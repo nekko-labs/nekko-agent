@@ -30,7 +30,8 @@ public protocol RemoteConnection: Caller {
     func registerPush(token: String) async throws
     /// `kinds`: the pushes this phone wants; nil asks for all.
     func registerPush(token: String, kinds: [String]?) async throws
-    func registerActivity(tag: String, token: String) async throws
+    /// The Live Activity card's push tokens and level (`RelayClient.registerCard`).
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws
     /// Frames from the relay itself (`RelayControl`).
     func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?)
     /// The phone moved to another network (`RelayClient.networkChanged`).
@@ -156,6 +157,19 @@ public final class ComputersStore {
     /// The pushes this phone wants (IO-30); nil asks for every kind. Re-registers when it changes.
     public var pushKinds: [PushKind]? {
         didSet { if pushKinds != oldValue { registerPushNow() } }
+    }
+    /// The Live Activity card's level and its ActivityKit push tokens (the card
+    /// that is up, and the one that starts a card). On every connect and change
+    /// they go to the relay, and the level to the computer (`card:set`), which
+    /// then sends the card for the relay to push while iOS has suspended the app.
+    public var cardLevel: LiveLevel = .none {
+        didSet { if cardLevel != oldValue { registerCardNow(level: true) } }
+    }
+    public var cardToken: String? {
+        didSet { if cardToken != oldValue { registerCardNow(level: false) } }
+    }
+    public var cardStartToken: String? {
+        didSet { if cardStartToken != oldValue { registerCardNow(level: false) } }
     }
     /// An approval or a question was handled somewhere: remove the needs-you
     /// notification for the chat with this tag (`E2E.activityTag`).
@@ -647,6 +661,16 @@ public final class ComputersStore {
 
     /// Make `id` the active computer and (re)connect to it.
     public func connect(_ id: String) {
+        // The computer left behind must not push (or start) a card on this phone any more:
+        // tell it and its relay, best effort, then close that connection. The switch never waits.
+        if id != activeId, conn == .online, let old = client, let computer = active {
+            client = nil
+            Task {
+                try? await old.registerCard(token: nil, startToken: nil, level: .none, computerId: computer.id, computerName: computer.name)
+                _ = try? await old.call(Channels.cardSet, [["level": "none"]], timeout: 3)
+                old.close()
+            }
+        }
         disconnect()
         guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
@@ -730,6 +754,7 @@ public final class ComputersStore {
                     await outbox.flush()
                 }
                 registerPushNow()
+                registerCardNow(level: true)
             }
         case .welcome(let version):
             hostProtocol = version
@@ -931,9 +956,28 @@ public final class ComputersStore {
         return TestPushResult.decide(computerAnswered: answered, hasToken: pushToken != nil, relayDelivers: relayDelivers)
     }
 
-    /// A Live Activity's push token for `sessionId` (see `RelayClient.registerActivity`).
-    public func registerActivity(sessionId: String, token: String) async {
-        try? await client?.registerActivity(tag: E2E.activityTag(sessionId), token: token)
+    /// The last card registration: each waits for it, so the relay keeps the newest.
+    private var cardRegistration: Task<Void, Never>?
+
+    private func registerCardNow(level: Bool) {
+        guard conn == .online, let c = client, let computer = active else { return }
+        let (token, start, cardLevel, previous) = (cardToken, cardStartToken, cardLevel, cardRegistration)
+        cardRegistration = Task {
+            await previous?.value
+            try? await c.registerCard(token: token, startToken: start, level: cardLevel, computerId: computer.id, computerName: computer.name)
+            if level { _ = try? await c.call(Channels.cardSet, [["level": .string(cardLevel.rawValue)]], timeout: 15) }
+        }
+    }
+
+    /// A chip tap (`focus`) or the close button under a finished chat (`dismiss`) on
+    /// the card, so the card the computer pushes shows the same. A computer from
+    /// before `card:set` refuses it; the card on this phone has it either way.
+    public func cardAction(focus: String? = nil, dismiss: String? = nil) async {
+        guard let c = client else { return }
+        var args: [String: JSONValue] = [:]
+        if let focus { args["focus"] = .string(focus) }
+        if let dismiss { args["dismiss"] = .string(dismiss) }
+        _ = try? await c.call(Channels.cardSet, [.object(args)], timeout: 15)
     }
 
     // MARK: Reading the computer

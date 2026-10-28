@@ -39,6 +39,7 @@ const SETTINGS = {
   defaultModelId: 'm1',
   favoriteModels: ['p1::m1'],
   defaultChatMode: 'ask',
+  effort: 'high',
   chatPaneAction: 'complete',
   skipDeleteConfirmation: false,
   automationsPaused: false,
@@ -157,8 +158,13 @@ describe('settings from a phone', () => {
       expect(Object.keys(view).sort()).toEqual([...new Set(PHONE_SETTINGS_VIEW.map((p) => p.split('.')[0]))].sort());
       expect(view.voice).toEqual({ enabled: true, language: 'en' });
       expect(view.defaultModelId).toBe('m1');
+      expect(view.effort).toBe('high');
     }
     for (const key of PHONE_SETTINGS_KEYS) expect(PHONE_SETTINGS_VIEW as readonly string[]).toContain(key);
+  });
+
+  it('exposes effort read-only, never as a phone-writable global setting', () => {
+    expect(code(() => screenPhoneCall('settings:update', [{ effort: 'max' }]))).toBe('setting-denied');
   });
 
   it('strips provider records to id, kind, label and enabled', () => {

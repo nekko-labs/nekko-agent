@@ -46,7 +46,7 @@ fn record(id: &str, priority: Priority, slots: u8) -> RunnerRecord {
         config: RunnerConfig {
             id: id.into(),
             scope: Scope::Org { org: "acme".into() },
-            label: "nekko-mac".into(),
+            label: "nekko-cloud-mac".into(),
             settings: RunnerSettings {
                 enabled: true,
                 priority,

@@ -15,6 +15,7 @@ import { EngineProcess } from './engine-process.js';
 import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
 import { createTrayCompanion } from './trayCompanion.js';
+import { createForegroundGuard, holdNotices, type ForegroundGuard } from './foregroundGuard.js';
 import { startAgentBrowser } from './agentBrowser.js';
 import { guardSession } from './connectionsGuard.js';
 import { registerArtifactPreview } from './artifactPreview.js';
@@ -42,13 +43,30 @@ const notificationSessions = new Map<number, string | null>();
 /** Each window's view on screen, so a workflow run notice stays quiet on the Workflows view. */
 const notificationViews = new Map<number, string | null>();
 
+/** Holds windows and notices while a full-screen app (a game) is in front (foregroundGuard.ts). */
+let foreground: ForegroundGuard | undefined;
+
+/** Run `fn`, which brings a window forward, once no full-screen app is in front. */
+function whenFree(fn: () => void): void {
+  if (foreground) void foreground.whenFree(fn);
+  else fn();
+}
+
+/** Restore, show and focus `win`, unless it has gone in the meantime. */
+function raise(win: BrowserWindow): void {
+  whenFree(() => {
+    if (win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  });
+}
+
 function showWindow(): void {
   trayCompanion?.dismiss();
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win) { createWindow(); return; }
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
+  raise(win);
 }
 
 /** The engine (nekkod); set once the app is ready. */
@@ -129,10 +147,8 @@ function deliverLink(url: string): void {
     if (!win) createWindow();
     return;
   }
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
   win.webContents.send(IpcEvents.deepLink, url);
+  raise(win);
 }
 
 /**
@@ -311,13 +327,14 @@ function createWindow(): void {
 
   mainWindow = win;
   win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
-  win.on('ready-to-show', () => {
+  win.on('ready-to-show', () => whenFree(() => {
+    if (win.isDestroyed()) return;
     if (maximized) win.maximize();
     win.show();
     // Without focus, Windows may leave a window opened from a terminal behind
     // others, flashing in the taskbar instead of coming to the front.
     win.focus();
-  });
+  }));
   const closeIntent = createCloseIntent();
   if (process.platform === 'win32') {
     win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));
@@ -494,9 +511,7 @@ function claimSingleInstance(): boolean {
     // window they already have rather than doing nothing at all.
     const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
     if (win) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
+      raise(win);
     } else {
       createWindow();
     }
@@ -621,11 +636,16 @@ app.whenReady().then(async () => {
     mainDir: __dirname,
   });
   engine.start();
+  const nekkod = engine;
+  foreground = createForegroundGuard({
+    ask: () => nekkod.running ? nekkod.call<{ quiet?: unknown }>('activity:fullscreen') : Promise.resolve(null),
+    ownFocus: () => BrowserWindow.getFocusedWindow() != null,
+  });
   nativeNotifications = createNativeNotificationPoster({
     isSupported: () => Notification.isSupported(),
     create: options => new Notification(options),
   }, url => { showWindow(); deliverLink(url); }, resolveWindowIcon());
-  stopNotifications = startMainNotifications(engine, nativeNotifications.post, undefined, () => {
+  stopNotifications = startMainNotifications(engine, holdNotices(foreground, nativeNotifications.post), undefined, () => {
     const focused = BrowserWindow.getFocusedWindow();
     const owned = focused && applicationWindows.has(focused.webContents.id) ? focused : null;
     const id = owned?.webContents.id;
@@ -701,6 +721,7 @@ app.on('before-quit', (event) => {
   trayCompanion?.dispose();
   stopNotifications?.();
   stopNotifications = undefined;
+  foreground?.dispose();
   nativeNotifications?.dispose();
   if (engineStopped || !engine) { desktopTray?.dispose(); desktopTray = null; return; }
   event.preventDefault();

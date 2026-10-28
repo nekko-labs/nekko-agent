@@ -17,3 +17,26 @@ final class ModelEffortTests: XCTestCase {
         XCTAssertEqual(Effort.levels(for: "qwen3-8b"), [.low, .normal, .high])
     }
 }
+
+extension ModelEffortTests {
+    func testConcreteEffortAndIndependentRecommendation() {
+        XCTAssertEqual(Effort.recommended(for: "claude-opus-5-5"), .medium)
+        XCTAssertEqual(Effort.recommended(for: "claude-sonnet-5"), .high)
+        XCTAssertEqual(Effort.recommended(for: "gpt-5"), .normal)
+        XCTAssertEqual(Effort.effective(.normal, for: "claude-opus-5-5"), .medium)
+        XCTAssertEqual(Effort.effective(.max, for: "gpt-5"), .high)
+        XCTAssertEqual(Effort.effective(.medium, for: "qwen3"), .normal)
+        for model in ["claude-opus-5-5", "claude-sonnet-5", "gpt-5", "qwen3"] {
+            for effort in Effort.allCases {
+                XCTAssertTrue(Effort.levels(for: model).contains(Effort.effective(effort, for: model)))
+            }
+        }
+    }
+
+    func testReadsComputerEffortWithoutExposingASettingsWrite() {
+        XCTAssertEqual(PcSettings.from(.object(["effort": .string("xhigh")])).effort, .xhigh)
+        XCTAssertNil(PcSettings.from(.object(["effort": .string("invalid")])).effort)
+        XCTAssertNil(PcSettings.from(nil).effort)
+        XCTAssertNil(PcSettings.patch(mode: .ask)["effort"])
+    }
+}

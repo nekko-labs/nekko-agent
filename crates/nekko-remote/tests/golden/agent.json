@@ -923,6 +923,82 @@
    "connected": [
     "phone-2"
    ]
+  },
+  {
+   "input": {
+    "relay": "{\"type\":\"c\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"C5FWu2jeqGXiG3Q3b0BRA9spbP1+5hBh1Q5Zn4Lm/V5Xmss1pVRkdD9zaEf3TT1/dx2DIi+/cSHa0ALoPXcQxNdCbNgRNEAyDz78rXcdNFw7R+FmgNpo9vN8Nkv95XCge8EQ7NM=\\\"}\"}"
+   },
+   "sent": [
+    "{\"type\":\"card\",\"state\":{\"chats\":[{\"id\":\"s1\",\"short\":\"Chat\",\"state\":\"working\",\"step\":\"Writing…\",\"reply\":\"\",\"closeWord\":\"Perfect\",\"startedAt\":800000000},{\"id\":\"s3\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Stopped\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s4\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s5\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Looks good\",\"finishedAt\":800000000},{\"id\":\"s2\",\"short\":\"Chat\",\"state\":\"failed\",\"step\":\"Stopped with an error\",\"reply\":\"\",\"closeWord\":\"Got it\",\"finishedAt\":800000000}],\"focusId\":\"s1\",\"more\":0,\"listening\":false,\"heard\":\"\"}}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"Uy6wEKfIzi4STFJbYwmmKyKY1dKaSitz0jB8Aya7CpKDSg9LcWF9rV7e+7/x/2IgAIn0fiF7186r3DokfiTH2M85CFCWDnQ=\\\"}\"}"
+   ],
+   "connected": [
+    "phone-2"
+   ]
+  },
+  {
+   "input": {
+    "event": {
+     "channel": "agent:event",
+     "payload": {
+      "type": "tool_call",
+      "sessionId": "s1",
+      "call": {
+       "id": "tc9",
+       "name": "bash",
+       "input": {
+        "command": "npm test"
+       }
+      }
+     }
+    }
+   },
+   "sent": [
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"PjadO+V6kQY/RYiJt8scUcwcceY+74gkffAe/pxWf4LriIQPrnmzTqUbDV2YuVkQQYbuxXP/YJH37bTOT99tCrRnevO6m7vCtVorTLi29C5//AdW9vvS0YJboB9jY9qd2alKremkYOxqLEqmN4UZBZcujKNzR11LdO4bI50Zk0Yr++Hf1HLPiSJosSMCYuoV3q+VW4UFr7JcsYEY4T5SR8dItFwngJ7UhL2/ndFyUwtA1rXyDQ==\\\"}\"}"
+   ],
+   "connected": [
+    "phone-2"
+   ]
+  },
+  {
+   "input": {
+    "event": {
+     "channel": "agent:event",
+     "payload": {
+      "type": "tool_approval_required",
+      "sessionId": "s1",
+      "call": {
+       "id": "tc9",
+       "name": "bash",
+       "input": {
+        "command": "npm test"
+       }
+      },
+      "reason": "runs a command",
+      "severity": "medium"
+     }
+    }
+   },
+   "sent": [
+    "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"approval\",\"callId\":\"tc9\",\"severity\":\"medium\"}",
+    "{\"type\":\"notify\",\"kind\":\"needs-you\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"title\":\"Nekko needs you\",\"body\":\"A tool needs your approval.\"}",
+    "{\"type\":\"card\",\"state\":{\"chats\":[{\"id\":\"s1\",\"short\":\"Chat\",\"state\":\"needsYou\",\"step\":\"Run npm test\",\"reply\":\"\",\"closeWord\":\"Perfect\",\"startedAt\":800000000,\"callId\":\"tc9\",\"severity\":\"medium\"},{\"id\":\"s3\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Stopped\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s4\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s5\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Looks good\",\"finishedAt\":800000000},{\"id\":\"s2\",\"short\":\"Chat\",\"state\":\"failed\",\"step\":\"Stopped with an error\",\"reply\":\"\",\"closeWord\":\"Got it\",\"finishedAt\":800000000}],\"focusId\":\"s1\",\"more\":0,\"listening\":false,\"heard\":\"\"}}",
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"2QabBWVJ/ZTPVqSldfJ6+ZCkDNw6WaKSZMU3nk8BSBiiWTJO9AMuQR1ra58VHIu0OMEdEhBMqU2R7HE4NM4Fw6Yj1G1XgNtUgpjoGUc0B3qJBN4hPHEHYVfm/2TdNT0YcBP4BTUV0dgFSVNIpkUjf/0YmFymLtiNtdUBj0lgIM2h8Oc1PJy6TW21RVdumN7iZqWs50Sbz1Wjiz2+NlWKZG6r5NWY0Ub3gdhk4lkpWqfztz7JS+D2AEvezEYFqlo2PW0SIJ5zFe8I3RHLtSfxrYzpiT6F/HHtntO9l8SRNceVOGSiN0zTzkZGqj7TPHQt\\\"}\"}"
+   ],
+   "connected": [
+    "phone-2"
+   ]
+  },
+  {
+   "input": {
+    "relay": "{\"type\":\"c\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"8buhkrtnIV4WQuWxi2ffdRO120jAbBUUsKFXP1I65rdwNDU6Q2/evNhyK36gq/6DaJ2wtaJKDL4IqRI7NHgKP8PrnrdxiCdXr2tMnBoWKVmFRNGXa/tGATwuI2xFIRK2pw==\\\"}\"}"
+   },
+   "sent": [
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"6bw7V90jognIhW3Fdyn+7RblEQ150n68D4UrsQHVJ3C/27OFNciA9FEXz3JFDOd81KC55QC8wsPuapXoI5lPOtW+0M3BA/I=\\\"}\"}"
+   ],
+   "connected": [
+    "phone-2"
+   ]
   }
  ],
  "relayedEvents": [

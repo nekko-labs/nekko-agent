@@ -75,7 +75,7 @@ In **Workflows > CI runners**, choose **Connect GitHub**. The sheet has three st
    workflows could ask for this Mac. If you allow them, keep "Require approval for all external
    contributors" on in the repo's Actions settings so fork pull requests wait for you, and see
    [Use it in a workflow](#use-it-in-a-workflow). The
-   **Runner label** defaults to `nekko-mac`; letters, digits, dot, dash and underscore, up to 64.
+   **Runner label** defaults to `nekko-cloud-mac`; letters, digits, dot, dash and underscore, up to 64.
 3. **How this Mac helps.** Pick a mode (below), then **Start runner**. If GitHub refuses (a
    revoked key, a public repo you did not allow, the wrong account), its reason shows on this
    step and everything you typed stays.
@@ -87,10 +87,10 @@ Point a job at the runner with all four labels:
 ```yaml
 jobs:
   build:
-    runs-on: [self-hosted, macOS, ARM64, nekko-mac]
+    runs-on: [self-hosted, macOS, ARM64, nekko-cloud-mac]
 ```
 
-Use your own label in place of `nekko-mac` if you changed it.
+Use your own label in place of `nekko-cloud-mac` if you changed it.
 
 To fall back to a GitHub-hosted Mac when yours is busy or away, add a small job that picks the
 runner first: [`.github/actions/pick-runner`](https://github.com/nekko-labs/nekko-agent/tree/main/.github/actions/pick-runner)

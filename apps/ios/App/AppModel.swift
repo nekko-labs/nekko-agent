@@ -31,6 +31,9 @@ final class AppModel {
     /// Drafts and the outbox, per computer.
     let offlineFiles: OfflineFileStore
     private let activities = RunActivities()
+    /// The card's mic: its own microphone use, apart from any composer's (they share one microphone).
+    private let cardDictation = Dictation()
+    private let talker = TalkRunner()
     private let network = NetworkWatcher()
     private var started = false
     private var foreground = true
@@ -40,6 +43,8 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A chat to open (notification tap, Live Activity tap, `nekko-agent://chat/<id>`).
     var openChat: String?
+    /// `nekko-agent://chat/<id>?listen=1` (the card's mic on iOS 17): that chat's composer starts listening once.
+    var listenIn: String?
     /// The first message typed on New chat (and its photos), sent by that chat's screen once it opens.
     var firstMessages: [String: UnsentPrompt] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
@@ -106,6 +111,35 @@ final class AppModel {
         // First run's step 3 without pairing a computer first.
         if args.contains("-uiTestNotificationStep") { showNotificationStep = true }
         #endif
+        // Here, not in `start()`: a tap on the card can launch the app in the
+        // background, locked, and the card needs no connection to answer it.
+        activities.level = { [weak self] in self?.prefs.liveActivityLevel ?? .none }
+        activities.source = { [weak self] in
+            guard let self, self.store.summariesLoaded, let c = self.store.active else { return nil }
+            return .init(summaries: self.store.summaries, activity: self.store.activity, computerId: c.id, computerName: c.name)
+        }
+        // The computer builds the same card for the relay to push: it hears these too.
+        IntentRouter.focus = { [weak self] sid in await self?.focusCard(sid) }
+        IntentRouter.nextPage = { [weak self] sid in await self?.focusCard(sid) }
+        IntentRouter.dismiss = { [weak self] sid in
+            self?.activities.dismiss(sid)
+            await self?.tellCard(dismiss: sid)
+        }
+        wireTalk()
+        activities.onCardToken = { [weak self] token in self?.cardTokenArrived(token) }
+        SystemCard.watch(adopt: { [weak self] card in self?.activities.adopt(card) },
+                         startToken: { [weak self] token in self?.store.cardStartToken = token })
+        #if DEBUG
+        // Once on screen: ActivityKit starts a card only from the foreground.
+        if ProcessInfo.processInfo.arguments.contains("-uiTestLiveCard") {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                self?.activities.showSample(.sample)
+            }
+        }
+        #endif
+        watchCard()
+        watchCardLevel()
     }
 
     /// The relay connection opens only after the first unlock (when the lock is
@@ -119,12 +153,6 @@ final class AppModel {
         notifier.onOpen = { [weak self] sid in self?.openChat = sid }
         IntentRouter.approve = { [weak self] sid, callId, allow in await self?.answerApproval(sid, callId, allow) }
         IntentRouter.stop = { [weak self] sid in await self?.stopChat(sid) }
-        activities.enabled = { [weak self] in self?.prefs.liveActivities ?? false }
-        activities.hideDetails = { [weak self] in self?.prefs.appLock ?? true }
-        activities.onPushToken = { [weak self] sid, token in
-            guard let self else { return }
-            Task { await self.store.registerActivity(sessionId: sid, token: token) }
-        }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
         // A mode raise the computer wants a security key or a code for (SK-6).
         store.stepUpPrompt = { [weak self] request in await self?.askStepUp(request) }
@@ -168,6 +196,8 @@ final class AppModel {
 
     func didEnterBackground() {
         foreground = false
+        // A `?listen=1` not taken by now is stale: listening never starts later by itself.
+        listenIn = nil
         lock.didEnterBackground(enabled: prefs.appLock)
         // What is typed is on disk before iOS may end the app.
         store.drafts.flush()
@@ -229,12 +259,95 @@ final class AppModel {
         }
     }
 
+    // MARK: Live Activity card
+
+    /// Rebuilds the card whenever the chat list, who is running, the computer or the level changes.
+    private func focusCard(_ sid: String) async {
+        activities.focus(sid)
+        await tellCard(focus: sid)
+    }
+
+    /// A tap on the card, from a phone that may be suspended or locked: wait for
+    /// the connection (as `stopChat` does), so the next push does not undo it.
+    private func tellCard(focus: String? = nil, dismiss: String? = nil) async {
+        start(force: true)
+        store.resume()
+        guard await waitOnline(seconds: 10) else { return }
+        await store.cardAction(focus: focus, dismiss: dismiss)
+    }
+
+    /// The card's mic (`TalkToChatIntent`, after Face ID): the connection starts while it
+    /// listens, so the computer can transcribe. The words go through the outbox (one
+    /// `session:get`, then `chat:queue` mid-run or `chat:send`), waited on for up to 10 s:
+    /// a refusal throws ("Not sent: ...", the words back in the chat's draft); no answer
+    /// yet still reads "Sent", since the outbox delivers it later.
+    private func wireTalk() {
+        talker.capture = { [weak self] in
+            guard let self else { return "" }
+            self.start(force: true)
+            self.store.resume()
+            return try await self.cardDictation.captureOnce(store: self.store)
+        }
+        talker.finish = { [weak self] in self?.cardDictation.stopListening() }
+        talker.discard = { [weak self] in self?.cardDictation.discard() }
+        talker.send = { [weak self] sid, text in
+            guard let self else { return }
+            // Offline after 10 s: leave it in the outbox rather than spend another 10 s of the intent.
+            let online = await self.waitOnline(seconds: 10)
+            _ = try await self.store.outbox.sendWaiting(chatId: sid, text: text, wait: online ? 10 : 0)
+        }
+        talker.show = { [weak self] listening, heard, to in self?.activities.talk(listening: listening, heard: heard, sentTo: to) }
+        IntentRouter.talk = { [weak self] sid in await self?.talker.talk(sid) }
+        IntentRouter.cancelTalk = { [weak self] in self?.talker.cancel() }
+    }
+
+    /// The composer of `chatId` takes a waiting `?listen=1` once: only for a chat the
+    /// phone's list has, and never behind the app lock.
+    func takeListen(_ chatId: String) -> Bool {
+        guard let id = listenIn, id == chatId, !(prefs.appLock && lock.locked) else { return false }
+        guard store.summaries.contains(where: { $0.id == id }) else {
+            if store.summariesLoaded { listenIn = nil }
+            return false
+        }
+        listenIn = nil
+        return true
+    }
+
+    /// The card's push token. A card the relay started can wake the app in the
+    /// background (locked, so `start` never ran): connect just to register the
+    /// token, as `deliverInBackground` does, and let the connection close as that does.
+    private func cardTokenArrived(_ token: String?) {
+        store.cardToken = token
+        guard token != nil, store.conn != .online else { return }
+        Task {
+            // Registering a token is not reading chats: the app lock doesn't hold it.
+            start(force: true)
+            if store.conn != .online { store.reconnect() }
+            _ = await waitOnline(seconds: 20)
+        }
+    }
+
+    /// The level goes to the relay and the computer (`ComputersStore.cardLevel`).
+    private func watchCardLevel() {
+        store.cardLevel = withObservationTracking { prefs.liveActivityLevel } onChange: { [weak self] in
+            Task { @MainActor in self?.watchCardLevel() }
+        }
+    }
+
+    private func watchCard() {
+        withObservationTracking {
+            activities.refresh()
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.watchCard() }
+        }
+    }
+
     // MARK: Events → haptics, notifications, Live Activities
 
     private func onEvent(_ e: AgentEvent) {
         let chat = store.summaries.first { $0.id == e.sessionId }
         let computer = store.active
-        activities.onEvent(e, chatTitle: chat?.title, computerId: computer?.id ?? "", computerName: computer?.name ?? "Computer")
+        activities.onEvent(e)
         switch e {
         case .approvalRequired, .question:
             if foreground, prefs.hapticNeedsYou { Haptics.needsYou() }
@@ -281,16 +394,20 @@ final class AppModel {
     // MARK: Pairing, links, push
 
     /// `nekko-agent-pair:?relay=…` (QR / camera), `https://…/?relay=…` (web
-    /// edition link), `nekko-agent://chat/<id>` or `nekko-agent://new`.
+    /// edition link), `nekko-agent://chat/<id>` (`?listen=1` starts listening), `nekko-agent://new` or `nekko-agent://chats`.
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
+            let listen = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "listen" && $0.value == "1" } == true
+            listenIn = listen ? openChat : nil
             return
         }
         if url.scheme == "nekko-agent", url.host == "new" {
             newChatRequested = true
             return
         }
+        // The card's "+N" when it holds more chats than it shows: opening the app is the point.
+        if url.scheme == "nekko-agent", url.host == "chats" { return }
         if let link = Pairing.parse(url.absoluteString) { pendingLink = link }
     }
 
@@ -416,6 +533,9 @@ final class AppModel {
     private func forgotten(_ id: String) {
         if prefs.defaultComputer == id { prefs.defaultComputer = store.activeId }
         prefs.lastModel[id] = nil
+        prefs.lastEffort[id] = nil
+        prefs.lastTools[id] = nil
+        prefs.lastFolder[id] = nil
         if store.computers.isEmpty { activities.endAll() }
     }
 
@@ -447,6 +567,9 @@ final class AppModel {
         activities.endAll()
         prefs.defaultComputer = nil
         prefs.lastModel = [:]
+        prefs.lastEffort = [:]
+        prefs.lastTools = [:]
+        prefs.lastFolder = [:]
     }
 
     /// Nekko Cloud: `NekkoCloudURL` in Info.plist, or `-cloudAPI <url>` (debug builds, for the local dev stack).

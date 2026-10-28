@@ -287,6 +287,7 @@
   "defaultModelId",
   "defaultProviderId",
   "favoriteModels",
+  "effort",
   "phoneChanges",
   "prompts",
   "skipDeleteConfirmation",

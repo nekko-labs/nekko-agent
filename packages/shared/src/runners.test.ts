@@ -37,7 +37,7 @@ const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['conf
   config: {
     id: 'r1',
     scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' },
-    label: 'nekko-mac',
+    label: 'nekko-cloud-mac',
     settings: { ...DEFAULT_RUNNER_SETTINGS, ...settings },
   },
   state: 'waiting', slots: [], reasons: [], available: 1, limit: null, awake: false, error: null,
@@ -79,7 +79,7 @@ describe('runner helpers', () => {
   it('titles a runner like the mockup', () => {
     const v = view();
     expect(runnerTitle(v)).toBe('This Mac · GitHub · nekko-labs/nekko-agent');
-    expect(runnerSubtitle(v)).toBe("repo scope · label nekko-mac · Do not disturb: Only run when I'm idle · While a runner is active");
+    expect(runnerSubtitle(v)).toBe("repo scope · label nekko-cloud-mac · Do not disturb: Only run when I'm idle · While a runner is active");
     expect(runnerTitle(view({ config: { ...v.config, scope: { kind: 'org', org: 'acme' } } }))).toBe('This Mac · GitHub · acme');
   });
 
@@ -148,7 +148,7 @@ describe('runner helpers', () => {
 
   it('builds a connect request', () => {
     const f: ConnectForm = { appId: '123', installationId: '456', privateKeyPem: '-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----', kind: 'org', target: 'acme', repos: 'api, acme/web', allowPublic: false, label: '', priority: 'balanced' };
-    expect(toConnectRequest(f, false)).toEqual({ provider: 'github', scope: { kind: 'org', org: 'acme' }, appId: 123, installationId: 456, privateKeyPem: f.privateKeyPem, repos: ['acme/api', 'acme/web'], allowPublic: false, label: 'nekko-mac' });
+    expect(toConnectRequest(f, false)).toEqual({ provider: 'github', scope: { kind: 'org', org: 'acme' }, appId: 123, installationId: 456, privateKeyPem: f.privateKeyPem, repos: ['acme/api', 'acme/web'], allowPublic: false, label: 'nekko-cloud-mac' });
     expect(toConnectRequest({ ...f, kind: 'repo', target: 'o/r', repos: 'ignored' }, false)).toMatchObject({ scope: { kind: 'repo', owner: 'o', repo: 'r' }, repos: [] });
 
     const err = (over: Partial<ConnectForm>, keyStored = false) => toConnectRequest({ ...f, ...over }, keyStored);

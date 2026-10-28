@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// Centered root mascot, outside iOS 26's shared toolbar glass.
+struct RootMascot: ToolbarContent {
+    var working = false
+
+    var body: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .principal) { ChatMascot(working: working) }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .principal) { ChatMascot(working: working) }
+        }
+    }
+}
+
 /// Desktop's pixel cat, with a local greeting. Never sends a chat or changes settings.
 struct ChatMascot: View {
     var working = false
@@ -37,11 +51,47 @@ struct ChatMascot: View {
 }
 
 /// The desktop's greeting cat (GreetingNekko.tsx): a face peeking over the new chat's
-/// composer, its paws on the box's top edge. Decorative.
+/// composer, its paws on the box's top edge. Tapping laughs locally.
 struct GreetingCat: View {
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var laughing = false
+    @State private var laughID = 0
+
+    private var motionDisabled: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReduceMotion") { return true }
+        #endif
+        return reduceMotion
+    }
 
     var body: some View {
+        Button {
+            laughing = true
+            laughID += 1
+        } label: {
+            TimelineView(.animation(minimumInterval: 0.12, paused: !laughing || motionDisabled || scenePhase != .active)) { timeline in
+                let lifted = Int(timeline.date.timeIntervalSinceReferenceDate * 8) % 2 == 0
+                drawing
+                    .offset(y: laughing && !motionDisabled && scenePhase == .active && lifted ? -3 : 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Make Nekko laugh")
+        .accessibilityValue(laughing ? String(localized: "Laughing") : String(localized: "Idle"))
+        .accessibilityIdentifier("newChat.mascot")
+        .task(id: laughID) {
+            guard laughing else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(1200))
+                laughing = false
+            } catch { /* A new tap restarts the laugh; leaving cancels it. */ }
+        }
+    }
+
+    private var drawing: some View {
         Canvas { context, size in
             // The desktop's 32 x 30 viewBox.
             context.scaleBy(x: size.width / 32, y: size.height / 30)
@@ -62,7 +112,14 @@ struct GreetingCat: View {
             head.stroke(face, with: .color(palette.ink), style: StrokeStyle(lineWidth: 2, lineJoin: .miter))
             // Eyes glance down at the message box; no colored mouth or nose.
             for x in [11, 20] {
-                head.fill(Path(CGRect(x: x, y: 16, width: 2, height: 3)), with: .color(palette.ink))
+                if laughing {
+                    head.stroke(polygon([(CGFloat(x) - 1, 17), (CGFloat(x) + 1, 15), (CGFloat(x) + 3, 17)]), with: .color(palette.ink), lineWidth: 1)
+                } else {
+                    head.fill(Path(CGRect(x: x, y: 16, width: 2, height: 3)), with: .color(palette.ink))
+                }
+            }
+            if laughing {
+                head.fill(Path(CGRect(x: 14, y: 20, width: 4, height: 3)), with: .color(palette.ink))
             }
             // Flip around the edge (y = 25), putting the small toes at the bottom.
             context.translateBy(x: 0, y: 50)

@@ -324,7 +324,7 @@ impl<H: Http> GitHub<H> {
         if req.provider != "github" {
             return Err("Only GitHub runners are supported.".into());
         }
-        let label = req.label.clone().unwrap_or_else(|| "nekko-mac".into());
+        let label = req.label.clone().unwrap_or_else(|| "nekko-cloud-mac".into());
         if !plain_name(&label, 64) {
             return Err("The label may use letters, digits, '.', '_' and '-' only (at most 64).".into());
         }

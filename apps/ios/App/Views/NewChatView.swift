@@ -16,7 +16,7 @@ struct NewChatView: View {
     @State private var model: (String, String)?
     @State private var folder: String?
     @State private var mode: PcSettings.ChatMode?
-    /// nil follows the computer's own effort setting.
+    /// A concrete draft choice; otherwise resolve the last-used choice for this computer.
     @State private var effort: Effort?
     /// The computer was picked here: keep offering the choice while its models load.
     @State private var pickedComputer = false
@@ -38,6 +38,36 @@ struct NewChatView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
+    private var selectedEffort: Effort {
+        let id = model?.1 ?? ""
+        return effort.map { Effort.effective($0, for: id) }
+            ?? app.prefs.newChatEffort(computer: store.activeId, model: id, settings: store.pcSettings)
+    }
+
+    private var selectedTools: PcSettings.ChatMode {
+        mode ?? app.prefs.newChatTools(computer: store.activeId, settings: store.pcSettings)
+    }
+
+    private var effortChoice: Binding<Effort> {
+        Binding(get: { selectedEffort }, set: { value in
+            effort = value
+            if let id = store.activeId { app.prefs.lastEffort[id] = value.rawValue }
+        })
+    }
+
+    private var toolsChoice: Binding<PcSettings.ChatMode> {
+        Binding(get: { selectedTools }, set: { value in
+            mode = value
+            if let id = store.activeId { app.prefs.lastTools[id] = value.rawValue }
+        })
+    }
+
+    private func rememberChoices() {
+        guard let id = store.activeId else { return }
+        app.prefs.lastEffort[id] = selectedEffort.rawValue
+        app.prefs.lastTools[id] = selectedTools.rawValue
+    }
+
     private var offline: Bool { store.conn != .online }
 
     var body: some View {
@@ -52,7 +82,6 @@ struct NewChatView: View {
                 // The desktop's clean start (2026-10-26): a peeking Nekko and a question over a glass message box.
                 NewChatGreeting(paused: !text.isEmpty || !images.isEmpty)
                     .padding(.top, 36)
-                    .allowsHitTesting(false)
                     .zIndex(1)
                 composer.padding(.top, -14)
                 options
@@ -72,7 +101,7 @@ struct NewChatView: View {
         .sheet(isPresented: $showModels) {
             ModelPicker(selected: (model?.0, model?.1)) { p, m in
                 model = (p, m)
-                if let e = effort, !Effort.levels(for: m).contains(e) { effort = nil }
+                if let e = effort { effort = Effort.effective(e, for: m) }
                 if let id = store.activeId { app.prefs.lastModel[id] = "\(p)::\(m)" }
             }
         }
@@ -192,12 +221,13 @@ struct NewChatView: View {
                 .accessibilityIdentifier("newChat.model")
                 if let model {
                     Menu {
-                        Picker("Effort", selection: $effort) {
-                            Text("Computer default").tag(Effort?.none)
-                            ForEach(Effort.levels(for: model.1), id: \.self) { e in Text(effortName(e)).tag(Optional(e)) }
+                        Picker("Effort", selection: effortChoice) {
+                            ForEach(Effort.levels(for: model.1), id: \.self) { e in
+                                Text(e == Effort.recommended(for: model.1) ? String(localized: "\(effortName(e)) (Recommended)") : effortName(e)).tag(e)
+                            }
                         }
                     } label: {
-                        chip(effort.map { effortName($0) } ?? String(localized: "Default effort"), icon: "gauge.with.dots.needle.33percent")
+                        chip(effortName(selectedEffort), icon: "gauge.with.dots.needle.33percent")
                     }
                     .accessibilityHint("How hard the model works on each reply. Higher takes longer.")
                     .accessibilityIdentifier("newChat.effort")
@@ -214,7 +244,10 @@ struct NewChatView: View {
                     .accessibilityIdentifier("newChat.computer")
                 }
                 Menu {
-                    Picker("Folder", selection: $folder) {
+                    Picker("Folder", selection: Binding(get: { folder }, set: { value in
+                        folder = value
+                        if let id = store.activeId { app.prefs.lastFolder[id] = value }
+                    })) {
                         Text("No folder").tag(String?.none)
                         ForEach(store.workspaces) { w in
                             VStack(alignment: .leading) {
@@ -228,14 +261,15 @@ struct NewChatView: View {
                 }
                 .accessibilityIdentifier("newChat.folder")
                 Menu {
-                    Picker("Tools", selection: $mode) {
-                        Text("Computer default").tag(PcSettings.ChatMode?.none)
-                        ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in Text(modeName(m)).tag(Optional(m)) }
+                    Picker("Tools", selection: toolsChoice) {
+                        ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
+                            Text(m == .guardrails ? String(localized: "\(modeName(m)) (Recommended)") : modeName(m)).tag(m)
+                        }
                     }
                 } label: {
-                    chip(mode.map { modeName($0) } ?? String(localized: "Default tools"), icon: "checkmark.shield")
+                    chip(modeName(selectedTools), icon: "checkmark.shield")
                 }
-                .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Its default is \(modeName(store.pcSettings.effectiveMode)).")
+                .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
                 .accessibilityIdentifier("newChat.tools")
             }
             if cloud.account?.canSync == true {
@@ -336,7 +370,8 @@ struct NewChatView: View {
         store.connect(id)
         model = nil
         effort = nil
-        folder = nil
+        mode = nil
+        folder = app.prefs.lastFolder[id]
         refusal = nil
         text = words
         store.drafts.set(DraftStore.newChat, current)
@@ -364,13 +399,15 @@ struct NewChatView: View {
     }
 
     private var current: Draft {
-        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: mode?.rawValue, effort: effort?.rawValue, refusal: refusal)
+        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal)
     }
 
     private func restoreDraft() {
         guard !restored else { return }
         restored = true
-        apply(store.drafts.draft(DraftStore.newChat))
+        let draft = store.drafts.draft(DraftStore.newChat)
+        folder = app.prefs.newChatFolder(computer: store.activeId, draft: draft)
+        apply(draft)
     }
 
     private func apply(_ d: Draft) {
@@ -396,6 +433,7 @@ struct NewChatView: View {
     private func start() {
         guard let model else { return }
         let (p, m) = model
+        rememberChoices()
         let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let photos = images
         if offline {
@@ -406,7 +444,7 @@ struct NewChatView: View {
         error = nil
         Task {
             do {
-                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: mode, effort: effort)
+                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools, effort: selectedEffort)
                 store.drafts.clear(DraftStore.newChat)
                 // The chat's own model sends the first message, so a failure shows
                 // there and the text comes back in its composer.
@@ -426,7 +464,7 @@ struct NewChatView: View {
     /// Waiting to send, and start when the computer is back.
     private func startLater(_ p: String, _ m: String, _ first: String) {
         guard !first.isEmpty || !images.isEmpty else { return }
-        store.outbox.add(chatId: nil, text: first, images: images, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: mode?.rawValue, effort: effort?.rawValue))
+        store.outbox.add(chatId: nil, text: first, images: images, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue))
         store.drafts.clear(DraftStore.newChat)
         text = ""
         images = []
@@ -537,6 +575,10 @@ struct NewChatGreeting: View {
         .frame(maxWidth: .infinity)
         .animation(.easeInOut(duration: 0.6), value: index)
         .task(id: paused || reduceMotion) {
+            #if DEBUG
+            // Keep the fixture's copy identical in before/after menu evidence.
+            if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") { return }
+            #endif
             guard !paused && !reduceMotion else { return }
             while (try? await Task.sleep(for: .seconds(8))) != nil {
                 index = (index + 1) % Self.questions.count

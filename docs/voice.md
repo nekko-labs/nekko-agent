@@ -54,6 +54,10 @@ Tap the microphone in a chat's message box and it keeps listening through pauses
 
 Without Whisper on your computer, speech is turned into text on the iPhone only, never on a server.
 
+### From the Lock Screen
+
+With **Settings > While a chat runs > Live Activities** set to **Detailed**, the card on the Lock Screen and in the Dynamic Island has a microphone. Tap it and the iPhone asks for Face ID (or your passcode) first. Then say one message: the card shows "Listening…" and stops at your first pause (or after 30 seconds without one). What you said goes to the chat the card shows, as if you had typed it there; while the chat is working it waits in that chat's queue. The card then shows "Sent: " and your words until the chat's reply line takes their place. If your computer doesn't answer within 10 seconds (it's offline, say), the card still says "Sent": the message waits on the iPhone and goes when the computer is back. If your computer turns it down, the card says "Not sent" and why, and your words wait in that chat's message box. **Send to** on the card sends what you have said so far without waiting for the pause, and **Cancel** sends nothing. Speech is turned into text the same way as in a chat: Whisper on your computer, or on the iPhone only, never on a server. If it couldn't be turned into text, the card says "Not sent" and why, for about a minute. On iOS 17 the microphone opens the chat with listening already on instead, once you have unlocked the app (with **Hold to talk**, it just opens the chat).
+
 ## Privacy
 
 Speech is turned into text on this computer, by Apple's on-device recognizer or by Whisper running locally. Audio is never sent anywhere and is not kept once it has been turned into text.

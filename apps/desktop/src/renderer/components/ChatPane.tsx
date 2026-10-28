@@ -39,7 +39,7 @@ import { clearDraft, loadDraft, restoredDraftImages, saveDraft } from '../compos
 import { indentListSelection } from '../composerLists.js';
 import { atTrigger, fileSelectionEdit, promptSelectionEdit, skillSelectionEdit, slashTrigger, type ComposerEdit } from '../composerSkills.js';
 import {
-  ActivityGroup, ApprovalBar, AutoQualityMenu, MessageBubble, ModelPicker,
+  ActivityGroup, ApprovalBar, AutoQualityMenu, FoldThoughtsContext, MessageBubble, ModelPicker,
   ReplyStatus, useElementWidth,
 } from './agent-console/index.js';
 import type { PendingApproval } from './agent-console/index.js';
@@ -2536,7 +2536,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         )}
         {surface !== 'composer' && !cleanStart && (
         <div className="relative flex min-h-0 w-full flex-1">
-          <SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
+          <FoldThoughtsContext.Provider value={!isCloudModel}><SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
             ref={transcriptRef}
             rows={rows}
             renderRow={renderRow}
@@ -2666,7 +2666,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
               </>
             }
-          /></WatchSessionContext.Provider></SubagentInheritedModelContext.Provider></SubagentParentContext.Provider>
+          /></WatchSessionContext.Provider></SubagentInheritedModelContext.Provider></SubagentParentContext.Provider></FoldThoughtsContext.Provider>
           {/* The Agent Monitor button floats in the chat area's top-right corner
               while the panel is minimized; the open panel has its own minimize
               button, so the two never stack. */}

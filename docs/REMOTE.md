@@ -51,6 +51,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > Portuguese, Japanese and Chinese): it follows the iPhone's language, and **Settings → Appearance →
 > Language** opens iOS Settings to pick one for Nekko Agent alone.
 >
+> On the iPhone, **New chat** remembers the last folder selected for each computer, even after
+> starting a chat or relaunching the app. **No folder** is remembered too; unfinished drafts keep
+> their own folder choice. Forgetting a computer removes its remembered folder.
+>
 > On the iPhone, **New chat** also picks the **Effort** (the levels the chosen model takes, or the
 > computer's default) and, when the model is a local one (llama.cpp, Ollama, LM Studio, vLLM),
 > **Run on**: which paired computer the chat and its model run on. Choosing another computer
@@ -318,14 +322,17 @@ inference or close the native apps' remaining feature and release gaps; see the
 [native Android spec](../spec/phone/native-android-app.md).
 
 **The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
-adds what only iOS can: a **Live Activity** for each running chat on the Lock Screen and in the
-Dynamic Island, with **Allow / Deny** for a waiting tool and **Stop**; notifications with Allow /
+adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
+the Dynamic Island, with a chip per chat, **Allow / Deny** for a waiting tool and **Stop**, and a
+level in **Settings → Live Activities** (None, Minimal, Standard, Detailed) that decides how much
+of the chat it shows (at Detailed, a mic sends one spoken message to the chat it shows, after Face ID; see [Voice](voice.md#from-the-lock-screen)); until the relay can push it, the card changes only while the app is running; notifications with Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
 and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone's own
 speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
 the iPhone. If a Tailscale relay can't be reached, the app says which side is the problem:
 Tailscale is off on the phone, or the computer isn't answering. With the app lock on (Face ID or
-passcode, on by default), the Lock Screen and notifications never show chat titles or commands.
+passcode, on by default), notifications never show chat titles or commands, and the card starts
+at Minimal, which shows no chat text.
 
 On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
 Keystore. The app drops any provider API keys your computer sends with its settings and never
@@ -660,7 +667,7 @@ watch counts treats inactive chats as Done until it is updated.
 On native iOS, a clock means a prompt is waiting to send. Running work, input
 requests and waiting prompts take priority over the inactive status.
 
-Nekko sits at the top-left of the Chats screen beside the computer menu. Tap the
+Nekko sits at the top center of the iOS Chats screen, outside the toolbar chips. Tap the
 pixel cat for a brief greeting. This is a local animation, not a message to an
 agent. The mascot respects Reduce Motion and pauses its animation in the
 background.

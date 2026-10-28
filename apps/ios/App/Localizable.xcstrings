@@ -174,6 +174,46 @@
         }
       }
     },
+    "%@ (Recommended)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (Empfohlen)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (Recomendado)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (Recommandé)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（推奨）"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (Recomendado)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（推荐）"
+          }
+        }
+      }
+    },
     "%@ context": {
       "localizations": {
         "de": {
@@ -1114,6 +1154,46 @@
         }
       }
     },
+    "%lld more chats": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld weitere Chats"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld chats más"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld autres discussions"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ほかに %lld 件のチャット"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais %lld chats"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另外 %lld 个聊天"
+          }
+        }
+      }
+    },
     "%lld more checks on GitHub.": {
       "localizations": {
         "de": {
@@ -2036,6 +2116,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "已连接一部手机"
+          }
+        }
+      }
+    },
+    "A question for you": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Frage an dich"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una pregunta para ti"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une question pour vous"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あなたへの質問"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma pergunta para você"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有个问题要问你"
           }
         }
       }
@@ -3520,42 +3640,42 @@
         }
       }
     },
-    "Asks on every open and every return, covers the app switcher preview, and keeps notifications and the Lock Screen free of chat details.": {
+    "Asks on every open and every return, covers the app switcher preview, and keeps notifications free of chat details. What the Lock Screen shows is set in Live Activities below.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fragt bei jedem Öffnen und jeder Rückkehr, verdeckt die Vorschau im App-Umschalter und hält Mitteilungen und den Sperrbildschirm frei von Chat-Details."
+            "value": "Fragt bei jedem Öffnen und jeder Rückkehr, verdeckt die Vorschau im App-Umschalter und hält Mitteilungen frei von Chat-Details. Was der Sperrbildschirm zeigt, legst du unten unter Live-Aktivitäten fest."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se pide en cada apertura y cada regreso, oculta la vista previa del selector de apps y mantiene las notificaciones y la pantalla de bloqueo sin detalles de los chats."
+            "value": "Se pide en cada apertura y cada regreso, oculta la vista previa del selector de apps y mantiene las notificaciones sin detalles de los chats. Lo que muestra la pantalla de bloqueo se elige más abajo, en Actividades en vivo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Demande à chaque ouverture et à chaque retour, masque l’aperçu dans le sélecteur d’apps et garde les notifications et l’écran verrouillé sans détails des discussions."
+            "value": "Demande à chaque ouverture et à chaque retour, masque l’aperçu dans le sélecteur d’apps et garde les notifications sans détails des discussions. Ce que montre l’écran verrouillé se règle plus bas, dans Live Activities."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アプリを開くたび、戻るたびに認証を求め、App スイッチャーのプレビューを隠し、通知やロック画面にチャットの内容を表示しません。"
+            "value": "アプリを開くたび、戻るたびに認証を求め、App スイッチャーのプレビューを隠し、通知にチャットの内容を表示しません。ロック画面に表示する内容は下のライブアクティビティで設定します。"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pede a cada abertura e a cada retorno, cobre a prévia no seletor de apps e mantém notificações e a Tela de Bloqueio sem detalhes das conversas."
+            "value": "Pede a cada abertura e a cada retorno, cobre a prévia no seletor de apps e mantém as notificações sem detalhes das conversas. O que a Tela de Bloqueio mostra é definido abaixo, em Atividades ao Vivo."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每次打开和返回时都会询问，遮盖 App 切换器预览，并让通知和锁定屏幕不显示聊天详情。"
+            "value": "每次打开和返回时都会询问，遮盖 App 切换器预览，并让通知不显示聊天详情。锁定屏幕显示的内容在下方的“实时活动”中设置。"
           }
         }
       }
@@ -4200,6 +4320,46 @@
         }
       }
     },
+    "Chat %lld of %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat %1$lld von %2$lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat %1$lld de %2$lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discussion %1$lld sur %2$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャット %1$lld/%2$lld"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat %1$lld de %2$lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %1$lld 个聊天，共 %2$lld 个"
+          }
+        }
+      }
+    },
     "Chat + Chat": {
       "localizations": {
         "de": {
@@ -4276,6 +4436,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "聊天 + 监控"
+          }
+        }
+      }
+    },
+    "Chat titles and status are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat-Titel und Status werden angezeigt, wenn dein iPhone entsperrt ist. Ist die App geschlossen, erreichen sie dein iPhone über das Relay und Apples Push-Dienst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los títulos y el estado de los chats se muestran cuando tu iPhone está desbloqueado. Con la app cerrada, llegan a tu iPhone a través del relay y del servicio de notificaciones push de Apple."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les titres et l’état des discussions s’affichent quand votre iPhone est déverrouillé. Quand l’app est fermée, ils arrivent sur votre iPhone via le relais et le service de notifications push d’Apple."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットのタイトルと状態は iPhone のロック解除中に表示されます。アプリを閉じている間は、Relay と Apple のプッシュサービスを通じて iPhone に届きます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os títulos e o status dos chats aparecem quando o iPhone está desbloqueado. Com o app fechado, eles chegam ao iPhone pelo relay e pelo serviço de push da Apple."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手机解锁时会显示聊天标题和状态。App 关闭时，它们通过 Relay 和 Apple 的推送服务送达你的手机。"
+          }
+        }
+      }
+    },
+    "Chat titles, status and each chat’s latest reply line are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service. The mic on the card asks for Face ID, then sends what you say to the chat it shows.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat-Titel, Status und die letzte Antwortzeile jedes Chats werden angezeigt, wenn dein iPhone entsperrt ist. Ist die App geschlossen, erreichen sie dein iPhone über das Relay und Apples Push-Dienst. Das Mikrofon auf der Karte fragt nach Face ID und sendet dann, was du sagst, an den angezeigten Chat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los títulos, el estado y la última línea de respuesta de cada chat se muestran cuando tu iPhone está desbloqueado. Con la app cerrada, llegan a tu iPhone a través del relay y del servicio de notificaciones push de Apple. El micrófono de la tarjeta pide Face ID y luego envía lo que dices al chat que muestra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les titres, l’état et la dernière ligne de réponse de chaque discussion s’affichent quand votre iPhone est déverrouillé. Quand l’app est fermée, ils arrivent sur votre iPhone via le relais et le service de notifications push d’Apple. Le micro de la carte demande Face ID, puis envoie ce que vous dites à la discussion affichée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットのタイトル、状態、各チャットの最新の返信は iPhone のロック解除中に表示されます。アプリを閉じている間は、Relay と Apple のプッシュサービスを通じて iPhone に届きます。カードのマイクは Face ID のあと、話した内容を表示中のチャットに送信します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os títulos, o status e a última linha de resposta de cada chat aparecem quando o iPhone está desbloqueado. Com o app fechado, eles chegam ao iPhone pelo relay e pelo serviço de push da Apple. O microfone do cartão pede o Face ID e depois envia o que você diz para o chat exibido."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手机解锁时会显示聊天标题、状态和每个聊天的最新回复。App 关闭时，它们通过 Relay 和 Apple 的推送服务送达你的手机。卡片上的麦克风会先要求 Face ID，然后把你说的话发送到它显示的聊天。"
           }
         }
       }
@@ -6040,6 +6280,46 @@
         }
       }
     },
+    "Cool": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cool"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genial"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cool"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "いいね"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legal"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "酷"
+          }
+        }
+      }
+    },
     "Copied": {
       "localizations": {
         "de": {
@@ -7080,6 +7360,46 @@
         }
       }
     },
+    "Detailed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausführlich"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detallado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détaillé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detalhado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详细"
+          }
+        }
+      }
+    },
     "Devices": {
       "localizations": {
         "de": {
@@ -7880,6 +8200,46 @@
         }
       }
     },
+    "Excellent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgezeichnet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excelente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excellent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すばらしい"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excelente"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "太棒了"
+          }
+        }
+      }
+    },
     "Expanded": {
       "localizations": {
         "de": {
@@ -8076,6 +8436,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "超高"
+          }
+        }
+      }
+    },
+    "Failed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehlgeschlagen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falló"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失敗"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falhou"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败"
           }
         }
       }
@@ -8402,6 +8802,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "找到电脑并不等于配对。请在目标电脑上：设置 → 远程访问 → 配对手机，然后扫描上方的代码。"
+          }
+        }
+      }
+    },
+    "Finished": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertig"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完了"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Concluído"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成"
           }
         }
       }
@@ -9446,6 +9886,46 @@
         }
       }
     },
+    "Got it": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verstanden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compris"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "了解"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "知道了"
+          }
+        }
+      }
+    },
     "Group by": {
       "localizations": {
         "de": {
@@ -9922,6 +10402,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "模型在每次回复上投入的力度。越高耗时越长。"
+          }
+        }
+      }
+    },
+    "How the agent asks before it runs tools on %@. Guardrails is recommended for general use.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie der Agent fragt, bevor er Tools auf %@ ausführt. Für den allgemeinen Gebrauch wird Guardrails empfohlen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómo pregunta el agente antes de ejecutar herramientas en %@. Se recomienda Guardrails para uso general."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment l’agent demande avant d’exécuter des outils sur %@. Guardrails est recommandé pour un usage général."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@でツールを実行する前の確認方法です。通常の利用にはGuardrailsを推奨します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como o agente pergunta antes de executar ferramentas em %@. Guardrails é recomendado para uso geral."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代理在 %@ 上运行工具前如何询问。一般使用推荐 Guardrails。"
           }
         }
       }
@@ -10732,6 +11252,46 @@
         }
       }
     },
+    "Laughing": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lacht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riendo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rit"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笑っています"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rindo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在笑"
+          }
+        }
+      }
+    },
     "Light": {
       "localizations": {
         "de": {
@@ -10768,6 +11328,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "浅色"
+          }
+        }
+      }
+    },
+    "Listening…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hört zu…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escuchando…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écoute…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞き取り中…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvindo…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在聆听…"
           }
         }
       }
@@ -11212,6 +11812,46 @@
         }
       }
     },
+    "Looks good": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sieht gut aus"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ve bien"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ça me va"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "いい感じ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ficou bom"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看起来不错"
+          }
+        }
+      }
+    },
     "Looks up, connects to and says hello on each of the computer's relay addresses.": {
       "localizations": {
         "de": {
@@ -11288,6 +11928,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "低"
+          }
+        }
+      }
+    },
+    "Make Nekko laugh": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekko zum Lachen bringen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer reír a Nekko"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire rire Nekko"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekkoを笑わせる"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fazer Nekko rir"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逗 Nekko 笑"
           }
         }
       }
@@ -11768,6 +12448,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "麦克风"
+          }
+        }
+      }
+    },
+    "Minimal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimal"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mínimo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimal"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最小"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mínimo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "简洁"
           }
         }
       }
@@ -12692,6 +13412,46 @@
         }
       }
     },
+    "Nice": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schön"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bien"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Super"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ナイス"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boa"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不错"
+          }
+        }
+      }
+    },
     "No Model Server is installed on %@.": {
       "localizations": {
         "de": {
@@ -13008,6 +13768,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "无聊天"
+          }
+        }
+      }
+    },
+    "No chat text leaves your computer for the Lock Screen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Chat-Text verlässt deinen Computer für den Sperrbildschirm."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ningún texto de los chats sale de tu computadora hacia la pantalla de bloqueo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun texte de discussion ne quitte votre ordinateur pour l’écran verrouillé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロック画面のためにチャットの文章がコンピュータから送られることはありません。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum texto dos chats sai do seu computador para a Tela de Bloqueio."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不会为锁定屏幕从电脑发送任何聊天文字。"
           }
         }
       }
@@ -13932,6 +14732,46 @@
         }
       }
     },
+    "Not sent: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gesendet: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No enviado: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non envoyé : %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未送信: %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não enviado: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未发送：%@"
+          }
+        }
+      }
+    },
     "Not shown on phones": {
       "localizations": {
         "de": {
@@ -14648,6 +15488,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "在你的电脑上：设置 → 同步 → 设备 → 批准，然后输入此代码。它向每台设备证明对方是你的设备；请勿与他人分享。"
+          }
+        }
+      }
+    },
+    "One card on the Lock Screen and in the Dynamic Island shows every running chat, with Allow / Deny for approvals.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Karte auf dem Sperrbildschirm und in der Dynamic Island zeigt alle laufenden Chats, mit Erlauben / Verweigern für Freigaben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una sola tarjeta en la pantalla de bloqueo y en la Dynamic Island muestra todos los chats en ejecución, con Permitir / Denegar para las aprobaciones."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une seule carte sur l’écran verrouillé et dans la Dynamic Island montre toutes les discussions en cours, avec Autoriser / Refuser pour les approbations."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロック画面とダイナミックアイランドの1枚のカードに実行中のすべてのチャットが表示され、承認では許可 / 拒否を選べます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um único cartão na Tela de Bloqueio e na Dynamic Island mostra todos os chats em andamento, com Permitir / Negar para aprovações."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁定屏幕和灵动岛上的一张卡片会显示所有运行中的聊天，批准请求可直接选择“允许”或“拒绝”。"
           }
         }
       }
@@ -16138,6 +17018,46 @@
         }
       }
     },
+    "Perfect": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfekt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfecto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parfait"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完璧"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfeito"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完美"
+          }
+        }
+      }
+    },
     "Phone protocol": {
       "localizations": {
         "de": {
@@ -16340,6 +17260,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "置顶"
+          }
+        }
+      }
+    },
+    "Preview of the Lock Screen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorschau des Sperrbildschirms"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa de la pantalla de bloqueo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aperçu de l’écran verrouillé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロック画面のプレビュー"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévia da Tela de Bloqueio"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁定屏幕预览"
           }
         }
       }
@@ -17824,6 +18784,46 @@
         }
       }
     },
+    "Removes this chat from the card": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernt diesen Chat von der Karte"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quita este chat de la tarjeta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retire cette discussion de la carte"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチャットをカードから外します"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove este chat do cartão"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从卡片上移除此聊天"
+          }
+        }
+      }
+    },
     "Rename": {
       "localizations": {
         "de": {
@@ -18420,46 +19420,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "运行于"
-          }
-        }
-      }
-    },
-    "Running chats show on the Lock Screen and in the Dynamic Island, with Allow / Deny for approvals.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Laufende Chats erscheinen auf dem Sperrbildschirm und in der Dynamic Island, mit Erlauben / Verweigern für Freigaben."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los chats en ejecución se muestran en la pantalla de bloqueo y en la Dynamic Island, con Permitir / Denegar para las aprobaciones."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les discussions en cours s’affichent sur l’écran verrouillé et dans la Dynamic Island, avec Autoriser / Refuser pour les approbations."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "実行中のチャットはロック画面とダイナミックアイランドに表示され、承認では許可 / 拒否を選べます。"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os chats em andamento aparecem na Tela de Bloqueio e na Dynamic Island, com Permitir / Negar para aprovações."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "运行中的聊天会显示在锁定屏幕和灵动岛上，批准请求可直接选择“允许”或“拒绝”。"
           }
         }
       }
@@ -19104,6 +20064,46 @@
         }
       }
     },
+    "Send to %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An %@ senden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar a %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer à %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ に送信"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar para %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送到 %@"
+          }
+        }
+      }
+    },
     "Send when online": {
       "localizations": {
         "de": {
@@ -19220,6 +20220,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "已作为提示词发送到此聊天。智能体会在 %@ 上完成 git 操作，需要批准的事项会先询问你。"
+          }
+        }
+      }
+    },
+    "Sent: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesendet: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyé : %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信済み: %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已发送：%@"
           }
         }
       }
@@ -20430,6 +21470,46 @@
         }
       }
     },
+    "Standard": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estándar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標準"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Padrão"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标准"
+          }
+        }
+      }
+    },
     "Starred on your computer": {
       "localizations": {
         "de": {
@@ -20990,6 +22070,86 @@
         }
       }
     },
+    "Stopped": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestoppt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detenido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêté"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止しました"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停止"
+          }
+        }
+      }
+    },
+    "Stopped with an error": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit einem Fehler gestoppt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se detuvo con un error"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêté sur une erreur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラーで停止しました"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parou com um erro"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "因出错而停止"
+          }
+        }
+      }
+    },
     "Swap": {
       "localizations": {
         "de": {
@@ -21386,6 +22546,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台 iPhone 上的 Tailscale"
+          }
+        }
+      }
+    },
+    "Talk to this chat": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit diesem Chat sprechen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hablar con este chat"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parler à cette discussion"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチャットに話しかける"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falar com este chat"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对此聊天说话"
           }
         }
       }
@@ -24230,6 +25430,126 @@
         }
       }
     },
+    "Watching": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vigilando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Surveille"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "監視中"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acompanhando"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关注中"
+          }
+        }
+      }
+    },
+    "Watching PR…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet PR…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vigilando el PR…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Surveille la PR…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PR を監視中…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acompanhando o PR…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在关注 PR…"
+          }
+        }
+      }
+    },
+    "Watching a pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet einen Pull Request"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vigilando un pull request"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Surveille une pull request"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プルリクエストを監視中"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acompanhando um pull request"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在关注拉取请求"
+          }
+        }
+      }
+    },
     "We sent a 6-digit code to %@.": {
       "localizations": {
         "de": {
@@ -24950,6 +26270,46 @@
         }
       }
     },
+    "Working…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeitet…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trabajando…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En cours…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作業中…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trabalhando…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在处理…"
+          }
+        }
+      }
+    },
     "Write another": {
       "localizations": {
         "de": {
@@ -25026,6 +26386,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "撰写信息"
+          }
+        }
+      }
+    },
+    "Writing…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreibt…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribiendo…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrit…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書いています…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrevendo…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在撰写…"
           }
         }
       }

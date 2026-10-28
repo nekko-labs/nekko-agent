@@ -19,7 +19,7 @@ const audit = (ago: number, job: string, result: AuditLine['result'], seconds: n
 });
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['config']['settings']> = {}): RunnerView => ({
   config: {
-    id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-mac',
+    id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac',
     settings: { ...DEFAULT_RUNNER_SETTINGS, enabled: true, macosSlots: 2, trustedNetworks: ['gw:a4:83:e7:1c:22:9f'], ...settings },
   },
   state: 'ready', slots: [], reasons: [], available: 2, limit: null, awake: false, error: null,
