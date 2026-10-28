@@ -55,6 +55,8 @@ final class Prefs {
     var expertMode: Bool { didSet { d.set(expertMode, forKey: "expertMode") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
+    /// Per computer, the last folder selected for a new chat. No entry means No folder.
+    var lastFolder: [String: String] { didSet { d.set(lastFolder, forKey: "lastFolder") } }
     /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
     var chatListView: ChatListView { didSet { d.set(chatListView.encoded, forKey: "chatListView") } }
     /// Per computer, the project groups' order as dragged on this iPhone (folder ids and `ChatGroup.general`).
@@ -95,6 +97,7 @@ final class Prefs {
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
+        lastFolder = d.dictionary(forKey: "lastFolder") as? [String: String] ?? [:]
         chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
         groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
         paneLayouts = d.dictionary(forKey: "paneLayouts") as? [String: Data] ?? [:]
@@ -104,6 +107,11 @@ final class Prefs {
         func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
         keepTranscripts = OfflineSetting.isOn(stored: choice("keepTranscripts"))
+    }
+
+    /// A saved draft wins, including an explicit No folder, over the fresh-chat default.
+    func newChatFolder(computer: String?, draft: Draft) -> String? {
+        draft.isEmpty ? computer.flatMap { lastFolder[$0] } : draft.workspaceId
     }
 
     func wants(_ kind: PushKind) -> Bool {

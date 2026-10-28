@@ -256,10 +256,10 @@ and New Chat, absolute-path validation, add, removal dismissal and confirmation.
 Matching native screenshots were captured and visually inspected. Live host,
 hardware authentication, iPad and VoiceOver remain unverified.
 
-### Desktop-style chat status and top-left Nekko (2026-10-25)
+### Desktop-style chat status and centered Nekko (2026-10-25; updated #1288)
 
 - **Intent:** recognize a chat's state from its leading icon, with the same visual vocabulary as desktop. Working uses a rocket, needs-attention a question mark, idle “Zz”, and completed a checkmark. A queued prompt keeps its clock. Live working/attention takes precedence over queued/completed state. VoiceOver includes the status label; colour alone never carries the state.
-- **Mascot:** one interactive pixel-cat button sits at the top-left of Chats, beside the computer menu. It uses the desktop head design, gently bobs while a chat is working, and shows a happy greeting for 1.2 seconds when tapped. Tapping only changes the local drawing, never sends a prompt or changes a setting. Its hit target is at least 44 pt. Reduce Motion suppresses movement and backgrounding pauses the animation timeline.
+- **Mascot:** one interactive pixel-cat button sits at the top center of Chats, separate from the computer menu and without a surrounding toolbar chip. It uses the desktop head design, gently bobs while a chat is working, and shows a happy greeting for 1.2 seconds when tapped. Tapping only changes the local drawing, never sends a prompt or changes a setting. Its hit target is at least 44 pt. Reduce Motion suppresses movement and backgrounding pauses the animation timeline.
 - **Verification:** native implementation and deterministic DEBUG-only synthetic-chat fixture added. Build, simulator interaction, visual evidence, physical-device VoiceOver and release verification are tracked separately; code presence alone does not mean this has shipped. The fixture has no computer credentials and does not represent a live relay journey.
 
 ### New-chat mascot grips the edge (#1247)
@@ -269,3 +269,11 @@ Implemented; the native app builds and the native pixel regression test passes o
 ### Wider, shorter paws (#1260)
 
 Implemented; matches the desktop greeting: each paw moves one drawing unit outward and is one unit shorter, still hanging in front of the box edge with toes down. The native pixel regression test samples the new toe and paw-bottom positions. Physical-device rendering remains unverified.
+
+### Remember the last new-chat folder (#1288)
+
+**Intent and acceptance:** iOS New chat defaults to the folder last selected on that paired computer, across chat creation and app relaunch. Choosing **No folder** clears the remembered choice. An unfinished draft keeps its own folder (including No folder). Switching computers uses that computer's remembered folder, never the previous computer's. Forgetting a computer clears its choice; Forget everything clears them all.
+
+**Implementation:** phone-only `Prefs.lastFolder` in UserDefaults stores folder ids, not paths or credentials. Selecting a folder does not make a network call or start a chat. The root mascot uses the centered principal toolbar placement; iOS 26 and later explicitly hide its shared glass background. Its existing 44-point target, greeting, working state and Reduce Motion behavior are unchanged.
+
+**Verification:** builds with Xcode 27.1; focused `LastFolderPrefsTests` and `ChatStatusTests` pass on an isolated iPhone 17 Pro simulator (iOS 26.5). Folder persistence, per-computer separation, No folder and draft priority are unit-tested. The UI test checks the mascot is horizontally centered within 2 pt, keeps a 44-point target and greets/returns to Working. Matched native before/after PNGs were inspected: centered mascot without a chip, other controls visible. Physical iPhone/iPad, iOS 17–25 layout and end-to-end folder creation over a real paired connection remain unverified.
