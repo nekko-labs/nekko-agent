@@ -529,6 +529,8 @@ final class RunActivitiesTests: XCTestCase {
     var level = LiveLevel.standard
     var summaries: [SessionSummary] = []
     var activity: [String: NekkoProtocol.Activity] = [:]
+    /// False: the computer's list hasn't loaded (`source()` is nil).
+    var loaded = true
 
     func make() -> RunActivities {
         let r = RunActivities(request: { [unowned self] attributes, state in
@@ -537,12 +539,12 @@ final class RunActivitiesTests: XCTestCase {
             return card
         }, adoptLeftover: false)
         r.level = { [unowned self] in level }
-        r.source = { [unowned self] in .init(summaries: summaries, activity: activity, computerId: "pc", computerName: "Mac") }
+        r.source = { [unowned self] in loaded ? .init(summaries: summaries, activity: activity, computerId: "pc", computerName: "Mac") : nil }
         return r
     }
 
-    func chat(_ id: String, _ title: String) -> SessionSummary {
-        SessionSummary.from(["id": .string(id), "title": .string(title), "lastReplyText": "Got it. Working on it now."])!
+    func chat(_ id: String, _ title: String, reply: String = "Got it. Working on it now.") -> SessionSummary {
+        SessionSummary.from(["id": .string(id), "title": .string(title), "lastReplyText": .string(reply)])!
     }
 
     func testTwoRunningChatsShareOneCard() throws {
@@ -596,5 +598,88 @@ final class RunActivitiesTests: XCTestCase {
         let card = try XCTUnwrap(started.first)
         r.refresh(now: Date().addingTimeInterval(LiveCardRules.finishedTail + 5))
         XCTAssertTrue(card.ended)
+    }
+
+    /// Reconnecting empties `activity` and the list load restores only needs-you:
+    /// a run the events saw keeps its chat as working for a while.
+    func testAReconnectKeepsARecentRunningChat() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        r.onEvent(.text(sessionId: "a", delta: "Hi"))
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        activity = [:]
+        r.refresh(urgent: true)
+        XCTAssertFalse(card.ended, "the run is still going as far as the phone knows")
+        XCTAssertEqual(card.state.chats.map(\.state), [.working])
+        XCTAssertEqual(card.state.chats.first?.step, "Writing…")
+        r.refresh(now: Date().addingTimeInterval(31 * 60))
+        XCTAssertTrue(card.ended, "no event for 30 minutes: the chat drops")
+    }
+
+    func testNoneStartsNoCardAndEndsARunningOne() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        level = .none
+        let r = make()
+        r.refresh()
+        XCTAssertTrue(started.isEmpty)
+        level = .standard
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        level = .none
+        r.refresh()
+        XCTAssertTrue(card.ended)
+        XCTAssertEqual(started.count, 1)
+    }
+
+    /// A tap on the card can launch the app before the list loads.
+    func testBeforeTheListLoadsTheCardKeepsItsOwnChats() throws {
+        summaries = [chat("a", "Billing fix"), chat("b", "Login page")]
+        activity = ["a": .running, "b": .running]
+        let r = make()
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        loaded = false
+        summaries = []
+        activity = [:]
+        r.refresh(urgent: true)
+        r.focus("b")
+        XCTAssertFalse(card.ended)
+        XCTAssertEqual(card.state.chats.map(\.id), ["a", "b"])
+        XCTAssertEqual(card.state.focusId, "b")
+        XCTAssertEqual(started.count, 1)
+    }
+
+    func testADismissedChatComesBackWhenItRunsAgain() throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.done(sessionId: "a", messageId: nil))
+        r.refresh()
+        r.dismiss("a")
+        XCTAssertTrue(try XCTUnwrap(started.first).ended)
+        r.onEvent(.text(sessionId: "a", delta: "Again"))
+        activity = ["a": .running]
+        r.refresh()
+        XCTAssertEqual(started.count, 2)
+        XCTAssertEqual(started.last?.state.chats.map(\.state), [.working])
+    }
+
+    /// A throttled update is sent once the 2 s are up, not dropped.
+    func testAThrottledUpdateArrivesLater() async throws {
+        summaries = [chat("a", "Billing fix", reply: "First.")]
+        activity = ["a": .running]
+        level = .detailed
+        let r = make()
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        summaries = [chat("a", "Billing fix", reply: "Second.")]
+        r.refresh()
+        r.refresh()
+        XCTAssertEqual(card.updates, 0, "throttled")
+        try await Task.sleep(nanoseconds: 2_600_000_000)
+        XCTAssertEqual(card.updates, 1, "one trailing update")
+        XCTAssertEqual(card.state.chats.first?.reply, "Second.")
     }
 }

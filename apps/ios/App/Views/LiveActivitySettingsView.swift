@@ -38,7 +38,7 @@ struct LiveActivitySettingsView: View {
         case .none: return nil
         case .minimal: return "No chat text leaves your computer for the Lock Screen."
         case .standard, .detailed:
-            return "Chat titles and status are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple's push service."
+            return "Chat titles and status are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service."
         }
     }
 }

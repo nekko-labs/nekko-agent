@@ -36,6 +36,7 @@ final class RunActivities {
     /// What the events say about a chat's latest run (the chat list doesn't).
     private struct Run {
         var startedAt: Date
+        var lastEventAt: Date
         var step = ""
         var callId: String?
         var severity: String?
@@ -51,6 +52,11 @@ final class RunActivities {
     var pinnedFocus: String?
     private var lastUpdate: Date?
     private var expiry: Task<Void, Never>?
+    /// The update a throttled refresh put off, sent once the 2 s are up.
+    private var trailing: Task<Void, Never>?
+    /// How long a run the events saw counts as working with no word from
+    /// `activity` (a reconnect empties it until the next event).
+    static let quietRun: TimeInterval = 30 * 60
     private let request: (NekkoCardAttributes, LiveCardState) -> CardActivity?
 
     var level: () -> LiveLevel = { .none }
@@ -67,7 +73,8 @@ final class RunActivities {
         let sid = e.sessionId
         let now = Date()
         func running(_ step: String, callId: String? = nil, severity: String? = nil) {
-            var run = runs[sid].flatMap { $0.finished == nil ? $0 : nil } ?? Run(startedAt: now)
+            var run = runs[sid].flatMap { $0.finished == nil ? $0 : nil } ?? Run(startedAt: now, lastEventAt: now)
+            run.lastEventAt = now
             run.step = step
             run.callId = callId
             run.severity = severity
@@ -75,7 +82,8 @@ final class RunActivities {
             dismissed.remove(sid)
         }
         func finish(_ state: LiveChatState, _ step: String) {
-            var run = runs[sid] ?? Run(startedAt: now)
+            var run = runs[sid] ?? Run(startedAt: now, lastEventAt: now)
+            run.lastEventAt = now
             run.finished = state
             run.finishedAt = now
             run.step = step
@@ -117,7 +125,7 @@ final class RunActivities {
         let level = level()
         let chats: [LiveChat], computerId: String, computerName: String
         if let src = source() {
-            chats = liveChats(src)
+            chats = liveChats(src, now: now)
             (computerId, computerName) = (src.computerId, src.computerName)
         } else if let card {
             // A tap on the card can launch the app before it has the list.
@@ -144,7 +152,20 @@ final class RunActivities {
         guard state != previous else { return }
         func shape(_ s: LiveCardState?) -> [String] { s?.chats.map { "\($0.id) \($0.state) \($0.callId ?? "")" } ?? [] }
         let seenAtOnce = urgent || state.focusId != previous?.focusId || shape(state) != shape(previous)
-        if !seenAtOnce, let lastUpdate, now.timeIntervalSince(lastUpdate) < 2 { return }
+        if !seenAtOnce, let lastUpdate, now.timeIntervalSince(lastUpdate) < 2 {
+            if trailing == nil {
+                let at = lastUpdate.addingTimeInterval(2)
+                trailing = Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(max(0, at.timeIntervalSinceNow) * 1_000_000_000))
+                    guard !Task.isCancelled else { return }
+                    self?.trailing = nil
+                    self?.refresh()
+                }
+            }
+            return
+        }
+        trailing?.cancel()
+        trailing = nil
         card.update(state)
         lastUpdate = now
     }
@@ -170,9 +191,11 @@ final class RunActivities {
         card = nil
         lastUpdate = nil
         expiry?.cancel()
+        trailing?.cancel()
+        trailing = nil
     }
 
-    private func liveChats(_ src: Source) -> [LiveChat] {
+    private func liveChats(_ src: Source, now: Date) -> [LiveChat] {
         src.summaries.compactMap { s in
             guard !s.archived, !dismissed.contains(s.id) else { return nil }
             let run = runs[s.id]
@@ -182,7 +205,8 @@ final class RunActivities {
             case .needsYou?: (state, step) = (.needsYou, live?.step ?? "")
             case .running?: (state, step) = (.working, live?.step ?? "")
             case nil:
-                if s.activeWatchCount > 0 { (state, step) = (.watching, "Watching PR…") }
+                if let live, now.timeIntervalSince(live.lastEventAt) < Self.quietRun { (state, step) = (.working, live.step) }
+                else if s.activeWatchCount > 0 { (state, step) = (.watching, "Watching PR…") }
                 else if let run, let finished = run.finished { (state, step) = (finished, run.step) }
                 else { return nil }
             }
@@ -244,7 +268,8 @@ final class SystemCard: CardActivity {
     /// one-per-chat activities of earlier versions, end.
     static func leftover() -> CardActivity? {
         for a in ActivityKit.Activity<AgentRunAttributes>.activities { Task { await a.end(nil, dismissalPolicy: .immediate) } }
-        let cards = ActivityKit.Activity<NekkoCardAttributes>.activities.filter { $0.activityState == .active }
+        // A stale card (past its staleDate while the app was suspended) is still up.
+        let cards = ActivityKit.Activity<NekkoCardAttributes>.activities.filter { $0.activityState != .ended && $0.activityState != .dismissed }
         for a in cards.dropFirst() { Task { await a.end(nil, dismissalPolicy: .immediate) } }
         return cards.first.map { SystemCard($0, state: $0.content.state) }
     }
