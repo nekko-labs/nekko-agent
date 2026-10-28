@@ -15,7 +15,7 @@ const form = (over: Partial<ConnectForm> = {}): ConnectForm => ({
   ...emptyConnectForm(), appId: '12', installationId: '34', privateKeyPem: PEM, kind: 'repo', target: 'nekko-labs/nekko-agent', ...over,
 });
 const view: RunnerView = {
-  config: { id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-mac', settings: { ...DEFAULT_RUNNER_SETTINGS } },
+  config: { id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac', settings: { ...DEFAULT_RUNNER_SETTINGS } },
   state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 },
   host: { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false },
   recent: [],
@@ -40,7 +40,7 @@ describe('ConnectRunnerSheet', () => {
     const one = body(1, form());
     for (const s of ['App ID', 'Installation ID', 'Private key', 'How to create the app', 'https://nekkoagent.com/docs/ci-runners#create-the-github-app']) expect(one).toContain(s);
     const two = body(2, form({ kind: 'org', target: 'nekko-labs' }));
-    for (const s of ['A repo', 'An org', 'Repos in the org', 'Allow public repos', 'Runner label', 'placeholder="nekko-mac"', 'runs-on: [self-hosted, macOS, ARM64, nekko-mac]']) expect(two).toContain(s);
+    for (const s of ['A repo', 'An org', 'Repos in the org', 'Allow public repos', 'Runner label', 'placeholder="nekko-cloud-mac"', 'runs-on: [self-hosted, macOS, ARM64, nekko-cloud-mac]']) expect(two).toContain(s);
   });
 
   it('step_1_hides_the_key', () => {

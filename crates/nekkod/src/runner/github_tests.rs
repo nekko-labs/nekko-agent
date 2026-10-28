@@ -66,7 +66,7 @@ fn repo_record() -> RunnerRecord {
         config: RunnerConfig {
             id: "r1".into(),
             scope: Scope::Repo { owner: "o".into(), repo: "r".into() },
-            label: "nekko-mac".into(),
+            label: "nekko-cloud-mac".into(),
             settings: RunnerSettings::default(),
         },
         link: Link::Github(GithubLink {
@@ -166,7 +166,7 @@ async fn jit_config_request_has_labels_and_group() {
     assert_eq!(t.http.urls()[1], "GET https://api.github.com/repos/o/r");
     let body = t.http.body(2);
     assert_eq!(body["name"], "nekko-mac1-1-1");
-    assert_eq!(body["labels"], json!(["self-hosted", "macOS", "ARM64", "nekko-mac"]));
+    assert_eq!(body["labels"], json!(["self-hosted", "macOS", "ARM64", "nekko-cloud-mac"]));
     assert_eq!(body["runner_group_id"], 1);
     assert_eq!(body["work_folder"], "_work");
 
@@ -188,7 +188,7 @@ async fn org_scope_creates_group_limited_to_repos() {
             (200, json!({ "id": 11, "private": true })),
             (200, json!({ "id": 12, "private": true })),
             (200, json!({ "total_count": 1, "runner_groups": [{ "id": 1, "name": "Default" }] })),
-            (201, json!({ "id": 7, "name": "nekko-nekko-mac" })),
+            (201, json!({ "id": 7, "name": "nekko-nekko-cloud-mac" })),
         ],
         false,
     );
@@ -202,7 +202,7 @@ async fn org_scope_creates_group_limited_to_repos() {
     assert_eq!(
         t.http.body(5),
         json!({
-            "name": "nekko-nekko-mac",
+            "name": "nekko-nekko-cloud-mac",
             "visibility": "selected",
             "selected_repository_ids": [11, 12],
             "allows_public_repositories": false,
@@ -224,7 +224,7 @@ async fn org_with_our_group_updates_it_instead() {
                 200,
                 json!({ "runner_groups": [{
                     "id": 8,
-                    "name": "nekko-nekko-mac",
+                    "name": "nekko-nekko-cloud-mac",
                     "restricted_to_workflows": true,
                     "selected_workflows": ["acme/app/.github/workflows/ios.yml@refs/heads/main"],
                 }] }),
@@ -241,7 +241,7 @@ async fn org_with_our_group_updates_it_instead() {
     assert_eq!(
         t.http.body(5),
         json!({
-            "name": "nekko-nekko-mac",
+            "name": "nekko-nekko-cloud-mac",
             "visibility": "selected",
             "allows_public_repositories": false,
             "restricted_to_workflows": true,
@@ -319,7 +319,7 @@ async fn connect_stores_the_key_only_after_github_accepts_it() {
     assert_eq!(t.vault().get(&key_name(123)).as_deref(), Some(PEM));
     assert!(rec.config.settings.enabled);
     assert_eq!(rec.config.settings.trusted_networks, vec![NET.to_string()]);
-    assert_eq!(rec.config.label, "nekko-mac");
+    assert_eq!(rec.config.label, "nekko-cloud-mac");
     assert_eq!(rec.config.scope, Scope::Repo { owner: "o".into(), repo: "r".into() });
     assert_eq!(
         *rec.github().unwrap(),
@@ -435,7 +435,7 @@ async fn queued_counts_jobs_with_our_labels() {
             (
                 200,
                 json!({ "jobs": [
-                    { "id": 1, "status": "queued", "labels": ["self-hosted", "macOS", "nekko-mac"] },
+                    { "id": 1, "status": "queued", "labels": ["self-hosted", "macOS", "nekko-cloud-mac"] },
                     { "id": 2, "status": "queued", "labels": ["ubuntu-latest"] },
                     { "id": 3, "status": "queued", "labels": ["self-hosted", "gpu"] },
                     { "id": 4, "status": "in_progress", "labels": ["self-hosted"] },
