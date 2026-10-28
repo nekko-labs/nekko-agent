@@ -58,6 +58,8 @@ final class Prefs {
     /// Per computer, concrete last-used choices, never a recommendation marker.
     var lastEffort: [String: String] { didSet { d.set(lastEffort, forKey: "lastEffort") } }
     var lastTools: [String: String] { didSet { d.set(lastTools, forKey: "lastTools") } }
+    /// Per computer, the last folder selected for a new chat. No entry means No folder.
+    var lastFolder: [String: String] { didSet { d.set(lastFolder, forKey: "lastFolder") } }
     /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
     var chatListView: ChatListView { didSet { d.set(chatListView.encoded, forKey: "chatListView") } }
     /// Per computer, the project groups' order as dragged on this iPhone (folder ids and `ChatGroup.general`).
@@ -100,6 +102,7 @@ final class Prefs {
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
         lastEffort = d.dictionary(forKey: "lastEffort") as? [String: String] ?? [:]
         lastTools = d.dictionary(forKey: "lastTools") as? [String: String] ?? [:]
+        lastFolder = d.dictionary(forKey: "lastFolder") as? [String: String] ?? [:]
         chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
         groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
         paneLayouts = d.dictionary(forKey: "paneLayouts") as? [String: Data] ?? [:]
@@ -117,6 +120,11 @@ final class Prefs {
 
     func newChatTools(computer: String?, settings: PcSettings) -> PcSettings.ChatMode {
         computer.flatMap { lastTools[$0] }.flatMap(PcSettings.ChatMode.init(rawValue:)) ?? settings.effectiveMode
+    }
+
+    /// A saved draft wins, including an explicit No folder, over the fresh-chat default.
+    func newChatFolder(computer: String?, draft: Draft) -> String? {
+        draft.isEmpty ? computer.flatMap { lastFolder[$0] } : draft.workspaceId
     }
 
     func wants(_ kind: PushKind) -> Bool {

@@ -4480,6 +4480,46 @@
         }
       }
     },
+    "Chat titles, status and each chat’s latest reply line are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service. The mic on the card asks for Face ID, then sends what you say to the chat it shows.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat-Titel, Status und die letzte Antwortzeile jedes Chats werden angezeigt, wenn dein iPhone entsperrt ist. Ist die App geschlossen, erreichen sie dein iPhone über das Relay und Apples Push-Dienst. Das Mikrofon auf der Karte fragt nach Face ID und sendet dann, was du sagst, an den angezeigten Chat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los títulos, el estado y la última línea de respuesta de cada chat se muestran cuando tu iPhone está desbloqueado. Con la app cerrada, llegan a tu iPhone a través del relay y del servicio de notificaciones push de Apple. El micrófono de la tarjeta pide Face ID y luego envía lo que dices al chat que muestra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les titres, l’état et la dernière ligne de réponse de chaque discussion s’affichent quand votre iPhone est déverrouillé. Quand l’app est fermée, ils arrivent sur votre iPhone via le relais et le service de notifications push d’Apple. Le micro de la carte demande Face ID, puis envoie ce que vous dites à la discussion affichée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットのタイトル、状態、各チャットの最新の返信は iPhone のロック解除中に表示されます。アプリを閉じている間は、Relay と Apple のプッシュサービスを通じて iPhone に届きます。カードのマイクは Face ID のあと、話した内容を表示中のチャットに送信します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os títulos, o status e a última linha de resposta de cada chat aparecem quando o iPhone está desbloqueado. Com o app fechado, eles chegam ao iPhone pelo relay e pelo serviço de push da Apple. O microfone do cartão pede o Face ID e depois envia o que você diz para o chat exibido."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手机解锁时会显示聊天标题、状态和每个聊天的最新回复。App 关闭时，它们通过 Relay 和 Apple 的推送服务送达你的手机。卡片上的麦克风会先要求 Face ID，然后把你说的话发送到它显示的聊天。"
+          }
+        }
+      }
+    },
     "Chats": {
       "localizations": {
         "de": {
@@ -14692,6 +14732,46 @@
         }
       }
     },
+    "Not sent: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gesendet: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No enviado: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non envoyé : %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未送信: %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não enviado: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未发送：%@"
+          }
+        }
+      }
+    },
     "Not shown on phones": {
       "localizations": {
         "de": {
@@ -20140,6 +20220,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "已作为提示词发送到此聊天。智能体会在 %@ 上完成 git 操作，需要批准的事项会先询问你。"
+          }
+        }
+      }
+    },
+    "Sent: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesendet: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyé : %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信済み: %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已发送：%@"
           }
         }
       }

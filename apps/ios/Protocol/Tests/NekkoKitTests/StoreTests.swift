@@ -522,6 +522,25 @@ final class ChatModelTests: XCTestCase {
         chat.stop()
     }
 
+    /// A Send tapped just as a reply finishes goes as a new turn: the re-read that
+    /// still says "running" is stale until the debounced reload after `done`.
+    func testASendRightAfterDoneStartsATurnNotAQueue() async throws {
+        let (s, c) = try await makeOnline()
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "activeRun": ["startedAt": 1]] }
+        let chat = ChatModel(sessionId: "s", store: s)
+        chat.start()
+        await settle()
+        c.event(["type": "text", "sessionId": "s", "delta": "Hi"])
+        c.event(["type": "done", "sessionId": "s"])
+        for _ in 0..<20 { await Task.yield() }
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": []] }
+        try await chat.send("next")
+        await settle()
+        XCTAssertEqual(c.callsTo(Channels.chatSend).first?.first?.str("text"), "next", "a new turn")
+        XCTAssertTrue(c.callsTo(Channels.chatQueue).isEmpty, "an idle chat's queue never runs")
+        chat.stop()
+    }
+
     func testApprovalsQuestionsAndStop() async throws {
         let (s, c) = try await makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)

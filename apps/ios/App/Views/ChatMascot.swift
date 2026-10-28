@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// Centered root mascot, outside iOS 26's shared toolbar glass.
+struct RootMascot: ToolbarContent {
+    var working = false
+
+    var body: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .principal) { ChatMascot(working: working) }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .principal) { ChatMascot(working: working) }
+        }
+    }
+}
+
 /// Desktop's pixel cat, with a local greeting. Never sends a chat or changes settings.
 struct ChatMascot: View {
     var working = false
