@@ -47,7 +47,7 @@ fn rig(replies: Vec<(u16, Value)>) -> T {
 
 fn rec(scope: Scope, link: GitlabLink) -> RunnerRecord {
     RunnerRecord {
-        config: RunnerConfig { id: "r1".into(), scope, label: "nekko-mac".into(), settings: RunnerSettings::default() },
+        config: RunnerConfig { id: "r1".into(), scope, label: "nekko-cloud-mac".into(), settings: RunnerSettings::default() },
         link: Link::Gitlab(link),
         image: None,
     }
@@ -99,7 +99,7 @@ async fn mint_creates_a_locked_tagged_project_runner() {
     assert_eq!(
         b,
         json!({"runner_type":"project_type","project_id":42,"description":"nekko-mac1-100-0","paused":false,
-        "locked":true,"run_untagged":false,"tag_list":"nekko-mac,macos,arm64","access_level":"ref_protected","maximum_timeout":7200})
+        "locked":true,"run_untagged":false,"tag_list":"nekko-cloud-mac,macos,arm64","access_level":"ref_protected","maximum_timeout":7200})
     );
     assert_eq!((m.runner_id, m.seed_file), (77, "gitlab-runner.toml"));
     assert!(m.jit_config.contains("token = \"glrt-abc\"") && m.jit_config.contains("url = \"https://gitlab.com\""));
@@ -269,11 +269,11 @@ async fn job_is_none_without_a_running_job() {
 #[tokio::test]
 async fn queued_counts_jobs_our_tags_cover() {
     let jobs = json!([
-        job_tags(&["nekko-mac"]),
-        job_tags(&["macos", "nekko-mac"]),
+        job_tags(&["nekko-cloud-mac"]),
+        job_tags(&["macos", "nekko-cloud-mac"]),
         job_tags(&[]),
         job_tags(&["docker"]),
-        job_tags(&["nekko-mac", "gpu"]),
+        job_tags(&["nekko-cloud-mac", "gpu"]),
     ]);
     let t = rig(vec![(200, jobs)]);
     assert_eq!(t.gl.queued(&unprotected_rec()).await.unwrap(), 2);
@@ -286,12 +286,12 @@ async fn queued_counts_jobs_our_tags_cover() {
 #[tokio::test]
 async fn queued_skips_unprotected_refs_when_protected_only() {
     let jobs = json!([
-        {"id": 1, "ref": "main", "tag": false, "tag_list": ["nekko-mac"]},
-        {"id": 2, "ref": "feature", "tag": false, "tag_list": ["nekko-mac"]},
-        {"id": 3, "ref": "refs/merge-requests/3/head", "tag": false, "tag_list": ["nekko-mac"]},
-        {"id": 4, "ref": "v1.0", "tag": true, "tag_list": ["nekko-mac"]},
-        {"id": 5, "ref": "v2/rc", "tag": true, "tag_list": ["nekko-mac"]},
-        {"id": 6, "ref": "gone", "tag": true, "tag_list": ["nekko-mac"]},
+        {"id": 1, "ref": "main", "tag": false, "tag_list": ["nekko-cloud-mac"]},
+        {"id": 2, "ref": "feature", "tag": false, "tag_list": ["nekko-cloud-mac"]},
+        {"id": 3, "ref": "refs/merge-requests/3/head", "tag": false, "tag_list": ["nekko-cloud-mac"]},
+        {"id": 4, "ref": "v1.0", "tag": true, "tag_list": ["nekko-cloud-mac"]},
+        {"id": 5, "ref": "v2/rc", "tag": true, "tag_list": ["nekko-cloud-mac"]},
+        {"id": 6, "ref": "gone", "tag": true, "tag_list": ["nekko-cloud-mac"]},
     ]);
     let t = rig(vec![
         (200, jobs.clone()),
@@ -316,8 +316,8 @@ async fn queued_skips_unprotected_refs_when_protected_only() {
 
 #[tokio::test]
 async fn protected_answers_expire_after_ten_minutes() {
-    let jobs = json!([{"id": 1, "ref": "main", "tag": false, "tag_list": ["nekko-mac"]}]);
-    let dev = json!([{"id": 2, "ref": "dev", "tag": false, "tag_list": ["nekko-mac"]}]);
+    let jobs = json!([{"id": 1, "ref": "main", "tag": false, "tag_list": ["nekko-cloud-mac"]}]);
+    let dev = json!([{"id": 2, "ref": "dev", "tag": false, "tag_list": ["nekko-cloud-mac"]}]);
     let t = rig(vec![
         (200, jobs.clone()),
         (200, json!({"protected": true})),
@@ -343,7 +343,7 @@ async fn protected_answers_expire_after_ten_minutes() {
 #[tokio::test]
 async fn group_queue_polls_each_listed_project() {
     let t =
-        rig(vec![(200, json!([job_tags(&["nekko-mac"])])), (200, json!([job_tags(&["arm64"]), job_tags(&["macos"])]))]);
+        rig(vec![(200, json!([job_tags(&["nekko-cloud-mac"])])), (200, json!([job_tags(&["arm64"]), job_tags(&["macos"])]))]);
     let mut r = group_rec(&["g/a", "g/b"]);
     if let Link::Gitlab(l) = &mut r.link {
         l.protected_only = false;
@@ -363,7 +363,7 @@ async fn group_queue_skips_a_project_it_cannot_read() {
     let t = rig(vec![
         (404, json!({"message": "404 Project Not Found"})),
         (403, json!({"message": "403 Forbidden"})),
-        (200, json!([job_tags(&["nekko-mac"])])),
+        (200, json!([job_tags(&["nekko-cloud-mac"])])),
     ]);
     let mut r = group_rec(&["g/gone", "g/hidden", "g/b"]);
     if let Link::Gitlab(l) = &mut r.link {
@@ -561,7 +561,7 @@ async fn connect_project_end_to_end() {
     );
     assert_eq!(r.config.settings.trusted_networks, vec!["gw:0a:1b:2c:3d:4e:05".to_string()]);
     assert!(r.config.settings.enabled);
-    assert_eq!(r.config.label, "nekko-mac");
+    assert_eq!(r.config.label, "nekko-cloud-mac");
     assert_eq!(c.vault.get(&token_key(&r.config.id)).as_deref(), Some("glpat-x"));
     assert_eq!(
         c.http.urls(),
