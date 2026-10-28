@@ -78,7 +78,7 @@ struct AgentRunLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    PhaseIcon(phase: context.state.phase).font(.title3).padding(.leading, 4)
+                    RunMascot(phase: context.state.phase, steps: context.state.steps, size: 32).padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if context.state.phase == .running && context.state.hasStart {
@@ -95,7 +95,7 @@ struct AgentRunLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                PhaseIcon(phase: context.state.phase)
+                RunMascot(phase: context.state.phase, steps: context.state.steps)
             } compactTrailing: {
                 if context.state.phase == .running && context.state.hasStart {
                     Text(context.state.startedAt, style: .timer).monospacedDigit().frame(maxWidth: 44)
@@ -103,10 +103,10 @@ struct AgentRunLiveActivity: Widget {
                     Text(shortLabel(context.state.phase)).font(.caption2.weight(.semibold))
                 }
             } minimal: {
-                PhaseIcon(phase: context.state.phase)
+                RunMascot(phase: context.state.phase, steps: context.state.steps)
             }
             .widgetURL(URL(string: "nekko-agent://chat/\(context.attributes.sessionId)"))
-            .keylineTint(color(context.state.phase))
+            .keylineTint(context.state.phase.tint)
         }
     }
 }
@@ -117,7 +117,7 @@ private struct LockScreenView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                PhaseIcon(phase: context.state.phase)
+                RunMascot(phase: context.state.phase, steps: context.state.steps, size: 26)
                 Text(context.attributes.chatTitle).font(.headline).lineLimit(1)
                 Spacer()
                 if context.state.phase == .running && context.state.hasStart {
@@ -162,43 +162,6 @@ private struct Buttons: View {
         default:
             EmptyView()
         }
-    }
-}
-
-private struct PhaseIcon: View {
-    let phase: AgentRunAttributes.Phase
-
-    var body: some View {
-        Image(systemName: symbol).foregroundStyle(color(phase)).accessibilityLabel(label)
-    }
-
-    private var label: String {
-        switch phase {
-        case .running: return "Working"
-        case .approval: return "Waiting for your approval"
-        case .question: return "Waiting for your answer"
-        case .done: return "Finished"
-        case .failed: return "Failed"
-        }
-    }
-
-    private var symbol: String {
-        switch phase {
-        case .running: return "sparkles"
-        case .approval: return "hand.raised.fill"
-        case .question: return "questionmark.bubble.fill"
-        case .done: return "checkmark.circle.fill"
-        case .failed: return "exclamationmark.triangle.fill"
-        }
-    }
-}
-
-private func color(_ phase: AgentRunAttributes.Phase) -> Color {
-    switch phase {
-    case .running: return Color(red: 0.55, green: 0.49, blue: 1)
-    case .approval, .question: return .orange
-    case .done: return .green
-    case .failed: return .red
     }
 }
 
