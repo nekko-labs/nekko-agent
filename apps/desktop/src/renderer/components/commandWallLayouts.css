@@ -371,6 +371,10 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; }
 /* Each option leans in on hover and its plus turns a quarter; a press squeezes it and turns the plus on. */
 .wall-zone-empty .wall-zone-option { transition: transform 180ms cubic-bezier(.2, .8, .2, 1), background var(--dur-fast) ease, color var(--dur-fast) ease; }
+/* The label takes the slack so every shortcut lines up on the right. */
+.wall-zone-label { flex: 1; padding-right: 16px; text-align: left; }
+.wall-zone-kbd { opacity: .6; transition: opacity 140ms ease; }
+.wall-zone-option:is(:hover, :focus-visible) .wall-zone-kbd { opacity: 1; }
 .wall-zone-plus { opacity: .6; transition: transform 260ms cubic-bezier(.34, 1.56, .64, 1), opacity 140ms ease, color 140ms ease; }
 .wall-zone-empty .wall-zone-option:is(:hover, :focus-visible) { transform: translateX(3px); }
 .wall-zone-empty .wall-zone-option.text-accent:is(:hover, :focus-visible, :active) { color: var(--accent); }
