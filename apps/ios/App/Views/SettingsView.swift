@@ -119,7 +119,7 @@ struct SettingsView: View {
                     UntestedHardwareNote()
                 }
             } header: { SectionHeader("Security") } footer: {
-                Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications and the Lock Screen free of chat details.")
+                Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications free of chat details. What the Lock Screen shows is set in Live Activities below.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
@@ -163,11 +163,14 @@ struct SettingsView: View {
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
-                Toggle("Live Activities", isOn: $prefs.liveActivities)
+                NavigationLink(value: Route.liveActivities) {
+                    LabeledContent("Live Activities", value: prefs.liveActivityLevel.rawValue.capitalized)
+                }
+                .accessibilityIdentifier("settings.liveActivities")
                 Toggle("Vibrate for approvals and questions", isOn: $prefs.hapticNeedsYou)
                 Toggle("Vibrate when a reply finishes", isOn: $prefs.hapticDone)
             } header: { SectionHeader("While a chat runs") } footer: {
-                Text("Running chats show on the Lock Screen and in the Dynamic Island, with Allow / Deny for approvals.")
+                Text("One card on the Lock Screen and in the Dynamic Island shows every running chat, with Allow / Deny for approvals.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {

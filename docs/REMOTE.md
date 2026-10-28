@@ -318,14 +318,17 @@ inference or close the native apps' remaining feature and release gaps; see the
 [native Android spec](../spec/phone/native-android-app.md).
 
 **The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
-adds what only iOS can: a **Live Activity** for each running chat on the Lock Screen and in the
-Dynamic Island, with **Allow / Deny** for a waiting tool and **Stop**; notifications with Allow /
+adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
+the Dynamic Island, with a chip per chat, **Allow / Deny** for a waiting tool and **Stop**, and a
+level in **Settings → Live Activities** (None, Minimal, Standard, Detailed) that decides how much
+of the chat it shows; until the relay can push it, the card changes only while the app is running; notifications with Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
 and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone's own
 speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
 the iPhone. If a Tailscale relay can't be reached, the app says which side is the problem:
 Tailscale is off on the phone, or the computer isn't answering. With the app lock on (Face ID or
-passcode, on by default), the Lock Screen and notifications never show chat titles or commands.
+passcode, on by default), notifications never show chat titles or commands, and the card starts
+at Minimal, which shows no chat text.
 
 On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
 Keystore. The app drops any provider API keys your computer sends with its settings and never

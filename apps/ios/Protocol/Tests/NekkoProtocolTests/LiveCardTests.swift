@@ -120,4 +120,15 @@ final class LiveCardTests: XCTestCase {
         let decoded = try JSONDecoder().decode(LiveCardState.self, from: Data(#"{"chats":[{"id":"a","state":"sleeping"},{"id":"b","state":"done"}]}"#.utf8))
         XCTAssertEqual(decoded.chats.map(\.state), [.working, .done])
     }
+
+    func testReplyLineIsTheFirstSentenceUpTo60Characters() {
+        XCTAssertEqual(replyLine("Got it. Working on it now."), "Got it.")
+        XCTAssertEqual(replyLine("  Done!\nThe tests pass."), "Done!")
+        XCTAssertEqual(replyLine("Line one\nline two"), "Line one")
+        XCTAssertEqual(replyLine("Version 1.2 is out"), "Version 1.2 is out", "a dot inside a word ends nothing")
+        XCTAssertEqual(replyLine(nil), "")
+        let long = replyLine(String(repeating: "word ", count: 30))
+        XCTAssertEqual(long.count, 60)
+        XCTAssertTrue(long.hasSuffix("…"))
+    }
 }

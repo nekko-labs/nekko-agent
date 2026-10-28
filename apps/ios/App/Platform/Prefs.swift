@@ -31,8 +31,8 @@ final class Prefs {
     var notifyNeedsYou: Bool { didSet { d.set(notifyNeedsYou, forKey: "notifyNeedsYou") } }
     var notifyFinished: Bool { didSet { d.set(notifyFinished, forKey: "notifyFinished") } }
     var notifyFailed: Bool { didSet { d.set(notifyFailed, forKey: "notifyFailed") } }
-    /// Show running turns on the Lock Screen and in the Dynamic Island.
-    var liveActivities: Bool { didSet { d.set(liveActivities, forKey: "liveActivities") } }
+    /// What the Live Activity card shows on the Lock Screen and in the Dynamic Island (None starts none).
+    var liveActivityLevel: LiveLevel { didSet { d.set(liveActivityLevel.rawValue, forKey: "liveActivityLevel") } }
     /// The computer to connect to at launch; nil = the one used last.
     var defaultComputer: String? { didSet { d.set(defaultComputer, forKey: "defaultComputer") } }
     /// Dictation: the computer's Whisper when installed, else this iPhone's recognizer.
@@ -77,7 +77,15 @@ final class Prefs {
         notifyNeedsYou = flag("notifyNeedsYou", notify)
         notifyFinished = flag("notifyFinished", notify)
         notifyFailed = flag("notifyFailed", notify)
-        liveActivities = flag("liveActivities", true)
+        // Before levels there was one switch, and app lock kept chat text off the Lock Screen.
+        // The first level is stored, so turning app lock off later doesn't change it.
+        if let level = defaults.string(forKey: "liveActivityLevel").flatMap(LiveLevel.init(rawValue:)) {
+            liveActivityLevel = level
+        } else {
+            let first: LiveLevel = !flag("liveActivities", true) ? .none : flag("appLock", true) ? .minimal : .standard
+            liveActivityLevel = first
+            defaults.set(first.rawValue, forKey: "liveActivityLevel")
+        }
         defaultComputer = d.string(forKey: "defaultComputer")
         dictationOnComputer = flag("dictationOnComputer", true)
         dictationHold = flag("dictationHold", false)

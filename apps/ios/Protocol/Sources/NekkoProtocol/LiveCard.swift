@@ -161,3 +161,17 @@ public func closeWord(for id: String, failed: Bool) -> String {
     for b in id.utf8 { h = (h ^ UInt32(b)) &* 16777619 }
     return closeWords[Int(h % UInt32(closeWords.count))]
 }
+
+/// The card's reply line (Detailed): the first sentence of the agent's latest
+/// reply, or its first line, at most 60 characters.
+public func replyLine(_ text: String?) -> String {
+    let t = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    var end = t.endIndex
+    for i in t.indices {
+        if t[i].isNewline { end = i; break }
+        let next = t.index(after: i)
+        if ".!?".contains(t[i]), next == t.endIndex || t[next].isWhitespace { end = next; break }
+    }
+    let line = t[..<end].trimmingCharacters(in: .whitespaces)
+    return line.count > 60 ? line.prefix(59).trimmingCharacters(in: .whitespaces) + "…" : line
+}

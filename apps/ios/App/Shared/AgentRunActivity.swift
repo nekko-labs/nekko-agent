@@ -3,76 +3,12 @@ import AppIntents
 import Foundation
 import NekkoProtocol
 
-/// A chat running on the computer, on the Lock Screen and in the Dynamic
-/// Island. Shared by the app (which starts and updates it from the relay's
-/// events) and the widget extension (which draws it). Content stays coarse on
-/// purpose: a step label and what the computer is waiting for, never the
-/// conversation, since the Lock Screen is visible without unlocking.
-struct AgentRunAttributes: ActivityAttributes {
-    enum Phase: String, Codable, Hashable {
-        case running, approval, question, done, failed
-    }
-
-    struct ContentState: Codable, Hashable {
-        var phase: Phase
-        /// "Thinking…", "Run npm test", "Edit src/app.ts" (tool label, or a generic word with the app lock on).
-        var step: String
-        /// The tool call waiting for approval, so the buttons can answer it.
-        var callId: String?
-        /// low / medium / high (the computer's guardrail rating).
-        var severity: String?
-        var steps: Int
-        var startedAt: Date
-
-        init(phase: Phase, step: String, callId: String?, severity: String?, steps: Int, startedAt: Date) {
-            self.phase = phase
-            self.step = step
-            self.callId = callId
-            self.severity = severity
-            self.steps = steps
-            self.startedAt = startedAt
-        }
-
-        /// Pushes from the relay carry only the phase (and an approval's call id
-        /// and risk): everything else falls back, and an empty step reads as the
-        /// phase's generic line (`displayStep`).
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            phase = try c.decode(Phase.self, forKey: .phase)
-            step = try c.decodeIfPresent(String.self, forKey: .step) ?? ""
-            callId = try c.decodeIfPresent(String.self, forKey: .callId)
-            severity = try c.decodeIfPresent(String.self, forKey: .severity)
-            steps = try c.decodeIfPresent(Int.self, forKey: .steps) ?? 0
-            startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt) ?? .distantPast
-        }
-
-        /// The step line, or a generic one for the phase when a push left it empty.
-        var displayStep: String {
-            if !step.isEmpty { return step }
-            switch phase {
-            case .running: return "Working…"
-            case .approval: return "A tool needs your approval"
-            case .question: return "Your computer has a question"
-            case .done: return "Finished"
-            case .failed: return "Stopped with an error"
-            }
-        }
-
-        /// Whether `startedAt` is real (a push doesn't know it).
-        var hasStart: Bool { startedAt > Date(timeIntervalSince1970: 0) }
-    }
-
-    var sessionId: String
-    var computerId: String
-    var chatTitle: String
-    var computerName: String
-}
-
-/// The one Live Activity for all of the computer's chats (replaces
-/// `AgentRunAttributes`, one per chat, in Task 3.3). The state and its rules,
-/// including the tolerant decoder for relay pushes, are `LiveCardState` in
-/// NekkoProtocol.
-struct NekkoCardAttributes: ActivityAttributes {
+/// The one Live Activity for all of the computer's chats, on the Lock Screen
+/// and in the Dynamic Island. Shared by the app (which starts and updates it,
+/// `RunActivities`) and the widget extension (which draws it, `LiveCardView`).
+/// The state and its rules, including the tolerant decoder for relay pushes,
+/// are `LiveCardState` in NekkoProtocol.
+struct NekkoCardAttributes: ActivityAttributes, Equatable {
     typealias ContentState = LiveCardState
 
     var computerId: String
@@ -88,7 +24,7 @@ struct NekkoCardAttributes: ActivityAttributes {
 enum IntentRouter {
     static var approve: ((_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
     static var stop: ((_ sessionId: String) async -> Void)?
-    // The card's buttons; set in the app by Task 3.3 (focus, nextPage, dismiss) and 5.1 (talk).
+    // The card's buttons (talk and cancelTalk arrive with the mic).
     static var focus: ((_ sessionId: String) async -> Void)?
     static var nextPage: ((_ sessionId: String) async -> Void)?
     static var dismiss: ((_ sessionId: String) async -> Void)?

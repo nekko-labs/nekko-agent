@@ -104,6 +104,26 @@ final class AppModel {
         // First run's step 3 without pairing a computer first.
         if args.contains("-uiTestNotificationStep") { showNotificationStep = true }
         #endif
+        // Here, not in `start()`: a tap on the card can launch the app in the
+        // background, locked, and the card needs no connection to answer it.
+        activities.level = { [weak self] in self?.prefs.liveActivityLevel ?? .none }
+        activities.source = { [weak self] in
+            guard let self, self.store.summariesLoaded, let c = self.store.active else { return nil }
+            return .init(summaries: self.store.summaries, activity: self.store.activity, computerId: c.id, computerName: c.name)
+        }
+        IntentRouter.focus = { [weak self] sid in self?.activities.focus(sid) }
+        IntentRouter.nextPage = { [weak self] sid in self?.activities.focus(sid) }
+        IntentRouter.dismiss = { [weak self] sid in self?.activities.dismiss(sid) }
+        #if DEBUG
+        // Once on screen: ActivityKit starts a card only from the foreground.
+        if ProcessInfo.processInfo.arguments.contains("-uiTestLiveCard") {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                self?.activities.showSample(.sample)
+            }
+        }
+        #endif
+        watchCard()
     }
 
     /// The relay connection opens only after the first unlock (when the lock is
@@ -117,12 +137,6 @@ final class AppModel {
         notifier.onOpen = { [weak self] sid in self?.openChat = sid }
         IntentRouter.approve = { [weak self] sid, callId, allow in await self?.answerApproval(sid, callId, allow) }
         IntentRouter.stop = { [weak self] sid in await self?.stopChat(sid) }
-        activities.enabled = { [weak self] in self?.prefs.liveActivities ?? false }
-        activities.hideDetails = { [weak self] in self?.prefs.appLock ?? true }
-        activities.onPushToken = { [weak self] sid, token in
-            guard let self else { return }
-            Task { await self.store.registerActivity(sessionId: sid, token: token) }
-        }
         _ = store.subscribe { [weak self] e in self?.onEvent(e) }
         // A mode raise the computer wants a security key or a code for (SK-6).
         store.stepUpPrompt = { [weak self] request in await self?.askStepUp(request) }
@@ -227,12 +241,23 @@ final class AppModel {
         }
     }
 
+    // MARK: Live Activity card
+
+    /// Rebuilds the card whenever the chat list, who is running, the computer or the level changes.
+    private func watchCard() {
+        withObservationTracking {
+            activities.refresh()
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.watchCard() }
+        }
+    }
+
     // MARK: Events → haptics, notifications, Live Activities
 
     private func onEvent(_ e: AgentEvent) {
         let chat = store.summaries.first { $0.id == e.sessionId }
         let computer = store.active
-        activities.onEvent(e, chatTitle: chat?.title, computerId: computer?.id ?? "", computerName: computer?.name ?? "Computer")
+        activities.onEvent(e)
         switch e {
         case .approvalRequired, .question:
             if foreground, prefs.hapticNeedsYou { Haptics.needsYou() }

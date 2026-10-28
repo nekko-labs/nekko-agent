@@ -489,3 +489,112 @@ final class LiveCardViewTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class LiveActivityLevelPrefsTests: XCTestCase {
+    private func defaults(_ set: [String: Any]) -> UserDefaults {
+        let name = "nekko.tests.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        for (k, v) in set { d.set(v, forKey: k) }
+        return d
+    }
+
+    /// Before levels there was one switch, and app lock kept chat text off the Lock Screen.
+    func testTheOldSwitchAndAppLockPickTheFirstLevel() {
+        XCTAssertEqual(Prefs(defaults: defaults(["liveActivities": false])).liveActivityLevel, LiveLevel.none)
+        XCTAssertEqual(Prefs(defaults: defaults(["liveActivities": true])).liveActivityLevel, .minimal, "app lock is on by default")
+        XCTAssertEqual(Prefs(defaults: defaults(["appLock": false])).liveActivityLevel, .standard)
+        let d = defaults(["appLock": false])
+        let p = Prefs(defaults: d)
+        p.liveActivityLevel = .detailed
+        p.appLock = true
+        XCTAssertEqual(Prefs(defaults: d).liveActivityLevel, .detailed, "a chosen level stays")
+    }
+}
+
+@MainActor
+final class RunActivitiesTests: XCTestCase {
+    final class FakeCard: CardActivity {
+        let attributes: NekkoCardAttributes
+        var state: LiveCardState
+        var updates = 0
+        var ended = false
+        init(_ attributes: NekkoCardAttributes, _ state: LiveCardState) { self.attributes = attributes; self.state = state }
+        func update(_ state: LiveCardState) { self.state = state; updates += 1 }
+        func end() { ended = true }
+    }
+
+    var started: [FakeCard] = []
+    var level = LiveLevel.standard
+    var summaries: [SessionSummary] = []
+    var activity: [String: NekkoProtocol.Activity] = [:]
+
+    func make() -> RunActivities {
+        let r = RunActivities(request: { [unowned self] attributes, state in
+            let card = FakeCard(attributes, state)
+            started.append(card)
+            return card
+        }, adoptLeftover: false)
+        r.level = { [unowned self] in level }
+        r.source = { [unowned self] in .init(summaries: summaries, activity: activity, computerId: "pc", computerName: "Mac") }
+        return r
+    }
+
+    func chat(_ id: String, _ title: String) -> SessionSummary {
+        SessionSummary.from(["id": .string(id), "title": .string(title), "lastReplyText": "Got it. Working on it now."])!
+    }
+
+    func testTwoRunningChatsShareOneCard() throws {
+        summaries = [chat("a", "Billing fix"), chat("b", "Login page")]
+        activity = ["a": .running, "b": .running]
+        let r = make()
+        r.refresh()
+        r.refresh()
+        XCTAssertEqual(started.count, 1, "one card for every chat")
+        let card = try XCTUnwrap(started.first)
+        XCTAssertEqual(card.state.chats.map(\.id), ["a", "b"])
+        XCTAssertEqual(card.state.chats.first?.short, "Billing")
+        XCTAssertEqual(card.attributes.level, .standard)
+
+        r.focus("b")
+        XCTAssertEqual(card.state.focusId, "b", "a chip tap brings that chat up")
+
+        level = .detailed
+        r.refresh()
+        XCTAssertTrue(card.ended, "the level is fixed for a card's life")
+        XCTAssertEqual(started.count, 2)
+        XCTAssertEqual(started.last?.attributes.level, .detailed)
+        XCTAssertEqual(started.last?.state.chats.first?.reply, "Got it.")
+
+        activity = [:]
+        r.refresh()
+        XCTAssertTrue(try XCTUnwrap(started.last).ended, "nothing running or finished: the card ends")
+    }
+
+    func testDismissingTheOnlyFinishedChatEndsTheCard() throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.done(sessionId: "a", messageId: nil))
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        XCTAssertEqual(card.state.chats.first?.state, .done)
+        XCTAssertEqual(card.state.chats.first?.step, "Finished")
+        XCTAssertNotNil(card.state.chats.first?.finishedAt)
+        XCTAssertFalse(card.state.chats.first?.closeWord.isEmpty ?? true)
+        r.dismiss("a")
+        XCTAssertTrue(card.ended)
+        r.refresh()
+        XCTAssertEqual(started.count, 1, "a dismissed chat stays off until it runs again")
+    }
+
+    func testAFinishedChatLeavesAfterTwoHours() throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.done(sessionId: "a", messageId: nil))
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        r.refresh(now: Date().addingTimeInterval(LiveCardRules.finishedTail + 5))
+        XCTAssertTrue(card.ended)
+    }
+}
