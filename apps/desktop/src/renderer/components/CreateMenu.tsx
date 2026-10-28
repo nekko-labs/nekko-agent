@@ -5,12 +5,14 @@ import { PhotoIcon, PlusIcon, TerminalIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
 
 export type CreateKind = 'chat' | 'image' | 'terminal';
+/** The three things the plus creates; the plus menu and an empty zone both offer them. */
+export const CREATE_OPTIONS = [
+  ['chat', 'Agent', <NekkoAvatar size={16} stationary eyes={false} />, SHORTCUTS.newAgent],
+  ['image', 'Create or Edit Photos and Videos', <PhotoIcon className="h-4 w-4" />, SHORTCUTS.newMedia],
+  ['terminal', 'Terminal', <TerminalIcon className="h-4 w-4" />, SHORTCUTS.newTerminal],
+] as const;
 export function CreateMenuRows({ onCreate }: { onCreate: (kind: CreateKind) => void }) {
-  return <>{([
-    ['chat', 'Agent', <NekkoAvatar size={16} stationary eyes={false} />, SHORTCUTS.newAgent],
-    ['image', 'Create or Edit Photos and Videos', <PhotoIcon className="h-4 w-4" />, SHORTCUTS.newMedia],
-    ['terminal', 'Terminal', <TerminalIcon className="h-4 w-4" />, SHORTCUTS.newTerminal],
-  ] as const).map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" onClick={() => onCreate(kind)}>
+  return <>{CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" onClick={() => onCreate(kind)}>
     <span className="create-tile">{icon}</span>
     <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug">{label}</span>
     <kbd className="kbd shrink-0">{shortcut.label}</kbd>

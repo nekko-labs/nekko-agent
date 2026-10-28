@@ -46,6 +46,8 @@ final class AppModel {
     var sharedText: String?
     /// `nekko-agent://new` (the Control Center control): open New chat once.
     var newChatRequested = false
+    /// "Nekko, open settings" from a chat's dictation: show Settings once.
+    var openSettings = false
     /// First run, step 3 (IO-31): shown right after the first pairing, where
     /// notification permission is asked.
     var showNotificationStep = false

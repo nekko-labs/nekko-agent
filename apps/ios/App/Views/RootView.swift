@@ -75,6 +75,11 @@ struct RootView: View {
             }
             // The Control Center control: New chat on the active computer, nothing typed.
             .onChange(of: app.newChatRequested, initial: true) { _, _ in takeNewChat() }
+            .onChange(of: app.openSettings) { _, on in
+                guard on else { return }
+                app.openSettings = false
+                open(.settings)
+            }
             .onChange(of: app.openChat) { _, id in
                 guard let id else { return }
                 open(.chat(id))

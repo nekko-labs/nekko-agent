@@ -85,6 +85,7 @@ struct SettingsView: View {
     @State private var testing = false
     @State private var testResult: (text: String, ok: Bool)?
     @State private var sendingFeedback = false
+    @State private var voiceIntro = VoiceIntroGate()
 
     var body: some View {
         @Bindable var prefs = app.prefs
@@ -176,16 +177,21 @@ struct SettingsView: View {
             Section {
                 // Inline: both choices are short rows with a checkmark, never cut off.
                 Picker("Microphone", selection: $prefs.dictationHold) {
-                    Text("Tap to start and stop").tag(false)
+                    Text("Tap to keep listening").tag(false)
                     Text("Hold to talk").tag(true)
                 }
                 .pickerStyle(.inline)
                 Toggle("Use Whisper on the computer when available", isOn: $prefs.dictationOnComputer)
             } header: { SectionHeader("Dictation") } footer: {
-                Text(prefs.dictationHold
-                     ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
-                     : "Tap the microphone to start and tap stop when you’re done.")
-                    .foregroundStyle(palette.inkSoft)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(prefs.dictationHold
+                         ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
+                         : "Tap the microphone and talk: it keeps listening through pauses until you tap stop, lock the phone, or leave the chat, and the screen stays on while it listens. Start with “Nekko” for a command, like “Nekko, send it”. Without Whisper on the computer, speech is turned into text on this iPhone only, never on a server.")
+                        .foregroundStyle(palette.inkSoft)
+                    Button("Watch how voice works") { voiceIntro.replay() }
+                        .font(.footnote)
+                        .accessibilityIdentifier("settings.voiceIntro")
+                }
             }
             if store.active != nil {
                 Section {
@@ -243,6 +249,7 @@ struct SettingsView: View {
         .appBackground()
         .navigationTitle("Settings")
         .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
+        .sheet(isPresented: $voiceIntro.showing, onDismiss: { voiceIntro.closed(app.prefs) {} }) { VoiceIntroView() }
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {
             Button("Forget everything", role: .destructive) { app.forgetEverything() }
         }

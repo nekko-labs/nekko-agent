@@ -39,6 +39,8 @@ final class Prefs {
     var dictationOnComputer: Bool { didSet { d.set(dictationOnComputer, forKey: "dictationOnComputer") } }
     /// Dictation: hold the microphone to talk and let go to stop (IO-28), instead of tap to start and tap to stop.
     var dictationHold: Bool { didSet { d.set(dictationHold, forKey: "dictationHold") } }
+    /// The first-open video for always-on dictation was closed, any way (IO-28); the mic's first tap shows it until then.
+    var voiceIntroSeen: Bool { didSet { d.set(voiceIntroSeen, forKey: "voiceIntroSeen") } }
     /// The first run (IO-31) was finished or skipped; it never shows again.
     var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
     /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
@@ -89,6 +91,7 @@ final class Prefs {
         defaultComputer = d.string(forKey: "defaultComputer")
         dictationOnComputer = flag("dictationOnComputer", true)
         dictationHold = flag("dictationHold", false)
+        voiceIntroSeen = flag("voiceIntroSeen", false)
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
