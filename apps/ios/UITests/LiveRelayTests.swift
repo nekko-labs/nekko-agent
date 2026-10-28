@@ -257,8 +257,9 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(reveal(hold, in: app), "Settings → Dictation")
         settle()
         hold.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hold the microphone while you speak")).firstMatch
-            .waitForExistence(timeout: 5))
+        // The section's footer can sit just below the screen, out of a lazy list's tree.
+        XCTAssertTrue(reveal(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hold the microphone while you speak")).firstMatch, in: app),
+                      "the hold-to-talk hint")
         attach(app, "\(theme)-7f-settings-dictation")
         auditAccessibility(app, "\(theme)-settings-dictation")
 

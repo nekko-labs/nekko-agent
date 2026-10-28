@@ -543,7 +543,7 @@ struct MonitorSheet: View {
             .navigationTitle("Monitor")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .refreshable { await monitor.refresh() }
+            .pawRefreshable { await monitor.refresh() }
             .safeAreaInset(edge: .bottom) {
                 if let notice {
                     Label(notice.text, systemImage: notice.ok ? "checkmark.circle" : "exclamationmark.triangle")

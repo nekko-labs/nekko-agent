@@ -3,24 +3,36 @@ import SwiftUI
 /// Centered root mascot, outside iOS 26's shared toolbar glass.
 struct RootMascot: ToolbarContent {
     var working = false
+    /// The list's pull to refresh, which this mascot plays (`pawRefreshable(pull)`).
+    var pull: PawPull?
 
     var body: some ToolbarContent {
         if #available(iOS 26.0, *) {
-            ToolbarItem(placement: .principal) { ChatMascot(working: working) }
+            ToolbarItem(placement: .principal) { ChatMascot(working: working, pull: pull) }
                 .sharedBackgroundVisibility(.hidden)
         } else {
-            ToolbarItem(placement: .principal) { ChatMascot(working: working) }
+            ToolbarItem(placement: .principal) { ChatMascot(working: working, pull: pull) }
         }
     }
 }
 
 /// Desktop's pixel cat, with a local greeting. Never sends a chat or changes settings.
+/// Given a pull, it looks shocked at the refresh spinner, pulls it home and smiles.
 struct ChatMascot: View {
     var working = false
+    @ObservedObject private var pull: PawPull
+    private let grabs: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var greeting = false
     @State private var greetingID = 0
+    @State private var mascotFrame = CGRect.zero
+
+    init(working: Bool = false, pull: PawPull? = nil) {
+        self.working = working
+        _pull = ObservedObject(wrappedValue: pull ?? PawPull())
+        grabs = pull != nil
+    }
 
     var body: some View {
         Button {
@@ -29,9 +41,9 @@ struct ChatMascot: View {
         } label: {
             TimelineView(.animation(minimumInterval: 0.2, paused: reduceMotion || scenePhase != .active)) { timeline in
                 let frame = Int(timeline.date.timeIntervalSinceReferenceDate * 5) % 40
-                PixelCat(happy: greeting, blink: !working && frame == 14)
+                PixelCat(happy: greeting || pull.smiling, shocked: pull.shocked, blink: !working && frame == 14)
                     .frame(width: 40, height: 40)
-                    .offset(y: reduceMotion || scenePhase != .active ? 0 : working && frame % 4 < 2 ? -2 : 0)
+                    .offset(y: reduceMotion || scenePhase != .active || pull.animating ? 0 : working && frame % 4 < 2 ? -2 : 0)
             }
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
@@ -47,6 +59,13 @@ struct ChatMascot: View {
                 greeting = false
             } catch { /* A newer tap or leaving the screen cancels the greeting. */ }
         }
+        // After the accessibility modifiers, so the paw never widens the button's frame.
+        .overlay(alignment: .top) {
+            if grabs { MascotPawLayer(pull: pull, mascot: mascotFrame) }
+        }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { mascotFrame = $0 }
+        .onAppear { if grabs { pull.mascot = true } }
+        .onDisappear { if grabs { pull.mascot = false } }
     }
 }
 
