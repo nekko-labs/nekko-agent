@@ -12,7 +12,7 @@ struct ChatStatusIcon: View {
     var body: some View {
         Group {
             if activity == .running {
-                RocketGlyph().stroke(palette.running, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)).frame(width: 18, height: 18)
+                RocketGlyph().stroke(palette.success, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)).frame(width: 18, height: 18)
             } else if activity == .needsYou {
                 Image(systemName: "questionmark").foregroundStyle(palette.warning)
             } else if waiting {
