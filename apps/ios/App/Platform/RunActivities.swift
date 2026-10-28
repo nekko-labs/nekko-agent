@@ -78,7 +78,10 @@ final class RunActivities {
     /// `adoptLeftover`: carry on with a card an earlier launch left up.
     init(request: @escaping (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
         self.request = request
-        if adoptLeftover { card = SystemCard.leftover() }
+        if adoptLeftover, let leftover = SystemCard.leftover() {
+            card = leftover
+            attach(leftover)
+        }
     }
 
     func onEvent(_ e: AgentEvent) {

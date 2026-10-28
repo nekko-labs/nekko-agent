@@ -337,6 +337,8 @@ pub const CARD_PUSH_GAP: f64 = 10.0;
 pub const REMOTE_START_WINDOW: f64 = 2.0 * 3600.0;
 /// A run with no event for this long no longer counts as working (as on the phone).
 const QUIET_RUN: f64 = 30.0 * 60.0;
+/// A run with no event for this long is forgotten (its end was never heard).
+const FORGET_RUN: f64 = 12.0 * 3600.0;
 /// How often the card is rebuilt with nothing new, so finished chats leave on time.
 const RECHECK: f64 = 60.0;
 
@@ -629,7 +631,9 @@ impl Cards {
     /// or a new step must wait; `card` (an empty one ends it); `card-start`
     /// when `start` (the relay starts one only on a phone with none up).
     fn update(&mut self, now: f64, urgent: bool, start: bool) -> Vec<Value> {
-        self.runs.retain(|_, r| r.finished_at.is_none_or(|at| now - at <= FINISHED_TAIL));
+        self.runs.retain(|_, r| {
+            r.finished_at.is_none_or(|at| now - at <= FINISHED_TAIL) && now - r.last_event_at <= FORGET_RUN
+        });
         self.checked_at = now;
         let level = self.level();
         if level == LiveLevel::None {
@@ -866,6 +870,16 @@ mod tests {
         let (ty, card) = only(&c.tick(T0 + 7.0 + FINISHED_TAIL + 60.0));
         assert_eq!((ty.as_str(), card.chats.len()), ("card", 0), "an empty card: the relay ends it");
         assert!(c.tick(T0 + 9.0 * 3600.0).is_empty());
+    }
+
+    #[test]
+    fn a_run_that_never_ends_is_forgotten_after_a_long_silence() {
+        let mut c = standard();
+        only(&c.on_event(&tool("s1", "sleep"), T0));
+        let (_, card) = only(&c.tick(T0 + QUIET_RUN + 60.0));
+        assert!(card.chats.is_empty(), "quiet: no longer shown as working");
+        c.tick(T0 + FORGET_RUN + 120.0);
+        assert!(c.runs.is_empty(), "a run whose end was never heard does not stay forever");
     }
 
     #[test]
