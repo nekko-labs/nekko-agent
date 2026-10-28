@@ -114,7 +114,7 @@ jobs:
   upload:
     needs: changed
     if: needs.changed.outputs.ship == 'true'
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 60
     env:
       APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
@@ -157,11 +157,9 @@ jobs:
           echo "TEAM_ID=$team" >> "$GITHUB_ENV"
           echo "Team: $team"
 
-      - name: Use the newest installed Xcode
-        run: |
-          x="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v beta | sort -V | tail -n1)"
-          [ -n "$x" ] && sudo xcode-select -s "$x/Contents/Developer"
-          xcodebuild -version
+      # The image's default Xcode is its newest release; newer ones there are release candidates.
+      - name: Show the Xcode
+        run: xcodebuild -version
 
       - name: Write the API key
         run: |

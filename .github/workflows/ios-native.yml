@@ -9,7 +9,7 @@ name: Native iOS
 # A PR or batch verifies dark mode only when it changes colours or a PR carries
 # `ci:theme`; the schedule and a branch dispatch run light and dark.
 # A `pick` job asks for the owner's idle Mac runner (scripts/pick-runner.mjs) and falls
-# back to macos-14; only for the schedule and dispatches on main or ci/ios-batch, and only when
+# back to xcode-27; only for the schedule and dispatches on main or ci/ios-batch, and only when
 # vars.NEKKO_MAC_RUNNERS is 'on'.
 on:
   pull_request:
@@ -65,12 +65,12 @@ jobs:
         with:
           token: ${{ secrets.MAC_RUNNER_STATUS_TOKEN }}
           org: ${{ vars.NEKKO_MAC_RUNNER_ORG }}
-          fallback: macos-14
+          fallback: xcode-27
   protocol-and-build:
     needs: pick
     # !cancelled(): a skipped or failed picker must not skip this job.
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))) }}
-    runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"macos-14"') }}
+    runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
     # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
     # passing runs off mid-test.
     timeout-minutes: 75
@@ -80,10 +80,10 @@ jobs:
           # A PR checks out its merge commit and a batch is one commit on main:
           # either way HEAD^1 is the base, for the appearance scope.
           fetch-depth: 2
-      - name: Use the newest installed Xcode
+      # The xcode-27 image's default Xcode is its newest release (the newer ones on it are
+      # release candidates), matching what we build with locally.
+      - name: Show the Xcode
         run: |
-          x="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v beta | sort -V | tail -n1)"
-          [ -n "$x" ] && sudo xcode-select -s "$x/Contents/Developer"
           xcodebuild -version
           swift --version
       # Dark costs a second live journey (about 5 minutes), so a PR runs it only when
@@ -134,9 +134,13 @@ jobs:
       # and saved about 17 s overall (runs 40132995453, 40136579251, 40138086476).
       - name: Create the simulator
         run: |
-          RUNTIME=$(xcrun simctl list runtimes -j | ruby -rjson -e 'puts JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last.fetch("identifier")')
-          TYPE=$(xcrun simctl list devicetypes -j | ruby -rjson -e 't = JSON.parse(STDIN.read)["devicetypes"].map { |d| d["identifier"] }; puts(t.select { |i| i =~ /iPhone-1[5-9]-Pro$/ }.last || t.select { |i| i.include?("iPhone") }.last)')
-          echo "DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")" >> "$GITHUB_ENV"
+          # The newest iPhone Pro on the newest iOS runtime that has one: the xcode-27 image's
+          # iOS 27.1 runtime only carries the iPhone Duo, a foldable the UI tests aren't laid out for.
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          echo "Simulator: $TYPE on $RUNTIME"
+          # An assignment, not an echo, so a failed create fails this step.
+          DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
       # One build for the bundle checks and every test run below: for the test
       # device's architecture only, ad-hoc signed as the UI tests need.
       - name: Build the app and its tests for the simulator
@@ -189,6 +193,8 @@ jobs:
           TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
           # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
+          # The first-run suite already asked for notifications; a fresh install gets the prompt again.
+          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           for THEME in $THEMES; do
             xcrun simctl ui "$DEVICE" appearance "$THEME"
             ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
