@@ -419,7 +419,7 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) shut(); });
 })();
 
-// ---- look switch: Dark by default, then White, then Colourful. The choice is
+// ---- look switch: Colourful by default, then Dark, then White. The choice is
 //      remembered once made; the icon shows where the next click goes. ----
 (() => {
   const btn = document.querySelector('.theme-toggle');
@@ -428,7 +428,7 @@
   const LOOKS = ['dark', 'white', 'colour'];
   const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
   const THEME_COLOR = { dark: '#0d0b18', white: '#f3effe', colour: '#9d8ce6' };
-  const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'dark');
+  const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'colour');
   const sync = () => {
     const now = current();
     const next = LOOKS[(LOOKS.indexOf(now) + 1) % LOOKS.length];
@@ -568,9 +568,8 @@
         if (a < 0.025) continue;
         const s = a > 0.18 ? 3 : 2;
         const k = x / W;
-        if (theme === 'colour') ctx.fillStyle = `rgba(255,255,255,${(a * 1.6).toFixed(3)})`;
-        else if (theme === 'dark') {
-          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing dots on the dark ground
+        if (theme === 'dark' || theme === 'colour') {
+          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing on the dark ground, tinted on the lilac one
           ctx.fillStyle = `rgba(${Math.round(157 - 19 * k)},${Math.round(140 + 88 * k)},${Math.round(230 + 12 * k)},${(a * 1.1).toFixed(3)})`;
         } else {
           // 0 = indigo #453A92, 1 = lavender #9D8CE6

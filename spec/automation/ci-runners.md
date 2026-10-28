@@ -144,9 +144,9 @@ This is a product reading of the macOS license, not legal advice; check the curr
 
 | Provider | Connect | One job per VM | Label |
 |---|---|---|---|
-| GitHub Actions (first) | Install the Nekko GitHub App on an org or repo | A JIT runner config per VM; the runner exits after one job | `self-hosted`, `macOS`, `ARM64`, `nekko-mac` |
-| Buildkite (later) | Agent token | Single-job agent flags | `queue=nekko-mac` |
-| GitLab `[implemented T215, not yet run against a live GitLab]` | A project or group access token (or personal token) with `create_runner`, `manage_runner` and `read_api`, from an Owner | A runner created per VM, its token on the seed, `gitlab-runner run-single --max-builds 1`; paused once busy, deleted afterward | tags `nekko-mac`, `macos`, `arm64`; untagged jobs never; protected branches and tags only by default |
+| GitHub Actions (first) | Install the Nekko GitHub App on an org or repo | A JIT runner config per VM; the runner exits after one job | `self-hosted`, `macOS`, `ARM64`, `nekko-cloud-mac` |
+| Buildkite (later) | Agent token | Single-job agent flags | `queue=nekko-cloud-mac` |
+| GitLab `[implemented T215, not yet run against a live GitLab]` | A project or group access token (or personal token) with `create_runner`, `manage_runner` and `read_api`, from an Owner | A runner created per VM, its token on the seed, `gitlab-runner run-single --max-builds 1`; paused once busy, deleted afterward | tags `nekko-cloud-mac`, `macos`, `arm64`; untagged jobs never; protected branches and tags only by default |
 
 ## Laptops that come and go, and the offline fallback `[planned]`
 

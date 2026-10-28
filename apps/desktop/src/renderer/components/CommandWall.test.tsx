@@ -41,7 +41,9 @@ describe('empty zone', () => {
     const html = renderToStaticMarkup(wall(state({ root: z, layout: layout('grid', 1, 1) })));
     expect(html).toContain('wall-zone-art pixel-sleeping');
     expect([...html.matchAll(/data-zone-create="(\w+)"/g)].map((m) => m[1])).toEqual(['chat', 'image', 'terminal']);
-    expect(html).toMatch(/class="btn btn-ghost text-accent" data-zone-create="chat"/);
+    expect(html).toMatch(/class="btn btn-ghost wall-zone-option text-accent" data-zone-create="chat"/);
+    expect(html.match(/wall-zone-plus/g)).toHaveLength(3);
+    expect(html).toContain('Drag in an agent chat or start a new one below.');
   });
 });
 

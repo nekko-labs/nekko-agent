@@ -32,7 +32,7 @@ fn settings_round_trip_camel_case() {
     let cfg = RunnerConfig {
         id: "r1".into(),
         scope: Scope::Repo { owner: "acme".into(), repo: "app".into() },
-        label: "nekko-mac".into(),
+        label: "nekko-cloud-mac".into(),
         settings: RunnerSettings::default(),
     };
     let v = serde_json::to_value(&cfg).unwrap();

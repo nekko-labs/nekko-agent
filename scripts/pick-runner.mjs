@@ -9,7 +9,7 @@ export function pick(runners, label, fallback) {
 }
 
 export async function main(env = process.env, fetchFn = globalThis.fetch) {
-  const label = env.PICK_LABEL || 'nekko-mac';
+  const label = env.PICK_LABEL || 'nekko-cloud-mac';
   const fallback = env.PICK_FALLBACK || 'macos-latest';
   const done = (value, reason) => {
     console.error(`runs-on ${value}: ${reason}`);
