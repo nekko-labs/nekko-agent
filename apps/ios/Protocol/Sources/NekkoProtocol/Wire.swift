@@ -65,6 +65,9 @@ public enum Channels {
     /// *Send a test notification*: answered by the computer's relay agent itself,
     /// so it is not on the phone allowlist (`PUSH_TEST_CHANNEL`) and not in `all`.
     public static let pushTest = "push:test"
+    /// The Live Activity card's level, focus or dismissal (`{ level?, focus?, dismiss? }`):
+    /// answered by the relay agent itself, like `pushTest`. Computers from before it refuse it.
+    public static let cardSet = "card:set"
 
     /// Git on a chat's folder (IO-33 FA-2, `Git.swift`). Reads: status, diffs,
     /// history, a commit, branches, compare, a PR's checks and diff.

@@ -396,13 +396,17 @@ public final class RelayClient: @unchecked Sendable {
         guard let c = locked({ conn }), c.send(frame.serialized()) else { throw RelayError("Could not reach your computer.") }
     }
 
-    /// Hand the relay a Live Activity's ActivityKit push token under the chat's
-    /// opaque tag (`E2E.activityTag`), so the computer's content-free `activity`
-    /// frames can update it while iOS has suspended the app.
-    public func registerActivity(tag: String, token: String) async throws {
+    /// Hand the relay the Live Activity card's ActivityKit push tokens (`token`
+    /// for the card that is up, `startToken` to start one) and its level, so the
+    /// computer's `card` frames reach it while iOS has suspended the app. The
+    /// relay blanks the card's text for the level; `.none` drops the registration.
+    /// The computer's id and name are the card's attributes when the relay starts one.
+    public func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {
         try await awaitReady()
-        var o: [String: JSONValue] = ["type": "register-activity", "tag": .string(tag), "token": .string(token),
-                                      "deviceId": .string(config.deviceId)]
+        var o: [String: JSONValue] = ["type": "register-card", "deviceId": .string(config.deviceId), "level": .string(level.rawValue),
+                                      "computerId": .string(computerId), "computerName": .string(computerName)]
+        if let token { o["token"] = .string(token) }
+        if let startToken { o["startToken"] = .string(startToken) }
         if let app = config.app { o["app"] = .string(app) }
         guard let c = locked({ conn }), c.send(JSONValue.object(o).serialized()) else { throw RelayError("Could not reach your computer.") }
     }

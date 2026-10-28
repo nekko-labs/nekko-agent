@@ -78,7 +78,7 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
     func nudge() {}
     func reconnect() {}
     func registerPush(token: String) async throws {}
-    func registerActivity(tag: String, token: String) async throws {}
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {}
 }
 
 final class ChangeCallsTests: XCTestCase {

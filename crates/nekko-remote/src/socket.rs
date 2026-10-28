@@ -39,6 +39,10 @@ pub struct PhoneCall {
 pub type PhoneDispatcher =
     Arc<dyn Fn(PhoneCall, String, Value) -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>> + Send + Sync>;
 
+/// Reads the chat list for the phone's Live Activity card (`sessions:summaries`
+/// through the router, not as any one phone).
+pub type Summaries = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>> + Send + Sync>;
+
 /// Host events to forward: `(channel, payload)`.
 pub type Events = mpsc::UnboundedReceiver<(String, Value)>;
 
@@ -111,6 +115,8 @@ pub struct Spawn {
     /// Phones attached to terminals, shared with the gate (`phone::gate_shared`):
     /// terminal output goes only to them, and a disconnect detaches them.
     pub terminals: Arc<crate::phone_terminal::PhoneTerminals>,
+    /// The chat list for the card; without it the card shows each chat as "Chat".
+    pub summaries: Option<Summaries>,
 }
 
 impl RelayAgent {
@@ -162,7 +168,7 @@ impl LinkHandle for RelayAgent {
 }
 
 async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool>) {
-    let Spawn { url, secret, room, verify, dispatch, mut events, terminals } = spec;
+    let Spawn { url, secret, room, verify, dispatch, mut events, terminals, summaries } = spec;
     let derive = tokio::task::spawn_blocking(move || e2e::derive_key(&secret, &room));
     let key = tokio::select! {
         k = derive => match k { Ok(k) => k, Err(_) => return },
@@ -197,7 +203,8 @@ async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool
             match connect {
                 Ok((ws, _)) => {
                     nekko_net::record(ID, nekko_net::Event::new("connect").host(&host));
-                    let (code, reason) = serve(&shared, ws, &verify, &dispatch, &mut events, &mut stopped).await;
+                    let (code, reason) =
+                        serve(&shared, ws, &verify, &dispatch, &summaries, &mut events, &mut stopped).await;
                     let mut ev = nekko_net::Event::new("close").host(&host);
                     if code != 1000 {
                         ev = ev.error(if reason.is_empty() { format!("code {code}") } else { reason.clone() });
@@ -243,6 +250,7 @@ async fn serve(
     ws: Ws,
     verify: &Verifier,
     dispatch: &PhoneDispatcher,
+    summaries: &Option<Summaries>,
     events: &mut Events,
     stopped: &mut watch::Receiver<bool>,
 ) -> (u16, String) {
@@ -265,8 +273,10 @@ async fn serve(
     let result = loop {
         tokio::select! {
             msg = stream.next() => match msg {
-                Some(Ok(Message::Text(text))) => on_text(shared, text.as_str(), verify, dispatch),
-                Some(Ok(Message::Binary(b))) => on_text(shared, &String::from_utf8_lossy(&b), verify, dispatch),
+                Some(Ok(Message::Text(text))) => on_text(shared, text.as_str(), verify, dispatch, summaries),
+                Some(Ok(Message::Binary(b))) => {
+                    on_text(shared, &String::from_utf8_lossy(&b), verify, dispatch, summaries)
+                }
                 Some(Ok(Message::Close(frame))) => {
                     break frame.map_or((1005, String::new()), |f| (u16::from(f.code), f.reason.to_string()));
                 }
@@ -278,6 +288,7 @@ async fn serve(
                     if let Some(core) = lock(&shared.core).as_mut() {
                         let frames = core.on_event(&channel, &payload);
                         shared.send_all(frames);
+                        read_summaries(shared, core, summaries);
                     }
                 }
                 None => break (1000, String::new()),
@@ -286,6 +297,8 @@ async fn serve(
                 if let Some(core) = lock(&shared.core).as_mut() {
                     let frames = core.tick();
                     shared.send_all(frames);
+                    // A card that is up re-reads the chat list once a minute.
+                    read_summaries(shared, core, summaries);
                 }
             }
             _ = stopped.changed() => break (u16::from(CloseCode::Normal), String::new()),
@@ -297,10 +310,37 @@ async fn serve(
     result
 }
 
-fn on_text(shared: &Arc<Shared>, text: &str, verify: &Verifier, dispatch: &PhoneDispatcher) {
+/// Reads the chat list when the card asks for it, then hands it to the core.
+fn read_summaries(shared: &Arc<Shared>, core: &mut AgentCore, summaries: &Option<Summaries>) {
+    let Some(read) = summaries else { return };
+    if !core.wants_summaries() {
+        return;
+    }
+    let (shared, read) = (shared.clone(), read.clone());
+    tokio::spawn(async move {
+        // A failed read waits for the next chat change to ask again.
+        if let Ok(list) = read().await
+            && let Some(core) = lock(&shared.core).as_mut()
+        {
+            let frames = core.set_summaries(&list);
+            shared.send_all(frames);
+        }
+    });
+}
+
+fn on_text(
+    shared: &Arc<Shared>,
+    text: &str,
+    verify: &Verifier,
+    dispatch: &PhoneDispatcher,
+    summaries: &Option<Summaries>,
+) {
     let mut guard = lock(&shared.core);
     let Some(core) = guard.as_mut() else { return };
-    for out in core.on_relay(text, verify.as_ref()) {
+    let outs = core.on_relay(text, verify.as_ref());
+    // A phone's `card:set` may want the chat list.
+    read_summaries(shared, core, summaries);
+    for out in outs {
         match out {
             Out::Send(f) => shared.send_all(vec![f]),
             Out::Dispatch { cid, id, device_id, channel, args, proof, step_up } => {
