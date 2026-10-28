@@ -45,7 +45,7 @@ export const ActivityGroup = memo(function ActivityGroup({ items, ...props }: Ac
   items.forEach((item, index) => {
     if (item.kind === 'reasoning') {
       flush(index);
-      parts.push(<ReasoningBlock key={`thought_${index}`} text={item.text} live={!!props.streaming && index === items.length - 1} duration={item.duration} />);
+      parts.push(<ReasoningBlock key={`thought_${index}`} stateKey={`thought-open-${index}`} text={item.text} live={!!props.streaming && index === items.length - 1} duration={item.duration} />);
     } else tools.push(item);
   });
   flush(items.length);
