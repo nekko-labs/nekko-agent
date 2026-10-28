@@ -7,6 +7,7 @@ struct ChatStatusFixture: View {
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
     @State private var feedback = false
+    @StateObject private var pull = PawPull()
     var body: some View {
         NavigationStack {
             List {
@@ -20,9 +21,10 @@ struct ChatStatusFixture: View {
             }
             .listStyle(.plain)
             .appBackground()
+            .pawRefreshable(pull) { try? await Task.sleep(for: .seconds(1.2)) }
             .navigationTitle("Chats")
             .toolbar {
-                RootMascot(working: true)
+                RootMascot(working: true, pull: pull)
                 ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $feedback) }
                 ToolbarItem(placement: .topBarTrailing) { Image(systemName: "line.3.horizontal.decrease") }
                 ToolbarItem(placement: .topBarTrailing) { Image(systemName: "square.and.pencil") }

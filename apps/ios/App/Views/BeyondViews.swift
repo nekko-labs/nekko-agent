@@ -22,7 +22,7 @@ struct AutomationsView: View {
         .navigationTitle("Automations")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = AutomationsModel(store: store) }
             await model?.load()
@@ -166,7 +166,7 @@ struct UsageView: View {
         .navigationTitle("Usage and limits")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = UsageModel(store: store) }
             await model?.load()

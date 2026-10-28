@@ -34,7 +34,7 @@ struct MonitorsView: View {
         .appBackground()
         .navigationTitle("Monitors")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await model?.refresh() }
+        .pawRefreshable { await model?.refresh() }
         // One model per computer: another computer starts from nothing. Runs again on
         // every return to the screen (a chat opened from here and closed), which restarts the reads.
         .task(id: store.activeId) {

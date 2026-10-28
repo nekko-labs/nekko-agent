@@ -4,6 +4,7 @@ import SwiftUI
 /// whose Live Activity card wears it as the mascot.
 struct PixelCat: View {
     var happy = false
+    var shocked = false
     var blink = false
     var fill = Color(red: 16/255, green: 23/255, blue: 20/255)
     var line = Color(red: 242/255, green: 241/255, blue: 233/255)
@@ -23,6 +24,12 @@ struct PixelCat: View {
                 for x in [9, 19] {
                     pixels([CGRect(x: x, y: 15, width: 1, height: 2), CGRect(x: x+1, y: 14, width: 2, height: 1), CGRect(x: x+3, y: 15, width: 1, height: 2)])
                 }
+            } else if shocked {
+                // Wide ring eyes and a small open mouth.
+                for x in [10, 19] {
+                    pixels([CGRect(x: x, y: 14, width: 4, height: 1), CGRect(x: x, y: 17, width: 4, height: 1), CGRect(x: x, y: 15, width: 1, height: 2), CGRect(x: x + 3, y: 15, width: 1, height: 2)])
+                }
+                pixels([CGRect(x: 15, y: 22, width: 2, height: 2)])
             } else {
                 pixels(blink ? [CGRect(x: 10, y: 17, width: 4, height: 1), CGRect(x: 19, y: 17, width: 4, height: 1)] : [CGRect(x: 11, y: 15, width: 2, height: 3), CGRect(x: 20, y: 15, width: 2, height: 3)])
             }

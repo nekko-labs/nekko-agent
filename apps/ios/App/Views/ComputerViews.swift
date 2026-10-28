@@ -120,7 +120,7 @@ struct ComputerDetailView: View {
         .listStyle(.plain)
         .listRowSeparatorTint(palette.line)
         .appBackground()
-        .refreshable { await m.refresh() }
+        .pawRefreshable { await m.refresh() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {

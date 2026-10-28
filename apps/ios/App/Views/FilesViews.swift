@@ -147,7 +147,7 @@ private struct FolderList: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "Find a file by name")
         .accessibilityIdentifier("files.list")
-        .refreshable { await load() }
+        .pawRefreshable { await load() }
         .task { if listing == nil { await load() } }
         .task(id: query) { await search() }
     }
@@ -335,7 +335,7 @@ struct FileDetailView: View {
                     }
                 }
             }
-            .refreshable { await load() }
+            .pawRefreshable { await load() }
             .accessibilityIdentifier("file.view")
         }
     }
@@ -511,7 +511,7 @@ struct LogsView: View {
         .appBackground()
         .navigationTitle("Logs")
         .accessibilityIdentifier("logs.list")
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = LogsModel(store: store) }
             await model?.load()
