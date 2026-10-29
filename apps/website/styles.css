@@ -651,6 +651,10 @@ body {
   border: 2px solid var(--sticker); box-shadow: 6px 6px 0 var(--sticker); border-radius: 18px;
   background: linear-gradient(135deg, #ffffff, #f4f1ff);
 }
+/* the screenshot sits on a frame of its own edge colour, in every look, so the
+   rounded corners clip the frame rather than the picture */
+:root .media.media-hero:has(img) { padding: 8px; background: #16132a; }
+.media-hero img { object-fit: contain; }
 
 /* the enlarged view */
 .lightbox {
