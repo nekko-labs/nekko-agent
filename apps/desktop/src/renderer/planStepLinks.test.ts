@@ -29,6 +29,30 @@ describe('planStepLinks', () => {
     expect(planStepLinks(messages, live).size).toBe(0);
   });
 
+  it('puts task links and sub-agents on the step being worked when they appeared, earlier ones on the first step', () => {
+    const issue = 'https://linear.app/nekko/issue/NEK-412/move-session-checks';
+    const messages = [
+      msg({ role: 'user', createdAt: 1, content: `Work on this Linear task: Move session checks\nLink: ${issue}.` }),
+      msg({ createdAt: 10, toolCalls: [plan([{ title: 'Trace', status: 'active' }, { title: 'Fix' }, { title: 'Ship' }])] }),
+      msg({ createdAt: 20, toolCalls: [plan([{ id: 'step_1', status: 'done' }, { id: 'step_2', status: 'active' }])] }),
+      msg({ createdAt: 22, content: 'Filed https://github.com/o/r/issues/12 for the leftovers.' }),
+      msg({ createdAt: 30, content: `Still ${issue}`, toolCalls: [plan([{ id: 'step_2', status: 'done' }])] }),
+    ];
+    const links = planStepLinks(messages, live, undefined, [{ id: 'early', createdAt: 5 }, { id: 'map', createdAt: 12 }, { id: 'routes', createdAt: 25 }, { id: 'late', createdAt: 40 }]);
+    expect(links.get('live_0')?.projects).toEqual([{ url: issue, label: 'NEK-412' }]);
+    // A link already shown on an earlier step is not repeated.
+    expect(links.get('live_1')?.projects).toEqual([{ url: 'https://github.com/o/r/issues/12', label: 'o/r#12' }]);
+    expect(links.get('live_0')?.subagents).toEqual(['early', 'map']);
+    // Started after the last step finished: the last step worked.
+    expect(links.get('live_1')?.subagents).toEqual(['routes', 'late']);
+  });
+
+  it('reads task keys from the tools people link', async () => {
+    const { projectLinks } = await import('./planStepLinks.js');
+    expect(projectLinks('see https://acme.atlassian.net/browse/OPS-7, https://trello.com/c/AbC123/9-x and https://example.com/x').map((l) => l.label)).toEqual(['OPS-7', 'Trello card']);
+    expect(projectLinks('a PR is not a task: https://github.com/o/r/pull/7')).toEqual([]);
+  });
+
   it('returns nothing without a plan', () => {
     expect(planStepLinks([msg({ content: '[x](file:///tmp/x.html)' })], undefined).size).toBe(0);
   });

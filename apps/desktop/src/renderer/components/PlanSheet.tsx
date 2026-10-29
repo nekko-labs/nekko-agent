@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import type { PlanStep, PrInfo, Session } from '@nekko-agent/shared';
+import type { PlanStep, PlanStepKind, PrInfo, Session } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
-import { getLiveRun } from '../liveRuns.js';
-import { planStepLinks } from '../planStepLinks.js';
+import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
+import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
 import { useStore } from '../store.js';
-import { CheckIcon, PencilIcon } from '../icons.js';
+import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 
@@ -77,31 +77,85 @@ function CiChips({ info }: { info: PrInfo }) {
   </>;
 }
 
+const KIND_LABEL: Record<PlanStepKind, string> = { explore: 'Explore', build: 'Build', verify: 'Verify', ship: 'Ship' };
+
+/** The step's place in the loop, a small caps word before its title. */
+function Kind({ kind, current }: { kind?: PlanStepKind; current?: boolean }) {
+  if (!kind) return null;
+  return <span className="plan-sheet-kind" data-plan-kind={kind} data-current={current || undefined}>{KIND_LABEL[kind]}</span>;
+}
+
+/** "Pass 2": Verify sent the work back to this step. */
+function Pass({ step }: { step: PlanStep }) {
+  if (!step.pass || step.pass < 2) return null;
+  return <span className="plan-sheet-pass" title={`Pass ${step.pass}: a later check sent the work back here`}>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" /></svg>Pass {step.pass}
+  </span>;
+}
+
+function ProjectChip({ link }: { link: ProjectLink }) {
+  return <button type="button" className="plan-sheet-chip" data-plan-chip="project" title={link.url} onClick={() => open(link.url)}><TagIcon className="h-3 w-3" />{link.label}</button>;
+}
+
+type Child = { id: string; title: string; running: boolean };
+
+function SubagentChip({ child, onOpen }: { child: Child; onOpen: (id: string) => void }) {
+  return <button type="button" className="plan-sheet-chip" data-plan-chip="subagent" title={`Open ${child.title}`} onClick={() => onOpen(child.id)}>
+    <RobotIcon className="h-3 w-3" /><span className="truncate">{child.title}</span>
+    {child.running ? <span className="plan-sheet-glyph is-running" role="img" aria-label="Running"><RocketIcon className="h-3 w-3" /></span> : <span className="plan-sheet-glyph" role="img" aria-label="Done"><CheckIcon className="h-3 w-3" /></span>}
+  </button>;
+}
+
+/** Folded, the sub-agents are one chip: how many run and how many are done. */
+function SubagentSummary({ children }: { children: Child[] }) {
+  const running = children.filter(c => c.running).length;
+  const done = children.length - running;
+  return <span className="plan-sheet-chip" data-plan-chip="subagents" title={`Sub-agents: ${running} running, ${done} done`}>
+    Sub-agents
+    {running > 0 && <><b>{running}</b><span className="plan-sheet-glyph is-running" role="img" aria-label="running"><RocketIcon className="h-3 w-3" /></span></>}
+    {done > 0 && <><b>{done}</b><span className="plan-sheet-glyph" role="img" aria-label="done"><CheckIcon className="h-3 w-3" /></span></>}
+  </span>;
+}
+
 /**
- * The agent's plan as a sheet rising from the composer's top edge. Each step is
- * a title, one line of detail, and (only when it has any) a row of chips for
- * the PRs and files that step produced, its verification report and CI checks. Finished steps squeeze to their title
- * and open while the pointer or keyboard focus is anywhere on the sheet.
+ * The agent's plan as a sheet tucked behind the composer's top edge, with
+ * curved shoulders into it and a slightly different tint.
+ *
+ * Folded (the default) it is one or two lines: the step being worked (its loop
+ * kind, title, pass and place in the plan) and a row of chips for it: the
+ * sub-agents as one count, then the step's PRs, task links, verification and
+ * files. Clicking it opens the whole plan, every step with its own chips
+ * underneath: task links, sub-agents (each opens its chat), verification, CI
+ * checks, PRs and files. Finished steps squeeze to their title and open while
+ * the pointer or keyboard focus is anywhere on the sheet.
  */
-export function PlanSheet({ sessionId, session, streaming, prs, basePath, onChangePlan }: {
+export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen = false }: {
   sessionId: string;
   session: Session | null;
   streaming: boolean;
   prs: PrInfo[];
   basePath?: string;
-  /** Pops up the plan-change prompt; nothing is sent until the user types and sends. */
-  onChangePlan?: () => void;
+  /** Opens a sub-agent's chat (on the wall, as a window there). */
+  onOpenChild?: (id: string) => void;
+  /** Start with the whole plan showing rather than folded. */
+  initiallyOpen?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(!initiallyOpen);
   const plan = session?.agentPlan;
   const messages = session?.messages;
-  const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath), [messages, plan, basePath]);
+  const sessions = useStore((s) => s.sessions);
+  useLiveRunsVersion();
+  const childSessions = useMemo(() => (sessions ?? []).filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
+  const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions), [messages, plan, basePath, childSessions]);
   if (!plan?.length) return null;
+  const running = new Set(runningSessionIds());
+  const childById = new Map(childSessions.map((c): [string, Child] => [c.id, { id: c.id, title: c.title || 'Sub-agent', running: running.has(c.id) || !!getLiveRun(c.id) || !!c.activeRun }]));
+  const openChild = onOpenChild ?? ((id: string) => useStore.getState().openChatPane(id));
   const progress = planProgress(plan);
   // An active step is not tied to token streaming. Only an explicit
   // interruption pauses it; a resumed live run takes precedence over history.
   const paused = !streaming && !getLiveRun(sessionId) && !session?.activeRun && lastReplyInterrupted(messages ?? []);
-  const current = plan.find(step => step.status === 'active') ?? plan.find(step => step.status === 'pending');
+  const current = plan.find(step => step.status === 'active') ?? plan.find(step => step.status === 'pending') ?? plan[plan.length - 1];
   const prInfo = new Map(prs.map(pr => [pr.url, pr]));
   // CI belongs under verification: the last step the agent publishes a check
   // for, else the step that opened the PR, else whatever is running now.
@@ -112,40 +166,78 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onChan
     const id = checker ?? [...links].find(([, own]) => own.prs.includes(pr.url))?.[0] ?? current?.id;
     if (id) ci.set(id, [...(ci.get(id) ?? []), pr]);
   }
+  const prChip = (url: string) => { const { text, tone } = prChipLabel(url, prInfo.get(url)); return <button key={url} type="button" className="plan-sheet-chip" data-plan-chip="pr" title={prInfo.get(url)?.title ?? url} onClick={() => open(url)}><span className="plan-sheet-dot" style={{ background: tone }} />{text}</button>; };
+  const artifactChip = (artifact: ChatArtifact) => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? artifact.live.host + artifact.live.route : artifact.filename}</button>;
+  const kids = (own?: PlanStepLinks) => (own?.subagents ?? []).map(id => childById.get(id)).filter((c): c is Child => !!c);
+  const position = plan.indexOf(current) + 1;
+
+  if (collapsed) {
+    const own = links.get(current.id);
+    const allKids = [...childById.values()];
+    // The current step's PRs, else the newest PR the chat opened, so a finished plan still shows where it landed.
+    const shownPrs = own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
+    const chips = [
+      allKids.length > 0 && <SubagentSummary key="subagents" children={allKids} />,
+      current.verification && <VerificationChip key="verify" step={current} />,
+      ...shownPrs.map(prChip),
+      // The step's own task links, else the chat's (the first step's), which say what this work is for.
+      ...(own?.projects.length ? own.projects : links.get(plan[0].id)?.projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
+      ...(own?.artifacts ?? []).map(artifactChip),
+    ].filter(Boolean);
+    return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded aria-label="Agent plan">
+      <button type="button" className="plan-sheet-fold" onClick={() => setCollapsed(false)} aria-expanded={false} title="Show the whole plan">
+        <span className="plan-sheet-line">
+          <StepMark status={current.status} paused={paused} />
+          <Kind kind={current.kind} current={current.status === 'active'} />
+          <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
+          <Pass step={current} />
+          <span className="shrink-0 tabular-nums text-[11px] text-ink-faint">{position} of {plan.length}</span>
+          <span aria-hidden className="ctl-caret">▴</span>
+        </span>
+      </button>
+      {chips.length > 0 && <div className="plan-sheet-chips plan-sheet-fold-chips">{chips}</div>}
+    </div></div>;
+  }
 
   return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet aria-label="Agent plan">
     <div className="plan-sheet-head">
-      <button type="button" className="plan-sheet-toggle" onClick={() => setCollapsed(c => !c)} aria-expanded={!collapsed} title={collapsed ? 'Show the plan' : 'Hide the plan'}>
+      <button type="button" className="plan-sheet-toggle" onClick={() => setCollapsed(true)} aria-expanded title="Fold the plan">
         <span className="font-semibold text-ink-soft">Plan</span>
-        <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total}</span>
-        {collapsed && current && <span className="min-w-0 truncate text-ink-soft">· {current.title}</span>}
-        <span aria-hidden className="ctl-caret">{collapsed ? '▴' : '▾'}</span>
+        <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span>
+        <span className="flex-1" />
+        <span aria-hidden className="ctl-caret">▾</span>
       </button>
-      <button type="button" className="plan-sheet-action disabled:cursor-not-allowed disabled:opacity-50" disabled={!onChangePlan} onClick={onChangePlan} title="Tell the agent what to change about its plan"><PencilIcon className="h-3 w-3" />Change plan</button>
     </div>
-    {!collapsed && <ol className="plan-sheet-steps">
+    <ol className="plan-sheet-steps">
       {plan.map(step => {
         const own = links.get(step.id);
         const checks = ci.get(step.id) ?? [];
-        const chips = !!(own?.prs.length || own?.artifacts.length || step.verification || checks.length);
+        const stepKids = kids(own);
+        const chips = !!(own?.prs.length || own?.artifacts.length || own?.projects.length || stepKids.length || step.verification || checks.length);
         const detail = step.verification?.detail || step.note;
         const squeezed = step.status === 'done' || step.status === 'skipped';
         return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id} tabIndex={squeezed && (detail || chips) ? 0 : undefined}>
           <StepMark status={step.status} paused={paused} />
           <div className="min-w-0">
-            <p className={`truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</p>
+            <p className="plan-sheet-line">
+              <Kind kind={step.kind} current={step.status === 'active'} />
+              <span className={`min-w-0 flex-1 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
+              <Pass step={step} />
+            </p>
             {(detail || chips) && <div className="plan-sheet-more" data-plan-more><div>
               {detail && <p className="truncate text-[11.5px] text-ink-faint" title={detail}>{detail}</p>}
               {chips && <div className="plan-sheet-chips">
+                {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
+                {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}
                 {step.verification && <VerificationChip step={step} />}
-                {own?.prs.map(url => { const { text, tone } = prChipLabel(url, prInfo.get(url)); return <button key={url} type="button" className="plan-sheet-chip" data-plan-chip="pr" title={prInfo.get(url)?.title ?? url} onClick={() => open(url)}><span className="plan-sheet-dot" style={{ background: tone }} />{text}</button>; })}
+                {own?.prs.map(prChip)}
                 {checks.map(pr => <CiChips key={pr.url} info={pr} />)}
-                {own?.artifacts.map(artifact => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? artifact.live.host + artifact.live.route : artifact.filename}</button>)}
+                {own?.artifacts.map(artifactChip)}
               </div>}
             </div></div>}
           </div>
         </li>;
       })}
-    </ol>}
+    </ol>
   </div></div>;
 }

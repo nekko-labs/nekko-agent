@@ -18,8 +18,6 @@ function queueLabel(item: QueuedPrompt): string {
   return bits.join(' · ');
 }
 
-/** Leads the message a plan change sends (see PlanChangePrompt). */
-export const PLAN_CHANGE_REQUEST = 'Please revise the current agent plan. I would like to change the approach as follows:\n';
 
 export function PlanRail({ sessionId, session, onMinimize }: {
   sessionId: string;

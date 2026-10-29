@@ -880,7 +880,8 @@ export function CommandWall({
               })}
             </div>
           </div>
-          {session && <WorkingSubagents children={subagents ?? []} running={running} pending={pending} onOpen={(id) => { const { setState, onSelect } = live.current; setState((s) => openWallPane(s, 'chat', id)); onSelect(id); }} />}
+          {/* With a plan, the plan sheet carries the sub-agents on their steps. */}
+          {session && !session.agentPlan?.length && <WorkingSubagents children={subagents ?? []} running={running} pending={pending} onOpen={(id) => { const { setState, onSelect } = live.current; setState((s) => openWallPane(s, 'chat', id)); onSelect(id); }} />}
         </PaneFrame></>}
       </div>
       );
