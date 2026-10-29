@@ -4,7 +4,7 @@ import NekkoProtocol
 /// The phone's own copy of one computer's chat list, kept while *Keep the
 /// chat list when offline* is on (on by default since OF-9). It holds what
 /// the list shows and nothing else: each chat's id, title, times, folder and
-/// pin, plus the folder names. Never the replies, the first message, the
+/// pin, plus the folder names and absolute paths. Never the replies, the first message, the
 /// model or anything a chat contains. The app stores it in a file the system
 /// encrypts while the iPhone is locked and leaves out of backups.
 public struct SavedChatList: Equatable, Sendable {
@@ -33,7 +33,11 @@ public struct SavedChatList: Equatable, Sendable {
                 if s.pinned { o["pinned"] = .bool(true) }
                 return .object(o)
             }),
-            "folders": .array(folders.map { .object(["id": .string($0.id), "name": .string($0.name)]) }),
+            "folders": .array(folders.map { folder in
+                var o: [String: JSONValue] = ["id": .string(folder.id), "name": .string(folder.name)]
+                if let path = folder.path { o["path"] = .string(path) }
+                return .object(o)
+            }),
         ])
     }
 

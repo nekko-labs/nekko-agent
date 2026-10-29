@@ -13,6 +13,7 @@ pub mod install;
 pub mod launch;
 pub mod library;
 pub mod mlx;
+pub mod placement;
 pub mod runtimes;
 pub mod server;
 

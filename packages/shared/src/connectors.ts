@@ -2,7 +2,7 @@
 
 export type ConnectorKind =
   | 'github' | 'gitlab' | 'linear' | 'slack' | 'discord' | 'jira' | 'teams' | 'gmail' | 'gdrive'
-  | 'trello' | 'asana' | 'todoist' | 'clickup' | 'tasksfile';
+  | 'trello' | 'asana' | 'todoist' | 'clickup' | 'tasksfile' | 'floop';
 
 export type ConnectorAuthKind = 'token' | 'oauth';
 
@@ -50,6 +50,7 @@ export const CONNECTOR_CATALOG: ConnectorMeta[] = [
   { kind: 'todoist', label: 'Todoist', auth: 'token', category: 'tasks', description: 'Active tasks via a Todoist API token.' },
   { kind: 'clickup', label: 'ClickUp', auth: 'token', category: 'tasks', description: 'Open tasks in a workspace via a ClickUp personal API token.' },
   { kind: 'tasksfile', label: 'Tasks file', auth: 'token', category: 'tasks', description: 'A local Markdown checklist (TASKS.md, todo.md): every "- [ ]" line is a task. No account needed.' },
+  { kind: 'floop', label: 'Floop', auth: 'token', category: 'tasks', description: "Your open tasks on your team's Floop server, where people and agents track work in separate streams (server URL + API token)." },
 ];
 
 /** Connector kinds that are task-management systems. */

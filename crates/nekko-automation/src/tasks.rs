@@ -9,8 +9,9 @@
 //! at once when a task changes.
 
 use crate::json::{self, assign, assign_value, num};
+use crate::run_policy::{self, Gate};
 use serde_json::{Map, Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -46,6 +47,22 @@ pub trait TaskHost: Send + Sync + 'static {
     fn send_chat(&self, opts: Value) -> BoxFut<'_, Result<(), String>>;
     /// The task list changed (`tasks:updated`, with the list as saved).
     fn notify(&self, tasks: &Value);
+    /// Whether someone is using the computer (`activity:state`), judged
+    /// against `idle_after_secs`; `None` when the host cannot tell.
+    fn activity(&self, idle_after_secs: f64) -> BoxFut<'_, Option<Value>> {
+        let _ = idle_after_secs;
+        Box::pin(async { None })
+    }
+}
+
+/// How the run policy let a fire start.
+#[derive(Default, Clone, Copy)]
+struct RunAs {
+    low_priority: bool,
+    waited_ms: Option<f64>,
+    /// How the turn steps aside while it runs (`run_policy::running_mode`),
+    /// when the host can tell whether anyone is here.
+    background: Option<&'static str>,
 }
 
 /// `Date.now()`; tests pass a fixed clock.
@@ -68,6 +85,9 @@ pub struct Tasks {
     clock: Clock,
     ids: Ids,
     in_flight: Mutex<HashSet<String>>,
+    /// Due tasks held back (paused, or waiting for idle), and when the
+    /// scheduler looks at each again: not on every turn of its loop.
+    held: Mutex<HashMap<String, f64>>,
     /// Read-modify-write of the file, one at a time.
     io: Mutex<()>,
     wake: tokio::sync::Notify,
@@ -148,6 +168,7 @@ impl Tasks {
             clock,
             ids,
             in_flight: Mutex::default(),
+            held: Mutex::default(),
             io: Mutex::new(()),
             wake: tokio::sync::Notify::new(),
         })
@@ -229,6 +250,7 @@ impl Tasks {
         put("intervalMs", field("intervalMs"));
         put("keepAlive", field("keepAlive"));
         put("condition", field("condition"));
+        put("runPolicy", field("runPolicy"));
         put("status", Some(json!("active")));
         put("createdAt", Some(num(now)));
         put("runCount", Some(json!(0)));
@@ -354,7 +376,10 @@ impl Tasks {
         }
         let settings = self.host.settings().await;
         // "Pause all automations": a due task waits; Run now still works.
-        if due_at.is_some() && nekko_js::truthy(settings.get("automationsPaused")) {
+        if let Some(now) = due_at
+            && nekko_js::truthy(settings.get("automationsPaused"))
+        {
+            self.hold(id, now);
             return None;
         }
         let provider = nullish_or(task.get("providerId"), settings.get("defaultProviderId")).cloned();
@@ -364,14 +389,49 @@ impl Tasks {
         else {
             return Some(vec![("status", Some(json!("error"))), ("lastResult", Some(json!(NO_MODEL)))]);
         };
-        Some(match self.drive(id, &task, provider, model).await {
+        // The run policy, for the scheduler's fires: Run now is a person asking.
+        let mut ran = RunAs::default();
+        if let Some(now) = due_at {
+            let local = run_policy::is_local_provider(&settings, Some(&provider));
+            let policy = run_policy::policy_of(&task, &settings, local);
+            let activity = match policy {
+                run_policy::Policy::Always => None,
+                _ => self.host.activity(run_policy::idle_after_secs(&settings)).await,
+            };
+            let due = nekko_js::to_number(task.get("nextRunAt"));
+            match run_policy::gate(policy, activity.as_ref(), due, now) {
+                Gate::Wait => {
+                    self.hold(id, now);
+                    // Said once, so the list can show the task waiting.
+                    let said = task.get("waitingSince").is_some_and(|w| !w.is_null());
+                    return (!said).then(|| vec![("waitingSince", Some(num(now)))]);
+                }
+                Gate::Go { low_priority, waited_ms } => {
+                    lock(&self.held).remove(id);
+                    let background =
+                        activity.is_some().then(|| run_policy::running_mode(policy, low_priority)).flatten();
+                    ran = RunAs { low_priority, waited_ms, background };
+                }
+            }
+        }
+        Some(match self.drive(id, &task, provider, model, ran).await {
             Ok(answer) => task_run_patch(&task, &answer, (self.clock)()),
             Err(e) => vec![("status", Some(json!("error"))), ("lastResult", Some(json!(format!("Run failed: {e}"))))],
         })
     }
 
+    /// Hold a due task back until the next look, a tick from `now`.
+    fn hold(&self, id: &str, now: f64) {
+        lock(&self.held).insert(id.to_string(), now + TICK.as_millis() as f64);
+    }
+
+    /// When a held task is looked at again, if it is held.
+    fn held_until(&self, id: &str, now: f64) -> Option<f64> {
+        lock(&self.held).get(id).copied().filter(|until| *until > now)
+    }
+
     /// The fire's turn; the last answer, or why it failed.
-    async fn drive(&self, id: &str, task: &Value, provider: Value, model: Value) -> Result<String, String> {
+    async fn drive(&self, id: &str, task: &Value, provider: Value, model: Value, ran: RunAs) -> Result<String, String> {
         // Reuse the task's chat across fires so background agents keep context.
         let existing = task
             .get("lastSessionId")
@@ -400,11 +460,17 @@ impl Tasks {
                 ("runCount", Some(num(runs))),
                 ("lastSessionId", Some(json!(sid))),
                 ("nextRunAt", None),
+                ("waitingSince", None),
+                // How the policy let this run start, for the list to say.
+                ("lastRunLowPriority", ran.low_priority.then(|| json!(true))),
+                ("lastRunWaitedMs", ran.waited_ms.map(num)),
             ],
         );
-        self.host
-            .send_chat(json!({ "sessionId": sid, "providerId": provider, "modelId": model, "text": prompt }))
-            .await?;
+        let mut opts = json!({ "sessionId": sid, "providerId": provider, "modelId": model, "text": prompt });
+        if let Some(mode) = ran.background {
+            opts["background"] = json!(mode);
+        }
+        self.host.send_chat(opts).await?;
         let done = self.host.get_session(&sid);
         let messages = done.as_ref().and_then(|s| s.get("messages")).and_then(Value::as_array);
         let last = messages.and_then(|m| {
@@ -427,7 +493,7 @@ impl Tasks {
             .iter()
             .filter(|t| t.get("status").and_then(Value::as_str) == Some("active"))
             .filter_map(|t| id_of(t).map(|id| (id, t)))
-            .filter(|(id, _)| !flying.contains(*id))
+            .filter(|(id, _)| !flying.contains(*id) && self.held_until(id, now).is_none())
             .filter(|(_, t)| t.get("nextRunAt").is_some_and(|n| !n.is_null() && nekko_js::to_number(Some(n)) <= now))
             .map(|(id, _)| id.to_string())
             .collect()
@@ -442,7 +508,10 @@ impl Tasks {
         let next = tasks
             .iter()
             .filter(|t| t.get("status").and_then(Value::as_str) == Some("active"))
-            .filter_map(|t| t.get("nextRunAt").filter(|n| !n.is_null()).map(|n| nekko_js::to_number(Some(n))))
+            .filter_map(|t| {
+                let next = nekko_js::to_number(Some(t.get("nextRunAt").filter(|n| !n.is_null())?));
+                Some(id_of(t).and_then(|id| self.held_until(id, now)).map_or(next, |until| until.max(next)))
+            })
             .filter(|n| !n.is_nan())
             .fold(f64::INFINITY, f64::min);
         let wait = (next - now).max(0.0);

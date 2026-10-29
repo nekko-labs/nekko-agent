@@ -1,9 +1,10 @@
 // The phone path with the relay agent in the engine daemon (crates/nekko-remote):
 // a device on a local apps/relay-server reaches the Local Web UI, which runs behind
-// nekkod, whose agent dials the relay. Checks transport auth, the sealed HELLO,
-// one-time pairing, requests to the daemon and through it to the TS host,
-// host events fanned out to the phone, the phone channel allowlist, and live
-// revocation.
+// nekkod, whose agent dials the relay. Checks transport auth, the sealed HELLO
+// answering the agent's challenge (phone protocol 4, with a legacy phone too),
+// replayed HELLOs and requests, one-time pairing, requests to the daemon and
+// through it to the TS host, host events fanned out to the phone, the phone
+// channel allowlist, and live revocation.
 //
 // Never point this at the managed relay with real devices: it always starts
 // its own relay on loopback.
@@ -105,13 +106,18 @@ try {
   }
   check('the daemon agent is online at the relay', online);
 
-  async function device({ deviceId, name, pair }) {
+  async function device({ deviceId, name, pair, legacy = false }) {
     const ws = new WebSocket(`${RELAY_URL}/relay?role=client&room=${room}&key=${key}`);
     const pending = new Map();
     const events = [];
+    const sent = [];
     let nextId = 1;
+    let seq = 0;
     let hello = null;
     let onHello = null;
+    // The agent's challenges, newest last (phone protocol 4).
+    const challenges = [];
+    let onChallenge = null;
     const closed = new Promise((res) => ws.addEventListener('close', (ev) => res(ev.code)));
     ws.onmessage = async (ev) => {
       let env;
@@ -122,7 +128,10 @@ try {
       }
       if (!env.enc) return;
       const f = await open(e2eKey, env.enc);
-      if (f.type === 'welcome' || f.type === 'denied') {
+      if (f.type === 'challenge') {
+        challenges.push(f.challenge);
+        onChallenge?.(f.challenge);
+      } else if (f.type === 'welcome' || f.type === 'denied') {
         hello = f;
         onHello?.(f);
       } else if (f.type === 'res' && pending.has(f.id)) {
@@ -137,21 +146,39 @@ try {
       ws.onopen = res;
       ws.onerror = () => rej(new Error('client ws failed'));
     });
-    const sendSealed = async (frame) => ws.send(JSON.stringify({ enc: await seal(e2eKey, frame) }));
+    const sendSealed = async (frame) => {
+      const text = JSON.stringify({ enc: await seal(e2eKey, frame) });
+      sent.push(text);
+      ws.send(text);
+    };
     const call = (channel, ...callArgs) =>
       new Promise(async (resolve, reject) => {
         const id = nextId++;
         pending.set(id, { resolve, reject });
-        await sendSealed({ type: 'req', id, channel, args: callArgs });
+        const bound = legacy ? {} : { seq: ++seq, challenge: hello?.challenge };
+        await sendSealed({ type: 'req', id, ...bound, channel, args: callArgs });
         setTimeout(() => pending.has(id) && reject(new Error(`timeout: ${channel}`)), 20000);
       });
-    const doHello = () =>
-      new Promise(async (res) => {
-        onHello = res;
-        await sendSealed({ type: 'hello', deviceId, name, platform: 'android', ...(pair ? { pair } : {}) });
-        setTimeout(() => res(hello ?? { type: 'timeout' }), 8000);
+    const nextChallenge = (after) =>
+      new Promise((res) => {
+        if (challenges.length > after) return res(challenges[challenges.length - 1]);
+        onChallenge = res;
+        setTimeout(() => res(null), 8000);
       });
-    return { ws, call, doHello, closed, events };
+    // `answer`: the challenge to send (default: the agent's newest); legacy phones send none.
+    const doHello = (answer) =>
+      new Promise(async (res) => {
+        hello = null;
+        onHello = res;
+        const challenge = legacy ? undefined : (answer ?? (await nextChallenge(0)));
+        await sendSealed({
+          type: 'hello', deviceId, name, platform: 'android',
+          ...(legacy ? {} : { protocol: 4, challenge }), ...(pair ? { pair } : {}),
+        });
+        if (hello === null) seq = 0;
+        setTimeout(() => res(hello ?? { type: 'timeout' }), 8000);
+      }).then((h) => (h.type === 'welcome' && !legacy ? Object.assign(h, { challenge: challenges[challenges.length - 1] }) : h));
+    return { ws, call, doHello, closed, events, challenges, nextChallenge, sent, raw: (text) => ws.send(text) };
   }
 
   const wrongKey = await new Promise((resolve) => {
@@ -175,6 +202,7 @@ try {
   check('a device enrolls with the one-time code', w.type === 'welcome' && w.device?.name === 'Pixel');
   const saved = JSON.parse(readFileSync(join(dataDir, 'remote.json'), 'utf8'));
   check('remote.json holds it (written by the daemon)', saved.devices?.[0]?.id === 'phone-1');
+  check('the agent challenged the connection before the HELLO', phone.challenges.length === 1 && phone.challenges[0].length === 24);
   const settings = await phone.call('settings:get');
   check('the phone reaches the TS host through the daemon (settings:get)', typeof settings === 'object' && settings !== null);
   const sessions = await phone.call('sessions:summaries');
@@ -187,6 +215,24 @@ try {
   await api('task:create', { title: 'From the computer', kind: 'scheduled', prompt: 'hi', runAt: Date.now() + 3_600_000 });
   for (let i = 0; i < 40 && !phone.events.some((e) => e.channel === 'tasks:updated'); i++) await sleep(100);
   check('host events reach the phone (tasks:updated)', phone.events.some((e) => e.channel === 'tasks:updated'));
+
+  // Relay replay protection: a request sent again byte for byte is dropped
+  // and the connection challenged anew; the recorded HELLO on a new connection is never welcomed.
+  const lastReq = phone.sent[phone.sent.length - 1];
+  const before = phone.challenges.length;
+  phone.raw(lastReq);
+  check('a replayed request is answered with a new challenge, not run', (await phone.nextChallenge(before)) !== null);
+  const recordedHello = phone.sent[0];
+  const eve = await device({ deviceId: 'eve-1', name: 'Recorder' });
+  await eve.nextChallenge(0);
+  eve.raw(recordedHello);
+  await sleep(1500);
+  check('a recorded HELLO is not welcomed on another connection', eve.challenges.length === 2);
+  const old = await device({ deviceId: 'phone-1', name: 'Pixel', legacy: true });
+  check('a legacy phone is still welcomed by default', (await old.doHello()).type === 'welcome');
+  const marked = JSON.parse(readFileSync(join(dataDir, 'remote.json'), 'utf8'));
+  check('and marked as legacy', marked.devices?.[0]?.legacyProtocol === true);
+  check('its requests need no counter', Array.isArray(await old.call('sessions:summaries')));
 
   const replay = await device({ deviceId: 'replay-1', name: 'Replayer', pair: grant.code });
   const r = await replay.doHello();

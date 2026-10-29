@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type {
+  AutomationRunPolicy,
   ConnectorKind,
   ModelInfo,
   ProviderConfig,
@@ -44,6 +45,7 @@ import { useStore } from '../store.js';
 import { Modal } from './primitives/index.js';
 import { WorkflowCanvas } from './WorkflowCanvas.js';
 import { ModelPicker, MODEL_LIST_TIMEOUT_MS, withTimeout } from './agent-console/ModelPicker.js';
+import { RunPolicyField } from './RunPolicyField.js';
 import { CloseIcon, PlusIcon } from '../icons.js';
 
 /**
@@ -69,6 +71,8 @@ export interface Draft {
   localModelOnly: boolean;
   toolAccess: WorkflowToolAccess;
   prCheckout: boolean;
+  /** When a scheduled run may start; unset follows Settings. */
+  runPolicy?: AutomationRunPolicy;
   steps: WorkflowStep[];
   triggers: WorkflowTrigger[];
 }
@@ -104,31 +108,34 @@ export function toDraft(wf?: Workflow): Draft {
     localModelOnly: !!wf?.localModelOnly,
     toolAccess: wf?.toolAccess ?? 'workspace',
     prCheckout: !!wf?.prCheckout,
+    runPolicy: wf?.runPolicy ?? undefined,
     steps: (wf?.steps ?? []).map((s) => ({ ...s })),
     triggers: (wf?.triggers ?? [{ id: newStepId('trg'), kind: 'manual' }]).map((t) => ({ ...t })),
   };
 }
 
 /**
- * What Save sends. Cleared settings are sent as explicit `undefined` so an
- * update drops them (the host merges the patch over the stored workflow), and
- * fields that only mean something for some step kinds are dropped from others.
+ * What Save sends. Cleared settings are sent as `null`, not `undefined`: the
+ * patch reaches the daemon as JSON, which drops an `undefined` key, and the
+ * daemon only assigns the keys it receives (it reads `null` as unset). Fields
+ * that only mean something for some step kinds are dropped from others.
  */
 export function draftPatch(draft: Draft): NewWorkflow {
   const agent = (s: WorkflowStep) => s.kind === 'prompt' || s.kind === 'skill';
   return {
     name: draft.name.trim(),
-    description: draft.description.trim() || undefined,
+    description: draft.description.trim() || null,
     category: draft.category.trim() || UNCATEGORIZED,
     enabled: draft.enabled,
-    workspaceId: draft.workspaceId,
+    workspaceId: draft.workspaceId ?? null,
     notify: draft.notify,
     templateId: draft.templateId,
-    providerId: draft.providerId && draft.modelId ? draft.providerId : undefined,
-    modelId: draft.providerId && draft.modelId ? draft.modelId : undefined,
-    localModelOnly: draft.localModelOnly || undefined,
-    toolAccess: draft.toolAccess === 'workspace' ? undefined : draft.toolAccess,
-    prCheckout: draft.prCheckout || undefined,
+    providerId: draft.providerId && draft.modelId ? draft.providerId : null,
+    modelId: draft.providerId && draft.modelId ? draft.modelId : null,
+    localModelOnly: draft.localModelOnly || null,
+    toolAccess: draft.toolAccess === 'workspace' ? null : draft.toolAccess,
+    prCheckout: draft.prCheckout || null,
+    runPolicy: draft.runPolicy ?? null,
     steps: draft.steps.map((s) => {
       const { providerId, modelId, allowedTools, args, ...rest } = s;
       const out: WorkflowStep = { ...rest };
@@ -202,6 +209,7 @@ export function WorkflowEditor({
           localModelOnly: seed.localModelOnly ?? base.localModelOnly,
           toolAccess: seed.toolAccess ?? base.toolAccess,
           prCheckout: seed.prCheckout ?? base.prCheckout,
+          runPolicy: base.runPolicy,
           steps: seed.steps,
           triggers: seed.triggers,
         }
@@ -225,6 +233,11 @@ export function WorkflowEditor({
     const p = providers.find((x) => x.id === providerId);
     return !!p && offlineProviderAllowed(p);
   };
+  // As the daemon judges it: local-only, or its model or any step's is local.
+  const runsLocally =
+    draft.localModelOnly ||
+    isLocal(draft.providerId ?? settings?.defaultProviderId) ||
+    draft.steps.some((s) => isLocal(s.providerId));
   const canSave = draft.name.trim().length > 0 && draft.steps.length > 0 && !busy;
 
   const save = async () => {
@@ -400,6 +413,12 @@ export function WorkflowEditor({
                 </span>
               </span>
             </label>
+            <RunPolicyField
+              value={draft.runPolicy}
+              local={runsLocally}
+              note="Pull request, push, Slack, connector and webhook events, and the Run button, never wait."
+              onChange={(v) => set('runPolicy', v)}
+            />
             <label className="flex items-start gap-2 sm:col-span-2">
               <input
                 type="checkbox"

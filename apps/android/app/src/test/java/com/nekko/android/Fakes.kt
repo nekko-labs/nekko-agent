@@ -7,6 +7,7 @@ import com.nekko.android.data.SecureStore
 import com.nekko.protocol.RelayConfig
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RelayStatus
+import com.nekko.protocol.StepUpProof
 import com.nekko.protocol.WelcomedDevice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.CopyOnWriteArrayList
 
 class FakeStore : SecureStore {
@@ -24,7 +26,14 @@ class FakeStore : SecureStore {
     }
 }
 
-data class Call(val channel: String, val args: List<JsonElement>, val timeoutMs: Long?)
+data class Call(
+    val channel: String,
+    val args: List<JsonElement>,
+    val timeoutMs: Long?,
+    val stepUp: StepUpProof? = null,
+    /** The signed Change proof (`callSigned`), null for a plain call. */
+    val proof: JsonObject? = null,
+)
 
 /** Records every call; [handler] answers (or throws, or suspends). */
 open class FakeCaller(
@@ -55,6 +64,18 @@ class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement
     var closed = false
     var nudges = 0
     var reconnects = 0
+
+    override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement {
+        val c = Call(channel, args.toList(), null, stepUp)
+        calls += c
+        return handler(c)
+    }
+
+    override suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof?, timeoutMs: Long?): JsonElement {
+        val c = Call(channel, args.toList(), timeoutMs, stepUp, proof)
+        calls += c
+        return handler(c)
+    }
 
     override fun connect() {
         connected = true

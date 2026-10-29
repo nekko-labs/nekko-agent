@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from '../../src/renderer/store';
-import { WorkspacesView } from '../../src/renderer/views/WorkspacesView';
+import { AgentSidebar } from '../../src/renderer/views/WorkspacesView';
 import { summarizeSession } from '@nekko-agent/shared';
 import '../../src/renderer/styles.css';
 
@@ -30,13 +30,13 @@ const opened: string[] = [];
 Object.assign(window, { nekko: new Proxy({ listSessionSummaries: async () => sessions, getSession: async (id: string) => full.find((s) => s.id === id) ?? null, listTerminals: async () => [], runningSessions: async () => [], pendingInput: async () => ({}) } as any, { get(t, k: string) { if (k in t) return t[k]; if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 const providers = [
   { id: 'eng', label: 'Nekko Agent engine', kind: 'llamacpp', baseUrl: 'http://127.0.0.1:8080', enabled: true },
-  { id: 'ant', label: 'Anthropic (Claude)', kind: 'anthropic', baseUrl: 'https://api.anthropic.com', enabled: true },
+  { id: 'ant', label: 'Claude API', kind: 'anthropic', baseUrl: 'https://api.anthropic.com', enabled: true },
 ];
 const workspaces = [{ id: 'w1', name: 'nekko-agent', path: 'C:/fixture' }, { id: 'w2', name: 'website', path: 'C:/site' }];
 function Fixture() {
   const [selected, setSelected] = useState<string | undefined>();
   React.useLayoutEffect(() => { useStore.setState({ sessions, providers, terminals: [], workspaces: [], settings: { providers, workspaces, experimental: {}, agent: {}, ui: {} } } as any); }, []);
   Object.assign(window, { integration: { opened, findSeed: () => useStore.getState().findSeed } });
-  return <main style={{ height: '100vh', width: 300 }}><WorkspacesView sidebarOnly selectedId={selected} onOpenChat={(id) => { opened.push(id); setSelected(id); }} /></main>;
+  return <main style={{ height: '100vh', width: 300 }}><AgentSidebar selectedId={selected ?? null} onOpenChat={(id) => { opened.push(id); setSelected(id); }} onOpenTerminal={() => {}} onCreate={async () => {}} /></main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

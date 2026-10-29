@@ -31,6 +31,8 @@ describe('agent status from events', () => {
     expect(statusFromEvent('text')).toBe('working');
     expect(statusFromEvent('done', 'input')).toBeNull();
     expect(statusFromEvent('error')).toBe('error');
+    expect(statusFromEvent('session_meta')).toBeUndefined();
+    expect(statusFromEvent('session_meta', 'input')).toBeUndefined();
   });
   // Source pin, pending an agents-panel e2e journey: the seeding is a mount effect
   // waiting on a host promise, which a server render never runs.
@@ -40,6 +42,15 @@ describe('agent status from events', () => {
 });
 
 describe('agent window indicators', () => {
+  it('shows a done check without watches and idle only for a watched sidebar chat', () => {
+    const html = renderSidebar({ sessions: [agentSummary('done', { activeWatchCount: 0 }), agentSummary('watched', { activeWatchCount: 1 })] });
+    expect(html).toContain('aria-label="Done"');
+    expect(html).toContain('aria-label="Idle, watching"');
+    const afterCancel = renderSidebar({ sessions: [agentSummary('watched', { activeWatchCount: 0 })] });
+    expect(afterCancel).toContain('aria-label="Done"');
+    expect(afterCancel).not.toContain('aria-label="Idle, watching"');
+  });
+
   const two = { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid' as const, cols: 2, rows: 1 } };
 
   it('wears the warm attention ring when waiting on you', async () => {
@@ -83,10 +94,10 @@ describe('agent window indicators', () => {
     expect(html.match(/<button[^>]*data-tool-name="read_file"[^>]*>/)![0]).not.toContain('disabled=""');
   });
 
-  it('drops the Continue work box from the wall composer', () => {
+  it('drops the Continue work box from every composer', () => {
     withProvider();
-    // The same chat with work to resume: the full chat offers it, the wall composer does not.
-    expect(renderChatPane(chatSession(), { surface: 'full' })).toContain('>Continue work</button>');
+    // Recovery remains in the error banner, never a suggested-response row.
+    expect(renderChatPane(chatSession(), { surface: 'full' })).not.toContain('>Continue work</button>');
     expect(renderWallComposer()).not.toContain('Continue work');
   });
 });

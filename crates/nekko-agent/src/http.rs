@@ -143,6 +143,19 @@ impl ReqwestTransport {
     }
 }
 
+/// reqwest's message and every cause under it: the cause says why
+/// (`connection reset`, `dns error`), the top line only that sending failed.
+fn causes(e: &dyn std::error::Error) -> String {
+    let mut out = e.to_string();
+    let mut next = e.source();
+    while let Some(c) = next {
+        out.push_str(": ");
+        out.push_str(&c.to_string());
+        next = c.source();
+    }
+    out
+}
+
 fn network(e: reqwest::Error, message: &str) -> TransportError {
     TransportError { message: message.into(), detail: Some(e.to_string()) }
 }
@@ -158,7 +171,15 @@ impl Transport for ReqwestTransport {
             if let Some(body) = &req.body {
                 b = b.body(crate::js::stringify(body));
             }
-            let res = b.send().await.map_err(|e| network(e, "fetch failed"))?;
+            // Loopback (local) providers stay allowed under All connections off.
+            let res = nekko_net::send("model-providers", b).await.map_err(|e| match e {
+                nekko_net::Error::Http(e) => {
+                    // The message the user sees is "Can't reach …"; this is why.
+                    eprintln!("nekkod: {} {} failed: {}", req.method, req.url, causes(&e));
+                    network(e, "fetch failed")
+                }
+                blocked => TransportError { message: blocked.to_string(), detail: None },
+            })?;
             let headers = res
                 .headers()
                 .iter()

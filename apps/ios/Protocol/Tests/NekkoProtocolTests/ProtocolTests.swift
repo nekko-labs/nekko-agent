@@ -187,8 +187,9 @@ final class WireTests: XCTestCase {
         XCTAssertEqual(s.messages[2].toolResult?.outputChars, 9000)
         let blocks = Transcript.fromMessages(s.messages)
         XCTAssertEqual(blocks.count, 4)
-        guard case .tool(_, _, let label, .ok, let output?) = blocks[2] else { return XCTFail("\(blocks[2])") }
+        guard case .tool(_, _, let label, .ok, let output?, let input) = blocks[2] else { return XCTFail("\(blocks[2])") }
         XCTAssertEqual(label, "Run ls -la")
+        XCTAssertEqual(input["command"]?.string, "ls -la")
         XCTAssertEqual(output, "abc\n… (8997 more characters, on the computer)\n2 images, on the computer")
         XCTAssertEqual(Transcript.splitNotes(output).0, "abc")
         XCTAssertEqual(Transcript.splitNotes(output).1.count, 2)
@@ -307,7 +308,7 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(t.rate, 50)
         XCTAssertEqual(t.blocks.count, 4)
         guard case .assistant(_, "Hello", "think", false, _) = t.blocks[1] else { return XCTFail("\(t.blocks[1])") }
-        guard case .tool("t1", _, "Run ls", .ok, "ok") = t.blocks[2] else { return XCTFail("\(t.blocks[2])") }
+        guard case .tool("t1", _, "Run ls", .ok, "ok", _) = t.blocks[2] else { return XCTFail("\(t.blocks[2])") }
         guard case .assistant(_, "Done", nil, false, _) = t.blocks[3] else { return XCTFail("\(t.blocks[3])") }
     }
 
@@ -326,16 +327,16 @@ final class TranscriptTests: XCTestCase {
             .user(id: "u0", text: "earlier", at: 0, images: 0),
             .assistant(id: "a0", text: "Same words", reasoning: nil, streaming: false, interrupted: false),
             .user(id: "u1", text: "go", at: 1, images: 0),
-            .tool(id: "t1", name: "bash", label: "Run ls", status: .ok, output: nil),
+            .tool(id: "t1", name: "bash", label: "Run ls", status: .ok, output: nil, input: [:]),
         ]
         let live: [Block] = [
             .user(id: "p", text: " go ", at: 1, images: 0),
-            .tool(id: "t1", name: "bash", label: "Run ls", status: .ok, output: "files"),
+            .tool(id: "t1", name: "bash", label: "Run ls", status: .ok, output: "files", input: [:]),
             .assistant(id: "l", text: "Same words", reasoning: nil, streaming: true, interrupted: false),
         ]
         let merged = Transcript.mergeLive(saved: saved, live: live)
         XCTAssertEqual(merged.map(\.id), ["u0", "a0", "u1", "t1", "l"])
-        guard case .tool(_, _, _, _, "files") = merged[3] else { return XCTFail() }
+        guard case .tool(_, _, _, _, "files", _) = merged[3] else { return XCTFail() }
         // A prompt the saved transcript doesn't hold yet is appended whole.
         XCTAssertEqual(Transcript.mergeLive(saved: Array(saved.prefix(2)), live: live).count, 5)
     }
@@ -410,5 +411,14 @@ final class BeyondWireTests: XCTestCase {
         let edited = try XCTUnwrap(try result(cases, "chat:editQueued"))
         XCTAssertEqual(QueuedPrompt.list(edited["queue"]).map(\.shown), ["sooner", "with a photo", "/review now"])
         XCTAssertEqual(try result(cases, "session:fork")?.str("id"), "s_fork")
+    }
+}
+
+final class ActiveWatchSummaryTests: XCTestCase {
+    func testMissingAndExplicitCounts() throws {
+        for (field, expected): (String, Int64) in [("", 0), (",\"activeWatchCount\":0", 0), (",\"activeWatchCount\":2", 2)] {
+            let summary = try XCTUnwrap(SessionSummary.from(JSONValue.parse("{\"id\":\"chat\"\(field)}")))
+            XCTAssertEqual(summary.activeWatchCount, expected)
+        }
     }
 }

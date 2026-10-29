@@ -6,7 +6,13 @@
 //! metadata-pair count, then that many pairs of (string key, u32 type, value).
 //! Keys are architecture-prefixed (`llama.block_count`), so lookups match on
 //! the suffix.
+//!
+//! After the pairs comes the tensor table (name, dimensions, type, offset),
+//! which gives the KV cache layer by layer ([`KvLayout`]) and what the weights
+//! are made of ([`WeightLayout`]). A table that cannot be read leaves both
+//! layouts out and changes nothing else.
 
+use crate::capacity::{KvLayout, WeightLayout};
 use crate::num;
 use serde_json::{Map, Value};
 use std::io::Read;
@@ -29,6 +35,10 @@ pub struct GgufMetadata {
     pub quantization: Option<String>,
     pub parameter_size: Option<String>,
     pub chat_template: Option<String>,
+    /// The KV cache layer by layer, when the tensor table was read.
+    pub kv_layout: Option<KvLayout>,
+    /// Expert, feed-forward and lookup-table shares, when the tensor table was read.
+    pub weight_layout: Option<WeightLayout>,
 }
 
 impl GgufMetadata {
@@ -54,6 +64,12 @@ impl GgufMetadata {
         text(&mut m, "quantization", &self.quantization);
         text(&mut m, "parameterSize", &self.parameter_size);
         text(&mut m, "chatTemplate", &self.chat_template);
+        if let Some(l) = &self.kv_layout {
+            m.insert("kvLayout".into(), l.to_value());
+        }
+        if let Some(w) = &self.weight_layout {
+            m.insert("weightLayout".into(), w.to_value());
+        }
         Value::Object(m)
     }
 }
@@ -109,14 +125,15 @@ pub fn read_metadata(path: &str) -> Option<GgufMetadata> {
     if head.len() < 24 {
         return None;
     }
-    match parse(&head) {
-        Parsed::Done(m) => m,
+    match parse(&head, false) {
+        Parsed::Done(m) => m.map(|m| *m),
         Parsed::Truncated => {
-            // A big vocabulary can push the geometry keys past the first read.
+            // A big vocabulary can push the geometry keys, or the tensor
+            // table after them, past the first read.
             let mut file = std::fs::File::open(path).ok()?;
             let wide = read_up_to(&mut file, MAX_HEADER_BYTES)?;
-            match parse(&wide) {
-                Parsed::Done(m) => m,
+            match parse(&wide, true) {
+                Parsed::Done(m) => m.map(|m| *m),
                 Parsed::Truncated => None,
             }
         }
@@ -130,7 +147,7 @@ fn read_up_to(file: &mut std::fs::File, n: usize) -> Option<Vec<u8>> {
 }
 
 enum Parsed {
-    Done(Option<GgufMetadata>),
+    Done(Option<Box<GgufMetadata>>),
     Truncated,
 }
 
@@ -146,8 +163,20 @@ enum Val {
     Str(String),
 }
 
-/// Parse a header buffer.
-fn parse(buf: &[u8]) -> Parsed {
+/// Short numeric arrays are per-layer settings (a sliding-window pattern, a
+/// head count per layer); longer ones are vocabularies and are skipped.
+const MAX_KEPT_ARRAY: f64 = 4096.0;
+
+/// One `blk.N.attn_*` tensor's output width (`ne[1]`).
+struct AttnTensor {
+    layer: usize,
+    kind: &'static str,
+    width: f64,
+}
+
+/// Parse a header buffer. `last`: no longer read to come, so a tensor table
+/// cut short leaves the layout out rather than asking for more.
+fn parse(buf: &[u8], last: bool) -> Parsed {
     let u32_at = |at: usize| u32::from_le_bytes([buf[at], buf[at + 1], buf[at + 2], buf[at + 3]]);
     if u32_at(0) != MAGIC {
         return Parsed::Done(None);
@@ -157,8 +186,10 @@ fn parse(buf: &[u8]) -> Parsed {
         return Parsed::Done(None);
     }
     let mut r = Reader { buf, at: 8 };
-    let read = |r: &mut Reader| -> Result<Option<Vec<(String, Val)>>, Stop> {
-        r.u64()?; // tensor count
+    let mut tensors = 0.0;
+    let mut arrays: Vec<(String, Vec<f64>)> = Vec::new();
+    let read = |r: &mut Reader, tensors: &mut f64, arrays: &mut Vec<(String, Vec<f64>)>| {
+        *tensors = r.u64()? as f64;
         let pairs = r.u64()? as f64;
         if pairs > MAX_SAFE || pairs > 100_000.0 {
             return Ok(None);
@@ -167,7 +198,12 @@ fn parse(buf: &[u8]) -> Parsed {
         let mut kv: Vec<(String, Val)> = Vec::new();
         for _ in 0..pairs as u64 {
             let key = r.string()?;
-            if let Some(value) = r.value()? {
+            let tag = r.u32()?;
+            if tag == 9 {
+                if let Some(values) = r.array()? {
+                    arrays.push((key, values));
+                }
+            } else if let Some(value) = r.typed(tag)? {
                 match kv.iter_mut().find(|(k, _)| *k == key) {
                     Some(slot) => slot.1 = value,
                     None => kv.push((key, value)),
@@ -176,12 +212,236 @@ fn parse(buf: &[u8]) -> Parsed {
         }
         Ok(Some(kv))
     };
-    match read(&mut r) {
-        Ok(None) => Parsed::Done(None),
-        Ok(Some(kv)) => Parsed::Done(Some(to_metadata(&kv))),
-        Err(Stop::Eof) => Parsed::Truncated,
-        Err(Stop::Bad) => Parsed::Done(None),
+    let kv = match read(&mut r, &mut tensors, &mut arrays) {
+        Ok(None) => return Parsed::Done(None),
+        Ok(Some(kv)) => kv,
+        Err(Stop::Eof) => return Parsed::Truncated,
+        Err(Stop::Bad) => return Parsed::Done(None),
+    };
+    let mut meta = to_metadata(&kv);
+    match tensor_table(&mut r, tensors) {
+        Ok((attn, bytes)) => {
+            meta.kv_layout = kv_layout(&kv, &arrays, &attn, tensors);
+            meta.weight_layout = bytes.layout(&kv);
+        }
+        Err(Stop::Eof) if !last => return Parsed::Truncated,
+        Err(_) => {}
     }
+    Parsed::Done(Some(Box::new(meta)))
+}
+
+/// `(elements per block, bytes per block)` for a ggml tensor type.
+fn ggml_block(kind: u32) -> Option<(f64, f64)> {
+    Some(match kind {
+        0 => (1.0, 4.0),     // F32
+        1 => (1.0, 2.0),     // F16
+        2 => (32.0, 18.0),   // Q4_0
+        3 => (32.0, 20.0),   // Q4_1
+        6 => (32.0, 22.0),   // Q5_0
+        7 => (32.0, 24.0),   // Q5_1
+        8 => (32.0, 34.0),   // Q8_0
+        9 => (32.0, 36.0),   // Q8_1
+        10 => (256.0, 84.0), // Q2_K
+        11 => (256.0, 110.0),
+        12 => (256.0, 144.0),
+        13 => (256.0, 176.0),
+        14 => (256.0, 210.0),
+        15 => (256.0, 292.0),
+        16 => (256.0, 66.0), // IQ2_XXS
+        17 => (256.0, 74.0),
+        18 => (256.0, 98.0),
+        19 => (256.0, 50.0),
+        20 => (32.0, 18.0), // IQ4_NL
+        21 => (256.0, 110.0),
+        22 => (256.0, 82.0),
+        23 => (256.0, 136.0),
+        24 => (1.0, 1.0), // I8
+        25 => (1.0, 2.0),
+        26 => (1.0, 4.0),
+        27 => (1.0, 8.0),
+        28 => (1.0, 8.0), // F64
+        29 => (256.0, 56.0),
+        30 => (1.0, 2.0), // BF16
+        34 => (256.0, 54.0),
+        35 => (256.0, 66.0),
+        39 => (32.0, 17.0), // MXFP4
+        _ => return None,
+    })
+}
+
+/// Lookup tables over this size are what `--lazy-mode auto` pages from disk.
+const LAZY_TABLE_BYTES: f64 = 4.0 * 1024.0 * 1024.0 * 1024.0;
+
+/// Tensor bytes by what they are for, summed over the table.
+#[derive(Default)]
+struct WeightBytes {
+    total: f64,
+    expert: f64,
+    ffn: f64,
+    table: f64,
+    /// A tensor of a type we cannot size: no shares rather than wrong ones.
+    unknown_type: bool,
+}
+
+impl WeightBytes {
+    fn add(&mut self, name: &str, shape: &[f64], kind: u32) {
+        let Some((block, size)) = ggml_block(kind) else {
+            self.unknown_type = true;
+            return;
+        };
+        let bytes = shape.iter().product::<f64>() / block * size;
+        self.total += bytes;
+        let tail = name.strip_prefix("blk.").and_then(|r| r.split_once('.')).map(|(_, t)| t);
+        match tail {
+            // llama.cpp's own `--cpu-moe` pattern: `\.ffn_(up|down|gate|gate_up)_(ch|)exps`.
+            Some(t) if t.starts_with("ffn_") && (t.contains("_exps") || t.contains("_chexps")) => self.expert += bytes,
+            Some(t) if ["ffn_up.", "ffn_down.", "ffn_gate.", "ffn_gate_up."].iter().any(|p| t.starts_with(p)) => {
+                self.ffn += bytes
+            }
+            Some(_) => {}
+            None if name.contains("embd")
+                && (name.contains("ngram")
+                    || name.contains("per_layer")
+                    || (bytes >= LAZY_TABLE_BYTES && name != "token_embd.weight")) =>
+            {
+                self.table += bytes
+            }
+            None => {}
+        }
+    }
+
+    /// Shares of the bytes this header lists.
+    // shortcut: a split model's shares come from its first shard, which holds the
+    // earliest layers; read every shard if a split MoE ever plans visibly wrong.
+    fn layout(&self, kv: &[(String, Val)]) -> Option<WeightLayout> {
+        if self.unknown_type || self.total <= 0.0 {
+            return None;
+        }
+        Some(WeightLayout {
+            expert_share: self.expert / self.total,
+            ffn_share: self.ffn / self.total,
+            table_share: self.table / self.total,
+            experts: num_of(kv, "expert_count"),
+            experts_used: num_of(kv, "expert_used_count"),
+        })
+    }
+}
+
+/// The tensor table's attention projections (`blk.N.attn_k`, `attn_v`,
+/// `attn_qkv`), which layers are recurrent (`blk.N.ssm_*`), and the bytes of
+/// every tensor by kind.
+fn tensor_table(r: &mut Reader, count: f64) -> Result<(Vec<AttnTensor>, WeightBytes), Stop> {
+    if count > 1_000_000.0 {
+        return Err(Stop::Bad);
+    }
+    let mut out = Vec::new();
+    let mut bytes = WeightBytes::default();
+    for _ in 0..count as u64 {
+        let name = r.string()?;
+        let dims = r.u32()?;
+        if dims > 8 {
+            return Err(Stop::Bad);
+        }
+        let mut shape = Vec::with_capacity(dims as usize);
+        for _ in 0..dims {
+            shape.push(r.u64()? as f64);
+        }
+        let kind = r.u32()?;
+        r.u64()?; // offset
+        bytes.add(&name, &shape, kind);
+        let Some(rest) = name.strip_prefix("blk.") else { continue };
+        let Some((layer, tail)) = rest.split_once('.') else { continue };
+        let kind = match tail {
+            "attn_k.weight" => "k",
+            "attn_v.weight" => "v",
+            "attn_qkv.weight" => "qkv",
+            t if t.starts_with("ssm_") => "ssm",
+            _ => continue,
+        };
+        if let (Ok(layer), Some(&width)) = (layer.parse::<usize>(), shape.get(1).or(shape.first())) {
+            out.push(AttnTensor { layer, kind, width });
+        }
+    }
+    Ok((out, bytes))
+}
+
+/// Every second or sixth layer slides where the file has a window but no
+/// per-layer pattern (llama.cpp's `set_swa_pattern` for these architectures).
+fn swa_period(arch: Option<&str>) -> Option<usize> {
+    match arch? {
+        "gpt-oss" | "gemma2" => Some(2),
+        "gemma3" => Some(6),
+        _ => None,
+    }
+}
+
+/// The KV cache per token, layer by layer: a layer with no attention keeps
+/// none, nor does a recurrent one (its `attn_qkv` feeds a state, not a
+/// cache); the last `shared_kv_layers` reuse earlier layers' cache; a layer with
+/// keys but no values tensor is counted as storing both; a fused `attn_qkv`
+/// stores the KV heads' keys and values. `None` for a file with no tensors to
+/// read it from (the uniform estimate stands).
+fn kv_layout(
+    kv: &[(String, Val)],
+    arrays: &[(String, Vec<f64>)],
+    attn: &[AttnTensor],
+    tensors: f64,
+) -> Option<KvLayout> {
+    if tensors == 0.0 {
+        return None;
+    }
+    let array = |suffix: &str| {
+        let dotted = format!(".{suffix}");
+        arrays.iter().find(|(k, _)| k == suffix || k.ends_with(&dotted)).map(|(_, v)| v)
+    };
+    let layers = num_of(kv, "block_count")? as usize;
+    let shared = num_of(kv, "attention.shared_kv_layers").unwrap_or(0.0) as usize;
+    let window = num_of(kv, "attention.sliding_window").unwrap_or(0.0);
+    let pattern = array("attention.sliding_window_pattern");
+    let period = swa_period(str_of(kv, "general.architecture").as_deref());
+    let heads = num_of(kv, "attention.head_count");
+    let kv_heads = |i: usize| {
+        array("attention.head_count_kv")
+            .and_then(|a| a.get(i).copied())
+            .or(num_of(kv, "attention.head_count_kv"))
+            .or(heads)
+    };
+    let key_len = num_of(kv, "attention.key_length").or(match (num_of(kv, "embedding_length"), heads) {
+        (Some(e), Some(h)) => Some(e / h),
+        _ => None,
+    });
+    let value_len = num_of(kv, "attention.value_length").or(key_len);
+    let width = |i: usize, kind: &str| attn.iter().find(|t| t.layer == i && t.kind == kind).map(|t| t.width);
+
+    let mut layout = KvLayout { sliding_window: window, ..KvLayout::default() };
+    for i in 0..layers.saturating_sub(shared) {
+        if width(i, "ssm").is_some() {
+            continue;
+        }
+        let per_token = match (width(i, "k"), width(i, "qkv")) {
+            (Some(k), _) => k + width(i, "v").unwrap_or(k),
+            (None, Some(_)) => match (kv_heads(i), key_len, value_len) {
+                (Some(h), Some(kd), Some(vd)) => h * (kd + vd),
+                _ => return None,
+            },
+            (None, None) => continue,
+        };
+        let sliding = window > 0.0
+            && match (pattern, period) {
+                (Some(p), _) => p.get(i).is_some_and(|x| *x != 0.0),
+                (None, Some(n)) => i % n < n - 1,
+                (None, None) => false,
+            };
+        if sliding {
+            layout.sliding_per_token += per_token;
+        } else {
+            layout.full_per_token += per_token;
+        }
+    }
+    if layout.sliding_per_token == 0.0 {
+        layout.sliding_window = 0.0;
+    }
+    Some(layout)
 }
 
 fn to_metadata(kv: &[(String, Val)]) -> GgufMetadata {
@@ -203,6 +463,8 @@ fn to_metadata(kv: &[(String, Val)]) -> GgufMetadata {
             .map(|t| file_type(t).map_or_else(|| format!("type {}", nekko_js::number_to_string(t)), str::to_string)),
         parameter_size: str_of(kv, "general.size_label"),
         chat_template: str_of(kv, "tokenizer.chat_template"),
+        kv_layout: None,
+        weight_layout: None,
     }
 }
 
@@ -272,12 +534,6 @@ impl Reader<'_> {
         Ok(String::from_utf8_lossy(&self.buf[start..start + len as usize]).into_owned())
     }
 
-    /// One metadata value; `None` for arrays, which are skipped whole.
-    fn value(&mut self) -> Result<Option<Val>, Stop> {
-        let tag = self.u32()?;
-        self.typed(tag)
-    }
-
     fn typed(&mut self, tag: u32) -> Result<Option<Val>, Stop> {
         let n = |x: f64| Ok(Some(Val::Num(x)));
         match tag {
@@ -299,6 +555,28 @@ impl Reader<'_> {
             // An unknown type means the next pair's start is lost.
             _ => Err(Stop::Bad),
         }
+    }
+
+    /// An array: its values when it is short and numeric (booleans as 0 and 1),
+    /// else skipped whole.
+    fn array(&mut self) -> Result<Option<Vec<f64>>, Stop> {
+        let start = self.at;
+        let elem = self.u32()?;
+        let count = self.u64()? as f64;
+        let numeric = matches!(elem, 0..=7 | 10..=12);
+        if !numeric || count > MAX_KEPT_ARRAY {
+            self.at = start;
+            self.skip_array()?;
+            return Ok(None);
+        }
+        let mut out = Vec::with_capacity(count as usize);
+        for _ in 0..count as u64 {
+            match self.typed(elem)? {
+                Some(Val::Num(n)) => out.push(n),
+                _ => return Err(Stop::Bad),
+            }
+        }
+        Ok(Some(out))
     }
 
     fn skip_array(&mut self) -> Result<(), Stop> {

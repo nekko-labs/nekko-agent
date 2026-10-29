@@ -152,7 +152,9 @@ impl Native {
     }
 
     async fn fetch_text(&self, url: &url::Url, accept: &str) -> Result<String, String> {
-        let res = self.client.get(url.clone()).header("Accept", accept).send().await.map_err(|e| e.to_string())?;
+        let res = nekko_net::send("updates", self.client.get(url.clone()).header("Accept", accept))
+            .await
+            .map_err(|e| e.to_string())?;
         let status = res.status();
         let body = res.text().await.map_err(|e| e.to_string())?;
         if !status.is_success() {

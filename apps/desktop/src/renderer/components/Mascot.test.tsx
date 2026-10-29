@@ -70,7 +70,7 @@ describe('Pixel Nekko', () => {
   });
   it('keeps working feedback, greeting, and the visibility setting', () => {
     expect(renderToStaticMarkup(<MiniNekko size={16} />)).toContain('pixel-working');
-    const working = renderToStaticMarkup(<Mascot mood="thinking" enabled />);
+    const working = renderToStaticMarkup(<Mascot mood="thinking" working enabled />);
     expect(working).toContain('data-mascot-pose="working"');
     expect(working).toContain('Nekko is working');
     expect(working).toContain('<button type="button"');
@@ -78,15 +78,22 @@ describe('Pixel Nekko', () => {
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled={false} />)).toBe('');
   });
 
-  it('uses matching head and eye geometry on marketing and mobile', () => {
+  it('ignores stale per-chat thinking mood and uses a steady aggregate working pose', () => {
+    expect(renderToStaticMarkup(<Mascot mood="thinking" enabled />)).toContain('data-mascot-pose="idle"');
+    const active = renderToStaticMarkup(<Mascot mood="idle" working enabled />);
+    expect(active).toContain('data-mascot-pose="working"');
+    expect(active).toContain('pixel-stationary');
+    expect(active).not.toContain('pixel-quiet');
+    expect(cssRule(stylesheet('styles.css'), '.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child')).toMatchObject({ fill: 'var(--accent)', stroke: 'var(--accent)' });
+  });
+
+  it('uses matching head and eye geometry on marketing', () => {
     const desktop = source('./Mascot.tsx');
     const website = source('../../../../../apps/website/index.html');
-    const mobile = source('../../../../../apps/mobile/src/ui/Mascot.tsx');
     const paths = [...desktop.matchAll(/d="([^"]+)"/g)].map((match) => match[1]);
     expect(paths).toHaveLength(5);
     for (const path of paths) {
       expect(website).toContain(path);
-      expect(mobile).toContain(path);
     }
   });
 
@@ -100,15 +107,8 @@ describe('Pixel Nekko', () => {
     }
   });
 
-  // Source pins: the mobile app's screens are not unit-rendered (its vitest
-  // config covers src/lib only and react-native is not installed here), and the
-  // desktop pause needs a client render to fire visibilitychange.
-  it('pauses with the page and honours reduced motion on mobile (source pin)', () => {
+  it('pauses desktop motion with page visibility', () => {
     expect(source('./Mascot.tsx')).toMatch(/document\.addEventListener\('visibilitychange'/);
-    const mobile = source('../../../../../apps/mobile/src/ui/Mascot.tsx');
-    expect(mobile).toMatch(/AccessibilityInfo\.isReduceMotionEnabled\(\)/);
-    expect(mobile).toMatch(/clearInterval\(timer\)/);
-    expect(mobile).toMatch(/AppState\.addEventListener\('change'/);
   });
 
   it('keeps navigation still and limits the quiet face to the corner mascot', () => {

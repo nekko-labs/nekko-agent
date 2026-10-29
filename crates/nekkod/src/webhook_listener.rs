@@ -95,6 +95,7 @@ pub struct WebhookListener {
 
 fn enabled(settings: &Value) -> bool {
     nekko_js::truthy(settings.pointer("/experimental/workflowLoopbackListener"))
+        && nekko_net::allowed("webhook-listener")
 }
 
 impl WebhookListener {

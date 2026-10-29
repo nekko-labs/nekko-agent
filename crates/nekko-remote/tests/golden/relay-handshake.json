@@ -1,0 +1,55 @@
+{
+  "$comment": "Relay v2 replay protection (protocol 4), shared by the computer (crates/nekko-remote, tests/golden.rs), the iPhone (apps/ios/Protocol, RelayClientTests) and Android (apps/android/protocol, RelayClientTest). The agent seals `challenge.frame` to a connection when the relay announces it (client-open); the phone opens it and answers with exactly `hello` (its own deviceId, name and platform; pair only when enrolling); every request after the welcome carries the same challenge and a seq that starts at 1 and goes up by one (`requests`). `legacyHello` is what a phone sends to a computer that never challenged it. Sealed with AES-256-GCM under PBKDF2-SHA256(secret, \"nekko-relay:\" + room, 100000), IV first, base64.",
+  "secret": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+  "room": "a1b2c3d4e5f60718",
+  "key": "df7d9b2ebbe22078543ea07b5a227d92f6eba4d7fa6ca5655f5b919de40f949a",
+  "protocol": 4,
+  "device": {
+    "deviceId": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "name": "Test phone",
+    "platform": "android"
+  },
+  "challenge": {
+    "nonceBytes": "05101b26313c47525d68737e89949faab5c0",
+    "frame": {
+      "type": "challenge",
+      "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA"
+    },
+    "blob": "AQQHCg0QExYZHB8ig2jWMpy5Ls/VKNFZJlm2vyEI2D8KcTpQXsCrXhq4lqap1hJwYSJzzUgkbhNXCdT0y1ylg11UmfdtUfz6XmF7Ob5WiZDnHSmqIUzk"
+  },
+  "hello": {
+    "type": "hello",
+    "deviceId": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "name": "Test phone",
+    "platform": "android",
+    "protocol": 4,
+    "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA"
+  },
+  "legacyHello": {
+    "type": "hello",
+    "deviceId": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+    "name": "Test phone",
+    "platform": "android",
+    "protocol": 3
+  },
+  "requests": [
+    {
+      "type": "req",
+      "id": 1,
+      "seq": 1,
+      "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA",
+      "channel": "sessions:summaries",
+      "args": []
+    },
+    {
+      "type": "req",
+      "id": 2,
+      "seq": 2,
+      "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA",
+      "channel": "session:get",
+      "args": [
+        "s1"
+      ]
+    }
+  ]
+}

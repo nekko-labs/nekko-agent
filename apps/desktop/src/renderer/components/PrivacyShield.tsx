@@ -18,7 +18,7 @@ const KIND_SHORT: Record<PrivacyKind, string> = {
 const REACH_NOTE: Record<PrivacyPreview['reach'], string | null> = {
   cloud: null,
   local: "This chat's model runs on this computer. Nothing leaves it, so the shield has nothing to hide.",
-  external: 'Claude Agent chats are sent by Claude Code itself, out of the shield’s reach. Use another provider to shield a chat.',
+  external: 'Claude subscription chats are sent by Claude Code itself, out of the shield’s reach. Use another provider to shield a chat.',
 };
 
 /**

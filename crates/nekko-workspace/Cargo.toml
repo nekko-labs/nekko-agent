@@ -17,6 +17,7 @@ getrandom.workspace = true
 memchr.workspace = true
 nekko-context = { path = "../nekko-context" }
 nekko-js = { path = "../nekko-js" }
+nekko-net = { path = "../nekko-net" }
 nekko-tools = { path = "../nekko-tools" }
 regress.workspace = true
 reqwest = { workspace = true, features = ["native-tls"] }

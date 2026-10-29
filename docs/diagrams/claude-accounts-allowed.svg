@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 430" width="880" height="430" font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">What Anthropic's terms allow with several Claude accounts</title>
+  <desc id="d">Allowed: your own plan in your own unmodified Claude Code, API keys and cloud accounts billed to their owner, separate accounts for separate people or organizations. Ask Anthropic first: one person buying several plans to add up usage limits. Not allowed, and Nekko does not do it: signing in to Claude inside Nekko, reading Claude Code's credentials, sharing a login, rotating accounts to get around rate limits.</desc>
+  <rect width="880" height="430" rx="18" fill="#ffffff"/>
+  <rect x="0.5" y="0.5" width="879" height="429" rx="18" fill="none" stroke="#e4e0f0"/>
+
+  <!-- allowed -->
+  <rect x="24" y="24" width="268" height="382" rx="14" fill="#f3faf5" stroke="#cfe8d8"/>
+  <circle cx="50" cy="54" r="12" fill="#2f7a4b"/>
+  <path d="M44 54 l4 4 l8 -8" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="70" y="59" font-size="15" font-weight="700" fill="#1f5a36">Allowed</text>
+  <g font-size="12.5" fill="#21352a">
+    <text x="42" y="98">Your own plan, signed in through</text>
+    <text x="42" y="116">Claude Code's /login, in the</text>
+    <text x="42" y="134">unmodified binary</text>
+    <text x="42" y="170">A work and a personal account,</text>
+    <text x="42" y="188">each yours, each for its own work</text>
+    <text x="42" y="224">Teammates, each on their own</text>
+    <text x="42" y="242">account, in their own Nekko</text>
+    <text x="42" y="278">Any number of API keys and</text>
+    <text x="42" y="296">cloud accounts, billed to</text>
+    <text x="42" y="314">whoever owns them</text>
+    <text x="42" y="350">Picking the account yourself,</text>
+    <text x="42" y="368">per chat</text>
+  </g>
+
+  <!-- gray -->
+  <rect x="306" y="24" width="268" height="382" rx="14" fill="#fff8ec" stroke="#f1dfbd"/>
+  <circle cx="332" cy="54" r="12" fill="#b26b00"/>
+  <text x="332" y="59" text-anchor="middle" font-size="15" font-weight="800" fill="#ffffff">?</text>
+  <text x="352" y="59" font-size="15" font-weight="700" fill="#7a4a00">Ask Anthropic first</text>
+  <g font-size="12.5" fill="#3d2e14">
+    <text x="324" y="98">One person buying several Pro or</text>
+    <text x="324" y="116">Max plans to add up their usage</text>
+    <text x="324" y="134">limits</text>
+    <text x="324" y="170">Anthropic says plan limits</text>
+    <text x="324" y="188">"assume ordinary, individual</text>
+    <text x="324" y="206">usage". Nothing in its terms</text>
+    <text x="324" y="224">authorizes pooling plans. If your</text>
+    <text x="324" y="242">business depends on it, get</text>
+    <text x="324" y="260">written confirmation.</text>
+    <text x="324" y="296">For more capacity, an API key or</text>
+    <text x="324" y="314">a cloud account has no such</text>
+    <text x="324" y="332">question.</text>
+  </g>
+
+  <!-- not allowed -->
+  <rect x="588" y="24" width="268" height="382" rx="14" fill="#fdf2f2" stroke="#f0d0d0"/>
+  <circle cx="614" cy="54" r="12" fill="#b3261e"/>
+  <path d="M609 49 l10 10 M619 49 l-10 10" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="634" y="59" font-size="15" font-weight="700" fill="#8a1c16">Not allowed</text>
+  <g font-size="12.5" fill="#3d1d1b">
+    <text x="606" y="98">A third-party app offering</text>
+    <text x="606" y="116">Claude.ai sign-in, or reading,</text>
+    <text x="606" y="134">storing or forwarding Claude</text>
+    <text x="606" y="152">credentials</text>
+    <text x="606" y="188">Sharing one login between</text>
+    <text x="606" y="206">people</text>
+    <text x="606" y="242">Rotating plan accounts</text>
+    <text x="606" y="260">automatically to get around</text>
+    <text x="606" y="278">rate limits</text>
+    <text x="606" y="314">Modifying or wrapping the</text>
+    <text x="606" y="332">Claude Code binary</text>
+    <text x="606" y="368" font-weight="600">Nekko does none of these.</text>
+  </g>
+</svg>

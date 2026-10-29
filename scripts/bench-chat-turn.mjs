@@ -188,7 +188,9 @@ process.on('SIGINT', () => process.exit(130));
 function startDaemon() {
   // As the desktop app starts it (engine-process.ts), with no backend.
   const config = { token, allowedOrigins: ['null'], dataDir: data, allowBrowserControl: true };
-  const child = spawn(daemonExe, [], { env: { ...process.env, NEKKOD_CONFIG: JSON.stringify(config) }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const child = spawn(daemonExe, ['--config-stdin'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  child.stdin.on('error', () => {});
+  child.stdin.write(`${JSON.stringify(config)}\n`);
   children.push(child);
   child.stderr.on('data', (d) => { if (args.verbose) process.stderr.write(d); });
   return new Promise((ok, fail) => {

@@ -5,9 +5,8 @@ phone: pair with the QR code from **Settings → Remote access** on the computer
 then run chats there, on the computer's models, files and tools. Everything goes
 through the end-to-end encrypted relay; the relay only ever sees ciphertext.
 
-This replaces the Android half of the Expo app in `apps/mobile` (the 2026-10-07
-native decision in [the spec](../../spec/README.md)). Expo stays as the behaviour
-reference until this app reaches parity.
+This is the supported Android implementation. The former Expo app and its dedicated
+CI have been removed. Remaining native feature gaps below stay tracked separately.
 
 ## What works
 
@@ -26,6 +25,19 @@ reference until this app reaches parity.
   opens or comes back (on by default, *Settings → Security*). Locked means nothing
   is shown or approvable, recents stay blank (`FLAG_SECURE`), and after a restart
   the relay doesn't connect until the first unlock.
+
+- **Step-up (unverified on hardware):** when the computer answers a mode raise
+  with `step-up-required`, a sheet asks for a security key or passkey
+  (Credential Manager) or a one-time code and sends the call again with
+  `stepUp`. Android is expected to refuse the computer's `nekko-computer:`
+  relying-party id (no Digital Asset Links), so in practice the code is the
+  way in today; the sheet says so. Raises also need the Change proof, which
+  this app can't sign yet (AN-30). *Settings → Security* lists the computer's
+  methods by kind.
+- **Safety exits:** *Settings → This computer* and the connection banner's ⋮:
+  *Sign out this phone* (forgets the computer now, tells it now or at the next
+  start), *Stop remote access on the computer*, and *Quit Nekko Agent on the
+  computer* (confirmed, only when the computer allows it).
 
 - **New chat defaults:** *Settings → New chats* sets the computer to connect
   to at start and a model per computer, on the phone only; a model the
@@ -54,6 +66,31 @@ reference until this app reaches parity.
   re-read every time a chat opens. The computer adds each skill's instructions
   itself; the phone only ever sees names and descriptions. No `/goal`.
 
+- **Folding phones and tablets** (written, not yet run on a foldable): open
+  (600 dp or wider) shows two panes from `FoldingFeature` and the window size
+  class (`ui/panes/`): *Chats + Chat* first, also *Chat + Chat*, *Chat +
+  Monitors* and *Monitors + Chats*, with Swap, Focus and Replace with… in each
+  pane's header. Side by side when wide, stacked when tall (the list never
+  below a chat), the divider on the hinge or dragged 35–65; tabletop puts the
+  transcript above the hinge and the message box below it. Remembered per
+  computer on the phone. A message dragged to the other pane lands in its
+  message box, unsent.
+- **Monitors:** the computer's hardware load and temperatures, running chats,
+  what needs you (Allow / Deny / answer) and the next automations, from
+  `monitor:summary` every 10 s while on screen; a pane when open, the last row
+  of the chat list on any phone.
+- **Simple and Expert:** a switch right of Back in every chat (the dial icon alone in a
+  folding phone's pane). Both modes: model and effort (an effort dial and the model's name,
+  opening a sheet with the model list and a large dial) and the context ring (`12.3k / 128k`,
+  tap for the breakdown) under the message box. Expert adds the computer's CPU, memory, GPU
+  and VRAM dials and the loaded-model count under the header, re-read every 3 s while shown,
+  and a Monitor sheet with Unload (`system:stats`, `gpu:stats`, `engine:status`,
+  `context:preview`, `model:unload`).
+- **Send feedback:** *Settings → Feedback* copies a prompt for your own coding
+  agent to file a GitHub issue, sends a quick note to Nekko Labs through Nekko
+  Cloud (app, version, OS and CPU type only when *Include app info* is on), or
+  opens GitHub issues.
+
 **Not yet:** models on the phone, push notifications, Markdown rendering,
 files other than photos, thumbnails of sent photos, Play Store release. See `TASKS.md` → *Native Android app*.
 
@@ -69,12 +106,15 @@ apps/android/
 
 | Piece | Kotlin | Mirrors |
 |---|---|---|
-| Crypto | `protocol/.../E2E.kt` | `packages/shared/src/e2e.ts`, `apps/mobile/src/lib/e2e.ts` |
-| Relay client | `protocol/.../RelayClient.kt` | `apps/mobile/src/lib/relayClient.ts` ↔ the computer's side in `crates/nekko-remote` |
-| Pairing links | `protocol/.../Pairing.kt` | `apps/mobile/src/lib/pairing.ts` |
-| Transcript | `protocol/.../Transcript.kt` | `apps/mobile/src/lib/transcript.ts` |
-| Chat logic | `app/.../chat/ChatController.kt` | `apps/mobile/src/chat/useRemoteChat.ts` |
-| Computers | `app/.../data/ComputersRepository.kt` | `apps/mobile/src/services/computers.ts` |
+| Crypto | `protocol/.../E2E.kt` | `packages/shared/src/e2e.ts` |
+| Relay client | `protocol/.../RelayClient.kt` | The computer's side in `crates/nekko-remote` |
+| Pairing links | `protocol/.../Pairing.kt` | Shared pairing fixtures and native protocol tests |
+| Transcript | `protocol/.../Transcript.kt` | Native transcript tests |
+| Chat logic | `app/.../chat/ChatController.kt` | Native chat controller tests |
+| Computers | `app/.../data/ComputersRepository.kt` | Native computer repository tests |
+| Posture and panes | `protocol/.../Posture.kt`, `protocol/.../Panes.kt` | `apps/ios/Protocol/Sources/NekkoKit/Posture.swift` |
+| Monitors | `protocol/.../MonitorSummary.kt` | `phoneMonitorView` in `packages/shared/src/phone-views.ts` |
+| Expert monitor, context, effort | `protocol/.../HardwareMonitor.kt` | `apps/ios/Protocol/Sources/NekkoProtocol/HardwareMonitor.swift` |
 
 ## Security notes
 

@@ -42,7 +42,7 @@ pub const CLAUDE_APPROVED_CLIENT: ApprovedClient =
     ApprovedClient { enabled: false, client_id: None, authorize_url: None, token_url: None, scopes: None };
 
 /// `CLAUDE_SIGN_IN_UNAVAILABLE`: what a Claude sign-in fails with.
-pub const CLAUDE_SIGN_IN_UNAVAILABLE: &str = "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code.";
+pub const CLAUDE_SIGN_IN_UNAVAILABLE: &str = "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or choose Claude, then Subscription, to run your installed Claude Code.";
 
 pub const CHATGPT_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 pub const CHATGPT_AUTHORIZE_URL: &str = "https://auth.openai.com/oauth/authorize";

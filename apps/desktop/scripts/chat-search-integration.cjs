@@ -6,19 +6,21 @@ const path = require('node:path');
 const cp = require('node:child_process');
 const repo = path.resolve(__dirname, '../../..');
 const modules = process.env.NEKKO_TEST_MODULES || path.join(repo, 'node_modules');
-const out = path.join(repo, '.shots/chat-search');
+// NEKKO_FIXTURE builds another fixture (and NEKKO_SANDBOX runs another script) on the same harness.
+const fixture = process.env.NEKKO_FIXTURE || 'chat-search-fixture.tsx';
+const out = path.join(repo, '.shots', path.basename(fixture, '-fixture.tsx'));
 async function main() {
   fs.mkdirSync(out, { recursive: true });
-  let entry = path.join(__dirname, 'chat-search-fixture.tsx');
+  let entry = path.join(__dirname, fixture);
   let shared = path.join(repo, 'packages/shared/src/index.ts');
   if (process.env.NEKKO_TEST_REVISION) {
     const source = path.join(out, 'base-source'); fs.rmSync(source, { recursive: true, force: true }); fs.mkdirSync(source, { recursive: true });
     const zip = path.join(out, 'base.zip');
-    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src/renderer', 'packages/shared/src'], { cwd: repo, windowsHide: true });
+    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src', 'packages/shared/src'], { cwd: repo, windowsHide: true });
     // bsdtar (bundled with Windows 10+, macOS and most Linux) reads zip archives.
     cp.execFileSync('tar', ['-xf', zip, '-C', source], { windowsHide: true });
     entry = path.join(out, 'base-fixture.tsx');
-    fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, 'chat-search-fixture.tsx'), 'utf8')
+    fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, fixture), 'utf8')
       .replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/'))
       .replace("'./wall-polish-chrome'", JSON.stringify(path.join(__dirname, 'wall-polish-chrome').replaceAll('\\', '/'))));
     shared = path.join(source, 'packages/shared/src/index.ts');

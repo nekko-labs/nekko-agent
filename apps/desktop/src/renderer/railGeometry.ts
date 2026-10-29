@@ -70,6 +70,8 @@ export function railGeometry({ railHeight, groupTop, groupHeight, bodyWidth = 19
   const radius = Math.max(0, Math.min(RAIL_OPEN_RADIUS, (swellTop - y0) / 2, (y1 - swellBottom) / 2, width / 2));
   const tipCorner = Math.min(RAIL_TIP, radius);
   const restPath = outline(y0, y1, swellTop, swellBottom, RAIL_TIP, rest, tipCorner);
-  const openPath = outline(y0, y1, swellTop, swellBottom, width, width, radius);
+  // Keep vertical anchors identical: the lower tail must widen with the body,
+  // not travel vertically because the open corners use a different radius.
+  const openPath = outline(y0, y1, swellTop, swellBottom, width, width, tipCorner);
   return { width, height, top, bottom, y0, y1, swellTop, swellBottom, restPath, openPath };
 }

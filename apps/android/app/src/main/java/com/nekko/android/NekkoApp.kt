@@ -10,6 +10,7 @@ import com.nekko.android.connection.ConnectionKeeper
 import com.nekko.android.data.AndroidSecureStore
 import com.nekko.android.data.ChatListFiles
 import com.nekko.android.data.NewChatDefaults
+import com.nekko.android.data.PaneLayouts
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.RelayRemoteFactory
@@ -17,6 +18,8 @@ import com.nekko.android.data.ThemePrefs
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.haptics.EventHaptics
 import com.nekko.android.lock.AppLock
+import com.nekko.android.security.ActivityOwnerCheck
+import com.nekko.android.security.KeystoreChangeSigner
 import com.nekko.android.share.ShareInbox
 import com.nekko.android.widget.StatusSnapshot
 import com.nekko.android.widget.StatusStore
@@ -41,6 +44,9 @@ class NekkoApp : Application() {
     lateinit var appLock: AppLock
         private set
     lateinit var newChatDefaults: NewChatDefaults
+    /** The folding-phone pane arrangement per computer (phone only). */
+    lateinit var paneLayouts: PaneLayouts
+        private set
     /** Text shared from other apps on its way to a chat's composer; memory only. */
     val shareInbox = ShareInbox()
     lateinit var connection: ConnectionKeeper
@@ -48,6 +54,8 @@ class NekkoApp : Application() {
     lateinit var haptics: AndroidHaptics
         private set
     private lateinit var chatLists: ChatListFiles
+    /** The fingerprint or screen lock for Change actions, through whichever activity is on screen. */
+    val ownerCheck = ActivityOwnerCheck()
 
     /** Settings → Connection → Keep the chat list when offline. Off deletes every saved list. */
     fun setKeepChatList(on: Boolean) {
@@ -61,12 +69,17 @@ class NekkoApp : Application() {
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
         newChatDefaults = NewChatDefaults(phonePrefs)
+        paneLayouts = PaneLayouts(phonePrefs)
         computers = ComputersRepository(
             store = AndroidSecureStore(this),
             remotes = RelayRemoteFactory(),
             scope = appScope,
             deviceName = ::deviceName,
-            onForget = newChatDefaults::forget,
+            changeSigner = KeystoreChangeSigner(ownerCheck),
+            onForget = { id ->
+                newChatDefaults.forget(id)
+                paneLayouts.forget(id)
+            },
         )
         chatLists = ChatListFiles(this)
         if (phonePrefs.get(ChatListFiles.ENABLED)) computers.chatListCache = chatLists

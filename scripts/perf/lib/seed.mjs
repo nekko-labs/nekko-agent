@@ -17,8 +17,6 @@ export function seedDataDir({ mockPort, chats }) {
     join(dir, 'settings.json'),
     JSON.stringify({
       theme: 'dark',
-        // Sidebar switching benchmarks explicitly exercise the optional Chat workspace.
-        developer: { chat: true },
       defaultProviderId: 'mock',
       defaultModelId: 'mock-1',
       providers: [

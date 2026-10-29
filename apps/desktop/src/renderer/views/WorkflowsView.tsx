@@ -21,6 +21,7 @@ import {
   listenerLabel,
   runDurationMs,
   runOutcome,
+  runPolicyNote,
   stepSummary,
   triggerLabel,
 } from '@nekko-agent/shared';
@@ -28,11 +29,13 @@ import { useStore } from '../store.js';
 import { Badge, EmptyHint, StatusDot, Toggle } from '../components/primitives/index.js';
 import { WorkflowCanvas } from '../components/WorkflowCanvas.js';
 import { WorkflowEditor, type WorkflowSeed } from '../components/WorkflowEditor.js';
-import { TemplateCards, TemplateGallery, TemplateSetup, templateSeed } from '../components/TemplateGallery.js';
+import { TemplateGallery, TemplateSetup, templateSeed } from '../components/TemplateGallery.js';
+import { FirstWorkflowWizard } from '../components/FirstWorkflowWizard.js';
 import { setAutomationsPaused } from '../automationsPause.js';
 import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
+import { CiRunnersView } from './CiRunnersView.js';
 
 /**
  * The Workflows tab: automation modelled on GitHub Actions, where a step can be
@@ -83,9 +86,12 @@ export function WorkflowsView() {
   /** What a skill step can run: built-in, installs, other tools' and Claude Code plugins' (read when the editor or a template opens). */
   const [skillDefs, setSkillDefs] = useState<SkillDef[] | null>(null);
   const skills = skillDefs ?? installedSkills;
+  const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [snapshot, setSnapshot] = useState<WorkflowsSnapshot>({ workflows: [], runs: [] });
   const [filter, setFilter] = useState<WorkflowFilter>({});
   const [grouping, setGrouping] = useState<WorkflowGrouping>('category');
+  const [section, setSection] = useState<'workflows' | 'ciRunners'>('workflows');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<Workflow | null>(null);
   const [creating, setCreating] = useState<{ seed?: WorkflowSeed } | null>(null);
@@ -98,8 +104,8 @@ export function WorkflowsView() {
   const [focusRun, setFocusRun] = useState<{ workflowId: string; runId: string } | null>(null);
 
   useEffect(() => {
-    void window.nekko.listWorkflows().then(setSnapshot).catch(() => {});
-    return window.nekko.onWorkflowsUpdated(setSnapshot);
+    void window.nekko.listWorkflows().then((next) => { setSnapshot(next); setLoaded(true); }).catch(() => setLoadFailed(true));
+    return window.nekko.onWorkflowsUpdated((next) => { setSnapshot(next); setLoaded(true); });
   }, []);
 
   // Re-read each time a sheet opens: a plugin enabled meanwhile shows up.
@@ -190,8 +196,9 @@ export function WorkflowsView() {
 
   return (
     <div className="flex h-full min-h-0">
+      {section === 'ciRunners' ? <CiRunnersView segment={<SectionSegment value={section} onChange={setSection} />} /> : <>
       {/* Filters */}
-      <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
+      {workflows.length > 0 && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
         <input
           className="input w-full text-[12.5px]"
           placeholder="Search workflows…"
@@ -273,13 +280,18 @@ export function WorkflowsView() {
             ))}
           </div>
         </FilterGroup>
-      </aside>
+      </aside>}
 
       {/* List */}
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
-        <div className="mx-auto max-w-5xl">
+        {!loaded ? <p className="p-4 text-[13px] text-ink-soft" role="status">{loadFailed ? 'Could not load workflows. Reopen this tab to try again.' : 'Loading workflows…'}</p> : workflows.length === 0 ? (<>
+          {/* The wizard replaces the list header, so keep the switcher: CI runners must stay reachable with no workflows. */}
+          <div className="mx-auto max-w-4xl px-4 sm:px-8"><SectionSegment value={section} onChange={setSection} /></div>
+          <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
+        </>) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
             {!hasAppChrome && <h1 className="view-title">Workflows</h1>}
+            <SectionSegment value={section} onChange={setSection} />
             <span className="text-[12px] text-ink-faint">
               {visible.length === workflows.length
                 ? `${workflows.length} total`
@@ -358,18 +370,6 @@ export function WorkflowsView() {
             </dl>
           </details>
 
-          {workflows.length === 0 && (
-            <div className="mt-4">
-              <EmptyHint>
-                Nothing here yet. Pick a ready-made automation below, or{' '}
-                <button className="underline" onClick={() => setPicking(true)}>build your own</button>.
-              </EmptyHint>
-              <div className="mt-3">
-                <TemplateCards onPick={setSetup} />
-              </div>
-            </div>
-          )}
-
           {workflows.length > 0 && visible.length === 0 && (
             <EmptyHint className="mt-4">
               Nothing matches those filters.{' '}
@@ -397,8 +397,9 @@ export function WorkflowsView() {
               />
             ))}
           </div>
-        </div>
+        </div>}
       </div>
+      </>}
 
       {picking && (
         <TemplateGallery
@@ -444,6 +445,26 @@ export function WorkflowsView() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** Switches the tab between workflows and this Mac's CI runners. */
+export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRunners'; onChange(v: 'workflows' | 'ciRunners'): void }) {
+  return (
+    <div role="group" aria-label="Section" className="flex gap-1">
+      {(['workflows', 'ciRunners'] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={value === v}
+          className={`rounded-lg border px-2 py-1 text-[11.5px] transition ${value === v ? 'border-transparent' : 'border-line text-ink-faint'}`}
+          style={value === v ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
+          onClick={() => onChange(v)}
+        >
+          {v === 'workflows' ? 'Workflows' : 'CI runners'}
+        </button>
+      ))}
     </div>
   );
 }
@@ -573,6 +594,16 @@ function WorkflowRow({
 
         <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-ink-faint">
           {!live && last && isRunnerRun(last) && <Badge tone="info" title="Fired by an external event">runner</Badge>}
+          {!live && wf.waitingSince && (
+            <span data-workflow-waiting>
+              <Badge
+                tone="info"
+                title={`Its schedule came due ${relative(wf.waitingSince)}. It runs once nobody is using this computer, or after 2 hours. Run starts it now.`}
+              >
+                waiting for you to be away
+              </Badge>
+            </span>
+          )}
           {live
             ? 'running now'
             : last
@@ -624,7 +655,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
       <button
         className="btn btn-ghost shrink-0 px-1.5! py-0.5! text-[11px] text-ink-soft"
         title="Open this step's transcript"
-        onClick={() => { openChat(sessionId); setView('chat'); }}
+        onClick={() => { openChat(sessionId); setView('command'); }}
       >
         Transcript
       </button>
@@ -666,6 +697,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
               This run · {STATUS_TONE[shownRun.status].label}
               {shownRun.status !== 'running' && ` in ${formatDuration(runDurationMs(shownRun))}`} · {relative(shownRun.startedAt)}
+              {runPolicyNote(shownRun.lowPriority, shownRun.waitedMs) && ` · ${runPolicyNote(shownRun.lowPriority, shownRun.waitedMs)}`}
             </p>
             {outcome.failed && (
               <div className="mb-2 rounded-lg border px-2.5 py-2" style={{ borderColor: STATUS.danger }} data-run-failure>
@@ -744,6 +776,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
                         {STATUS_TONE[r.status].label}
                         {r.status !== 'running' && ` · ${formatDuration(runDurationMs(r))}`}
                         {failedAt && ` · at ${failedAt}`}
+                        {runPolicyNote(r.lowPriority, r.waitedMs) && <span data-run-policy-note>{` · ${runPolicyNote(r.lowPriority, r.waitedMs)}`}</span>}
                       </span>
                     </span>
                     <span className="shrink-0 font-mono text-[10px] text-ink-faint">{relative(r.startedAt)}</span>

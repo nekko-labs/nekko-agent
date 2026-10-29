@@ -52,7 +52,7 @@ export const COMPACT_HEIGHT = 440;
 
 /**
  * What a surface already knows about the room a window will have, before the
- * window has been laid out. The Command Center wall knows every window's
+ * window has been laid out. The Agent board wall knows every window's
  * share of the stage, so it can say "compact" on the first render; a pane
  * mounted anywhere else starts full-size and folds once measured.
  */
@@ -60,7 +60,7 @@ export const PaneDensityHint = createContext<boolean | null>(null);
 
 /**
  * Whether the element is small enough to call for the compact chat chrome:
- * a cell on the Command Center wall, or a window split down to a sliver.
+ * a cell on the Agent board wall, or a window split down to a sliver.
  * Width and height both count, since a wide but short window has no more
  * room for two rows of controls than a narrow one.
  *

@@ -15,8 +15,10 @@ test('default build builds and stages nekkod before building the app', () => {
 
 test('dev builds before starting the desktop development server', () => {
   // Dependencies are installed first, so a pull that changed package.json or
-  // the lockfile never launches against missing or stale modules.
-  assert.equal(pkg.scripts.dev, 'npm install --no-audit --no-fund && npm run build:dev && npm run dev -w @nekko-agent/desktop');
+  // the lockfile never launches against missing or stale modules. --no-save
+  // keeps that install from rewriting package-lock.json: npm versions disagree
+  // on its metadata, so every launch left a diff. Change the lock deliberately.
+  assert.equal(pkg.scripts.dev, 'npm install --no-save --no-audit --no-fund && npm run build:dev && npm run dev -w @nekko-agent/desktop');
   // The daemon and every workspace the app imports are rebuilt, so dev never
   // runs stale output; the daemon uses the fast dev-daemon profile.
   assert.match(pkg.scripts['build:dev'], /^node apps\/desktop\/scripts\/stage-daemon\.mjs --dev && /);

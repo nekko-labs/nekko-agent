@@ -66,8 +66,9 @@ async fn refresh_user(http: &reqwest::Client, user: &Value) -> Result<(String, f
         ("client_secret", field("client_secret")),
         ("refresh_token", field("refresh_token")),
     ];
-    let res =
-        http.post(TOKEN_URL).form(&form).timeout(TIMEOUT).send().await.map_err(|e| format!("Google sign-in: {e}"))?;
+    let res = nekko_net::send("sign-in", http.post(TOKEN_URL).form(&form).timeout(TIMEOUT))
+        .await
+        .map_err(|e| format!("Google sign-in: {e}"))?;
     let status = res.status();
     let body: Value = res.json().await.unwrap_or(Value::Null);
     if !status.is_success() {

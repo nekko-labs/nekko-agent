@@ -3,9 +3,9 @@
  * each group is in, and what it shows. A per-window preference, remembered like
  * the panel's width, not a setting.
  *
- * The defaults are the panel as it always was: grouped by project, in the order
- * cards were dragged into (newest first for the rest), every detail and every
- * group shown.
+ * The defaults group the cards by activity (what each agent is doing), in the
+ * order cards were dragged into (newest first for the rest), every detail and
+ * every group shown.
  */
 
 export type AgentGroupBy = 'project' | 'status' | 'date' | 'none';
@@ -18,6 +18,8 @@ export type AgentPanelView = {
   direction: SortDirection;
   /** The model, context, git and sub-agent lines under each card's title. */
   showMetadata: boolean;
+  /** The model provider ("Claude", "Local") as subtext under the model. */
+  showProvider: boolean;
   /** Chats an automation started (they carry a task id). */
   showAutomations: boolean;
   /** Groups with nothing in them, shown with their "No active agents" line. */
@@ -25,17 +27,18 @@ export type AgentPanelView = {
 };
 
 export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
-  groupBy: 'project',
+  groupBy: 'status',
   sortBy: 'manual',
   direction: 'desc',
   showMetadata: true,
+  showProvider: true,
   showAutomations: true,
   showEmptyGroups: true,
 };
 
 export const GROUP_BY_LABELS: Record<AgentGroupBy, string> = {
   project: 'Project',
-  status: 'Status',
+  status: 'Activity',
   date: 'Date',
   none: 'None',
 };
@@ -65,6 +68,7 @@ export function parseAgentPanelView(raw: string | null): AgentPanelView {
     sortBy: SORTS.includes(saved.sortBy as AgentSortBy) ? saved.sortBy as AgentSortBy : d.sortBy,
     direction: saved.direction === 'asc' || saved.direction === 'desc' ? saved.direction : d.direction,
     showMetadata: bool(saved.showMetadata, d.showMetadata),
+    showProvider: bool(saved.showProvider, d.showProvider),
     showAutomations: bool(saved.showAutomations, d.showAutomations),
     showEmptyGroups: bool(saved.showEmptyGroups, d.showEmptyGroups),
   };
@@ -122,16 +126,16 @@ export function compareCards(view: Pick<AgentPanelView, 'sortBy' | 'direction'>)
   };
 }
 
-/** The status groups, most urgent first. */
+/** The activity groups, most urgent first. */
 export const STATUS_GROUPS = [
   { key: 'status:input', name: 'Needs input' },
   { key: 'status:working', name: 'Working' },
   { key: 'status:error', name: 'Error' },
-  { key: 'status:idle', name: 'Idle' },
+  { key: 'status:done', name: 'Done' },
 ] as const;
 
-export function statusGroupOf(status: 'working' | 'input' | 'error' | undefined): string {
-  return status ? `status:${status}` : 'status:idle';
+export function statusGroupOf(status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+  return !status || status === 'idle' ? 'status:done' : `status:${status}`;
 }
 
 /** The date groups, newest first. */

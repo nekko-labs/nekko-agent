@@ -7,8 +7,9 @@
  * appeared belongs on this window's wall.
  */
 import { useEffect, useState } from 'react';
+import type { WallLayoutMode } from '@nekko-agent/shared';
 import type { ClaimMode, DisplaysBridge, DisplaysState } from '../displayWindows.js';
-export type { DisplayInfo, DisplayPlacement, DisplaysState } from '../displayWindows.js';
+export type { DesktopInfo, DisplayInfo, DisplayPlacement, DisplaysState, GoTarget, SpacesMode } from '../displayWindows.js';
 export { MAIN_KEY } from '../displayWindows.js';
 
 /** The bridge, or undefined outside the desktop shell. */
@@ -32,6 +33,18 @@ export const windowKey = screenDisplayId ?? 'main';
  */
 export function wallStorageKey(base: string, displayId: string | null = screenDisplayId): string {
   return displayId ? `${base}.display.${displayId}` : base;
+}
+
+const OPENER_MODE_KEY = 'nekko.screenOpenerMode';
+
+/** Remember the wall mode of the window switching a screen on, for the window it opens. */
+export function rememberOpenerMode(mode: WallLayoutMode): void {
+  try { localStorage.setItem(OPENER_MODE_KEY, mode); } catch { /* storage blocked: the new window opens Dynamic */ }
+}
+
+/** The mode a newly opened screen window starts in. */
+export function openerMode(): WallLayoutMode {
+  try { return localStorage.getItem(OPENER_MODE_KEY) === 'focus' ? 'focus' : 'grid'; } catch { return 'grid'; }
 }
 
 /** The live screen list and placement, or null outside the desktop shell. */

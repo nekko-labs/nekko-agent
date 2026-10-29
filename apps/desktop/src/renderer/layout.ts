@@ -25,11 +25,11 @@ export type Direction = 'up' | 'down' | 'left' | 'right';
 export type DropTarget = Direction | 'swap';
 
 /**
- * What a single window shows. The last two exist only on the Command Center
+ * What a single window shows. The last two exist only on the Agent board
  * wall, where the automations list and the insights box are windows you place
  * like any other.
  */
-export type PaneKind = 'chat' | 'terminal' | 'file' | 'files' | 'browser' | 'diff' | 'pr' | 'hypergate' | 'automations' | 'insights' | 'subscriptions' | 'resources';
+export type PaneKind = 'chat' | 'terminal' | 'file' | 'files' | 'browser' | 'diff' | 'pr' | 'hypergate' | 'automations' | 'insights' | 'subscriptions' | 'resources' | 'zone';
 
 /** A leaf: one window. */
 export interface WbPane {
@@ -41,8 +41,13 @@ export interface WbPane {
    * or the Hypergate manager's URL (hypergate).
    */
   refId: string;
-  /** Command Center only: preserve this window when adding or arranging. */
+  /** Agent board only: preserve this window when adding or arranging. */
   pinned?: boolean;
+  /**
+   * Agent board only: the name of the zone this leaf is. A zone outlives the
+   * agent in it; an empty one is kind `zone` with no refId.
+   */
+  zone?: string;
 }
 
 /**

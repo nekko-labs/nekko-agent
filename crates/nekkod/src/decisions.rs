@@ -535,16 +535,16 @@ impl Decisions {
         };
         let model = if nekko_js::truthy(body.get("model")) { body["model"].clone() } else { json!("jev-latest") };
         body.insert("model".into(), model);
-        let res = self
+        let req = self
             .http
             .post(format!("{}/systemone", self.typesafe_url))
             .header("Authorization", format!("Bearer {key}"))
             .header("Content-Type", "application/json")
             .body(nekko_js::stringify(&Value::Object(body)))
-            .timeout(Duration::from_secs(60))
-            .send()
+            .timeout(Duration::from_secs(60));
+        let res = nekko_net::send("decide", req)
             .await
-            .map_err(|_| "fetch failed".to_string())?;
+            .map_err(|e| if e.is_blocked() { e.to_string() } else { "fetch failed".to_string() })?;
         let status = res.status();
         let text = res.text().await.map_err(|e| e.to_string())?;
         let parsed: Value =
@@ -573,15 +573,14 @@ impl Decisions {
     /// A key check that costs nothing: TypeSafe's model list.
     async fn check_typesafe(&self) -> Value {
         let Some(key) = self.typesafe_key().await else { return ok(false, "No TypeSafe API key is set.") };
-        let res = match self
+        let req = self
             .http
             .get(format!("{}/models", self.typesafe_url))
             .header("Authorization", format!("Bearer {key}"))
-            .timeout(Duration::from_secs(15))
-            .send()
-            .await
-        {
+            .timeout(Duration::from_secs(15));
+        let res = match nekko_net::send("decide", req).await {
             Ok(r) => r,
+            Err(e) if e.is_blocked() => return ok(false, e.to_string()),
             Err(_) => return ok(false, "Could not reach TypeSafe: fetch failed"),
         };
         let status = res.status().as_u16();

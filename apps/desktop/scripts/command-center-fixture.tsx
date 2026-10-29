@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from '../src/renderer/store';
 import { putCachedSession } from '../src/renderer/sessionCache';
 import { CommandCenterView } from '../src/renderer/views/CommandCenterView';
-import { WorkspacesView } from '../src/renderer/views/WorkspacesView';
+import { StoreSidebar } from './store-sidebar';
 import { Toasts } from '../src/renderer/components/Toasts';
 import { Mascot } from '../src/renderer/components/Mascot';
 import { DEFAULT_WALL_STATE } from '../src/renderer/commandWall';
@@ -42,11 +42,11 @@ function Fixture() {
     records = [makeSession('existing')]; terminals = []; serial = 0; calls.length = 0;
     Object.assign(failures, { create: false, options: false, cleanup: false, terminal: false, delay: 0 });
     localStorage.clear();
-    useStore.setState({ toasts: [], view: 'command', providers: [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: 'synthetic-project', settings: { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'light', experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, root: { id: 'synthetic-pane', kind: 'chat', refId: 'existing' }, autoAdd: false, watermark: Date.now(), dock: { ...DEFAULT_WALL_STATE.dock, show: false } } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: false } as any);
+    useStore.setState({ toasts: [], view: 'command', providers: [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: 'synthetic-project', settings: { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'light', experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root: { id: 'synthetic-pane', kind: 'chat', refId: 'existing' }, autoAdd: false, watermark: Date.now(), dock: { ...DEFAULT_WALL_STATE.dock, show: false } } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: false } as any);
     records.forEach(putCachedSession); setRoute('command'); setEpoch(e => e + 1);
   };
-  Object.assign(window, { integration: { reset, configureWall: async (wall: any) => { setRoute('blank'); await new Promise(resolve => setTimeout(resolve, 100)); localStorage.clear(); const state = useStore.getState(); useStore.setState({settings:{...state.settings, commandWall:wall}} as any); setEpoch(e=>e+1); setRoute('command'); }, dashboard: () => { const st=useStore.getState(); useStore.setState({settings:{...st.settings,commandWall:{...st.settings!.commandWall!,dock:{...DEFAULT_WALL_STATE.dock,show:true,monitors:{vitals:true,utilization:true,budget:true,hardware:true,automations:false,insights:true}}}}} as any); setEpoch(e=>e+1); }, calls, failures, route: setRoute, state: () => useStore.getState(), records: () => records } });
+  Object.assign(window, { integration: { reset, configureWall: async (wall: any) => { setRoute('blank'); await new Promise(resolve => setTimeout(resolve, 100)); localStorage.clear(); const state = useStore.getState(); useStore.setState({settings:{...state.settings, commandWall:{zonesIntro:true,...wall}}} as any); setEpoch(e=>e+1); setRoute('command'); }, dashboard: () => { const st=useStore.getState(); useStore.setState({settings:{...st.settings,commandWall:{...st.settings!.commandWall!,dock:{...DEFAULT_WALL_STATE.dock,show:true,monitors:{vitals:true,utilization:true,budget:true,hardware:true,automations:false,insights:true}}}}} as any); setEpoch(e=>e+1); }, calls, failures, route: setRoute, state: () => useStore.getState(), records: () => records } });
   React.useEffect(reset, []);
-  return <main style={{ height: '100vh' }} key={epoch}>{route === 'blank' ? null : route === 'command' ? <CommandCenterView /> : <WorkspacesView />}<Toasts /><Mascot mood="idle" enabled /></main>;
+  return <main style={{ height: '100vh' }} key={epoch}>{route === 'blank' ? null : route === 'command' ? <CommandCenterView /> : <StoreSidebar />}<Toasts /><Mascot mood="idle" enabled /></main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

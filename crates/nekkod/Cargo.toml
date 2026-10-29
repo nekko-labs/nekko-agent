@@ -13,6 +13,9 @@ cuda = ["nekko-decide/cuda"]
 # Developer-only settings (`npm run dev`'s daemon, stage-daemon.mjs): the Claude
 # policy preview. Never on in the release build the app packages.
 dev-tools = []
+# The runner VM spike example only: the NAT's host-to-guest port forward
+# (127.0.0.1:2222 -> guest:22). Never on in any shipped build (decision 0022).
+spike = []
 
 [dependencies]
 # Verifies the signed claudePolicy document (claude_policy.rs).
@@ -44,9 +47,11 @@ nekko-loop = { path = "../nekko-loop" }
 nekko-oauth = { path = "../nekko-oauth" }
 nekko-settings = { path = "../nekko-settings" }
 nekko-remote = { path = "../nekko-remote" }
+nekko-runner = { path = "../nekko-runner" }
 nekko-machine = { path = "../nekko-machine" }
 nekko-messaging = { path = "../nekko-messaging" }
 nekko-native = { path = "../nekko-native" }
+nekko-net = { path = "../nekko-net" }
 nekko-sandbox = { path = "../nekko-sandbox" }
 nekko-store = { path = "../nekko-store" }
 nekko-term = { path = "../nekko-term" }
@@ -61,14 +66,24 @@ reqwest = { workspace = true, features = ["native-tls"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
+smoltcp.workspace = true
 # The mDNS responder's socket: SO_REUSEADDR before bind, multicast membership per interface.
-socket2 = "0.6"
+# "all": bind_device_by_index_v4/v6 (IP_BOUND_IF) for the runner NAT's host sockets.
+socket2 = { version = "0.6", features = ["all"] }
+# The OS name and version the Send feedback sheet may share (feedback.rs); nekko-machine already builds it.
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 url = "2.5"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
+
+# The runner's GitHub App JWT is signed with Security.framework's RSA (runner/github.rs).
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+security-framework-sys = "2"
+core-foundation = "0.10"
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
@@ -77,3 +92,11 @@ libc.workspace = true
 # Signs the Change proofs a phone sends in the relay itest (IO-33 FA-3).
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
 tempfile = "3"
+# start_paused: the runner supervisor's tests step its clock.
+tokio = { workspace = true, features = ["test-util"] }
+# The fake guest in tests/runner_net.rs: a DHCP client and UDP sockets on its own smoltcp interface.
+smoltcp = { workspace = true, features = ["socket-dhcpv4", "socket-udp"] }
+
+[[example]]
+name = "runner_vm_spike"
+required-features = ["spike"]

@@ -133,6 +133,7 @@ export function PaneFrame({
   onDragStart,
   onDragEnd,
   onDrop,
+  onPickUp,
   ringColor,
   stripStyle,
   addable,
@@ -159,7 +160,7 @@ export function PaneFrame({
   hideSplit?: boolean;
   locked?: boolean;
   /** The window currently being dragged anywhere in this workspace, if any. */
-  dragging: string | null;
+  dragging?: string | null;
   canSplit: (dir: Direction) => boolean;
   onSplit: (dir: Direction, kind: WbPane['kind']) => void;
   onAddWindow?: () => void;
@@ -169,9 +170,15 @@ export function PaneFrame({
   /** Wall Focus action immediately beside Minimize. */
   focusAction?: React.ReactNode;
   onFocus: () => void;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDrop: (target: DropTarget) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onDrop?: (target: DropTarget) => void;
+  /**
+   * Pick the window up by its strip with the pointer instead of a native drag
+   * (the Agent board, which previews the drop by laying itself out). Not
+   * called for a press on one of the strip's buttons.
+   */
+  onPickUp?: (e: React.PointerEvent<HTMLDivElement>) => void;
   children: React.ReactNode;
 }) {
   const [over, setOver] = useState<DropTarget | null>(null);
@@ -204,7 +211,7 @@ export function PaneFrame({
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const [metadataSlot, setMetadataSlot] = useState<HTMLElement | null>(null);
   // A window can't be dropped on itself, so it shows no target for its own drag.
-  const targeting = !locked && dragging !== null && dragging !== pane.id;
+  const targeting = !locked && !onPickUp && dragging != null && dragging !== pane.id;
 
   return (
     <div
@@ -231,20 +238,26 @@ export function PaneFrame({
       <div
         className="flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1"
         style={{ background: isActive ? 'var(--surface-2)' : 'transparent', cursor: 'grab', ...stripStyle }}
-        draggable={!locked}
+        draggable={!locked && !onPickUp}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = 'move';
           e.dataTransfer.setData(PANE_DRAG_TYPE, pane.id);
           // Some targets only see text/plain; harmless duplicate.
           e.dataTransfer.setData('text/plain', pane.id);
-          onDragStart();
+          onDragStart?.();
         }}
+        onPointerDown={onPickUp && !locked ? (e) => {
+          if (e.button !== 0 || (e.target as Element).closest('button, a, input, select, textarea, [role="button"], [contenteditable="true"]')) return;
+          // No preventDefault: it would also cancel the mousedown that focuses this window.
+          onPickUp(e);
+        } : undefined}
         onDragEnd={onDragEnd}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
           setMenu({ x: e.clientX, y: e.clientY });
         }}
+        data-pane-title-strip=""
         title="Drag to move this window"
       >
         {icon}
@@ -330,7 +343,7 @@ export function PaneFrame({
               e.preventDefault();
               const target = targetAt(e.currentTarget.getBoundingClientRect(), e.clientX, e.clientY);
               setOver(null);
-              onDrop(target);
+              onDrop?.(target);
             }}
           >
             {over === 'swap' ? (

@@ -27,13 +27,22 @@ export interface RemoteDevice {
   lastSeenAt: number;
   /** Revoked devices are denied at HELLO and kicked if connected. */
   revoked?: boolean;
+  /** SK-3: when the phone signed itself out (`device:signOut`), so *Paired devices* says so. */
+  signedOutAt?: number;
   /**
-   * What this phone may do beyond the chat (IO-33, *What phones can do*):
-   * `read` covers read-class channels, `change` change-class ones
-   * (`PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS`). Missing, or a missing
+   * What this phone may do (IO-33, *What phones can do*): `read` covers
+   * read-class channels (the chats too, since 2026-10-22), `change`
+   * change-class and agent-class ones (`PHONE_READ_CHANNELS`,
+   * `PHONE_CHANGE_CHANNELS`, `PHONE_AGENT_CHANNELS`). Missing, or a missing
    * field, means on. Set with `remote:setAccess`.
    */
   access?: { read?: boolean; change?: boolean };
+  /**
+   * Its last HELLO came from an app older than relay replay protection
+   * (protocol 4): welcomed for one release unless `acceptLegacyPhones` is
+   * false in remote.json. Cleared when the phone connects with a newer app.
+   */
+  legacyProtocol?: boolean;
   /**
    * The phone's public key for Change proofs (base64 X9.63 P-256), registered
    * by the phone itself over `device:registerKey` on its first Change action.
@@ -66,6 +75,8 @@ export interface RemoteStatus {
   /** True when the agent's relay socket is currently open. */
   online?: boolean;
   error?: string;
+  /** SK-3: the phone that stopped remote access (`remote:stop`) and when, until it is turned on again: the desktop's banner. */
+  stoppedBy?: { deviceId: string; name?: string | null; at: number };
 }
 
 export interface RemotePairing {
@@ -87,8 +98,23 @@ export interface RemotePairing {
  *
  * 2 (2026-10-19): `push:test`, notification kinds and dismissal frames.
  * 3 (2026-10-20): git from a phone (IO-33 FA-2), the first Change actions.
+ * 4 (2026-10-22): relay replay protection. The agent seals each new
+ *   connection a `RemoteChallenge`; a HELLO declaring 4 or later must carry
+ *   it (single use), and every request after the welcome carries it plus a
+ *   rising `seq`. Older phones are legacy: accepted unless the computer's
+ *   `acceptLegacyPhones` is false, then refused with `update-required`.
  */
-export const REMOTE_PROTOCOL_VERSION = 3;
+export const REMOTE_PROTOCOL_VERSION = 4;
+
+/** The first protocol whose HELLO answers the agent's challenge (crates/nekko-remote `CHALLENGE_PROTOCOL`). */
+export const REMOTE_CHALLENGE_PROTOCOL = 4;
+
+/** Sealed by the agent to a connection the relay just announced (and again after a refused HELLO or request). */
+export interface RemoteChallenge {
+  type: 'challenge';
+  /** 18 random bytes, base64. */
+  challenge: string;
+}
 
 /** First sealed frame a device sends after connecting. */
 export interface RemoteHello {
@@ -100,9 +126,23 @@ export interface RemoteHello {
   pair?: string;
   /** The phone's `REMOTE_PROTOCOL_VERSION`; absent means 1. */
   protocol?: number;
+  /** The connection's `RemoteChallenge`, required from protocol 4. */
+  challenge?: string;
 }
 
-export type RemoteDenyReason = 'unknown-device' | 'revoked' | 'bad-code' | 'invalid';
+/** A phone's request: from protocol 4 it carries its connection's challenge and a `seq` above every earlier one. */
+export interface RemoteRequest {
+  type: 'req';
+  id: number;
+  seq?: number;
+  challenge?: string;
+  channel: string;
+  args: unknown[];
+  /** A signed Change proof (`PHONE_CHANGE_PROOF`). */
+  proof?: { ts: number; sig: string };
+}
+
+export type RemoteDenyReason = 'unknown-device' | 'revoked' | 'bad-code' | 'invalid' | 'update-required';
 
 /** Agent's sealed reply to a HELLO. The relay agent adds `protocol` to a welcome. */
 export type RemoteHelloReply =
@@ -119,6 +159,9 @@ export const PUSH_KINDS: readonly PushKind[] = ['needs-you', 'finished', 'failed
 
 /** The phone channel the relay agent answers itself: a test push to the asking phone. */
 export const PUSH_TEST_CHANNEL = 'push:test';
+
+/** The phone channel the relay agent answers itself: the Live Activity card's level, focus or dismissal (crates/nekko-remote `CARD_CHANNEL`). */
+export const CARD_CHANNEL = 'card:set';
 
 /** Outcome of validating a HELLO against the device registry. Pure; host applies it. */
 export type HelloVerdict =
@@ -234,9 +277,40 @@ function hex(bytes: Uint8Array): string {
  *   agent → relay : { type:'notify', kind, tag?, deviceId?, title, body } (content-free push trigger)
  *   agent → relay : { type:'dismiss', tag }        (a needs-you push was handled)
  *   agent → relay : { type:'push-remove', deviceId }
+ *   agent → relay : { type:'activity', tag, phase, callId?, severity? } (per-chat Live Activity, older iPhones)
+ *   agent → relay : { type:'card', state } | { type:'card-start', state } (the iPhone's one Live Activity card)
  *   client → relay: { type:'register-push', token, platform, deviceId, kinds? }
+ *   client → relay: { type:'register-activity', deviceId, tag, token, app? } (older iPhones)
+ *   client → relay: { type:'register-card', deviceId, token?, startToken?, level, computerId, computerName, app? }
  *   relay → client: { type:'agent-online' } | { type:'agent-offline' }
  *   relay → client: { type:'push-registered', delivers } | { type:'dismiss', tag }
+ *
+ * The Live Activity card (always-on voice, Part 4). An iPhone shows one card
+ * for all of a computer's chats (`LiveCardState` in apps/ios LiveCard.swift).
+ * It registers the card's ActivityKit push token (`token`, while a card is up)
+ * and its push-to-start token (`startToken`, iOS 17.2 and later) with the
+ * relay, with its `level` ('minimal' | 'standard' | 'detailed'; 'none' drops
+ * the registration) and the computer's id and name for a started card's
+ * attributes. Over the sealed connection it tells the computer its level, a
+ * chip tap and a closed chat with `CARD_CHANNEL` (`{ level?, focus?, dismiss? }`,
+ * answered by the relay agent itself). While any phone wants a card the
+ * computer builds it with the app's rules (crates/nekko-remote card.rs, both
+ * held to fixtures/live-card.json) and sends `card` when it changes; dates are
+ * seconds since 2001, as ActivityKit decodes them. It includes chat text
+ * only when some phone asked for Standard or Detailed. The relay pushes
+ * `event: 'update'` to every registered card, or `'end'` when `state.chats`
+ * is empty, blanking the title, step and reply at Minimal and the reply at
+ * Standard, with step and reply cut to 60 characters and the payload under
+ * 4 KB. `card-start` (a run in a chat a phone sent `chat:send`/`chat:queue`
+ * to in the last two hours, or one a watch woke) also pushes `event: 'start'`
+ * with `attributes-type: 'NekkoCardAttributes'` to each phone with no card up
+ * and no open socket in the room, once until it registers again. A push that
+ * only changes a step, a reply or a time goes at APNs priority 5, anything
+ * else at 10; `computerId` and `computerName` are kept to 64 UTF-8 bytes. Unlike every other push the card carries
+ * chat text in the clear (ActivityKit draws only what the push holds), so it
+ * passes through the relay and Apple's push service at Standard and Detailed.
+ * APNs delivery and push-to-start are unverified until the relay has the
+ * production APNs key and a device runs it.
  */
 export interface RelayClientOpen {
   type: 'client-open';

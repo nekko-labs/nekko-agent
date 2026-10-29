@@ -19,12 +19,27 @@ fast-forward the primary checkout and remove the task worktree and merged branch
 Inspect dirty files and preserve any unmerged work before cleanup; never force
 remove a worktree just because its PR was squash-merged.
 
+## Start from an issue
+
+Every feature or change is tracked as a GitHub issue in `nekko-labs/nekko-agent`, and its PR links to it. Search first (`gh issue list --search "<words>"`); file one only when none fits:
+
+```
+gh issue create --title "<what changes, in plain words>" --body "<what and why>"
+```
+
+Put the requester's prompt, screenshots or other chat context in the issue only when they said to (the app's Settings > Project management holds the same choice for its own users). Then put `Closes #<n>` in the PR description. A fix for a baseline failure links the issue for that failure.
+
 ## Always land work as a PR
 
 The default for every change is: commit it to a branch, push, open a PR, and merge it.
 Do not leave finished work sitting uncommitted in a working tree. When several
 in-flight batches share the tree (parallel agents), land them together in one PR
 rather than letting the tree drift further from `main`.
+
+When you fan work out to parallel agents, hand each one its ids up front: the
+next `docs/decisions/` number, any new TASKS.md task ids. Each agent reads the
+same `main`, picks the same "next free" number, and the collision only shows
+when the second PR lands.
 
 ```
 # In the task worktree created above, once your own checks pass:
@@ -45,8 +60,29 @@ so a fix to a red PR re-queues itself. Every 15 minutes `queue-sweeper.yml`
 re-queues a ready PR whose `gate` is green but which is not in the queue (once per
 head commit, so a queue ejection by a flake heals and a real one waits for your
 fix), and re-runs a red `gate`'s failed jobs once. To keep a ready PR out of the
-queue, mark it draft or label it `hold`. If you need it queued sooner, `gh pr merge
---auto <n>` once `gate` is green still works.
+queue, mark it draft or label it `hold`. If it is already queued, either one also
+fails the group's `gate`, so the queue ejects it rather than merging it. If you need it
+queued sooner, `gh pr merge --auto <n>` once `gate` is green still works.
+
+With the `ci:macos` label, `gate` on the PR waits for the macOS runs the label turns on
+in other workflows (Native iOS, Dev identity, CodeQL's Swift pass,
+Decision models' CoreML job, nekkod-npm's darwin build) and fails if any of them fails,
+so the PR is not queued until they are green. macOS runners queue, so that can take an
+hour or more. Adding the label re-runs CI.
+
+Native iOS runs in batches, not on every push: about a minute after a push, one run
+on `ci/ios-batch` takes every open, ready `ci:macos` PR that touches iOS and merges
+cleanly onto main (the largest set that also merges with each other), and reports to
+each PR's head as the `Native iOS (batch)` status, which `gate` accepts
+(`scripts/ios-batch.mjs`). A PR that conflicts with main gets a red status saying so;
+one that conflicts only with others in the batch waits for a later batch. A red batch
+marks every PR in it red: run `gh workflow run ios-native.yml --ref <branch>` on your
+branch to see whether the failure is yours (a green run on the PR beats a red batch).
+Preview the next batch with `node scripts/ios-batch.mjs --dry-run`.
+
+On a PR, Native iOS checks dark mode only when the change touches colours
+(`scripts/ios-theme-scope.mjs`); add `ci:theme` to force light and dark for theme work
+the script cannot see. The 6-hourly run always checks both.
 
 ### Ready, not draft
 
@@ -58,6 +94,30 @@ below). "CI is still running" is never a reason to stay draft.
 
 If the queue ejects your PR, it comes back with the failing run linked. Diagnose
 it like any red check below, push the fix, and it re-queues.
+
+### When the queue holds or ejects your PR
+
+- **A queued branch refuses pushes** (GH006, "Branches that are queued for
+  merging cannot be updated"). Push a fix right after an ejection, before the
+  sweeper re-queues it; if the push is refused, wait for that queue run to finish
+  instead of retrying.
+- **Green but never queued.** `mergeStateStatus` is `BLOCKED` with every check
+  passing: usually an unresolved review thread. The common one is CodeQL's
+  "improper code sanitization" on an `apps/desktop/scripts/*-sandbox.cjs` that
+  splices `JSON.stringify(...)` into `executeJavaScript`; escape it with the `js()`
+  helper the other sandboxes use (see `monitors-trio-sandbox.cjs`) and the thread
+  resolves on the rescan. To see the blocker, call the `enqueuePullRequest`
+  GraphQL mutation (the one in `queue-sweeper.yml`): it names the reason, and
+  queues the PR once it is clear.
+- **A stack's bottom layer is never queued by the bots.** `gh pr merge --auto`
+  and the `enqueuePullRequest` mutation refuse stacked PRs, and the merge-async
+  REST API they point to refuses the repo's App ("Enqueuer is not authorized to
+  merge"). Once its `gate` is green, run `gh stack merge <pr> --yes` yourself. Auto-merge armed with a merge method also sits
+  here forever; re-arm with plain `gh pr merge --auto`.
+- **No PR CI after a push** means a conflict with `main` (`mergeable_state:
+  dirty`): GitHub computes no merge ref and triggers nothing. Merge `main` in.
+- **Typecheck fails on a new import after merging `main`**: your worktree's
+  `node_modules` is stale. Run `npm ci --ignore-scripts` before believing it.
 
 ### Big features: stack them
 
@@ -77,7 +137,16 @@ gh stack merge --yes                     # queue the stack (or up to a layer)
 
 Each layer is a normal PR: fast-tier CI, ready not draft, its own Unfinished work
 section. Rebasing a lower layer re-runs CI on every layer above it, so keep stacks
-short (2-4 layers) and finish lower layers first. The app's **Continue as stacked
+short (2-4 layers) and finish lower layers first.
+
+The auto-merge workflow and the sweeper only queue PRs based on `main`, so a
+layer whose base is another branch is never queued. Once its parent merges,
+retarget the layer to `main`, merge `main` in, and rerun
+`node scripts/spec-index.mjs` if `spec/` changed. A squash-merged parent leaves
+its original commits in the child's history, so git's merge conflicts wherever
+both layers touched the same lines; a three-way `git merge-file` per file, using
+the parent commit the child was built on as the base (not git's merge-base),
+resolves most of them cleanly. The app's **Continue as stacked
 PR** action creates the same native stacks from an agent chat.
 
 ## PR descriptions must record unfinished work

@@ -392,8 +392,15 @@ async fn a_daemon_turn_fetches_pages_and_runs_background_processes_itself() {
     let spec = turn_spec(&rig, &model, "turn_f", "s_turn_f", json!({}));
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
     assert_eq!(status, 200);
+    // A local address: one approval, worded as such, even in ask mode.
     let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_fetch").await;
-    assert_eq!(approval["reason"], format!("Fetch {url}"));
+    assert_eq!(
+        approval["reason"],
+        format!(
+            "Fetch {url}? 127.0.0.1 is on this computer or your local network, not the public internet. Approve only if you expected the agent to read it."
+        )
+    );
+    assert_eq!(approval["severity"], "medium");
     post(rig.d.port, "tool:approve", json!(["s_turn_f", "c_fetch", true]), Some(TOKEN)).await;
     let approval = wait_pending(rig.d.port, "s_turn_f", "approval", "c_start").await;
     assert_eq!(approval["reason"], "Start a background process");
@@ -580,4 +587,140 @@ async fn a_daemon_turn_arms_agent_watches_itself_and_owns_their_file() {
     assert_eq!(wake, file[0]["deadlineAt"]);
     let (_, listed) = post(rig.d.port, "watch:tool", json!(["s_turn_w", { "action": "list" }]), Some(TOKEN)).await;
     assert!(listed.as_str().unwrap().contains("\"Check the build\""), "{listed}");
+}
+
+/// A loopback GitHub with two PRs: #42, whose combined status the test sets,
+/// and #43, which it cannot read (a PR the user's token cannot see).
+async fn fake_github_pr(status: std::sync::Arc<std::sync::Mutex<&'static str>>) -> u16 {
+    use axum::routing::get;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let pr = json!({ "title": "Fix it", "state": "open", "draft": false, "head": { "sha": "abc", "ref": "fix" }, "base": { "ref": "main" } });
+    let app = axum::Router::new().route("/repos/o/r/pulls/42", get(move || async move { axum::Json(pr) })).route(
+        "/repos/o/r/commits/abc/status",
+        get(move || async move { axum::Json(json!({ "state": *status.lock().unwrap(), "total_count": 1 })) }),
+    );
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    port
+}
+
+/// The "Watch CI and merge when passing" button end to end: the user's
+/// request (a plain chat:send) has the model register a real PR watch, a
+/// failed registration leaves nothing armed, and a CI change wakes the chat
+/// through a normal continuation turn with the armed prompt.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_user_started_pr_watch_registers_and_wakes_the_chat_when_ci_changes() {
+    let data = std::env::temp_dir().join(format!("nekkod-user-pr-watch-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let workspace = data.join("project");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    for id in ["s_ok", "s_bad"] {
+        let chat =
+            json!({ "id": id, "title": id, "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+        std::fs::write(data.join(format!("sessions/{id}.json")), chat.to_string()).unwrap();
+    }
+    let (ok_url, bad_url) = ("https://github.com/o/r/pull/42", "https://github.com/o/r/pull/43");
+    let arm = |id: &str, url: &str| {
+        call_tool(
+            id,
+            "agent_watch",
+            json!({ "action": "create", "kind": "pr", "url": url, "prompt": "Merge it if CI passed", "timeout_seconds": 3600 }),
+        )
+    };
+    let model = scripted_model(vec![
+        arm("c_bad", bad_url),
+        say_text("Could not start the watch."),
+        arm("c_ok", ok_url),
+        say_text("Watching."),
+        say_text("CI passed; merging."),
+    ])
+    .await;
+    let ci = std::sync::Arc::new(std::sync::Mutex::new("pending"));
+    let gh = fake_github_pr(ci.clone()).await;
+    let settings = json!({
+        "providers": [{ "id": "p1", "kind": "openai-compat", "label": "Scripted", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }],
+        "workspaces": [{ "id": "w1", "name": "project", "path": workspace.to_string_lossy() }],
+        "defaultChatMode": "yolo", "defaultProviderId": "p1", "defaultModelId": "synthetic",
+    });
+    std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
+    // No gh: the PR is read from the loopback REST API, never from github.com.
+    let d = start_with_env(
+        Some(&data),
+        json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
+        &[("NEKKO_GH_PATH", Some("nekko-no-such-gh"))],
+    );
+    let send = |id: &str, url: &str| {
+        let text = format!("Watch CI for {url} and merge when passing.");
+        json!([{ "sessionId": id, "providerId": "p1", "modelId": "synthetic", "text": text }])
+    };
+    let views = |id: &'static str| {
+        let port = d.port;
+        async move { post(port, "session:watches", json!([id]), Some(TOKEN)).await.1 }
+    };
+    let tool_out = |id: &str, call: &str| -> String {
+        let saved: Value =
+            serde_json::from_str(&std::fs::read_to_string(data.join(format!("sessions/{id}.json"))).unwrap()).unwrap();
+        let m = saved["messages"].as_array().unwrap().iter().find(|m| m["toolResult"]["toolCallId"] == call).cloned();
+        m.unwrap()["toolResult"]["output"].as_str().unwrap().to_string()
+    };
+
+    // A PR the host cannot read: the tool says so, nothing is armed, and the
+    // UI keeps offering the button (no active watch to show).
+    let (status, body) = post(d.port, "chat:send", send("s_bad", bad_url), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert!(
+        tool_out("s_bad", "c_bad").starts_with("Agent watch failed: PR catalog unavailable"),
+        "{}",
+        tool_out("s_bad", "c_bad")
+    );
+    assert_eq!(views("s_bad").await, json!([]));
+
+    // A readable PR: armed, and listed as the active watch the UI renders.
+    let (status, body) = post(d.port, "chat:send", send("s_ok", ok_url), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert!(tool_out("s_ok", "c_ok").starts_with("Watch armed: "), "{}", tool_out("s_ok", "c_ok"));
+    let listed = views("s_ok").await;
+    assert_eq!(
+        (
+            listed[0]["kind"].clone(),
+            listed[0]["url"].clone(),
+            listed[0]["status"].clone(),
+            listed[0]["pending"].clone()
+        ),
+        (json!("pr"), json!(ok_url), json!("active"), json!(false)),
+        "{listed}"
+    );
+
+    // CI goes green. shortcut: the first poll is a minute out, so the test
+    // moves it to now instead of waiting; the 15 s scheduler tick is real.
+    *ci.lock().unwrap() = "success";
+    let file = data.join("agent-watches.json");
+    let mut armed: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    armed[0]["nextPollAt"] = json!(0);
+    std::fs::write(&file, armed.to_string()).unwrap();
+    until("the watch to wake the chat", Duration::from_secs(45), || async {
+        (views("s_ok").await[0]["status"] == "done").then_some(())
+    })
+    .await;
+    let requests = model.requests.lock().unwrap().clone();
+    let wake = requests.iter().rev().find_map(|r| {
+        let last = r["messages"].as_array()?.iter().rev().find(|m| m["role"] == "user")?;
+        last["content"].as_str().filter(|c| c.starts_with("[Agent watch ")).map(str::to_string)
+    });
+    let wake = wake.expect("a continuation turn reached the model");
+    assert!(wake.contains(&format!("PR state changed for {ok_url}")), "{wake}");
+    assert!(wake.contains("\"checks\":\"passing\""), "{wake}");
+    assert!(wake.contains("Merge it if CI passed"), "{wake}");
+    assert!(wake.contains("grants no new permissions"), "{wake}");
+    wait_for("the continuation reply", || {
+        let saved: Value =
+            serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_ok.json")).unwrap()).unwrap();
+        saved["messages"].as_array().unwrap().last().unwrap()["content"] == "CI passed; merging."
+    })
+    .await;
+    drop(d);
+    std::fs::remove_dir_all(data).ok();
 }

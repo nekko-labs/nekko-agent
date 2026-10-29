@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" width="880" height="400" font-family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Switching a chat to another account</title>
+  <desc id="d">The model picker shows an Account row when a vendor has more than one account. On Nekko's engine the chat continues with its whole history; on Claude Agent the switch starts a new Claude Code conversation in the other account.</desc>
+  <rect width="880" height="400" rx="18" fill="#ffffff"/>
+  <rect x="0.5" y="0.5" width="879" height="399" rx="18" fill="none" stroke="#e4e0f0"/>
+
+  <!-- picker mock -->
+  <text x="40" y="44" font-size="12" font-weight="700" fill="#5b4ea7" letter-spacing="0.6">THE MODEL PICKER</text>
+  <rect x="40" y="58" width="330" height="300" rx="14" fill="#ffffff" stroke="#d9d4ea"/>
+  <text x="58" y="88" font-size="10" font-weight="700" fill="#8a85a3" letter-spacing="0.4">ACCOUNT</text>
+  <rect x="122" y="73" width="118" height="24" rx="12" fill="#ffffff" stroke="#5b4ea7"/>
+  <text x="181" y="89" text-anchor="middle" font-size="11.5" font-weight="600" fill="#5b4ea7">me@home.example</text>
+  <rect x="246" y="73" width="114" height="24" rx="12" fill="#ffffff" stroke="#d9d4ea"/>
+  <text x="303" y="89" text-anchor="middle" font-size="11.5" fill="#5d5970">me@work.example</text>
+  <line x1="56" y1="110" x2="354" y2="110" stroke="#efecf6"/>
+  <rect x="56" y="120" width="298" height="30" rx="8" fill="#f1eef9"/>
+  <text x="70" y="140" font-size="12.5" font-weight="600" fill="#5b4ea7">GPT 6</text>
+  <text x="70" y="178" font-size="12.5" fill="#17151f">GPT 6 mini</text>
+  <text x="70" y="212" font-size="12.5" fill="#17151f">GPT 6 codex</text>
+  <line x1="56" y1="230" x2="354" y2="230" stroke="#efecf6"/>
+  <text x="70" y="256" font-size="12.5" font-weight="700" fill="#17151f">Claude (API key)</text>
+  <text x="70" y="284" font-size="12.5" fill="#17151f">Claude Opus 5.5</text>
+  <text x="70" y="312" font-size="12.5" fill="#17151f">Claude Sonnet 5.5</text>
+
+  <!-- click arrow -->
+  <path d="M303 100 C 330 120, 380 120, 418 120" fill="none" stroke="#5b4ea7" stroke-width="1.6" marker-end="url(#a)"/>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5b4ea7"/></marker></defs>
+  <text x="330" y="140" font-size="11" fill="#5b4ea7">one click</text>
+
+  <!-- outcomes -->
+  <rect x="424" y="58" width="416" height="138" rx="14" fill="#fbfaff" stroke="#e4e0f0"/>
+  <text x="444" y="86" font-size="14" font-weight="700" fill="#17151f">API keys, ChatGPT plans, cloud accounts</text>
+  <text x="444" y="112" font-size="12.5" fill="#2b2838">The chat moves to the same model on the other</text>
+  <text x="444" y="130" font-size="12.5" fill="#2b2838">account and continues. Nekko keeps the history,</text>
+  <text x="444" y="148" font-size="12.5" fill="#2b2838">so the next message carries all of it.</text>
+  <rect x="444" y="162" width="190" height="22" rx="11" fill="#eef7f1"/>
+  <text x="539" y="177" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2f7a4b">Same conversation</text>
+
+  <rect x="424" y="212" width="416" height="146" rx="14" fill="#fbfaff" stroke="#e4e0f0"/>
+  <text x="444" y="240" font-size="14" font-weight="700" fill="#17151f">Claude Agent accounts</text>
+  <text x="444" y="266" font-size="12.5" fill="#2b2838">Claude Code keeps its sessions inside each account's</text>
+  <text x="444" y="284" font-size="12.5" fill="#2b2838">folder, so the switch starts a new Claude Code</text>
+  <text x="444" y="302" font-size="12.5" fill="#2b2838">conversation there. The chat still shows its history.</text>
+  <rect x="444" y="318" width="250" height="22" rx="11" fill="#fff6e8"/>
+  <text x="569" y="333" text-anchor="middle" font-size="11.5" font-weight="600" fill="#9a5b00">New Claude Code conversation</text>
+</svg>

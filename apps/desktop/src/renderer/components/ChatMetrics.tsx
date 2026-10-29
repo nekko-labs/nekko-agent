@@ -1,9 +1,11 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import type { ContextBundle, ContextItem, EffortLevel, Session } from '@nekko-agent/shared';
-import { chatEffort, effectiveEffort, modelDefaultEffort, modelEffortLevels, usesNativeEffort } from '@nekko-agent/shared';
+import { chatEffort, effectiveEffort, modelDefaultEffort, modelEffortLevels } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { sourceMeta } from '../contextSources.js';
 import { fillTone } from './contextTone.js';
+import { EffortDial, usePopover } from './ModeViews.js';
 
 const FREE_COLOR = 'var(--surface-2)';
 
@@ -89,22 +91,19 @@ export function ContextGauge({
 
   return (
     <div className="group relative flex min-w-0 shrink-0 items-center text-[11px] text-ink-faint">
-      {/* One bar that fills as the window does, with the count written on it.
-          `~` marks a window guessed from the model family rather than reported. */}
+      {/* A ring that fills as the window does, and the count beside it, as on
+          the phone. `~` marks a window guessed from the model family rather
+          than reported. */}
       <span
-        className="context-bar relative flex h-6 min-w-[92px] cursor-default items-center justify-center overflow-hidden rounded-md border border-line px-2 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
-        style={{ background: windowTokens > 0 ? `color-mix(in srgb, ${fillTone(pct)} 12%, var(--surface-2))` : 'var(--surface-2)' }}
+        className="context-bar flex h-6 cursor-default items-center gap-1.5 rounded-md px-1.5 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
         tabIndex={0}
         aria-label={`Context window: ${num(used)}${windowTokens ? ` of ${num(windowTokens)}` : ''} tokens in use`}
       >
-        {/* Filled by scaling, not by width: the count moves with every streamed
-            token, and a width transition re-laid-out the page on every frame. */}
-        <span
-          aria-hidden
-          className="absolute inset-0 origin-left transition-transform duration-300"
-          style={{ transform: `scaleX(${pct / 100})`, background: `color-mix(in srgb, ${fillTone(windowTokens > 0 ? pct : NaN)} 28%, transparent)` }}
-        />
-        <span className="relative text-ink-soft">
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" className="shrink-0 -rotate-90">
+          <circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--surface-2)" strokeWidth="3" />
+          {windowTokens > 0 && <circle cx="8" cy="8" r="6.5" fill="none" stroke={fillTone(pct)} strokeWidth="3" strokeLinecap="round" pathLength={100} strokeDasharray={`${pct} 100`} className="transition-[stroke-dasharray] duration-300" />}
+        </svg>
+        <span className="text-ink-soft" style={pct >= 60 ? { color: fillTone(pct) } : undefined}>
           {formatContextTokens(used)}{windowTokens ? ` / ${!windowKnown ? '~' : ''}${formatContextTokens(windowTokens)}` : ''}
         </span>
       </span>
@@ -167,25 +166,11 @@ export const EFFORT_LABEL: Record<EffortLevel, string> = {
   max: 'Max',
 };
 
-/**
- * The slider's stops for a model, lowest first, and which one the saved
- * setting sits on.
- *
- * The model's default takes its own rung's place rather than a stop of its
- * own at the far left: "Default · Medium" sitting left of Low read as the
- * bottom of the scale, so Opus 5.5 looked like it had no Low at all.
- */
+/** Concrete, model-compatible stops. Recommendations never replace a saved choice. */
 export function effortRungs(saved: EffortLevel, modelId: string | undefined): { options: EffortLevel[]; index: number; shown: string } {
-  const levels = modelEffortLevels(modelId);
-  const native = usesNativeEffort(modelId);
-  const fallback = modelDefaultEffort(modelId);
-  // What this model will actually be sent, which is what the slider shows: a
-  // saved `xhigh` on a temperature model runs as `high`, and says so.
+  const options = modelEffortLevels(modelId);
   const effective = effectiveEffort(saved, modelId);
-  const atDefault = native && effective === fallback;
-  const options: EffortLevel[] = native ? levels.map((l) => (l === fallback ? 'normal' : l)) : levels;
-  const index = Math.max(0, options.indexOf(atDefault ? 'normal' : effective));
-  return { options, index, shown: atDefault ? `Default · ${EFFORT_LABEL[fallback]}` : EFFORT_LABEL[effective] };
+  return { options, index: Math.max(0, options.indexOf(effective)), shown: EFFORT_LABEL[effective] };
 }
 
 /**
@@ -206,7 +191,12 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
     onChanged?.();
     if (session) {
       void window.nekko.setSessionOptions(session.id, { effort: level })
-        .then((s) => { if (s) onSessionChange?.(s); })
+        .then(async (s) => {
+          if (!s) return;
+          onSessionChange?.(s);
+          await window.nekko.updateSettings({ effort: level });
+          await useStore.getState().refreshSettings();
+        })
         .catch((e) => useStore.getState().pushToast('error', String(e)));
     } else {
       void window.nekko.updateSettings({ effort: level }).then(() => useStore.getState().refreshSettings());
@@ -214,35 +204,58 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
   };
 
   const { options, index, shown } = effortRungs(saved, modelId);
-  // 0..1 up the rungs: it drives the glow's size and arms the top rung's
-  // speed lines.
-  const level = options.length > 1 ? index / (options.length - 1) : 0;
-  const atMax = options.length > 1 && index === options.length - 1;
+  const pop = usePopover(380);
+  const step = (by: number) => {
+    const next = options[Math.max(0, Math.min(options.length - 1, index + by))];
+    if (next) pick(next);
+  };
+  // A dial with one notch per level the model takes, as on the phone; the
+  // levels themselves are stops in the popover, and the arrow keys step them.
   return (
-    <div className="effort-slider flex shrink-0 items-center gap-1 rounded-r-lg border border-l-0 border-line px-2 py-1 text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort (the app default; a chat can set its own)'}>
-      <label htmlFor="composer-effort" className="text-ink-faint">Effort</label>
-      <span
-        className="effort-track"
-        style={{ '--effort-fill': `${level * 100}%`, '--effort-level': level } as React.CSSProperties}
+    <div className="effort-slider flex shrink-0 items-center rounded-lg border border-line text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort, remembered for new chats on this computer'}>
+      <button
+        ref={pop.anchor}
+        type="button"
+        className="flex items-center gap-1.5 px-2 py-1"
+        onClick={() => pop.setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); step(1); }
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); step(-1); }
+        }}
+        aria-haspopup="dialog"
+        aria-expanded={pop.open}
+        aria-label={`Reasoning effort: ${shown}`}
+        data-effort-index={index}
+        data-effort-count={options.length}
       >
-        <input
-          id="composer-effort"
-          type="range"
-          min={0}
-          max={options.length - 1}
-          step={1}
-          value={Math.max(0, index)}
-          onChange={(event) => pick(options[Number(event.target.value)])}
-          aria-label="Reasoning effort"
-          aria-valuetext={shown}
-        />
-        {atMax && (
-          <span className="effort-speed" aria-hidden="true">
-            <i /><i /><i />
-          </span>
-        )}
-      </span>
-      <span className="min-w-12 text-right text-ink-soft">{shown}</span>
+        <EffortDial index={index} count={options.length} size={18} />
+        <span className="text-ink-faint">Effort</span>
+        <span className="min-w-12 text-ink-soft">{shown}</span>
+      </button>
+      {pop.open && createPortal(
+        <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-3 shadow-lg" role="dialog" aria-label="Reasoning effort" data-effort-popover>
+          <div className="flex flex-col items-center gap-2">
+            <EffortDial index={index} count={options.length} size={88} />
+            <span className="text-[13px] font-semibold text-ink">{shown}</span>
+            <div className="flex w-full gap-1" role="radiogroup" aria-label="Reasoning effort">
+              {options.map((o, i) => (
+                <button
+                  key={o}
+                  type="button"
+                  role="radio"
+                  aria-checked={i === index}
+                  className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink'}`}
+                  onClick={() => pick(o)}
+                  data-effort={o}
+                  title={o === modelDefaultEffort(modelId) ? 'Recommended' : undefined}
+                >{EFFORT_LABEL[o]}{o === modelDefaultEffort(modelId) && <span className="block text-[9px]">Recommended</span>}</button>
+              ))}
+            </div>
+            <p className="text-center text-[11px] text-ink-faint">Higher effort thinks longer and spends more tokens.</p>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

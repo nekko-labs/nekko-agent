@@ -9,6 +9,8 @@ import com.nekko.protocol.ActivityTracker
 import com.nekko.protocol.AgentEvent
 import com.nekko.protocol.Appearance
 import com.nekko.protocol.AppInfo
+import com.nekko.android.security.ChangeCalls
+import com.nekko.protocol.ChangeSigner
 import com.nekko.protocol.Channels
 import com.nekko.protocol.E2E
 import com.nekko.protocol.Events
@@ -22,8 +24,18 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SavedChatList
 import com.nekko.protocol.SessionSummary
+import com.nekko.protocol.StepUpChallenge
+import com.nekko.protocol.StepUpProof
+import com.nekko.protocol.TerminalChannels
+import com.nekko.protocol.TerminalEvent
 import com.nekko.protocol.WorkspaceFolder
+import com.nekko.protocol.WorkspacePath
+import com.nekko.android.previews.PreviewLoader
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import com.nekko.protocol.PcSettings
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -31,6 +43,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -88,7 +102,16 @@ class ComputersRepository(
     private val modelListTimeoutMs: Long = 6_000,
     /** A computer was forgotten: drop what the phone kept about it elsewhere (New chat defaults). */
     private val onForget: (id: String) -> Unit = {},
+    /** How long a safety exit waits for the computer's answer before counting on the next connection. */
+    private val exitTimeoutMs: Long = 8_000,
+    /** How long a queued sign-out waits for the computer to come online at app start. */
+    private val outboxConnectMs: Long = 20_000,
+    /** Signs Change actions (AN-32): the Keystore key in the app, a software key in tests, none where unset. */
+    private val changeSigner: ChangeSigner? = null,
 ) {
+    /** *Sign out this phone* not yet heard by the computer (SK-8). */
+    private val signOuts = SignOutOutbox(store)
+
     private val _state = MutableStateFlow(ComputersState())
     val state: StateFlow<ComputersState> = _state.asStateFlow()
 
@@ -117,11 +140,34 @@ class ComputersRepository(
     /** Every `agent:event` from the active computer. Chat screens filter by session. */
     val events: SharedFlow<AgentEvent> = _events.asSharedFlow()
 
+    /**
+     * What is open over each chat (Git, the Terminals), by chat id. Kept here,
+     * not in a chat screen, so opening or folding the phone (a new activity,
+     * and a chat pane instead of a full screen) keeps it open and its
+     * terminals attached.
+     */
+    private val _overlays = MutableStateFlow<Map<String, Any>>(emptyMap())
+    val overlays: StateFlow<Map<String, Any>> = _overlays.asStateFlow()
+
+    fun setOverlay(chatId: String, overlay: Any?) {
+        _overlays.update { if (overlay == null) it - chatId else it + (chatId to overlay) }
+    }
+
+    /** Work that outlives a screen (leaving a terminal after its page is gone). */
+    val appScope: CoroutineScope get() = scope
+
+    private val _terminalEvents = MutableSharedFlow<TerminalEvent>(extraBufferCapacity = 512)
+    /** The output of the terminals this phone opened on the active computer (AN-31). */
+    val terminalEvents: SharedFlow<TerminalEvent> = _terminalEvents.asSharedFlow()
+
     private val lock = Mutex()
     @Volatile private var client: Remote? = null
     private var connJob: Job? = null
     private var summariesJob: Job? = null
+    private var summariesDirty = false
     private var cachedDeviceId: String? = null
+    /** Change actions on the live connection: its key registration is per connection. */
+    @Volatile private var changeCalls: Pair<Remote, ChangeCalls>? = null
     /** The live list has been read since connecting, so it may be saved. */
     @Volatile private var liveList = false
 
@@ -143,6 +189,39 @@ class ComputersRepository(
 
     fun remote(): Remote = client ?: throw RelayException("Not connected to a computer.")
 
+    /** Files and loopback pages the agent linked, read for the preview window and cards (AN-35), cached per chat. */
+    val previews: PreviewLoader by lazy { PreviewLoader(read = { r -> caller.call(r.channel, *r.args.toTypedArray()) }) }
+
+    /**
+     * A Change action on the active computer (IO-33, AN-32): signed with this
+     * phone's key (the fingerprint, face or screen lock within the last 5
+     * minutes), the key registered on first use. A refusal is thrown with
+     * words for the owner, e.g. "Changes from this phone are turned off on Studio".
+     */
+    suspend fun callChange(channel: String, args: List<JsonElement>, stepUp: StepUpProof? = null, timeoutMs: Long? = null): JsonElement {
+        val r = remote()
+        val signer = changeSigner ?: throw RelayException("This phone can’t confirm changes with a fingerprint or screen lock.")
+        val calls = changeCalls?.takeIf { it.first === r }?.second
+            ?: ChangeCalls(r, signer, deviceId(), _state.value.active?.name ?: "your computer").also { changeCalls = r to it }
+        return calls.call(channel, args, stepUp, timeoutMs)
+    }
+
+    /**
+     * A call that may raise a chat's tool policy: `session:setOptions` with a
+     * more permissive `mode`, or `settings:update` raising `defaultChatMode`
+     * (ask < guardrails < yolo). Sent plain first; when the computer answers
+     * `proof-required` (it was a raise), sent again signed ([callChange]), so
+     * the phone asks for the fingerprint or screen lock. Lowering or keeping
+     * the mode never asks. A `step-up-required` refusal is thrown for the
+     * step-up sheet, which sends it again through [callChange] with its answer.
+     */
+    suspend fun callRaising(channel: String, args: List<JsonElement>): JsonElement = try {
+        remote().call(channel, *args.toTypedArray())
+    } catch (e: RelayException) {
+        if (e.refusal?.code != "proof-required" || changeSigner == null) throw e
+        callChange(channel, args)
+    }
+
     /**
      * Read the paired computers and connect to one: [preferredId] (the phone's
      * default computer, Settings → New chats) when it is still paired, else the
@@ -153,11 +232,15 @@ class ComputersRepository(
         val activeId = NewChatDefaults.startComputer(preferredId, store.get(ACTIVE_KEY), list.map { it.id })
         _state.update { it.copy(ready = true, computers = list, activeId = activeId) }
         activeId?.let { connect(it) }
+        // Sign-outs the computer has not heard yet: say them now, beside the normal connection.
+        scope.launch { deliverSignOuts() }
     }
 
     /** Save a scanned/pasted pairing and connect. Returns the computer's id. */
     suspend fun pair(link: PairingLink): String {
         val keyHex = E2E.toHex(deriveKey(link.key, link.room))
+        // Paired again after signing out: the old sign-out must never reach the new pairing.
+        signOuts.cancel(link.relayUrl, link.room)
         val id = lock.withLock {
             // Re-scanning a computer we already know keeps its id and name.
             val list = _state.value.computers
@@ -192,6 +275,8 @@ class ComputersRepository(
             onForget(id)
             val next = _state.value.computers.filter { it.id != id }
             saveIndex(next)
+            // No computer knows the Change key any more: the next pairing makes a new one.
+            if (next.isEmpty()) runCatching { changeSigner?.forget() }
             val activeId = if (wasActive) next.firstOrNull()?.id else _state.value.activeId
             store.set(ACTIVE_KEY, activeId)
             _state.update {
@@ -223,6 +308,8 @@ class ComputersRepository(
                 summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(),
                 // Another computer, or the same one later: its settings are unknown until it answers.
                 pcSettings = PcSettings(),
+                quitFromPhone = false,
+                remoteStoppedAt = null,
                 lastError = null,
                 savedListAt = null,
             )
@@ -242,7 +329,10 @@ class ComputersRepository(
             pairCode = secret.pair,
             platform = "android",
         )
-        val c = remotes.create(config, scope)
+        // Refusals read with the computer's current name (it can be renamed while connected).
+        val c = PlainRefusals(remotes.create(config, scope)) {
+            _state.value.computers.firstOrNull { it.id == id }?.name ?: computer.name
+        }
         client = c
         connJob = scope.launch {
             launch {
@@ -267,6 +357,10 @@ class ComputersRepository(
                         _state.update { it.copy(appearance = Appearance.from(payload)) }
                         return@collect
                     }
+                    if (channel == TerminalChannels.EVENT) {
+                        TerminalEvent.from(payload)?.let { _terminalEvents.emit(it) }
+                        return@collect
+                    }
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
                     _events.emit(e)
@@ -286,8 +380,10 @@ class ComputersRepository(
     fun disconnect() {
         connJob?.cancel(); connJob = null
         summariesJob?.cancel(); summariesJob = null
+        summariesDirty = false
         client?.close()
         client = null
+        changeCalls = null
         _state.update { it.copy(conn = RelayState.IDLE) }
     }
 
@@ -303,9 +399,128 @@ class ComputersRepository(
      * Only the keys the computer lets a phone set; the reply is the computer's
      * reduced view, so the screen shows what was actually saved there.
      */
-    suspend fun updatePcSettings(patch: JsonObject) {
-        val reply = remote().call(Channels.SETTINGS_UPDATE, patch)
+    suspend fun updatePcSettings(patch: JsonObject, stepUp: StepUpProof? = null) {
+        // A step-up only follows a raise, which is signed too.
+        val reply = if (stepUp == null) callRaising(Channels.SETTINGS_UPDATE, listOf(patch)) else callChange(Channels.SETTINGS_UPDATE, listOf(patch), stepUp)
         _state.update { it.copy(pcSettings = PcSettings.from(reply)) }
+    }
+
+    /**
+     * A fresh step-up challenge from the active computer (SK-7): single use,
+     * two minutes, and which kinds of method it has. Fetched for every try.
+     */
+    suspend fun stepUpChallenge(): StepUpChallenge =
+        StepUpChallenge.from(remote().call(Channels.SECURITY_CHALLENGE))
+            ?: throw RelayException("${_state.value.active?.name ?: "Your computer"} didn’t send a confirmation request. Update Nekko Agent there.")
+
+    // ---- safety exits (SK-8): never a proof or a step-up, decision 0018 ----
+
+    /** How *Sign out this phone* went: heard by the computer now, or queued for when it is reachable. */
+    enum class SignOutResult { SENT, QUEUED }
+
+    /**
+     * *Sign out this phone* for the active computer: say `device:signOut` if
+     * the computer is online (it revokes and kicks this phone), then forget
+     * it here either way: pairing secret, saved chat list, New chat defaults.
+     * When the computer could not hear it, it is queued and said at the next
+     * app start ([deliverSignOuts]). Signing out never waits on the computer.
+     */
+    // Leaving the screen mid-way must not leave the phone half signed out.
+    suspend fun signOutThisPhone(): SignOutResult = withContext(NonCancellable) { signOut() }
+
+    private suspend fun signOut(): SignOutResult {
+        val id = _state.value.activeId ?: throw RelayException("No computer to sign out of.")
+        val computer = _state.value.active ?: throw RelayException("No computer to sign out of.")
+        val secret = StoredJson.decodeSecret(store.get(secretKey(id)))
+        val c = client
+        val sent = c != null && _state.value.conn == RelayState.ONLINE && try {
+            c.callWithTimeout(exitTimeoutMs, Channels.DEVICE_SIGN_OUT)
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+        if (!sent && secret != null) {
+            signOuts.add(PendingSignOut(computer.relayUrl, secret.room, secret.key, secret.keyHex, deviceId(), now()))
+        }
+        forget(id)
+        return if (sent || secret == null) SignOutResult.SENT else SignOutResult.QUEUED
+    }
+
+    /**
+     * *Stop remote access on the computer*: `remote:stop`. The computer turns
+     * remote access off and kicks every phone, so the reply may be lost with
+     * the socket; a connection dropped after sending counts as stopped. Only
+     * the computer can turn it on again.
+     */
+    suspend fun stopRemoteAccess() {
+        try {
+            remote().callWithTimeout(exitTimeoutMs, Channels.REMOTE_STOP)
+        } catch (e: RelayException) {
+            if (e.refusal != null || !e.afterSend) throw e
+        }
+        _state.update { it.copy(remoteStoppedAt = now()) }
+    }
+
+    /**
+     * *Quit Nekko Agent on the computer*: `app:quit`, only offered when
+     * `app:info` says `quitFromPhone`. The computer may be gone before it
+     * answers; a dropped connection after sending counts as quitting. A
+     * refusal (`quit-disabled`: the switch was turned off meanwhile) is thrown,
+     * already in plain words.
+     */
+    suspend fun quitComputer() {
+        try {
+            remote().callWithTimeout(exitTimeoutMs, Channels.APP_QUIT)
+        } catch (e: RelayException) {
+            if (e.refusal != null || !e.afterSend) throw e
+        }
+    }
+
+    /**
+     * Say each queued sign-out to its computer over a connection of its own
+     * (the phone no longer lists that computer). Dropped once heard, once the
+     * computer already refuses this phone (revoked or unknown: signed out
+     * all the same), or when too old; kept for the next start otherwise.
+     */
+    suspend fun deliverSignOuts() {
+        for (p in signOuts.prune(now())) {
+            val config = RelayConfig(
+                relayUrl = p.relayUrl,
+                room = p.room,
+                key = p.key,
+                keyBytes = E2E.fromHex(p.keyHex),
+                deviceId = p.deviceId,
+                deviceName = deviceName(),
+                platform = "android",
+            )
+            val r = remotes.create(config, scope)
+            val done = try {
+                r.connect()
+                val s = withTimeout(outboxConnectMs) {
+                    r.status.first { it.state == RelayState.ONLINE || it.state == RelayState.DENIED }
+                }
+                if (s.state == RelayState.DENIED) {
+                    true
+                } else {
+                    r.callWithTimeout(exitTimeoutMs, Channels.DEVICE_SIGN_OUT)
+                    true
+                }
+            } catch (_: TimeoutCancellationException) {
+                false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: RelayException) {
+                // Kicked while the answer was on its way is the computer doing what was asked.
+                r.status.value.state == RelayState.DENIED
+            } catch (_: Exception) {
+                false
+            } finally {
+                r.close()
+            }
+            if (done) signOuts.remove(p)
+        }
     }
 
     /** Complete a chat (the desktop's archive): it moves under its group's Completed, nothing is deleted. */
@@ -368,6 +583,7 @@ class ComputersRepository(
                     workspaces = r.workspaces, activity = activity, summariesLoading = false, savedListAt = null,
                 )
             }
+            _state.update { it.copy(quitFromPhone = r.info?.quitFromPhone == true) }
             liveList = true
             saveList()
             learnPlatform(r.info?.platform)
@@ -421,23 +637,51 @@ class ComputersRepository(
         cache.save(id, SavedChatList(now(), s.summaries, s.workspaces))
     }
 
+    /** Save a folder on the computer by its absolute path there (a signed Change). */
+    suspend fun addWorkspace(path: String) {
+        val p = path.trim()
+        if (!WorkspacePath.isAbsolute(p)) throw RelayException("Enter an absolute folder path on the computer.")
+        changeWorkspace(Channels.WORKSPACE_ADD_BY_PATH, p)
+    }
+
+    /** Forget a saved folder (a signed Change). The computer never deletes the folder on disk. */
+    suspend fun removeWorkspace(id: String) {
+        changeWorkspace(Channels.WORKSPACE_REMOVE, id)
+        reloadList()
+    }
+
+    private suspend fun changeWorkspace(channel: String, value: String) {
+        if (_state.value.conn != RelayState.ONLINE) throw RelayException("Connect to the computer to manage folders.")
+        val c = remote()
+        val list = WorkspaceFolder.list(callChange(channel, listOf(JsonPrimitive(value))))
+        if (client === c) _state.update { it.copy(workspaces = list) }
+    }
+
+    /** Read the chat list again soon (a chat was forked or created from here). */
+    fun reloadList() = scheduleSummaries()
+
     private fun scheduleSummaries() {
-        if (summariesJob?.isActive == true) return
         val c = client ?: return
+        summariesDirty = true
+        if (summariesJob?.isActive == true) return
         summariesJob = scope.launch {
-            delay(summariesDebounceMs)
-            if (client !== c) return@launch
-            try {
-                val list = SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES))
-                if (client === c) {
+            do {
+                delay(summariesDebounceMs)
+                if (client !== c) return@launch
+                // Notifications during the debounce are covered by this call.
+                summariesDirty = false
+                try {
+                    val list = SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES))
+                    ensureActive()
+                    if (client !== c) return@launch
                     _state.update { it.copy(summaries = list) }
                     saveList()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Only a new invalidation retries, never a failed call alone.
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // The next refresh will catch up.
-            }
+            } while (isActive && client === c && summariesDirty)
         }
     }
 

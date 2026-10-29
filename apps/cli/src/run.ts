@@ -205,7 +205,8 @@ export async function runCli(argv: string[]): Promise<void> {
   if (flags.version || cmd === 'version') return void print(VERSION, !!flags.json);
   if (!cmd || flags.help || cmd === 'help') return void console.log(HELP);
   // Claude Agent's approval bridge: started by nekkod in a chat's --mcp-config, not by hand.
-  if (cmd === 'mcp' && value(flags, 'bridge')) return runBridgeServer({ token: value(flags, 'bridge'), url: value(flags, 'url') });
+  // The token comes in the environment (NEKKO_BRIDGE_TOKEN), where other users can't list it; `--bridge <token>` is the older form.
+  if (cmd === 'mcp' && flags.bridge) return runBridgeServer({ token: process.env.NEKKO_BRIDGE_TOKEN || value(flags, 'bridge'), url: value(flags, 'url') });
   if (cmd === 'mcp') return runMcpServer({ url: value(flags, 'url'), token: value(flags, 'token') });
   // Before getClient: building a client opens the data root, which refuses to start while an earlier profile is unmerged.
   if (cmd === 'migrate') { process.exitCode = await migrateCommand(flags); return; }

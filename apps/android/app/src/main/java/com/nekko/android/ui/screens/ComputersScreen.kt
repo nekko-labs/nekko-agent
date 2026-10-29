@@ -206,7 +206,7 @@ private fun ComputerCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Dot(state.tone)
                     Text(
-                        "${state.label} · ${Pairing.relayHost(c.relayUrl)} · paired ${ago(c.pairedAt)} ago",
+                        "${state.label} · ${Pairing.relayHost(c.relayUrl)} · paired ${ago(c.pairedAt).let { if (it == "now") "just now" else "$it ago" }}",
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkSoft,
                     )

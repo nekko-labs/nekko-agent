@@ -37,7 +37,7 @@ export function startDesktopNotifications(): () => void {
       if (!sessionId) return;
       const s = useStore.getState();
       s.setActiveSession(sessionId);
-      s.setView('chat');
+      s.setView('command');
       // Focus the session's workspace pane (or create one if it was closed);
       // setActiveSession/setView alone never touch the workbench layout.
       s.openChatPane(sessionId);
@@ -52,7 +52,8 @@ export function startDesktopNotifications(): () => void {
     return {
       enabled: s.settings?.desktopNotifications !== false,
       windowHidden: document.hidden || !document.hasFocus(),
-      visibleSessionId: s.view === 'chat' ? s.activeSessionId : null,
+      // Wall windows can be collapsed or offscreen, so selection alone never suppresses a notice.
+      visibleSessionId: null,
       titleOf: (id) => s.sessions.find((x) => x.id === id)?.title,
     };
   };
@@ -70,7 +71,7 @@ export function startDesktopNotifications(): () => void {
         else {
           const s = useStore.getState();
           s.setActiveSession(notice.sessionId);
-          s.setView('chat');
+          s.setView('command');
           // Focus the session's workspace pane (or create one if it was closed).
           s.openChatPane(notice.sessionId);
         }

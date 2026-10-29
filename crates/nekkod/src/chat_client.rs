@@ -17,6 +17,9 @@ use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+mod yielding;
+pub use yielding::{GateFuture, YieldGate, YieldingClient};
+
 /// A provider, as the agent loop's model client.
 #[derive(Clone)]
 pub struct ProviderClient {
@@ -43,6 +46,7 @@ impl ChunkStream for ProviderStream {
         let item = self.0.next().await?;
         Some(item.map_err(|e| e.message).map(|chunk| match chunk {
             ProviderChunk::Phase { phase } => Chunk::Phase(phase),
+            ProviderChunk::Carry { item } => Chunk::Carry(item),
             ProviderChunk::Text { delta } => Chunk::Text(delta),
             ProviderChunk::Reasoning { delta } => Chunk::Reasoning(delta),
             ProviderChunk::ToolCall { call } => Chunk::ToolCall(serde_json::to_value(call).unwrap_or(Value::Null)),
@@ -55,6 +59,7 @@ impl ChunkStream for ProviderStream {
                     output_ms: output_ms.map(|ms| ms as f64),
                 }
             }
+            ProviderChunk::OutputLimit => Chunk::OutputLimit,
             ProviderChunk::Done => Chunk::Done,
         }))
     }

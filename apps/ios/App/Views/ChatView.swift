@@ -25,6 +25,17 @@ struct ChatView: View {
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(Prefs.self) private var prefs
+    /// Expert mode's hardware and loaded models, read while the chat is on screen.
+    @State private var monitor: HardwareMonitorModel?
+    /// Tabletop (FD-6): the hinge in window points, from the pane host; nil elsewhere.
+    @Environment(\.paneHinge) private var paneHinge
+    /// In the pane host: messages can be dragged to the other pane.
+    @Environment(\.inPanes) private var inPanes
+    /// This chat's frame in the window, to place the hinge.
+    @State private var windowFrame: CGRect = .zero
+    /// Something is being dragged over the chat.
+    @State private var dropping = false
 
     var body: some View {
         Group {
@@ -34,9 +45,11 @@ struct ChatView: View {
                 ProgressView()
             }
         }
-        .background(palette.paper)
+        .background { AppBackdrop() }
         .navigationBarTitleDisplayMode(.inline)
-        .keyboardDoneButton()
+        // No keyboard toolbar here: on iOS 26 its Done floats over the
+        // composer's send button. Scrolling or tapping the transcript puts
+        // the keyboard away, and the message box has a VoiceOver action for it.
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
@@ -48,8 +61,8 @@ struct ChatView: View {
             app.notifier.clear(sessionId: sessionId)
             if let first = app.firstMessages.removeValue(forKey: sessionId), let chat {
                 await chat.reload()
-                do { try await chat.send(first) } catch {
-                    chat.handBack(UnsentPrompt(text: first, skill: nil, images: []))
+                do { try await chat.send(first.text, images: first.images) } catch {
+                    chat.handBack(first)
                     actionError = error.localizedDescription
                 }
             }
@@ -59,7 +72,11 @@ struct ChatView: View {
     }
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
+        let flex = self.flex
         ScrollViewReader { proxy in
+         // Tabletop (FD-6): the transcript above the hinge, the composer and cards below it.
+         // One structure either way, so the transcript keeps its place when the phone folds.
+         VStack(spacing: 0) {
           // At least as tall as the space above the bottom bar, bottom-aligned:
           // a short transcript then moves up when an approval or question card
           // grows the bar, instead of staying pinned where the card now covers it.
@@ -71,12 +88,30 @@ struct ChatView: View {
                             .font(.footnote).foregroundStyle(palette.inkFaint).frame(maxWidth: .infinity)
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
-                    ForEach(chat.blocks) { b in
-                        BlockView(block: b, photos: b.isPrompt ? chat.photos(b.id) : []) { i in
-                            viewing = PhotoSet(photos: chat.photos(b.id), index: i)
+                    ForEach(TranscriptRow.of(chat.blocks)) { row in
+                        switch row {
+                        case .block(let b):
+                            BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : []) { i in
+                                viewing = PhotoSet(photos: chat.photos(b.id), index: i)
+                            }
+                            .id(b.id)
+                            // Drag a message to the other pane's composer (FD-4); it lands as text, never sent.
+                            .modifier(PaneDraggable(text: inPanes ? b.copyText : nil))
+                            .contextMenu { blockMenu(chat, b) }
+                        case .agents(let blocks):
+                            // Consecutive delegations read as one group, as on the desktop.
+                            SubagentGroup(blocks: blocks, chat: chat)
+                                .id(row.id)
+                                .contextMenu { if let first = blocks.first { blockMenu(chat, first) } }
+                        case .purpose(let purpose, let blocks, let calls):
+                            // Adjacent calls with one purpose: one row that says the goal, opening to the calls.
+                            PurposeGroupRow(purpose: purpose, blocks: blocks, calls: calls) { b in
+                                BlockView(block: b, chat: chat)
+                                    .id(b.id)
+                                    .contextMenu { blockMenu(chat, b) }
+                            }
+                            .id(row.id)
                         }
-                        .id(b.id)
-                        .contextMenu { blockMenu(chat, b) }
                     }
                     // Prompts written here that the computer doesn't have yet.
                     ForEach(chat.waiting) { item in
@@ -111,6 +146,7 @@ struct ChatView: View {
                 .frame(minHeight: geo.size.height, alignment: .bottom)
             }
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
           }
             // Follow streamed output only while the reader is at the end, and
@@ -132,30 +168,50 @@ struct ChatView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    if let a = chat.turn.approval {
-                        ApprovalCard(approval: a) { ok in try await chat.approve(ok) }.id(a.call.id)
-                    }
-                    if let q = chat.turn.question {
-                        // A new question starts with nothing picked.
-                        QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
-                    }
-                    if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
-                    PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading)
-                    // The phone's saved copy (OF-5): read-only until the computer answers.
-                    if let at = chat.savedAt {
-                        Label(SavedListNote.copy(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
-                            .font(.footnote).foregroundStyle(palette.inkSoft)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
-                            .accessibilityIdentifier("chat.savedCopy")
-                    }
-                    Composer(chat: chat)
-                }
-                .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
-                .background(.bar)
+                if flex == nil { bottomBar(chat) }
+            }
+            .frame(height: flex.map { CGFloat($0.top) })
+          if let flex {
+              // Nothing sits on the hinge.
+              Color.clear.frame(height: CGFloat(flex.gap)).accessibilityHidden(true)
+              ScrollView { bottomBar(chat) }
+                  .scrollBounceBehavior(.basedOnSize)
+                  .background(.bar)
+                  .accessibilityIdentifier("chat.flexLower")
+          }
+         }
+        }
+        // Where this chat sits in the window, for the hinge (measured under the keyboard too).
+        .background {
+            GeometryReader { g in
+                Color.clear.onChange(of: g.frame(in: .global), initial: true) { _, f in windowFrame = f }
+            }
+            .ignoresSafeArea(.keyboard)
+        }
+        // Text or a photo dragged from the other pane (or another app) goes into the message; nothing is sent.
+        .dropDestination(for: PaneDrop.self) { items, _ in
+            PaneDrop.accept(items, into: chat)
+        } isTargeted: { dropping = $0 }
+        .overlay {
+            if dropping {
+                RoundedRectangle(cornerRadius: 14).strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    .padding(6).allowsHitTesting(false).accessibilityHidden(true)
             }
         }
+        .safeAreaInset(edge: .top) {
+            if prefs.expertMode, let monitor {
+                MonitorPanel(monitor: monitor, chat: chat).background(.bar)
+            }
+        }
+        // Expert mode re-reads the hardware every few seconds, only while it's on and the chat is on screen.
+        .task(id: prefs.expertMode) {
+            guard prefs.expertMode else { return }
+            let m = monitor ?? HardwareMonitorModel(store: store)
+            monitor = m
+            await m.follow()
+        }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) { ModeToggle() }
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 0) {
                     Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -214,6 +270,38 @@ struct ChatView: View {
         .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
+    }
+
+    /// The approval and question cards, the queue, the PR chip and the composer.
+    private func bottomBar(_ chat: ChatModel) -> some View {
+        VStack(spacing: 8) {
+            if let a = chat.turn.approval {
+                ApprovalCard(approval: a) { ok in try await chat.approve(ok) }.id(a.call.id)
+            }
+            if let q = chat.turn.question {
+                // A new question starts with nothing picked.
+                QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
+            }
+            if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
+            PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading)
+            // The phone's saved copy (OF-5): read-only until the computer answers.
+            if let at = chat.savedAt {
+                Label(SavedListNote.copy(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
+                    .font(.footnote).foregroundStyle(palette.inkSoft)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+                    .accessibilityIdentifier("chat.savedCopy")
+            }
+            Composer(chat: chat, openTerminals: { showTerminals = true })
+        }
+        .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
+        .background(.bar)
+    }
+
+    /// Tabletop: where the hinge cuts this chat, when the pane host passes one and it falls inside.
+    private var flex: PaneFlex? {
+        guard let h = paneHinge else { return nil }
+        return PaneFlex(hingeMinY: Double(h.minY), hingeMaxY: Double(h.maxY),
+                        frameMinY: Double(windowFrame.minY), frameHeight: Double(windowFrame.height))
     }
 
     /// Copy, and fork: a prompt comes back in a new chat to edit and send; a reply keeps the chat up to there.
@@ -323,40 +411,79 @@ struct WaitingRow: View {
 
 func modeName(_ m: PcSettings.ChatMode) -> String {
     switch m {
-    case .ask: return "Ask before every tool"
-    case .guardrails: return "Guardrails (ask for risky tools)"
-    case .yolo: return "YOLO (never ask)"
+    case .ask: return String(localized: "Ask before every tool")
+    case .guardrails: return String(localized: "Guardrails (ask for risky tools)")
+    case .yolo: return String(localized: "YOLO (never ask)")
+    }
+}
+
+/// The transcript's rows: each block on its own, except adjacent calls with one
+/// purpose, which are one row that says the goal (spec/chat/tool-calls-grouped-by-purpose.md).
+/// A run of delegations is the Delegate purpose, drawn as the subagent group.
+enum TranscriptRow: Identifiable {
+    case block(Block)
+    case agents([Block])
+    case purpose(ToolPurpose, [Block], [PurposeCall])
+
+    var id: String {
+        switch self {
+        case .block(let b): return b.id
+        case .agents(let blocks): return "agents-" + (blocks.first?.id ?? "")
+        case .purpose(_, let blocks, _): return "purpose-" + (blocks.first?.id ?? "")
+        }
+    }
+
+    static func of(_ blocks: [Block]) -> [TranscriptRow] {
+        Purpose.group(blocks, role: Purpose.role(of:)).map { run in
+            switch run {
+            case .single(let b):
+                return .block(b)
+            case .group(let purpose, let items, let calls):
+                let subagents = items.allSatisfy { b in
+                    if case .tool(_, let name, _, _, _, _) = b { return name == AgentRows.subagentTool }
+                    return false
+                }
+                return purpose == .delegate && subagents ? .agents(items) : .purpose(purpose, items, calls)
+            }
+        }
     }
 }
 
 struct BlockView: View {
     let block: Block
+    /// The chat, for rows that read more than the block (watch chips, subagent children). Nil in previews.
+    var chat: ChatModel? = nil
     /// A prompt's photos as the computer sent them (small copies; `""` for one it kept back).
     var photos: [String] = []
     var openPhoto: (Int) -> Void = { _ in }
     @Environment(\.palette) private var palette
-    @State private var expanded = false
     @State private var showReasoning = false
 
     var body: some View {
         switch block {
-        case .user(_, let text, _, let images):
-            HStack {
-                Spacer(minLength: 48)
-                VStack(alignment: .trailing, spacing: 4) {
-                    // No text selection here: touch and hold opens the menu (Copy, Edit in a new chat).
-                    Text(text).foregroundStyle(palette.userInk)
-                    if photos.contains(where: { !$0.isEmpty }) {
-                        PhotoStrip(photos: photos, open: openPhoto)
-                    } else if images > 0 {
-                        Label(images == 1 ? "1 image" : "\(images) images", systemImage: "photo").font(.caption2).foregroundStyle(palette.userInk.opacity(0.8))
+        case .user(_, let text, let at, let images):
+            if images == 0, let wake = AgentRows.parseWake(text) {
+                // A watch's wake-up is a step of the run, not something the user typed.
+                WatchWakeRow(wake: wake, content: text, at: at)
+            } else {
+                HStack {
+                    Spacer(minLength: 48)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        // Markdown, as on the desktop (T101). No text selection here: touch and
+                        // hold opens the menu (Copy, Edit in a new chat); a table keeps its own menu.
+                        MarkdownText(text: text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
+                        if photos.contains(where: { !$0.isEmpty }) {
+                            PhotoStrip(photos: photos, open: openPhoto)
+                        } else if images > 0 {
+                            Label(images == 1 ? "1 image" : "\(images) images", systemImage: "photo").font(.caption2).foregroundStyle(palette.userInk.opacity(0.8))
+                        }
                     }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
                 }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(images > 0 ? "You: \(text), with \(images == 1 ? "1 image" : "\(images) images")" : "You: \(text)")
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(images > 0 ? "You: \(text), with \(images == 1 ? "1 image" : "\(images) images")" : "You: \(text)")
         case .assistant(_, let text, let reasoning, let streaming, let interrupted):
             VStack(alignment: .leading, spacing: 6) {
                 if let reasoning, !reasoning.isEmpty {
@@ -366,60 +493,26 @@ struct BlockView: View {
                         Label(streaming && text.isEmpty ? "Thinking…" : "Thought", systemImage: "brain").font(.footnote).foregroundStyle(palette.inkFaint)
                     }
                 }
-                if !text.isEmpty { MarkdownText(text: text).foregroundStyle(palette.ink) }
+                if !text.isEmpty {
+                    if let chat {
+                        // Links route to the preview window or Safari; linked files and pages get cards (#1095).
+                        AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId)
+                    } else {
+                        MarkdownText(text: text).foregroundStyle(palette.ink)
+                    }
+                }
                 if interrupted { Label("Interrupted", systemImage: "pause.circle").font(.caption).foregroundStyle(palette.warning) }
             }
-        case .tool(_, _, let label, let status, let output):
-            VStack(alignment: .leading, spacing: 6) {
-                Button {
-                    if output != nil { withAnimation(.snappy) { expanded.toggle() } }
-                } label: {
-                    HStack(spacing: 8) {
-                        statusIcon(status)
-                        // Two lines collapsed: one line truncated even short commands by a fraction of a point.
-                        Text(label).font(.footnote.monospaced()).foregroundStyle(palette.inkSoft).lineLimit(expanded ? nil : 2)
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 0)
-                        if output != nil { Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(palette.inkFaint) }
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(label), \(statusName(status))")
-                .accessibilityValue(output == nil ? "" : (expanded ? "Output shown" : "Output hidden"))
-                .accessibilityHint(output == nil ? "" : "Shows or hides the output")
-                if expanded, let output {
-                    let split = Transcript.splitNotes(output)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        Text(split.0.isEmpty ? "(no output)" : split.0).font(.caption.monospaced()).foregroundStyle(palette.ink)
-                            .textSelection(.enabled).fixedSize(horizontal: true, vertical: false).padding(10)
-                    }
-                    .frame(maxHeight: 280)
-                    .background(palette.code, in: RoundedRectangle(cornerRadius: 8))
-                    ForEach(split.1, id: \.self) { Text($0).font(.caption2).foregroundStyle(palette.inkFaint) }
-                }
+        case .tool(_, let name, let label, let status, let output, let input):
+            // The agent's work, drawn as the desktop draws it: no fill, no stroke, one line each.
+            switch name {
+            case AgentRows.watchTool:
+                WatchRow(input: input, status: status, output: output, watches: chat?.watches ?? [])
+            case AgentRows.subagentTool:
+                if let chat { SubagentRow(input: input, status: status, output: output, chat: chat) } else { ToolRow(label: label, status: status, output: output) }
+            default:
+                ToolRow(label: label, status: status, output: output)
             }
-            .padding(10)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
-            .accessibilityElement(children: .combine)
-        }
-    }
-
-    private func statusName(_ s: ToolStatus) -> String {
-        switch s {
-        case .running: return "running"
-        case .waiting: return "waiting for you"
-        case .ok: return "done"
-        case .error: return "failed"
-        }
-    }
-
-    @ViewBuilder private func statusIcon(_ s: ToolStatus) -> some View {
-        switch s {
-        case .running: ProgressView().controlSize(.mini)
-        case .waiting: Image(systemName: "hand.raised.fill").foregroundStyle(palette.warning)
-        case .ok: Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.success)
-        case .error: Image(systemName: "xmark.octagon.fill").foregroundStyle(palette.danger)
         }
     }
 }
@@ -465,8 +558,8 @@ struct ApprovalCard: View {
             .disabled(busy)
         }
         .padding(14)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.5)))
+        // A card, because it needs you; tinted by its risk rather than outlined.
+        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.09))) }
         // The haptic comes from AppModel, per the user's vibration setting; VoiceOver gets told here.
         .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
     }
@@ -536,8 +629,7 @@ struct QuestionCard: View {
                 .disabled(!ready || busy)
         }
         .padding(14)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.accent.opacity(0.4)))
+        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(palette.accent.opacity(0.07))) }
     }
 
     private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
@@ -590,9 +682,14 @@ struct FlowOptions: View {
 /// on release. VoiceOver can't hold, so its double-tap starts and the next one stops.
 struct HoldToTalkButton: View {
     let dictation: Dictation
+    let gate: VoiceIntroGate
     @Environment(ComputersStore.self) private var store
+    @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
-    @State private var down = false
+    /// Resets when the gesture is cancelled too (the video's sheet coming up mid-press), so no press is swallowed.
+    @GestureState private var down = false
+    /// This press showed the video instead of listening, so its release has nothing to stop.
+    @State private var introduced = false
 
     var body: some View {
         Image(systemName: dictation.recording ? "waveform.circle.fill" : "mic.fill")
@@ -602,16 +699,17 @@ struct HoldToTalkButton: View {
             .contentShape(Rectangle())
             .scaleEffect(down ? 1.15 : 1)
             .animation(.easeOut(duration: 0.12), value: down)
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard !down else { return }
-                    down = true
-                    Task { await dictation.press(store: store) }
+            .gesture(DragGesture(minimumDistance: 0).updating($down) { _, pressed, _ in pressed = true })
+            // Down, and up whether released or cancelled.
+            .onChange(of: down) { _, pressed in
+                if pressed {
+                    introduced = gate.intercept(prefs)
+                    if !introduced { Task { await dictation.press(store: store) } }
+                } else {
+                    if !introduced { Task { await dictation.letGo(store: store) } }
+                    introduced = false
                 }
-                .onEnded { _ in
-                    down = false
-                    Task { await dictation.letGo(store: store) }
-                })
+            }
             .accessibilityElement()
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(dictation.recording ? "Stop dictation" : "Dictate")
@@ -619,15 +717,18 @@ struct HoldToTalkButton: View {
             .accessibilityIdentifier("composer.holdToTalk")
             .accessibilityAction {
                 Task {
-                    if dictation.recording { await dictation.finish(store: store) } else { await dictation.start(store: store) }
+                    if dictation.recording { dictation.stopListening() } else if !gate.intercept(prefs) { await dictation.start(store: store, holding: true) }
                 }
             }
     }
 }
 
-/// Text, the computer's skills (`/`), photos, dictation, Send / Stop.
+/// Text, the computer's skills (`/`), photos, dictation, Send / Stop, with + and Send inside the box.
 struct Composer: View {
     let chat: ChatModel
+    /// + → Terminal: the chat's terminals sheet.
+    var openTerminals: () -> Void = {}
+    @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
     @State private var text = ""
@@ -635,12 +736,19 @@ struct Composer: View {
     /// A saved prompt from the computer, run with what's typed after it.
     @State private var prompt: SavedPrompt?
     @State private var photos: [PhotosPickerItem] = []
+    @State private var pickingPhotos = false
     @State private var images: [String] = []
     @State private var loadingPhotos = false
     @State private var error: String?
     @State private var dictation = Dictation()
+    /// "Nekko, ..." commands in what is dictated, and the words for the message box.
+    @State private var voice = VoiceRunner()
+    /// The first tap of the mic shows the how-voice-works video instead of listening.
+    @State private var intro = VoiceIntroGate()
+    @Environment(\.scenePhase) private var phase
     @Environment(Prefs.self) private var prefs
-    @FocusState private var focused: Bool
+    /// The message box has the keyboard (its formatting toolbar shows then).
+    @State private var focused = false
     /// Why the computer turned down the prompt now in the box (it came back from the outbox).
     @State private var refusal: String?
     /// The draft as last saved from here: a different one in the store was handed back (Edit, a refusal).
@@ -724,84 +832,120 @@ struct Composer: View {
                     }
                 }
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    if !store.pcSettings.prompts.isEmpty {
-                        Menu {
-                            ForEach(store.pcSettings.prompts) { p in Button("/\(p.name)") { prompt = p; skill = nil } }
-                        } label: { Label("Saved prompts", systemImage: "text.badge.star") }
+            // One box the width of the screen: the message on top, + and Send inside it below.
+            VStack(alignment: .leading, spacing: 0) {
+                // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
+                // "Hide keyboard" action is on the text view itself.
+                MarkdownComposerField(text: $text, focused: $focused,
+                                      placeholder: chat.running ? "Queue a follow-up" : "Message",
+                                      onPasteImages: pasteImages, boxed: false)
+                    .padding(.horizontal, 12).padding(.top, 10)
+                HStack(alignment: .center, spacing: 4) {
+                    Menu {
+                        // As on the desktop: another agent or a terminal beside this one, or a photo for this message.
+                        Button { app.newChatRequested = true } label: { Label("New agent", systemImage: "plus.bubble") }
+                            .accessibilityIdentifier("composer.newAgent")
+                        Button(action: openTerminals) { Label("Terminal", systemImage: "terminal") }
+                            .disabled(chat.savedAt != nil)
+                            .accessibilityIdentifier("composer.terminal")
+                        Divider()
+                        if !store.pcSettings.prompts.isEmpty {
+                            Menu {
+                                ForEach(store.pcSettings.prompts) { p in Button("/\(p.name)") { prompt = p; skill = nil } }
+                            } label: { Label("Saved prompts", systemImage: "text.badge.star") }
+                        }
+                        if !chat.skills.isEmpty {
+                            Menu {
+                                ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
+                            } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
+                        }
+                        // A PhotosPicker inside a Menu never opens its sheet: the menu closing dismisses it.
+                        Button { pickingPhotos = true } label: { Label("Photos", systemImage: "photo.on.rectangle") }
+                        // Asked for by the user, so iOS shows its paste prompt only then.
+                        Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
+                            .disabled(!UIPasteboard.general.hasImages)
+                    } label: {
+                        Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }
-                    if !chat.skills.isEmpty {
-                        Menu {
-                            ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
-                        } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
+                    .accessibilityLabel("Add")
+                    .accessibilityIdentifier("composer.add")
+                    Spacer(minLength: 0)
+                    // Listening (tap mode) keeps its stop button while earlier segments are transcribed.
+                    if dictation.recording && !prefs.dictationHold {
+                        Button { dictation.stopListening() } label: {
+                            Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Stop dictation")
+                        .accessibilityIdentifier("composer.stopDictation")
+                    } else if dictation.starting && !prefs.dictationHold {
+                        // Permissions or the computer are being asked; a second tap would open a second microphone.
+                        ProgressView().frame(width: 44, height: 44).accessibilityLabel("Starting dictation")
+                            .accessibilityIdentifier("composer.dictationStarting")
+                    } else if dictation.transcribing {
+                        ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
+                    } else if prefs.dictationHold && dictation.available {
+                        HoldToTalkButton(dictation: dictation, gate: intro)
+                    } else if dictation.available {
+                        Button { if !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } } } label: {
+                            Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Dictate")
+                        .accessibilityHint("Keeps listening until you tap stop. Start with Nekko for a command, like Nekko, send it.")
+                        .accessibilityIdentifier("composer.dictate")
                     }
-                    PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
-                        Label("Photos", systemImage: "photo.on.rectangle")
+                    // Stop while running with nothing to queue; a photo or skill alone can be queued.
+                    if chat.running && !hasContent {
+                        Button { chat.abort() } label: {
+                            Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
+                                .background(palette.danger, in: Circle()).foregroundStyle(.white)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }.accessibilityLabel("Stop")
+                    } else if chat.sendsLater {
+                        // Offline: the prompt waits on this iPhone (the outbox) and goes when the computer is back.
+                        Button { send() } label: {
+                            Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
+                                .padding(.horizontal, 12).frame(minHeight: 36)
+                                .background(canSend ? palette.accent : palette.surface2, in: Capsule())
+                                .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                                .frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!canSend)
+                        .accessibilityIdentifier("chat.sendLater")
+                    } else {
+                        Button { send() } label: {
+                            Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
+                                .background(canSend ? palette.accent : palette.surface2, in: Circle())
+                                .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .disabled(!canSend)
+                        .accessibilityLabel(chat.running ? "Queue" : "Send")
                     }
-                    // Asked for by the user, so iOS shows its paste prompt only then.
-                    Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
-                        .disabled(!UIPasteboard.general.hasImages)
-                } label: {
-                    Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
-                .accessibilityLabel("Add")
-                TextField(chat.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
-                    .lineLimit(1...6)
-                    .accessibilityIdentifier("chat.message")
-                    .focused($focused)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
-                if dictation.transcribing {
-                    ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
-                } else if prefs.dictationHold && dictation.available && (text.isEmpty || dictation.recording) {
-                    HoldToTalkButton(dictation: dictation)
-                } else if dictation.available && text.isEmpty && !dictation.recording {
-                    Button { Task { await dictation.start(store: store) } } label: {
-                        Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Dictate")
-                } else if dictation.recording {
-                    Button { Task { await dictation.finish(store: store) } } label: {
-                        Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Stop dictation")
-                }
-                // Stop while running with nothing to queue; a photo or skill alone can be queued.
-                if chat.running && !hasContent {
-                    Button { chat.abort() } label: {
-                        Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
-                            .background(palette.danger, in: Circle()).foregroundStyle(.white)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Stop")
-                } else if chat.sendsLater {
-                    // Offline: the prompt waits on this iPhone (the outbox) and goes when the computer is back.
-                    Button(action: send) {
-                        Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
-                            .padding(.horizontal, 12).frame(minHeight: 36)
-                            .background(canSend ? palette.accent : palette.surface2, in: Capsule())
-                            .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
-                            .frame(minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canSend)
-                    .accessibilityIdentifier("chat.sendLater")
-                } else {
-                    Button(action: send) {
-                        Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
-                            .background(canSend ? palette.accent : palette.surface2, in: Circle())
-                            .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }
-                    .disabled(!canSend)
-                    .accessibilityLabel(chat.running ? "Queue" : "Send")
-                }
+                .padding(.horizontal, 4).padding(.bottom, 2)
+            }
+            .frame(maxWidth: .infinity)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
+            // The chat's model and effort, and its context window: in Simple and Expert alike.
+            HStack(spacing: 0) {
+                ModelEffortButton(chat: chat)
+                Spacer(minLength: 8)
+                ContextGauge(chat: chat)
+            }
+            .padding(.top, -4)
+            if let pending = voice.pending { voicePending(pending) }
+            if let said = voice.notice {
+                Text(said.text).font(.caption2).foregroundStyle(palette.inkSoft).accessibilityIdentifier("composer.voiceNotice")
             }
             if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
             else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
         }
+        .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
         // Send waits for the photos (it used to send without them, and they came back later).
         .task(id: photos) {
             guard !photos.isEmpty else { return }
@@ -819,12 +963,41 @@ struct Composer: View {
         .onChange(of: refusal) { _, _ in saveDraft() }
         // Edit on a waiting prompt, or a refusal: the prompt comes back into the box.
         .onChange(of: store.drafts.drafts[chat.sessionId]) { _, d in adopt(d) }
-        // Tapped stop or hit the 30-second limit: the words go into the message, never sent.
-        .onChange(of: dictation.result) { _, r in if let r { text += (text.isEmpty ? "" : " ") + r.text } }
+        .onAppear(perform: bindVoice)
+        // The Live Activity's mic on iOS 17 opens this chat listening (tap mode only: a hold needs
+        // a finger), once the app is unlocked and the chat list has this chat.
+        .onChange(of: app.listenIn, initial: true) { _, _ in takeListen() }
+        .onChange(of: app.lock.locked) { _, _ in takeListen() }
+        .onChange(of: store.summariesLoaded) { _, _ in takeListen() }
+        .sheet(isPresented: $intro.showing, onDismiss: {
+            // Turn on is the one way out that listens: in hold mode there is no hold to start from.
+            intro.closed(prefs) { if !prefs.dictationHold { Task { await dictation.startListening(store: store) } } }
+        }) { VoiceIntroView(onTurnOn: intro.turnOn) }
+        .onChange(of: dictation.recording) { _, on in
+            if on { return voice.started() }
+            let afterHold = dictation.released
+            Task { await voice.stopped(afterHold: afterHold, after: dictation.drain) }
+        }
+        // Listening never outlives the screen: lock, app switch, or leaving the chat stops it, and it never restarts by itself.
+        .onChange(of: phase) { _, p in if Dictation.leavesScreen(p, starting: dictation.starting) { dictation.abort() } }
+        .onDisappear(perform: unbindVoice)
+        .task(id: voice.notice) {
+            guard let said = voice.notice else { return }
+            try? await Task.sleep(for: .seconds(4))
+            voice.clearNotice(said.id)
+        }
         // "Ask about this" in Changes: the quote goes after what's typed, never sent.
         .onChange(of: chat.insert) { _, q in
             guard q != nil, let quote = chat.takeInsert() else { return }
             text += (text.isEmpty || text.hasSuffix("\n") ? "" : "\n\n") + quote
+        }
+        // A photo dropped on the chat (from the other pane): into the message, at most four, never sent.
+        .onChange(of: chat.insertImages) { _, dropped in
+            guard !dropped.isEmpty else { return }
+            let taken = chat.takeImages()
+            let room = max(0, 4 - images.count)
+            images += taken.prefix(room)
+            if taken.count > room { error = "A message takes four photos at most." }
         }
         // A prompt that never reached the computer comes back, with its skill and photos.
         .onChange(of: chat.unsent) { _, u in
@@ -906,7 +1079,103 @@ struct Composer: View {
         return chat.skills.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(8).map { $0 }
     }
 
-    private func send() {
+    /// A confirm or a choice from a voice command: answered by voice or a tap.
+    private func voicePending(_ p: VoiceRunner.Pending) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(p.message).font(.caption).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+            if p.confirm {
+                HStack {
+                    Button("Confirm") { answer(.yes) }.buttonStyle(.borderedProminent).accessibilityIdentifier("composer.voiceConfirm")
+                    Button("Cancel") { answer(.no) }.buttonStyle(.bordered)
+                }
+                .frame(minHeight: 44)
+            } else {
+                ForEach(Array(p.options.enumerated()), id: \.offset) { i, o in
+                    Button { answer(.pick(i + 1)) } label: {
+                        Text(o.label).font(.footnote).lineLimit(1).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).foregroundStyle(palette.accent)
+                }
+                Button("Cancel") { answer(.no) }.font(.footnote).frame(minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityIdentifier("composer.voicePending")
+    }
+
+    /// Each segment once, in order, while this composer is on screen: words into the message, "Nekko, ..." commands run.
+    private func bindVoice() {
+        let store = store, id = chat.sessionId
+        voice.park = nil
+        dictation.park = { Self.park($0, in: id, store.drafts) }
+        dictation.sink = { words in
+            voice.host = voiceHost
+            Task { await voice.hear([words]) }
+        }
+    }
+
+    private func takeListen() {
+        guard app.takeListen(chat.sessionId) else { return }
+        if !prefs.dictationHold, dictation.available, !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } }
+    }
+
+    /// The chat closed: listening stops, and words still on their way go to its saved draft as plain text.
+    private func unbindVoice() {
+        dictation.sink = nil
+        voice.park = dictation.park
+        dictation.stopListening()
+    }
+
+    /// Words for a chat whose composer is not on screen: after its saved draft, which the composer shows when it opens.
+    static func park(_ words: String, in chatId: String, _ drafts: DraftStore) {
+        var d = drafts.draft(chatId)
+        d.text += (d.text.isEmpty || d.text.last?.isWhitespace == true ? "" : " ") + words
+        drafts.set(chatId, d)
+    }
+
+    private func answer(_ intent: VoiceIntent) {
+        voice.host = voiceHost
+        Task { await voice.answer(intent) }
+    }
+
+    /// What voice commands act on: this composer, this chat, and the app's routes.
+    private var voiceHost: VoiceRunner.Host {
+        let chat = chat, store = store, app = app
+        return VoiceRunner.Host(
+            text: $text,
+            send: { canSend ? await send().value : false },
+            toast: { AccessibilityNotification.Announcement($0).post() },
+            tap: { Haptics.tap() },
+            chats: { store.summaries.filter(\.isVisible) },
+            open: { app.openChat = $0 },
+            park: { Self.park($0, in: chat.sessionId, store.drafts) },
+            newChat: { app.newChatRequested = true },
+            openSettings: { app.openSettings = true },
+            status: {
+                let lane = switch store.activity[chat.sessionId] {
+                case .needsYou: "Needs you"
+                case .running: "Working"
+                case nil: chat.running ? "Working" : "Idle"
+                }
+                let watching = chat.watches.contains { $0.kind == .pr && $0.status == .active }
+                return "\(chat.title): \(lane)\(watching ? ", Watching PR" : "")"
+            },
+            ship: { VoiceRunner.ShipFacts(prs: try await chat.pullRequests(refresh: true), running: chat.running, question: chat.turn.question) },
+            merge: { pr in
+                let r = await GitModel(store: store, chatId: chat.sessionId).prAction(pr.url, .merge)
+                if r?.ok == true { return nil }
+                return r.map { $0.message.isEmpty ? "Git refused it." : $0.message } ?? "Couldn’t merge \(VoiceRunner.label(pr))."
+            },
+            answer: { q, note in try await chat.answer(q.questions.map { AskAnswer(questionId: $0.id, labels: [], note: note) }) },
+            complete: { try await store.completeChat(chat.sessionId) },
+            title: { chat.title })
+    }
+
+    /// Sends what is in the box; the task says whether the computer took it (a refusal puts the text back).
+    @discardableResult
+    private func send() -> Task<Bool, Never> {
         var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var s = skill
         // "/name rest" typed out in full runs that skill.
@@ -936,16 +1205,19 @@ struct Composer: View {
         // The prompt is on disk in the outbox from here until the computer lists it.
         store.drafts.clear(chat.sessionId)
         lastSaved = nil
-        Task {
+        return Task {
             do {
                 try await chat.send(sentBody, skill: sentSkill, images: sentImages)
                 Haptics.tap()
+                return true
             } catch {
                 self.error = error.localizedDescription
-                text = saved
+                // Words dictated since stay after the refused message.
+                text = text.isEmpty ? saved : saved + " " + text
                 skill = sentSkill
                 prompt = sentPrompt
                 images = sentImages
+                return false
             }
         }
     }

@@ -87,8 +87,9 @@ export interface OnboardingState {
 /** Bump when the wizard's steps change enough that existing users should see it again. */
 export const ONBOARDING_VERSION = 1;
 
-export type WallLayoutMode = 'grid' | 'focus' | 'fixed';
-export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number }
+export type WallLayoutMode = 'grid' | 'focus';
+/** `fixedGrid`: Dynamic draws even rows and columns (`rows` x `cols`) instead of the free-form split tree. */
+export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number; fixedGrid?: boolean }
 export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
 export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware' | 'localModels';
 export interface MonitorsDock {
@@ -100,7 +101,7 @@ export interface MonitorsDock {
   /** Independent minimization state for each monitor. */
   minimized: Record<MonitorKey, boolean>;
 }
-export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2 };
+export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13
@@ -116,7 +117,7 @@ export function sanitizeMonthlyBudgetUsd(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
-/** The saved Command Center wall; `root` is the renderer's split tree (`layout.ts`), checked on load. */
+/** The saved Agent board wall; `root` is the renderer's split tree (`layout.ts`), checked on load. */
 export interface CommandWallSetting {
   /** Agent tab placement, independent of window layout. */
   tabs?: 'top' | 'left' | 'hidden';
@@ -136,6 +137,12 @@ export interface CommandWallSetting {
   composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right'; width?: number; height?: number };
   /** Snap to grid: the wall keeps its windows evenly spaced. Absent means off. */
   snap?: boolean;
+  /** The board is laid out in zones. Absent on a wall saved before zones, which is migrated once. */
+  zones?: boolean;
+  /** The pane id of the active zone. */
+  activeZone?: string | null;
+  /** The zones intro has been seen. */
+  zonesIntro?: boolean;
 }
 
 /**
@@ -208,6 +215,8 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /** Default off: continuing a model request after internet restoration can incur charges. */
+  autoResumeOnInternetRestore?: boolean;
   /** Default on: request provider prompt/KV reuse, never store prompts on disk. */
   promptCaching?: boolean;
   voice?: import('./voice.js').VoiceSettings;
@@ -224,13 +233,29 @@ export interface AppSettings {
    * merged is removed in the background when it is clean and its chat is idle.
    */
   gitManagement?: { mode?: 'worktree' | 'shared'; baseline?: 'head' | 'local-changes'; removeMerged?: boolean };
+  /**
+   * Work tracking (Settings > Project management). `createIssue` is on unless
+   * false. The include choices are unset until the user answers; unset means the
+   * agent asks the first time.
+   */
+  projectManagement?: { createIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean; includeContext?: boolean };
+  /** Settings > Pull requests. `linkIssue` is on unless false; includes as above. */
+  pullRequests?: { linkIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean };
   theme: ThemeMode;
   navOrder?: string[];
+  /** Optional sidebar shortcuts. Both remain available from Settings. */
+  sidebarViews?: { skills?: boolean; connectors?: boolean };
   accent: string;
   /** Secondary accent used for the brand gradient and border beam. */
   accent2?: string;
   /** Selected theme preset id (`system`, `nebula`, `terminal`, etc.). */
   themePreset?: string;
+  /** Settings > Style: the interface font family; unset is Inter Tight, the website's. */
+  fontSans?: string;
+  /** Settings > Style: the code font family; unset is JetBrains Mono, the website's. */
+  fontMono?: string;
+  /** Settings > Style: interface scale in percent; unset is 100. */
+  textScale?: number;
   sandboxMode: SandboxMode;
   providers: ProviderConfig[];
   guardrails: GuardrailRule[];
@@ -271,6 +296,12 @@ export interface AppSettings {
   savedModes?: import('./saved-modes.js').SavedMode[];
   /** The saved mode new chats start in. Unset = new chats keep the last-used defaults. */
   defaultSavedModeId?: string;
+  /** Last changed Mode choices, merged by field by the daemon, snapshotted for new chats. Null clears a choice. */
+  defaultSessionOptions?: Partial<Pick<import('./chat.js').Session,
+    'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'cloudOnly' | 'incognito' |
+    'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' |
+    'memory' | 'guidance' | 'toolApproach' | 'autoModel' | 'autoProviderSwitch'>>;
+
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
   completionTipSeen?: boolean;
@@ -283,9 +314,15 @@ export interface AppSettings {
   skipDeleteConfirmation?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a
-   * chat (Settings → Remote access). Off unless set. Phones can never accept,
+   * chat (Settings → Remote access). On by default; only `false` turns it off. Phones can never accept,
    * revert or edit changes, read other files or open terminals.
    */
+  /**
+   * SK-3: whether a paired phone may quit Nekko Agent on this computer
+   * (`app:quit`, reported in `app:info`). Off unless the owner turns it on in
+   * Settings → Remote access; never settable from a phone.
+   */
+  quitFromPhone?: boolean;
   phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
@@ -337,6 +374,13 @@ export interface AppSettings {
    */
   automationsPaused?: boolean;
   /**
+   * The run policy for tasks and workflows that set none. Absent: wait for
+   * idle on a local model, run at once on a cloud one. `null` clears it.
+   */
+  automationRunPolicy?: import('./tasks.js').AutomationRunPolicy | null;
+  /** Minutes without input before the user counts as away (default 5). */
+  automationIdleMinutes?: number;
+  /**
    * Lifecycle hooks: your own commands run around the agent's actions, with
    * the event as JSON on stdin (see crates/nekko-tools/src/hooks.rs).
    */
@@ -372,11 +416,11 @@ export interface AppSettings {
   /** Experimental feature toggles (Settings → Experimental). Off = surface hidden. */
   experimental?: ExperimentalFlags;
   /** Desktop developer controls; absent means disabled. */
-  developer?: { serverControls?: boolean; chat?: boolean };
+  developer?: { serverControls?: boolean };
   /** First-run setup wizard progress (undefined on installs that predate it). */
   onboarding?: OnboardingState;
   /**
-   * The Command Center wall: the split tree of windows and the toolbar
+   * The Agent board wall: the split tree of windows and the toolbar
    * switches, as the renderer saves them, so the desktop, web and phone
    * editions of one install show the same wall. The renderer validates the
    * tree field by field on load, hence the loose type here.
@@ -387,6 +431,10 @@ export interface AppSettings {
    * enabled with an explicit allowlist of chat ids. See messaging.ts.
    */
   messaging?: import('./messaging.js').MessagingSettings;
+  /** Settings > Connections: All connections off, and the connections switched off one by one. See connections.ts. */
+  connections?: import('./connections.js').ConnectionSettings;
+  /** Opt-in usage and crash reports (crates/nekkod/src/telemetry.rs). Off unless turned on; `installId` is random and replaced each time it is turned on. */
+  telemetry?: { enabled?: boolean; installId?: string };
 }
 
 /**

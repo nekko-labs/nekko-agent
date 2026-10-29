@@ -209,7 +209,7 @@ struct App {
 impl ApiServer {
     /// Bring the server in line with the saved settings. Safe to call repeatedly.
     pub async fn sync(&self, ctx: &Ctx, settings: &Value) {
-        let enabled = nekko_js::truthy(settings.get("enabled"));
+        let enabled = nekko_js::truthy(settings.get("enabled")) && nekko_net::allowed("api-server");
         {
             let live = lock(&self.live);
             if enabled && live.running.is_some() && live.applied.as_ref() == Some(&applied_of(settings)) {

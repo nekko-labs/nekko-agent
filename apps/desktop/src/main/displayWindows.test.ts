@@ -3,13 +3,13 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { pickWindowForAgent, readDisplayPrefs, swipeBounds, SWIPE_EDGE } from '../displayWindows.js';
-import { CLAIM_GRACE_MS, createDisplayWindows, type ScreenDisplay, type ScreenWindow } from './displayWindows.js';
+import { CLAIM_GRACE_MS, createDisplayWindows, type ScreenDisplay, type ScreenWindow, type SpacesApi } from './displayWindows.js';
 
 const area = (x: number) => ({ x, y: 0, width: 1920, height: 1040 });
 const display = (id: number, x: number): ScreenDisplay => ({ id, bounds: { ...area(x), height: 1080 }, workArea: area(x), scaleFactor: 1 });
 
 /** A fake clock + screen + windows, driven by hand. */
-function rig(displays: ScreenDisplay[], saved?: unknown) {
+function rig(displays: ScreenDisplay[], saved?: unknown, spaces?: SpacesApi) {
   const dataDir = mkdtempSync(join(tmpdir(), 'displays-'));
   if (saved) writeFileSync(join(dataDir, 'display-windows.json'), JSON.stringify(saved));
   let clock = 0;
@@ -45,6 +45,7 @@ function rig(displays: ScreenDisplay[], saved?: unknown) {
     createWindow: (id, b) => { const w = new FakeWindow(id, b); made.push(w); return w; },
     broadcast: () => { broadcasts.push(clock); },
     placed: (key, s) => placed.push([key, s]),
+    spaces,
     setTimer: (fn, ms) => { const t = { at: clock + ms, fn }; timers.push(t); return t; },
     clearTimer: (t) => { (t as { dead?: boolean }).dead = true; },
     now: () => clock,
@@ -71,8 +72,8 @@ describe('multi-monitor placement policy', () => {
   });
 
   it('reads saved prefs defensively', () => {
-    expect(readDisplayPrefs(null)).toEqual({ enabled: [], placement: 'empty-first' });
-    expect(readDisplayPrefs({ enabled: ['2', 2, '2', ''], placement: 'main-first' })).toEqual({ enabled: ['2'], placement: 'main-first' });
+    expect(readDisplayPrefs(null)).toEqual({ enabled: [], placement: 'empty-first', spacesMode: 'ask' });
+    expect(readDisplayPrefs({ enabled: ['2', 2, '2', ''], placement: 'main-first' })).toEqual({ enabled: ['2'], placement: 'main-first', spacesMode: 'ask' });
   });
 
   it('swipes in from the left edge and out into the right edge', () => {
@@ -166,5 +167,96 @@ describe('screen windows', () => {
     const late = dw.claim(made[0].webContents.id, 'y', 'auto');
     advance(CLAIM_GRACE_MS);
     await expect(late).resolves.toBe('main');
+  });
+});
+
+/** A fake Mission Control: desktops 1-3, Accessibility on or off, switches recorded. */
+function fakeSpaces(trusted = false) {
+  const fake = { current: '1', desktops: ['1', '2', '3'], trusted, prompted: 0, switches: [] as Array<[number, number]>, listener: (() => {}) as () => void };
+  const api: SpacesApi = {
+    read: async () => ({ current: fake.current, desktops: fake.desktops }),
+    trusted: (prompt) => { if (prompt) fake.prompted++; return fake.trusted; },
+    switchTo: async (from, to) => { fake.switches.push([from, to]); },
+    onChange: (l) => { fake.listener = l; },
+  };
+  const go = async (sid: string) => { fake.current = sid; fake.listener(); await flush(); };
+  return { fake, api, go };
+}
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
+describe('macOS desktops (Spaces)', () => {
+  it('lists desktops once there are two, the main window\'s marked and always on', async () => {
+    const { api } = fakeSpaces();
+    const r = rig([display(1, 0)], undefined, api);
+    r.dw.start(); await flush();
+    const spaces = r.dw.state(r.main.webContents.id).spaces!;
+    expect(spaces.mode).toBe('ask');
+    expect(spaces.desktops.map((d) => [d.id, d.label, d.main, d.current, d.enabled, d.self])).toEqual([
+      ['space-1', '1', true, true, true, true], ['space-2', '2', false, false, false, false], ['space-3', '3', false, false, false, false],
+    ]);
+    await r.dw.toggleDesktop('space-1', false);
+    expect(r.made).toHaveLength(0);
+  });
+  it('without Accessibility, holds the new window hidden until you arrive on its desktop', async () => {
+    const { fake, api, go } = fakeSpaces(false);
+    const r = rig([display(1, 0)], undefined, api);
+    r.dw.start(); await flush();
+    r.dw.setSpacesMode('switch');
+    expect(fake.prompted).toBe(1); // asked macOS once
+    await r.dw.toggleDesktop('space-2', true);
+    const win = r.made[0];
+    expect(win.displayId).toBe('space-2');
+    expect(fake.switches).toEqual([]);
+    win.emit('ready-to-show');
+    expect(win.shown).toBe(false);
+    expect(r.dw.state(r.main.webContents.id).spaces!.desktops[1]).toMatchObject({ enabled: true, waiting: true });
+    await go('3');
+    expect(win.shown).toBe(false);
+    await go('2');
+    expect(win.shown).toBe(true);
+    expect(r.dw.state(win.webContents.id).spaces!.desktops[1]).toMatchObject({ waiting: false, self: true, current: true });
+  });
+  it('with Accessibility in switch mode, jumps there and shows the window on arrival', async () => {
+    const { fake, api, go } = fakeSpaces(true);
+    const r = rig([display(1, 0)], undefined, api);
+    r.dw.start(); await flush();
+    r.dw.setSpacesMode('switch');
+    expect(fake.prompted).toBe(0);
+    await r.dw.toggleDesktop('space-3', true);
+    expect(fake.switches).toEqual([[1, 3]]);
+    r.made[0].emit('ready-to-show');
+    await go('3');
+    expect(r.made[0].shown).toBe(true);
+    // Off closes it; screen syncs leave desktop windows alone.
+    await r.dw.toggleDesktop('space-3', false);
+    expect(r.made[0].destroyed).toBe(true);
+  });
+  it('keeps desktop windows through screen changes and follows the main window to its desktop', async () => {
+    const { api, go } = fakeSpaces(true);
+    const r = rig([display(1, 0)], undefined, api);
+    r.dw.start(); await flush();
+    await r.dw.toggleDesktop('space-2', true);
+    r.handlers['display-added']();
+    expect(r.made[0].destroyed).toBe(false);
+    await go('3');
+    r.dw.mainFocused(); await flush(); await flush();
+    expect(r.dw.state(r.main.webContents.id).spaces!.desktops.find((d) => d.main)?.id).toBe('space-3');
+  });
+  it('voice: steps and numbers need Accessibility; screens turn on', async () => {
+    const off = fakeSpaces(false);
+    const r = rig([display(1, 0), display(2, 1920)], undefined, off.api);
+    r.dw.start(); await flush();
+    expect(await r.dw.go({ kind: 'desktop', n: 2 })).toBe('needs-access');
+    expect(await r.dw.go({ kind: 'desktop', n: 7 })).toBe('not-found');
+    off.fake.trusted = true;
+    expect(await r.dw.go({ kind: 'desktop', step: 1 })).toBe('ok');
+    expect(off.fake.switches).toEqual([[1, 2]]);
+    expect(await r.dw.go({ kind: 'screen', n: 2 })).toBe('ok');
+    expect(r.dw.openIds()).toContain('2');
+    expect(await r.dw.go({ kind: 'screen', n: 3 })).toBe('not-found');
+  });
+  it('saves the desktop mode with the screens', () => {
+    expect(readDisplayPrefs({ spacesMode: 'arrive' }).spacesMode).toBe('arrive');
+    expect(readDisplayPrefs({ spacesMode: 'teleport' }).spacesMode).toBe('ask');
   });
 });

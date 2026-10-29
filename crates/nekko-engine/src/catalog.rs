@@ -89,7 +89,7 @@ impl Fetch for HttpFetch {
             for (k, v) in headers {
                 req = req.header(k, v);
             }
-            let res = req.send().await.map_err(|e| e.to_string())?;
+            let res = nekko_net::send("models", req).await.map_err(|e| e.to_string())?;
             let status = res.status().as_u16();
             let body = res.text().await.map_err(|e| e.to_string())?;
             Ok(Reply { status, body })

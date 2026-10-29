@@ -34,6 +34,8 @@ rquickjs = { version = "0.14", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 # preserve_order: a decision's option order is its meaning (criteria dicts), and Laya's input is the state serialized in the order the caller wrote it.
 serde_json = { version = "1", features = ["preserve_order"] }
+# The userspace NAT a runner VM's only network goes through (nekkod runner/net.rs). No log, no phy devices.
+smoltcp = { version = "0.12.0", default-features = false, features = ["std", "medium-ethernet", "proto-ipv4", "proto-dhcpv4", "socket-tcp"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.29"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security"] }

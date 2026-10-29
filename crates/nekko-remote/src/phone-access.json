@@ -1,6 +1,8 @@
 {
  "channels": [
   "app:info",
+  "app:quit",
+  "artifact:read",
   "changes:list",
   "chat:abort",
   "chat:answer",
@@ -8,6 +10,9 @@
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "context:preview",
+  "device:signOut",
+  "engine:status",
   "files:list",
   "files:read",
   "files:search",
@@ -24,27 +29,39 @@
   "git:stage",
   "git:switch",
   "git:unstage",
+  "gpu:stats",
   "limits:get",
   "logs:list",
   "logs:read",
+  "machine:summary",
+  "model:unload",
   "models:list",
+  "monitor:summary",
   "pr:action",
   "pr:checks",
   "pr:create",
   "pr:diff",
   "pr:sessionList",
+  "preview:fetch",
   "providers:list",
+  "providers:saveSealed",
+  "providers:sealKey",
+  "providers:setEnabled",
+  "remote:stop",
+  "security:challenge",
   "session:create",
   "session:delete",
   "session:fork",
   "session:get",
   "session:setOptions",
+  "session:watches",
   "sessions:summaries",
   "settings:get",
   "settings:update",
   "skills:runnable",
   "ssh:hosts",
   "ssh:open",
+  "system:stats",
   "task:runNow",
   "tasks:list",
   "terminal:close",
@@ -60,8 +77,10 @@
   "voice:transcribe",
   "workflow:run",
   "workflows:list",
+  "workspace:addByPath",
   "workspace:gitStatus",
-  "workspace:list"
+  "workspace:list",
+  "workspace:remove"
  ],
  "alwaysDenied": {
   "channels": [
@@ -93,9 +112,7 @@
    "workflow:delete",
    "workflow:duplicate",
    "workflow:event",
-   "workflow:update",
-   "workspace:addByPath",
-   "workspace:remove"
+   "workflow:update"
   ],
   "prefixes": [
    "cloud:",
@@ -111,6 +128,7 @@
   ],
   "except": [
    "remote:status",
+   "remote:stop",
    "ssh:hosts",
    "ssh:open",
    "terminal:close",
@@ -123,6 +141,29 @@
   ]
  },
  "readChannels": [
+  "changes:list",
+  "chat:pending",
+  "limits:get",
+  "machine:summary",
+  "models:list",
+  "monitor:summary",
+  "pr:sessionList",
+  "providers:list",
+  "providers:sealKey",
+  "session:get",
+  "session:watches",
+  "sessions:summaries",
+  "settings:get",
+  "skills:runnable",
+  "tasks:list",
+  "usage:summary",
+  "voice:status",
+  "workflows:list",
+  "workspace:list",
+  "context:preview",
+  "engine:status",
+  "gpu:stats",
+  "system:stats",
   "git:branches",
   "git:compare",
   "git:diff",
@@ -138,9 +179,16 @@
   "logs:read",
   "ssh:hosts",
   "terminal:tail",
-  "terminals:list"
+  "terminals:list",
+  "artifact:read",
+  "preview:fetch",
+  "security:challenge"
  ],
  "changeChannels": [
+  "workspace:addByPath",
+  "workspace:remove",
+  "providers:saveSealed",
+  "providers:setEnabled",
   "git:commit",
   "git:commitMessage",
   "git:mergeAbort",
@@ -156,10 +204,50 @@
   "terminal:create",
   "terminal:signal"
  ],
+ "agentChannels": [
+  "app:quit",
+  "device:signOut",
+  "remote:stop",
+  "chat:abort",
+  "chat:answer",
+  "chat:editQueued",
+  "chat:queue",
+  "chat:send",
+  "model:unload",
+  "session:create",
+  "session:delete",
+  "session:fork",
+  "session:setOptions",
+  "settings:update",
+  "task:runNow",
+  "tool:approve",
+  "voice:transcribe",
+  "workflow:run"
+ ],
+ "safetyExits": [
+  "app:quit",
+  "device:signOut",
+  "remote:stop"
+ ],
+ "openChannels": [
+  "app:info"
+ ],
  "tokenChannels": [
   "terminal:resize",
   "terminal:write"
  ],
+ "modeProof": {
+  "channels": [
+   "session:setOptions",
+   "settings:update"
+  ],
+  "rank": [
+   "ask",
+   "guardrails",
+   "yolo"
+  ],
+  "fallback": "guardrails"
+ },
  "terminal": {
   "tailBytes": 65536,
   "writeBytes": 65536,
@@ -199,6 +287,7 @@
   "defaultModelId",
   "defaultProviderId",
   "favoriteModels",
+  "effort",
   "phoneChanges",
   "prompts",
   "skipDeleteConfirmation",
@@ -212,6 +301,59 @@
   "id",
   "kind",
   "label"
+ ],
+ "providerKinds": [
+  "anthropic",
+  "openai",
+  "openrouter",
+  "openai-compat",
+  "ollama",
+  "lmstudio",
+  "vllm"
+ ],
+ "providerCloudKinds": [
+  "anthropic",
+  "openai",
+  "openrouter"
+ ],
+ "providerSaveKeys": [
+  "id",
+  "kind",
+  "label",
+  "baseUrl",
+  "sealedKey"
+ ],
+ "providerLimits": {
+  "id": 64,
+  "label": 80,
+  "url": 512,
+  "blob": 8192
+ },
+ "watchView": [
+  "id",
+  "kind",
+  "url",
+  "status",
+  "deadlineAt",
+  "nextPollAt",
+  "pending",
+  "failures",
+  "lastError"
+ ],
+ "machineView": [
+  "version",
+  "platform",
+  "edition",
+  "uptimeMs",
+  "hardware",
+  "live",
+  "gpu",
+  "engine"
+ ],
+ "machineResidentView": [
+  "id",
+  "name",
+  "contextTokens"
  ],
  "skillView": [
   "category",
@@ -227,6 +369,7 @@
  ],
  "sessionOptionKeys": [
   "archivedAt",
+  "effort",
   "mode",
   "modelId",
   "pinned",
@@ -250,6 +393,14 @@
   "ask",
   "guardrails",
   "yolo"
+ ],
+ "effortLevels": [
+  "low",
+  "medium",
+  "normal",
+  "high",
+  "xhigh",
+  "max"
  ],
  "sessionView": {
   "messages": 300,
@@ -334,10 +485,88 @@
   "status",
   "usedPercent"
  ],
+ "monitorView": {
+  "running": 20,
+  "needsYou": 20,
+  "automations": 10,
+  "labelChars": 120
+ },
+ "monitorSources": [
+  "system:stats",
+  "gpu:stats",
+  "chat:running",
+  "sessions:summaries",
+  "chat:pending",
+  "tasks:list",
+  "workflows:list"
+ ],
  "queueEditKeys": [
   "expect",
   "text"
  ],
+ "expertMonitor": {
+  "systemView": [
+   "cpuCores",
+   "cpuPct",
+   "memTotalMB",
+   "memUsedMB",
+   "temps"
+  ],
+  "tempsView": [
+   "cpuC",
+   "gpuC",
+   "memoryC"
+  ],
+  "gpuView": [
+   "freeMB",
+   "source",
+   "totalMB",
+   "unified",
+   "usedMB"
+  ],
+  "gpuDeviceView": [
+   "memoryFreeMB",
+   "memoryTotalMB",
+   "memoryUsedMB",
+   "temperatureC",
+   "utilizationPct"
+  ],
+  "engineView": [
+   "running"
+  ],
+  "residentView": [
+   "contextLength",
+   "expiresAt",
+   "gpuLayers",
+   "id",
+   "lastUsedAt",
+   "loadedOn",
+   "sizeBytes",
+   "startedAt",
+   "totalLayers",
+   "vramBytes"
+  ],
+  "loadingView": [
+   "id",
+   "phase",
+   "progress",
+   "startedAt"
+  ],
+  "engineMemoryView": [
+   "budgetBytes",
+   "kind"
+  ],
+  "contextSources": [
+   "attached-file",
+   "connector",
+   "conversation",
+   "guideline",
+   "index-snippet",
+   "memory",
+   "skill",
+   "system"
+  ]
+ },
  "files": {
   "view": {
    "entries": 500,
@@ -391,6 +620,96 @@
    "size",
    "title",
    "updatedAt"
+  ]
+ },
+ "artifacts": {
+  "view": {
+   "textBytes": 1048576,
+   "binaryBytes": 4194304,
+   "previewBytes": 4194304,
+   "pathChars": 4096,
+   "urlChars": 2048,
+   "idChars": 200,
+   "redirects": 5,
+   "timeoutMs": 15000
+  },
+  "artifactView": [
+   "kind",
+   "mime",
+   "mtime",
+   "name",
+   "path",
+   "size",
+   "truncated"
+  ],
+  "previewView": [
+   "contentType",
+   "status",
+   "truncated",
+   "url"
+  ],
+  "previewHeaders": [
+   "cache-control",
+   "content-length",
+   "content-type",
+   "etag",
+   "last-modified"
+  ],
+  "previewMethods": [
+   "GET",
+   "HEAD"
+  ],
+  "linkExt": [
+   "csv",
+   "doc",
+   "docx",
+   "gif",
+   "htm",
+   "html",
+   "jpeg",
+   "jpg",
+   "json",
+   "markdown",
+   "md",
+   "pdf",
+   "png",
+   "ppt",
+   "pptx",
+   "svg",
+   "txt",
+   "webp",
+   "xls",
+   "xlsx"
+  ],
+  "assetExt": [
+   "avif",
+   "css",
+   "csv",
+   "gif",
+   "htm",
+   "html",
+   "ico",
+   "jpeg",
+   "jpg",
+   "js",
+   "json",
+   "map",
+   "md",
+   "mjs",
+   "otf",
+   "png",
+   "svg",
+   "ttf",
+   "txt",
+   "webp",
+   "woff",
+   "woff2"
+  ],
+  "loopbackHosts": [
+   "localhost",
+   "127.0.0.1",
+   "0.0.0.0",
+   "[::1]"
   ]
  },
  "git": {
@@ -467,5 +786,65 @@
    "workflow"
   ]
  },
- "maxFrameBytes": 9437184
+ "maxFrameBytes": 9437184,
+ "stepUp": {
+  "challenge": {
+   "channel": "security:challenge",
+   "bytes": 18,
+   "ttlMs": 120000
+  },
+  "coverMs": 300000,
+  "clientType": "webauthn.get",
+  "totp": {
+   "periodS": 30,
+   "digits": 6,
+   "window": 1,
+   "algorithm": "SHA-1",
+   "maxWrong": 5,
+   "lockMs": 60000
+  },
+  "recovery": {
+   "count": 10,
+   "length": 10
+  },
+  "minMethods": 2,
+  "phoneGuarded": {
+   "channels": [
+    "session:setOptions",
+    "settings:update"
+   ]
+  },
+  "desktopGuarded": {
+   "modeRaise": [
+    "session:setOptions",
+    "settings:update"
+   ],
+   "remoteAccess": [
+    "remote:enable",
+    "remote:attach"
+   ],
+   "pairing": [
+    "remote:pair",
+    "remote:rotate"
+   ],
+   "phoneAccess": [
+    "remote:setAccess"
+   ],
+   "providerKeys": [
+    "providers:save",
+    "providers:remove",
+    "providers:importCliAuth",
+    "providers:revealKey"
+   ],
+   "stepUpOff": [
+    "security:disable",
+    "security:removeMethod"
+   ]
+  },
+  "neverGuarded": [
+   "app:quit",
+   "device:signOut",
+   "remote:stop"
+  ]
+ }
 }

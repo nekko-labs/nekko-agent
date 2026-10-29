@@ -178,6 +178,11 @@ pub struct Machine {
     gpu: tokio::sync::Mutex<Option<Cached<Option<GpuStats>>>>,
     engine_gpu: tokio::sync::Mutex<Option<Cached<Option<GpuStats>>>>,
     cpu: tokio::sync::Mutex<(sysinfo::System, Option<Instant>)>,
+    speeds: crate::measured::MeasuredSpeeds,
+    activity: std::sync::Arc<crate::activity::Sampler>,
+    /// The GPU probe's core temperature, read for activity at most every
+    /// `TEMPS_TTL`: `nvidia-smi` is a process spawn.
+    gpu_temp: tokio::sync::Mutex<Option<(Instant, Option<f64>)>>,
 }
 
 /// A polling meter reads the GPU at most this often.
@@ -192,13 +197,52 @@ const CPU_PRIME: Duration = Duration::from_millis(200);
 
 impl Machine {
     pub fn new(data_dir: Option<PathBuf>, external_bin: ExternalBin) -> Self {
+        let speeds = crate::measured::MeasuredSpeeds::new(data_dir.as_deref());
         Self {
             data_dir,
             external_bin,
             gpu: tokio::sync::Mutex::new(None),
             engine_gpu: tokio::sync::Mutex::new(None),
             cpu: tokio::sync::Mutex::new((sysinfo::System::new(), None)),
+            speeds,
+            activity: std::sync::Arc::default(),
+            gpu_temp: tokio::sync::Mutex::new(None),
         }
+    }
+
+    /// Input, power and heat now (`activity:state`), each from its cache.
+    /// The GPU probe's core temperature (NVIDIA's) wins over the sensors'.
+    pub async fn activity(&self) -> crate::activity::Readings {
+        let sampler = self.activity.clone();
+        let mut r = tokio::task::spawn_blocking(move || sampler.read()).await.unwrap_or_default();
+        let probed = {
+            let mut cache = self.gpu_temp.lock().await;
+            match *cache {
+                Some((at, c)) if at.elapsed() < crate::activity::TEMPS_TTL => c,
+                _ => {
+                    let devices = self.gpu_stats().await.into_iter().flat_map(|g| g.devices);
+                    let c = devices.filter_map(|d| d.temperature_c).reduce(f64::max);
+                    *cache = Some((Instant::now(), c));
+                    c
+                }
+            }
+        };
+        if let Some(c) = probed {
+            r.gpu_c = Some(c);
+        }
+        r
+    }
+
+    /// The decode speeds measured here.
+    pub fn speeds(&self) -> &crate::measured::MeasuredSpeeds {
+        &self.speeds
+    }
+
+    /// One reply the engine served from the model file at `path`: `predicted_n`
+    /// tokens in `predicted_ms`. `alone` when no other request shared the model.
+    pub async fn record_decode(&self, path: &str, predicted_n: f64, predicted_ms: f64, alone: bool) -> bool {
+        let machine = crate::measured::machine_key(&self.profile(false).await);
+        self.speeds.record(path, &machine, predicted_n, predicted_ms, alone, nekko_js::now_ms())
     }
 
     /// Where the daemon keeps its data, when it knows.

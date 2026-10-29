@@ -10,7 +10,10 @@
 //! responses the TS test replays. Events and the transcript it appends are the
 //! TS shapes (`AgentEvent`, `ChatMessage`), as JSON.
 
-use crate::fit::{ELIDE_ALL, apply_elision, elidable, elision_for, is_context_overflow};
+use crate::fit::{
+    ELIDE_ALL, FIT_TARGET, apply_elision, elidable, elision_for, is_context_overflow, overflow_message, prompt_units,
+    reported_window,
+};
 use crate::history::{
     as_seen_by_chat_model, from_latest_compaction, latest_compaction_index, window_history, without_images,
 };
@@ -29,6 +32,8 @@ use std::time::{Duration, Instant};
 pub enum Chunk {
     Text(String),
     Phase(String),
+    /// A provider item to send back on the turn's next call (`ProviderChunk::Carry`).
+    Carry(Value),
     Reasoning(String),
     /// A complete `ToolCall` (`{ id, name, input }`).
     ToolCall(Value),
@@ -39,6 +44,8 @@ pub enum Chunk {
         output_tokens: f64,
         output_ms: Option<f64>,
     },
+    /// The response stopped at the output cap (`ProviderChunk::OutputLimit`).
+    OutputLimit,
     Done,
 }
 
@@ -163,6 +170,11 @@ const RUNAWAY_KEEP_CHARS: usize = 4_000;
 const EMPTY_NUDGE: &str = "Please continue and give your answer.";
 const STALLED: &str =
     "_The model returned an empty response and stopped. It may have run out of steam: try again, or rephrase._";
+/// An empty reply that hit the output cap: the model spent it all thinking.
+/// Asking again does the same, so this replaces the nudge rather than following it.
+const OUTPUT_LIMIT_EMPTY: &str = "_The model used its whole output budget thinking and stopped before answering. Try a lower effort level, or ask for something smaller._";
+/// Appended to a reply cut off at the output cap.
+const OUTPUT_LIMIT_NOTE: &str = "_Cut off: the reply reached the model's output limit._";
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -197,6 +209,18 @@ fn trim_runaway(s: &str) -> String {
     } else {
         format!("{}\n\n[…cut off here: the model started repeating itself.]", js::slice16(s, RUNAWAY_KEEP_CHARS))
     }
+}
+
+/// What a background turn's model call ends with when it steps aside for the
+/// person at the computer (nekkod's `chat_client::YieldingClient`). The loop sends it
+/// again from where it stood, at once and without spending an attempt: the
+/// client holds the next call until it may run.
+pub const YIELDED: &str = "Paused while someone uses this computer";
+/// A connectivity gate holds only the same model call, never tools or a new turn.
+pub const INTERNET_PAUSED: &str = "Paused until internet connectivity returns";
+
+pub fn is_yield(message: &str) -> bool {
+    message == YIELDED || message == INTERNET_PAUSED
 }
 
 /// Attempts a model call gets before the reply ends as interrupted
@@ -303,6 +327,9 @@ pub fn is_network_error(message: &str) -> bool {
         "dns error",
         "network is unreachable",
         "no route to host",
+        // `friendly_error` rewrites a failed send into "Can't reach ChatGPT
+        // at …" / "Can't reach the model server at …" before it gets here.
+        "can't reach",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
@@ -325,12 +352,27 @@ struct Turn {
     reasoning: String,
     reasoning_seconds: Option<u64>,
     calls: Vec<Value>,
+    carry: Vec<Value>,
     runaway: bool,
+    /// The response stopped at the output cap rather than finishing.
+    output_limit: bool,
 }
 
 impl Turn {
     fn is_empty(&self) -> bool {
         js::trim(&self.text).is_empty() && js::trim(&self.reasoning).is_empty() && self.calls.is_empty()
+    }
+}
+
+/// Strips `carry` from every message up to the latest user prompt, so a
+/// finished turn's encrypted reasoning neither grows the session file nor
+/// rides along on later requests.
+fn drop_carry_before_last_prompt(history: &mut [Value]) {
+    let last_user = history.iter().rposition(|m| m.get("role").and_then(Value::as_str) == Some("user"));
+    for m in history.iter_mut().take(last_user.map_or(0, |i| i + 1)) {
+        if let Some(o) = m.as_object_mut() {
+            o.remove("carry");
+        }
     }
 }
 
@@ -358,6 +400,13 @@ struct Loop<'o, 'a, C, T, E> {
     squeezed: bool,
     /// Elidable tool outputs in the last request (`sentEligible`).
     sent_eligible: usize,
+    /// The prompt overflowed on the system prompt and tool definitions rather
+    /// than the conversation (a small local window): the rest of the run is
+    /// sent without tools.
+    toolless: bool,
+    /// The last request's size in UTF-16 units, its fixed part (system prompt
+    /// and tools) and its conversation, and whether it carried tools.
+    sent_units: (usize, usize, bool),
 }
 
 impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '_, C, T, E> {
@@ -386,10 +435,12 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             .map(|m| if blind { without_images(&m) } else { m })
             .collect();
         messages.extend(extra);
-        let tools = if send_tools { self.opts.tools.clone() } else { Vec::new() };
+        let tools = if send_tools && !self.toolless { self.opts.tools.clone() } else { Vec::new() };
         self.elided = elision_for(&self.opts.system, &tools, &messages, self.opts.context_window, self.elided);
         self.sent_eligible = elidable(&messages).len();
         let messages = apply_elision(messages, self.elided);
+        self.sent_units =
+            (prompt_units(&self.opts.system, &tools, &[]), prompt_units("", &[], &messages), !tools.is_empty());
         let req = ChatRequest {
             model: self.opts.model.clone(),
             messages,
@@ -419,6 +470,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             };
             match chunk {
                 Chunk::Phase(phase) => turn.phase = Some(phase),
+                Chunk::Carry(item) => turn.carry.push(item),
                 Chunk::Text(delta) => {
                     settle(turn, reasoning_started);
                     turn.text.push_str(&delta);
@@ -451,6 +503,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     }
                     self.event("usage", f);
                 }
+                Chunk::OutputLimit => turn.output_limit = true,
                 Chunk::Done => {}
             }
             // Cut a degenerate stream off rather than waiting out the output cap;
@@ -479,7 +532,9 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 reasoning: turn.reasoning.clone(),
                 reasoning_seconds: turn.reasoning_seconds,
                 calls: turn.calls.clone(),
+                carry: turn.carry.clone(),
                 runaway: turn.runaway,
+                output_limit: turn.output_limit,
             };
             match self.stream(turn, extra.clone(), send_tools).await {
                 Ok(()) => return Ok(()),
@@ -505,6 +560,51 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         );
                         attempt = 1;
                         continue;
+                    }
+                    if is_yield(&e) && !self.opts.cancel.is_cancelled() {
+                        *turn = before;
+                        self.event(
+                            "retry",
+                            json!({
+                                "attempt": attempt,
+                                "maxAttempts": MAX_STREAM_ATTEMPTS,
+                                "delayMs": 0,
+                                "reason": e,
+                                "paused": true,
+                            }),
+                        );
+                        continue;
+                    }
+                    // Still too big, and the system prompt and tool definitions
+                    // alone fill most of a small window (a local model loaded
+                    // with 8k): answer without tools rather than not at all. A
+                    // long conversation, or a window that is not small, is left
+                    // to compaction instead.
+                    let (fixed, conversation, sent_tools) = self.sent_units;
+                    let window = reported_window(&e).or(self.opts.context_window);
+                    if !self.opts.cancel.is_cancelled()
+                        && !self.toolless
+                        && sent_tools
+                        && fixed >= conversation
+                        && window.is_some_and(|w| fixed as f64 / 4.0 > w * FIT_TARGET)
+                        && is_context_overflow(&e)
+                    {
+                        self.toolless = true;
+                        *turn = before;
+                        self.event(
+                            "retry",
+                            json!({
+                                "attempt": attempt,
+                                "maxAttempts": MAX_STREAM_ATTEMPTS,
+                                "delayMs": 0,
+                                "reason": "The model's context window is too small for its tools: replying without them",
+                            }),
+                        );
+                        attempt = 1;
+                        continue;
+                    }
+                    if is_context_overflow(&e) {
+                        return Err(overflow_message(&e));
                     }
                     let max_attempts =
                         if is_network_error(&e) { MAX_NETWORK_STREAM_ATTEMPTS } else { MAX_STREAM_ATTEMPTS };
@@ -563,6 +663,8 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
     }
 
     async fn run(&mut self) {
+        // Carried provider items only matter within the turn that made them.
+        drop_carry_before_last_prompt(self.opts.history);
         let mut resume_extra = Vec::new();
         // A normal follow-up after Stop needs the same valid history as Resume.
         repair_interrupted_history(self.opts.history);
@@ -600,8 +702,9 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             let first = if first_call { std::mem::take(&mut resume_extra) } else { std::mem::take(&mut loop_extra) };
             let mut result = self.stream_with_retry(&mut turn, first, true).await;
             // An empty response gets one retry with a nudge, so the turn does not
-            // silently stall (common with some local models mid-loop).
-            if result.is_ok() && turn.is_empty() && !self.opts.cancel.is_cancelled() {
+            // silently stall (common with some local models mid-loop). Not one
+            // that hit the output cap: asked again, it spends the cap again.
+            if result.is_ok() && turn.is_empty() && !turn.output_limit && !self.opts.cancel.is_cancelled() {
                 result = self.stream_with_retry(&mut turn, vec![nudge.clone()], true).await;
             }
             if let Err(e) = result {
@@ -628,12 +731,23 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     put_reasoning(&mut m, trim_runaway(&turn.reasoning), turn.reasoning_seconds);
                 }
             } else {
-                m.insert("content".into(), json!(if stalled { STALLED.to_string() } else { turn.text.clone() }));
+                let content = match (stalled, turn.output_limit) {
+                    (true, true) => OUTPUT_LIMIT_EMPTY.to_string(),
+                    (true, false) => STALLED.to_string(),
+                    (false, true) if turn.calls.is_empty() && !js::trim(&turn.text).is_empty() => {
+                        format!("{}\n\n{OUTPUT_LIMIT_NOTE}", js::trim(&turn.text))
+                    }
+                    (false, _) => turn.text.clone(),
+                };
+                m.insert("content".into(), json!(content));
                 if !turn.reasoning.is_empty() {
                     put_reasoning(&mut m, turn.reasoning.clone(), turn.reasoning_seconds);
                 }
                 if !turn.calls.is_empty() {
                     m.insert("toolCalls".into(), Value::Array(turn.calls.clone()));
+                }
+                if !turn.carry.is_empty() {
+                    m.insert("carry".into(), json!({ "model": self.opts.model, "items": turn.carry }));
                 }
             }
             m.insert("createdAt".into(), json!(nekko_js::now_ms()));
@@ -719,13 +833,38 @@ pub async fn run_agent<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) 
     tools: &T,
     emit: &mut E,
 ) {
-    Loop { opts: &mut opts, client, tools, emit, elided: 0, squeezed: false, sent_eligible: 0 }.run().await;
+    Loop {
+        opts: &mut opts,
+        client,
+        tools,
+        emit,
+        elided: 0,
+        squeezed: false,
+        sent_eligible: 0,
+        toolless: false,
+        sent_units: (0, 0, false),
+    }
+    .run()
+    .await;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn carry_is_dropped_once_a_new_prompt_starts_a_turn() {
+        let carry = json!({ "model": "m", "items": [{}] });
+        let mut h = vec![
+            json!({ "role": "assistant", "carry": carry }),
+            json!({ "role": "user" }),
+            json!({ "role": "assistant", "carry": carry }),
+        ];
+        drop_carry_before_last_prompt(&mut h);
+        assert!(h[0].get("carry").is_none());
+        assert!(h[2].get("carry").is_some(), "the turn in progress keeps its own");
+    }
 
     #[test]
     fn cancel_runs_each_hook_once_even_when_registered_late() {

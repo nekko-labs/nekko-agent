@@ -110,8 +110,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         aria-label="Agent panel view"
         tabIndex={-1}
         data-agent-view-menu
-        className="card fixed z-[1000] p-1.5 shadow-xl outline-hidden"
-        style={{ left, top, width: MENU_W, background: 'var(--paper)' }}
+        className="context-menu card fixed z-[1000] p-1.5 shadow-xl outline-hidden"
+        style={{ left, top, width: MENU_W }}
         onContextMenu={(e) => e.preventDefault()}
         onKeyDown={(e) => {
           if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -141,8 +141,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           role="menu"
           aria-label={sub === 'group' ? 'Group by' : sub === 'sort' ? 'Sort by' : 'Show'}
           data-agent-view-submenu={sub}
-          className="card fixed z-[1001] p-1.5 shadow-xl"
-          style={{ width: SUB_W, background: 'var(--paper)', left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
+          className="context-menu card fixed z-[1001] p-1.5 shadow-xl"
+          style={{ width: SUB_W, left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
           onMouseEnter={keepSub}
           onMouseLeave={closeSubSoon}
           onContextMenu={(e) => e.preventDefault()}
@@ -156,7 +156,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           }}
         >
           {sub === 'group' && <>
-            {(['project', 'status', 'date'] as AgentGroupBy[]).map((g) => (
+            {(['status', 'project', 'date'] as AgentGroupBy[]).map((g) => (
               <Choice key={g} checked={view.groupBy === g} onClick={() => set({ groupBy: g })}>{GROUP_BY_LABELS[g]}</Choice>
             ))}
             <Divider />
@@ -177,6 +177,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           {sub === 'show' && <>
             <Choice toggle checked={view.showMetadata} onClick={() => set({ showMetadata: !view.showMetadata })}
               title="The model, context, git and sub-agent lines under each card">Metadata</Choice>
+            <Choice toggle checked={view.showMetadata && view.showProvider} disabled={!view.showMetadata} onClick={() => set({ showProvider: !view.showProvider })}
+              title="Where each card's model comes from, under the model">Model provider</Choice>
             <Divider />
             <Choice toggle checked={view.showAutomations} onClick={() => set({ showAutomations: !view.showAutomations })}
               title="Chats an automation started">Automations</Choice>

@@ -10,13 +10,17 @@
 //! the agent's exact output for a scripted session.
 
 pub mod agent;
+pub mod card;
+pub mod chat_links;
 pub mod e2e;
 pub mod hello;
 pub mod jsobj;
 pub mod phone;
+pub mod phone_artifacts;
 pub mod phone_changes;
 pub mod phone_files;
 pub mod phone_git;
+pub mod phone_providers;
 pub mod phone_terminal;
 pub mod phone_thumbs;
 pub mod phone_views;
@@ -24,12 +28,14 @@ pub mod proof;
 pub mod route;
 pub mod service;
 pub mod socket;
+pub mod step_up;
+pub mod step_up_register;
 
 pub use agent::{AgentCore, Out, PUSH_TEST_CHANNEL, RELAYED_EVENTS};
 pub use phone::{Activity, DeviceAccess, Devices, PhoneDevice};
 pub use phone_terminal::PhoneTerminals;
 pub use service::{CHANNELS, Clock, Link, LinkHandle, RemoteService, Verifier, system_clock};
-pub use socket::{Dispatcher, Events, PhoneCall, PhoneDispatcher, RelayAgent, Spawn, agent_url};
+pub use socket::{Dispatcher, Events, PhoneCall, PhoneDispatcher, RelayAgent, Spawn, Summaries, agent_url};
 
 /// Every public IPC channel the host's dispatcher serves (`IpcChannels`,
 /// written by the golden test); the daemon's internal callbacks (`turn:*`,

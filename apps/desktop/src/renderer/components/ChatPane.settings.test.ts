@@ -24,6 +24,11 @@ describe('chatPaneSettings', () => {
     expect(shallow(chatPaneSettings(base), chatPaneSettings(next))).toBe(false);
   });
 
+  it('updates empty-agent decoration when its appearance settings change', () => {
+    expect(shallow(chatPaneSettings(base), chatPaneSettings({ ...base, themePreset: 'lilac' }))).toBe(false);
+    expect(shallow(chatPaneSettings(base), chatPaneSettings({ ...base, backgroundAnimation: false }))).toBe(false);
+  });
+
   it('is null before settings load', () => {
     expect(chatPaneSettings(null)).toBeNull();
   });

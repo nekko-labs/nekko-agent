@@ -21,7 +21,7 @@ const session = {
   messageCount: 2, exchangeCount: 1, stalled: false, recentTurns: [], prUrls: [], imageCount: 0, createdAt: 0,
 } as unknown as SessionSummary;
 
-const card = (status?: 'working', chat: SessionSummary = session) => renderToStaticMarkup(
+const card = (status?: 'working' | 'done' | 'idle', chat: SessionSummary = session) => renderToStaticMarkup(
   <WorkspaceCard workspace={null} session={chat} terminal={null} status={status} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} />,
 );
 
@@ -29,10 +29,18 @@ describe('workspace card completion control', () => {
   it('shows an X for completion, keeping the Complete name and retention title', () => {
     const html = card();
     expect(html).toContain('aria-label="Complete Chat"');
-    expect(html).toContain('title="Complete this chat (kept for 60 days)"');
-    // CloseIcon's two crossing strokes, not CheckIcon's tick.
-    expect(html).toContain('M18 6 6 18M6 6l12 12');
-    expect(html).not.toContain('M20 6 9 17l-5-5');
+    expect(html).toContain('title="Complete this chat (kept until you delete it)"');
+    // The status may be a done check, but the action must remain an X.
+    const action = html.match(/<button[^>]*aria-label="Complete Chat"[^]*?<\/button>/)?.[0] ?? '';
+    expect(action).toContain('M18 6 6 18M6 6l12 12');
+    expect(action).not.toContain('M20 6 9 17l-5-5');
+  });
+
+  it('keeps the last-reply time for done and idle cards, not working ones', () => {
+    const replied = { ...session, lastReplyAt: -60_000 } as SessionSummary;
+    expect(card('done', replied)).toContain('1 min ago');
+    expect(card('idle', replied)).toContain('1 min ago');
+    expect(card('working', replied)).not.toContain('min ago');
   });
 });
 
@@ -73,5 +81,29 @@ describe('workspace card context readout', () => {
     expect(chat).toMatch(/const publishesContext = surface !== 'composer' && !readOnly;/);
     // Both the publish effect and the clear-on-unmount effect are gated.
     expect(chat.match(/if \(!publishesContext\) return;/g)?.length).toBe(2);
+  });
+});
+
+describe('workspace card model line and attention', () => {
+  const render = (props: Partial<React.ComponentProps<typeof WorkspaceCard>> = {}) => renderToStaticMarkup(
+    <WorkspaceCard workspace={null} session={{ ...session, modelId: 'claude-opus-5-5' } as SessionSummary} terminal={null} status={undefined}
+      isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} {...props} />,
+  );
+
+  it('names the model alone, with its provider as optional subtext under it', () => {
+    state.providers = [{ id: 'p', label: 'Claude', kind: 'anthropic' }];
+    const html = render();
+    expect(html).toContain('Opus 5.5');
+    expect(html).toContain('<span class="min-w-0 truncate">Opus 5.5</span>');
+    expect(html).toMatch(/data-card-provider[^>]*>Claude</);
+    expect(render({ showProvider: false })).not.toContain('data-card-provider');
+    state.providers = [];
+  });
+
+  it('highlights a card waiting on you like the active one', () => {
+    expect(render()).not.toContain('bg-accent-soft');
+    expect(render({ status: 'input' })).toContain('bg-accent-soft');
+    expect(render({ status: 'error' })).toContain('bg-accent-soft');
+    expect(render({ status: 'input' })).toContain('var(--attention)');
   });
 });

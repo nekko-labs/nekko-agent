@@ -273,9 +273,13 @@ pub fn browser_reason(input: &Value, mode: &str, action: &str) -> String {
         }
         _ => String::new(),
     };
+    // The browser resolves and follows redirects itself, so this is only the
+    // first address; the approval is the gate.
+    let local = url::Url::parse(js::trim(&url)).ok().and_then(|u| crate::netguard::local_host(&u)).is_some();
     let disclosure = match action {
         "screenshot" => " Page pixels will be sent to the selected chat model for inspection.",
         "evaluate" => " The expression runs as script inside the page.",
+        _ if local => " This address is on this computer or your local network, not the public internet.",
         _ => "",
     };
     let url = if url.is_empty() { url } else { format!(" {url}") };
@@ -333,6 +337,13 @@ pub async fn browser_tool(
         Ok(p) => p,
         Err(e) => return err(call, e),
     };
+    // Opening a page the agent named is a web-tools connection (Settings > Connections).
+    if (action == "navigate" || action == "tab_new")
+        && let Some(u) = input.get("url").and_then(Value::as_str).and_then(|u| url::Url::parse(js::trim(u)).ok())
+        && let Err(e) = nekko_net::check("web-tools", u.host_str().unwrap_or_default())
+    {
+        return err(call, e);
+    }
     let existing = lock(&browsers.existing).get(&sid).cloned();
     if (mode == "existing" && lock(&browsers.dedicated).contains(&sid))
         || existing.as_ref().is_some_and(|e| mode != "existing" || Some(e.port()) != port)
@@ -664,6 +675,17 @@ async fn capture(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn navigating_to_a_local_address_says_so_in_the_prompt() {
+        let r = |url: &str| browser_reason(&json!({ "url": url }), "existing", "navigate");
+        assert_eq!(r("https://example.com"), "Browser existing: navigate https://example.com.");
+        for url in ["http://localhost:3000/", "http://169.254.169.254/latest/meta-data/", "http://192.168.1.1/"] {
+            assert!(
+                r(url).ends_with("This address is on this computer or your local network, not the public internet.")
+            );
+        }
+    }
 
     #[test]
     fn base64_is_as_lenient_as_node() {

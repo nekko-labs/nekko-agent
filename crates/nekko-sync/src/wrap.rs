@@ -96,7 +96,7 @@ pub(crate) fn seal(
     let recipient_key = parse_public(recipient)?;
     let eph_pub = ephemeral.public();
     let shared = diffie_hellman(ephemeral.0.to_nonzero_scalar(), recipient_key.as_affine());
-    let mut ikm = [shared.raw_secret_bytes().as_slice(), extra_ikm].concat();
+    let mut ikm = [&shared.raw_secret_bytes()[..], extra_ikm].concat();
     let salt = [eph_pub.as_slice(), recipient, extra_salt].concat();
     let (mut key, nonce) = hkdf::key_and_nonce(&ikm, &salt, context.as_bytes());
     ikm.zeroize();
@@ -123,7 +123,7 @@ pub(crate) fn open(
     let eph_pub = &raw[1..1 + PUBLIC_KEY_LEN];
     let eph = parse_public(eph_pub).map_err(|_| Error::Malformed)?;
     let shared = diffie_hellman(key.0.to_nonzero_scalar(), eph.as_affine());
-    let mut ikm = [shared.raw_secret_bytes().as_slice(), extra_ikm].concat();
+    let mut ikm = [&shared.raw_secret_bytes()[..], extra_ikm].concat();
     let salt = [eph_pub, key.public().as_slice(), extra_salt].concat();
     let (mut k, nonce) = hkdf::key_and_nonce(&ikm, &salt, context.as_bytes());
     ikm.zeroize();

@@ -19,19 +19,36 @@ vi.mock('./PaneFrame.js', () => ({
   PaneFrame: ({ title, children, focusAction }: { title: string; children: React.ReactNode; focusAction?: React.ReactNode }) => <section data-title={title}>{focusAction}{children}</section>,
   PaneActions: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-import { CommandWall, boardEdgePreview, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
+import { applyWallDrop } from '../wallDrag.js';
+import { CommandWall, commandWallGeometry, companionTree, resizeCompanionSplit, sameDeps, WARM_COMPOSERS, warmFront, workspaceCompanions } from './CommandWall.js';
 import { leafRects } from '../commandWall.js';
 
 const a: WbPane = { id: 'a', kind: 'chat', refId: 'chat-a' };
 const b: WbPane = { id: 'b', kind: 'chat', refId: 'chat-b' };
 const t: WbPane = { id: 't', kind: 'terminal', refId: 'term' };
 const root: WbSplit = { id: 'split', dir: 'row', children: [a, b, t], sizes: [0.5, 0.3, 0.2] };
-const state = (patch: Partial<CommandWallState> = {}): CommandWallState => ({ ...DEFAULT_WALL_STATE, root, layout: { mode: 'grid', cols: 3, rows: 2 }, folded: {}, ...patch });
-const layout = (mode: 'grid' | 'focus' | 'fixed') => ({ mode, cols: 2, rows: 1 });
+const state = (patch: Partial<CommandWallState> = {}): CommandWallState => ({ ...DEFAULT_WALL_STATE, root, layout: { mode: 'grid', cols: 3, rows: 2, fixedGrid: false }, folded: {}, ...patch });
+/** `fixed` is Dynamic with Fixed grid on. */
+const layout = (mode: 'grid' | 'focus' | 'fixed', cols = 2, rows = 1) => ({ mode: mode === 'fixed' ? 'grid' as const : mode, cols, rows, fixedGrid: mode === 'fixed' });
 
 function wall(s: CommandWallState, addContent?: React.ReactNode) {
   return <CommandWall state={s} setState={vi.fn()} sessions={[]} terminals={[]} running={new Set()} pending={{}} childrenOf={new Map()} projects={[]} flash={null} selectedId={null} onSelect={vi.fn()} onAspect={vi.fn()} onOpenChat={vi.fn()} onOpenTerminal={vi.fn()} onNewChat={vi.fn()} onNewTerminal={vi.fn()} onAddWindow={vi.fn()} addContent={addContent} />;
 }
+
+describe('empty zone', () => {
+  it('shows the sleeping Nekko and the plus menu options, Agent in the accent colour', () => {
+    const z: WbPane = { id: 'z', kind: 'zone', refId: 'z', zone: 'Zone 1' };
+    const html = renderToStaticMarkup(wall(state({ root: z, layout: layout('grid', 1, 1) })));
+    expect(html).toContain('wall-zone-art pixel-sleeping');
+    expect([...html.matchAll(/data-zone-create="(\w+)"/g)].map((m) => m[1])).toEqual(['chat', 'image', 'terminal']);
+    expect(html).toMatch(/class="btn btn-ghost wall-zone-option text-accent" data-zone-create="chat"/);
+    // Named by the label alone, so "Agent" stays "Agent" with its shortcut beside it (#1310 broke the e2e lookup).
+    expect(html).toMatch(/data-zone-create="chat" aria-label="Agent" title="Agent \([^)]+\)"/);
+    expect(html.match(/wall-zone-plus/g)).toHaveLength(3);
+    expect([...html.matchAll(/<kbd class="kbd wall-zone-kbd">([^<]+)<\/kbd>/g)]).toHaveLength(3);
+    expect(html).toContain('Drag in an agent chat or start a new one below.');
+  });
+});
 
 describe('command wall geometry', () => {
   it('nests creation details inside the Add tile without a pane-stage offset', () => {
@@ -41,7 +58,7 @@ describe('command wall geometry', () => {
   });
   it.each(['grid', 'fixed'] as const)('fits %s windows into the space remaining above the composer', (mode) => {
     const before = JSON.stringify(root);
-    const g = commandWallGeometry(state({ layout: { mode, cols: 3, rows: 2 } }), 2400, 600);
+    const g = commandWallGeometry(state({ layout: layout(mode, 3, 2) }), 2400, 600);
     expect(g.stageHeight).toBeLessThanOrEqual(600);
     for (const pane of g.panes.values()) expect(pane.y + pane.height).toBeLessThanOrEqual(600);
     expect(JSON.stringify(root)).toBe(before);
@@ -163,7 +180,7 @@ describe('command wall geometry', () => {
 
   it('lists the unfilled Grid squares for placeholders, and none in Dynamic or on a phone', () => {
     // Three windows in a 3×2 Grid leave the bottom row empty.
-    const g = commandWallGeometry(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } }), 1000, 700);
+    const g = commandWallGeometry(state({ layout: layout('fixed', 3, 2) }), 1000, 700);
     expect(g.empty).toHaveLength(3);
     expect(g.empty.every((r) => r.y > 0 && r.width > 0 && r.height > 0)).toBe(true);
     for (const cell of g.empty) for (const pane of g.panes.values()) {
@@ -172,20 +189,23 @@ describe('command wall geometry', () => {
       expect(overlapW > 0 && overlapH > 0).toBe(false);
     }
     expect(commandWallGeometry(state(), 1000, 700).empty).toEqual([]);
-    expect(commandWallGeometry(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } }), 400, 700).empty).toEqual([]);
-    const html = renderToStaticMarkup(wall(state({ layout: { mode: 'fixed', cols: 3, rows: 2 } })));
+    expect(commandWallGeometry(state({ layout: layout('fixed', 3, 2) }), 400, 700).empty).toEqual([]);
+    const html = renderToStaticMarkup(wall(state({ layout: layout('fixed', 3, 2) })));
     expect(html).not.toContain('data-wall-empty-cell'); // unmeasured: nothing drawn yet
   });
 
-  it('previews a board-edge drop as a full column or a full-width row', () => {
+  it('previews a held window at the place a board-edge drop puts it', () => {
     const stacked: WbSplit = { id: 'col', dir: 'col', children: [a, b], sizes: [0.5, 0.5] };
     const s = state({ root: stacked });
-    expect(boardEdgePreview(s, 'b', 'right', 1000, 600)).toEqual({ x: 500, y: 0, width: 500, height: 600 });
-    expect(boardEdgePreview(s, 'b', 'down', 1000, 600)).toBeNull(); // already the bottom row
+    const right = commandWallGeometry({ ...s, root: applyWallDrop(s.root, 'b', { kind: 'edge', side: 'right' }) }, 1000, 600).panes.get('b')!;
+    expect(right).toMatchObject({ y: 0, height: 600 });
+    expect(right.x).toBeGreaterThan(490);
+    // Already the bottom row: the zone stays where the window already is.
+    expect(commandWallGeometry({ ...s, root: applyWallDrop(s.root, 'b', { kind: 'edge', side: 'down' }) }, 1000, 600).panes.get('b')).toEqual(commandWallGeometry(s, 1000, 600).panes.get('b'));
     const cols = state({ root: { id: 'row', dir: 'row', children: [a, b, t], sizes: [1 / 3, 1 / 3, 1 / 3] } });
-    const bottom = boardEdgePreview(cols, 't', 'down', 900, 600)!;
+    const bottom = commandWallGeometry({ ...cols, root: applyWallDrop(cols.root, 't', { kind: 'edge', side: 'down' }) }, 900, 600).panes.get('t')!;
     expect(bottom).toMatchObject({ x: 0, width: 900 });
-    expect(bottom.y).toBeCloseTo(300);
+    expect(bottom.y).toBeGreaterThan(290);
   });
 
   it('stacks narrow Grid and Fixed panes and handles unmeasured empty mounts', () => {

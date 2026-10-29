@@ -174,7 +174,7 @@ private fun Note(text: String) {
 }
 
 @Composable
-private fun DiffLine(line: PhoneChanges.Line) {
+internal fun DiffLine(line: PhoneChanges.Line) {
     val p = Nekko.palette
     // The row's tint carries the colour; the mark is ink so it reads on it in both themes.
     val (mark, bg) = when (line.kind) {

@@ -25,24 +25,47 @@ pub use nekko_remote::CHANNELS;
 pub struct Remote {
     svc: Option<Arc<RemoteService>>,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
+    /// The router itself, for the chat list the phone's Live Activity card shows.
+    router: Arc<OnceLock<Dispatcher>>,
     /// Phones attached to terminals (FA-3), shared by the gate and the relay agent.
     terminals: Arc<PhoneTerminals>,
+    /// `security.json` beside `remote.json`: step-up on guarded phone calls
+    /// (SK-2), the same store Settings → Security writes (SK-4).
+    security: Option<Arc<dyn nekko_remote::step_up::SecurityStore>>,
+    /// Where a safety exit is announced, for the desktop's notification (SK-4).
+    hub: Hub,
 }
+
+/// The hub event a phone's safety exit (`device:signOut`, `remote:stop`,
+/// `app:quit`) sends once the computer has done it: `{ channel, deviceId,
+/// name, at }`. The desktop's main process turns it into a notification.
+pub const SAFETY_EXIT_EVENT: &str = "remote:safetyExit";
 
 impl Remote {
     pub fn new(dir: Option<PathBuf>, hub: Hub) -> Self {
         let dispatch: Arc<OnceLock<PhoneDispatcher>> = Arc::default();
+        let router: Arc<OnceLock<Dispatcher>> = Arc::default();
         let terminals = PhoneTerminals::new();
+        let security = dir.as_deref().map(|d| {
+            Arc::new(nekko_remote::step_up::SecurityFile::in_dir(d)) as Arc<dyn nekko_remote::step_up::SecurityStore>
+        });
+        let events = hub.clone();
         let svc = dir.map(|d| {
             let link = HubLink {
                 rt: tokio::runtime::Handle::current(),
                 hub,
                 dispatch: dispatch.clone(),
+                router: router.clone(),
                 terminals: terminals.clone(),
             };
             RemoteService::new(&d, nekko_remote::hello::os_random(), nekko_remote::system_clock(), Box::new(link))
         });
-        Self { svc, dispatch, terminals }
+        Self { svc, dispatch, router, terminals, security, hub: events }
+    }
+
+    /// `security.json`'s store, shared with Settings → Security (security.rs).
+    pub fn security_store(&self) -> Option<Arc<dyn nekko_remote::step_up::SecurityStore>> {
+        self.security.clone()
     }
 
     pub fn enabled(&self) -> bool {
@@ -57,7 +80,16 @@ impl Remote {
     pub fn set_dispatcher(&self, run: Dispatcher) {
         // Without a data directory there is no registry and no relay agent to dispatch for.
         if let Some(svc) = &self.svc {
-            let _ = self.dispatch.set(nekko_remote::phone::gate_shared(run, svc.clone(), self.terminals.clone()));
+            let _ = self.router.set(run.clone());
+            let classes = nekko_remote::phone::Classes::from_policy();
+            let gate = nekko_remote::phone::gate_secured(
+                run,
+                svc.clone(),
+                classes,
+                self.terminals.clone(),
+                self.security.clone(),
+            );
+            let _ = self.dispatch.set(announce_safety_exits(gate, svc.clone(), self.hub.clone()));
         }
     }
 
@@ -87,6 +119,7 @@ struct HubLink {
     rt: tokio::runtime::Handle,
     hub: Hub,
     dispatch: Arc<OnceLock<PhoneDispatcher>>,
+    router: Arc<OnceLock<Dispatcher>>,
     terminals: Arc<PhoneTerminals>,
 }
 
@@ -118,19 +151,52 @@ impl Link for HubLink {
             Some(run) => run(who, channel, args),
             None => Box::pin(std::future::ready(Err("the daemon is still starting".to_string()))),
         });
+        let router = self.router.clone();
+        let summaries: nekko_remote::Summaries = Arc::new(move || match router.get() {
+            Some(run) => run("sessions:summaries".into(), Value::Array(Vec::new())),
+            None => Box::pin(std::future::ready(Err("the daemon is still starting".to_string()))),
+        });
         Arc::new(RelayAgent::spawn(
             &self.rt,
             Spawn {
-                url: nekko_remote::agent_url(relay_url, room, key, None),
+                // A Nekko Cloud machine presents its access token to the relay's enrolment gate (decision 0017).
+                url: nekko_remote::agent_url(relay_url, room, key, std::env::var("NEKKO_RELAY_ACCESS").ok().as_deref()),
                 secret: key.to_string(),
                 room: room.to_string(),
                 verify,
                 dispatch,
                 events,
                 terminals: self.terminals.clone(),
+                summaries: Some(summaries),
             },
         ))
     }
+}
+
+/// The gate, announcing each safety exit it carried out on the hub
+/// (`SAFETY_EXIT_EVENT`), with the phone's name as the registry has it.
+fn announce_safety_exits(gate: PhoneDispatcher, svc: Arc<RemoteService>, hub: Hub) -> PhoneDispatcher {
+    Arc::new(move |who, channel, args| {
+        let (gate, svc, hub) = (gate.clone(), svc.clone(), hub.clone());
+        Box::pin(async move {
+            let exit = nekko_remote::phone::policy().safety_exits.contains(&channel);
+            let device = who.device_id.clone();
+            let out = gate(who, channel.clone(), args).await;
+            if exit && out.is_ok() {
+                hub.publish(SAFETY_EXIT_EVENT, safety_exit_payload(&*svc, &channel, &device), false);
+            }
+            out
+        })
+    })
+}
+
+fn safety_exit_payload(devices: &dyn nekko_remote::phone::Devices, channel: &str, device: &str) -> Value {
+    serde_json::json!({
+        "channel": channel,
+        "deviceId": device,
+        "name": devices.name(device),
+        "at": nekko_remote::hello::nekko_num(devices.now()),
+    })
 }
 
 /// A hub frame the agent forwards: one of the relayed channels, and not a
@@ -151,6 +217,22 @@ fn relayed(text: &str) -> Option<(String, Value)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_safety_exit_is_announced_with_the_phone_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let _guard = rt.enter();
+        let hub = Hub::new();
+        let remote = Remote::new(Some(dir.path().to_path_buf()), hub.clone());
+        let svc = remote.svc.clone().unwrap();
+        let payload = safety_exit_payload(&*svc, "remote:stop", "phone-1");
+        assert_eq!(payload["channel"], "remote:stop");
+        assert_eq!(payload["deviceId"], "phone-1");
+        assert!(payload["name"].is_null(), "an unknown phone has no name");
+        assert!(payload["at"].as_f64().unwrap() > 0.0);
+        assert!(remote.security_store().is_some());
+    }
 
     #[test]
     fn forwards_only_relayed_channels() {

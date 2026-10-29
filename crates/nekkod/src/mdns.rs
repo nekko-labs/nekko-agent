@@ -605,11 +605,21 @@ impl NetworkVisibility {
         self.status()
     }
 
+    /// Settings > Connections changed: go quiet, or announce again.
+    pub async fn recheck(self: &Arc<Self>) {
+        self.refresh().await;
+    }
+
     /// App shutdown: say goodbye, keep the switch as it is.
     pub fn close(&self) {
+        lock(&self.live).watching = false;
+        self.hush();
+    }
+
+    /// Say goodbye and close the socket, but keep watching (Settings > Connections).
+    fn hush(&self) {
         let (socket, current) = {
             let mut live = lock(&self.live);
-            live.watching = false;
             if let Some(stop) = live.stop.take() {
                 stop.notify_one();
             }
@@ -637,6 +647,11 @@ impl NetworkVisibility {
     async fn refresh(self: &Arc<Self>) {
         let _one = self.refreshing.lock().await;
         if !lock(&self.live).enabled {
+            return;
+        }
+        if !nekko_net::allowed("network-visibility") {
+            self.hush();
+            lock(&self.live).error = Some(nekko_net::blocked_message("network-visibility"));
             return;
         }
         let next = self.advertisement();

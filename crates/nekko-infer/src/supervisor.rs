@@ -90,6 +90,11 @@ impl Child {
         self.last_used.store(nekko_js::now_ms(), Ordering::Relaxed);
     }
 
+    /// Requests in flight right now.
+    pub fn active_requests(&self) -> usize {
+        self.active.load(Ordering::Relaxed)
+    }
+
     /// Count a request in flight; the guard counts it out when dropped.
     pub fn begin(self: &Arc<Self>) -> ActiveGuard {
         self.active.fetch_add(1, Ordering::Relaxed);
