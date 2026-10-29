@@ -403,6 +403,7 @@
       let big;
       if (src) {
         big = src.cloneNode(true);
+        if (big.tagName === 'IMG' && big.srcset) big.sizes = '100vw';
         if (big.tagName === 'VIDEO') { big.controls = true; big.autoplay = true; big.muted = true; big.loop = true; }
       } else {
         big = document.createElement('div');

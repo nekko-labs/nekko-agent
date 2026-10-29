@@ -669,6 +669,7 @@ body {
   border: 2px solid var(--sticker); box-shadow: 6px 6px 0 var(--sticker); border-radius: 16px;
   background: #ffffff;
 }
+.lightbox-stage > img { width: auto; height: auto; }
 .lightbox-stage .media-placeholder {
   width: min(1100px, 100%); aspect-ratio: 16 / 10;
   display: grid; place-items: center; background: linear-gradient(135deg, #f7f5ff, #efeaff);
