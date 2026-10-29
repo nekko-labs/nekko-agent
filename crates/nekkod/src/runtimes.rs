@@ -1,6 +1,6 @@
 //! The runtime control plane and the Models page's server calls, served from
-//! the daemon (`nekko-engine::runtimes`): `runtime:*`, `model:pull/load/unload`,
-//! `lms:probe` and `server:stop`, over the daemon's own library, installers
+//! the daemon (`nekko-engine::runtimes`): `runtime:*`, `model:pull/load/unload`
+//! and `server:stop`, over the daemon's own library, installers
 //! and model server. The daemon is the only writer of
 //! `runtime-calibration.json` and owns the servers it starts.
 
@@ -22,7 +22,6 @@ pub const CHANNELS: &[&str] = &[
     "model:pull",
     "model:load",
     "model:unload",
-    "lms:probe",
     "server:stop",
 ];
 
@@ -100,25 +99,15 @@ pub async fn route(ctx: &crate::routes::Ctx, rt: &Runtimes, channel: &str, args:
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let s = |i: usize| nekko_js::display(arg(i));
     let params = |i: usize| if arg(i).is_object() { arg(i).clone() } else { json!({}) };
-    // The Models page polls status, facts and the `lms` probe. A provider
-    // switched off there answers as absent, so polling never spawns `lms` or
-    // touches its server (and so cannot wake a stopped LM Studio).
+    // The Models page polls status and facts. A provider switched off there
+    // answers as absent, so polling never spawns `lms` or touches its server
+    // (and so cannot wake a stopped LM Studio). `lms:probe` is providers.rs'.
     if matches!(
         channel,
-        "runtime:status"
-            | "runtime:facts"
-            | "runtime:plan"
-            | "runtime:autoFit"
-            | "runtime:place"
-            | "runtime:recommend"
-            | "lms:probe"
+        "runtime:status" | "runtime:facts" | "runtime:plan" | "runtime:autoFit" | "runtime:place" | "runtime:recommend"
     ) && disabled(ctx, &s(0)).await
     {
-        return Ok(match channel {
-            "runtime:facts" => json!([]),
-            "lms:probe" => json!({ "available": false, "reason": crate::providers::DISABLED }),
-            _ => Value::Null,
-        });
+        return Ok(if channel == "runtime:facts" { json!([]) } else { Value::Null });
     }
     Ok(match channel {
         "runtime:status" => rt.status(&s(0)).await,
@@ -139,7 +128,6 @@ pub async fn route(ctx: &crate::routes::Ctx, rt: &Runtimes, channel: &str, args:
         "model:pull" => rt.pull_model(&s(0), &s(1)).await,
         "model:load" => rt.load_model(&s(0), &s(1)).await,
         "model:unload" => rt.unload_model(&s(0), &s(1)).await,
-        "lms:probe" => rt.lms_probe(&s(0)).await,
         "server:stop" => rt.stop_server(&s(0)).await,
         other => return Err(format!("{other} is not a runtime channel")),
     })
