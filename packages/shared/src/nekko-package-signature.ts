@@ -23,7 +23,7 @@ const bytes = (s: string) => new TextEncoder().encode(s);
 /** The listing every signature covers: each file but SIGNATURES, sorted by path. */
 export async function packageListing(files: Record<string, Uint8Array>): Promise<string> {
   const paths = Object.keys(files).filter((p) => p !== PACKAGE_SIGNATURES).sort();
-  const lines = await Promise.all(paths.map(async (p) => `${hex(await crypto.subtle.digest('SHA-256', files[p]))}  ${p}\n`));
+  const lines = await Promise.all(paths.map(async (p) => `${hex(await crypto.subtle.digest('SHA-256', files[p] as BufferSource))}  ${p}\n`));
   return HEADER + lines.join('');
 }
 
