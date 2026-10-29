@@ -651,6 +651,16 @@ body {
   border: 2px solid var(--sticker); box-shadow: 6px 6px 0 var(--sticker); border-radius: 18px;
   background: linear-gradient(135deg, #ffffff, #f4f1ff);
 }
+/* each screenshot sits on a frame of its own edge colour, so the rounded
+   corners clip the frame rather than the picture. The frame belongs to the
+   image, so the lightbox clone carries it too. Dark look shows the dark shot;
+   White and Colourful show the light one. */
+.media .hero-shot { box-sizing: border-box; padding: 8px; object-fit: contain; }
+.hero-shot-dark, .lightbox-stage > .hero-shot-dark { background: #16132a; }
+.hero-shot-light, .lightbox-stage > .hero-shot-light { background: #9d8ce6; }
+.media .hero-shot-dark, :root[data-theme='dark'] .media .hero-shot-light { display: none; }
+:root[data-theme='dark'] .media .hero-shot-dark { display: block; }
+:root[data-theme='dark'] .lightbox-stage > .hero-shot-dark { background: #16132a; }
 
 /* the enlarged view */
 .lightbox {
@@ -669,6 +679,8 @@ body {
   border: 2px solid var(--sticker); box-shadow: 6px 6px 0 var(--sticker); border-radius: 16px;
   background: #ffffff;
 }
+.lightbox-stage > img { width: auto; height: auto; }
+.lightbox-stage > .hero-shot { padding: 8px; }
 .lightbox-stage .media-placeholder {
   width: min(1100px, 100%); aspect-ratio: 16 / 10;
   display: grid; place-items: center; background: linear-gradient(135deg, #f7f5ff, #efeaff);

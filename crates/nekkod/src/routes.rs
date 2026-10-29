@@ -235,7 +235,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "terminal:attach" => attach_viewer(&ctx.terminals, str_arg(&args, 0).unwrap_or_default(), arg(&args, 1)),
         "terminal:detach" => detach_viewer(&ctx.terminals, str_arg(&args, 0), str_arg(&args, 1).unwrap_or_default()),
         "ssh:hosts" => {
-            let home = home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
+            let home = nekko_js::home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
             let hosts = tokio::task::spawn_blocking(move || nekko_term::read_ssh_hosts(&home))
                 .await
                 .map_err(|e| e.to_string())?;
@@ -691,11 +691,7 @@ fn resolve_cwd(settings: &Value, workspace_id: Option<&str>, cwd: Option<&str>) 
     if let Some(p) = workspaces.first().and_then(path_of).filter(|p| Path::new(p).is_dir()) {
         return p.into();
     }
-    home_dir().unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()))
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+    nekko_js::home_dir().unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()))
 }
 
 /// The scroll-back cap a snapshot call asks for: `terminal:tail(id, maxBytes?)`
@@ -783,7 +779,7 @@ fn detach_viewer(reg: &Registry, id: Option<&str>, viewer_id: &str) -> Result<Va
 /// running the system `ssh` to a host alias from `~/.ssh/config`. The alias
 /// must be one the config lists; it is passed as its own argument.
 async fn open_ssh(ctx: &Ctx, alias: &str, opts: &Value) -> Result<Value, String> {
-    let home = home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
+    let home = nekko_js::home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
     let alias = alias.to_string();
     let found = tokio::task::spawn_blocking(move || {
         let hosts = nekko_term::read_ssh_hosts(&home);

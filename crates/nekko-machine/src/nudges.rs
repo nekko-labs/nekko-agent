@@ -111,11 +111,8 @@ pub fn read_seen(data_dir: &Path) -> Option<Seen> {
 
 pub fn write_seen(data_dir: &Path, seen: &Seen) {
     let p = path(data_dir);
-    let tmp = p.with_extension(format!("json.{}.tmp", std::process::id()));
-    if let Ok(text) = serde_json::to_string_pretty(seen)
-        && std::fs::write(&tmp, text).is_ok()
-    {
-        let _ = std::fs::rename(&tmp, &p);
+    if let Ok(text) = serde_json::to_string_pretty(seen) {
+        let _ = nekko_js::fs::atomic_write(&p, text.as_bytes(), Default::default());
     }
 }
 

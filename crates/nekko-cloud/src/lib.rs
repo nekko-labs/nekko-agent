@@ -122,10 +122,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_ms() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
-
 fn arg(args: &[Value], i: usize) -> String {
     args.get(i).and_then(Value::as_str).unwrap_or("").trim().to_string()
 }
@@ -1096,7 +1092,7 @@ impl Cloud {
         self.edit(|s| {
             s.last_error = err.clone();
             if err.is_none() {
-                s.last_sync_at = Some(now_ms());
+                s.last_sync_at = Some(nekko_js::now_ms_f64());
             }
         })?;
         self.changed();
@@ -1311,7 +1307,7 @@ impl Cloud {
         // Chats deleted here since they were synced.
         for (id, k) in &st.chats {
             if !k.deleted && !here.contains(id) {
-                let at = now_ms();
+                let at = nekko_js::now_ms_f64();
                 queue.push((
                     id.clone(),
                     records::tombstone(at),

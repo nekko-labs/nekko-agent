@@ -42,6 +42,8 @@ describe('empty zone', () => {
     expect(html).toContain('wall-zone-art pixel-sleeping');
     expect([...html.matchAll(/data-zone-create="(\w+)"/g)].map((m) => m[1])).toEqual(['chat', 'image', 'terminal']);
     expect(html).toMatch(/class="btn btn-ghost wall-zone-option text-accent" data-zone-create="chat"/);
+    // Named by the label alone, so "Agent" stays "Agent" with its shortcut beside it (#1310 broke the e2e lookup).
+    expect(html).toMatch(/data-zone-create="chat" aria-label="Agent" title="Agent \([^)]+\)"/);
     expect(html.match(/wall-zone-plus/g)).toHaveLength(3);
     expect([...html.matchAll(/<kbd class="kbd wall-zone-kbd">([^<]+)<\/kbd>/g)]).toHaveLength(3);
     expect(html).toContain('Drag in an agent chat or start a new one below.');

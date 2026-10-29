@@ -577,14 +577,9 @@ async fn remove_folder(ctx: &Ctx, id: &str) -> Result<Value, String> {
     Ok(saved.get("workspaces").cloned().unwrap_or(json!([])))
 }
 
-/// `os.homedir()`.
-pub(crate) fn home_dir() -> String {
-    std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()
-}
-
 /// The skills channels, on the data directory and the user's home.
 fn skills_route(dir: &std::path::Path, channel: &str, args: &[Value], roots: &[String]) -> Result<Value, String> {
-    let home = home_dir();
+    let home = nekko_js::home_dir_string();
     match channel {
         "skills:installed" => Ok(Value::Array(skills::list_installed(dir))),
         "skills:targets" => Ok(skills::targets(&home)),

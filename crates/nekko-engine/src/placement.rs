@@ -14,7 +14,7 @@
 //! Like the rest of the planner it is pure: facts in, placement out.
 
 use crate::capacity::{FitRequest, Hardware, ModelFacts, estimate_overhead_bytes, jmax, kv_cache_bytes};
-use crate::{js_round, num, to_fixed};
+use crate::{js_round, num};
 use serde_json::{Map, Value, json};
 
 const GB: f64 = 1024.0 * 1024.0 * 1024.0;
@@ -342,7 +342,7 @@ pub fn place(facts: &ModelFacts, req: &Request, hw: &Hardware, resident_vram: f6
 
 fn gb(n: f64) -> String {
     if n >= GB {
-        format!("{} GB", to_fixed(n / GB, 1))
+        format!("{} GB", nekko_js::to_fixed_unsigned_zero(n / GB, 1))
     } else {
         format!("{} MB", nekko_js::number_to_string(jmax(0.0, js_round(n / MB))))
     }

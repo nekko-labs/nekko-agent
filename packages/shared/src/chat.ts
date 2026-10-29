@@ -374,7 +374,7 @@ export interface Session {
   queue?: QueuedPrompt[];
   /**
    * The newest `clientMessageId`s this chat has taken (`chat:send` or
-   * `chat:queue`), oldest first, at most `CLIENT_MESSAGE_IDS_KEPT`. A repeat is
+   * `chat:queue`), oldest first, capped by nekkod. A repeat is
    * answered without a second turn or queue entry (exactly-once delivery from a
    * phone's outbox).
    */
@@ -386,17 +386,8 @@ export interface Session {
    */
   activeRun?: { startedAt: number };
   /**
-   * The plan for the prompt this chat is working on: decoded from the prompt,
-   * then whatever the user edited it into. Lives on the session so the rail
-   * survives a tab switch, and so a chat resumed tomorrow still shows what it
-   * was told to do.
-   */
-  plan?: import('./prompt-plan.js').PromptPlan;
-  /**
    * The plan the agent itself wrote for this chat, via the `update_plan` tool:
    * what it decided to do after reading the request, kept live as it works.
-   * Distinct from `plan`, which is the user's editable draft decoded from the
-   * prompt.
    */
   agentPlan?: import('./training.js').PlanStep[];
   /**
@@ -631,24 +622,9 @@ export interface QueuePayload {
 /** Queue entries are kept backwards-compatible with older string-only sessions. */
 export type QueuedPrompt = string | QueuePayload;
 
-/** How many `clientMessageId`s a chat remembers. A phone's outbox resends within minutes, so this is plenty. */
-export const CLIENT_MESSAGE_IDS_KEPT = 200;
-
 /** A usable `clientMessageId`: a short id of letters, digits, `-` and `_` (a UUID), else undefined. */
 export function clientMessageIdOf(value: unknown): string | undefined {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : undefined;
-}
-
-/** True when the chat has already taken this `clientMessageId`. */
-export function hasClientMessageId(session: Pick<Session, 'clientMessageIds'> | null | undefined, id: string | undefined): boolean {
-  return !!id && !!session?.clientMessageIds?.includes(id);
-}
-
-/** `ids` with `add` appended (each once, oldest first), cut to the newest `CLIENT_MESSAGE_IDS_KEPT`. */
-export function rememberClientMessageIds(ids: readonly string[] | undefined, add: readonly string[]): string[] {
-  const out = [...(ids ?? [])];
-  for (const id of add) if (!out.includes(id)) out.push(id);
-  return out.slice(Math.max(0, out.length - CLIENT_MESSAGE_IDS_KEPT));
 }
 
 export function queueItemText(item: QueuedPrompt): string {
@@ -657,10 +633,6 @@ export function queueItemText(item: QueuedPrompt): string {
 
 export function queueItemPayload(item: QueuedPrompt): QueuePayload {
   return typeof item === 'string' ? { text: item } : item;
-}
-
-export function queueItemsEqual(a: QueuedPrompt, b: QueuedPrompt): boolean {
-  return JSON.stringify(queueItemPayload(a)) === JSON.stringify(queueItemPayload(b));
 }
 
 export interface SendOptions {
@@ -721,80 +693,6 @@ export interface SendOptions {
 export interface ReplySuggestions {
   options: string[];
   next: string | null;
-}
-
-/** A suggestion chip stays a chip: past this it's a paragraph, not an option. */
-const SUGGESTION_OPTION_MAX = 120;
-const SUGGESTION_NEXT_MAX = 240;
-
-function cleanSuggestion(text: string, max: number): string {
-  return text
-    .replace(/^[-*•\d]+[.)]?\s+/, '') // bullet or numbered-list marker
-    .replace(/^["'`,]+|["'`,]+$/g, '') // quote wrappers, and a trailing comma off a JSON fragment
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, max);
-}
-
-/**
- * Read the suggestion call's answer. The prompt asks for one JSON object
- * (`{"options": [...], "next": "..."}`) and most models comply; small local
- * models drift, so a bare-lines read stands in for it: each non-empty line is
- * an option and the first is the ghost text. Returns null when nothing usable
- * came back.
- */
-export function parseReplySuggestions(raw: string): ReplySuggestions | null {
-  const braces = raw.indexOf('{');
-  const lastBrace = raw.lastIndexOf('}');
-  if (braces >= 0 && lastBrace > braces) {
-    try {
-      const parsed = JSON.parse(raw.slice(braces, lastBrace + 1)) as {
-        options?: unknown;
-        next?: unknown;
-        suggestion?: unknown;
-        draft?: unknown;
-      };
-      const options = (Array.isArray(parsed.options) ? parsed.options : [])
-        .map((o) => (typeof o === 'string' ? cleanSuggestion(o, SUGGESTION_OPTION_MAX) : ''))
-        .filter(Boolean);
-      const nextRaw = [parsed.next, parsed.suggestion, parsed.draft].find((v) => typeof v === 'string');
-      const next = typeof nextRaw === 'string' ? cleanSuggestion(nextRaw, SUGGESTION_NEXT_MAX) : null;
-      // Valid JSON that came back empty is a real "no suggestions" answer; the
-      // line read below would only re-serve the object's own fragments.
-      if (options.length || next) return { options: dedupeSuggestions(options).slice(0, 4), next };
-      return null;
-    } catch {
-      /* fall through to the line read */
-    }
-  }
-  const options = dedupeSuggestions(
-    raw
-      .split(/\r?\n/)
-      // JSON-ishness is judged on the raw line, before cleaning strips the
-      // quotes that mark a fragment like `"options": [`.
-      .map((line) => line.trim())
-      .filter(
-        (line) =>
-          line &&
-          !/^[{}[\],]/.test(line) &&
-          !/^["'][A-Za-z_]+["']\s*:/.test(line) &&
-          !/^(options|next|suggestion|draft)\s*:/i.test(line),
-      )
-      .map((line) => cleanSuggestion(line, SUGGESTION_OPTION_MAX))
-      .filter(Boolean),
-  ).slice(0, 4);
-  if (!options.length) return null;
-  return { options, next: options[0] };
-}
-
-function dedupeSuggestions(options: string[]): string[] {
-  const seen = new Set<string>();
-  return options.filter((o) => {
-    const key = o.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 /** Explicit execution mode is authoritative; legacy sessions retain their previous behavior. */

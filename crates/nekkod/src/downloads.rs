@@ -53,10 +53,6 @@ pub struct ModelDownloads {
     seen: Mutex<HashMap<String, String>>,
 }
 
-fn now() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
-}
-
 fn landed(p: &str) -> bool {
     std::fs::metadata(p).is_ok_and(|m| m.len() > 0)
 }
@@ -65,7 +61,7 @@ impl ModelDownloads {
     pub fn new(fetch: Arc<dyn Fetch>, library: Arc<Library>, catalog: Arc<Catalog>, hub: Hub) -> Arc<Self> {
         Arc::new_cyclic(|me: &std::sync::Weak<ModelDownloads>| {
             let me = me.clone();
-            let queue = Downloads::new(fetch, Arc::new(now), move |jobs| {
+            let queue = Downloads::new(fetch, Arc::new(nekko_js::now_ms_f64), move |jobs| {
                 if let Some(me) = me.upgrade() {
                     me.changed(jobs);
                 }

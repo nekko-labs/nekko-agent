@@ -38,3 +38,5 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0026](0026-retire-expo-in-favor-of-native-phone-apps.md) | Retire Expo in favor of native phone apps | accepted |
 | [0028](0028-phones-read-the-monitors-and-unload-models.md) | Let phones read the hardware, the Model Server and a chat's context, and unload a model | accepted |
 | [0029](0029-one-always-on-microphone-text-follows-the-focused-chat.md) | One always-on microphone for the whole app; single-shot dictation removed; text follows the focused chat | accepted |
+| [0032](0032-three-layers-and-the-nekko-package.md) | Customizations, mods and custom layouts as three layers in one open `.nekko` zip format; customizations sync through encrypted sync | accepted |
+| [0033](0033-mods-may-run-agent-tools-behind-a-permission.md) | Mods may run agent tools behind `tools:run`, the tool policy (Ask by default) and picked folders | accepted |
