@@ -128,6 +128,7 @@ import com.nekko.android.ui.chat.LongChatNudge
 import com.nekko.android.ui.chat.MiniMonitor
 import com.nekko.android.ui.simple.PollHardware
 import com.nekko.android.ui.simple.SlimBar
+import com.nekko.android.ui.simple.SlimReveal
 import com.nekko.android.data.ModelPick
 import com.nekko.android.data.SimpleVisibility
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -329,6 +330,8 @@ private fun ChatScreenContent(
             Column {
                 CenterAlignedTopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                    // A little shorter than the default, so the slim row sits right under the title.
+                    expandedHeight = 56.dp,
                     actions = {
                         if (changesAllowed && simple.shown("changes")) {
                             IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
@@ -390,7 +393,9 @@ private fun ChatScreenContent(
                     },
                 )
                 SlimBar(simple.expert, simple.setExpert) {
-                    if (showHardware) MiniMonitor(hardware, onOpen = { showMonitor = !showMonitor }, compact = pane != null)
+                    SlimReveal(showHardware) {
+                        MiniMonitor(hardware, onOpen = { showMonitor = !showMonitor }, compact = pane != null, modelName = vm::modelName)
+                    }
                 }
             }
         },

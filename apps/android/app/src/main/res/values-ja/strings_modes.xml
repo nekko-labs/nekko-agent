@@ -37,6 +37,8 @@
     <string name="hw_gpu_n">GPU %1$d</string>
     <string name="hw_gpu_memory">GPU メモリ</string>
     <string name="hw_vram">VRAM</string>
+    <string name="hw_cores">%1$d コア</string>
+    <string name="details">詳細</string>
     <string name="monitor">モニター</string>
     <string name="monitor_models_loaded">%1$d 個のモデルを読み込み済み</string>
     <string name="monitor_reading">%1$s を読み取り中…</string>

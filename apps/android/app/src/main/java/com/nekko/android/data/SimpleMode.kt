@@ -29,7 +29,7 @@ object SimpleMode {
         SimpleItem("hardware", "Chat · header", "Hardware strip", "CPU, memory and GPU dials under the title", E),
         SimpleItem("ph-subtitle", "Chat · header", "Model and computer under the title", "Like \"Opus 5.5 · Studio Mac\"", E),
         SimpleItem("model", "Chat · message box", "Model name and picker", "Switch between Claude, ChatGPT or a local model", SimpleVisibility.SHOW),
-        SimpleItem("effort", "Chat · message box", "Effort", "How hard the model thinks before it answers", E),
+        SimpleItem("effort", "Chat · message box", "Effort", "How hard the model thinks before it answers", SimpleVisibility.SHOW),
         SimpleItem("context", "Chat · message box", "Context ring and token count", "How full this chat is, in tokens", SimpleVisibility.SHOW),
         SimpleItem("ph-policy", "Chat · message box", "Tool policy", "Ask, Guardrails or YOLO, in the More menu and New chat", E),
         SimpleItem("thinking", "Chat · conversation", "Reasoning and tool steps", "What the model thought, and each step it took", E),

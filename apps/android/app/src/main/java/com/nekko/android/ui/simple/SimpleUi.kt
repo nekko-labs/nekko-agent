@@ -40,7 +40,15 @@ import com.nekko.android.data.SimpleVisibility
 import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.monitors.HardwareMonitorController
 import androidx.activity.compose.BackHandler
+import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -198,22 +206,63 @@ fun ModeSwitch(expert: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier 
     }
 }
 
+/** The system's animator duration scale is 0 (Remove animations, or a test harness): motion is skipped. */
+@Composable
+fun rememberReduceMotion(): Boolean {
+    val context = LocalContext.current
+    return remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+}
+
+/** How long the slim row and its gauges take to slide in. */
+const val SLIM_REVEAL_MS = 250
+
+/**
+ * Shows [content] sliding down from behind the header with a fade, the first time and whenever
+ * [visible] turns on. [expand] grows the space as it comes (a whole row); without it the content
+ * slides within space it already has (the gauges at the end of the row). Instant when motion is off.
+ */
+@Composable
+fun SlimReveal(visible: Boolean = true, expand: Boolean = false, content: @Composable () -> Unit) {
+    val still = rememberReduceMotion()
+    val state = remember { MutableTransitionState(false) }
+    state.targetState = visible
+    val spec = tween<IntOffset>(SLIM_REVEAL_MS)
+    val fade = tween<Float>(SLIM_REVEAL_MS)
+    val enter = when {
+        still -> EnterTransition.None
+        expand -> expandVertically(tween(SLIM_REVEAL_MS), expandFrom = Alignment.Top) + slideInVertically(spec) { -it } + fadeIn(fade)
+        else -> slideInVertically(spec) { -it } + fadeIn(fade)
+    }
+    val exit = when {
+        still -> ExitTransition.None
+        expand -> shrinkVertically(tween(SLIM_REVEAL_MS), shrinkTowards = Alignment.Top) + fadeOut(fade)
+        else -> fadeOut(fade)
+    }
+    AnimatedVisibility(state, enter = enter, exit = exit) { content() }
+}
+
 /**
  * The slim second row under a header: the mode switch on the left, the minimal monitor (or
- * nothing) on the right, and a hairline under it.
+ * nothing) on the right, and a hairline under it. It slides down from behind the header.
  */
 @Composable
 fun SlimBar(expert: Boolean, onExpert: (Boolean) -> Unit, modifier: Modifier = Modifier, end: @Composable () -> Unit = {}) {
-    Column(modifier.fillMaxWidth().background(Nekko.palette.paper)) {
-        Row(Modifier.fillMaxWidth().height(34.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Both keep 48 dp touch areas that reach past the 34 dp row.
-            ModeSwitch(expert, onExpert, Modifier.wrapContentHeight(unbounded = true))
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.wrapContentHeight(unbounded = true)) { end() }
+    SlimReveal(expand = true) {
+        Column(modifier.fillMaxWidth().background(Nekko.palette.paper)) {
+            Row(Modifier.fillMaxWidth().height(34.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Both keep 48 dp touch areas that reach past the 34 dp row.
+                ModeSwitch(expert, onExpert, Modifier.wrapContentHeight(unbounded = true))
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.wrapContentHeight(unbounded = true)) { end() }
+            }
+            SlimDivider()
         }
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }
 }
+
+/** The hairline under the slim row (and under the search field that can take its place). */
+@Composable
+fun SlimDivider() = HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
 /**
  * Reads the computer's hardware every 3 s while the monitor shows ([full]), else only its Model

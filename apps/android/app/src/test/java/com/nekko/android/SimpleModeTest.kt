@@ -10,16 +10,16 @@ import org.junit.Test
 
 /** Simple and Expert's catalogue and saved choices (the desktop's simple-mode.test.ts). */
 class SimpleModeTest {
-    @Test fun `by default Simple shows only the model and the context`() {
+    @Test fun `by default Simple shows only the model, effort and the context`() {
         val simple = SimpleMode.ITEMS.filter { SimpleMode.shown(it.id, expert = false, choices = emptyMap()) }.map { it.id }
-        assertEquals(listOf("model", "context"), simple)
+        assertEquals(listOf("model", "effort", "context"), simple)
         assertTrue(SimpleMode.ITEMS.all { SimpleMode.shown(it.id, expert = true, choices = emptyMap()) })
     }
 
     @Test fun `each choice in each mode`() {
-        val show = mapOf("effort" to SimpleVisibility.SHOW)
-        assertTrue(SimpleMode.shown("effort", false, show))
-        assertTrue(SimpleMode.shown("effort", true, show))
+        val show = mapOf("thinking" to SimpleVisibility.SHOW)
+        assertTrue(SimpleMode.shown("thinking", false, show))
+        assertTrue(SimpleMode.shown("thinking", true, show))
         val expert = mapOf("model" to SimpleVisibility.EXPERT)
         assertFalse(SimpleMode.shown("model", false, expert))
         assertTrue(SimpleMode.shown("model", true, expert))
@@ -34,7 +34,7 @@ class SimpleModeTest {
         assertTrue(SimpleMode.shown("hardware", false, emptyMap(), localModelLoaded = true))
         assertTrue(SimpleMode.shown("ph-monitors", false, emptyMap(), localModelLoaded = true))
         // Only the monitors: other Expert-only controls stay out of Simple.
-        assertFalse(SimpleMode.shown("effort", false, emptyMap(), localModelLoaded = true))
+        assertFalse(SimpleMode.shown("thinking", false, emptyMap(), localModelLoaded = true))
         assertFalse(SimpleMode.shown("ph-monitors", false, mapOf("ph-monitors" to SimpleVisibility.HIDE), localModelLoaded = true))
         assertTrue(SimpleMode.shown("ph-monitors", false, mapOf("ph-monitors" to SimpleVisibility.SHOW)))
     }
@@ -51,8 +51,8 @@ class SimpleModeTest {
         assertEquals(emptyMap<String, SimpleVisibility>(), SimpleMode.parse(""))
         // Unknown ids, bad values and defaults are dropped; the rest is kept.
         assertEquals(
-            mapOf("effort" to SimpleVisibility.SHOW),
-            SimpleMode.parse("""{"effort":"show","nope":"hide","context":"sometimes","model":"show","thinking":3}"""),
+            mapOf("effort" to SimpleVisibility.EXPERT),
+            SimpleMode.parse("""{"effort":"expert","nope":"hide","context":"sometimes","model":"show","thinking":3}"""),
         )
     }
 

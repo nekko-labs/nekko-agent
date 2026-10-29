@@ -1,6 +1,31 @@
 package com.nekko.android.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.selected
+import com.nekko.android.ui.components.RowDivider
+import com.nekko.android.ui.security.SafetyExitDialogs
+import com.nekko.android.ui.security.SafetyExitMenuItems
+import com.nekko.android.ui.security.SafetyExits
+import com.nekko.android.ui.simple.SlimDivider
+import com.nekko.android.ui.simple.SlimReveal
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,7 +94,6 @@ import com.nekko.android.ui.components.SectionHeader
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import com.nekko.protocol.ChatSearch
@@ -127,6 +151,7 @@ fun ChatsScreen(
     // The panel names loaded models from the Model Server's own list.
     LaunchedEffect(showPanel) { if (showPanel) runCatching { repo.loadModels(ENGINE_PROVIDER_ID) } }
     val scope = rememberCoroutineScope()
+    val modelName: (String) -> String = { id -> s.models.values.firstNotNullOfOrNull { l -> l.firstOrNull { it.id == id }?.name } ?: id }
     // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
     val exits = rememberSafetyExits(repo)
     var pulling by remember { mutableStateOf(false) }
@@ -143,6 +168,10 @@ fun ChatsScreen(
     val groups = remember(s.summaries, s.workspaces) { ChatGroup.of(s.summaries, s.workspaces) }
     // Search: every word, any case or accent, in the title, first prompt or last reply, completed chats too.
     var query by rememberSaveable { mutableStateOf("") }
+    // Search chats, from the computer menu: a field in place of the slim row until closed.
+    var searching by rememberSaveable { mutableStateOf(false) }
+    val closeSearch = { query = ""; searching = false }
+    BackHandler(enabled = searching, onBack = closeSearch)
     val found = remember(s.summaries, query) { if (query.isBlank()) emptyList() else ChatSearch.matches(s.summaries.filter { it.isVisible }, query) }
     val restore: (SessionSummary) -> Unit = { chat ->
         actionError = null
@@ -212,6 +241,9 @@ fun ChatsScreen(
         )
     }
 
+    // The quit confirmation, for the banner's ⋮ and the computer menu alike.
+    active?.let { SafetyExitDialogs(exits, it.name) }
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
@@ -219,18 +251,31 @@ fun ChatsScreen(
                 CenterAlignedTopAppBar(
                     title = { Text("Chats", style = MaterialTheme.typography.titleLarge) },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                    // A little shorter than the default, so the slim row sits right under the title.
+                    expandedHeight = 56.dp,
+                    navigationIcon = {
+                        ComputerPill(
+                            s, exits, compact = pane != null,
+                            onSearch = { searching = true },
+                            onComputers = onComputers,
+                            onConnect = { id -> scope.launch { repo.connect(id) } },
+                        )
+                    },
                     actions = {
-                        IconButton(onClick = onComputers) {
-                            Icon(Icons.Filled.Computer, contentDescription = "Computers", tint = p.inkSoft)
-                        }
                         IconButton(onClick = onSettings) {
                             Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = p.inkSoft)
                         }
                         pane?.actions?.invoke(this)
                     },
                 )
-                SlimBar(simple.expert, simple.setExpert) {
-                    if (showHardware) MiniMonitor(hardware, onOpen = { showPanel = !showPanel }, compact = pane != null)
+                if (searching) {
+                    SearchRow(query, onQuery = { query = it }, onClose = closeSearch)
+                } else {
+                    SlimBar(simple.expert, simple.setExpert) {
+                        SlimReveal(showHardware) {
+                            MiniMonitor(hardware, onOpen = { showPanel = !showPanel }, compact = pane != null, modelName = modelName)
+                        }
+                    }
                 }
             }
         },
@@ -277,22 +322,6 @@ fun ChatsScreen(
                         }
                         item(key = "header") { SectionHeader("On ${active.name}") }
                         actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
-                        if (s.summaries.isNotEmpty()) {
-                            item(key = "search") {
-                                OutlinedTextField(
-                                    value = query,
-                                    onValueChange = { query = it },
-                                    placeholder = { Text("Search chats") },
-                                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                                    trailingIcon = {
-                                        if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") }
-                                    },
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.search"),
-                                )
-                            }
-                        }
                         if (query.isNotBlank()) {
                             if (found.isEmpty()) {
                                 item(key = "no-match") {
@@ -300,7 +329,8 @@ fun ChatsScreen(
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                                 }
                             }
-                            items(found, key = { "found:${it.id}" }) { summary ->
+                            itemsIndexed(found, key = { _, it -> "found:${it.id}" }) { i, summary ->
+                                if (i > 0) RowDivider(60.dp)
                                 if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
                                 else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
                             }
@@ -339,7 +369,8 @@ fun ChatsScreen(
                                     )
                                 }
                             }
-                            items(g.active, key = { it.id }) { summary ->
+                            itemsIndexed(g.active, key = { _, it -> it.id }) { i, summary ->
+                                if (i > 0) RowDivider(60.dp)
                                 ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
                             }
                             if (g.completed.isNotEmpty()) {
@@ -349,7 +380,8 @@ fun ChatsScreen(
                                     }
                                 }
                                 if (showDone) {
-                                    items(g.completed, key = { it.id }) { summary ->
+                                    itemsIndexed(g.completed, key = { _, it -> it.id }) { i, summary ->
+                                        if (i > 0) RowDivider(40.dp)
                                         CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
                                     }
                                 }
@@ -362,10 +394,164 @@ fun ChatsScreen(
             }
             AgentPanel(
                 open = showPanel && showHardware, state = hardware, chat = null, computer = active?.name ?: "your computer",
-                modelName = { id -> s.models.values.firstNotNullOfOrNull { l -> l.firstOrNull { it.id == id }?.name } ?: id },
+                modelName = modelName,
                 onUnload = monitor::unload, onDismiss = { showPanel = false },
                 modifier = Modifier.padding(top = padding.calculateTopPadding()),
             )
+        }
+    }
+}
+
+/** The pill's second line once more than one computer is paired: "2 paired". The phone holds a live connection to one at a time. */
+internal fun pairedCaption(count: Int): String? = if (count >= 2) "$count paired" else null
+
+/** What the pill's screen-reader label says: the computer, its connection, and how many are paired. */
+internal fun pillDescription(name: String, state: String, count: Int): String =
+    listOfNotNull("Computer menu", name, state, pairedCaption(count)).joinToString(", ")
+
+private fun connName(s: RelayState) = when (s) {
+    RelayState.IDLE -> "Not connected"
+    RelayState.CONNECTING -> "Connecting"
+    RelayState.ONLINE -> "Online"
+    RelayState.OFFLINE -> "Offline"
+    RelayState.DENIED -> "Refused"
+}
+
+/**
+ * The computer at the top left: its connection dot, its name, and "N paired" under it when there
+ * are several. It opens the computer menu: switch computers, Search chats, Computers (where pairing
+ * lives), and Sign out or disconnect (the safety exits, SK-8).
+ */
+@Composable
+private fun ComputerPill(
+    s: com.nekko.android.data.ComputersState,
+    exits: SafetyExits,
+    /** A folding phone's pane: the name gets less room beside the centred title. */
+    compact: Boolean,
+    onSearch: () -> Unit,
+    onComputers: () -> Unit,
+    onConnect: (String) -> Unit,
+) {
+    val p = Nekko.palette
+    // With no computer chosen yet the pill still opens the menu, as on the iPhone.
+    val name = s.active?.name ?: "Computers"
+    var open by remember { mutableStateOf(false) }
+    var exitsOpen by remember { mutableStateOf(false) }
+    val caption = pairedCaption(s.computers.size)
+    val dot = when (s.conn) {
+        RelayState.ONLINE -> p.success
+        RelayState.CONNECTING -> p.accent
+        RelayState.OFFLINE -> p.warning
+        RelayState.DENIED -> p.danger
+        RelayState.IDLE -> p.inkFaint
+    }
+    val description = pillDescription(name, connName(s.conn), s.computers.size)
+    val close = { open = false; exitsOpen = false }
+    Box {
+        Box(
+            Modifier
+                .padding(start = 4.dp)
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .clickable(role = Role.Button, onClick = { open = true })
+                // Before clearAndSetSemantics, which would clear a tag that came after it.
+                .testTag("chats.menu")
+                .clearAndSetSemantics { contentDescription = description },
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(
+                Modifier.clip(RoundedCornerShape(999.dp)).background(p.surface2).padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(dot))
+                Column {
+                    Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = if (compact) 88.dp else 132.dp))
+                    caption?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1) }
+                }
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(18.dp))
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = close) {
+            if (exitsOpen) {
+                DropdownMenuItem(
+                    text = { Text("Sign out or disconnect", fontWeight = FontWeight.SemiBold) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to the menu") },
+                    onClick = { exitsOpen = false },
+                )
+                HorizontalDivider(color = p.line)
+                SafetyExitMenuItems(s, exits, onPicked = close)
+                return@DropdownMenu
+            }
+            s.computers.forEach { c ->
+                val on = c.id == s.activeId
+                DropdownMenuItem(
+                    text = { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingIcon = { if (on) Icon(Icons.Filled.Check, contentDescription = null, tint = p.accent) else Spacer(Modifier.size(24.dp)) },
+                    trailingIcon = if (on) null else ({ Text("Connect", style = MaterialTheme.typography.labelMedium, color = p.accent) }),
+                    onClick = {
+                        close()
+                        if (!on) onConnect(c.id)
+                    },
+                    modifier = Modifier.semantics { selected = on },
+                )
+            }
+            HorizontalDivider(color = p.line)
+            DropdownMenuItem(
+                text = { Text("Search chats") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                onClick = { close(); onSearch() },
+                modifier = Modifier.testTag("chats.menu.search"),
+            )
+            DropdownMenuItem(
+                text = { Text("Computers") },
+                leadingIcon = { Icon(Icons.Filled.Computer, contentDescription = null) },
+                onClick = { close(); onComputers() },
+            )
+            if (s.active != null) HorizontalDivider(color = p.line)
+            if (s.active != null) DropdownMenuItem(
+                text = { Text("Sign out or disconnect") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
+                trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                onClick = { exitsOpen = true },
+                modifier = Modifier.testTag("chats.menu.safety"),
+            )
+        }
+    }
+}
+
+/** Search chats, in place of the slim row: focused with the keyboard up; Cancel clears it and brings the row back. */
+@Composable
+private fun SearchRow(query: String, onQuery: (String) -> Unit, onClose: () -> Unit) {
+    val p = Nekko.palette
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        focus.requestFocus()
+        keyboard?.show()
+    }
+    SlimReveal(expand = true) {
+        Column(Modifier.fillMaxWidth().background(p.paper)) {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Search, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(20.dp))
+                TextField(
+                    value = query,
+                    onValueChange = onQuery,
+                    placeholder = { Text("Search chats") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
+                    modifier = Modifier.weight(1f).focusRequester(focus).testTag("chats.search"),
+                )
+                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Cancel search", tint = p.inkSoft) }
+            }
+            SlimDivider()
         }
     }
 }
@@ -489,7 +675,7 @@ private fun GroupHeader(name: String, open: Boolean, activeCount: Int, onToggle:
         Text(
             name.uppercase(),
             style = MaterialTheme.typography.labelMedium,
-            color = p.inkFaint,
+            color = p.accent,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.6.sp,
             maxLines = 1,

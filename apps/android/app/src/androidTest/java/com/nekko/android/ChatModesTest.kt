@@ -16,6 +16,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.CompositionLocalProvider
@@ -111,8 +113,12 @@ class ChatModesTest {
         assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
         shot("1-simple-local-model")
 
-        // The minimal monitor opens the agent's details from the top; Unload frees the model.
-        compose.onAllNodesWithTag(ModeTags.MONITOR).onFirst().performClick()
+        // A long-press on a gauge shows that reading in full; Details opens the agent's panel from the top.
+        compose.onAllNodesWithContentDescription("CPU, 38%").onFirst().performTouchInput { longClick() }
+        settle()
+        assertTrue(compose.onAllNodes(hasText("16 cores")).fetchSemanticsNodes().isNotEmpty())
+        shot("1b-gauge-tooltip")
+        compose.onAllNodes(hasText("Details")).onFirst().performClick()
         settle()
         assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().isNotEmpty())
         shot("2-panel")
@@ -134,7 +140,7 @@ class ChatModesTest {
         assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
         shot("4-expert")
 
-        // Model and effort: the sheet, then High.
+        // Model and effort: the sheet with the effort slider, then High.
         compose.onAllNodesWithTag(ModeTags.MODEL_EFFORT).onFirst().performClick()
         settle()
         shot("5-model-effort")
@@ -226,6 +232,59 @@ class ChatModesTest {
         expertSegment.performTouchInput { click(Offset(centerX, 2f)) }
         settle()
         assertTrue(prefs.get(EXPERT_MODE))
+    }
+
+    /**
+     * The computer menu at the top left: Sign out or disconnect, no pairing (that is in Computers),
+     * and Search chats, which takes the slim row's place until Cancel.
+     */
+    @Test fun chatsMenuAndSearch() {
+        computer.resident = false
+        val repo = repo()
+        runBlocking { repo.load() }
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                CompositionLocalProvider(LocalSimple provides rememberSimpleView(prefs)) {
+                    ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {}, onMonitors = {})
+                }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty() }
+        settle()
+        compose.onAllNodesWithTag("chats.menu").onFirst().performClick()
+        settle()
+        assertTrue(compose.onAllNodes(hasText("Sign out or disconnect")).fetchSemanticsNodes().isNotEmpty())
+        assertEquals(0, compose.onAllNodes(hasText("Pair another computer")).fetchSemanticsNodes().size)
+        shot("chats-menu")
+
+        compose.onAllNodesWithTag("chats.menu.search").onFirst().performClick()
+        settle()
+        assertTrue(compose.onAllNodesWithTag("chats.search").fetchSemanticsNodes().isNotEmpty())
+        assertEquals(0, compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).fetchSemanticsNodes().size)
+        compose.onAllNodesWithTag("chats.search").onFirst().performTextInput("image")
+        settle()
+        assertTrue(compose.onAllNodes(hasText("Profile the image cache")).fetchSemanticsNodes().isNotEmpty())
+        assertEquals(0, compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().size)
+        shot("chats-search")
+
+        compose.onAllNodesWithContentDescription("Cancel search").onFirst().performClick()
+        settle()
+        assertEquals(0, compose.onAllNodesWithTag("chats.search").fetchSemanticsNodes().size)
+        assertTrue(compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty())
+    }
+
+    /** Effort shows in Simple too: the slider in the sheet, and High sets it. */
+    @Test fun effortInSimple() {
+        computer.resident = false
+        show()
+        compose.onAllNodesWithTag(ModeTags.MODEL_EFFORT).onFirst().performClick()
+        settle()
+        shot("effort-simple")
+        compose.onAllNodesWithTag(ModeTags.effort(com.nekko.protocol.Effort.HIGH)).onFirst().performClick()
+        compose.waitUntil(5_000) { computer.effort == "high" }
+        settle()
+        shot("effort-simple-high")
     }
 
     /** Simple's "getting long" line once the context passes 85% of the window. */

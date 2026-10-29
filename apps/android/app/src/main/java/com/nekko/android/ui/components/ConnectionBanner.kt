@@ -25,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.nekko.android.ui.security.SafetyExitDialogs
 import com.nekko.android.ui.security.SafetyExitMenuItems
 import com.nekko.android.ui.security.SafetyExits
 import androidx.compose.ui.Alignment
@@ -63,7 +62,8 @@ fun deniedCopy(reason: DenyReason?): String = when (reason) {
 /**
  * One line saying whether your computer is reachable, and what to do if not.
  * With [exits], its ⋮ menu holds the safety exits (SK-8), one tap away while
- * a chat runs, and what they did is said under it.
+ * a chat runs, and what they did is said under it. The screen draws their
+ * quit confirmation (`SafetyExitDialogs`), so it shows wherever the list is scrolled.
  */
 @Composable
 fun ConnectionBanner(
@@ -159,5 +159,4 @@ fun ConnectionBanner(
         }
         exits?.outcome?.let { (msg, msgTone) -> Notice(msg, msgTone, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
     }
-    exits?.let { SafetyExitDialogs(it, active.name) }
 }

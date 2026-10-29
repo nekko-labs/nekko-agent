@@ -1,6 +1,39 @@
 package com.nekko.android.ui.chat
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.RichTooltip
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.setProgress
+import com.nekko.android.ui.simple.rememberReduceMotion
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -58,7 +91,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -252,7 +284,7 @@ private fun ModelEffortButton(chat: ChatUi, enabled: Boolean, onClick: () -> Uni
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (showEffort) EffortDial(level, levels.size, 22.dp)
+        if (showEffort) EffortDial(level, levels.size, 18.dp)
         if (showModel) Text(name, style = MaterialTheme.typography.labelLarge, color = if (enabled) p.ink else p.inkFaint, maxLines = 1, overflow = TextOverflow.MiddleEllipsis, modifier = Modifier.widthIn(max = 220.dp))
         Icon(Icons.Filled.UnfoldMore, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(14.dp))
     }
@@ -295,8 +327,8 @@ fun ModelEffortSheet(
         }
     }
     LaunchedEffect(picking) { if (picking) runCatching { onLoadModels() } }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(if (!showEffort) R.string.model_section else if (!showModel) R.string.effort_section else R.string.model_effort), style = MaterialTheme.typography.titleMedium, color = p.ink)
             if (showModel) {
                 SectionTitle(stringResource(R.string.model_section))
@@ -323,31 +355,7 @@ fun ModelEffortSheet(
                 }
             }
             if (showEffort) {
-                SectionTitle(stringResource(R.string.effort_section))
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    EffortDial(level, levels.size, 112.dp)
-                    Text(chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), style = MaterialTheme.typography.titleSmall, color = p.ink)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        levels.forEachIndexed { i, e ->
-                            val on = i == level
-                            Box(
-                                Modifier
-                                    .heightIn(min = 48.dp)
-                                    .widthIn(min = 64.dp)
-                                    .clip16()
-                                    .background(if (on) p.accent else p.surface2)
-                                    .clickable(enabled = busy == null, role = Role.RadioButton) { if (!on) run(e, null) }
-                                    .padding(horizontal = 12.dp)
-                                    .testTag(ModeTags.effort(e))
-                                    .semantics { selected = on },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (busy == e) CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(16.dp))
-                                else Text(effortLabel(e), style = MaterialTheme.typography.labelLarge, color = if (on) p.accentInk else p.ink, maxLines = 1)
-                            }
-                        }
-                    }
-                }
+                EffortSlider(levels, level, busy, onPick = { run(it, null) })
                 Text(
                     if (chat.effort == null) stringResource(R.string.effort_following, computer) else stringResource(R.string.effort_footer),
                     style = MaterialTheme.typography.bodySmall,
@@ -355,6 +363,128 @@ fun ModelEffortSheet(
                 )
             }
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
+        }
+    }
+}
+
+/**
+ * The stop of [count] evenly spaced stops on a track from [start] to [end] nearest a touch at [x].
+ * A touch past either end snaps to that end.
+ */
+internal fun effortStop(x: Float, start: Float, end: Float, count: Int): Int {
+    if (count <= 1 || end <= start) return 0
+    return Math.round((x - start) / (end - start) * (count - 1)).coerceIn(0, count - 1)
+}
+
+/**
+ * Effort as a short track that snaps to the model's levels, their names under it and the current
+ * one's name over it. The filled part is a gradient that deepens toward the thumb, deeper for higher
+ * levels, with light streaks drifting through it (faster for higher levels, still when motion is off).
+ * No level (the computer's own setting) leaves the track empty and the thumb faint in the middle.
+ */
+@Composable
+private fun EffortSlider(levels: List<Effort>, level: Int?, busy: Effort?, onPick: (Effort) -> Unit) {
+    val p = Nekko.palette
+    val n = levels.size
+    var dragging by remember { mutableStateOf<Int?>(null) }
+    val shown = dragging ?: level
+    val enabled = busy == null
+    val still = rememberReduceMotion()
+    val pick: (Int) -> Unit = { i -> if (enabled && i != level) onPick(levels[i]) }
+    val name = shown?.let { effortLabel(levels[it]) } ?: stringResource(R.string.effort_computer_default)
+    val sectionLabel = stringResource(R.string.effort_section)
+    // How intense the fill is: 0 at the lowest level, 1 at the highest.
+    val intensity = shown?.let { if (n > 1) it.toFloat() / (n - 1) else 1f }
+    val phase = if (still || intensity == null) 0.35f else {
+        val speed = (1600 - 1000 * intensity).toInt()
+        val t by rememberInfiniteTransition(label = "effort-streaks").animateFloat(
+            0f, 1f, infiniteRepeatable(tween(speed, easing = LinearEasing)), label = "effort-phase",
+        )
+        t
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle(sectionLabel)
+            Spacer(Modifier.weight(1f))
+            if (busy != null) CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.padding(end = 6.dp).size(14.dp))
+            Text(name, style = MaterialTheme.typography.titleSmall, color = if (shown == null) p.inkSoft else p.ink)
+        }
+        // The track's ends sit over the first and last names' centres, so each stop is over its name.
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .pointerInput(levels, enabled) {
+                    if (!enabled) return@pointerInput
+                    val inset = size.width / (2f * n)
+                    detectTapGestures { pick(effortStop(it.x, inset, size.width - inset, n)) }
+                }
+                .pointerInput(levels, enabled) {
+                    if (!enabled) return@pointerInput
+                    val inset = size.width / (2f * n)
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragging = effortStop(it.x, inset, size.width - inset, n) },
+                        onDragEnd = { dragging?.let(pick); dragging = null },
+                        onDragCancel = { dragging = null },
+                    ) { change, _ -> dragging = effortStop(change.position.x, inset, size.width - inset, n) }
+                }
+                .semantics {
+                    contentDescription = sectionLabel
+                    stateDescription = name
+                    progressBarRangeInfo = ProgressBarRangeInfo((level ?: 0).toFloat(), 0f..(n - 1).coerceAtLeast(1).toFloat(), steps = (n - 2).coerceAtLeast(0))
+                    if (enabled) setProgress { v -> pick(Math.round(v).coerceIn(0, n - 1)); true }
+                },
+        ) {
+            val inset = size.width / (2f * n)
+            val trackH = 8.dp.toPx()
+            val top = (size.height - trackH) / 2
+            val radius = CornerRadius(trackH / 2)
+            val x = { i: Int -> if (n > 1) inset + i * (size.width - 2 * inset) / (n - 1) else size.width / 2 }
+            drawRoundRect(p.surface2, Offset(inset - trackH / 2, top), Size(size.width - 2 * inset + trackH, trackH), radius)
+            if (shown == null || intensity == null) {
+                for (i in 0 until n) drawCircle(p.line, 2.dp.toPx(), Offset(x(i), size.height / 2))
+                drawCircle(p.inkFaint.copy(alpha = 0.45f), 9.dp.toPx(), Offset(size.width / 2, size.height / 2))
+                return@Canvas
+            }
+            val thumb = x(shown)
+            val strong = p.accent.copy(alpha = 0.45f + 0.55f * intensity)
+            val left = inset - trackH / 2
+            val fillW = thumb - left
+            drawRoundRect(
+                Brush.horizontalGradient(listOf(p.accent.copy(alpha = 0.15f), strong), startX = left, endX = thumb),
+                Offset(left, top), Size(fillW, trackH), radius,
+            )
+            // Speed lines: short light streaks drifting left to right inside the filled part.
+            clipRect(left, top, thumb, top + trackH) {
+                val streak = 7.dp.toPx()
+                for (k in 0 until 5) {
+                    val at = (phase + k * 0.21f) % 1f
+                    val sx = left + at * (fillW + streak) - streak
+                    val sy = top + trackH * (0.25f + 0.5f * ((k * 0.37f) % 1f))
+                    drawLine(Color.White.copy(alpha = 0.55f), Offset(sx, sy), Offset(sx + streak * (0.6f + 0.4f * (k % 2)), sy), 1.dp.toPx(), StrokeCap.Round)
+                }
+            }
+            for (i in shown + 1 until n) drawCircle(p.line, 2.dp.toPx(), Offset(x(i), size.height / 2))
+            drawCircle(strong.copy(alpha = 1f), 9.dp.toPx(), Offset(thumb, size.height / 2))
+            drawCircle(p.paper, 3.5.dp.toPx(), Offset(thumb, size.height / 2))
+        }
+        Row(Modifier.fillMaxWidth().selectableGroup()) {
+            levels.forEachIndexed { i, e ->
+                val on = i == level
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .selectable(on, enabled = enabled, role = Role.RadioButton) { pick(i) }
+                        .testTag(ModeTags.effort(e)),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Text(
+                        effortLabel(e), style = MaterialTheme.typography.labelSmall, color = if (i == shown) p.ink else p.inkSoft,
+                        fontWeight = if (i == shown) FontWeight.SemiBold else null, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
@@ -468,24 +598,28 @@ private fun BreakdownRow(name: String, value: String, share: String?, bold: Bool
 // ---------------------------------------------------------------------------
 
 /** One hardware reading in the desktop Hardware monitor's order: CPU, memory, each GPU, then GPU memory. */
-data class HardwareRow(val label: String, val fraction: Double?, val value: String, val temp: Double?)
+data class HardwareRow(val label: String, val fraction: Double?, val value: String, val temp: Double?, val detail: String? = null)
 
 @Composable
 fun hardwareRows(s: HardwareState): List<HardwareRow> {
     val cpu = s.system?.let { (it.cpuPct / 100).coerceIn(0.0, 1.0) }
+    val memory = s.system?.takeIf { it.memTotalMB > 0 }?.let { MonitorFormat.memory(it.memUsedMB, it.memTotalMB) }
     val rows = mutableListOf(
-        HardwareRow(stringResource(R.string.hw_cpu), cpu, MonitorFormat.percent(cpu), s.system?.cpuC),
-        HardwareRow(stringResource(R.string.hw_memory), s.system?.memFraction, MonitorFormat.percent(s.system?.memFraction), s.system?.memoryC),
+        HardwareRow(stringResource(R.string.hw_cpu), cpu, MonitorFormat.percent(cpu), s.system?.cpuC, s.system?.cpuCores?.takeIf { it > 0 }?.let { stringResource(R.string.hw_cores, it) }),
+        HardwareRow(stringResource(R.string.hw_memory), s.system?.memFraction, MonitorFormat.percent(s.system?.memFraction), s.system?.memoryC, memory),
     )
+    val gpuMemory = s.gpu?.takeIf { it.totalMB > 0 }?.let { g -> stringResource(if (g.unified) R.string.hw_gpu_memory else R.string.hw_vram) to MonitorFormat.memory(g.usedMB, g.totalMB) }
     val devices = s.gpu?.devices.orEmpty()
     devices.forEach { d ->
         val f = d.utilizationPct?.let { (it / 100).coerceIn(0.0, 1.0) }
         val name = if (devices.size == 1) stringResource(R.string.hw_gpu) else stringResource(R.string.hw_gpu_n, d.index + 1)
         // The board's sensor fills in for the only GPU, as on the desktop.
-        rows += HardwareRow(name, f, MonitorFormat.percent(f), d.temperatureC ?: s.system?.gpuC?.takeIf { devices.size == 1 })
+        val temp = d.temperatureC ?: s.system?.gpuC?.takeIf { devices.size == 1 }
+        val detail = listOfNotNull(temp?.let { "${Math.round(it)}°C" }, gpuMemory?.let { (label, used) -> "$label $used" }).joinToString(" · ").ifEmpty { null }
+        rows += HardwareRow(name, f, MonitorFormat.percent(f), temp, detail)
     }
     s.gpu?.takeIf { it.totalMB > 0 }?.let { g ->
-        rows += HardwareRow(stringResource(if (g.unified) R.string.hw_gpu_memory else R.string.hw_vram), g.memFraction, MonitorFormat.percent(g.memFraction), null)
+        rows += HardwareRow(gpuMemory!!.first, g.memFraction, MonitorFormat.percent(g.memFraction), null, gpuMemory.second)
     }
     return rows
 }
@@ -512,42 +646,102 @@ private fun ThinRing(fraction: Double?, size: Dp = 18.dp) {
     }
 }
 
+/** One gauge of the minimal monitor and what its tooltip says in full. */
+private data class MiniGauge(val name: String, val fraction: Double?, val value: String, val detail: String?, val spoken: String = "$name, $value", val models: Boolean = false)
+
 /**
  * The minimal monitor in the slim row under the header: a thin ring and its percentage for
  * the CPU, memory and the first GPU, and how many models the Model Server holds. Tap for the
- * agent's details. [compact] (a folding phone's pane) drops the percentages.
+ * agent's details; a long-press (or a mouse resting on a gauge) shows that reading in full.
+ * [compact] (a folding phone's pane) drops the percentages.
  */
 @Composable
-fun MiniMonitor(state: HardwareState, onOpen: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
-    val p = Nekko.palette
+fun MiniMonitor(state: HardwareState, onOpen: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false, modelName: (String) -> String = { it }) {
     val rows = hardwareRows(state)
-    val gauges = rows.take(2) + rows.drop(2).take(1)
-    val loaded = state.engine?.resident?.size ?: 0
+    val loaded = state.engine?.resident.orEmpty()
+    val models = MiniGauge(
+        stringResource(R.string.monitor_loaded_models), null, "${loaded.size}",
+        loaded.joinToString(", ") { modelName(it.id) }.ifEmpty { stringResource(R.string.monitor_none_loaded) },
+        spoken = stringResource(R.string.monitor_models_loaded, loaded.size), models = true,
+    )
     val label = stringResource(R.string.monitor)
-    val value = gauges.joinToString(", ") { "${it.label} ${it.value}" } + ", " + stringResource(R.string.monitor_models_loaded, loaded)
+    val gauges = (rows.take(2) + rows.drop(2).take(1)).map { MiniGauge(it.label, it.fraction, it.value, it.detail) } + models
+    // The gauges sit edge to edge (no gaps), so a touch anywhere on the row lands on one.
     Row(
-        modifier
-            .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .clickable(role = Role.Button, onClick = onOpen)
-            .padding(horizontal = 8.dp)
-            .testTag(ModeTags.MONITOR)
-            .semantics(mergeDescendants = true) {
-                contentDescription = label
-                stateDescription = value
-            },
+        modifier.heightIn(min = 48.dp).padding(horizontal = 4.dp).testTag(ModeTags.MONITOR)
+            .semantics { isTraversalGroup = true; contentDescription = label },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
     ) {
-        gauges.forEach { g ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        gauges.forEach { g -> MiniGaugeView(g, compact, loaded.isNotEmpty(), onOpen) }
+    }
+}
+
+/** A pointer resting on (or leaving) this element: a mouse, trackpad or stylus, never a finger. */
+private fun Modifier.onHover(set: (Boolean) -> Unit) = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val e = awaitPointerEvent()
+            if (e.changes.firstOrNull()?.type == PointerType.Touch) continue
+            when (e.type) {
+                PointerEventType.Enter -> set(true)
+                PointerEventType.Exit -> set(false)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
+@Composable
+private fun MiniGaugeView(g: MiniGauge, compact: Boolean, anyLoaded: Boolean, onOpen: () -> Unit) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    val tip = rememberTooltipState(isPersistent = true)
+    var overGauge by remember { mutableStateOf(false) }
+    var overTip by remember { mutableStateOf(false) }
+    // A mouse on the gauge or its tooltip keeps it open; moving from one to the other doesn't close it.
+    LaunchedEffect(tip) {
+        snapshotFlow { overGauge || overTip }.debounce(250).distinctUntilChanged().collectLatest { if (it) tip.show() }
+    }
+    val details = stringResource(R.string.details)
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+        tooltip = {
+            RichTooltip(
+                modifier = Modifier.onHover { overTip = it },
+                title = { Text("${g.name} · ${g.value}") },
+                action = {
+                    TextButton(onClick = { tip.dismiss(); onOpen() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(details) }
+                },
+            ) { g.detail?.let { Text(it) } }
+        },
+        state = tip,
+        // Focusable so Back and a tap outside close it, and a screen reader reaches Details.
+        focusable = true,
+        enableUserInput = false,
+        hasAction = true,
+    ) {
+        Row(
+            Modifier
+                .heightIn(min = 48.dp)
+                .combinedClickable(
+                    role = Role.Button,
+                    onLongClickLabel = details,
+                    onLongClick = { scope.launch { tip.show() } },
+                    onClick = onOpen,
+                )
+                .onHover { overGauge = it }
+                .padding(horizontal = if (compact) 3.dp else 5.dp)
+                .semantics(mergeDescendants = true) { contentDescription = g.spoken },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (g.models) 3.dp else 4.dp),
+        ) {
+            if (g.models) {
+                Icon(Icons.Filled.ViewInAr, contentDescription = null, tint = if (anyLoaded) p.accent else p.inkFaint, modifier = Modifier.size(15.dp))
+                Text(g.value, style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
+            } else {
                 ThinRing(g.fraction)
                 if (!compact) Text(g.value, style = MaterialTheme.typography.labelSmall, color = if (g.fraction == null) p.inkFaint else p.inkSoft, maxLines = 1)
             }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            Icon(Icons.Filled.ViewInAr, contentDescription = null, tint = if (loaded > 0) p.accent else p.inkFaint, modifier = Modifier.size(15.dp))
-            Text("$loaded", style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
         }
     }
 }

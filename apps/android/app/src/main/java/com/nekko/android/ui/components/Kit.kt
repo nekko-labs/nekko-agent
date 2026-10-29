@@ -85,17 +85,23 @@ fun NCard(modifier: Modifier = Modifier, border: Color? = null, content: @Compos
     )
 }
 
+/** A group's heading; [accent] colours it, as the chats list and Monitors do. */
 @Composable
-fun SectionHeader(title: String) {
+fun SectionHeader(title: String, accent: Boolean = false) {
     Text(
         title.uppercase(),
         style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-        color = Nekko.palette.inkFaint,
+        color = if (accent) Nekko.palette.accent else Nekko.palette.inkFaint,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.6.sp,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
     )
 }
+
+/** The hairline between rows of a flat list, from [start] (past a row's icon) to the edge. */
+@Composable
+fun RowDivider(start: androidx.compose.ui.unit.Dp = 16.dp) =
+    androidx.compose.material3.HorizontalDivider(Modifier.padding(start = start), thickness = 0.5.dp, color = Nekko.palette.line)
 
 /** A soft-coloured notice line (errors, warnings). */
 @Composable

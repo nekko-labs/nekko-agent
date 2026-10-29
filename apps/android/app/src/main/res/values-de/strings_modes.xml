@@ -37,6 +37,8 @@
     <string name="hw_gpu_n">GPU %1$d</string>
     <string name="hw_gpu_memory">GPU-Speicher</string>
     <string name="hw_vram">VRAM</string>
+    <string name="hw_cores">%1$d Kerne</string>
+    <string name="details">Details</string>
     <string name="monitor">Monitor</string>
     <string name="monitor_models_loaded">%1$d Modelle geladen</string>
     <string name="monitor_reading">%1$s wird gelesen…</string>
