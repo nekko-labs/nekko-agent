@@ -10,7 +10,7 @@
 //! functions; packages/shared's `engine-data.golden.test.ts` keeps the accents
 //! in the embedded defaults current.
 
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -83,6 +83,12 @@ fn parse(text: &str) -> Option<Map<String, Value>> {
         if d.legacy_accents.iter().any(|l| *l == accent.to_lowercase()) {
             s.insert("accent".into(), Value::String(d.accent.clone()));
         }
+    }
+    if s.contains_key("autoResumeOnInternetRestore") {
+        s.insert(
+            "autoResumeOnInternetRestore".into(),
+            json!(s.get("autoResumeOnInternetRestore") == Some(&Value::Bool(true))),
+        );
     }
     Some(s)
 }
@@ -178,6 +184,46 @@ pub fn merge(current: &Map<String, Value>, patch: &Value) -> Result<Map<String, 
         && nekko_js::truthy(Some(ws))
     {
         next.insert("workspaces".into(), Value::Array(unique_folders(ws)?));
+    }
+    // Merge Mode changes under this store's write lock. Independent windows
+    // send only changed fields, so an old renderer cannot erase another choice.
+    if let Some(fields) = patch.get("defaultSessionOptions").and_then(Value::as_object) {
+        let mut defaults = current.get("defaultSessionOptions").and_then(Value::as_object).cloned().unwrap_or_default();
+        for (key, value) in fields {
+            if key == "effort" && value.is_null() {
+                // "Use the app default" must also override a starred mode's effort.
+                let effort =
+                    next.get("effort").filter(|v| !v.is_null()).cloned().unwrap_or(Value::String("normal".into()));
+                defaults.insert(key.clone(), effort);
+            } else if value.is_null() {
+                defaults.shift_remove(key);
+            } else {
+                defaults.insert(key.clone(), value.clone());
+            }
+        }
+        next.insert("defaultSessionOptions".into(), Value::Object(defaults));
+    }
+    // An explicit new starred mode replaces the last-used bundle.
+    if patch.get("defaultSavedModeId").is_some() {
+        next.shift_remove("defaultSessionOptions");
+    }
+    for (setting, field) in
+        [("effort", "effort"), ("defaultChatMode", "mode"), ("defaultExecutionMode", "executionMode")]
+    {
+        if let Some(value) = patch.get(setting)
+            && let Some(defaults) = next.get_mut("defaultSessionOptions").and_then(Value::as_object_mut)
+        {
+            defaults.insert(field.into(), value.clone());
+            if field == "executionMode" {
+                defaults.insert("gitIsolation".into(), Value::Bool(value.as_str() == Some("worktree")));
+            }
+        }
+    }
+    if next.contains_key("autoResumeOnInternetRestore") {
+        next.insert(
+            "autoResumeOnInternetRestore".into(),
+            json!(next.get("autoResumeOnInternetRestore") == Some(&Value::Bool(true))),
+        );
     }
     Ok(next)
 }
@@ -365,5 +411,58 @@ mod tests {
         store.reset().unwrap();
         assert_eq!(SettingsStore::new(&dir).get()["theme"], "system");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod chat_defaults_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn clearing_effort_uses_app_default_even_with_a_starred_mode() {
+        let current = json!({ "effort": "low", "defaultSavedModeId": "custom",
+            "defaultSessionOptions": { "effort": "max", "memory": "off" } });
+        let next =
+            merge(current.as_object().unwrap(), &json!({ "defaultSessionOptions": { "effort": null } })).unwrap();
+        assert_eq!(next["defaultSessionOptions"], json!({ "effort": "low", "memory": "off" }));
+    }
+
+    #[test]
+    fn unstar_clears_overrides_and_new_manual_choices_merge_afterwards() {
+        let current = json!({ "defaultSavedModeId": "fusion", "defaultSessionOptions": { "memory": "off" } });
+        let next = merge(current.as_object().unwrap(), &json!({ "defaultSavedModeId": null })).unwrap();
+        assert!(next.get("defaultSessionOptions").is_none());
+        assert!(next["defaultSavedModeId"].is_null());
+        let next = merge(&next, &json!({ "defaultSessionOptions": { "memory": "project", "mode": "ask" } })).unwrap();
+        let next = merge(&next, &json!({ "defaultSessionOptions": { "memory": null, "mode": "yolo" } })).unwrap();
+        assert_eq!(next["defaultSessionOptions"], json!({ "mode": "yolo" }));
+    }
+
+    #[test]
+    fn independent_windows_merge_choices_and_restart_keeps_them() {
+        let dir = std::env::temp_dir().join(format!("nekko-settings-chat-defaults-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Arc::new(SettingsStore::new(dir.clone()));
+        let a = store.clone();
+        let b = store.clone();
+        let a = std::thread::spawn(move || a.update(&json!({ "defaultSessionOptions": { "effort": "max" } })).unwrap());
+        let b = std::thread::spawn(move || {
+            b.update(&json!({ "defaultSessionOptions": { "mode": "ask", "memory": "off" } })).unwrap()
+        });
+        a.join().unwrap();
+        b.join().unwrap();
+        let reopened = SettingsStore::new(dir.clone());
+        assert_eq!(reopened.get()["defaultSessionOptions"], json!({ "effort": "max", "mode": "ask", "memory": "off" }));
+        let cleared = reopened.update(&json!({ "defaultSessionOptions": { "effort": null } })).unwrap();
+        assert_eq!(cleared["defaultSessionOptions"], json!({ "mode": "ask", "memory": "off", "effort": "normal" }));
+        let explicit = reopened.update(&json!({ "effort": "low", "defaultChatMode": "guardrails" })).unwrap();
+        assert_eq!(
+            explicit["defaultSessionOptions"],
+            json!({ "mode": "guardrails", "memory": "off", "effort": "low" })
+        );
+        let starred = reopened.update(&json!({ "defaultSavedModeId": "fusion" })).unwrap();
+        assert!(starred.get("defaultSessionOptions").is_none());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

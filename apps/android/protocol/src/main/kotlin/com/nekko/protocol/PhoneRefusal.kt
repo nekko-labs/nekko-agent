@@ -7,9 +7,11 @@ package com.nekko.protocol
  * in apps/ios/Protocol/Sources/NekkoProtocol/ChangeProof.swift.
  *
  * Codes: `read-off` and `change-off` (Remote access → What phones can do is off
- * for that kind of channel), `proof-*` (raising a chat's mode needs a signed
- * Change proof, which this app can't make yet; the detail is the channel),
- * `device-unknown`, `channel-denied` (the computer doesn't know the channel).
+ * for that kind of channel), `proof-*` (a Change action or raising a chat's
+ * mode needs a signed Change proof, [ChangeProof]; the detail is the channel),
+ * `key-*` (the phone's Change key, `device:registerKey`), `device-unknown`, `channel-denied` (the computer doesn't know the channel),
+ * `step-up-required|invalid|stale|replayed` (the computer wants a second
+ * factor too, SK-7; [asksForStepUp]) and `quit-disabled` (SK-3).
  */
 data class PhoneRefusal(val code: String, val detail: String) {
     /** A missing or rejected Change proof. */
@@ -18,16 +20,24 @@ data class PhoneRefusal(val code: String, val detail: String) {
     /** Refused for want of a proof when raising a chat's mode (new chats or this one). */
     val isModeChange: Boolean get() = isProof && detail in MODE_CHANNELS
 
+    /** A step-up refusal (SK-7) or `quit-disabled`; null for every other code. */
+    val stepUp: StepUpCode? get() = StepUpCode.of(code)
+
+    /** A guarded call that a step-up sheet can answer: ask for a key or a code, then send it again. */
+    val asksForStepUp: Boolean get() = stepUp?.asksAgain == true
+
     /** What to tell the owner, or null to show the computer's message as it is. */
-    fun message(computer: String): String? = when {
+    fun message(computer: String): String? = stepUp?.message ?: when {
         code == "read-off" ->
             "Reading from this phone is turned off on $computer. Turn it on in Remote access → What phones can do."
         code == "change-off" ->
             "Changes from this phone are turned off on $computer. Turn them on in Remote access → What phones can do."
-        isModeChange ->
-            "Switching to Guardrails or YOLO needs a confirmation this phone can’t give yet. Change the mode on $computer."
-        isProof ->
-            "$computer needs a confirmation this phone can’t give yet. Do this on $computer."
+        code == "key-mismatch" -> "$computer knows a different key for this phone. Remove this phone on $computer and pair it again."
+        code == "key-missing" || code == "key-invalid" -> "$computer couldn’t set up confirmations from this phone. Try again."
+        code == "proof-required" && isModeChange ->
+            "Confirm with your fingerprint or screen lock to let chats on $computer run with fewer approvals."
+        code == "proof-stale" -> "$computer couldn’t confirm it was you: check that this phone’s clock is right, then try again."
+        isProof -> "$computer couldn’t confirm it was you. Try again."
         code == "device-unknown" -> "$computer doesn’t know this phone any more. Pair it again."
         code == "channel-denied" -> "$computer doesn’t allow this from a phone. Update Nekko Agent on $computer if it’s new."
         code == "value-invalid" && detail == "secret file" -> "This file may hold secrets, so it never leaves $computer."

@@ -84,6 +84,10 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  # Signs like electron-builder does, but gives resources/bin/nekko-vm its own
+  # entitlements (com.apple.security.virtualization). Never put that one in the
+  # files above: everything the app starts, nekkod included, inherits them.
+  sign: scripts/sign-mac.cjs
   # Left off here on purpose: notarization needs the App Store Connect key,
   # which only the release workflow has. It turns this on with
   # `-c.mac.notarize=true` rather than failing every local `npm run dist`.
@@ -93,6 +97,8 @@ mac:
     # Required for the QR pairing scanner (QrScanner.tsx → getUserMedia).
     # Without it macOS kills the process instead of prompting.
     NSCameraUsageDescription: Nekko Agent uses the camera to scan the pairing QR code shown by the Nekko Agent mobile app.
+    # Desktops (Spaces): switching sends Mission Control's shortcuts through System Events.
+    NSAppleEventsUsageDescription: Nekko Agent switches you to another desktop by pressing Mission Control's shortcuts for you, when you turn on a desktop or ask by voice.
 # The drag-to-install window: a pixel Nekko leaping from the app to the
 # Applications folder. The art comes from scripts/gen-dmg-art.mjs, whose
 # APP_X / APPS_X / ICON_Y match the two icon positions here; the labels sit on

@@ -1,0 +1,116 @@
+//! The runner's settings: the defaults the spec fixes and the camelCase JSON
+//! the UI and the config file share.
+
+use nekko_runner::{KeepAwake, Priority, RunnerConfig, RunnerSettings, Scope};
+use serde_json::json;
+
+#[test]
+fn defaults_match_the_spec() {
+    let s = RunnerSettings::default();
+    assert_eq!(
+        (s.priority, s.keep_awake, s.macos_slots, s.memory_per_vm_mb),
+        (Priority::DoNotDisturb, KeepAwake::WhileActive, 1, 8192)
+    );
+    assert_eq!((s.disk_budget_gb, s.disk_floor_gb, s.max_job_minutes), (150, 25, 120));
+    assert!(s.only_on_power && s.trusted_networks_only && s.never_on_hotspot && !s.allow_fork_prs);
+    assert!(!s.enabled && s.linux_slots == 0 && s.cpus_per_vm.is_none());
+    assert!(s.rerun_lost_jobs && s.trusted_cache);
+    assert!(!s.allow_direct_with_vpn);
+}
+
+#[test]
+fn settings_round_trip_camel_case() {
+    let v = serde_json::to_value(RunnerSettings::default()).unwrap();
+    assert_eq!(v["keepAwake"], "whileActive");
+    assert_eq!(v["priority"], "doNotDisturb");
+    assert_eq!(v["macosSlots"], 1);
+    assert_eq!(v["memoryPerVmMb"], 8192);
+    assert_eq!(v["cpusPerVm"], serde_json::Value::Null);
+    assert_eq!(v["runnerMemoryMb"], serde_json::Value::Null);
+    assert_eq!(serde_json::from_value::<RunnerSettings>(v).unwrap(), RunnerSettings::default());
+
+    let cfg = RunnerConfig {
+        id: "r1".into(),
+        scope: Scope::Repo { owner: "acme".into(), repo: "app".into() },
+        label: "nekko-cloud-mac".into(),
+        settings: RunnerSettings::default(),
+    };
+    let v = serde_json::to_value(&cfg).unwrap();
+    assert_eq!(v["scope"], json!({"kind": "repo", "owner": "acme", "repo": "app"}));
+    assert_eq!(serde_json::from_value::<RunnerConfig>(v).unwrap(), cfg);
+
+    let org = serde_json::to_value(Scope::Org { org: "acme".into() }).unwrap();
+    assert_eq!(org, json!({"kind": "org", "org": "acme"}));
+}
+
+#[test]
+fn missing_fields_take_defaults() {
+    let s: RunnerSettings = serde_json::from_value(json!({"enabled": true, "priority": "runnerFirst"})).unwrap();
+    assert!(s.enabled);
+    assert_eq!(s.priority, Priority::RunnerFirst);
+    assert_eq!(s.max_job_minutes, 120);
+}
+
+#[test]
+fn runner_memory_round_trips() {
+    let s = RunnerSettings { runner_memory_mb: Some(16384), ..Default::default() };
+    let v = serde_json::to_value(&s).unwrap();
+    assert_eq!(v["runnerMemoryMb"], 16384);
+    assert_eq!(serde_json::from_value::<RunnerSettings>(v).unwrap(), s);
+}
+
+#[test]
+fn allow_direct_with_vpn_round_trips_and_defaults_off() {
+    assert_eq!(serde_json::to_value(RunnerSettings::default()).unwrap()["allowDirectWithVpn"], false);
+    let s = RunnerSettings { allow_direct_with_vpn: true, ..Default::default() };
+    let v = serde_json::to_value(&s).unwrap();
+    assert_eq!(v["allowDirectWithVpn"], true);
+    assert_eq!(serde_json::from_value::<RunnerSettings>(v).unwrap(), s);
+    let old: RunnerSettings = serde_json::from_value(json!({"enabled": true})).unwrap();
+    assert!(!old.allow_direct_with_vpn);
+}
+
+#[test]
+fn sanitize_clamps_out_of_range_values() {
+    let s = RunnerSettings {
+        macos_slots: 7,
+        linux_slots: 3,
+        memory_per_vm_mb: 0,
+        runner_memory_mb: Some(0),
+        cpus_per_vm: Some(1),
+        disk_budget_gb: 1,
+        disk_floor_gb: 0,
+        max_job_minutes: 100_000,
+        trusted_networks: vec![" gw:aa ".into(), "".into(), "gw:aa".into()],
+        ..Default::default()
+    }
+    .sanitized();
+    assert_eq!(
+        (s.macos_slots, s.linux_slots, s.memory_per_vm_mb, s.runner_memory_mb, s.cpus_per_vm),
+        (2, 0, 8192, None, Some(2))
+    );
+    assert_eq!((s.disk_budget_gb, s.disk_floor_gb, s.max_job_minutes), (50, 10, 1440));
+    assert_eq!(s.trusted_networks, vec!["gw:aa".to_string()]);
+    assert_eq!(RunnerSettings { memory_per_vm_mb: 1024, ..Default::default() }.sanitized().memory_per_vm_mb, 4096);
+    let many = RunnerSettings { trusted_networks: (0..40).map(|i| format!("gw:{i}")).collect(), ..Default::default() };
+    assert_eq!(many.sanitized().trusted_networks.len(), 32);
+}
+
+#[test]
+fn sanitize_keeps_valid_settings() {
+    assert_eq!(RunnerSettings::default().sanitized(), RunnerSettings::default());
+}
+
+#[test]
+fn trusted_networks_round_trip() {
+    let s: RunnerSettings = serde_json::from_value(json!({"trustedNetworks": ["gw:aa:bb:cc:dd:ee:ff"]})).unwrap();
+    assert_eq!(s.trusted_networks, vec!["gw:aa:bb:cc:dd:ee:ff".to_string()]);
+    assert_eq!(serde_json::to_value(&s).unwrap()["trustedNetworks"], json!(["gw:aa:bb:cc:dd:ee:ff"]));
+    assert!(serde_json::from_value::<RunnerSettings>(json!({})).unwrap().trusted_networks.is_empty());
+}
+
+#[test]
+fn default_settings_match_the_shared_fixture() {
+    let want: serde_json::Value = serde_json::from_str(include_str!("fixtures/default-settings.json")).unwrap();
+    assert_eq!(serde_json::to_value(RunnerSettings::default()).unwrap(), want);
+}

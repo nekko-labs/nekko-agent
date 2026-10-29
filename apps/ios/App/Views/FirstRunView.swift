@@ -15,7 +15,7 @@ struct FirstRunIntroView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 StepLabel(step: 1)
-                CatMark().frame(width: 56, height: 56).foregroundStyle(palette.accent)
+                BrandMark().frame(width: 64, height: 64)
                 Text("Your agent, in your pocket").font(.largeTitle.weight(.bold)).foregroundStyle(palette.ink)
                     .accessibilityAddTraits(.isHeader)
                 Text("Nekko Agent runs on your computer. This app lets you drive it from anywhere.")

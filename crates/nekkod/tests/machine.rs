@@ -120,6 +120,17 @@ async fn machine_channels_are_served_without_a_backend() {
         assert_eq!(act["headless"], json!(false), "{act}");
     }
 
+    // Whether a full-screen app (a game) is in front: a state, never which app.
+    let (status, fs) = post(d.port, "activity:fullscreen", json!([])).await;
+    assert_eq!(status, 200, "{fs}");
+    let state = fs["state"].as_str().unwrap_or_default();
+    assert!(["free", "d3dFullscreen", "busy", "presentation"].contains(&state), "{fs}");
+    assert_eq!(fs["quiet"], json!(state != "free"), "{fs}");
+    assert_eq!(fs.as_object().map(|o| o.len()), Some(2), "{fs}");
+    if !cfg!(windows) {
+        assert_eq!(fs, json!({ "quiet": false, "state": "free" }));
+    }
+
     let (status, body) = post(d.port, "resource:queue", json!(["list", {}])).await;
     assert_eq!((status, body["error"].clone()), (400, json!("Resource queue experiment is disabled")));
 

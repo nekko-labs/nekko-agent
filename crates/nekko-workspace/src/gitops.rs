@@ -973,6 +973,9 @@ impl GitOps {
         let merge = self.run(dir, &["config", "--get", &merge_key], READ_TIMEOUT).await;
         let upstream_ref = js::trim(&merge.stdout).to_string();
         let remote = self.push_remote(dir, &branch).await;
+        if let Err(m) = nekko_net::check("github", remote.as_deref().unwrap_or("origin")) {
+            return Ok(fail(m));
+        }
         let local = format!("refs/heads/{branch}");
         let r = if merge.ok && upstream_ref.starts_with("refs/heads/") {
             let Some(remote) = remote else { return Ok(fail("This branch's upstream remote is missing.")) };

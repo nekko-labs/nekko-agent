@@ -149,8 +149,14 @@ fn api_error(status: u16, authed: bool) -> String {
 }
 
 /// What `fetch` rejects with: undici's `fetch failed`, or the timeout signal's reason.
-fn fetch_error(e: reqwest::Error) -> String {
-    if e.is_timeout() { "The operation was aborted due to timeout".into() } else { "fetch failed".into() }
+fn fetch_error(e: nekko_net::Error) -> String {
+    if e.is_blocked() {
+        e.to_string()
+    } else if e.is_timeout() {
+        "The operation was aborted due to timeout".into()
+    } else {
+        "fetch failed".into()
+    }
 }
 
 /// GitHub's REST API and raw file host (`ctx(deps)`'s `api` and `raw`).
@@ -183,11 +189,11 @@ impl Gh {
         if let Some(t) = &self.token {
             req = req.header("Authorization", format!("Bearer {t}"));
         }
-        let res = req.send().await.map_err(fetch_error)?;
+        let res = nekko_net::send("skill-sources", req).await.map_err(fetch_error)?;
         if !res.status().is_success() {
             return Err(api_error(res.status().as_u16(), self.token.is_some()));
         }
-        let text = js::decode_text(&res.bytes().await.map_err(fetch_error)?);
+        let text = js::decode_text(&res.bytes().await.map_err(|e| fetch_error(nekko_net::Error::Http(e)))?);
         // `res.json()`; V8's wording for an empty body, serde's otherwise.
         serde_json::from_str::<Value>(&text)
             .map(js::js_order)
@@ -197,7 +203,9 @@ impl Gh {
     /// `raw(githubRawUrl(repo, ref, file))`, with every caller's
     /// `.catch(() => null)`: the file's text, or `None`.
     async fn raw(&self, repo: &str, r#ref: &str, file: &str) -> Option<String> {
-        let res = self.http.get(raw_url_at(&self.raw_base, repo, r#ref, file)).send().await.ok()?;
+        let res = nekko_net::send("skill-sources", self.http.get(raw_url_at(&self.raw_base, repo, r#ref, file)))
+            .await
+            .ok()?;
         if !res.status().is_success() {
             return None;
         }

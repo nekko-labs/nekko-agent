@@ -3,6 +3,7 @@ import type { PrInfo, PrAction, PrDiff, PrChecks } from '@nekko-agent/shared';
 import { getExecutionMode, parsePrUrl } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { subscribePrPolling } from '../prPolling.js';
+import { PrProgress } from './WorkProgress.js';
 import { BranchIcon, CheckIcon, CloseIcon } from '../icons.js';
 
 /** Summarise a chat's PRs for the sidebar/header badges. */
@@ -63,8 +64,22 @@ export function PrCard({ url, info, event = 'created' }: { url: string; info?: P
   );
 }
 
+/** Runs a PR action for a chat, toasts the result and refreshes the chat's PRs. Shared with "Nekko, ship it". */
+export async function runPrAction(sessionId: string, url: string, action: PrAction): Promise<void> {
+  try {
+    const res = await window.nekko.prAction(url, action);
+    useStore.getState().pushToast(res.ok ? 'success' : 'error', res.message);
+    if (res.pr) {
+      useStore.setState((s) => ({ prsBySession: { ...s.prsBySession, [sessionId]: [...(s.prsBySession[sessionId] ?? []).filter((p) => p.url !== url), res.pr!] } }));
+    }
+    await useStore.getState().refreshSessionPrs(sessionId);
+  } catch (e) {
+    useStore.getState().pushToast('error', (e as Error).message);
+  }
+}
+
 /** Live actions stay above the composer and disappear when the PR is resolved. */
-export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string; info?: PrInfo; sessionId: string; onDismiss: () => void }) {
+export function PrActionCard({ url, info, sessionId, onDismiss, checksInPlan = false }: { url: string; info?: PrInfo; sessionId: string; onDismiss: () => void; checksInPlan?: boolean }) {
   const parsed = parsePrUrl(url);
   const openPrPane = useStore((s) => s.openPrPane);
   const [busy, setBusy] = useState<PrAction | 'continue' | 'stack' | null>(null);
@@ -79,16 +94,7 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
     if (confirm !== action) { setConfirm(action); return; }
     setConfirm(null);
     setBusy(action);
-    try {
-      const res = await window.nekko.prAction(url, action);
-      useStore.getState().pushToast(res.ok ? 'success' : 'error', res.message);
-      if (res.pr) {
-        useStore.setState((s) => ({ prsBySession: { ...s.prsBySession, [sessionId]: [...(s.prsBySession[sessionId] ?? []).filter((p) => p.url !== url), res.pr!] } }));
-      }
-      await useStore.getState().refreshSessionPrs(sessionId);
-    } catch (e) {
-      useStore.getState().pushToast('error', (e as Error).message);
-    } finally { setBusy(null); }
+    try { await runPrAction(sessionId, url, action); } finally { setBusy(null); }
   };
   const check = info ? CHECK_META[info.checks] : CHECK_META.none;
   const stackAction = async (action: 'continue' | 'stack') => {
@@ -105,14 +111,16 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
   };
   const actionClass = 'rounded-md px-1.5 py-0.5 text-[11px] font-medium hover:bg-surface-2 disabled:opacity-50';
   return (
-    <div className="pr-deck-card flex items-start gap-2 rounded-lg border border-line px-2.5 py-1.5" data-pr-actions={url}>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <div className="pr-deck-card rounded-lg border border-line px-2.5 py-1.5" data-pr-actions={url}>
+      <div className="pr-action-layout">
+      <div className="pr-action-content min-w-0 flex-1">
+        <div className="pr-action-heading flex flex-wrap items-center gap-x-2 gap-y-1">
           <a href={url} className="truncate font-mono text-[11px] font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
           <span className="text-[10px] text-ink-faint">{info ? info.isDraft ? 'Draft' : 'Open' : 'Status unavailable'}</span>
-          {check.dot && <span className="text-[10px]" style={{ color: check.color }}>{check.dot} {check.label}</span>}
+          {!info?.checkProgress && check.dot && <span className="text-[10px]" style={{ color: check.color }}>{check.dot} {check.label}</span>}
         </div>
         {info?.title && <p className="truncate text-[12px]">{info.title}</p>}
+        <PrProgress url={url} info={info} checks={!checksInPlan} />
         {info?.stack && <span className="text-[10px] text-ink-soft">GitHub stack · {info.stack.size} PRs</span>}
         {parent && <a className="block truncate text-[10px] text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}
       </div>
@@ -129,8 +137,9 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
         <button className={actionClass} onClick={() => openExternally(url)} aria-label="Open on GitHub">↗</button>
         {confirm && <button className={actionClass} onClick={() => setConfirm(null)}>Cancel</button>}
       </div>
-      <button className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink"
+      <button className="pr-action-dismiss grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink"
         onClick={onDismiss} aria-label={'Hide PR ' + label} title="Hide this PR panel (does not close the PR)"><CloseIcon className="h-3.5 w-3.5" /></button>
+      </div>
     </div>
   );
 }
@@ -140,7 +149,8 @@ export function PrActionCard({ url, info, sessionId, onDismiss }: { url: string;
  * and the cards stack above it. `floating` closes it into a standalone card
  * where there is no divider below (the wall composer).
  */
-export function PrActionDock({ sessionId, prs, urls, floating = false }: { sessionId: string; prs: PrInfo[]; urls: string[]; floating?: boolean }) {
+/** checksInPlan: the plan card above shows this PR's CI, so the card leaves it out. */
+export function PrActionDock({ sessionId, prs, urls, floating = false, checksInPlan = false }: { sessionId: string; prs: PrInfo[]; urls: string[]; floating?: boolean; checksInPlan?: boolean }) {
   const storageKey = 'nekko.pr-dismissed.' + sessionId;
   const load = () => {
     try { const value = JSON.parse(localStorage.getItem(storageKey) ?? '[]'); return new Set<string>(Array.isArray(value) ? value.filter((x) => typeof x === 'string') : []); }
@@ -152,7 +162,8 @@ export function PrActionDock({ sessionId, prs, urls, floating = false }: { sessi
   const active = tracked.filter((url) => !byUrl.has(url) || byUrl.get(url)?.state === 'open');
   const statusKey = tracked.map((url) => url + ':' + (byUrl.get(url)?.state ?? 'unknown')).sort().join('|');
   const [expansion, setExpansion] = useState<{ key: string; value: boolean } | null>(null);
-  const expanded = expansion?.key === statusKey ? expansion.value : active.length > 0;
+  // The plan card already shows these PRs and their CI, so the actions start tucked away.
+  const expanded = expansion?.key === statusKey ? expansion.value : active.length > 0 && !checksInPlan;
   const [closing, setClosing] = useState<Set<string>>(() => new Set());
   useEffect(() => { setDismissed(load()); }, [storageKey]);
   useEffect(() => subscribePrPolling(sessionId, () => useStore.getState().refreshSessionPrs(sessionId)), [sessionId]);
@@ -186,7 +197,7 @@ export function PrActionDock({ sessionId, prs, urls, floating = false }: { sessi
     <div className="pr-deck-reveal" id={'pr-deck-' + sessionId} inert={!expanded}>
       <div className="pr-deck-clip"><div className="pr-deck-list">
         {active.map((url) => <div key={url} className="pr-deck-slot" data-closing={closing.has(url)} onAnimationEnd={(event) => { if (event.target === event.currentTarget && event.animationName === 'pr-deck-retract') finishDismiss(url); }}>
-          <PrActionCard url={url} info={byUrl.get(url)} sessionId={sessionId} onDismiss={() => dismiss(url)} />
+          <PrActionCard url={url} info={byUrl.get(url)} sessionId={sessionId} onDismiss={() => dismiss(url)} checksInPlan={checksInPlan} />
         </div>)}
       </div></div>
     </div>

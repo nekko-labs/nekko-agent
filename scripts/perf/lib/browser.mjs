@@ -149,6 +149,8 @@ async function launchOnce(bin, { port, width, height, vsync, gpu }) {
     `--window-size=${width},${height}`,
     '--no-first-run',
     '--no-default-browser-check',
+    // Otherwise macOS Chrome prompts for the login keychain ("Chromium Safe Storage").
+    '--use-mock-keychain',
     '--disable-extensions',
     '--disable-background-networking',
     '--disable-component-update',

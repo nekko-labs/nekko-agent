@@ -215,6 +215,7 @@ pub async fn continue_stack(host: &dyn StackHost, session_id: &str, url: &str) -
                 .iter()
                 .map(|a| a.to_string())
                 .collect();
+            nekko_net::check("github", "github.com")?;
             if !host.fetch(&path, &fetch_args).await {
                 return Err(
                     "Could not fetch the parent PR. Check Git authentication and repository access, then retry.".into(),

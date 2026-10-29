@@ -1,0 +1,295 @@
+{
+ "_note": "Posture model cases shared by NekkoKit (Posture.swift) and the Android app (Posture.kt). Sizes in points / dp. Edit here and copy to apps/android/protocol/src/test/resources/posture.json; both tests check the copies match.",
+ "cases": [
+  {
+   "name": "Phone portrait (any phone, a Fold's cover screen)",
+   "input": {
+    "widthDp": 390,
+    "heightDp": 844,
+    "widthClass": "compact",
+    "heightClass": "expanded"
+   },
+   "expected": "closed"
+  },
+  {
+   "name": "Phone landscape, big iPhone: wide but short, stays one column",
+   "input": {
+    "widthDp": 932,
+    "heightDp": 430,
+    "widthClass": "expanded",
+    "heightClass": "compact"
+   },
+   "expected": "closed"
+  },
+  {
+   "name": "Flip open inner screen, portrait: under 600 wide",
+   "input": {
+    "widthDp": 412,
+    "heightDp": 915,
+    "widthClass": "compact",
+    "heightClass": "expanded",
+    "hinge": {
+     "bounds": {
+      "x": 0,
+      "y": 457,
+      "width": 412,
+      "height": 0
+     },
+     "state": "flat",
+     "orientation": "horizontal",
+     "isSeparating": false
+    }
+   },
+   "expected": "closed"
+  },
+  {
+   "name": "Flip half open (tabletop) under 600 wide stays closed",
+   "input": {
+    "widthDp": 412,
+    "heightDp": 915,
+    "widthClass": "compact",
+    "heightClass": "expanded",
+    "hinge": {
+     "bounds": {
+      "x": 0,
+      "y": 457,
+      "width": 412,
+      "height": 0
+     },
+     "state": "halfOpened",
+     "orientation": "horizontal",
+     "isSeparating": false
+    }
+   },
+   "expected": "closed"
+  },
+  {
+   "name": "Fold open flat, held wide (near-square, portrait-ish)",
+   "input": {
+    "widthDp": 673,
+    "heightDp": 841,
+    "widthClass": "medium",
+    "heightClass": "medium",
+    "hinge": {
+     "bounds": {
+      "x": 336,
+      "y": 0,
+      "width": 0,
+      "height": 841
+     },
+     "state": "flat",
+     "orientation": "vertical",
+     "isSeparating": false
+    }
+   },
+   "expected": "openWide"
+  },
+  {
+   "name": "Fold open flat, rotated (landscape)",
+   "input": {
+    "widthDp": 841,
+    "heightDp": 673,
+    "widthClass": "expanded",
+    "heightClass": "medium",
+    "hinge": {
+     "bounds": {
+      "x": 0,
+      "y": 336,
+      "width": 841,
+      "height": 0
+     },
+     "state": "flat",
+     "orientation": "horizontal",
+     "isSeparating": false
+    }
+   },
+   "expected": "openWide"
+  },
+  {
+   "name": "Pixel Fold open, landscape",
+   "input": {
+    "widthDp": 841,
+    "heightDp": 701,
+    "widthClass": "expanded",
+    "heightClass": "medium",
+    "hinge": {
+     "bounds": {
+      "x": 420,
+      "y": 0,
+      "width": 0,
+      "height": 701
+     },
+     "state": "flat",
+     "orientation": "vertical",
+     "isSeparating": false
+    }
+   },
+   "expected": "openWide"
+  },
+  {
+   "name": "Open, tall: a tall unfolded window without a hinge",
+   "input": {
+    "widthDp": 700,
+    "heightDp": 1100,
+    "widthClass": "medium",
+    "heightClass": "expanded"
+   },
+   "expected": "openTall"
+  },
+  {
+   "name": "Fold half open, hinge horizontal: tabletop",
+   "input": {
+    "widthDp": 841,
+    "heightDp": 673,
+    "widthClass": "expanded",
+    "heightClass": "medium",
+    "hinge": {
+     "bounds": {
+      "x": 0,
+      "y": 336,
+      "width": 841,
+      "height": 0
+     },
+     "state": "halfOpened",
+     "orientation": "horizontal",
+     "isSeparating": false
+    }
+   },
+   "expected": "tabletop"
+  },
+  {
+   "name": "Fold half open, hinge vertical: book",
+   "input": {
+    "widthDp": 673,
+    "heightDp": 841,
+    "widthClass": "medium",
+    "heightClass": "medium",
+    "hinge": {
+     "bounds": {
+      "x": 336,
+      "y": 0,
+      "width": 0,
+      "height": 841
+     },
+     "state": "halfOpened",
+     "orientation": "vertical",
+     "isSeparating": false
+    }
+   },
+   "expected": "book"
+  },
+  {
+   "name": "iPad portrait, full screen (no hinge)",
+   "input": {
+    "widthDp": 820,
+    "heightDp": 1180,
+    "widthClass": "medium",
+    "heightClass": "expanded"
+   },
+   "expected": "openTall"
+  },
+  {
+   "name": "iPad landscape, full screen (no hinge)",
+   "input": {
+    "widthDp": 1180,
+    "heightDp": 820,
+    "widthClass": "expanded",
+    "heightClass": "medium"
+   },
+   "expected": "openWide"
+  },
+  {
+   "name": "iPad Slide Over / narrow split (compact width)",
+   "input": {
+    "widthDp": 320,
+    "heightDp": 1180,
+    "widthClass": "compact",
+    "heightClass": "expanded"
+   },
+   "expected": "closed"
+  },
+  {
+   "name": "iPad half split, 600 wide and tall",
+   "input": {
+    "widthDp": 600,
+    "heightDp": 820,
+    "widthClass": "medium",
+    "heightClass": "medium"
+   },
+   "expected": "openTall"
+  },
+  {
+   "name": "Just under 600 wide is closed whatever the class",
+   "input": {
+    "widthDp": 599,
+    "heightDp": 800,
+    "widthClass": "medium",
+    "heightClass": "medium"
+   },
+   "expected": "closed"
+  },
+  {
+   "name": "Surface Duo spanned wide: separating vertical hinge",
+   "input": {
+    "widthDp": 1114,
+    "heightDp": 705,
+    "widthClass": "expanded",
+    "heightClass": "medium",
+    "hinge": {
+     "bounds": {
+      "x": 540,
+      "y": 0,
+      "width": 34,
+      "height": 705
+     },
+     "state": "flat",
+     "orientation": "vertical",
+     "isSeparating": true
+    }
+   },
+   "expected": "openWide"
+  },
+  {
+   "name": "Surface Duo spanned tall: separating horizontal hinge",
+   "input": {
+    "widthDp": 705,
+    "heightDp": 1114,
+    "widthClass": "medium",
+    "heightClass": "expanded",
+    "hinge": {
+     "bounds": {
+      "x": 0,
+      "y": 540,
+      "width": 705,
+      "height": 34
+     },
+     "state": "flat",
+     "orientation": "horizontal",
+     "isSeparating": true
+    }
+   },
+   "expected": "openTall"
+  },
+  {
+   "name": "Surface Duo half open like a book",
+   "input": {
+    "widthDp": 1114,
+    "heightDp": 705,
+    "widthClass": "expanded",
+    "heightClass": "medium",
+    "hinge": {
+     "bounds": {
+      "x": 540,
+      "y": 0,
+      "width": 34,
+      "height": 705
+     },
+     "state": "halfOpened",
+     "orientation": "vertical",
+     "isSeparating": true
+    }
+   },
+   "expected": "book"
+  }
+ ]
+}

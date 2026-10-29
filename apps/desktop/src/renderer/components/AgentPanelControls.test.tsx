@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import '../tests/browserGlobals.js';
-import { cssRule, hasSelector, stylesheet } from '../tests/css.js';
+import { cssRule, cssValue, hasSelector, stylesheet } from '../tests/css.js';
 import { loadWall, summary, windowBody } from '../tests/renderWall.js';
 import { AgentPanelControls } from './AgentPanelControls.js';
 import { NumberedAgentIcon } from './NumberedChatIcon.js';
@@ -52,25 +52,24 @@ describe('agent window identity and activity', () => {
     expect(windowBody(wall, 'b')).toMatch(/data-frame-icon[^]*numbered-agent-icon[^]*aria-label="Window 2"/);
     expect(wall).not.toContain('numbered-chat-icon');
   });
-  it('gives a working window a quieter copy of the composer beam', async () => {
+  it('keeps working status without an animated colored border', async () => {
     const wall = (await loadWall()).render(two, { sessions: [summary('a'), summary('b')], running: ['a'] });
-    expect(windowBody(wall, 'a')).toContain('class="composer-beam-ring wall-window-beam"');
-    expect(windowBody(wall, 'b')).not.toContain('wall-window-beam');
-    expect(cssRule(styles, '.wall-window-beam').opacity).toBe('0.55');
-    expect(cssRule(styles, '.wall-window-beam .composer-beam-spin')['animation-duration']).toBe('5s');
+    expect(windowBody(wall, 'a')).toContain('data-wall-working="true"');
+    expect(wall).not.toContain('composer-beam');
+    expect(hasSelector(styles, /composer-beam|wall-window-beam/)).toBe(false);
   });
 });
 
 describe('wall chrome fixes', () => {
-  it('floats the composer resize grips outside its edges', () => {
+  it('floats the composer resize grips outside its edges, the bottom one in the wall gap', () => {
     expect(cssRule(styles, '.wall-composer.panel').overflow).toBe('visible');
     expect(cssRule(styles, '.wall-composer-side[data-edge="left"]').left).toBe('-14px');
     expect(cssRule(styles, '.wall-composer-side[data-edge="right"]').right).toBe('-14px');
-    expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe('-14px');
+    expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe(cssValue('calc(-1 * var(--wall-gap))'));
   });
   it('reserves snap-to-grid space so revealing it never shifts the controls beside it', () => {
     const hidden = cssRule(styles, '.wall-auto-arrange');
-    expect(hidden).toMatchObject({ 'grid-template-columns': '1fr', 'margin-left': '6px', visibility: 'hidden' });
+    expect(hidden).toMatchObject({ 'grid-template-columns': '1fr', visibility: 'hidden' });
     expect(hidden.width).toBeUndefined();
     // Revealing it changes only paint (opacity, visibility, transform), never its box.
     const shown = cssRule(styles, ".wall-auto-arrange[data-visible='true']");

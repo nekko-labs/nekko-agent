@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Warning
@@ -50,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -65,7 +67,16 @@ import com.nekko.android.ui.components.ConnectionBanner
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import com.nekko.protocol.ChatSearch
 import com.nekko.android.ui.components.Tone
+import com.nekko.android.ui.panes.PaneSlot
+import com.nekko.android.ui.security.rememberSafetyExits
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.util.ago
 import com.nekko.android.util.plainText
@@ -85,10 +96,16 @@ fun ChatsScreen(
     onPair: () -> Unit,
     onComputers: () -> Unit,
     onSettings: () -> Unit,
+    /** The Monitors row at the bottom of the list (the computer's hardware, running chats, what needs you). */
+    onMonitors: (() -> Unit)? = null,
+    /** Set when the list is one of an open folding phone's two panes: its header actions. */
+    pane: PaneSlot? = null,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
+    val exits = rememberSafetyExits(repo)
     var pulling by remember { mutableStateOf(false) }
     val active = s.active
     // Long-press on a chat: the computer's own action (Complete or Delete) for it.
@@ -101,6 +118,9 @@ fun ChatsScreen(
     var collapsed by rememberSaveable { mutableStateOf(setOf<String>()) }
     var showCompleted by rememberSaveable { mutableStateOf(setOf<String>()) }
     val groups = remember(s.summaries, s.workspaces) { ChatGroup.of(s.summaries, s.workspaces) }
+    // Search: every word, any case or accent, in the title, first prompt or last reply, completed chats too.
+    var query by rememberSaveable { mutableStateOf("") }
+    val found = remember(s.summaries, query) { if (query.isBlank()) emptyList() else ChatSearch.matches(s.summaries.filter { it.isVisible }, query) }
     val restore: (SessionSummary) -> Unit = { chat ->
         actionError = null
         scope.launch {
@@ -182,6 +202,7 @@ fun ChatsScreen(
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = p.inkSoft)
                     }
+                    pane?.actions?.invoke(this)
                 },
             )
         },
@@ -214,7 +235,7 @@ fun ChatsScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
             ) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-                    item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers) }
+                    item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
                     s.savedListAt?.let { at ->
                         item(key = "saved-list") {
                             Text(
@@ -227,7 +248,34 @@ fun ChatsScreen(
                     }
                     item(key = "header") { SectionHeader("On ${active.name}") }
                     actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
-                    if (s.summaries.isEmpty()) {
+                    if (s.summaries.isNotEmpty()) {
+                        item(key = "search") {
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                placeholder = { Text("Search chats") },
+                                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") }
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.search"),
+                            )
+                        }
+                    }
+                    if (query.isNotBlank()) {
+                        if (found.isEmpty()) {
+                            item(key = "no-match") {
+                                Text("No chats match “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                            }
+                        }
+                        items(found, key = { "found:${it.id}" }) { summary ->
+                            if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
+                            else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                        }
+                    } else if (s.summaries.isEmpty()) {
                         item(key = "empty") {
                             Text(
                                 when {
@@ -243,7 +291,7 @@ fun ChatsScreen(
                     }
                     // The desktop's agent sidebar: General, then each folder; active
                     // chats first, completed ones folded away under Show completed.
-                    groups.forEach { g ->
+                    if (query.isBlank()) groups.forEach { g ->
                         val open = g.key !in collapsed
                         val showDone = g.key in showCompleted
                         item(key = "group:${g.key}") {
@@ -278,6 +326,8 @@ fun ChatsScreen(
                             }
                         }
                     }
+                    // Monitors, as on an open folding phone's pane: so the feature is not foldable-only.
+                    if (onMonitors != null) item(key = "monitors") { MonitorsRow(onMonitors) }
                 }
             }
         }
@@ -307,7 +357,7 @@ private fun ChatActionDialog(title: String, delete: Boolean, computer: String, o
 }
 
 @Composable
-private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
+internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
@@ -341,9 +391,43 @@ private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> U
             when (activity) {
                 Activity.NEEDS_YOU -> Box(Modifier.padding(top = 4.dp)) { Pill("Needs you", Tone.WARNING, Icons.Filled.Warning) }
                 Activity.RUNNING -> Box(Modifier.padding(top = 4.dp)) { Pill("Running", Tone.ACCENT, Icons.Filled.Bolt) }
-                null -> Unit
+                null -> Box(Modifier.padding(top = 4.dp)) {
+                    if (s.activeWatchCount > 0) {
+                        Text("Zz", style = MaterialTheme.typography.labelMedium, color = p.inkFaint,
+                            modifier = Modifier.semantics { contentDescription = "Idle" })
+                    } else {
+                        Icon(Icons.Filled.Check, contentDescription = "Done", tint = p.inkFaint, modifier = Modifier.size(14.dp))
+                    }
+                }
             }
         }
+    }
+}
+
+/** The last row of the list: the computer's Monitors. */
+@Composable
+private fun MonitorsRow(onClick: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(p.surface2),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Monitor, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text("Monitors", style = MaterialTheme.typography.titleMedium, color = p.ink)
+            Text("Hardware, running chats, what needs you", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
     }
 }
 

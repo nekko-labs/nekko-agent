@@ -95,6 +95,126 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-10
 
+### A full GPU offload puts the output layer on the GPU too (2026-10-28)
+Area: local inference
+Result: improvement
+Conditions: Apple M5 Max, 128 GB, macOS (Darwin 25.6.0), Nekko's llama.cpp b11224 (Metal), Qwen3-8B Q4_K_M (36 blocks). Engine: `llama-bench -p 512 -n 128 -r 3`, `-ngl 36` (what Nekko passed for a full offload) against `-ngl 99`, same run. App: the model loaded from a chat message with its saved preset (`gpuLayers: 36`) through the engine router, streamed chat requests with a fresh prefix each (so no prompt cache hit), prefill as llama-server's own `prompt_per_second`, 5 requests after one warmup; before on 2026-10-27 (~504-token prompt, `--n-gpu-layers 36`), after on 2026-10-28 (~455-token prompt, `--n-gpu-layers 999`), speculative decoding on in both
+
+| Metric | Before | After |
+|---|---|---|
+| llama-bench pp512 | 1531.33 ± 3.09 tok/s | 2761.98 ± 3.71 tok/s |
+| llama-bench tg128 | 89.79 ± 0.02 tok/s | 95.28 ± 0.28 tok/s |
+| App prefill, 5 requests (llama-server's figure) | 1395, 1360, 1336, 1271, 1231 tok/s | 2120, 2109, 2115, 2132, 2140 tok/s |
+
+Why: a download's preset stores a full offload as `gpuLayers` equal to the model's block count, and llama.cpp (and Ollama's `num_gpu`) count the output layer as one more, keeping it on the CPU unless asked for more layers than there are blocks; a full offload now asks for 999. The app rows are sequential runs on different days with different prompts, so they confirm the direction, not the size; the llama-bench rows are the matched measurement. The Ollama path was not measured. Source: this PR.
+
+### Nekko Dark: static glow background on the window field (2026-10-27)
+Area: renderer
+Result: no effect
+Conditions: Windows 11, Electron 45, hidden off-screen non-focusable window at 1440×900 (stub bridge, isolated profile, network blocked), Agents view on Nekko Dark via System in dark mode, idle; `app.getAppMetrics()` CPU summed over 6 s after settling; two sequential runs each, without the glow (the branch's earlier commit) and with it
+
+| Metric | Before | After |
+|---|---|---|
+| Idle CPU, all processes, 6 s (run 1) | 0.1569 s | 0.1651 s |
+| Idle CPU, all processes, 6 s (run 2) | 0.1577 s | 0.1528 s |
+| GPU process CPU, 6 s (run 1 / run 2) | 0.0756 / 0.0765 s | 0.0839 / 0.0756 s |
+| Running animations (excluding CSS transitions) | 20 | 20 |
+
+Why: the glow is six static CSS radial gradients on the shell background, with no animation or timer; the difference is within run-to-run noise. Source: the Nekko Dark theme PR.
+
+### Phone Mermaid: bundled renderer size and render time (MM-1, 2026-10-25)
+Area: packaging | renderer
+Result: regression (new cost)
+Conditions: `vendor/mermaid/mermaid.min.js` measured on disk (Mermaid 12.2.0). Render times from the UI test `MarkdownTests.testDiagramsDrawAndABrokenOneFallsBack` in Native iOS run 40198943879: GitHub-hosted macos-14, Xcode 16.2, iPhone simulator on iOS 18.2, Debug build, one launch per theme, timed in the app from queueing a diagram to its cached image (`MermaidRenderer.timings`). The first diagram includes creating the web view and loading the bundled script. Two diagrams per launch (flowchart, sequence); the broken diagram is not timed.
+
+| Metric | Before | After |
+|---|---|---|
+| App bundle: Mermaid script | 0 | 5,494,801 bytes (uncompressed) |
+| First diagram, light launch | none drawn (shown as code) | 1,680 ms |
+| Second diagram, light launch | none drawn | 688 ms |
+| First diagram, dark launch | none drawn | 870 ms |
+| Second diagram, dark launch | none drawn | 439 ms |
+| Earlier run 40194741689, light (before the height cap) | none drawn | 2,162 ms, 765 ms |
+
+Why: diagrams are drawn by the bundled Mermaid in one off-screen web view, loaded only when a chat first shows a diagram; a drawn diagram is cached, so scrolling and reopening do not draw it again. Not measured: the compressed IPA size, memory of the renderer's web view, and times on a device. Source: the MM-1/MM-2 PR.
+
+### #1204 Dynamic zones and the Remotion intro (2026-10-26)
+Area: packaging
+Result: regression (small, main bundle); the intro's cost is deferred to a lazy chunk
+Conditions: macOS (Apple silicon), `electron-vite build` of apps/desktop, base `6927b1db` versus the zones branch, one build each, sizes as printed by Vite (uncompressed)
+
+| Metric | Before | After |
+|---|---|---|
+| `out/renderer/assets/index-*.js` | 4,222.62 kB | 4,236.83 kB |
+| Zones intro chunk (`ZonesIntro-*.js`, loaded only with the intro) | none | 692.60 kB |
+
+Why: zones add board code to the main bundle; Remotion (`remotion`, `@remotion/player`) loads only when the one-time intro opens, through `React.lazy`. Load time and memory were not measured. Source: #1204.
+
+### T211 Runner VM NAT: guest-facing TCP send buffer 16 to 64 KiB (2026-10-25)
+Area: engine daemon
+Result: improvement
+Conditions: Apple M1 Max, 64 GB, macOS 27.0.1; guest Cirrus `macos-sequoia-base` (macOS 15.7.7), 4 vCPU, 8 GiB, booted by `nekko-vm` with the runner NAT (`runner_vm_spike` example, `dev-daemon` optimized profile). Throughput is 200,000,000 bytes over SSH through the spike's 127.0.0.1:2222 forward, so the NAT is measured without the internet link; 3 runs per side, each a fresh SSH session. Before and after are separate VM boots.
+
+| Metric (Mbit/s) | Before (16 KiB) | After (64 KiB) |
+|---|---|---|
+| NAT to guest (`cat > /dev/null` in the guest), runs | 85.4, 89.1, 90.9 | 200.7, 206.1, 202.6 |
+| Guest to NAT (`head -c 200000000 /dev/zero` in the guest), runs | 611.1, 683.7, 696.3 | 694.0, 702.6, 701.1 |
+
+Internet downloads were limited by the host link, not the NAT. With 64 KiB, 20 s of `https://proof.ovh.net/files/1Gb.dat` alternating host then guest gave, in run order, host 3202000, guest 3105736, host 2610439, guest 2622182, host 3077573, guest 2956506 B/s (guest 98% of host in total, about 23 Mbit/s). `ash-speed.hetzner.com` swung between 212934 and 2738628 B/s on either side across four pairs, so it supports no comparison. A debug build gave 68.2 to 103.1 Mbit/s NAT to guest at 16 KiB, about the same as optimized, so the cap was the window, not CPU.
+
+Why: the smoltcp send buffer toward the guest bounds bytes in flight on a sub-millisecond leg; guest-to-host keeps 16 KiB. Worst-case socket memory is 20 MiB per VM at 256 flows. Source: commit 11395dc6 (`nekkod: runner NAT sends to the guest from a 64 KiB TCP buffer`), PR #1065.
+
+### Phone Markdown parser: block tree, cached per segment (MD-1, 2026-10-25)
+Area: renderer
+Result: mixed
+Conditions: microbenchmark, not the app. Docker `swift:6.1-noble` (x86_64, 32 cores) on a Windows 11 desktop, `swift test -c release`, three runs of one test. Input: a generated 500-line reply (10,560 characters) with headings, nested lists, numbered lists, inline styles and three 10-row tables. Before is the old line scanner (`MarkdownText.parse`, copied verbatim into the benchmark); after is `MarkdownParser`. Streaming: the text grown one character at a time, parsed at every 20th character (528 parses). Medians of 20 for the whole-text rows.
+
+| Metric | Before (line scanner) | After (`MarkdownParser`) |
+|---|---|---|
+| One whole parse, median | 0.785 / 0.778 / 0.776 ms | 1.192 / 1.177 / 1.153 ms (`parse`) |
+| Same text again | same as above (no cache) | 0.246 / 0.250 / 0.242 ms (`blocks`, segments cached) |
+| Streaming, total for 528 parses | 209.6 / 206.1 / 205.9 ms | 78.3 / 76.7 / 76.2 ms |
+| Streaming, per parse | 0.397 / 0.390 / 0.390 ms | 0.148 / 0.145 / 0.144 ms |
+
+Why: the block tree (nested lists, tables) costs about 50% more than the flat scan for one cold parse, but `blocks` re-parses only the segment still being written, so a streaming reply costs less than half as much per token. Not measured: SwiftUI layout and `AttributedString` inline parsing, scrolling frame times on a device, and anything on iOS hardware. Source: the MD-1 PR.
+
+### #1031 Native iOS CI: one build, dark mode only for colour changes (2026-10-24)
+Area: dev build
+Result: mixed
+Conditions: GitHub-hosted macos-14 (3 vCPU), Native iOS on PR #1011's head e04ff824, old workflow (run 40131450126) against the new one in a batch (run 40138086476); main's live tests were failing in both, which dominates both runs' time.
+
+| Metric | Before | After |
+|---|---|---|
+| `swift test` | 70 s | 70 s |
+| cargo build of nekkod | 114 s | 133 s |
+| Xcode build step | 118 s | 297 s (simulator booting beside it) |
+| Simulator step start to first test | 248 s | 40 s |
+| Build + time to first test | 366 s | 349 s |
+| Whole job | 45.6 min | hit the 50 min timeout |
+
+Booting the simulator in the background made whatever ran beside it slower: `swift test` 262 s instead of about 56 s and the cargo build 185 s when it booted from the job's start (run 40132995453), and nekkod never became ready beside the relay itest (run 40136579251). Net about 17 s, so the background boot was dropped; the single build stays. The larger saving is the dark live journey, which a PR now runs only when it changes colours (#1011 does, so both runs here ran it): on the last green run it was 5.2 min, on these failing runs 450 s and 684 s. Source: #1031.
+
+### B2 Background replies pause for the user instead of unloading the model (2026-10-23)
+Area: local inference
+Result: improvement (a design choice made on measurements: pause, not unload)
+Conditions: Apple M5 Max (40-core GPU, 128 GB), macOS, the app's engine llama-server b11224 with the engine's own flags (32k context, `--cache-reuse 256`, `--no-cache-idle-slots`), behind the nekko-infer router. Prompt of 3,267 tokens (Qwen3.5 4B Q4_K_M) / 3,269 (Gemma 4 12B Q4_K_M), page cache warm. Yield and paused resume: 7 samples each; unloaded resume: 5. `crates/nekko-infer/tests/yield_cost.rs`.
+
+| Metric | Qwen3.5 4B | Gemma 4 12B |
+|---|---|---|
+| Yield: client hangs up mid-reply → no slot generating (median) | 22.1 ms | 35.0 ms |
+| Resume, model kept loaded: prompt tokens processed again | 4 | 1 |
+| Resume, model kept loaded: prompt time (median) | 16.0 ms | 26.3 ms |
+| Resume after unloading: load (median) | 806 ms | 1208 ms |
+| Resume after unloading: prompt tokens processed again | 3,267 | 3,269 |
+| Resume after unloading: prompt time (median) | 911 ms | 2634 ms |
+| Resume after unloading: total to first token (median) | 1724 ms | 3850 ms |
+
+Gate cost (`crates/nekko-machine/tests/activity.rs`, `read_cost`): one look at the input past its 200 ms cache, median of 20, 7.2 µs (min 2.5 µs). The temperature read inside it runs every 10 s and took up to 105 ms (sysinfo's sensors), off the async threads. The first whole reading took 107.65 ms.
+
+Not measured: the time from the user's real return to the stop. By design it is at most one 200 ms gate poll plus the 200 ms input cache on macOS and Windows (1 s cache on Linux, where input is a `loginctl` spawn), plus the hang-up above.
+
+Why: a yielded request only needs its connection closed; llama-server keeps the prompt in the slot, so the resumed request re-reads 1 to 4 tokens instead of the whole prompt, and no reload is paid. Source: the B2 PR.
+
 ### A3a Engine router reads each reply's decode speed (2026-10-23)
 Area: engine daemon
 Result: no effect
@@ -982,6 +1102,13 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Quiet beside full-screen games (2026-10-28): before, measured 2026-10-18 on a Core Ultra 9 285H / RTX 5070 Ti laptop with the dev build idle and Overwatch running: 93 new processes in 60 s from nekkod (`where.exe` about every 6 s, `nvidia-smi.exe` about every 6-12 s, each with a conhost; `nvidia-smi` about 96 ms wall / 62 ms CPU, `where` about 60 ms / 38 ms), and Overwatch at 60-90 FPS (normally 200-300) after Nekko took the foreground until a game restart. After: the tray's poll no longer runs `engine:status`, PATH lookups no longer spawn, hidden pages stop asking, and windows and notices wait while a full-screen app is in front. Neither the process count nor the game's FPS has been measured after the change. Repeat the 60 s process count with the same idle app and an FPS run with a turn finishing mid-game.
+- CI scoped to what a change touches (2026-10-24): before, measured on #1023 (two Swift UI test files with `ci:macos`, CI run 40133900216, CodeQL run 40133900149): `daemon (macos-latest)` 274 s, `capture (macos-latest)` 289 s, `build` 147 s, CodeQL Rust 281 s, JS/TS 102 s, Python 42 s, Actions 43 s, Swift 799 s. After: per the scope rules and their tests, the same change runs only CodeQL Swift of these; no CI run of a native-only PR under the new rules has been measured yet. Update with that run's numbers.
+
+- Focus surface refinement (2026-10-24): removed navigation SVG path/clip animation and ResizeObservers, retaining only width and text-opacity reveal. Focus corners reuse native CSS squircle with rounded fallback, without added masks or blur. CPU/GPU/frame times before and after: not measured. No zero-cost or smoothness claim; collect matched renderer traces to quantify the effect.
+
+- Focused panel motion: navigation morph shortened to 180/160 ms and backdrop/text blur removed. These are configured durations, not measured frame times. Before and after CPU, GPU, energy and frame-time cost: not measured. Collect matched renderer traces before claiming a performance improvement.
+
 - **Native agent-browser default feasibility (2026-10-17).** Candidate `agent-browser@0.39.1` (native Rust, Chrome), Nekko base `2f81bfc0`, Windows / Node `v24.1.0`. Migration blocked before runtime edits: the native command daemon accepts unauthenticated loopback JSON outside Nekko's approval bridge. Two diagnostic clients received `success: true` for `session_info` without credentials; these are security probes, not performance samples. No browser was launched. **Before: not measured. After: not measured.** No latency, memory, warm/cold distribution or speedup is established. Playwright remains explicitly required. [Exact provenance, raw outputs, reproduction and matched benchmark acceptance criteria](../reports/agent-browser/feasibility.md). Next: secure native command IPC, then collect at least 20 interleaved cold/warm samples with the same browser revision, viewport, theme and synthetic fixture before claiming any effect.
 
 Performance-motivated changes with no recorded numbers. Measure them if they
@@ -1027,3 +1154,22 @@ Conditions: Ryzen9 9950X3D32threads,Windows,HeadlessChrome151.0.7922.34,release 
 Matched invalidation-tracked base/explicit vacancy-marker p95 6.8/6.1ms (341/357frames),p50 4.5/4.4ms,max19.5/20.2ms. Affected-by-:has invalidations134/0. Instrumentation adds overhead; single samples do not prove Linux-gate improvement. Marker replaces the exact empty-wall descendant selectors while retaining state semantics. No containment or beam change retained. Saved reports/traces .shots/stream-containment/{invalidation,explicit-empty}; expected static appearance unchanged,20matching Electron capture pairs byte-identical. Full gate pending.
 
 Full local candidate gate (same hardware/browser/release daemon,no GPU): all budgets pass. Composer p95 7.8ms,terminal18.9ms,streaming5.4ms347frames,warm8.0ms,cold10.9ms. Layer ratio0.15x,tile memory206.61MB,heap slope0.06MB/lap,DOM/listener slopes0.00. This build predates the latest unrelated main visual refinements; final Linux CI remains the release criterion.
+
+### Empty-agent dot texture and steady working cat (2026-10-25)
+
+Issue: [#1157](https://github.com/nekko-labs/nekko-agent/issues/1157). Base `1935c659`. Removed the full-app canvas wave and composer/window border beams. Empty agents use a fixed 720×360 precomputed SVG image moved by stepped CSS transform; inactive windows/panels pause it. The aggregate working cat has a steady accent fill with no animation.
+
+Matched diagnostic full-App fixture: macOS arm64, Electron 45, 1440×900 DIP, default dark chrome with supplemental Lilac wave, four synthetic empty agents (one visible Focus pane), hidden non-focusable isolated window, network blocked. Before/after sequential six-second CPU deltas, no full test/build running concurrently. The focused condition overrides `document.hasFocus` and dispatches a synthetic renderer focus event; no real desktop focus is taken. Raw `app.getAppMetrics().cpu.cumulativeCPUUsage` deltas:
+
+| Condition | GPU-process CPU before → after (%) | Renderer CPU before → after (%) |
+| --- | --- | --- |
+| Unfocused empty | 2.8794867522079652 → 1.0229385307346324 | 1.8395434094317615 → 1.731884057971014 |
+| Synthetic focused empty | 8.872568287808127 → 3.2341605596269134 | 8.273600932711526 → 8.454946702198532 |
+
+These short single samples suggest lower GPU-process CPU overhead, **not measured GPU utilization, energy, or battery savings**. Renderer CPU did not improve in the synthetic focused case. No distribution, live user-profile A/B, or cross-platform performance claim is established. Earlier blank cross-worktree captures were rejected: the harness now aliases React consistently across the fixture and alternate source tree. Stub `getAppInfo` and installed/external skills lists are defined so final before/after runs have no console errors. Reproduce via `NEKKO_TEST_LABEL=<label> NEKKO_LAYOUT_SANDBOX=empty-agent-wave-sandbox.cjs node apps/desktop/scripts/layout-evidence-integration.cjs`, with `NEKKO_TEST_SOURCE=<base-worktree>` for base and `NEKKO_EXPECT_WAVE_NEW=1` for assertions on head. Local JSON reports and PNG/GIF frames are under ignored `.shots/layout-evidence/`; published media belongs in the PR, never git. A second sequential sample after texture edge fading (after first, then base; same six-second conditions) recorded GPU-process CPU unfocused 2.8918693768743755 → 0.7673163418290863%, focused 6.20781406197934 → 2.7728135932033955%; renderer CPU unfocused 2.4742919026991013 → 1.2345827086456764%, focused 5.300233255581473 → 7.023354989172079%. The focused renderer increase reinforces that this is not an across-the-board CPU win. These are separate diagnostic samples, not a statistical distribution.
+
+
+After merging concurrent main changes (base `974ad4e8`, which already scopes the old canvas to clean-start), repeated against that newer base: unfocused GPU-process CPU 2.1987173080126605 → 0.8032784157097687%, renderer 2.3422955189072123 → 1.8271759028124495%; synthetic-focused GPU-process CPU 4.680159920039981 → 2.5662389601733047%, renderer 4.137214725970347 → 7.275287452091319%. Thus not all of the original global-wave reduction belongs to this PR alone. A `will-change: transform` experiment then recorded unfocused GPU-process/renderer CPU 0.6353882039320237/1.7538820393202272%, focused 2.8200766411196265/7.11802732422526%: no persuasive focused improvement, so the explicit promotion was reverted rather than retaining extra layer memory. Focused renderer overhead remains a verification limitation to profile with longer traces; no budget has been loosened.
+
+
+Final scheduling refinement: keep the CSS transform animation paused and advance its Web Animations timeline only on a dot-step boundary (625 ms for Lilac), stopping the timer on blur, hidden document/pane, or reduced motion. No per-frame canvas draw or JS animation dependency. On the current merged renderer, the same six-second fixture measured unfocused GPU-process/renderer CPU 0.7196434521826046/1.7811896034655113%, focused 2.752915694768412/5.78202265911363%. This reduced the previous candidate's 7.275287452091319% focused renderer overhead, but is still not a controlled improvement over the 4.137214725970347% newer-base sample (the intervening main merge also changed monitor styling). Treat performance attribution as diagnostic, not a guaranteed win. The acceptance assertions additionally check that the paused timeline actually advances while focused and stays frozen while offscreen/unfocused, not just its CSS play-state.

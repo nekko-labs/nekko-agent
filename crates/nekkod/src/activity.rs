@@ -7,7 +7,7 @@ use crate::routes::Ctx;
 use nekko_machine::activity::{self, Activity};
 use serde_json::Value;
 
-pub const CHANNELS: &[&str] = &["activity:state"];
+pub const CHANNELS: &[&str] = &["activity:state", "activity:fullscreen"];
 
 /// The signals now, judged against `idle_after` seconds.
 pub async fn state(ctx: &Ctx, idle_after: f64) -> Activity {
@@ -27,6 +27,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 None => nekko_automation::run_policy::idle_after_secs(&crate::settings::current(ctx).await),
             };
             serde_json::to_value(state(ctx, idle_after).await).map_err(|e| e.to_string())
+        }
+        // Whether a full-screen app is in front (a game, say): the desktop app
+        // holds its notices and leaves the foreground alone while it is.
+        // Never which app.
+        "activity:fullscreen" => {
+            let fg = nekko_machine::fullscreen::foreground();
+            Ok(serde_json::json!({ "quiet": fg.quiet(), "state": fg.name() }))
         }
         other => Err(format!("{other} is not an activity channel")),
     }

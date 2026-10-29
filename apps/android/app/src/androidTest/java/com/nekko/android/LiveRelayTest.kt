@@ -3,6 +3,7 @@ package com.nekko.android
 import android.Manifest
 import android.graphics.Bitmap
 import android.os.Build
+import android.view.KeyEvent
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
@@ -93,6 +94,14 @@ class LiveRelayTest {
             send("Say hello")
             waitFor(hasText("Hello from your computer."), 30_000)
             shot("4-reply")
+
+            // + sits inside the message box and offers another agent or a terminal, as on the desktop.
+            tap(hasContentDescription("Add"))
+            waitFor(hasText("New agent"))
+            waitFor(hasText("Terminal"))
+            screenShot("4a-plus-menu")
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            waitGone(hasText("New agent"), 5_000)
 
             // A Markdown reply: heading, lists, a code block with its Copy button, a link.
             send("show me markdown")
@@ -198,6 +207,14 @@ class LiveRelayTest {
 
     private fun waitGone(matcher: SemanticsMatcher, timeoutMs: Long) {
         compose.waitUntil(timeoutMs) { compose.onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+    }
+
+    /** The whole screen, popups included (a menu is its own window, outside [shot]'s root). */
+    private fun screenShot(name: String) {
+        compose.waitForIdle()
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
+        File(dir, "$theme-$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     private fun shot(name: String) {

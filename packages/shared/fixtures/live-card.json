@@ -1,0 +1,1058 @@
+{
+ "about": "The Live Activity card's rules (buildCard). Run by LiveCardTests (Swift, apps/ios/Protocol) and crates/nekko-remote card tests (Rust), so change both together. Dates are seconds since 2001-01-01, ActivityKit's default JSONDecoder date form. A chat or card leaves out empty text, false, zero and missing values; read them as empty. bytes is the card's size as Swift's JSONEncoder writes it (a slash counts twice).",
+ "now": 800000000,
+ "build": [
+  {
+   "name": "sorts by state, then most recent finish; focus is the first",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "f",
+     "state": "failed",
+     "finishedAt": 799999940,
+     "closeWord": "Got it"
+    },
+    {
+     "id": "d-old",
+     "state": "done",
+     "finishedAt": 799999400,
+     "closeWord": "Cool"
+    },
+    {
+     "id": "d-new",
+     "state": "done",
+     "finishedAt": 799999940,
+     "closeWord": "Nice"
+    },
+    {
+     "id": "w",
+     "state": "watching",
+     "step": "Watching PR…"
+    },
+    {
+     "id": "r",
+     "state": "working",
+     "startedAt": 799999910
+    },
+    {
+     "id": "n",
+     "state": "needsYou",
+     "callId": "call_1",
+     "severity": "high",
+     "startedAt": 799999970
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "n",
+      "state": "needsYou",
+      "startedAt": 799999970,
+      "callId": "call_1",
+      "severity": "high"
+     },
+     {
+      "id": "r",
+      "state": "working",
+      "startedAt": 799999910
+     },
+     {
+      "id": "w",
+      "state": "watching",
+      "step": "Watching PR…"
+     },
+     {
+      "id": "d-new",
+      "state": "done",
+      "closeWord": "Nice",
+      "finishedAt": 799999940
+     },
+     {
+      "id": "d-old",
+      "state": "done",
+      "closeWord": "Cool",
+      "finishedAt": 799999400
+     },
+     {
+      "id": "f",
+      "state": "failed",
+      "closeWord": "Got it",
+      "finishedAt": 799999940
+     }
+    ],
+    "focusId": "n"
+   },
+   "bytes": 699
+  },
+  {
+   "name": "a finished chat stays two hours",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "old",
+     "state": "done",
+     "finishedAt": 799992740
+    },
+    {
+     "id": "older",
+     "state": "failed",
+     "finishedAt": 799982000
+    },
+    {
+     "id": "ok",
+     "state": "done",
+     "finishedAt": 799992860
+    },
+    {
+     "id": "edge",
+     "state": "done",
+     "finishedAt": 799992800
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "ok",
+      "state": "done",
+      "finishedAt": 799992860
+     },
+     {
+      "id": "edge",
+      "state": "done",
+      "finishedAt": 799992800
+     }
+    ],
+    "focusId": "ok"
+   },
+   "bytes": 260
+  },
+  {
+   "name": "nothing to show",
+   "level": "detailed",
+   "chats": [],
+   "card": null
+  },
+  {
+   "name": "only old finished chats",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "old",
+     "state": "done",
+     "finishedAt": 799989200
+    }
+   ],
+   "card": null
+  },
+  {
+   "name": "level none shows no card",
+   "level": "none",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working"
+    }
+   ],
+   "card": null
+  },
+  {
+   "name": "keeps eight and counts the rest",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "c0",
+     "state": "working"
+    },
+    {
+     "id": "c1",
+     "state": "working"
+    },
+    {
+     "id": "c2",
+     "state": "working"
+    },
+    {
+     "id": "c3",
+     "state": "working"
+    },
+    {
+     "id": "c4",
+     "state": "working"
+    },
+    {
+     "id": "c5",
+     "state": "working"
+    },
+    {
+     "id": "c6",
+     "state": "working"
+    },
+    {
+     "id": "c7",
+     "state": "working"
+    },
+    {
+     "id": "c8",
+     "state": "working"
+    },
+    {
+     "id": "c9",
+     "state": "working"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "c0",
+      "state": "working"
+     },
+     {
+      "id": "c1",
+      "state": "working"
+     },
+     {
+      "id": "c2",
+      "state": "working"
+     },
+     {
+      "id": "c3",
+      "state": "working"
+     },
+     {
+      "id": "c4",
+      "state": "working"
+     },
+     {
+      "id": "c5",
+      "state": "working"
+     },
+     {
+      "id": "c6",
+      "state": "working"
+     },
+     {
+      "id": "c7",
+      "state": "working"
+     }
+    ],
+    "focusId": "c0",
+    "more": 2
+   },
+   "bytes": 680
+  },
+  {
+   "name": "a pin holds focus",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working"
+    },
+    {
+     "id": "b",
+     "state": "working"
+    },
+    {
+     "id": "c",
+     "state": "watching"
+    }
+   ],
+   "pinnedFocus": "c",
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working"
+     },
+     {
+      "id": "b",
+      "state": "working"
+     },
+     {
+      "id": "c",
+      "state": "watching"
+     }
+    ],
+    "focusId": "c"
+   },
+   "bytes": 292
+  },
+  {
+   "name": "a pin on a chat that is gone falls back to the first",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working"
+    },
+    {
+     "id": "b",
+     "state": "working"
+    }
+   ],
+   "pinnedFocus": "gone",
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working"
+     },
+     {
+      "id": "b",
+      "state": "working"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 215
+  },
+  {
+   "name": "focus jumps to a chat that newly needs you, over the pin; listening and heard carry over",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working"
+    },
+    {
+     "id": "b",
+     "state": "needsYou"
+    }
+   ],
+   "previous": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working"
+     },
+     {
+      "id": "b",
+      "state": "working"
+     }
+    ],
+    "focusId": "b",
+    "more": 0,
+    "listening": true,
+    "heard": "run the"
+   },
+   "pinnedFocus": "a",
+   "card": {
+    "chats": [
+     {
+      "id": "b",
+      "state": "needsYou"
+     },
+     {
+      "id": "a",
+      "state": "working"
+     }
+    ],
+    "focusId": "b",
+    "listening": true,
+    "heard": "run the"
+   },
+   "bytes": 222
+  },
+  {
+   "name": "a chat that already needed you is not new: the pin wins",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working"
+    },
+    {
+     "id": "b",
+     "state": "needsYou"
+    }
+   ],
+   "previous": {
+    "chats": [
+     {
+      "id": "b",
+      "state": "needsYou"
+     },
+     {
+      "id": "a",
+      "state": "working"
+     }
+    ],
+    "focusId": "b"
+   },
+   "pinnedFocus": "a",
+   "card": {
+    "chats": [
+     {
+      "id": "b",
+      "state": "needsYou"
+     },
+     {
+      "id": "a",
+      "state": "working"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 216
+  },
+  {
+   "name": "a brand-new chat that needs you is new",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working"
+    },
+    {
+     "id": "z",
+     "state": "needsYou"
+    }
+   ],
+   "previous": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working"
+     }
+    ],
+    "focusId": "a"
+   },
+   "pinnedFocus": "a",
+   "card": {
+    "chats": [
+     {
+      "id": "z",
+      "state": "needsYou"
+     },
+     {
+      "id": "a",
+      "state": "working"
+     }
+    ],
+    "focusId": "z"
+   },
+   "bytes": 216
+  },
+  {
+   "name": "no previous card: needs-you is not new, the pin wins",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working"
+    },
+    {
+     "id": "z",
+     "state": "needsYou"
+    }
+   ],
+   "pinnedFocus": "a",
+   "card": {
+    "chats": [
+     {
+      "id": "z",
+      "state": "needsYou"
+     },
+     {
+      "id": "a",
+      "state": "working"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 216
+  },
+  {
+   "name": "duplicate ids in the previous card keep the first",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "needsYou"
+    }
+   ],
+   "previous": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working"
+     },
+     {
+      "id": "a",
+      "state": "needsYou"
+     }
+    ],
+    "focusId": "a"
+   },
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "needsYou"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 140
+  },
+  {
+   "name": "minimal blanks the short title, step and reply",
+   "level": "minimal",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working",
+     "short": "Fix it",
+     "step": "Run  tests\n now",
+     "reply": "Got it.",
+     "closeWord": "Cool"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working",
+      "closeWord": "Cool"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 143
+  },
+  {
+   "name": "standard blanks the reply",
+   "level": "standard",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working",
+     "short": "Fix it",
+     "step": "Run  tests\n now",
+     "reply": "Got it.",
+     "closeWord": "Cool"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "short": "Fix it",
+      "state": "working",
+      "step": "Run tests now",
+      "closeWord": "Cool"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 162
+  },
+  {
+   "name": "detailed keeps the reply; the step is one line",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working",
+     "short": "Fix it",
+     "step": "Run  tests\n now",
+     "reply": "Got it.",
+     "closeWord": "Cool"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "short": "Fix it",
+      "state": "working",
+      "step": "Run tests now",
+      "reply": "Got it.",
+      "closeWord": "Cool"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 169
+  },
+  {
+   "name": "the step is clipped to 60 characters",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working",
+     "step": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "reply": "Done."
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working",
+      "step": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
+      "reply": "Done."
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 206
+  },
+  {
+   "name": "the step at exactly 60 characters is kept",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working",
+     "step": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working",
+      "step": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 199
+  },
+  {
+   "name": "a big card blanks every reply first",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "c0",
+     "state": "working",
+     "short": "Chat 0",
+     "step": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c1",
+     "state": "working",
+     "short": "Chat 1",
+     "step": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c2",
+     "state": "working",
+     "short": "Chat 2",
+     "step": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c3",
+     "state": "working",
+     "short": "Chat 3",
+     "step": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c4",
+     "state": "working",
+     "short": "Chat 4",
+     "step": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c5",
+     "state": "working",
+     "short": "Chat 5",
+     "step": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c6",
+     "state": "working",
+     "short": "Chat 6",
+     "step": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c7",
+     "state": "working",
+     "short": "Chat 7",
+     "step": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "c0",
+      "short": "Chat 0",
+      "state": "working",
+      "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
+     },
+     {
+      "id": "c1",
+      "short": "Chat 1",
+      "state": "working",
+      "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
+     },
+     {
+      "id": "c2",
+      "short": "Chat 2",
+      "state": "working",
+      "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
+     },
+     {
+      "id": "c3",
+      "short": "Chat 3",
+      "state": "working",
+      "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
+     },
+     {
+      "id": "c4",
+      "short": "Chat 4",
+      "state": "working",
+      "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
+     },
+     {
+      "id": "c5",
+      "short": "Chat 5",
+      "state": "working",
+      "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
+     },
+     {
+      "id": "c6",
+      "short": "Chat 6",
+      "state": "working",
+      "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
+     },
+     {
+      "id": "c7",
+      "short": "Chat 7",
+      "state": "working",
+      "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
+     }
+    ],
+    "focusId": "c0"
+   },
+   "bytes": 1224
+  },
+  {
+   "name": "a huge card then moves the last chats into more, never the focused one",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "c0",
+     "state": "working",
+     "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c1",
+     "state": "working",
+     "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c2",
+     "state": "working",
+     "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c3",
+     "state": "working",
+     "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c4",
+     "state": "working",
+     "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c5",
+     "state": "working",
+     "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c6",
+     "state": "working",
+     "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c7",
+     "state": "working",
+     "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    }
+   ],
+   "pinnedFocus": "c7",
+   "card": {
+    "chats": [
+     {
+      "id": "c0",
+      "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+      "state": "working"
+     },
+     {
+      "id": "c1",
+      "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+      "state": "working"
+     },
+     {
+      "id": "c2",
+      "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+      "state": "working"
+     },
+     {
+      "id": "c7",
+      "short": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+      "state": "working"
+     }
+    ],
+    "focusId": "c7",
+    "more": 4
+   },
+   "bytes": 3172
+  },
+  {
+   "name": "a slash counts as two bytes, as Swift's JSONEncoder writes it",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "c0",
+     "state": "working",
+     "short": "a/bppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+     "step": ""
+    },
+    {
+     "id": "c1",
+     "state": "working",
+     "short": "a/b",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c2",
+     "state": "working",
+     "short": "a/b",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c3",
+     "state": "working",
+     "short": "a/b",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c4",
+     "state": "working",
+     "short": "a/b",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c5",
+     "state": "working",
+     "short": "a/b",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c6",
+     "state": "working",
+     "short": "a/b",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+     "id": "c7",
+     "state": "working",
+     "short": "a/b",
+     "reply": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "c0",
+      "short": "a/bppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+      "state": "working"
+     },
+     {
+      "id": "c1",
+      "short": "a/b",
+      "state": "working"
+     },
+     {
+      "id": "c2",
+      "short": "a/b",
+      "state": "working"
+     },
+     {
+      "id": "c3",
+      "short": "a/b",
+      "state": "working"
+     },
+     {
+      "id": "c4",
+      "short": "a/b",
+      "state": "working"
+     },
+     {
+      "id": "c5",
+      "short": "a/b",
+      "state": "working"
+     },
+     {
+      "id": "c6",
+      "short": "a/b",
+      "state": "working"
+     },
+     {
+      "id": "c7",
+      "short": "a/b",
+      "state": "working"
+     }
+    ],
+    "focusId": "c0"
+   },
+   "bytes": 1101
+  }
+ ],
+ "decode": [
+  {
+   "name": "dates are seconds since 2001",
+   "json": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "done",
+      "finishedAt": 799999940,
+      "startedAt": 799999000.5
+     }
+    ],
+    "focusId": "a"
+   },
+   "finishedAt": 799999940,
+   "startedAt": 799999000.5,
+   "states": [
+    "done"
+   ]
+  },
+  {
+   "name": "missing fields read as empty",
+   "json": {},
+   "states": []
+  },
+  {
+   "name": "a state from a newer computer reads as working",
+   "json": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "sleeping"
+     },
+     {
+      "id": "b",
+      "state": "done"
+     }
+    ]
+   },
+   "states": [
+    "working",
+    "done"
+   ]
+  }
+ ],
+ "shortTitle": [
+  [
+   "Fix login bug",
+   "Fix"
+  ],
+  [
+   "Fix it now",
+   "Fix it"
+  ],
+  [
+   "Refactoring the parser",
+   "Refactor…"
+  ],
+  [
+   "  Deploy  ",
+   "Deploy"
+  ],
+  [
+   "Exactly8 words",
+   "Exactly8"
+  ],
+  [
+   "",
+   ""
+  ]
+ ],
+ "closeWord": [
+  [
+   "chat-1",
+   false,
+   "Excellent"
+  ],
+  [
+   "chat-1",
+   true,
+   "Got it"
+  ],
+  [
+   "s1",
+   false,
+   "Perfect"
+  ],
+  [
+   "id7",
+   false,
+   "Perfect"
+  ],
+  [
+   "日本",
+   false,
+   "Cool"
+  ],
+  [
+   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   false,
+   "Cool"
+  ],
+  [
+   "",
+   false,
+   "Cool"
+  ]
+ ],
+ "replyLine": [
+  [
+   "Got it. Working on it now.",
+   "Got it."
+  ],
+  [
+   "  Done!\nThe tests pass.",
+   "Done!"
+  ],
+  [
+   "Line one\nline two",
+   "Line one"
+  ],
+  [
+   "Version 1.2 is out",
+   "Version 1.2 is out"
+  ],
+  [
+   "",
+   ""
+  ],
+  [
+   "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+   "word word word word word word word word word word word word…"
+  ]
+ ]
+}

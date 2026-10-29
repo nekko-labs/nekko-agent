@@ -1,3 +1,4 @@
+import { rememberConnectivityNotice } from './components/ConnectivityNotices.js';
 /**
  * Every running turn, folded and kept alive for as long as the host is running
  * it, not for as long as somebody is looking at it.
@@ -37,6 +38,8 @@ export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; ite
 /** One session's in-flight turn, as much of it as a pane needs to redraw. */
 export interface LiveRun {
   sessionId: string;
+  /** Saved tail before a user-initiated resume; never hide this work. */
+  transcriptThroughId?: string;
   /** Progress text and working steps in the order they arrive. */
   blocks: LiveBlock[];
   /** The assistant text streamed so far this turn. */
@@ -57,7 +60,7 @@ export interface LiveRun {
   reasoningMs: number;
   /** Set while reasoning is streaming, so the pane can show the thinking dot. */
   reasoningStartedAt: number;
-  /** The folded step rail, shared with the Command Center's cards. */
+  /** The folded step rail, shared with the Agent board's cards. */
   activity: LiveActivity;
   /**
    * Where the current model call started: the blocks, text and reasoning as
@@ -127,6 +130,14 @@ function emptyRun(sessionId: string, now: number): LiveRun {
   };
 }
 
+/** Seed a resumed run before its first event, keeping its saved transcript visible. */
+export function beginResumedRun(sessionId: string, transcriptThroughId?: string): void {
+  startSubagentActivity(sessionId);
+  finished.delete(sessionId);
+  runs.set(sessionId, { ...emptyRun(sessionId, Date.now()), transcriptThroughId });
+  markDirty(sessionId);
+}
+
 /**
  * Sessions whose next repaint is still pending.
  *
@@ -174,6 +185,7 @@ const STARTS_RUN = new Set<AgentEvent['type']>([
  * a DOM or an IPC bridge.
  */
 export function applyEvent(event: AgentEvent, now = Date.now()): void {
+  if (event.type === 'session_meta' && event.connectivityNotice) rememberConnectivityNotice(event.sessionId, event.connectivityNotice);
   const id = event.sessionId;
   if (!runs.has(id) && STARTS_RUN.has(event.type)) startSubagentActivity(id);
   foldSubagentActivity(event, now);
@@ -229,7 +241,7 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
     const items = last?.kind === 'activity' ? last.items : [];
     const tail = items[items.length - 1];
     const item: Activity = event.type === 'tool_call'
-      ? { kind: 'tool', call: event.call }
+      ? { kind: 'tool', call: event.call, startedAt: now }
       : { kind: 'reasoning', text: clampLive((tail?.kind === 'reasoning' ? tail.text : '') + event.delta), duration: null };
     const merged = event.type === 'reasoning' && tail?.kind === 'reasoning' ? [...items.slice(0, -1), item] : [...items, item];
     const block: LiveBlock = { kind: 'activity', items: merged };
@@ -265,6 +277,10 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
       next.decodeMs = accumulateDecodeMs(prev.decodeMs, event.outputTokens, event.outputMs);
       break;
     case 'tool_result':
+      next.blocks = next.blocks.map((b) => b.kind !== 'activity' ? b : {
+        ...b,
+        items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now, ...(event.result.isError ? { failed: true } : {}) } : it),
+      });
       // A step boundary: the next model call starts from here.
       next.stepMark = { blocks: next.blocks, text: next.text, reasoning: next.reasoning };
       break;
@@ -291,9 +307,12 @@ export function applyReplay(replay: AgentReplay): void {
   const events = replay.events ?? [];
   if (!events.length) return;
   const keepStart = runs.get(id)?.startedAt;
+  const transcriptThroughId = runs.get(id)?.transcriptThroughId;
   runs.delete(id);
   resetSubagentActivityFor(id);
   events.forEach((e, i) => applyEvent({ ...e, sessionId: id } as AgentEvent, replay.at?.[i] ?? Date.now()));
+  const replayed = runs.get(id);
+  if (replayed && transcriptThroughId) runs.set(id, { ...replayed, transcriptThroughId });
   const run = runs.get(id);
   if (run && keepStart !== undefined && keepStart < run.startedAt) runs.set(id, { ...run, startedAt: keepStart });
   markDirty(id);

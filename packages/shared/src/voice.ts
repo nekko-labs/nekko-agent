@@ -14,6 +14,8 @@ export interface VoiceSettings {
   commandsEnabled?: boolean;
   threads?: number;
   idleSeconds?: number;
+  /** The first-open voice video has been shown (closed any way). */
+  introSeen?: boolean;
 }
 /** `installed`, `installing` and `error` speak for the active engine; `apple` and `whisper` for each. */
 export interface VoiceStatus {

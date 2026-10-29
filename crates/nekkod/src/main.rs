@@ -12,8 +12,10 @@ mod activity;
 mod admission;
 mod agent_logs;
 mod api_server;
+mod artifacts;
 mod auto_continue;
 mod automation;
+mod background;
 
 mod boot;
 mod catalog;
@@ -22,6 +24,8 @@ mod claude_policy;
 mod cli_install;
 mod compaction;
 mod config;
+mod connections;
+mod connectivity;
 mod connectors;
 mod context;
 mod datalock;
@@ -30,6 +34,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod feedback;
 mod gcp;
 mod harness;
 mod hub;
@@ -55,8 +60,14 @@ mod remote_image;
 mod repository_review;
 mod resource_queue;
 mod routes;
+// The runner supervisor that calls into it lands with the VM pool (T211, T212).
+// Unix only: VMs run only on macOS, and the NAT is built on Unix sockets.
+#[cfg(unix)]
+#[allow(dead_code)]
+mod runner;
 mod runtimes;
 mod sandbox;
+mod security;
 mod settings;
 mod side;
 mod sideband;
@@ -64,6 +75,7 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod telemetry;
 mod tooling;
 mod turns;
 mod voice;
@@ -87,6 +99,7 @@ pub fn random_token() -> String {
 }
 
 fn main() -> std::process::ExitCode {
+    machine::mark_started();
     let cfg = match config::load() {
         Ok(c) => c,
         Err(e) => {
@@ -108,6 +121,9 @@ fn main() -> std::process::ExitCode {
     let _daemon_log = cfg.data_dir.as_ref().and_then(|d| logs::start_daemon_log(&std::path::Path::new(d).join("logs")));
     logs::note(&format!("nekkod {} starting, pid {}", env!("CARGO_PKG_VERSION"), std::process::id()));
     procgroup::init();
+    // Each job VM's NAT holds a socket per guest flow; 256 runs out.
+    #[cfg(unix)]
+    runner::raise_nofile();
     // What a predecessor killed outright left running goes first; then keep
     // our own record for the next one.
     if let Some(d) = &cfg.data_dir {
@@ -173,6 +189,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Err(e) => eprintln!("nekkod: Claude sign-in cleanup failed: {e}"),
         }
     }
+    // Settings > Connections: the switch, before anything below reaches the network.
+    connections::start(cfg.data_dir.as_deref().map(std::path::Path::new), settings.as_ref());
     // Voice reads its settings from the daemon's store.
     let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
         let store = s.store.clone();
@@ -199,10 +217,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Some(nekko_cloud::Cloud::new(nekko_cloud::Options {
                 vault: nekko_cloud::vault::default_vault(&dir),
                 dir,
-                api_url: std::env::var("NEKKO_CLOUD_URL")
-                    .ok()
-                    .filter(|u| !u.is_empty())
-                    .unwrap_or_else(|| "https://nekko-agent-api.fly.dev".into()),
+                api_url: feedback::cloud_url(),
                 device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
                 sessions: store.clone(),
                 publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
@@ -241,6 +256,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let library = settings.clone().map(|s| library::Library::new(s, machine.clone(), engine.clone()));
     if let Some(library) = &library {
         let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+        // Abandoned downloads can be GBs each (#1035).
+        let dir = std::path::PathBuf::from(library.models_dir());
+        tokio::task::spawn_blocking(move || {
+            let freed = downloads::sweep_stale_parts(&dir, std::time::SystemTime::now());
+            if freed > 0 {
+                logs::note(&format!("nekkod: removed {freed} bytes of abandoned downloads"));
+            }
+        });
     }
     let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
         let fetch =
@@ -314,12 +337,22 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             }
             _ => None,
         },
-        machine,
+        machine: machine.clone(),
         runtimes: runtimes.clone(),
         library: library.clone(),
         downloads: model_downloads.clone(),
         installs: installs.clone(),
         server: server.clone(),
+        #[cfg(unix)]
+        runners: cfg.data_dir.clone().map(|d| {
+            runner::Runners::start(
+                d.into(),
+                machine.clone(),
+                Box::new(read_settings(&settings)),
+                hub.clone(),
+                cfg.github_api_url.clone(),
+            )
+        }),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
@@ -335,6 +368,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         )),
         automation: automation.clone(),
         remote: remote.clone(),
+        security: Arc::new(security::Security::new(remote.security_store(), nekko_remote::system_clock())),
         sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
@@ -364,6 +398,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         cloud.start(std::time::Duration::from_secs(60));
     }
     routes::forward_terminal_events(&ctx);
+    ctx.turns.set_background(background::Background::new(
+        ctx.machine.clone(),
+        ctx.admission.clone(),
+        ctx.settings.as_ref().map(|s| s.store.clone()),
+        ctx.hub.clone(),
+    ));
     if let Some(adm) = ctx.admission.clone() {
         let c = ctx.clone();
         ctx.turns.set_preparer(Arc::new(move |payload| {
@@ -436,6 +476,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let c = ctx.clone();
         tokio::spawn(async move { d.start(&c).await });
     }
+    connections::follow(ctx.clone());
+    telemetry::start(ctx.clone());
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
     // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.
@@ -492,6 +534,10 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
 
     if let Some(d) = &after.desktop {
         d.shutdown(&after).await;
+    }
+    #[cfg(unix)]
+    if let Some(r) = &after.runners {
+        r.shutdown().await;
     }
     remote.stop();
     if let Some(m) = &messaging {
@@ -572,5 +618,6 @@ async fn shutdown_signal(watch_stdin: bool, signals: &mut Signals) -> &'static s
     tokio::select! {
         _ = stdin_closed => "stdin closed",
         why = signals.next() => why,
+        _ = small_services::QUIT.notified() => "app:quit from a phone",
     }
 }

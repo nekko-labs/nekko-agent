@@ -7,9 +7,11 @@
 //! Also the hardware profile (`machine:profile`, `profile.rs`), the decode
 //! speeds measured here (`measured.rs`) and the model recommendations made
 //! against both (`machine:recommendations`, `recommend.rs`), and whether
-//! someone is using the computer (`activity:state`, `activity.rs`).
+//! someone is using the computer (`activity:state`, `activity.rs`), and
+//! whether a full-screen app is in front (`activity:fullscreen`, `fullscreen.rs`).
 
 pub mod activity;
+pub mod fullscreen;
 pub mod measured;
 pub mod nudges;
 pub mod parse;

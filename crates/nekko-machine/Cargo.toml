@@ -17,7 +17,7 @@ sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 tokio.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_SystemInformation", "Win32_System_Performance", "Win32_System_Power", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_SystemInformation", "Win32_System_Performance", "Win32_System_Power", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell"] }
 
 # macOS temperature sensors (IOKit HID). Only there: on Windows sysinfo's
 # component support is WMI with process-wide COM security, which the daemon

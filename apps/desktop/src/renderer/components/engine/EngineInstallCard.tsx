@@ -1,3 +1,5 @@
+import { useDownloadAction } from './useDownloadAction.js';
+import { DownloadProgress } from './DownloadProgress.js';
 import { useState } from 'react';
 import { ENGINE_BACKEND_LABELS, type EngineInstall } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -24,15 +26,15 @@ export function EngineInstallCard({
   onChanged: () => void;
 }) {
   const pushToast = useStore((s) => s.pushToast);
-  const [busy, setBusy] = useState(false);
+  const download = useDownloadAction({ runtime: 'llama' });
+  const busy = download.active;
   const [showOther, setShowOther] = useState(false);
   const [ownPath, setOwnPath] = useState('');
   const [buildId, setBuildId] = useState(install.recommended?.id ?? '');
 
   const start = async () => {
-    setBusy(true);
-    const res = await window.nekko.engineInstall(buildId || undefined);
-    setBusy(false);
+    const res = await download.run(() => window.nekko.engineInstall(buildId || undefined));
+    if (!res) return;
     pushToast(res.ok ? 'info' : 'error', res.message);
     onChanged();
   };
@@ -61,6 +63,7 @@ export function EngineInstallCard({
             </label>
             <select
               className="input mt-1 w-full text-[12px]"
+              disabled={busy}
               value={buildId}
               onChange={(e) => setBuildId(e.target.value)}
             >
@@ -79,12 +82,13 @@ export function EngineInstallCard({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button className="btn btn-primary py-1.5 text-[12px]" onClick={start} disabled={busy}>
               <DownloadIcon className="mr-1 inline h-3.5 w-3.5" />
-              {busy ? 'Starting…' : 'Download the engine'}
+              {busy ? 'Downloading…' : 'Download the engine'}
             </button>
             <button className="btn btn-ghost py-1.5 text-[12px]" onClick={() => setShowOther((v) => !v)}>
               I already have llama.cpp
             </button>
           </div>
+          {busy && <DownloadProgress group={download.group} />}
           <p className="mt-2 text-[11px] text-ink-faint">
             From llama.cpp's own GitHub releases: tens of megabytes for Vulkan or CPU, several hundred for CUDA.
             Nothing is downloaded until you press the button.

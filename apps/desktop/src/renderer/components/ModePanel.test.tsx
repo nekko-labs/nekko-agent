@@ -78,7 +78,8 @@ describe('Mode panel markup', () => {
     session = { ...base, effort: 'low' } as Session;
     const out = html();
     expect(out).toMatch(/aria-checked="true" data-effort="low"/);
-    expect(out).toContain('Use the app default');
+    expect(out).toContain('remembered for new chats on this computer');
+    expect(out).not.toContain('Use the app default');
   });
   it('locks internet on for a cloud model and approvals in a sandbox', () => {
     expect(renderToStaticMarkup(<ModePanel {...deps({ isCloudModel: true })} />)).toMatch(/aria-checked="true" aria-label="Internet access" class="mode-switch" disabled/);
@@ -121,12 +122,12 @@ describe('Mode panel writes', () => {
     expect(window.nekko.setSessionOptions).toHaveBeenCalledExactlyOnceWith('chat', { workMode: 'better-review' });
     expect(window.nekko.updateSettings).not.toHaveBeenCalled();
   });
-  it('sets effort on this chat, and clears it back to the app default', async () => {
+  it('remembers effort on this computer after the chat accepts it', async () => {
     await modePanelActions(deps()).setEffort('max');
     expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { effort: 'max' });
     await modePanelActions(deps()).setEffort(null);
     expect(window.nekko.setSessionOptions).toHaveBeenCalledWith('chat', { effort: null });
-    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+    expect(window.nekko.updateSettings).toHaveBeenCalledWith({ effort: 'max' });
   });
   it('switches MCP servers and connectors for this chat only', async () => {
     session = { ...base, disabledMcpServers: ['web'], disabledConnectors: ['slack'] };

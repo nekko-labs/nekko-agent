@@ -76,6 +76,8 @@ mod tests {
         let err = acquire(dir.path(), Duration::from_millis(300)).expect_err("second lock refused");
         assert!(err.contains("another nekkod"), "{err}");
         drop(first);
-        acquire(dir.path(), Duration::ZERO).expect("free again once dropped");
+        // The OS releases the lock on close, but under parallel test load it is
+        // not always free on the very next call (#881): wait as a daemon would.
+        acquire(dir.path(), Duration::from_secs(5)).expect("free again once dropped");
     }
 }

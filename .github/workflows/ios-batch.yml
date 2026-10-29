@@ -1,0 +1,44 @@
+name: Native iOS batch
+# Gathers the open `ci:macos` iOS PRs that merge cleanly onto main into one
+# commit on `ci/ios-batch` and dispatches Native iOS there once for all of them
+# (scripts/ios-batch.mjs). Linux and about a minute; the macOS run is
+# ios-native.yml's. Every 30 minutes too, so a PR left out for a conflict with
+# another joins a later batch once that one merges.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    paths:
+      - 'apps/ios/**'
+      - 'apps/relay-server/src/**'
+      - 'crates/nekko-remote/**'
+      - 'crates/nekkod/src/remote.rs'
+      - 'packages/shared/src/phone-access.ts'
+      - 'packages/shared/src/pairing-link.ts'
+      - '.github/workflows/ios-native.yml'
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  statuses: write
+  actions: write
+  pull-requests: read
+# Composing is cheap: the newest push wins.
+concurrency:
+  group: ios-batch
+  cancel-in-progress: true
+jobs:
+  compose:
+    # A fork's PR gets a read-only token; the schedule picks up same-repo PRs only.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Full history: the script merges each PR onto origin/main.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Compose the batch and dispatch Native iOS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ios-batch.mjs

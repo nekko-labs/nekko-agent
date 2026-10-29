@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AskAnswer, AskQuestion, AskRequest } from '@nekko-agent/shared';
+import { PixelQuestionIcon } from './PixelQuestionIcon.js';
 import { ASK_OTHER_LABEL, isAskComplete } from '@nekko-agent/shared';
 
 /**
@@ -81,7 +82,7 @@ export function QuestionCard({
   // among other cards and don't get to steal focus.
   useEffect(() => {
     setCursor(0);
-    if (!compact) rootRef.current?.focus();
+    if (!compact) rootRef.current?.focus({ preventScroll: true });
   }, [index, compact]);
 
   const toggle = useCallback(
@@ -190,7 +191,7 @@ export function QuestionCard({
       onKeyDown={onKeyDown}
     >
       <div className="mb-2 flex items-center gap-1.5">
-        <span className="text-[13px]" aria-hidden>💬</span>
+        <PixelQuestionIcon className="h-4 w-4 shrink-0" />
         <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: hue }}>
           Before I start
         </span>

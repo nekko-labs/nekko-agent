@@ -53,29 +53,45 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nekko.android.ui.previews.PreviewCards
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
+import com.nekko.protocol.Purpose
+import com.nekko.protocol.PurposeCall
+import com.nekko.protocol.ToolPurpose
 import com.nekko.protocol.Transcript
 import com.nekko.protocol.ToolStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+/**
+ * What a long press on a message offers besides Copy: fork the chat from it
+ * (AN-29). *Edit in a new chat* on a prompt, *Fork from here* on a reply.
+ */
+data class ForkAction(val label: String, val run: () -> Unit)
+
 @Composable
-fun BlockView(block: Block) {
+fun BlockView(block: Block, fork: ForkAction? = null) {
     when (block) {
-        is Block.User -> UserBubble(block)
-        is Block.Assistant -> Reply(block)
+        is Block.User -> UserBubble(block, fork)
+        is Block.Assistant -> Reply(block, fork)
         is Block.Tool -> ToolRow(block)
     }
 }
 
 @Composable
-private fun UserBubble(b: Block.User) {
+private fun UserBubble(b: Block.User, fork: ForkAction?) {
     val p = Nekko.palette
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Column(
@@ -89,19 +105,21 @@ private fun UserBubble(b: Block.User) {
                 PromptPhotos(b.thumbs, tint = p.userInk.copy(alpha = 0.7f), tile = p.userInk.copy(alpha = 0.12f))
             }
             if (b.text.isNotEmpty()) {
-                Text(
-                    b.text,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = p.userInk,
-                    modifier = Modifier.padding(top = if (b.thumbs.isNotEmpty()) 8.dp else 0.dp).copyOnLongPress(b.text),
-                )
+                LongPressMenu(b.text, fork) { press ->
+                    Text(
+                        b.text,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = p.userInk,
+                        modifier = Modifier.padding(top = if (b.thumbs.isNotEmpty()) 8.dp else 0.dp).then(press),
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Reply(b: Block.Assistant) {
+private fun Reply(b: Block.Assistant, fork: ForkAction?) {
     val p = Nekko.palette
     var open by rememberSaveable(b.id) { mutableStateOf(false) }
     val reasoning = b.reasoning
@@ -144,7 +162,9 @@ private fun Reply(b: Block.Assistant) {
             }
         }
         if (b.text.isNotEmpty()) {
-            MarkdownText(b.text, color = p.ink, modifier = Modifier.fillMaxWidth().copyOnLongPress(b.text))
+            LongPressMenu(b.text, fork) { press -> MarkdownText(b.text, color = p.ink, modifier = Modifier.fillMaxWidth().then(press)) }
+            // Cards come once the reply is finished; a tapped link works meanwhile.
+            if (!b.streaming) PreviewCards(b.text)
         } else if (b.streaming && reasoning.isNullOrEmpty()) {
             CircularProgressIndicator(
                 color = p.accent,
@@ -251,7 +271,117 @@ private fun ToolRow(b: Block.Tool) {
 }
 
 /**
- * Long press copies the whole message. Messages are not wrapped in a
+ * Adjacent calls with one purpose as one card that says the goal ("Read the
+ * project's guidance", "Ran the tests") with a quiet detail line, opening to
+ * the calls as they look on their own (spec/chat/tool-calls-grouped-by-purpose.md).
+ * Present tense with a spinner while a call in it runs; a group with a failed
+ * call says so and starts open, so the failure is not hidden.
+ */
+@Composable
+fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<PurposeCall>) {
+    val p = Nekko.palette
+    val running = blocks.any { it is Block.Tool && it.status == ToolStatus.RUNNING }
+    val h = Purpose.headline(purpose, calls, running)
+    // The detail without the failure count, which is drawn in its own colour.
+    val quiet = if (h.failed > 0 && purpose == ToolPurpose.CHECK && !running) ""
+        else Purpose.headline(purpose, calls.map { it.copy(failed = false) }, running).detail
+    var chosen by rememberSaveable(blocks.firstOrNull()?.id) { mutableStateOf<Boolean?>(null) }
+    val open = chosen ?: (h.failed > 0)
+    val count = if (calls.size == 1) "1 call" else "${calls.size} calls"
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(p.surface)
+            .border(1.dp, p.line, RoundedCornerShape(12.dp)),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button) { chosen = !open }
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = listOf(h.headline, h.detail, count).filter { it.isNotEmpty() }.joinToString(", ")
+                    stateDescription = if (open) "Calls shown" else "Calls hidden"
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (running) {
+                CircularProgressIndicator(color = p.running, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+            } else {
+                Icon(
+                    if (h.failed > 0) Icons.Filled.Close else Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = if (h.failed > 0) p.danger else p.success,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    h.headline,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (running) p.accent else p.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (quiet.isNotEmpty() || h.failed > 0) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (quiet.isNotEmpty()) {
+                            Text(quiet, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        }
+                        if (h.failed > 0) Text("${h.failed} failed", style = MaterialTheme.typography.bodySmall, color = p.danger)
+                    }
+                }
+            }
+            Text("${calls.size}", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+            Icon(
+                if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = p.inkFaint,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        if (open) {
+            Column(
+                Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                blocks.forEach { BlockView(it) }
+            }
+        }
+    }
+}
+
+/**
+ * A message's long press: Copy at once, or with a [fork] a small menu of
+ * Copy and the fork (accessibility actions for both).
+ */
+@Composable
+private fun LongPressMenu(text: String, fork: ForkAction?, content: @Composable (Modifier) -> Unit) {
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    if (fork == null) {
+        content(Modifier.onLongPress(text, "Copy message") { copy(scope, clipboard, context, text) })
+        return
+    }
+    var open by remember { mutableStateOf(false) }
+    Box {
+        content(
+            Modifier.onLongPress(text, "Copy or fork") { open = true }
+                .semantics { customActions = listOf(CustomAccessibilityAction(fork.label) { fork.run(); true }) },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Copy") }, onClick = { open = false; copy(scope, clipboard, context, text) })
+            DropdownMenuItem(text = { Text(fork.label) }, onClick = { open = false; fork.run() }, modifier = Modifier.testTag("message.fork"))
+        }
+    }
+}
+
+/**
+ * A long press on the whole message. Messages are not wrapped in a
  * SelectionContainer: its press-and-drag gesture starts a text selection and
  * swallows the drag, so a chat of long messages (one can fill the screen)
  * could not be scrolled by a finger that rests before moving. This gesture
@@ -259,13 +389,10 @@ private fun ToolRow(b: Block.Tool) {
  * a drag after the copy still scrolls the list.
  */
 @Composable
-private fun Modifier.copyOnLongPress(text: String): Modifier {
-    val clipboard = LocalClipboard.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+private fun Modifier.onLongPress(text: String, label: String, action: () -> Unit): Modifier {
     val haptics = LocalHapticFeedback.current
     return this
-        .semantics { onLongClick(label = "Copy message") { copy(scope, clipboard, context, text); true } }
+        .semantics { onLongClick(label = label) { action(); true } }
         .pointerInput(text) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -281,7 +408,7 @@ private fun Modifier.copyOnLongPress(text: String): Modifier {
                 }
                 if (ended == null) {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    copy(scope, clipboard, context, text)
+                    action()
                 }
             }
         }

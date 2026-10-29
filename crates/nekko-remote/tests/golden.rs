@@ -1,7 +1,7 @@
 //! The Rust remote access against the TS code it replaces.
 //!
 //! `golden/*.json` is a frozen record of the deleted TS code (edit it by hand
-//! per docs/runbooks/golden-fixtures.md), apart from `phone-files.json` and
+//! per docs/runbooks/golden-fixtures.md), apart from `phone-files.json`, `phone-artifacts.json` and
 //! `phone-git.json`, which packages/shared still writes. Everything must come
 //! out exactly as the TS wrote it:
 //! keys, sealed blobs, verdicts, `remote.json` and the relay agent's frames.
@@ -137,8 +137,10 @@ fn the_relay_agent_sends_the_same_frames() {
     let ivs: Arc<Mutex<VecDeque<[u8; 12]>>> = Arc::default();
     let feed = ivs.clone();
     // A challenge (which the TS agent never sent) is sealed with a fresh IV.
+    // The Live Activity card's dates come from a fixed clock (seconds since 2001).
     let mut core =
-        AgentCore::new(key.clone(), Box::new(move || feed.lock().unwrap().pop_front().unwrap_or_else(e2e::random_iv)));
+        AgentCore::new(key.clone(), Box::new(move || feed.lock().unwrap().pop_front().unwrap_or_else(e2e::random_iv)))
+            .with_clock(Box::new(|| 800_000_000.0));
     let verify = |hello: &Value| -> Value {
         let id = hello.get("deviceId").and_then(Value::as_str).unwrap_or("");
         if id == "phone-1" || id == "phone-2" {
@@ -189,7 +191,7 @@ fn the_relay_agent_sends_the_same_frames() {
             for out in outs {
                 match out {
                     Out::Send(f) => sent.push(f),
-                    Out::Dispatch { cid, id, device_id, channel, args, proof } => {
+                    Out::Dispatch { cid, id, device_id, channel, args, proof, .. } => {
                         // As the daemon runs it: through the phone gate, then the host.
                         let seen = Arc::new(Mutex::new(Vec::new()));
                         let (record, responses) = (seen.clone(), responses.clone());
@@ -207,7 +209,7 @@ fn the_relay_agent_sends_the_same_frames() {
                             Box::pin(std::future::ready(result))
                         });
                         let gated = nekko_remote::phone::gate(host, Arc::new(AllOn));
-                        let result = rt.block_on(gated(PhoneCall { device_id, proof }, channel, args));
+                        let result = rt.block_on(gated(PhoneCall { device_id, proof, step_up: None }, channel, args));
                         calls.extend(seen.lock().unwrap().drain(..));
                         sent.push(core.reply(&cid, id, result));
                     }
@@ -467,6 +469,59 @@ fn files_and_logs_from_a_phone_match_the_ts() {
 }
 
 #[test]
+fn artifacts_and_previews_from_a_phone_match_the_ts() {
+    // Written from packages/shared/src/chat-links.ts and phone-artifacts.ts by phone-artifacts.golden.test.ts.
+    use nekko_remote::chat_links::{self, ChatLinks};
+    let g = golden("phone-artifacts.json");
+    let cases = |k: &str, at_least: usize| {
+        let list = g[k].as_array().unwrap().clone();
+        assert!(list.len() >= at_least, "{k}");
+        list
+    };
+    for c in cases("links", 15) {
+        let got = chat_links::chat_links(&c["messages"], c["base"].as_str());
+        assert_eq!(got.value(), c["links"], "{} with base {}", c["messages"], c["base"]);
+    }
+    for c in cases("paths", 15) {
+        let got = chat_links::local_path(s(&c["path"]), None);
+        assert_eq!(got.map(Value::String).unwrap_or(Value::Null), c["local"], "{}", c["path"]);
+    }
+    for c in cases("urls", 15) {
+        let got = chat_links::loopback_url(s(&c["url"]), 2048);
+        assert_eq!(got.map(|u| u.value()).unwrap_or(Value::Null), c["parsed"], "{}", c["url"]);
+    }
+    for c in cases("access", 15) {
+        let links = ChatLinks::from_value(&c["links"]);
+        let got = chat_links::artifact_access(s(&c["path"]), &links, c["caseInsensitive"] == json!(true));
+        assert_eq!(
+            got.map(|a| a.value()).unwrap_or(Value::Null),
+            c["access"],
+            "{} ci {}",
+            c["path"],
+            c["caseInsensitive"]
+        );
+    }
+    for c in cases("screens", 25) {
+        let channel = s(&c["channel"]);
+        let args = c["args"].as_array().unwrap();
+        let got = nekko_remote::phone::screen(channel, args);
+        let what = format!("{channel} {}", c["args"]);
+        match c.get("error") {
+            Some(e) => assert_eq!(got.err().map(|d| d.to_string()).as_deref(), Some(s(e)), "{what}"),
+            None => {
+                let args = got.unwrap_or_else(|d| panic!("{what}: {d}")).args.map(Value::Array).unwrap_or(Value::Null);
+                assert_eq!(args, c["callArgs"], "{what}");
+            }
+        }
+    }
+    for c in cases("views", 10) {
+        let channel = s(&c["channel"]);
+        let got = nekko_remote::phone::redact(channel, c["result"].clone());
+        assert_eq!(got, c["view"], "{channel} {}", c["result"]);
+    }
+}
+
+#[test]
 fn the_relay_route_rule_matches_the_ts() {
     for case in golden("relay-route.json").as_array().unwrap() {
         let url = s(&case["url"]);
@@ -568,4 +623,36 @@ fn the_relay_handshake_matches_the_phones() {
 
 fn getrandom_fill(buf: &mut [u8]) {
     (hello::os_random())(buf)
+}
+
+/// SK-2: the step-up verifier decides every case the TS twin wrote
+/// (`packages/shared/src/step-up.golden.test.ts`): real ES256 assertions from
+/// a software authenticator, TOTP codes and their rate limit.
+#[test]
+fn step_up_matches_the_ts_verifier() {
+    use nekko_remote::step_up::{self, Issued};
+    let g = golden("step-up.json");
+    let cases = g["cases"].as_array().unwrap();
+    assert!(cases.len() > 20);
+    for c in cases {
+        let name = c["name"].as_str().unwrap();
+        let mut state = c["state"].clone();
+        let mut issued: Vec<Issued> = c["issued"].as_array().unwrap().iter().map(|v| Issued::of(v).unwrap()).collect();
+        let out = step_up::check(&mut state, &mut issued, c["now"].as_f64().unwrap(), Some(&c["stepUp"]));
+        let e = &c["expect"];
+        assert_eq!(out.result, e["result"].as_str().unwrap(), "{name}");
+        assert_eq!(out.method, e["method"].as_str(), "{name}");
+        assert_eq!(out.uv, e["uv"].as_bool(), "{name}");
+        assert_eq!(out.cloned.as_deref(), e["cloned"].as_str(), "{name}");
+        assert_eq!(state, e["state"], "{name}: security.json after");
+        assert_eq!(Value::Array(issued.iter().map(Issued::value).collect()), e["issued"], "{name}: challenges after");
+    }
+    for v in g["totpVectors"].as_array().unwrap() {
+        let secret = step_up::base32_decode(v["secret"].as_str().unwrap()).unwrap();
+        assert_eq!(step_up::totp_at(&secret, v["step"].as_i64().unwrap(), 6), v["code"].as_str().unwrap());
+    }
+    let r = &g["recovery"];
+    for (code, hash) in r["codes"].as_array().unwrap().iter().zip(r["hashes"].as_array().unwrap()) {
+        assert_eq!(step_up::hash_recovery_code(code.as_str().unwrap()), hash.as_str().unwrap());
+    }
 }

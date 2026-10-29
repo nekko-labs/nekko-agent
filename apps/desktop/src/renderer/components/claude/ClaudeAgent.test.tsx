@@ -3,26 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CLAUDE_PLAN_SHEET } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
-import { ClaudeAgentSetup, ClaudeComparison, ClaudePlanSheet, ClaudeReasonLine, claudeAuthLabel } from './ClaudeAgent.js';
+import { ClaudeComparison, ClaudePlanSheet, ClaudeReasonLine, claudeAuthLabel } from './ClaudeAgent.js';
 
 describe('Claude Agent', () => {
   it('renders the comparison from the policy table, not hand-written cells', () => {
     const html = renderToStaticMarkup(<ClaudeComparison />);
-    expect(html).toContain('Claude (API or cloud)');
-    expect(html).toContain('Claude Agent with a Claude plan');
+    expect(html).toContain('Subscription');
+    expect(html).toContain('>API<');
     expect(html).toContain('Scheduled tasks and watches');
     expect(html).toContain('Not yet');
     expect(html).toContain('Your Claude plan');
     // Header row plus six capabilities plus "Billed to".
     expect((html.match(/<tr>/g) ?? []).length).toBe(8);
-  });
-
-  it('starts the setup panel by looking for Claude Code and never offers a Nekko sign-in', () => {
-    const html = renderToStaticMarkup(<ClaudeAgentSetup onSave={() => {}} saving={false} />);
-    expect(html).toContain('Looking for Claude Code');
-    expect(html).toContain('Sign-in happens in Claude Code, not in Nekko');
-    expect(html).not.toContain('type="password"');
-    expect(html).not.toContain('<input');
   });
 
   it('names how Claude Code is signed in, in plain words', () => {

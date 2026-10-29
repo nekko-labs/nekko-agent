@@ -16,17 +16,17 @@ type Dict = Record<string, string>;
 // English is the source of truth; other locales fall back to it per-key.
 const en: Dict = {
   'nav.command': 'Agents',
-  'nav.chat': 'Chat',
   'nav.artifacts': 'Artifacts',
   'nav.design': 'Design',
   'nav.skills': 'Skills',
   'nav.training': 'Training',
   'nav.workflows': 'Workflows',
-  'nav.models': 'Model Providers',
+  'nav.models': 'Models',
   'nav.modelserver': 'Model Server',
   'nav.connectors': 'Connectors',
   'nav.memory': 'Memory',
   'nav.settings': 'Settings',
+  'nav.feedback': 'Send feedback',
 
   'settings.title': 'Settings',
   'settings.appearance': 'Appearance',
@@ -59,12 +59,12 @@ const en: Dict = {
 
 const es: Dict = {
   'nav.command': 'Agentes',
-  'nav.chat': 'Chat',
-  'nav.models': 'Proveedores',
+  'nav.models': 'Modelos',
   'nav.modelserver': 'Servidor de modelos',
   'nav.connectors': 'Conectores',
   'nav.memory': 'Memoria',
   'nav.settings': 'Ajustes',
+  'nav.feedback': 'Enviar comentarios',
   'settings.title': 'Ajustes',
   'settings.appearance': 'Apariencia',
   'settings.theme': 'Tema',
@@ -95,12 +95,12 @@ const es: Dict = {
 
 const fr: Dict = {
   'nav.command': 'Agents',
-  'nav.chat': 'Chat',
-  'nav.models': 'Fournisseurs',
+  'nav.models': 'Modèles',
   'nav.modelserver': 'Serveur de modèles',
   'nav.connectors': 'Connecteurs',
   'nav.memory': 'Mémoire',
   'nav.settings': 'Paramètres',
+  'nav.feedback': 'Envoyer un avis',
   'settings.title': 'Paramètres',
   'settings.appearance': 'Apparence',
   'settings.theme': 'Thème',
@@ -131,12 +131,12 @@ const fr: Dict = {
 
 const de: Dict = {
   'nav.command': 'Agenten',
-  'nav.chat': 'Chat',
-  'nav.models': 'Anbieter',
+  'nav.models': 'Modelle',
   'nav.modelserver': 'Modellserver',
   'nav.connectors': 'Konnektoren',
   'nav.memory': 'Speicher',
   'nav.settings': 'Einstellungen',
+  'nav.feedback': 'Feedback senden',
   'settings.title': 'Einstellungen',
   'settings.appearance': 'Darstellung',
   'settings.theme': 'Design',
@@ -167,12 +167,12 @@ const de: Dict = {
 
 const pt: Dict = {
   'nav.command': 'Agentes',
-  'nav.chat': 'Chat',
-  'nav.models': 'Provedores',
+  'nav.models': 'Modelos',
   'nav.modelserver': 'Servidor de modelos',
   'nav.connectors': 'Conectores',
   'nav.memory': 'Memória',
   'nav.settings': 'Configurações',
+  'nav.feedback': 'Enviar feedback',
   'settings.title': 'Configurações',
   'settings.appearance': 'Aparência',
   'settings.theme': 'Tema',
@@ -203,12 +203,12 @@ const pt: Dict = {
 
 const ja: Dict = {
   'nav.command': 'エージェント',
-  'nav.chat': 'チャット',
-  'nav.models': 'モデル提供元',
+  'nav.models': 'モデル',
   'nav.modelserver': 'モデルサーバー',
   'nav.connectors': 'コネクタ',
   'nav.memory': 'メモリ',
   'nav.settings': '設定',
+  'nav.feedback': 'フィードバックを送信',
   'settings.title': '設定',
   'settings.appearance': '外観',
   'settings.theme': 'テーマ',
@@ -239,12 +239,12 @@ const ja: Dict = {
 
 const zh: Dict = {
   'nav.command': '智能体',
-  'nav.chat': '聊天',
-  'nav.models': '模型来源',
+  'nav.models': '模型',
   'nav.modelserver': '模型服务器',
   'nav.connectors': '连接器',
   'nav.memory': '记忆',
   'nav.settings': '设置',
+  'nav.feedback': '发送反馈',
   'settings.title': '设置',
   'settings.appearance': '外观',
   'settings.theme': '主题',

@@ -166,7 +166,7 @@ public struct RelayConfig: Sendable {
 ///    `{type:'hello', deviceId, name, platform, protocol: 4, challenge, pair?}`
 ///    (the one-time pairing code only while enrolling).
 /// 3. After the welcome every request is `{type:'req', id, seq, challenge,
-///    channel, args, proof?}`: `seq` starts at 1 after each welcome and goes up
+///    channel, args, proof?, stepUp?}`: `seq` starts at 1 after each welcome and goes up
 ///    by one per request, and `challenge` is the nonce the welcomed HELLO
 ///    answered. The computer drops a request with a stale seq or the wrong
 ///    challenge and challenges the connection again, so a recorded frame
@@ -352,6 +352,13 @@ public final class RelayClient: @unchecked Sendable {
 
     /// `call`, with a signed Change proof beside the args (`ChangeProof`, IO-33).
     public func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue {
+        try await call(channel, args, proof: proof, stepUp: nil, timeout: timeout)
+    }
+
+    /// `call`, with a Change proof and a step-up (`StepUpProof.json`, SK-6)
+    /// beside the args, both inside the sealed frame.
+    public func call(_ channel: String, _ args: [JSONValue], proof: JSONValue?, stepUp: JSONValue?,
+                     timeout: TimeInterval?) async throws -> JSONValue {
         try await awaitReady()
         let id: Int64 = locked {
             let id = nextId
@@ -360,6 +367,7 @@ public final class RelayClient: @unchecked Sendable {
         }
         var fields: [String: JSONValue] = ["type": "req", "id": .int(id), "channel": .string(channel), "args": .array(args)]
         if let proof { fields["proof"] = proof }
+        if let stepUp { fields["stepUp"] = stepUp }
         let limit = timeout ?? config.requestTimeout
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<JSONValue, Error>) in
             locked { pending[id] = cont }
@@ -388,13 +396,17 @@ public final class RelayClient: @unchecked Sendable {
         guard let c = locked({ conn }), c.send(frame.serialized()) else { throw RelayError("Could not reach your computer.") }
     }
 
-    /// Hand the relay a Live Activity's ActivityKit push token under the chat's
-    /// opaque tag (`E2E.activityTag`), so the computer's content-free `activity`
-    /// frames can update it while iOS has suspended the app.
-    public func registerActivity(tag: String, token: String) async throws {
+    /// Hand the relay the Live Activity card's ActivityKit push tokens (`token`
+    /// for the card that is up, `startToken` to start one) and its level, so the
+    /// computer's `card` frames reach it while iOS has suspended the app. The
+    /// relay blanks the card's text for the level; `.none` drops the registration.
+    /// The computer's id and name are the card's attributes when the relay starts one.
+    public func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {
         try await awaitReady()
-        var o: [String: JSONValue] = ["type": "register-activity", "tag": .string(tag), "token": .string(token),
-                                      "deviceId": .string(config.deviceId)]
+        var o: [String: JSONValue] = ["type": "register-card", "deviceId": .string(config.deviceId), "level": .string(level.rawValue),
+                                      "computerId": .string(computerId), "computerName": .string(computerName)]
+        if let token { o["token"] = .string(token) }
+        if let startToken { o["startToken"] = .string(startToken) }
         if let app = config.app { o["app"] = .string(app) }
         guard let c = locked({ conn }), c.send(JSONValue.object(o).serialized()) else { throw RelayError("Could not reach your computer.") }
     }

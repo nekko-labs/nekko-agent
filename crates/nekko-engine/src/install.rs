@@ -28,6 +28,11 @@ pub trait InstallIo: Send + Sync {
     ) -> BoxFuture<Result<(u16, Vec<u8>), String>>;
     /// `execFile`: stdout then stderr when it exited 0, else `None`.
     fn run(&self, cmd: String, args: Vec<String>, timeout_ms: u64) -> BoxFuture<Option<String>>;
+    /// `where <name>` on Windows, `which <name>` elsewhere (`finder`): what it
+    /// prints, or `None` when nothing is found.
+    fn find_on_path(&self, finder: String, name: String) -> BoxFuture<Option<String>> {
+        self.run(finder, vec![name], 4000)
+    }
 }
 
 /// The real network and processes.
@@ -59,7 +64,9 @@ impl InstallIo for SystemIo {
             if let Some(t) = timeout {
                 req = req.timeout(t);
             }
-            let res = req.send().await.map_err(|_| "fetch failed".to_string())?;
+            let res = nekko_net::send("models", req)
+                .await
+                .map_err(|e| if e.is_blocked() { e.to_string() } else { "fetch failed".to_string() })?;
             let status = res.status().as_u16();
             let body = res.bytes().await.map_err(|_| "terminated".to_string())?;
             Ok((status, body.to_vec()))
@@ -81,6 +88,70 @@ impl InstallIo for SystemIo {
             Some(text)
         })
     }
+
+    /// Searched here rather than by running `where`/`which`: `engine:status`
+    /// asks every few seconds while the app is open (the tray, the Models
+    /// page), and a process plus a console host each time is a cost other
+    /// programs (games) pay.
+    fn find_on_path(&self, _finder: String, name: String) -> BoxFuture<Option<String>> {
+        let windows = cfg!(windows);
+        let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+        // `where` looks in the current folder first; `which` does not.
+        if windows && let Ok(cwd) = std::env::current_dir() {
+            dirs.push(cwd);
+        }
+        dirs.extend(
+            std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect::<Vec<_>>()).unwrap_or_default(),
+        );
+        let exts = if windows {
+            path_exts(std::env::var("PATHEXT").ok().as_deref().unwrap_or(DEFAULT_PATHEXT))
+        } else {
+            Vec::new()
+        };
+        Box::pin(async move { search_path(&name, &dirs, &exts, runnable) })
+    }
+}
+
+/// Windows' `PATHEXT` when the variable is missing.
+const DEFAULT_PATHEXT: &str = ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC";
+
+/// `PATHEXT`'s extensions, lower-cased as files usually are on disk.
+fn path_exts(pathext: &str) -> Vec<String> {
+    pathext.split(';').map(str::trim).filter(|e| e.starts_with('.') && e.len() > 1).map(str::to_lowercase).collect()
+}
+
+/// A file `which` would accept: on Unix, one with an execute bit.
+fn runnable(p: &std::path::Path) -> bool {
+    let Ok(m) = std::fs::metadata(p) else { return false };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        m.is_file() && m.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    m.is_file()
+}
+
+/// The first `name` in `dirs`, as `where`/`which` prints it. With `exts`
+/// (Windows' `PATHEXT`), a name without an extension matches only with one of
+/// them, the way `where` matches it; a name with one matches as given.
+fn search_path(
+    name: &str,
+    dirs: &[std::path::PathBuf],
+    exts: &[String],
+    exists: impl Fn(&std::path::Path) -> bool,
+) -> Option<String> {
+    let has_ext = std::path::Path::new(name).extension().is_some();
+    let names: Vec<String> = if exts.is_empty() || has_ext {
+        vec![name.to_string()]
+    } else {
+        exts.iter().map(|e| format!("{name}{e}")).collect()
+    };
+    dirs.iter()
+        .filter(|d| !d.as_os_str().is_empty())
+        .flat_map(|d| names.iter().map(move |n| d.join(n)))
+        .find(|p| exists(p))
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 /// Where the Visual C++ runtime is looked for (`VcRuntimeOptions`).
@@ -321,7 +392,7 @@ impl Installer {
     async fn find_on_path(&self) -> Option<String> {
         let finder = if self.platform == "win32" { "where" } else { "which" };
         for name in self.server_names() {
-            let out = self.io.run(finder.into(), vec![name.into()], 4000).await;
+            let out = self.io.find_on_path(finder.into(), name.into()).await;
             let first = out
                 .as_deref()
                 .and_then(|o| o.split('\n').map(nekko_js::trim).find(|l| !l.is_empty()))
@@ -773,7 +844,36 @@ fn ps_single_quoted(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::ps_single_quoted;
+    use super::{path_exts, ps_single_quoted, search_path};
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn path_search_matches_where_and_which() {
+        let dirs = [PathBuf::from("a"), PathBuf::new(), PathBuf::from("b")];
+        let on_disk = |files: &'static [&'static str]| move |p: &Path| files.iter().any(|f| Path::new(f) == p);
+        let exts = path_exts(".COM; .EXE;;.BAT");
+        assert_eq!(exts, [".com", ".exe", ".bat"]);
+        // Windows: a bare name only with a PATHEXT extension, first folder first.
+        assert_eq!(
+            search_path("sd-server", &dirs, &exts, on_disk(&["b/sd-server.exe", "a/sd-server"])),
+            Some(Path::new("b").join("sd-server.exe").to_string_lossy().into_owned())
+        );
+        assert_eq!(
+            search_path("sd-server", &dirs, &exts, on_disk(&["a/sd-server.bat", "b/sd-server.exe"])),
+            Some(Path::new("a").join("sd-server.bat").to_string_lossy().into_owned())
+        );
+        // A name with an extension matches as given.
+        assert_eq!(
+            search_path("sd-server.exe", &dirs, &exts, on_disk(&["b/sd-server.exe"])),
+            Some(Path::new("b").join("sd-server.exe").to_string_lossy().into_owned())
+        );
+        assert_eq!(search_path("sd-server.exe", &dirs, &exts, on_disk(&[])), None);
+        // `which`: the exact name; an empty PATH entry is skipped, not the current folder.
+        assert_eq!(
+            search_path("llama-server", &dirs, &[], on_disk(&["llama-server", "b/llama-server"])),
+            Some(Path::new("b").join("llama-server").to_string_lossy().into_owned())
+        );
+    }
 
     #[test]
     fn powershell_paths_cannot_close_their_quotes() {

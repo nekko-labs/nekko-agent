@@ -14,6 +14,8 @@ import { WelcomeStep } from '../components/onboarding/WelcomeStep.js';
 import { ThemeStep } from '../components/onboarding/ThemeStep.js';
 import { ProvidersStep } from '../components/onboarding/ProvidersStep.js';
 import { IntegrationsStep } from '../components/onboarding/IntegrationsStep.js';
+import { WorkTrackingStep } from '../components/onboarding/WorkTrackingStep.js';
+import { HelpImproveStep } from '../components/onboarding/HelpImproveStep.js';
 import { DoneStep } from '../components/onboarding/DoneStep.js';
 
 export function OnboardingView() {
@@ -172,6 +174,8 @@ export function OnboardingView() {
       {step.id === 'theme' && <ThemeStep />}
       {step.id === 'providers' && <ProvidersStep onExit={close} />}
       {step.id === 'integrations' && <IntegrationsStep commitRef={stepCommitRef} />}
+      {step.id === 'tracking' && <WorkTrackingStep commitRef={stepCommitRef} />}
+      {step.id === 'help' && <HelpImproveStep commitRef={stepCommitRef} />}
       {step.id === 'done' && <DoneStep onFinish={finish} />}
     </WizardShell>
   );

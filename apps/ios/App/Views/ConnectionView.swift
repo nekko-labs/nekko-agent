@@ -104,6 +104,7 @@ struct ConnectionView: View {
                 Text("Pair a computer first.").foregroundStyle(palette.inkSoft)
             }
         }
+        .appBackground()
         .navigationTitle("Connection")
         .onAppear { tailnet = Tailnet.isConnected }
         .onChange(of: phase) { _, p in if p == .active { tailnet = Tailnet.isConnected } }
@@ -199,10 +200,10 @@ private struct LogRow: View {
 
 func stateName(_ s: RelayState) -> String {
     switch s {
-    case .idle: "Not connected"
-    case .connecting: "Connecting"
-    case .online: "Online"
-    case .offline: "Computer offline"
-    case .denied: "Refused"
+    case .idle: String(localized: "Not connected")
+    case .connecting: String(localized: "Connecting")
+    case .online: String(localized: "Online")
+    case .offline: String(localized: "Computer offline")
+    case .denied: String(localized: "Refused")
     }
 }

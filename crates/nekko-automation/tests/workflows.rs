@@ -620,6 +620,39 @@ fn saves(fake: &Fake) -> Vec<Value> {
 }
 
 #[tokio::test]
+async fn an_update_clears_the_settings_it_sends_as_null() {
+    let (engine, fake, dir) = engine_with("clear-null", local_settings());
+    fake.replies.lock().unwrap().push_back(json!({ "reply": "done" }));
+    let wf = engine
+        .create(&json!({ "name": "C", "description": "Old", "localModelOnly": true, "toolAccess": "read",
+            "prCheckout": true, "providerId": "local", "modelId": "m", "steps": [prompt_step("a", json!({}))] }))
+        .await
+        .unwrap();
+    let id = wf["id"].as_str().unwrap();
+    // What the editor sends when every one of them is cleared (JSON has no undefined).
+    let wf = engine
+        .update(
+            id,
+            &json!({ "description": null, "localModelOnly": null, "toolAccess": null, "prCheckout": null,
+            "providerId": null, "modelId": null }),
+        )
+        .unwrap();
+    for k in ["description", "localModelOnly", "toolAccess", "prCheckout", "providerId", "modelId"] {
+        assert!(wf[k].is_null(), "{k}: {wf}");
+    }
+    // The run reads them as unset: the default model, online, full workspace access.
+    assert_eq!(engine.run(id).await.unwrap()["status"], "success");
+    let saves = saves(&fake);
+    assert!(!saves.is_empty());
+    for fields in saves {
+        for k in ["providerId", "modelId", "offline", "toolAccess", "disabledTools"] {
+            assert!(fields.get(k).is_none(), "{k}: {fields}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn a_skill_step_fills_its_arguments_and_runs_under_its_skills_allowlist() {
     let (engine, fake, dir) = engine_with("skill-args", local_settings());
     fake.replies.lock().unwrap().push_back(json!({ "reply": "LGTM" }));
@@ -758,6 +791,7 @@ async fn a_local_schedule_waits_for_idle_and_an_event_never_waits() {
     let runs = engine.dispatch_event(&pr_event("MEMBER", false)).await;
     assert_eq!(runs[0]["status"], "success", "{runs:?}");
     assert_eq!(runs[0]["lowPriority"], json!(true));
+    assert_eq!(fake.turns.lock().unwrap()[0]["background"], json!("lowPriority"));
     assert!(engine.list()[0].get("waitingSince").is_none(), "a run started: no longer waiting");
 
     *fake.activity.lock().unwrap() = Some(json!({ "userActive": false, "strain": [] }));
@@ -765,6 +799,7 @@ async fn a_local_schedule_waits_for_idle_and_an_event_never_waits() {
     assert_eq!(run["status"], "success", "{run}");
     assert!(run.get("lowPriority").is_none(), "{run}");
     assert_eq!(fake.turns.lock().unwrap().len(), 2);
+    assert_eq!(fake.turns.lock().unwrap()[1]["background"], json!("idle"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

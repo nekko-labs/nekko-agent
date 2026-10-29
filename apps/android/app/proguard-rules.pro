@@ -10,3 +10,11 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.conscrypt.**
 -dontwarn org.openjsse.**
+
+# Credential Manager finds its Play services provider by reflection (the rule
+# from the androidx.credentials setup guide); without it a release build has no
+# provider on Android 13 and below and step-up with a key always fails.
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** {
+  *;
+}

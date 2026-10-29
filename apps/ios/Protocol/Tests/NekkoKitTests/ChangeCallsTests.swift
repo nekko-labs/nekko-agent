@@ -13,6 +13,9 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
     var seen: Set<String> = []
     var now: Int64 = 1_760_000_000_000
     var calls: [(String, [JSONValue], JSONValue?)] = []
+    var replies: [String: JSONValue] = [:]
+    private var onStatus: (@Sendable (RelayStatus) -> Void)?
+    func online() { onStatus?(RelayStatus(.online)) }
     let deviceId: String
 
     init(deviceId: String = "phone-1") { self.deviceId = deviceId }
@@ -53,10 +56,11 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
             guard patch?.str(settings ? "defaultChatMode" : "mode") == "yolo" else { return settings ? (patch ?? .null) : .null }
             guard proof != nil else { throw refuse("proof-required", channel) }
         }
+        if !Channels.change.contains(channel), let reply = replies[channel] { return reply }
         guard changeOn else { throw refuse("change-off", channel) }
         guard let key else { throw refuse("key-missing", channel) }
         try check(channel, args, proof, key: key)
-        return ["ok": .string(channel)]
+        return replies[channel] ?? ["ok": .string(channel)]
     }
 
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
@@ -68,13 +72,13 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
 
     // The rest of a connection: unused here.
     func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?,
-                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {}
+                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) { self.onStatus = onStatus }
     func connect() {}
     func close() {}
     func nudge() {}
     func reconnect() {}
     func registerPush(token: String) async throws {}
-    func registerActivity(tag: String, token: String) async throws {}
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {}
 }
 
 final class ChangeCallsTests: XCTestCase {

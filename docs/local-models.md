@@ -5,6 +5,20 @@ installed, or by driving a server you already run (Ollama, LM Studio, vLLM). Eit
 it loads a model with the settings you choose and tells you honestly whether it will fit
 before you wait through the load. This is what the Models page shows you and why.
 
+## Your first local model
+
+If you have never run a model here, Models > Local model server starts with one question:
+what will you mostly use it for, **Everyday help** or **Writing code**. Each card names the
+model picked for your computer and its download size. Press **Download and set up** and
+Nekko fetches the model, plus the engine that runs it if you do not have it yet. You see
+the download as steps with time left, and when it is done, **Start chatting** opens a chat
+with that model. Nothing downloads until you press the button.
+
+Want a different model, or already use Ollama or LM Studio? **Show all models and
+settings** opens the full page described below. If Nekko finds models from another app on
+this computer, or you have connected your own local server, the full page opens straight
+away.
+
 ## The Nekko engine
 
 The engine is llama.cpp, managed by Nekko Agent. You press one button, a build comes down
@@ -61,18 +75,68 @@ resident; a request for one that is not loaded loads it; an idle one is evicted 
 timer; and the address survives every load and unload. It is OpenAI-compatible, so point
 Claude Code, Cursor, Continue or anything else at it and name a model from `/v1/models`.
 
-**Two ways to configure a load.** *Simple* asks one question, how much of this machine
-the model may use, and solves it into a real context length, GPU offload and KV cache
-type, then says what it chose and what it costs. *Advanced* is every llama.cpp flag:
-context, GPU layers, KV cache type, parallel slots, flash attention, batch and physical
-batch, threads, mmap and mlock, RoPE base and scale, seed, idle TTL. They are the same
-state, so moving one moves the other, and either can be saved as that model's default.
+**What stays loaded.** A model has to make room before it loads, in two ways:
+
+- **The resident limit:** if the limit is reached, the least recently used idle model is
+  unloaded first.
+- **Free GPU memory:** if the engine can size the model and the GPU reading says it will not
+  fit, idle models are unloaded, least recently used first, until it fits. On Apple Silicon
+  this is unified memory. If nothing idle is left, the model loads anyway and the log says
+  it may not fit.
+
+A model marked **Keep resident** in Model Server is never unloaded to make room for
+another. If every slot is busy or kept resident, a new load is refused with a message
+that says so.
+
+A paused background automation keeps no request open, so its model counts as idle: it
+goes on the idle timer, or sooner when a chat of yours needs the room.
+
+**Configuring a load.** A model's drawer leads with a **memory meter**: graphics memory
+(VRAM) and system memory (RAM) as two bars, each split into other apps, this model (its
+weights, its context, its working space) and what is left, plus a line when part of the
+model is read from your SSD. It is the planner's answer for exactly the settings below, and
+the launch passes that placement to llama.cpp as is, so what loads is what the meter showed.
+
+**Use recommended settings** picks the fastest setup that fits: GPU only when the model fits
+there, otherwise the lightest hybrid split at 32K of context, then as much context as that
+split allows. "What this chose" explains each choice in a sentence. A model with no saved
+settings opens with the recommendation applied.
+
+Then come **Run on** (GPU only or Hybrid) and **Context** (per session). In Hybrid, **How to
+split it** offers ready-made recipes:
+
+| Preset | What it does | llama.cpp flags |
+| --- | --- | --- |
+| Custom | You choose how many layers go on the GPU. | `--n-gpu-layers N` |
+| Fill the GPU, rest in RAM | Mixture-of-experts: as many experts on the GPU as fit at this context, the rest in RAM. Dense models: attention and context on the GPU, the feed-forward of some layers in RAM. | `--n-cpu-moe N` / `--n-cpu-ffn N` |
+| All experts in RAM | Only the core on the GPU, the most room for context, plus a cache of the busiest experts in spare VRAM. | `--cpu-moe --moe-cache-mib N` |
+| Long coding sessions | The most context in compact memory, experts in RAM, and a model's n-gram lookup table left on the SSD. | `--n-cpu-moe N -ctk q8_0 -ctv q8_0 --lazy-mode on` |
+| Context in RAM | The whole model on the GPU, its KV cache in system RAM. | `--no-kv-offload` |
+
+The mixture-of-experts presets work because such a model uses only a few of its experts for
+each word: the experts are most of the file and few of its reads, so they can live in RAM
+while the GPU does the rest. Some models also ship a large n-gram lookup table they read a
+few KB of per word; with the file memory-mapped it stays on the SSD.
+
+**More controls** holds sessions at once (with a recommended number), memory precision (the
+KV cache type, from most reliable to fastest) and keep in memory (load when needed, keep
+loaded, pin in memory; none of them move the work off the GPU). **Expert** holds every
+remaining flag, each with a sentence and the flag it sets. Controls a build does not support
+fall back to `--override-tensor` patterns or are left out. Any of it can be saved as that
+model's default.
+
+**Thinking** is on by default. For a built-in llama.cpp model, open **More controls >
+Expert > Thinking** to turn it off for that model, then load or save the settings.
+The preference applies across chats using that model and is not available for MLX.
+Other connected local servers default to thinking on; models without reasoning may
+ignore the request. There is no per-chat thinking switch in the composer. Cloud
+models keep thinking on, regardless of any old chat-level off preference.
 
 **Seeing what is loaded from anywhere.** The Agents view's **Panels** dock has a **Local
 models** monitor, under Hardware: each model the engine holds in memory, whether it runs on
 the GPU, split across GPU and CPU (with the layer count, in amber), or on the CPU, plus its
 context and footprint. **Settings** on a row opens Model Server with that model's drawer
-unfolded on *Advanced*, where **Runs on** (GPU only, Hybrid, CPU only) lives. The chat's
+unfolded, with **More controls** open. The chat's
 right panel has the same jump as **All settings** inside each model under Model settings.
 Switch the monitor off in the dock's **Configure** menu. Changing a setting reloads the
 model, which interrupts a reply it is generating.
@@ -279,10 +343,14 @@ The microphone in the message box turns speech into draft text on this computer;
 - **Apple speech** on macOS 26 and later: the recognizer built into the Mac. The language pack for your recognition language is often already installed, so the first click on the microphone just asks which engine to use. It is the default on a Mac that has it.
 - **Whisper Tiny English** (Nekko Voice) on Windows and Linux: a 32 MB model plus the whisper.cpp runtime, downloaded once and loaded on demand.
 
-Say "Nekko, open settings" (or "Nekko, new chat") and the app shows the command for confirmation instead of typing it.
+The microphone stays on until you tap it again, and "Nekko, ..." phrases are commands. See [Voice](voice.md).
 
 ## What is not here yet
 
 Browsing and downloading models from inside the app, and a bundled inference engine so a
 fresh install can run a model with nothing else present, are both planned as separate
 pieces of work. Today Nekko Agent manages the runtimes you already have.
+
+## Models navigation
+
+Open **Models** in the app rail. **Local model server** contains the built-in engine and connected local servers, with discovery and shortcuts for Ollama, LM Studio and vLLM. **Cloud providers** contains subscriptions and API accounts. To add one, use the filled provider icons to the right of your current providers, or **More providers** for the full chooser. Existing provider controls are unchanged.

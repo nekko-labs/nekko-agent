@@ -18,12 +18,12 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 
 Vision, users, product names, scope boundaries, open questions and policies.
 
-- [Claude policy (2026-10-19)](product/claude-policy.md) (5 KB)
+- [Claude policy (2026-10-19)](product/claude-policy.md) (6 KB)
 - [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
-- [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (1 KB)
-- [Scope Boundaries](product/scope-boundaries.md) (3 KB)
+- [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (2 KB)
+- [Scope Boundaries](product/scope-boundaries.md) (4 KB)
 - [Vision](product/vision.md) (2 KB)
 - [What Success Looks Like](product/what-success-looks-like.md) (2 KB)
 - [Who It's For](product/who-its-for.md) (1 KB)
@@ -35,49 +35,61 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 - [Automatic title requests during queued turns (2026-10-13)](chat/automatic-title-requests-during-queued-turns.md) (1 KB)
 - [Background notification and panel batch (2026-10-13)](chat/background-notification-and-panel-batch.md) (8 KB)
-- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (71 KB)
-- [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (23 KB)
-- [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (4 KB)
+- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (74 KB)
+- [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (25 KB)
+- [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (8 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
 - [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (2 KB)
 - [Chat isolation and prompt customization](chat/chat-isolation-and-prompt-customization.md) (24 KB)
-- [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (1 KB)
+- [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (6 KB)
 - [Chat transcript width (2026-10-19)](chat/chat-transcript-width.md) (1 KB)
 - [Clarification answers remain visible in chat](chat/clarification-answers-remain-visible-in-chat.md) (2 KB)
-- [Completion and interruption reconciliation](chat/completion-and-interruption-reconciliation.md) (1 KB)
+- [Completed chat retention and storage controls](chat/completed-history-retention-and-storage.md) (3 KB)
+- [Completion and interruption reconciliation](chat/completion-and-interruption-reconciliation.md) (2 KB)
 - [Composer containment and compact subagent activity (2026-10-13)](chat/composer-containment-and-compact-subagent-activity.md) (2 KB)
 - [Composer Markdown editing tools (implemented; isolated interaction checks verified, visual inspection pending)](chat/composer-markdown-editing-tools.md) (2 KB)
 - [Default modes: where the models run (2026-10-22)](chat/default-modes-where-the-models-run.md) (4 KB)
 - [End-to-end encrypted sync for Pro and Team (2026-10-22)](chat/end-to-end-encrypted-sync-for-pro-and-team.md) (9 KB)
 - [Find in this chat (2026-10-16)](chat/find-in-this-chat.md) (3 KB)
+- [Internet reachability and restoration recovery](chat/internet-recovery.md) (6 KB)
 - [Live streaming token rate](chat/live-streaming-token-rate.md) (1 KB)
 - [Muted pending-change badge](chat/muted-pending-change-badge.md) (1 KB)
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
-- [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (2 KB)
+- [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
+- [Plan sheet on the composer (2026-10-25)](chat/plan-sheet-on-the-composer.md) (4 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
+- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (19 KB)
+- [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
 
 ### desktop
 
 The desktop shell: wall, windows, navigation rail, layouts, settings.
 
+- [Agent board header spacing](desktop/command-center-header-spacing.md) (13 KB)
+- [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
+- [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
-- [Command Center header spacing](desktop/command-center-header-spacing.md) (12 KB)
-- [Command Center panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
-- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
-- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (2 KB)
+- [Desktop: Simple and Expert modes, the effort dial, the context ring and the hardware strip (2026-10-25)](desktop/desktop-simple-and-expert-modes.md) (3 KB)
+- [Dynamic view: zones](desktop/dynamic-zones.md) (6 KB)
+- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (13 KB)
+- [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
-- [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
-- [Minimize agent windows](desktop/minimize-agent-windows.md) (1 KB)
+- [Inline agent-window creation](desktop/inline-agent-window-creation.md) (6 KB)
+- [Minimize agent windows](desktop/minimize-agent-windows.md) (2 KB)
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
-- [New agent window defaults](desktop/new-agent-window-defaults.md) (1 KB)
+- [Nekko Dark and the branded System theme (desktop)](desktop/nekko-dark-and-branded-system-theme.md) (3 KB)
+- [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
-- [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)
-- [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (1 KB)
-- [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (2 KB)
+- [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (5 KB)
+- [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (5 KB)
+- [Stay out of the way of full-screen apps (games)](desktop/stay-out-of-the-way-of-full-screen-apps.md) (3 KB)
+- [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
+- [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (3 KB)
+- [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (4 KB)
 - [Wall model controls and drafting layout](desktop/wall-model-controls-and-drafting-layout.md) (3 KB)
 - [Wall new-chat details placement](desktop/wall-new-chat-details-placement.md) (1 KB)
 - [Wall push and navigation shoulders](desktop/wall-push-and-navigation-shoulders.md) (1 KB)
@@ -89,22 +101,23 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (39 KB)
-- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (5 KB)
-- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (2 KB)
-- [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (2 KB)
+- [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (11 KB)
+- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (7 KB)
+- [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
 - [Delegating frontier planning to a local worker](agents/delegating-frontier-planning-to-a-local-worker.md) (2 KB)
-- [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (5 KB)
+- [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
-- [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (2 KB)
+- [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
+- [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (5 KB)
 
 ### context
 
 What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 - [Code mode: a chat's tools as code (2026-10-22)](context/code-mode-tools-as-code.md) (7 KB)
-- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (11 KB)
+- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (12 KB)
 - [Floop task connector](context/floop-task-connector.md) (2 KB)
 - [Living spec from a conversation](context/living-spec-from-a-conversation.md) (1 KB)
 - [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (8 KB)
@@ -117,18 +130,20 @@ What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 Providers, local models, the Model Server, training.
 
+- [Accounts and switching (2026-10-23)](models/accounts-and-switching.md) (5 KB)
 - [Anthropic image-dimension rejection prevention and continuation](models/anthropic-image-dimension-rejection-prevention-and-continuation.md) (1 KB)
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (4 KB)
-- [Models & providers](models/models-providers.md) (39 KB)
+- [Models & providers](models/models-providers.md) (44 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
-- [Setting up a local model](models/setting-up-a-local-model.md) (5 KB)
+- [Setting up a local model](models/setting-up-a-local-model.md) (12 KB)
 - [Signing in with a subscription (planned)](models/signing-in-with-a-subscription.md) (2 KB)
-- [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (4 KB)
+- [System models: dictation on Apple's recognizer or Whisper](models/system-speech-models.md) (11 KB)
 - [Training a model while you watch (Training tab)](models/training-a-model-while-you-watch-training-tab.md) (2 KB)
+- [Your first local model](models/first-local-model.md) (3 KB)
 
 ### code
 
@@ -139,32 +154,42 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [Designing: draw it or describe it (Design tab)](code/designing-draw-it-or-describe-it-design-tab.md) (2 KB)
 - [Editing, reviewing & previewing, without leaving the app](code/editing-reviewing-previewing-without-leaving-the-app.md) (2 KB)
 - [Files, editor & visual surfaces (IDE-like, "stay in the app")](code/files-editor-visual-surfaces-ide-like-stay-in-the-app.md) (6 KB)
-- [In-chat pull requests](code/in-chat-pull-requests.md) (1 KB)
+- [In-chat pull requests](code/in-chat-pull-requests.md) (2 KB)
+- [Issue per change and work tracking preferences](code/issue-per-change.md) (2 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
-- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (20 KB)
-- [Working in a codebase](code/working-in-a-codebase.md) (4 KB)
+- [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (22 KB)
+- [Working in a codebase](code/working-in-a-codebase.md) (5 KB)
 
 ### automation
 
 Workflows, goals, integrations and tools.
 
-- [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (4 KB)
-- [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (7 KB)
+- [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
+- [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
+- [CI runners](automation/ci-runners.md) (38 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
 - [Tooling & integrations](automation/tooling-integrations.md) (8 KB)
-- [Workflows (procedural automation)](automation/workflows-procedural-automation.md) (20 KB)
+- [Workflows (procedural automation)](automation/workflows-procedural-automation.md) (22 KB)
 
 ### phone
 
 Phone remote control and the native iOS and Android apps.
 
-- [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (12 KB)
-- [Native Android app (2026-10-11)](phone/native-android-app.md) (40 KB)
-- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (71 KB)
+- [Agent-linked files and local previews on the phone](phone/agent-linked-files-and-previews-on-the-phone.md) (9 KB)
+- [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
+- [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
+- [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
+- [iPhone Markdown composer and rich replies (iPhone implemented 2026-10-25; Android planned)](phone/iphone-markdown-composer-and-rich-replies.md) (8 KB)
+- [iPhone: Simple and Expert modes, the model and effort control, the context gauge and the hardware monitor (2026-10-24)](phone/iphone-simple-and-expert-modes.md) (8 KB)
+- [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (7 KB)
+- [Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android planned)](phone/mermaid-diagrams-on-the-phone.md) (6 KB)
+- [Native Android app (2026-10-11)](phone/native-android-app.md) (59 KB)
+- [Native iOS app (2026-10-16)](phone/native-ios-app.md) (122 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
-- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (8 KB)
+- [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (7 KB)
+- [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (12 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 
 ### platform
@@ -172,11 +197,16 @@ Phone remote control and the native iOS and Android apps.
 Architecture, speed contract, distribution, builds and startup.
 
 - [Build storage maintenance](platform/build-storage-maintenance.md) (3 KB)
+- [Connections: one switch for every network connection, and its activity log](platform/connections-switch-and-activity-log.md) (4 KB)
 - [Development macOS identity](platform/development-macos-identity.md) (2 KB)
 - [Distribution & platforms](platform/distribution-platforms.md) (10 KB)
+- [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (17 KB)
 - [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (26 KB)
+- [Limits on what grows in the data folder](platform/data-folder-growth-limits.md) (2 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
+- [Opt-in usage and crash reports](platform/opt-in-usage-and-crash-reports.md) (3 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)
+- [Send feedback from every app (2026-10-24)](platform/send-feedback.md) (5 KB)
 - [Speed & responsiveness (the speed contract)](platform/speed-responsiveness-the-speed-contract.md) (12 KB)
 - [Startup splash and window launch (2026-10-21)](platform/startup-splash-and-window-launch.md) (2 KB)
 - [Windows installs without Visual Studio, and a smaller download (2026-10-12)](platform/windows-installs-without-visual-studio-and-a-smaller-download.md) (6 KB)
@@ -186,9 +216,9 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (6 KB)
-- [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (1 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (8 KB)
+- [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
-- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (10 KB)
+- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (12 KB)
 
 <!-- index:end -->

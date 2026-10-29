@@ -76,7 +76,35 @@ app.whenReady().then(async () => {
         await check(`${theme}: the default is by where the model runs`, "document.querySelector('[data-settings-run-policy]').selectedOptions[0].textContent==='By where the model runs'");
       }
     }
+    // The resource chip and the Agent board's monitors, with one automation
+    // paused for the user and then one running (both revisions).
+    for (const [label, bg] of [['paused', { running: 1, paused: 1, reason: 'active' }], ['running', { running: 1, paused: 0, reason: null }]]) {
+      for (const theme of ['dark', 'light']) {
+        await run(`integration.setBackground(${JSON.stringify(bg)})`);
+        await show('hud', theme); await sleep(600);
+        await capture(`hud-background-${label}-${theme}`);
+        await show('dock', theme); await sleep(600);
+        await capture(`dock-background-${label}-${theme}`);
+        if (!base) {
+          await show('hud', theme); await sleep(600);
+          await check(`${theme}: the resource chip says ${label}`, `document.querySelector('[data-background-chip="${label}"]')?.textContent.includes('BG')`);
+          await show('dock', theme); await sleep(600);
+          await check(`${theme}: the monitors say ${label}`, `document.querySelector('[data-dock-scene] [data-background-chip="${label}"]')?.textContent.startsWith('Background: 1 ${label}')`);
+        }
+      }
+    }
+    await run(`integration.setBackground({ running: 0, paused: 0, reason: null })`);
     if (!base) {
+      await show('hud', 'dark'); await sleep(600);
+      await check('nothing in the background: no chip', "!document.querySelector('[data-background-chip]')");
+    }
+    if (!base) {
+      for (const theme of ['dark', 'light']) {
+        await show('paused', theme); await sleep(400);
+        await capture(`reply-paused-${theme}`);
+        await check(`${theme}: a paused reply says so`, "document.querySelector('[data-paused-status]')?.textContent.includes('Status: Paused')");
+        await check(`${theme}: and drops what it had half written`, "!document.body.innerText.includes('dependency bu')");
+      }
       // Picking a policy in the editor changes the hint with it.
       await show('editor', 'dark'); await run(toRuns);
       await run("(()=>{const s=document.querySelector('[data-run-policy]');const set=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;set.call(s,'lowPriority');s.dispatchEvent(new Event('change',{bubbles:true}))})()"); await sleep(300);

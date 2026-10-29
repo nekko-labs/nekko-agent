@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, relayHost, relayUrlProblem, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
+import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, PROTECT_COMPUTER_DOCS_URL, relayHost, relayUrlProblem, remoteStoppedBanner, type SecurityStatus, type LocalRelayStatus, type NetworkVisibilityStatus, type PairingGrant, type PhoneActivityEntry, type RemoteDevice, type RemoteStatus } from '@nekko-agent/shared';
 import { Badge } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
+import { PhoneIcon } from '../icons.js';
+import { SECURITY_SECTION_ID } from './security/SecuritySettings.js';
 
 /**
  * Settings card for phone remote control: expose this machine over a relay,
@@ -12,23 +14,10 @@ import { useStore } from '../store.js';
  * sees ciphertext. Self-hosting the relay is documented and first-class.
  */
 
-/** Managed relay (free during beta; becomes a Nekko Cloud perk). */
+/** The managed relay, shown to owners as Nekko Cloud. */
 export const MANAGED_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
 const SELF_HOST_DOCS = 'https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md';
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download';
-
-/**
- * The relay the field starts with (TASKS.md IO-19 TS-1). A relay the owner
- * chose wins. Otherwise, with Tailscale connected here, the relay on this
- * computer: phones on the tailnet reach it with nothing hosted in between, and
- * the managed host may be gone (PH5). The managed relay is the last resort, and
- * a saved managed URL counts as no choice, since it was only ever the default.
- */
-export function defaultRelay(saved: string | undefined, local: LocalRelayStatus | null): { url: string; local: boolean } {
-  if (saved && saved !== MANAGED_RELAY_URL) return { url: saved, local: false };
-  if (local && local.available !== false && local.tailnetIp && local.url) return { url: local.url, local: true };
-  return { url: saved ?? MANAGED_RELAY_URL, local: false };
-}
 
 /**
  * The address Enable connects to. When it is the default relay on this
@@ -48,6 +37,17 @@ export async function relayToEnable(
 }
 
 /**
+ * Where a pairing link points. An http origin (Local Web UI) opens this same UI on
+ * the phone, unless it is loopback (the desktop app under Vite in dev, or the web UI
+ * opened on this computer): on the phone that is the phone itself, so the link uses
+ * the app's own scheme instead.
+ */
+export function pairingBase(loc: { protocol: string; hostname: string; origin: string }): string {
+  const loopback = /^(localhost|127\.|\[::1\]$)/.test(loc.hostname);
+  return loc.protocol.startsWith('http') && !loopback ? loc.origin + '/' : 'nekko-agent-pair:';
+}
+
+/**
  * The extra routes a pairing link carries (TASKS.md IO-20): when remote access
  * uses the relay on this computer (by MagicDNS name or tailnet address, same
  * port) and that relay also listens on the LAN, its LAN addresses. A phone on
@@ -63,7 +63,7 @@ export function pairingAlts(relayUrl: string, local: LocalRelayStatus | null): s
 
 export function RemoteAccess() {
   const [status, setStatus] = useState<RemoteStatus>({ enabled: false });
-  const [relayUrl, setRelayUrl] = useState(MANAGED_RELAY_URL);
+  const [relayUrl, setRelayUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [grant, setGrant] = useState<PairingGrant | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -72,20 +72,29 @@ export function RemoteAccess() {
   const [renameText, setRenameText] = useState('');
   const [link, setLink] = useState('');
   const [urlProblem, setUrlProblem] = useState<string | undefined>();
-  const editedUrl = useRef(false);
   const [localRelay, setLocalRelay] = useState<LocalRelayStatus | null>(null);
-  const fallback = defaultRelay(status.relayUrl, localRelay);
+  const [security, setSecurity] = useState<SecurityStatus | null>(null);
+
+  // Whether step-up is on, for the one-time *Protect this computer* prompt (SK-10).
+  useEffect(() => {
+    void window.nekko.securityStatus?.().then(setSecurity).catch(() => {});
+  }, [status.enabled]);
 
   const refresh = async () => {
     setStatus(await window.nekko.getRemoteStatus());
   };
 
-  // Until the owner types or picks one, the field follows the default: it moves
-  // to this computer's relay when Tailscale connects, and to its MagicDNS name
-  // once that is known.
+  // This computer's relay status, for the Tailscale option and the connection label.
   useEffect(() => {
-    if (!editedUrl.current) setRelayUrl(fallback.url);
-  }, [fallback.url]);
+    let live = true;
+    const load = () => void window.nekko.localRelayStatus?.().then((r) => live && setLocalRelay(r)).catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -120,8 +129,7 @@ export function RemoteAccess() {
     }
     void window.nekko.getRemotePairing().then((p) => {
       if (!p) return setLink('');
-      const base = location.protocol.startsWith('http') ? location.origin + '/' : 'nekko-agent-pair:';
-      setLink(pairingLink(base, { ...p, pair: liveGrant.code, alts: pairingAlts(p.relayUrl, localRelay) }));
+      setLink(pairingLink(pairingBase(location), { ...p, pair: liveGrant.code, alts: pairingAlts(p.relayUrl, localRelay) }));
     });
   }, [status.enabled, liveGrant?.code, alts]);
 
@@ -130,18 +138,18 @@ export function RemoteAccess() {
     else setQr('');
   }, [link]);
 
-  const enable = async () => {
-    if (!relayUrl.trim()) return;
+  /** Turn remote access on through `url`; `local` starts this computer's relay first (Tailscale). */
+  const enable = async (url: string, local = false) => {
+    if (!url.trim()) return;
     // The phone refuses plain ws:// to the open internet; refuse it here first.
-    const problem = relayUrlProblem(relayUrl);
+    const problem = local ? undefined : relayUrlProblem(url);
     setUrlProblem(problem);
     if (problem) return;
     setBusy(true);
     try {
-      const target = await relayToEnable(relayUrl.trim(), fallback, localRelay, () => window.nekko.localRelayStart());
+      const target = await relayToEnable(url.trim(), { url: url.trim(), local }, localRelay, () => window.nekko.localRelayStart());
       if (target.started) setLocalRelay(target.started);
       if (!target.url) return setUrlProblem(target.problem);
-      setRelayUrl(target.url);
       setStatus(await window.nekko.enableRemote(target.url));
     } catch (e) {
       // The computer applies the same rule (and any other refusal) and says why.
@@ -166,7 +174,7 @@ export function RemoteAccess() {
     void refresh();
   };
   const rotate = async () => {
-    if (!confirm('Rotate the pairing secret? Every paired device is removed and must pair again with a fresh QR.')) return;
+    if (!confirm('Sign out all phones? The room is re-keyed: every paired device is removed and must pair again with a fresh QR.')) return;
     setGrant(null);
     setStatus(await window.nekko.rotateRemoteSecret());
   };
@@ -184,7 +192,7 @@ export function RemoteAccess() {
   return (
     <section className="card mt-5 p-5">
       <div className="flex items-center gap-2">
-        <span className="text-base">📱</span>
+        <PhoneIcon className="h-4 w-4" />
         <h2 className="font-semibold">Remote access</h2>
         {status.enabled && (
           <Badge tone={status.online ? 'success' : 'warning'} variant="solid">
@@ -193,79 +201,67 @@ export function RemoteAccess() {
         )}
       </div>
       <p className="mt-1 text-[12px] text-ink-faint">
-        Run and manage your chats, training runs, and goals from your phone. Your device pairs to this
-        machine over an end-to-end encrypted relay (the relay only sees ciphertext); inference and tools
-        keep running here, under this machine's guardrails.
+        Run and manage your chats, training runs, and goals from your phone. Everything is end-to-end encrypted;
+        inference and tools keep running here, under this machine's guardrails.{!status.enabled && ' Pick how your phone connects:'}
       </p>
+      {!status.enabled && status.stoppedBy && <RemoteStoppedBanner stoppedBy={status.stoppedBy} />}
       {status.error && !status.online && (
         <p className="mt-2 rounded border border-line px-2 py-1.5 text-[12px] text-ink-soft">{status.error}</p>
       )}
 
       {!status.enabled ? (
-        <div className="mt-3 space-y-2">
-          <div className="flex gap-2">
-            <input
-              className="input py-1.5 text-[13px]"
-              placeholder={`Relay URL, e.g. ${MANAGED_RELAY_URL}`}
-              value={relayUrl}
-              onChange={(e) => {
-                editedUrl.current = true;
-                setUrlProblem(undefined);
-                setRelayUrl(e.target.value);
-              }}
-            />
-            <button className="btn btn-primary py-1.5" onClick={enable} disabled={busy}>
-              {busy ? 'Connecting…' : 'Enable'}
-            </button>
-          </div>
-          {urlProblem && (
-            <p className="text-[12px]" style={{ color: 'var(--danger)' }}>
-              {urlProblem}
-            </p>
-          )}
-          {fallback.local && relayUrl.trim() === fallback.url ? (
-            <p className="text-[11.5px] text-ink-faint" data-shot="tailnet-default">
-              Tailscale is connected, so the default is the relay on this computer: phones on your tailnet connect
-              straight here, and Enable starts it. To use a hosted relay instead, paste its URL.
-            </p>
-          ) : (
-            <p className="text-[11.5px] text-ink-faint">
-              The default is the managed Nekko Agent relay (free during beta). Privacy purists can{' '}
-              <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">
-                self-host the relay
-              </a>{' '}
-              with one Docker command and paste its URL here.
-            </p>
-          )}
-          <LocalRelayCard
-            onStatus={setLocalRelay}
-            inUse={relayUrl.trim()}
-            onUse={(url) => {
-              editedUrl.current = true;
-              setUrlProblem(undefined);
-              setRelayUrl(url);
-            }}
-          />
-        </div>
+        <PairingChoiceView
+          local={localRelay}
+          busy={busy}
+          problem={urlProblem}
+          relayUrl={relayUrl}
+          onRelayUrl={(url) => {
+            setUrlProblem(undefined);
+            setRelayUrl(url);
+          }}
+          onTailscale={() => localRelay?.url && void enable(localRelay.url, true)}
+          onCloud={() => void enable(MANAGED_RELAY_URL)}
+          onOwnRelay={() => void enable(relayUrl)}
+        />
       ) : (
         <div className="mt-3 space-y-4">
-          <div className="grid grid-cols-1 gap-1 text-[12.5px] sm:grid-cols-2">
-            <Field label="Relay" value={status.relayUrl!} />
-            <Field label="Room" value={status.room!} mono />
-          </div>
-          <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />
-          <NetworkVisibilitySwitch />
-          <PhoneChangesSwitch />
-          <PhoneAccess devices={active} onChanged={() => void refresh()} />
-
+          {security && !security.enabled && <ProtectComputerPrompt />}
           {/* Paired devices */}
-          <div>
+          <div data-shot="phone-pairing">
             <div className="flex items-center justify-between">
               <h3 className="text-[13px] font-medium">Paired devices</h3>
-              <button className="btn btn-primary py-1 text-[12px]" onClick={pair}>
+              <button className="btn btn-primary py-1.5 text-[12.5px]" onClick={pair}>
                 + Pair a device
               </button>
             </div>
+            {/* Pairing QR (short-lived, single-use) */}
+            {liveGrant && link && (
+              <div className="mt-2 flex flex-col items-start gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
+                {qr && <img src={qr} alt="Pairing QR" width={132} height={132} className="rounded-lg border border-line" />}
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium">Scan with your phone's camera to connect.</div>
+                  <div
+                    className="mt-2 inline-flex items-baseline gap-2 rounded-full px-3 py-1"
+                    style={{ background: 'var(--surface-2)' }}
+                    aria-label={`Code expires in ${Math.floor(secsLeft / 60)} minutes ${secsLeft % 60} seconds`}
+                  >
+                    <span className="text-[11px] text-ink-faint">Expires in</span>
+                    <span className={`font-mono text-[20px] font-semibold tabular-nums ${secsLeft < 60 ? 'text-amber-500' : ''}`}>
+                      {Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}
+                    </span>
+                  </div>
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-[12px] text-ink-faint">Can’t scan? Show the link</summary>
+                    <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
+                      {link}
+                    </code>
+                    <button className="btn btn-outline mt-2 py-1 text-[12px]" onClick={() => navigator.clipboard?.writeText(link)}>
+                      Copy link
+                    </button>
+                  </details>
+                </div>
+              </div>
+            )}
             {active.length === 0 ? (
               <p className="mt-2 text-[12px] text-ink-faint">
                 Nothing paired yet. Hit “Pair a device” and scan the QR from your phone.
@@ -310,37 +306,121 @@ export function RemoteAccess() {
             )}
           </div>
 
-          {/* Pairing QR (short-lived, single-use) */}
-          {liveGrant && link && (
-            <div className="flex flex-col items-start gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
-              {qr && <img src={qr} alt="Pairing QR" width={132} height={132} className="rounded-lg border border-line" />}
-              <div className="min-w-0">
-                <div className="text-[12px]">
-                  Scan from the Nekko Agent app (or open the link in your phone's browser). One device,{' '}
-                  <span className="font-mono font-medium">{Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}</span>{' '}
-                  left.
-                </div>
-                <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
-                  {link}
-                </code>
-                <button className="btn btn-outline mt-2 py-1 text-[12px]" onClick={() => navigator.clipboard?.writeText(link)}>
-                  Copy link
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="grid grid-cols-1 gap-1 text-[12.5px] sm:grid-cols-2">
+            <Field label="Connected through" value={connectionName(status.relayUrl!, localRelay)} />
+            <Field label="Room" value={status.room!} mono />
+          </div>
+          {connectionName(status.relayUrl!, localRelay) === 'Tailscale' && <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />}
+          <NetworkVisibilitySwitch />
+          <PhoneChangesSwitch />
+          <PhoneAccess devices={active} onChanged={() => void refresh()} />
+          <LockPhonesSwitch devices={active} onChanged={() => void refresh()} />
+          <QuitFromPhoneSwitch />
 
           <div className="flex flex-wrap gap-2">
             <button className="btn btn-ghost py-1.5 text-[12px]" onClick={disable} disabled={busy}>
               Disable remote access
             </button>
-            <button className="btn btn-ghost py-1.5 text-[12px]" title="New secret; all devices must re-pair" onClick={rotate}>
-              Rotate secret…
+            <button className="btn btn-ghost py-1.5 text-[12px]" title="Re-keys the room with a new secret; every phone must pair again" onClick={rotate}>
+              Sign out all phones…
             </button>
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+/** What the owner calls the connection: Nekko Cloud (the managed relay), Tailscale (this computer's relay), or the URL of their own. */
+export function connectionName(relayUrl: string, local: LocalRelayStatus | null): string {
+  if (relayUrl === MANAGED_RELAY_URL) return 'Nekko Cloud';
+  const here = [local?.tailnetName, local?.tailnetIp].filter(Boolean).map((h) => h!.toLowerCase());
+  if (here.includes(relayHost(relayUrl))) return 'Tailscale';
+  return relayUrl;
+}
+
+/**
+ * Before remote access is on: two ways to connect a phone. Tailscale is free
+ * but needs its app on both ends; Nekko Cloud works anywhere with nothing to
+ * install. Tailscale is hidden where this computer cannot run a relay (the
+ * Local Web UI). Your own relay sits behind a disclosure for self-hosters.
+ */
+export function PairingChoiceView({
+  local,
+  busy,
+  problem,
+  relayUrl,
+  onRelayUrl,
+  onTailscale,
+  onCloud,
+  onOwnRelay,
+}: {
+  local: LocalRelayStatus | null;
+  busy?: boolean;
+  problem?: string;
+  relayUrl: string;
+  onRelayUrl: (url: string) => void;
+  onTailscale: () => void;
+  onCloud: () => void;
+  onOwnRelay: () => void;
+}) {
+  const tailscale = !!local && local.available !== false;
+  const connected = !!local?.tailnetIp && !!local.url;
+  return (
+    <div className="mt-3 space-y-2">
+      <div className={`grid grid-cols-1 gap-2 ${tailscale ? 'sm:grid-cols-2' : ''}`}>
+        {tailscale && (
+          <div data-shot="pair-tailscale" className="flex flex-col rounded-lg border border-line p-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[13px] font-medium">Tailscale</h3>
+              <Badge tone="neutral" variant="soft">Free</Badge>
+            </div>
+            <p className="mt-1 flex-1 text-[12px] text-ink-faint">
+              Your phone connects straight to this computer. Needs the Tailscale app on both.
+            </p>
+            {connected ? (
+              <p className="mt-2 flex items-center gap-2 text-[12px] text-ink-soft">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--success)' }} aria-hidden />
+                <span className="truncate">Connected: <span className="font-mono">{local!.tailnetName ?? local!.tailnetIp}</span></span>
+              </p>
+            ) : (
+              <p className="mt-2 text-[12px] text-ink-soft">
+                <a className="underline" href={TAILSCALE_DOWNLOAD} target="_blank" rel="noreferrer">Get Tailscale</a> and sign in on this computer and your phone.
+              </p>
+            )}
+            <button className="btn btn-outline mt-3 self-start py-1.5 text-[12.5px] disabled:opacity-50" onClick={onTailscale} disabled={busy || !connected}>
+              Use Tailscale
+            </button>
+          </div>
+        )}
+        <div data-shot="pair-cloud" className="flex flex-col rounded-lg border border-line p-3">
+          <h3 className="text-[13px] font-medium">Nekko Cloud</h3>
+          <p className="mt-1 flex-1 text-[12px] text-ink-faint">
+            Works anywhere, nothing to install. End-to-end encrypted: Nekko Cloud only passes along messages it can’t read.
+          </p>
+          <button className="btn btn-primary mt-3 self-start py-1.5 text-[12.5px]" onClick={onCloud} disabled={busy}>
+            {busy ? 'Connecting…' : 'Use Nekko Cloud'}
+          </button>
+        </div>
+      </div>
+      {problem && (
+        <p className="text-[12px]" style={{ color: 'var(--danger)' }}>
+          {problem}
+        </p>
+      )}
+      <details className="text-[12px] text-ink-faint">
+        <summary className="cursor-pointer">Use your own relay</summary>
+        <div className="mt-2 flex gap-2">
+          <input className="input py-1.5 text-[13px]" placeholder="wss://relay.example.com" value={relayUrl} onChange={(e) => onRelayUrl(e.target.value)} />
+          <button className="btn btn-outline py-1.5" onClick={onOwnRelay} disabled={busy || !relayUrl.trim()}>
+            Connect
+          </button>
+        </div>
+        <p className="mt-1">
+          <a className="underline" href={SELF_HOST_DOCS} target="_blank" rel="noreferrer">Self-host the relay</a> with one Docker command.
+        </p>
+      </details>
+    </div>
   );
 }
 
@@ -538,7 +618,7 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 
 /**
  * Whether paired phones may see the files the agent changed in a chat
- * (`phoneChanges`, off unless set). Read only: a phone can never accept or
+ * (`phoneChanges`, on by default). Read only: a phone can never accept or
  * revert changes, read other files or open terminals, and files that may hold
  * secrets are counted, not shown.
  */
@@ -782,6 +862,144 @@ export function PhoneChangesSwitch() {
         </p>
       </div>
       <Toggle value={on} onChange={set} label="Let phones see changes" />
+    </div>
+  );
+}
+
+/**
+ * After a phone pressed *Stop remote access on the computer* (SK-3): who
+ * stopped it and when, until remote access is turned on again here.
+ */
+export function RemoteStoppedBanner({ stoppedBy, time }: { stoppedBy: { name?: string | null; at: number }; time?: (at: number) => string }) {
+  return (
+    <p data-shot="remote-stopped" role="status" className="mt-2 rounded border px-2 py-1.5 text-[12px] text-ink-soft" style={{ borderColor: 'var(--warning)' }}>
+      {remoteStoppedBanner(stoppedBy, time)}
+    </p>
+  );
+}
+
+/**
+ * *Lock phones*: every paired phone keeps Read and loses Change, with one
+ * switch instead of each phone's Change switch (`remote:setAccess` for every
+ * device, guarded by step-up when it is on: one confirmation covers them all).
+ * On while every phone has Change off.
+ */
+export function LockPhonesSwitch({ devices, onChanged }: { devices: RemoteDevice[]; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const set = async (lock: boolean) => {
+    setBusy(true);
+    try {
+      for (const d of devices) {
+        if (phoneDeviceAccess(d).change === !lock) continue;
+        await window.nekko.setRemoteAccess(d.id, { change: !lock });
+      }
+    } catch (e) {
+      useStore.getState().pushToast('error', String((e as Error)?.message ?? e));
+    } finally {
+      setBusy(false);
+      onChanged();
+    }
+  };
+  return <LockPhonesView devices={devices} busy={busy} onChange={(v) => void set(v)} />;
+}
+
+export function LockPhonesView({ devices, busy, onChange }: { devices: RemoteDevice[]; busy?: boolean; onChange: (lock: boolean) => void }) {
+  if (devices.length === 0) return null;
+  const locked = devices.every((d) => !phoneDeviceAccess(d).change);
+  return (
+    <div data-shot="lock-phones" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">Lock phones</div>
+        <p className="mt-0.5 text-[12px] text-ink-faint">
+          Every paired phone can still read, but can’t change anything: no prompts, approvals, file or git changes.
+          Turn it off to give each phone its Change switch back.
+        </p>
+      </div>
+      <Toggle value={locked} onChange={onChange} disabled={busy} label="Lock phones" />
+    </div>
+  );
+}
+
+/**
+ * *Let a phone quit Nekko Agent* (`quitFromPhone`, SK-3): off by default, so
+ * a phone cannot shut down a computer whose owner did not opt in. A phone
+ * can never change it.
+ */
+export function QuitFromPhoneSwitch() {
+  const on = useStore((s) => s.settings?.quitFromPhone === true);
+  const set = (v: boolean) => {
+    void window.nekko.updateSettings({ quitFromPhone: v })
+      .then(() => useStore.getState().refreshSettings())
+      .catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
+  return <QuitFromPhoneView on={on} onChange={set} />;
+}
+
+export function QuitFromPhoneView({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div data-shot="quit-from-phone" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">Let a phone quit Nekko Agent</div>
+        <p className="mt-0.5 text-[12px] text-ink-faint">
+          A paired phone can quit the app on this computer in an emergency; running chats stop and you start it again
+          here. Stopping remote access from a phone always works, with this on or off.
+        </p>
+      </div>
+      <Toggle value={on} onChange={onChange} label="Let a phone quit Nekko Agent" />
+    </div>
+  );
+}
+
+const PROTECT_PROMPT_KEY = 'nekko.protectComputerPrompt.dismissed';
+
+/**
+ * The one-time *Protect this computer* prompt (SK-10): shown while remote
+ * access is on and step-up is off, until dismissed (remembered on this
+ * device). Points to Settings → Security and the docs page.
+ */
+export function ProtectComputerPrompt() {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(PROTECT_PROMPT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (hidden) return null;
+  const dismiss = () => {
+    try {
+      localStorage.setItem(PROTECT_PROMPT_KEY, '1');
+    } catch {
+      /* private mode: it shows again next time */
+    }
+    setHidden(true);
+  };
+  const setUp = () => {
+    document.getElementById(SECURITY_SECTION_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    dismiss();
+  };
+  return <ProtectComputerPromptView onSetUp={setUp} onDismiss={dismiss} />;
+}
+
+export function ProtectComputerPromptView({ onSetUp, onDismiss }: { onSetUp: () => void; onDismiss: () => void }) {
+  return (
+    <div data-shot="protect-computer" className="rounded-md border border-line p-3" style={{ background: 'var(--surface-2)' }}>
+      <div className="text-[13px] font-medium">Protect this computer</div>
+      <p className="mt-0.5 text-[12px] text-ink-faint">
+        Remote access is on. Add a security key so pairing a phone, signing phones out, changing what a phone may do or
+        touching a provider key needs the key in your hand, not only this computer’s login.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-[12.5px]">
+        <button className="btn btn-primary py-1 text-[12px]" onClick={onSetUp}>
+          Set up in Security
+        </button>
+        <a className="underline" href={PROTECT_COMPUTER_DOCS_URL} target="_blank" rel="noreferrer">
+          How it works
+        </a>
+        <button className="btn btn-ghost py-1 text-[12px]" onClick={onDismiss}>
+          Not now
+        </button>
+      </div>
     </div>
   );
 }

@@ -643,6 +643,8 @@ body {
 .media img, .media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .media:has(img, video) { border: 2px solid var(--sticker); box-shadow: 4px 4px 0 var(--sticker); }
 .media:has(img, video) span { display: none; }
+.media:not(:has(img, video)) { place-content: center; gap: 8px; }
+.media .media-joke { max-width: 32ch; padding: 0 16px; font-family: inherit; font-size: 14px; letter-spacing: 0; text-transform: none; text-align: center; }
 .showcase { padding-top: 10px; }
 .media-hero {
   width: min(960px, 100%); margin: 0; aspect-ratio: 16 / 9;
@@ -729,12 +731,13 @@ body {
 }
 @media (max-width: 560px) { .nav-menu { width: 32px; height: 32px; } }
 
-/* ---- colourful mode: the whole page painted in the logo's lavender
-   (#9D8CE6), with lighter lilac, aqua and mint drifting through it. No dark
-   ground anywhere: text stays dark ink, cards are frosted white, and the
-   retro buttons switch to white and aqua faces so they pop off the lavender. ---- */
+/* ---- colourful mode: the logo's lavender (#9D8CE6) as the accent, not
+   the wallpaper. The hero sits in a lavender wash that fades into pale lilac
+   paper, and the band sections are solid lavender (or lavender into aqua)
+   blocks, so the page alternates strong and quiet instead of reading as one
+   flat colour. Text stays dark ink; cards are white. ---- */
 :root[data-theme='colour'] {
-  --bg: #9d8ce6; --bg-2: #ffffff; --ink: #17151f; --muted: #2c2640;
+  --bg: #f4f1ff; --bg-2: #ffffff; --ink: #17151f; --muted: #2c2640;
   --line: rgba(23, 21, 31, 0.16); --accent: #2e2570; --accent-2: #241d5c;
   --shadow: 0 1px 2px rgba(23, 21, 31, 0.08), 0 12px 30px rgba(46, 37, 112, 0.18);
   --sticker: #17151f; --peach-soft: #c2fce3;
@@ -742,29 +745,29 @@ body {
 }
 :root[data-theme='colour'] body {
   background:
-    radial-gradient(60% 900px at 10% 0%, rgba(214, 205, 250, 0.85), transparent 70%),
-    radial-gradient(50% 800px at 92% 6%, rgba(138, 228, 242, 0.45), transparent 70%),
-    radial-gradient(50% 900px at 88% 40%, rgba(138, 228, 242, 0.42), transparent 70%),
-    radial-gradient(55% 900px at 8% 58%, rgba(214, 205, 250, 0.4), transparent 70%),
-    radial-gradient(60% 900px at 90% 80%, rgba(165, 249, 223, 0.38), transparent 70%),
-    radial-gradient(45% 800px at 6% 90%, rgba(138, 228, 242, 0.36), transparent 70%),
-    radial-gradient(60% 800px at 20% 100%, rgba(214, 205, 250, 0.8), transparent 70%),
+    radial-gradient(55% 800px at 6% 0%, rgba(214, 205, 250, 0.7), transparent 70%),
+    radial-gradient(50% 700px at 92% 4%, rgba(138, 228, 242, 0.45), transparent 70%),
+    radial-gradient(50% 900px at 90% 42%, rgba(138, 228, 242, 0.2), transparent 70%),
+    radial-gradient(55% 900px at 8% 66%, rgba(214, 205, 250, 0.5), transparent 70%),
+    radial-gradient(60% 900px at 90% 88%, rgba(165, 249, 223, 0.22), transparent 70%),
+    linear-gradient(180deg, #9d8ce6 0, #ab9cec 560px, #e6e0fd 1050px, var(--bg) 1350px) no-repeat,
     var(--bg);
 }
 :root[data-theme='colour'] .nav { background: rgba(178, 164, 238, 0.78); }
-:root[data-theme='colour'] .glass, :root[data-theme='colour'] .card { background: rgba(255, 255, 255, 0.72); border-color: rgba(23, 21, 31, 0.12); }
+:root[data-theme='colour'] .glass, :root[data-theme='colour'] .card { background: #ffffff; border-color: rgba(69, 58, 146, 0.14); }
 :root[data-theme='colour'] .band .card { background: #ffffff; }
-:root[data-theme='colour'] .band-lavender { background: linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(214, 205, 250, 0.5)); }
-:root[data-theme='colour'] .band-aqua { background: linear-gradient(135deg, rgba(232, 226, 255, 0.7), rgba(214, 205, 250, 0.6)); }
-:root[data-theme='colour'] .band-blend { background: linear-gradient(120deg, #d6cdfa 0%, #e6e0fd 100%); }
+:root[data-theme='colour'] .band-lavender { background: linear-gradient(135deg, #9d8ce6, #b6a8f1); }
+:root[data-theme='colour'] .band-aqua { background: linear-gradient(135deg, #a999ec 0%, #9fdcf0 100%); }
+:root[data-theme='colour'] .band-blend { background: linear-gradient(120deg, #a493ea 0%, #c9bef8 100%); }
 :root[data-theme='colour'] .btn-ghost { background: #e6e0fd; color: #17151f; }
 :root[data-theme='colour'] .btn-ghost:hover { background: #ffffff; }
 :root[data-theme='colour'] .media { background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(241, 237, 255, 0.75)); border-color: rgba(23, 21, 31, 0.3); }
 :root[data-theme='colour'] .media-hero { background: linear-gradient(135deg, #ffffff, #efeafe); }
 :root[data-theme='colour'] .media span, :root[data-theme='colour'] .media::after { color: #4a4366; }
 :root[data-theme='colour'] .grad, :root[data-theme='colour'] .tagline .grad { background: linear-gradient(100deg, #241d5c 0%, #3b2f86 100%); -webkit-background-clip: text; background-clip: text; }
-:root[data-theme='colour'] code { background: rgba(255, 255, 255, 0.55); border-color: rgba(23, 21, 31, 0.15); }
-:root[data-theme='colour'] ::selection { background: rgba(255, 255, 255, 0.6); }
+:root[data-theme='colour'] code { background: rgba(157, 140, 230, 0.14); border-color: rgba(69, 58, 146, 0.18); }
+:root[data-theme='colour'] .band code { background: rgba(255, 255, 255, 0.55); border-color: rgba(23, 21, 31, 0.15); }
+:root[data-theme='colour'] ::selection { background: rgba(157, 140, 230, 0.35); }
 :root[data-theme='colour'] .theme-toggle .ic-sun { display: none; }
 :root[data-theme='colour'] .theme-toggle .ic-moon { display: block; } /* colourful: next is Dark */
 
@@ -782,7 +785,6 @@ h3 { font-size: 21px; }
 .mf-rows b { font-size: 18px; }
 .eyebrow, .mf-num, .chip, .dl-group, .dl-term-or, .media span, .mf-rows b::before { font-family: var(--retro-mono); letter-spacing: 0.1em; font-weight: 400; }
 .eyebrow { font-size: 12px; }
-:root[data-theme='colour'] .brand-mark { filter: brightness(0) invert(1); } /* white cat on lavender, as in the app icon */
 
 /* ---- beta sign-up: one friendly band between "what you can do" and the
    technical sections, so it reads as the next step for the curious without

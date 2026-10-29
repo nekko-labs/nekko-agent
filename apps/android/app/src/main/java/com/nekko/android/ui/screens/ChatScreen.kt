@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +27,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,12 +36,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -67,22 +70,108 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
+import com.nekko.android.ui.chat.PurposeGroupCard
+import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
+import com.nekko.protocol.Purpose
+import com.nekko.protocol.PurposeRun
 import java.util.Locale
+import android.content.ClipData
+import android.content.ClipDescription
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
+import androidx.compose.ui.draganddrop.mimeTypes
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.draw.alpha
+import com.nekko.android.ui.components.Dot
+import com.nekko.android.ui.chat.ForkAction
+import com.nekko.android.ui.files.FilesDialog
+import com.nekko.android.ui.previews.PreviewWindow
+import com.nekko.android.previews.LocalChatPreviews
+import androidx.compose.runtime.CompositionLocalProvider
+import com.nekko.android.ui.git.GitDialog
+import com.nekko.android.ui.terminal.TerminalsDialog
+import androidx.compose.material.icons.filled.Terminal
+import com.nekko.android.ui.git.PrChip
+import com.nekko.android.ui.git.PrSheet
+import com.nekko.protocol.PullRequest
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import com.nekko.android.ui.panes.PaneSlot
+import com.nekko.android.ui.chat.ChatOptionsRow
+import com.nekko.android.ui.chat.ModeToggle
+import com.nekko.android.ui.chat.ModelEffortSheet
+import com.nekko.android.ui.chat.MonitorSheet
+import com.nekko.android.ui.chat.MonitorStrip
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import com.nekko.protocol.RelayState
+import com.nekko.protocol.ENGINE_PROVIDER_ID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boolean = false, onBack: () -> Unit) {
+fun ChatScreen(
+    vm: ChatViewModel,
+    initialDraft: String? = null,
+    dictationOn: Boolean = false,
+    onBack: () -> Unit,
+    /** Open another chat: one forked from here, with [draft] waiting in its message box (AN-29). */
+    onOpenChat: (id: String, draft: String?) -> Unit = { _, _ -> },
+    /** Set when the chat is one of an open folding phone's two panes (header actions, drag and drop, tabletop). */
+    pane: PaneSlot? = null,
+    /** The composer's **+** → New agent. */
+    onNewChat: (() -> Unit)? = null,
+) {
     val chat by vm.ui.collectAsStateWithLifecycle()
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    val expert by vm.expert.collectAsStateWithLifecycle()
+    val hardware by vm.hardware.state.collectAsStateWithLifecycle()
+    val computers by vm.computers.collectAsStateWithLifecycle()
+    val computerName = computers.active?.name ?: "your computer"
+    var showModelEffort by remember { mutableStateOf(false) }
+    var showMonitor by remember { mutableStateOf(false) }
+    // Expert re-reads the hardware every 3 s, only while it is on, this chat is on screen and the computer is reachable.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val online = computers.conn == RelayState.ONLINE
+    // The model's name for the row under the message box (the computer's list, cached for the connection).
+    LaunchedEffect(chat.providerId, online) { if (online) chat.providerId?.let { vm.loadModels(it) } }
+    // The Monitor names loaded models from the Model Server's own list.
+    LaunchedEffect(showMonitor, online) { if (showMonitor && online) vm.loadModels(ENGINE_PROVIDER_ID) }
+    if (expert && online) {
+        LaunchedEffect(vm, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.hardware.poll() } }
+    }
+    var showMenu by remember { mutableStateOf(false) }
+    var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
+    var showPrs by remember { mutableStateOf(false) }
+    // The chat's pull request chip: read when the chat opens, after each turn, and when Git or the
+    // pull request sheet closes (a merge or close from the phone changes it).
+    var prReads by remember { mutableIntStateOf(0) }
+    LaunchedEffect(vm.sessionId, chat.running, prReads) {
+        if (!chat.running) try { prs = vm.pullRequests(refresh = prReads > 0) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+    }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -90,6 +179,28 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
     val mic = rememberMic(vm.dictation.takeIf { dictationOn })
     val attach = rememberAttach(vm)
     val list = rememberLazyListState()
+    val prompts by vm.prompts.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
+    // everything up to the next prompt. Streaming blocks aren't saved yet, so they offer Copy only.
+    val forkAction: (Block) -> ForkAction? = { block ->
+        if ((block is Block.User || (block is Block.Assistant && !block.streaming)) && vm.canFork(block)) {
+            ForkAction(if (block is Block.User) "Edit in a new chat" else "Fork from here") {
+                scope.launch {
+                    try {
+                        val (id, draft) = vm.fork(block)
+                        onOpenChat(id, draft)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, e.message ?: "Couldn’t fork the chat.", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        } else {
+            null
+        }
+    }
 
     // Stable keys: a provider that reuses a call id across turns gets a suffix.
     val keyed = remember(chat.blocks) {
@@ -109,17 +220,37 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
     // A note above the messages when the computer sent only the newest ones.
     val headerCount = if (chat.omittedMessages > 0) 1 else 0
     val footerCount = 1
-    val lastIndex = headerCount + keyed.size + footerCount - 1
+    // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
+    val rows = remember(keyed) { Purpose.group(keyed) { Purpose.role(it.second) } }
+    val lastIndex = headerCount + rows.size + footerCount - 1
 
-    // Follow the reply while it streams, unless the user scrolled up to read.
+    // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
     val streamTick = (chat.blocks.lastOrNull() as? Block.Assistant)?.let { it.text.length + (it.reasoning?.length ?: 0) } ?: 0
-    LaunchedEffect(keyed.size, streamTick, chat.error) {
-        if (keyed.isEmpty()) return@LaunchedEffect
+    var openedAtBottom by remember(vm.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(rows.size, keyed.size, streamTick, chat.error, chat.ready) {
+        if (!chat.ready || keyed.isEmpty()) return@LaunchedEffect
+        if (!openedAtBottom) {
+            // The list replaces the spinner in this frame: wait until it has items, then jump without animating.
+            snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > 0 }
+            list.scrollToItem(lastIndex)
+            openedAtBottom = true
+            return@LaunchedEffect
+        }
         val info = list.layoutInfo
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
         val nearBottom = lastVisible >= info.totalItemsCount - 3
-        // totalItemsCount is 0 on the first frame: start at the bottom.
-        if (nearBottom || info.totalItemsCount == 0) list.scrollToItem(lastIndex)
+        if (nearBottom) list.scrollToItem(lastIndex)
+    }
+
+    // Keep the newest message in view when the list gets shorter (the keyboard opens, the message box grows),
+    // if it was at the bottom; a list scrolled up to read stays where it is.
+    LaunchedEffect(list) {
+        var height = 0
+        var atBottom = false
+        snapshotFlow { list.layoutInfo.viewportSize.height to !list.canScrollForward }.collect { (h, bottom) ->
+            if (h < height && atBottom) list.scrollBy((height - h).toFloat()) else atBottom = bottom
+            height = h
+        }
     }
 
     if (showChanges && changesAllowed) {
@@ -130,45 +261,106 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
         )
     }
 
+    if (showModelEffort) {
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onDismiss = { showModelEffort = false })
+    }
+    if (showMonitor && expert) {
+        MonitorSheet(hardware, chat, computerName, vm::modelName, onUnload = vm.hardware::unload, onDismiss = { showMonitor = false })
+    }
+    val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
+    terminals?.let { t ->
+        val online by vm.online.collectAsStateWithLifecycle()
+        TerminalsDialog(t, online, vm.computerName, onDismiss = vm::closeTerminals)
+    }
+    val preview by vm.previewOpen.collectAsStateWithLifecycle()
+    preview?.let { o -> PreviewWindow(o.link, vm.sessionId, vm.repo.previews, onDismiss = vm::closePreview) }
+    val files by vm.filesOpen.collectAsStateWithLifecycle()
+    files?.let { f -> FilesDialog(f, vm.repo, onDismiss = vm::closeFiles) }
+    val git by vm.gitOpen.collectAsStateWithLifecycle()
+    git?.let { o -> GitDialog(o.git, onDismiss = { vm.closeGit(); prReads++ }, pr = o.pr) }
+    if (showPrs) {
+        PrSheet(
+            prs, onDismiss = { showPrs = false; prReads++ },
+            onGit = { pr -> showPrs = false; vm.openGit(pr) },
+            onAsk = { text -> vm.send(text) },
+        )
+    }
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                actions = {
-                    if (changesAllowed) {
-                        IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
-                            Icon(Icons.Filled.Difference, contentDescription = "Changes")
+            Column {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                    actions = {
+                        if (changesAllowed) {
+                            IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
+                                Icon(Icons.Filled.Difference, contentDescription = "Changes")
+                            }
                         }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                title = {
-                    Column {
-                        Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
-                            Text(
-                                chat.subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = p.inkFaint,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                        Box {
+                            IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                            }
+                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Git") },
+                                    leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                                    onClick = { showMenu = false; vm.openGit() },
+                                    modifier = Modifier.testTag("chat.git"),
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Files") },
+                                    leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                                    onClick = { showMenu = false; vm.openFiles() },
+                                    modifier = Modifier.testTag("chat.files"),
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Terminals") },
+                                    leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
+                                    onClick = { showMenu = false; vm.openTerminals() },
+                                    modifier = Modifier.testTag("chat.terminals"),
+                                )
+                            }
                         }
-                    }
-                },
-            )
+                        pane?.actions?.invoke(this)
+                    },
+                    navigationIcon = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                            ModeToggle(expert, vm::setExpert, compact = pane != null)
+                        }
+                    },
+                    title = {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
+                                if (pane != null) {
+                                    PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
+                                }
+                                Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
+                                Text(
+                                    chat.subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = p.inkFaint,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    },
+                )
+                if (expert) MonitorStrip(hardware, computerName, onOpen = { showMonitor = true }, modifier = Modifier.background(p.paper))
+            }
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).imePadding()) {
-            // Full width as well as the remaining height: without fillMaxWidth the box
-            // wraps its content, so the loading spinner sat at the left edge.
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+        val transcript: @Composable (Modifier) -> Unit = { transcriptModifier ->
+            Box(transcriptModifier) {
                 when {
                     !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
                     keyed.isEmpty() && chat.error == null -> Text(
@@ -196,7 +388,21 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                                 )
                             }
                         }
-                        itemsIndexed(keyed, key = { _, (k, _) -> k }) { _, (_, block) -> BlockView(block) }
+                        itemsIndexed(rows, key = { _, run -> rowKey(run) }) { _, run ->
+                            when (run) {
+                                is PurposeRun.Single -> {
+                                    val block = run.item.second
+                                    // Long press: Copy, and fork the chat from a saved message.
+                                    val fork = forkAction(block)
+                                    // In a pane a message can be dragged into the other pane's message box.
+                                    // A reply's links to files and loopback pages open previews from the computer (AN-35).
+                                    CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
+                                        if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
+                                    }
+                                }
+                                is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
+                            }
+                        }
                         item(key = "footer") {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 chat.error?.let { Notice(it, Tone.DANGER) }
@@ -213,8 +419,11 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                     }
                 }
             }
+        }
+        val controls: @Composable () -> Unit = {
             chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
             chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
+            prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
             // A completed chat reads like the desktop's: no message box until it is restored.
             if (completedAt != null && !chat.running) CompletedBar(
                 restoring = restoring,
@@ -235,22 +444,89 @@ fun ChatScreen(vm: ChatViewModel, initialDraft: String? = null, dictationOn: Boo
                     }
                 },
                 modifier = Modifier.navigationBarsPadding(),
-            ) else Composer(
-                initialText = initialDraft,
-                running = chat.running,
-                blocked = chat.blocked,
-                queued = chat.queued,
-                onSend = { text, skill, images -> vm.send(text, skill, images) },
-                onStop = vm::stop,
-                modifier = Modifier.navigationBarsPadding(),
-                mic = mic,
-                skills = chat.skills,
-                insert = insert,
-                onInserted = vm::inserted,
-                attach = attach,
-            )
+            ) else Column(Modifier.navigationBarsPadding()) {
+                Composer(
+                    initialText = initialDraft,
+                    running = chat.running,
+                    blocked = chat.blocked,
+                    queued = chat.queued,
+                    onSend = { text, skill, images -> vm.send(text, skill, images) },
+                    onStop = vm::stop,
+                    // In a pane, text dragged from the other pane lands here (never sent by itself).
+                    modifier = if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote),
+                    mic = mic,
+                    skills = chat.skills,
+                    insert = insert,
+                    onInserted = vm::inserted,
+                    attach = attach,
+                    prompts = prompts,
+                    queuedPrompts = chat.queuedPrompts,
+                    onEditQueued = vm::editQueued,
+                    onNewAgent = onNewChat,
+                    onTerminal = vm::openTerminals,
+                )
+                ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
+            }
+        }
+        ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
+    }
+}
+
+/** A chat pane's status dot: waiting on the owner (pulsing while the other pane has the keyboard), working, or idle (none). */
+@Composable
+private fun PaneStatusDot(waiting: Boolean, running: Boolean, pulse: Boolean) {
+    if (!waiting && !running) return
+    val alpha = if (waiting && pulse) {
+        val t = rememberInfiniteTransition(label = "pane-dot")
+        t.animateFloat(1f, 0.3f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "pane-dot-alpha").value
+    } else {
+        1f
+    }
+    Dot(if (waiting) Tone.WARNING else Tone.ACCENT, Modifier.alpha(alpha))
+}
+
+/** What a dragged message carries: its text, as plain text another pane's message box takes. */
+internal fun dragText(block: Block): String = when (block) {
+    is Block.User -> block.text
+    is Block.Assistant -> block.text
+    is Block.Tool -> block.label
+}
+
+/**
+ * Long-press a message in a pane and drag it: its text goes as plain text. The
+ * chat's id rides along as the local state, so dropping on its own pane does nothing.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.messageDragSource(block: Block, sessionId: String): Modifier = dragAndDropSource { _ ->
+    val text = dragText(block)
+    if (text.isBlank()) null else DragAndDropTransferData(ClipData.newPlainText("Message", text), localState = sessionId)
+}
+
+/**
+ * The message box as a drop target for text dragged from the other pane: the text is
+ * added after what is typed ([ChatViewModel.quote]) and never sent by a drop.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.messageDropTarget(sessionId: String, onText: (String) -> Unit): Modifier {
+    val current by rememberUpdatedState(onText)
+    val target = remember(sessionId) {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                val drag = event.toAndroidDragEvent()
+                if (drag.localState == sessionId) return false
+                val clip = drag.clipData ?: return false
+                val text = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).text?.toString() }.joinToString("\n").trim()
+                if (text.isEmpty()) return false
+                current(text)
+                return true
+            }
         }
     }
+    return dragAndDropTarget(
+        shouldStartDragAndDrop = { e -> e.mimeTypes().any { it == ClipDescription.MIMETYPE_TEXT_PLAIN || it.startsWith("text/") } },
+        target = target,
+    )
 }
 
 /** In place of the message box for a completed chat: say so, and offer Restore. */
@@ -365,3 +641,9 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
 
 private fun cameraUri(context: Context, file: File): Uri =
     FileProvider.getUriForFile(context, "${context.packageName}.photos", file)
+
+/** A list key for a transcript row: the block's own key, or its first block's for a purpose group. */
+private fun rowKey(run: PurposeRun<Pair<String, Block>>): String = when (run) {
+    is PurposeRun.Single -> run.item.first
+    is PurposeRun.Group -> "purpose:" + run.items.first().first
+}

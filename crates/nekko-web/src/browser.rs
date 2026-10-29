@@ -337,6 +337,13 @@ pub async fn browser_tool(
         Ok(p) => p,
         Err(e) => return err(call, e),
     };
+    // Opening a page the agent named is a web-tools connection (Settings > Connections).
+    if (action == "navigate" || action == "tab_new")
+        && let Some(u) = input.get("url").and_then(Value::as_str).and_then(|u| url::Url::parse(js::trim(u)).ok())
+        && let Err(e) = nekko_net::check("web-tools", u.host_str().unwrap_or_default())
+    {
+        return err(call, e);
+    }
     let existing = lock(&browsers.existing).get(&sid).cloned();
     if (mode == "existing" && lock(&browsers.dedicated).contains(&sid))
         || existing.as_ref().is_some_and(|e| mode != "existing" || Some(e.port()) != port)

@@ -14,6 +14,7 @@
 
 import { clientMessageIdOf } from './chat.js';
 import { skillTurnText } from './skills.js';
+import { stepUpPolicy, STEP_UP_CHALLENGE } from './step-up.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
 import {
   PHONE_TERMINAL,
@@ -57,26 +58,60 @@ import {
 import {
   PHONE_LIMIT_WINDOW_VIEW,
   PHONE_LIMITS_VIEW,
+  PHONE_MACHINE_RESIDENT_VIEW,
+  PHONE_MACHINE_VIEW,
+  PHONE_MONITOR_SOURCES,
+  PHONE_MONITOR_VIEW,
   PHONE_PR_VIEW,
   PHONE_PROMPT_VIEW,
   PHONE_QUEUE_EDIT_KEYS,
   PHONE_TASK_VIEW,
   PHONE_VIEWS,
+  PHONE_WATCH_VIEW,
   PHONE_WORKFLOW_RUN_VIEW,
   PHONE_WORKFLOW_VIEW,
+  PHONE_CONTEXT_SOURCES,
+  PHONE_ENGINE_MEMORY_VIEW,
+  PHONE_ENGINE_VIEW,
+  PHONE_GPU_DEVICE_VIEW,
+  PHONE_GPU_VIEW,
+  PHONE_LOADING_VIEW,
+  PHONE_RESIDENT_VIEW,
+  PHONE_SYSTEM_VIEW,
+  PHONE_TEMPS_VIEW,
+  phoneContextView,
+  phoneEngineView,
+  phoneGpuView,
+  phoneSystemView,
   phoneLimitsKey,
   phoneLimitsView,
+  phoneMachineView,
+  phoneMonitorView,
   phonePromptsView,
   phonePrsView,
   phoneQueueView,
+  phoneWatchesView,
   phoneTasksView,
   phoneUsageView,
   phoneWorkflowsView,
 } from './phone-views.js';
+import {
+  PHONE_ARTIFACT_CHANNELS,
+  PHONE_ARTIFACT_READ_CHANNELS,
+  PHONE_ARTIFACT_VIEW,
+  PHONE_ARTIFACTS_VIEW,
+  PHONE_PREVIEW_HEADERS,
+  PHONE_PREVIEW_METHODS,
+  PHONE_PREVIEW_VIEW,
+  PhoneArtifactsRefusal,
+  phoneArtifactsView,
+  screenPhoneArtifacts,
+} from './phone-artifacts.js';
+import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
 
 /**
  * Channels a paired phone may call. Built from what the phone clients send
- * (apps/mobile/src/lib/protocol.ts, apps/android/protocol Wire.kt `Channels`,
+ * (apps/android/protocol Wire.kt `Channels`,
  * apps/ios/Protocol Wire.swift `Channels`), plus the ones the next phone
  * releases need: settings (filtered), completing or deleting a chat the way
  * the desktop does (`session:setOptions` with `archivedAt`, `session:delete`)
@@ -93,9 +128,17 @@ import {
  * folder's files (list, search, read; save as a Change action) and the
  * computer's logs, read only (phone-files.ts). FA-3 / FA-6 add the chat's
  * terminals and SSH (`PHONE_TERMINAL_CHANNELS`, phone-terminal.ts).
+ * The Expert monitor (2026-10-24) reads the computer's hardware, the Model
+ * Server's loaded models and a chat's context totals, and unloads a model
+ * (`PHONE_MONITOR_READ_CHANNELS`, `model:unload`).
+ * Issue #1095 adds what the agent linked in a chat, read only: its files
+ * (`artifact:read`) and its local preview servers (`preview:fetch`),
+ * phone-artifacts.ts and chat-links.ts.
  */
 export const PHONE_CHANNELS = [
   'app:info',
+  'app:quit',
+  'artifact:read',
   'changes:list',
   'chat:abort',
   'chat:answer',
@@ -103,6 +146,9 @@ export const PHONE_CHANNELS = [
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'context:preview',
+  'device:signOut',
+  'engine:status',
   'files:list',
   'files:read',
   'files:search',
@@ -119,27 +165,39 @@ export const PHONE_CHANNELS = [
   'git:stage',
   'git:switch',
   'git:unstage',
+  'gpu:stats',
   'limits:get',
   'logs:list',
   'logs:read',
+  'machine:summary',
+  'model:unload',
   'models:list',
+  'monitor:summary',
   'pr:action',
   'pr:checks',
   'pr:create',
   'pr:diff',
   'pr:sessionList',
+  'preview:fetch',
   'providers:list',
+  'providers:saveSealed',
+  'providers:sealKey',
+  'providers:setEnabled',
+  'remote:stop',
+  'security:challenge',
   'session:create',
   'session:delete',
   'session:fork',
   'session:get',
   'session:setOptions',
+  'session:watches',
   'sessions:summaries',
   'settings:get',
   'settings:update',
   'skills:runnable',
   'ssh:hosts',
   'ssh:open',
+  'system:stats',
   'task:runNow',
   'tasks:list',
   'terminal:close',
@@ -155,8 +213,10 @@ export const PHONE_CHANNELS = [
   'voice:transcribe',
   'workflow:run',
   'workflows:list',
+  'workspace:addByPath',
   'workspace:gitStatus',
   'workspace:list',
+  'workspace:remove',
 ] as const;
 
 /** A family of channels a phone may not call: exact names, and whole prefixes. */
@@ -237,8 +297,6 @@ export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undeci
       'workflow:duplicate',
       'workflow:event',
       'workflow:update',
-      'workspace:addByPath',
-      'workspace:remove',
     ],
     /** MCP servers. */
     prefixes: ['mcp:'],
@@ -256,7 +314,7 @@ export const PHONE_ALWAYS_DENIED = {
   channels: DENIED_GROUPS.flatMap((g) => g.channels).sort(),
   prefixes: DENIED_GROUPS.flatMap((g) => g.prefixes).sort(),
   /** Not forced off by a prefix (each still has to be in `PHONE_CHANNELS` to be callable). */
-  except: ['remote:status', ...PHONE_TERMINAL_CHANNELS],
+  except: ['remote:status', 'remote:stop', ...PHONE_TERMINAL_CHANNELS],
 };
 
 /**
@@ -279,10 +337,14 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'changes:list',
   'chat:pending',
   'limits:get',
+  'machine:summary',
   'models:list',
+  'monitor:summary',
   'pr:sessionList',
   'providers:list',
+  'providers:sealKey',
   'session:get',
+  'session:watches',
   'sessions:summaries',
   'settings:get',
   'skills:runnable',
@@ -292,28 +354,51 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'workflows:list',
   'workspace:list',
 ];
+/**
+ * The Expert monitor's reads (2026-10-24): the computer's hardware, the Model
+ * Server's state and a chat's context totals, each a narrow projection.
+ */
+export const PHONE_MONITOR_READ_CHANNELS: readonly string[] = ['context:preview', 'engine:status', 'gpu:stats', 'system:stats'];
 export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_CHAT_READ_CHANNELS,
+  ...PHONE_MONITOR_READ_CHANNELS,
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
+  // #1095: what the agent linked in a chat, scoped to those links (phone-artifacts.ts).
+  ...PHONE_ARTIFACT_READ_CHANNELS,
+  // SK-2: a step-up challenge; the daemon's gate answers it itself (step-up.ts).
+  STEP_UP_CHALLENGE.channel,
 ];
 /**
  * Change level without a proof per call (2026-10-22): everything that makes
  * the agent act or changes the computer's settings or chats. Sending,
  * queueing and editing prompts, stopping a run, approving a tool, answering a
  * question, making, forking and deleting chats and changing their options,
- * the phone-settable settings, running an automation and transcribing a voice
- * prompt. The Change switch applies; each call is written to the activity
+ * the phone-settable settings, running an automation, transcribing a voice
+ * prompt and unloading a local model (it frees memory and reloads on the next
+ * reply, so it is undone by using the model; 2026-10-24). The Change switch applies; each call is written to the activity
  * list. Raising a chat's mode is the exception that needs a proof
  * (`PHONE_MODE_PROOF`).
  */
+/**
+ * SK-3 safety exits: sign this phone out, stop remote access on the computer,
+ * quit the agent (`app:quit` only when the computer reports `quitFromPhone`).
+ * Agent class (logged), but exempt by name from the Change switch, from the
+ * Read switch and from every proof and step-up: a safety exit must never be
+ * harder than the attack (decision 0018). The daemon's gate answers them.
+ * A test pins this list: growing it is a security decision, not a refactor.
+ */
+export const PHONE_SAFETY_EXIT_CHANNELS: readonly string[] = ['app:quit', 'device:signOut', 'remote:stop'];
+
 export const PHONE_AGENT_CHANNELS: readonly string[] = [
+  ...PHONE_SAFETY_EXIT_CHANNELS,
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
   'chat:queue',
   'chat:send',
+  'model:unload',
   'session:create',
   'session:delete',
   'session:fork',
@@ -326,7 +411,18 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
 ];
 /** Any paired phone, whatever its switches: which Nekko Agent version it talks to. */
 export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
+/**
+ * Provider setup from a phone (decision 0016, 2026-10-24): a sealed key the
+ * computer opens, and one provider's switch. A signed proof each. The plaintext
+ * `providers:save`, `providers:remove` and `providers:importCliAuth` stay in
+ * `PHONE_DENIED_FOREVER`.
+ */
+export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
+  // Saved-folder access changes need a signed proof, including revocation.
+  'workspace:addByPath',
+  'workspace:remove',
+  ...PHONE_PROVIDER_CHANGE_CHANNELS,
   ...PHONE_GIT_CHANGE_CHANNELS,
   ...PHONE_FILES_CHANGE_CHANNELS,
   ...PHONE_TERMINAL_CHANGE_CHANNELS,
@@ -427,6 +523,7 @@ export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): vo
   const cls = phoneChannelClass(channel);
   if (cls === null) throw new PhoneAccessError('channel-denied', channel);
   if (cls === 'read' && !access.read) throw new PhoneAccessError('read-off', channel);
+  if (PHONE_SAFETY_EXIT_CHANNELS.includes(channel)) return;
   if ((cls === 'change' || cls === 'agent' || cls === 'token') && !access.change) throw new PhoneAccessError('change-off', channel);
 }
 
@@ -459,6 +556,8 @@ export const PHONE_SETTINGS_VIEW = [
   'defaultModelId',
   'defaultProviderId',
   'favoriteModels',
+  // Read-only: show the computer's effort before the phone has a saved choice.
+  'effort',
   // Whether this computer shows phones the agent's changes (set on the computer only).
   'phoneChanges',
   // The saved prompts, as names and text (`PHONE_PROMPT_VIEW`).
@@ -470,16 +569,74 @@ export const PHONE_SETTINGS_VIEW = [
   'voice.language',
 ] as const;
 
+/** The kinds a phone may add (`providers:saveSealed`): API-key clouds and the local servers a computer reaches itself. */
+export const PHONE_PROVIDER_KINDS = ['anthropic', 'openai', 'openrouter', 'openai-compat', 'ollama', 'lmstudio', 'vllm'] as const;
+/** Kinds that need a key and an https base URL. */
+export const PHONE_PROVIDER_CLOUD_KINDS = ['anthropic', 'openai', 'openrouter'] as const;
+/** The fields of a `providers:saveSealed` request; anything else is `option-denied`. */
+export const PHONE_PROVIDER_SAVE_KEYS = ['id', 'kind', 'label', 'baseUrl', 'sealedKey'] as const;
+export const PHONE_PROVIDER_LIMITS = { id: 64, label: 80, url: 512, blob: 8192 } as const;
+
+function phoneProviderUrlOk(url: string, kind: string): boolean {
+  if (url.length > PHONE_PROVIDER_LIMITS.url || /[\s\u0000-\u001f\u007f]/.test(url)) return false;
+  let rest: string;
+  if (url.startsWith('https://')) rest = url.slice(8);
+  else if (url.startsWith('http://')) {
+    if ((PHONE_PROVIDER_CLOUD_KINDS as readonly string[]).includes(kind)) return false;
+    rest = url.slice(7);
+  } else return false;
+  const authority = rest.split('/')[0];
+  return authority.length > 0 && !authority.includes('@');
+}
+
+/**
+ * The shape of a sealed provider save, checked before the computer is asked
+ * (the Rust gate runs the same checks, `phone_providers::screen_save`): a
+ * lowercase id, a kind a phone may add, a label, an optional base URL
+ * (https for a cloud kind), and the sealed key, required for a cloud kind.
+ */
+export function screenPhoneProviderSave(request: unknown): void {
+  if (!isObj(request)) throw new PhoneAccessError('value-invalid', 'provider');
+  for (const key of Object.keys(request)) {
+    if (!(PHONE_PROVIDER_SAVE_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+  }
+  const id = typeof request.id === 'string' ? request.id : '';
+  if (!id || id.length > PHONE_PROVIDER_LIMITS.id || !/^[a-z0-9_-]+$/.test(id)) throw new PhoneAccessError('value-invalid', 'id');
+  const kind = typeof request.kind === 'string' ? request.kind : '';
+  if (!(PHONE_PROVIDER_KINDS as readonly string[]).includes(kind)) throw new PhoneAccessError('value-invalid', 'kind');
+  const label = typeof request.label === 'string' ? request.label.trim() : '';
+  if (!label || label.length > PHONE_PROVIDER_LIMITS.label || /[\u0000-\u001f\u007f]/.test(label)) throw new PhoneAccessError('value-invalid', 'label');
+  if (request.baseUrl !== undefined && (typeof request.baseUrl !== 'string' || !phoneProviderUrlOk(request.baseUrl, kind))) throw new PhoneAccessError('value-invalid', 'baseUrl');
+  const blob = request.sealedKey;
+  if (blob === undefined) {
+    if ((PHONE_PROVIDER_CLOUD_KINDS as readonly string[]).includes(kind)) throw new PhoneAccessError('value-invalid', 'sealedKey');
+  } else if (typeof blob !== 'string' || !blob || blob.length > PHONE_PROVIDER_LIMITS.blob || !/^[A-Za-z0-9_=-]+$/.test(blob)) {
+    throw new PhoneAccessError('value-invalid', 'sealedKey');
+  }
+}
+
+/** `providers:saveSealed` and `providers:setEnabled` as a phone sees them: `ok`, a message, a save's models; never a key or the list. */
+export function phoneProviderResultView(result: unknown): Obj {
+  if (!isObj(result)) return { ok: false };
+  const out: Obj = { ok: result.ok === true };
+  if (typeof result.message === 'string') out.message = result.message.length > 600 ? result.message.slice(0, 600) : result.message;
+  if (Array.isArray(result.models)) {
+    out.models = result.models.filter(isObj).filter((m) => typeof m.id === 'string').map((m) => ({ id: m.id, name: typeof m.name === 'string' ? m.name : m.id }));
+  }
+  return out;
+}
+
 /** The provider fields a phone receives from `providers:list` (never `apiKey`, `tokenKey` or `baseUrl`). */
 export const PHONE_PROVIDER_VIEW = ['enabled', 'id', 'kind', 'label'] as const;
 
 /**
  * Chat options a phone may set with `session:setOptions`: the model, the
- * title and organisation, completing (`archivedAt`) and the chat mode. Not the tools, the execution mode, Git
+ * title and organisation, completing (`archivedAt`), the chat mode and the effort. Not the tools, the execution mode, Git
  * isolation or offline/incognito.
  */
 export const PHONE_SESSION_OPTION_KEYS = [
   'archivedAt',
+  'effort',
   'mode',
   'modelId',
   'pinned',
@@ -488,6 +645,9 @@ export const PHONE_SESSION_OPTION_KEYS = [
   'thinking',
   'title',
 ] as const;
+
+/** The effort levels a phone may set on a chat (`EffortLevel`, settings.ts). */
+export const PHONE_EFFORT_LEVELS = ['low', 'medium', 'normal', 'high', 'xhigh', 'max'] as const;
 
 /** `chat:send` fields a phone may set: no `attachedPaths` (files on this computer) or history limits. */
 export const PHONE_CHAT_SEND_KEYS = [
@@ -576,7 +736,13 @@ export type PhoneAccessCode =
   | 'token-required'
   | 'token-invalid'
   | 'token-expired'
-  | 'terminal-hidden';
+  | 'terminal-hidden'
+  // SK-1: the step-up a guarded call carries (step-up.ts), and quitting from a phone when the computer did not opt in.
+  | 'step-up-required'
+  | 'step-up-invalid'
+  | 'step-up-stale'
+  | 'step-up-replayed'
+  | 'quit-disabled';
 
 /** Why the computer refused a phone's request. The wire carries `message`. */
 export class PhoneAccessError extends Error {
@@ -690,6 +856,14 @@ export function screenPhoneCall(
       throw e;
     }
   }
+  if (PHONE_ARTIFACT_CHANNELS.includes(channel)) {
+    try {
+      return { callArgs: screenPhoneArtifacts(channel, args) };
+    } catch (e) {
+      if (e instanceof PhoneArtifactsRefusal) throw new PhoneAccessError(e.code, e.detail);
+      throw e;
+    }
+  }
   if (PHONE_FILES_CHANNELS.includes(channel)) {
     try {
       return { callArgs: screenPhoneFiles(channel, args) };
@@ -699,8 +873,24 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'workspace:addByPath':
+    case 'workspace:remove':
+      if (typeof args[0] !== 'string' || args[0].trim() === '' || args[0].includes('\0')) {
+        throw new PhoneAccessError('value-invalid', channel === 'workspace:addByPath' ? 'folder path' : 'workspace id');
+      }
+      if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
+    case 'providers:saveSealed':
+      screenPhoneProviderSave(args[0]);
+      if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
+    case 'providers:setEnabled':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
+      if (typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'enabled');
+      return {};
     case 'changes:list':
     case 'pr:sessionList':
+    case 'session:watches':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
@@ -728,6 +918,13 @@ export function screenPhoneCall(
     case 'limits:get':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
       return {};
+    case 'context:preview':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      return {};
+    case 'model:unload':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'model id');
+      return {};
     case 'settings:update':
       return { settingsPatch: checkPhoneSettingsPatch(args[0]) };
     case 'session:setOptions': {
@@ -737,6 +934,7 @@ export function screenPhoneCall(
         if (!(PHONE_SESSION_OPTION_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
       if (own(patch, 'mode')) chatMode(patch.mode, 'mode');
+      if (own(patch, 'effort') && !(PHONE_EFFORT_LEVELS as readonly unknown[]).includes(patch.effort)) throw new PhoneAccessError('value-invalid', 'effort');
       return {};
     }
     case 'chat:send': {
@@ -854,10 +1052,29 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return null;
     case 'pr:sessionList':
       return phonePrsView(result);
+    case 'session:watches':
+      return phoneWatchesView(result);
+    case 'machine:summary':
+      return phoneMachineView(result);
+    case 'providers:sealKey':
+      return isObj(result) && typeof result.publicKey === 'string' && typeof result.context === 'string' ? { publicKey: result.publicKey, context: result.context } : null;
+    case 'providers:saveSealed':
+    case 'providers:setEnabled':
+      return phoneProviderResultView(result);
     case 'usage:summary':
       return phoneUsageView(result);
     case 'limits:get':
       return phoneLimitsView(result);
+    case 'system:stats':
+      return phoneSystemView(result);
+    case 'gpu:stats':
+      return phoneGpuView(result);
+    case 'engine:status':
+      return phoneEngineView(result);
+    case 'context:preview':
+      return phoneContextView(result);
+    case 'model:unload':
+      return isObj(result) ? pick(result, ['message', 'ok']) : null;
     case 'terminals:list':
     case 'terminal:tail':
     case 'ssh:hosts':
@@ -870,6 +1087,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneTerminalResult(channel, result);
     default:
       if (PHONE_GIT_CHANNELS.includes(channel)) return phoneGitView(channel, result);
+      if (PHONE_ARTIFACT_CHANNELS.includes(channel)) return phoneArtifactsView(channel, result);
       return PHONE_FILES_CHANNELS.includes(channel) ? phoneFilesView(channel, result) : result;
   }
 }
@@ -996,14 +1214,24 @@ export async function callFromPhone(
 ): Promise<unknown> {
   const { settingsPatch, skill, callArgs: checked } = screenPhoneCall(channel, args);
   if (channel === 'changes:list') {
-    // Off unless the computer's owner turned it on (Settings → Remote access).
+    // The computer's setting (Settings → Remote access), on by default; the owner can turn it off.
     const settings = await dispatch('settings:get', []);
     if (!isObj(settings) || settings.phoneChanges !== true) throw new PhoneAccessError('turned-off', 'changes:list');
+  }
+  if (channel === 'monitor:summary') {
+    // Answered from what the computer already reads for its own Monitors dock; the phone's arguments are ignored.
+    const sources: Record<string, unknown> = {};
+    for (const source of PHONE_MONITOR_SOURCES) sources[source] = await dispatch(source, []);
+    return phoneMonitorView(sources, Date.now());
   }
   let callArgs = checked ?? args;
   // Only what the computer's own call takes: an id, or nothing.
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
   if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
+  if (channel === 'system:stats' || channel === 'gpu:stats' || channel === 'engine:status') callArgs = [];
+  // A chat's own context only: the phone never attaches a path.
+  if (channel === 'context:preview') callArgs = [args[0], []];
+  if (channel === 'model:unload') callArgs = [args[0], args[1]];
   if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
@@ -1043,6 +1271,7 @@ export function phoneAccessPolicy() {
     readChannels: [...PHONE_READ_CHANNELS],
     changeChannels: [...PHONE_CHANGE_CHANNELS],
     agentChannels: [...PHONE_AGENT_CHANNELS],
+    safetyExits: [...PHONE_SAFETY_EXIT_CHANNELS],
     openChannels: [...PHONE_OPEN_CHANNELS],
     tokenChannels: [...PHONE_TOKEN_CHANNELS],
     modeProof: { channels: [...PHONE_MODE_PROOF.channels], rank: [...PHONE_MODE_PROOF.rank], fallback: PHONE_MODE_PROOF.fallback },
@@ -1053,11 +1282,19 @@ export function phoneAccessPolicy() {
     settingsKeys: [...PHONE_SETTINGS_KEYS],
     settingsView: [...PHONE_SETTINGS_VIEW],
     providerView: [...PHONE_PROVIDER_VIEW],
+    providerKinds: [...PHONE_PROVIDER_KINDS],
+    providerCloudKinds: [...PHONE_PROVIDER_CLOUD_KINDS],
+    providerSaveKeys: [...PHONE_PROVIDER_SAVE_KEYS],
+    providerLimits: { ...PHONE_PROVIDER_LIMITS },
+    watchView: [...PHONE_WATCH_VIEW],
+    machineView: [...PHONE_MACHINE_VIEW],
+    machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],
     chatModes: [...PHONE_CHAT_MODES],
+    effortLevels: [...PHONE_EFFORT_LEVELS],
     sessionView: { ...PHONE_SESSION_VIEW },
     changesView: { ...PHONE_CHANGES_VIEW },
     views: { ...PHONE_VIEWS },
@@ -1068,13 +1305,36 @@ export function phoneAccessPolicy() {
     prView: [...PHONE_PR_VIEW],
     limitsView: [...PHONE_LIMITS_VIEW],
     limitWindowView: [...PHONE_LIMIT_WINDOW_VIEW],
+    monitorView: { ...PHONE_MONITOR_VIEW },
+    monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
+    expertMonitor: {
+      systemView: [...PHONE_SYSTEM_VIEW],
+      tempsView: [...PHONE_TEMPS_VIEW],
+      gpuView: [...PHONE_GPU_VIEW],
+      gpuDeviceView: [...PHONE_GPU_DEVICE_VIEW],
+      engineView: [...PHONE_ENGINE_VIEW],
+      residentView: [...PHONE_RESIDENT_VIEW],
+      loadingView: [...PHONE_LOADING_VIEW],
+      engineMemoryView: [...PHONE_ENGINE_MEMORY_VIEW],
+      contextSources: [...PHONE_CONTEXT_SOURCES],
+    },
     files: {
       view: { ...PHONE_FILES_VIEW },
       entryView: [...PHONE_FILE_ENTRY_VIEW],
       fileView: [...PHONE_FILE_VIEW],
       writeView: [...PHONE_FILE_WRITE_VIEW],
       logView: [...PHONE_LOG_VIEW],
+    },
+    artifacts: {
+      view: { ...PHONE_ARTIFACTS_VIEW },
+      artifactView: [...PHONE_ARTIFACT_VIEW],
+      previewView: [...PHONE_PREVIEW_VIEW],
+      previewHeaders: [...PHONE_PREVIEW_HEADERS],
+      previewMethods: [...PHONE_PREVIEW_METHODS],
+      linkExt: [...CHAT_LINK_EXT],
+      assetExt: [...CHAT_ASSET_EXT],
+      loopbackHosts: [...LOOPBACK_HOSTS],
     },
     git: {
       view: { ...PHONE_GIT_VIEW },
@@ -1085,5 +1345,6 @@ export function phoneAccessPolicy() {
       checkView: [...PHONE_CHECK_VIEW],
     },
     maxFrameBytes: PHONE_MAX_FRAME_BYTES,
+    stepUp: stepUpPolicy(),
   };
 }

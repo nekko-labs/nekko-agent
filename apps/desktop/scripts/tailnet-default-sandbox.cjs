@@ -1,4 +1,4 @@
-// Synthetic Settings → Remote access evidence (TASKS.md IO-19 TS-1); never
+// Synthetic Settings → Remote access evidence (Tailscale or Nekko Cloud); never
 // connects to the user's host, profile, relay or the web.
 // Launched through tailnet-default-integration.cjs (NEKKO_TEST_REVISION=<rev> for "before").
 // Hidden, non-focusable, off-screen window; clicks are DOM events, no OS input.
@@ -48,7 +48,7 @@ app.whenReady().then(async () => {
     const w = await run('innerWidth');
     fs.writeFileSync(path.join(dir, name + '.png'), (await win.capturePage({ x: 0, y: 0, width: w, height: Math.min(h, 900) }, { stayHidden: true, stayAwake: false })).toPNG());
   };
-  const field = () => run(`document.querySelector('section.card input')?.value`);
+  const field = () => run(`[...document.querySelectorAll('section.card button')].map((b) => b.textContent.trim() + (b.disabled ? ' (off)' : '')).join(' | ')`);
   try {
     for (const width of [900, 420]) {
       await open(width, 900);
@@ -61,8 +61,9 @@ app.whenReady().then(async () => {
           report.measures[`${name}-${theme}-${width}`] = value;
           const overflow = await run('document.documentElement.scrollWidth > innerWidth');
           if (!base) {
-            if (name === 'no-tailscale') check(`without Tailscale the field keeps the managed relay (${theme}, ${width})`, value === 'wss://nekko-agent-relay.fly.dev');
-            else check(`with Tailscale the field defaults to this computer's relay (${name}, ${theme}, ${width})`, value === 'ws://gomi.tailfd6474.ts.net:4400');
+            const text = await run(`document.querySelector('section.card').textContent`);
+            check(`offers Tailscale and Nekko Cloud, no relay host named (${name}, ${theme}, ${width})`, value.includes('Use Tailscale') && value.includes('Use Nekko Cloud') && !text.includes('fly.dev'));
+            check(`Use Tailscale is ${name === 'no-tailscale' ? 'off' : 'on'} (${name}, ${theme}, ${width})`, value.includes('Use Tailscale (off)') === (name === 'no-tailscale'));
             check(`no horizontal overflow (${name}, ${theme}, ${width})`, !overflow);
           }
           await capture(`${name}-${theme}-${width}`);
@@ -70,14 +71,15 @@ app.whenReady().then(async () => {
       }
     }
     if (!base) {
-      // Enable on the tailnet default starts the relay first, then enables on its address.
+      // Use Tailscale starts the relay first, then enables on its address.
       await run(`integration.show('tailnet-idle')`);
       await sleep(900);
-      await run(`[...document.querySelectorAll('section.card button')].find((b) => b.textContent.trim() === 'Enable').click()`);
+      await run(`[...document.querySelectorAll('section.card button')].find((b) => b.textContent.trim() === 'Use Tailscale').click()`);
       await sleep(900);
       const calls = await run('[...integration.calls]');
       report.measures.enableCalls = calls;
-      check('Enable starts the relay on this computer, then enables remote access on it', JSON.stringify(calls) === JSON.stringify(['localRelay:start', 'remote:enable ws://gomi.tailfd6474.ts.net:4400']));
+      check('Use Tailscale starts the relay on this computer, then enables remote access on it', JSON.stringify(calls) === JSON.stringify(['localRelay:start', 'remote:enable ws://gomi.tailfd6474.ts.net:4400']));
+      check('the enabled card names the connection Tailscale', await run(`document.querySelector('section.card').textContent.includes('Connected through:Tailscale')`));
       await capture('enabled-dark-420');
     }
     check('the renderer requested nothing from the web', blocked.length === 0);

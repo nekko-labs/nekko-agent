@@ -72,10 +72,10 @@ class MiscTest {
     }
 
     @Test
-    fun `a removed phone is told the steps on the computer, with Rotate secret as the fallback`() {
+    fun `a removed phone is told the steps on the computer, with Sign out all phones as the fallback`() {
         val copy = com.nekko.android.ui.components.deniedCopy(com.nekko.protocol.DenyReason.REVOKED)
         assertTrue(copy.contains("Pair a device"))
-        assertTrue(copy.contains("Rotate secret"))
+        assertTrue(copy.contains("Sign out all phones"))
     }
 
     @Test
@@ -94,7 +94,7 @@ class MiscTest {
         val other = com.nekko.protocol.RelayException("no such session")
         assertTrue(com.nekko.android.data.PlainRefusals.reword(other, "Studio") === other)
         // A code this app has no words for keeps the computer's message.
-        val unknown = com.nekko.protocol.RelayException("Not allowed from a paired phone (key-mismatch): chat:send")
+        val unknown = com.nekko.protocol.RelayException("Not allowed from a paired phone (value-invalid): chat:send")
         assertTrue(com.nekko.android.data.PlainRefusals.reword(unknown, "Studio") === unknown)
     }
 }

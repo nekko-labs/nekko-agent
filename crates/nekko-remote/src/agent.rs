@@ -12,6 +12,7 @@
 //! agent -> relay : { type:'dismiss', tag }        (a needs-you push was handled)
 //! agent -> relay : { type:'push-remove', deviceId }
 //! agent -> relay : { type:'activity', tag, phase, callId?, severity? } (content-free Live Activity update)
+//! agent -> relay : { type:'card' | 'card-start', state } (the iPhone's one Live Activity card, `card.rs`)
 //! ```
 //!
 //! A client's `data` is `{"enc": seal(frame)}`. Nothing is dispatched for a
@@ -31,6 +32,7 @@
 //! counter. Relay frames that announce connections are capped: at most
 //! `MAX_UNWELCOMED` connections wait for a HELLO, the oldest is forgotten first.
 
+use crate::card::{CARD_CHANNEL, Cards, REFERENCE_DATE};
 use crate::e2e::{self, Key};
 use crate::phone_terminal::{Coalescer, PhoneTerminals, data_event};
 use serde_json::{Value, json};
@@ -41,6 +43,13 @@ use std::time::Instant;
 
 /// Where IVs come from: random in production, scripted in the golden tests.
 pub type IvSource = Box<dyn FnMut() -> [u8; 12] + Send>;
+
+/// The wall clock the card's dates come from, in seconds since 2001 (ActivityKit's).
+pub type CardClock = Box<dyn Fn() -> f64 + Send>;
+
+fn wall_clock() -> f64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64()) - REFERENCE_DATE
+}
 
 /// The events the agent forwards to welcomed devices (`IpcEvents`).
 pub const RELAYED_EVENTS: &[&str] = &[
@@ -67,7 +76,16 @@ pub enum Out {
     /// `device_id` is the device the HELLO welcomed on `cid`, so the phone
     /// gate knows who is calling; `proof` is the request's signed Change
     /// proof, when it carried one (IO-33).
-    Dispatch { cid: String, id: Option<Value>, device_id: String, channel: String, args: Value, proof: Option<Value> },
+    Dispatch {
+        cid: String,
+        id: Option<Value>,
+        device_id: String,
+        channel: String,
+        args: Value,
+        proof: Option<Value>,
+        /// The request's step-up (`stepUp`), when it carried one (SK-2).
+        step_up: Option<Value>,
+    },
 }
 
 /// The first phone protocol version whose HELLO must answer the agent's
@@ -113,6 +131,9 @@ pub struct AgentCore {
     /// Paces each terminal's output to phones.
     flow: Coalescer,
     epoch: Instant,
+    /// The iPhone's Live Activity card, for the phones that asked for one.
+    cards: Cards,
+    clock: CardClock,
 }
 
 fn frame(v: Value) -> String {
@@ -131,7 +152,27 @@ impl AgentCore {
             terminals: PhoneTerminals::new(),
             flow: Coalescer::from_policy(),
             epoch: Instant::now(),
+            cards: Cards::default(),
+            clock: Box::new(wall_clock),
         }
+    }
+
+    /// Date the card from `clock` instead of the system's (tests).
+    pub fn with_clock(mut self, clock: CardClock) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    /// Whether the card needs the chat list (`sessions:summaries`) read: the
+    /// caller reads it and hands it to `set_summaries`. True once per need.
+    pub fn wants_summaries(&mut self) -> bool {
+        self.cards.wants_summaries()
+    }
+
+    /// The chat list for the card: its titles, reply lines and watches.
+    pub fn set_summaries(&mut self, list: &Value) -> Vec<String> {
+        let now = (self.clock)();
+        self.cards.set_summaries(list, now).into_iter().map(frame).collect()
     }
 
     /// Share the phone gate's terminal attachments (`phone::gate_shared`).
@@ -230,6 +271,7 @@ impl AgentCore {
     pub fn reset(&mut self) {
         let before = self.connected_devices();
         self.conns.clear();
+        self.cards.reconnected();
         self.forget_gone(before);
     }
 
@@ -314,6 +356,16 @@ impl AgentCore {
                     // unanswered, and the connection goes back to the handshake.
                     return vec![Out::Send(self.challenge(cid))];
                 }
+                if f.get("channel").and_then(Value::as_str) == Some(CARD_CHANNEL) {
+                    // The phone's card level, focus or dismissal: answered here, never by the host.
+                    let device = self.conn(cid).device.clone().unwrap_or_default();
+                    let now = (self.clock)();
+                    let args = f.get("args").cloned().unwrap_or(Value::Null);
+                    let mut out: Vec<Out> =
+                        self.cards.set(&device, &args, now).into_iter().map(|v| Out::Send(frame(v))).collect();
+                    out.push(Out::Send(self.reply(cid, id, Ok(json!({ "ok": true })))));
+                    return out;
+                }
                 if f.get("channel").and_then(Value::as_str) == Some(PUSH_TEST_CHANNEL) {
                     // *Send a test notification*: the relay pushes to this phone only.
                     let device = self.conn(cid).device.clone();
@@ -328,7 +380,9 @@ impl AgentCore {
                 // Welcomed above, so the connection has its device.
                 let device_id = self.conn(cid).device.clone().unwrap_or_default();
                 let proof = f.get("proof").filter(|p| !p.is_null()).cloned();
-                vec![Out::Dispatch { cid: cid.to_string(), id, device_id, channel, args, proof }]
+                let step_up = f.get("stepUp").filter(|p| !p.is_null()).cloned();
+                self.cards.phone_call(&channel, &args, (self.clock)());
+                vec![Out::Dispatch { cid: cid.to_string(), id, device_id, channel, args, proof, step_up }]
             }
             _ => Vec::new(),
         }
@@ -379,6 +433,8 @@ impl AgentCore {
         let mut out = Vec::new();
         if channel == "agent:event" {
             out.extend(self.relay_frames(payload).into_iter().map(frame));
+            let now = (self.clock)();
+            out.extend(self.cards.on_event(payload, now).into_iter().map(frame));
         }
         let welcomed = self.welcomed();
         if welcomed.is_empty() {
@@ -446,10 +502,11 @@ impl AgentCore {
     }
 
     pub fn tick_at(&mut self, now: u64) -> Vec<String> {
+        let wall = (self.clock)();
+        let mut out: Vec<String> = self.cards.tick(wall).into_iter().map(frame).collect();
         if self.flow.is_idle() {
-            return Vec::new();
+            return out;
         }
-        let mut out = Vec::new();
         for (id, data, skipped) in self.flow.due(now) {
             let cids = self.viewers_of(&id);
             out.extend(self.send_event(&cids, "terminal:event", data_event(&id, &data, skipped)));
@@ -548,14 +605,22 @@ impl AgentCore {
 
     /// Revocation: kick the device's live connections and drop its push token.
     pub fn kick_device(&mut self, device_id: &str) -> Vec<String> {
-        let mut out: Vec<String> = self
-            .welcomed()
+        self.cards.forget(device_id);
+        let mut out = self.disconnect_device(device_id);
+        out.push(frame(json!({ "type": "push-remove", "deviceId": device_id })));
+        out
+    }
+
+    /// Kick the device's live connections and keep its push token, so the
+    /// phone is still told about chats when remote access comes back
+    /// (`remote:stop`). Only an intentional disconnect (revoke, sign out)
+    /// drops push.
+    pub fn disconnect_device(&self, device_id: &str) -> Vec<String> {
+        self.welcomed()
             .into_iter()
             .filter(|cid| self.conns[cid].device.as_deref() == Some(device_id))
             .map(|cid| frame(json!({ "type": "kick", "cid": cid })))
-            .collect();
-        out.push(frame(json!({ "type": "push-remove", "deviceId": device_id })));
-        out
+            .collect()
     }
 
     /// Device ids with a welcomed live connection, each once.
@@ -671,6 +736,7 @@ mod tests {
                 channel: "tasks:list".into(),
                 args: json!([]),
                 proof: None,
+                step_up: None,
             }]
         );
     }
@@ -680,12 +746,15 @@ mod tests {
         let (mut core, key) = core();
         core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome_all);
         let proof = json!({ "ts": 1, "sig": "c2ln" });
-        let req = json!({ "type": "req", "id": 1, "channel": "file:write", "args": ["a"], "proof": proof });
+        let step = json!({ "totp": "123456" });
+        let req =
+            json!({ "type": "req", "id": 1, "channel": "file:write", "args": ["a"], "proof": proof, "stepUp": step });
         match core.on_relay(&client(&key, "c1", req), &welcome_all).pop() {
-            Some(Out::Dispatch { device_id, args, proof: p, .. }) => {
+            Some(Out::Dispatch { device_id, args, proof: p, step_up, .. }) => {
                 assert_eq!(device_id, "phone-1");
                 assert_eq!(args, json!(["a"]), "the proof is not one of the args");
                 assert_eq!(p, Some(proof));
+                assert_eq!(step_up, Some(step), "the step-up travels beside the proof (SK-2)");
             }
             other => panic!("{other:?}"),
         }
@@ -705,6 +774,61 @@ mod tests {
         let req = json!({ "type": "req", "id": 3, "channel": "tasks:list", "args": [] });
         let out = core.on_relay(&client(&key, "c1", req), &welcome_all);
         assert!(matches!(out.as_slice(), [Out::Send(_)]), "refused, not dispatched as phone-1: {out:?}");
+    }
+
+    /// The phone's Live Activity card (`card.rs`): `card:set` is answered here,
+    /// and the agent's events then drive `card` frames for the relay to push.
+    #[test]
+    fn card_set_is_answered_here_and_events_drive_card_frames() {
+        let (core, key) = core();
+        let mut core = core.with_clock(Box::new(|| 800_000_000.0));
+        core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome_all);
+        let tool = json!({ "type": "tool_call", "sessionId": "s1", "call": { "id": "t", "name": "bash", "input": { "command": "ls" } } });
+        let plain = |frames: &[String]| -> Vec<Value> {
+            frames.iter().map(|f| serde_json::from_str::<Value>(f).unwrap()).filter(|f| f["type"] != "d").collect()
+        };
+        // No phone asked: the old per-chat activity frame only.
+        let first = plain(&core.on_event("agent:event", &tool));
+        assert_eq!(first.iter().map(|f| f["type"].as_str().unwrap()).collect::<Vec<_>>(), ["activity"]);
+        assert!(!core.wants_summaries());
+
+        let req = json!({ "type": "req", "id": 5, "channel": "card:set", "args": [{ "level": "standard" }] });
+        let out = core.on_relay(&client(&key, "c1", req), &welcome_all);
+        let sent: Vec<String> = out
+            .iter()
+            .map(|o| match o {
+                Out::Send(f) => f.clone(),
+                Out::Dispatch { .. } => panic!("card:set is never dispatched: {o:?}"),
+            })
+            .collect();
+        let card = plain(&sent);
+        assert_eq!(card.len(), 1);
+        assert_eq!(card[0]["type"], "card");
+        assert_eq!(card[0]["state"]["chats"][0]["step"], "Run ls");
+        let reply: Value = serde_json::from_str(sent.last().unwrap()).unwrap();
+        let reply: Value = serde_json::from_str(reply["data"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            e2e::open(&key, reply["enc"].as_str().unwrap()).unwrap(),
+            json!({ "type": "res", "id": 5, "result": { "ok": true } })
+        );
+
+        // The chat list fills in the title.
+        assert!(core.wants_summaries());
+        let titled = plain(&core.set_summaries(&json!([{ "id": "s1", "title": "List files", "updatedAt": 1 }])));
+        assert_eq!(titled[0]["state"]["chats"][0]["short"], "List");
+
+        // A prompt the phone sends makes that chat's next run start a card.
+        let send =
+            json!({ "type": "req", "id": 6, "channel": "chat:send", "args": [{ "sessionId": "s2", "text": "go" }] });
+        assert!(matches!(core.on_relay(&client(&key, "c1", send), &welcome_all).as_slice(), [Out::Dispatch { .. }]));
+        let run = json!({ "type": "text", "sessionId": "s2", "delta": "Hi" });
+        let frames = plain(&core.on_event("agent:event", &run));
+        assert_eq!(frames.last().unwrap()["type"], "card-start", "{frames:?}");
+
+        // A revoked phone stops the card.
+        core.kick_device("phone-1");
+        let after = plain(&core.on_event("agent:event", &json!({ "type": "text", "sessionId": "s3", "delta": "x" })));
+        assert!(after.iter().all(|f| f["type"] != "card" && f["type"] != "card-start"), "{after:?}");
     }
 
     mod replay {

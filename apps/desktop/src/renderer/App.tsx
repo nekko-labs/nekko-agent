@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { navOrder, moveNav } from './nav-order.js';
+import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
 import { startLiveRuns } from './liveRuns.js';
+import { useAnyAgentWorking } from './workingAgents.js';
+import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
 import { startCompactionStatus } from './compactionStatus.js';
@@ -14,27 +16,28 @@ import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { BrandMark } from './components/BrandMark.js';
 import { RailBackdrop } from './components/RailBackdrop.js';
 import { AboutNekko } from './components/AboutNekko.js';
+import { FeedbackSheet, openFeedback } from './components/FeedbackSheet.js';
+import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
-import { PixelWaveBackground, pixelWaveFor } from './components/PixelWaveBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
 import { Mascot, NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
+import { StepUpSheet } from './components/security/StepUpSheet.js';
+import { installStepUpHandler } from './stepUp.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { UpdateBanner } from './components/UpdateBanner.js';
 import { AppNotices } from './components/AppNotices.js';
 import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
-import { WorkspacesView } from './views/WorkspacesView.js';
 import { DesignBoardView } from './views/DesignBoardView.js';
 import { ArtifactsView } from './views/ArtifactsView.js';
 import { SkillsView } from './views/SkillsView.js';
 import { TrainingView } from './views/TrainingView.js';
 import { WorkflowsView } from './views/WorkflowsView.js';
 import { CommandCenterView } from './views/CommandCenterView.js';
-import { ModelsView } from './views/ModelsView.js';
-import { ModelServerView } from './views/ModelServerView.js';
+import { ModelsWorkspace } from './views/ModelsWorkspace.js';
 import { ConnectorsView } from './views/ConnectorsView.js';
 import { MemoryView } from './views/MemoryView.js';
 import { SettingsView } from './views/SettingsView.js';
@@ -42,13 +45,11 @@ import { OnboardingView } from './views/OnboardingView.js';
 import { ClaudePlanSheet } from './components/claude/ClaudeAgent.js';
 import {
   ArtifactsColorIcon,
-  CommandHudIcon,
   SkillsColorIcon,
   TrainingColorIcon,
   WorkflowsColorIcon,
   DesignColorIcon,
   ModelsColorIcon,
-  ModelServerColorIcon,
   ConnectorsColorIcon,
   MemoryColorIcon,
   SettingsColorIcon,
@@ -60,21 +61,19 @@ const AgentCatIcon = (_p: { className?: string }) => <NekkoAvatar size={22} stat
 
 const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string }) => React.JSX.Element }> = [
   { view: 'command', labelKey: 'nav.command', Icon: AgentCatIcon },
-  { view: 'chat', labelKey: 'nav.chat', Icon: CommandHudIcon },
   { view: 'artifacts', labelKey: 'nav.artifacts', Icon: ArtifactsColorIcon },
   { view: 'skills', labelKey: 'nav.skills', Icon: SkillsColorIcon },
   { view: 'training', labelKey: 'nav.training', Icon: TrainingColorIcon },
   { view: 'workflows', labelKey: 'nav.workflows', Icon: WorkflowsColorIcon },
   { view: 'design', labelKey: 'nav.design', Icon: DesignColorIcon },
   { view: 'models', labelKey: 'nav.models', Icon: ModelsColorIcon },
-  { view: 'modelserver', labelKey: 'nav.modelserver', Icon: ModelServerColorIcon },
   { view: 'connectors', labelKey: 'nav.connectors', Icon: ConnectorsColorIcon },
   { view: 'memory', labelKey: 'nav.memory', Icon: MemoryColorIcon },
   { view: 'settings', labelKey: 'nav.settings', Icon: SettingsColorIcon },
 ];
 
 /** Phone bottom-tab destinations (the remote-control essentials). */
-const MOBILE_NAV: View[] = ['command', 'chat', 'training', 'workflows', 'settings'];
+const MOBILE_NAV: View[] = ['command', 'training', 'workflows', 'settings'];
 
 export function App() {
   const { view, setView, mascotMood, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
@@ -92,16 +91,15 @@ export function App() {
       refreshTerminals: s.refreshTerminals,
     })),
   );
+  const working = useAnyAgentWorking();
   const t = useT();
 
   // Experimental surfaces only exist in the nav once their Settings flag is on.
   const [draggedNav, setDraggedNav] = useState<View | null>(null);
   const [dropNav, setDropNav] = useState<View | null>(null);
-  // The theme's moving background, unless turned off in Settings → Appearance.
-  const wave = settings?.backgroundAnimation === false ? null : pixelWaveFor(settings?.themePreset);
   const order = navOrder(NAV.map(n => n.view), settings?.navOrder);
-  const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings));
-  const activeNavIndex = visibleNav.findIndex(n => n.view === view);
+  const visibleNav = order.map(v => NAV.find(n => n.view === v)!).filter(n => viewEnabled(n.view, settings) && sidebarViewVisible(n.view, settings?.sidebarViews));
+  const activeNavIndex = visibleNav.findIndex(n => n.view === (view === 'modelserver' ? 'models' : view));
   const reorder = async (from: View, to: View) => {
     const previous = settings;
     const nextOrder = moveNav(order, from, to);
@@ -110,6 +108,9 @@ export function App() {
     catch (e) { useStore.setState({ settings: previous }); useStore.getState().pushToast('error', (e as Error).message); }
   };
   const mobileNav = MOBILE_NAV.filter((v) => viewEnabled(v, settings));
+
+  // A guarded call the computer refuses `step-up-required` opens the step-up sheet (SK-4, SK-5).
+  useEffect(() => installStepUpHandler(window.nekko), []);
 
   // If the surface you're looking at gets switched off (say from another
   // client over the same settings file), land somewhere real.
@@ -121,6 +122,7 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  useEffect(() => startSessionSummaryRefresh(refreshSessions), [refreshSessions]);
   // Take only the streams of the chats this window shows (agentSubscription.ts);
   // every chat's start, waits and end still arrive for the sidebar and board.
   useEffect(() => startAgentSubscription({ list: () => useStore.getState().sessions, watch: (fn) => useStore.subscribe(fn) }), []);
@@ -131,19 +133,6 @@ export function App() {
   useEffect(() => syncAppActivity(), []);
   // Step the looping decorations on a clock of their own, not every frame.
   useEffect(() => startDecorClock(), []);
-
-  // Archived chats past the retention window are deleted at launch and every
-  // few hours after, whichever view the app opens on, so a long-running window
-  // still lets them go on time. The list is re-read only when something went.
-  useEffect(() => {
-    const purge = () =>
-      void window.nekko.purgeExpiredArchives?.()
-        .then((n) => { if (n > 0) void useStore.getState().refreshSessions(); })
-        .catch(() => { /* an older host without the channel */ });
-    purge();
-    const t = window.setInterval(purge, 6 * 60 * 60 * 1000);
-    return () => window.clearInterval(t);
-  }, []);
 
   // Agents idle past Settings → Complete idle agents after (a month unless
   // changed) are completed: the same reversible archive the window's X does.
@@ -186,9 +175,15 @@ export function App() {
       if (SHORTCUTS.palette.matches(e)) {
         e.preventDefault();
         useStore.getState().setPaletteOpen(!useStore.getState().paletteOpen);
+      } else if (SHORTCUTS.searchChats.matches(e)) {
+        e.preventDefault();
+        useStore.setState((s) => ({ view: 'command', chatFinderOpen: s.view !== 'command' || !s.chatFinderOpen }));
       } else if (SHORTCUTS.newAgent.matches(e)) {
         e.preventDefault();
         useStore.getState().newChat();
+      } else if (SHORTCUTS.newMedia.matches(e)) {
+        e.preventDefault();
+        void useStore.getState().newImageChat().catch((error: Error) => useStore.getState().pushToast('error', error.message));
       } else if (SHORTCUTS.newTerminal.matches(e)) {
         e.preventDefault();
         useStore.getState().newTerminal();
@@ -254,13 +249,14 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: wave ? 'transparent' : 'var(--paper)' }}>
+    <div className="flex h-full w-full flex-col" style={{ background: 'var(--field, var(--paper))' }}>
       {/* With the Lilac / Lavender pixel field on, the shell stays see-through so
           the dots (drawn behind it) show in the space around the panels; the
           body still paints --paper beneath them. */}
       {/* The window's own title bar, in the desktop shell only. */}
       <ErrorBoundary label="Title bar"><TitleBar /></ErrorBoundary>
       <ErrorBoundary label="About"><AboutNekko /></ErrorBoundary>
+      <ErrorBoundary label="Feedback"><FeedbackSheet /></ErrorBoundary>
 
       {!settingsLoaded ? (
         <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
@@ -295,7 +291,7 @@ export function App() {
             {visibleNav.map(({ view: v, labelKey, Icon }, navIndex) => (
               <button
                 key={v}
-                className={`nav-item ${view === v ? 'active' : ''}`}
+                className={`nav-item ${(view === 'modelserver' ? 'models' : view) === v ? 'active' : ''}`}
                 aria-label={t(labelKey)}
                 draggable
                 title={`${t(labelKey)}. Drag to reorder, or use Alt+Up / Alt+Down.`}
@@ -320,6 +316,11 @@ export function App() {
             </div>
             </div>
             <div className="rail-space-after" aria-hidden="true" />
+            {/* Not a destination: it opens the Send feedback sheet over the current view. */}
+            <button className="nav-item rail-feedback" aria-label={t('nav.feedback')} title={t('nav.feedback')} onClick={openFeedback} data-testid="rail-feedback">
+              <span className="grid h-10 w-10 shrink-0 place-items-center text-ink-faint"><FeedbackIcon className="h-[18px] w-[18px]" /></span>
+              <span className="rail-label text-[13px] font-medium">{t('nav.feedback')}</span>
+            </button>
           </div>
         </nav>
 
@@ -331,20 +332,18 @@ export function App() {
               style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
               onClick={() => setView('models')}
             >
-              <span className="font-medium">Get started:</span> connect your first model in Model Providers →
+              <span className="font-medium">Get started:</span> connect your first model in Models →
             </button>
           )}
           <ErrorBoundary key={view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
-          {view === 'chat' && <WorkspacesView />}
           {view === 'artifacts' && <ArtifactsView />}
-          {view === 'skills' && <SkillsView />}
+          {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}
           {view === 'training' && <TrainingView />}
           {view === 'workflows' && <WorkflowsView />}
           {view === 'design' && <DesignBoardView />}
-          {view === 'models' && <ModelsView />}
-          {view === 'modelserver' && <ModelServerView />}
-          {view === 'connectors' && <ConnectorsView />}
+          {(view === 'models' || view === 'modelserver') && <ModelsWorkspace />}
+          {view === 'connectors' && <SettingsDestination><ConnectorsView /></SettingsDestination>}
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
           </ErrorBoundary>
@@ -384,16 +383,24 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
-      {wave && <PixelWaveBackground wave={wave} />}
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
       <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
       {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}
-      <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
+      <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} working={working} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
       <ErrorBoundary label="Command palette"><CommandPalette /></ErrorBoundary>
       <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
       <ErrorBoundary label="Claude plan"><ClaudePlanSheet /></ErrorBoundary>
       <ErrorBoundary label="Notifications"><Toasts /></ErrorBoundary>
+      <ErrorBoundary label="Step-up"><StepUpSheet /></ErrorBoundary>
     </div>
   );
+}
+
+/** Catalog pages remain reachable from the rail, with a clear route back to Settings. */
+function SettingsDestination({ children }: { children: React.ReactNode }) {
+  return <div className="settings-destination">
+    <div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div>
+    <div className="settings-destination-content">{children}</div>
+  </div>;
 }

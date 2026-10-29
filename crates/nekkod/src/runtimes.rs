@@ -17,6 +17,8 @@ pub const CHANNELS: &[&str] = &[
     "runtime:facts",
     "runtime:plan",
     "runtime:autoFit",
+    "runtime:place",
+    "runtime:recommend",
     "model:pull",
     "model:load",
     "model:unload",
@@ -117,8 +119,16 @@ pub async fn route(ctx: &crate::routes::Ctx, rt: &Runtimes, channel: &str, args:
     // The Models page polls status, facts and the `lms` probe. A provider
     // switched off there answers as absent, so polling never spawns `lms` or
     // touches its server (and so cannot wake a stopped LM Studio).
-    if matches!(channel, "runtime:status" | "runtime:facts" | "runtime:plan" | "runtime:autoFit" | "lms:probe")
-        && disabled(ctx, &s(0)).await
+    if matches!(
+        channel,
+        "runtime:status"
+            | "runtime:facts"
+            | "runtime:plan"
+            | "runtime:autoFit"
+            | "runtime:place"
+            | "runtime:recommend"
+            | "lms:probe"
+    ) && disabled(ctx, &s(0)).await
     {
         return Ok(match channel {
             "runtime:facts" => json!([]),
@@ -142,6 +152,8 @@ pub async fn route(ctx: &crate::routes::Ctx, rt: &Runtimes, channel: &str, args:
         "runtime:facts" => Value::Array(rt.facts(&s(0)).await),
         "runtime:plan" => rt.plan(&s(0), &s(1), arg(2)).await,
         "runtime:autoFit" => rt.auto_plan(&s(0), &s(1), arg(2), arg(3)).await,
+        "runtime:place" => rt.place(&s(0), &s(1), arg(2)).await,
+        "runtime:recommend" => rt.recommend(&s(0), &s(1), arg(2)).await,
         "model:pull" => rt.pull_model(&s(0), &s(1)).await,
         "model:load" => rt.load_model(&s(0), &s(1)).await,
         "model:unload" => rt.unload_model(&s(0), &s(1)).await,

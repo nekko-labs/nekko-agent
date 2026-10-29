@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { VoiceStatus, VoiceSettings as Preferences } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { startVoiceCapture } from '../voiceCapture.js';
 import { engineRows } from '../voiceEngines.js';
+
+const VoiceIntro = lazy(() => import('./VoiceIntro.js'));
 
 export function VoiceSettings({ compact = false }: { compact?: boolean }) {
   const settings = useStore(s => s.settings);
@@ -12,6 +14,7 @@ export function VoiceSettings({ compact = false }: { compact?: boolean }) {
   const [permission, setPermission] = useState('Not checked');
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [level, setLevel] = useState<number | null>(null);
+  const [intro, setIntro] = useState(false);
   const capture = useRef<Awaited<ReturnType<typeof startVoiceCapture>> | null>(null);
   useEffect(() => {
     let live = true;
@@ -36,6 +39,8 @@ export function VoiceSettings({ compact = false }: { compact?: boolean }) {
   return <section className={compact ? 'space-y-3' : 'card mt-5 p-5'} aria-label="Voice settings">
     <h2 className="font-semibold">Dictation</h2>
     <p className="mt-1 text-[12px] text-ink-faint">Speech models run on this computer; audio is never sent anywhere. Pick the one dictation uses.</p>
+    <button type="button" className="mt-1 text-[12px] text-(--accent) hover:underline" onClick={() => setIntro(true)}>Watch how voice works</button>
+    {intro && <Suspense fallback={null}><VoiceIntro onClose={() => setIntro(false)} /></Suspense>}
     <ul className="mt-3 space-y-1.5" aria-label="Speech engines">
       {rows.map(row => <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-line px-3 py-2">
         <div className="min-w-0 flex-1">
@@ -66,7 +71,7 @@ export function VoiceSettings({ compact = false }: { compact?: boolean }) {
       <label className="block">Speech sensitivity · {voice.sensitivity ?? 60}<input className="mt-1 w-full" type="range" min="0" max="100" value={voice.sensitivity ?? 60} onChange={e => void update({ sensitivity: Number(e.target.value) })} /></label>
       <p className="text-[11px] text-ink-faint">Higher detects quieter speech but may pick up background noise. This does not change model accuracy.</p>
       <label className="block">End utterance after silence (ms)<input className="input mt-1" type="number" min="300" max="5000" value={voice.silenceMs ?? 1200} onChange={e => void update({ silenceMs: Number(e.target.value) })} /></label>
-      <label className="flex items-center gap-2"><input type="checkbox" checked={voice.commandsEnabled !== false} onChange={e => void update({ commandsEnabled: e.target.checked })} />Enable “Nekko…” commands (preview before execution)</label>
+      <label className="flex items-center gap-2"><input type="checkbox" checked={voice.commandsEnabled !== false} onChange={e => void update({ commandsEnabled: e.target.checked })} />Enable “Nekko…” commands</label>
       {status?.engine === 'whisper' && <><label className="block">CPU threads<input className="input mt-1" type="number" min="1" max="8" value={voice.threads ?? 2} onChange={e => void update({ threads: Number(e.target.value) })} /></label>
       <label className="block">Unload speech model after idle (seconds)<input className="input mt-1" type="number" min="10" max="600" value={voice.idleSeconds ?? 60} onChange={e => void update({ idleSeconds: Number(e.target.value) })} /></label>
       </>}

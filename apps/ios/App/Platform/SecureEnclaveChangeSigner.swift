@@ -1,4 +1,5 @@
 import CryptoKit
+import CryptoTokenKit
 import Foundation
 import LocalAuthentication
 import NekkoKit
@@ -17,8 +18,12 @@ import Security
 /// the passcode", as for Allow from the Lock Screen.
 ///
 /// One check covers five minutes: the evaluated `LAContext` is reused for
-/// `reuse` seconds (and `touchIDAuthenticationAllowableReuseDuration` lets a
-/// recent unlock count), then dropped so the next Change asks again.
+/// `reuse` seconds, then dropped so the next Change asks again. A recent
+/// unlock of the phone does not count (no
+/// `touchIDAuthenticationAllowableReuseDuration`): a context that passed on
+/// that alone was refused by the Secure Enclave key (CryptoTokenKit error -5,
+/// "authentication failed"). A context the key refuses anyway is dropped and
+/// the owner asked once more.
 ///
 /// The key's Secure Enclave blob (useless off this phone) is kept in the
 /// Keychain beside the pairing material, so *Forget all computers* removes it
@@ -82,14 +87,38 @@ final class SecureEnclaveChangeSigner: ChangeSigner, @unchecked Sendable {
 
     func sign(_ message: Data) async throws -> Data {
         let ctx = try await authenticated()
-        return try lock.withLock { try load(context: ctx).sign(message) }
+        do {
+            return try lock.withLock { try load(context: ctx).sign(message) }
+        } catch let e as TKError where Self.refusedContext(e) {
+            forget(ctx)
+        }
+        let fresh = try await authenticated()
+        do {
+            return try lock.withLock { try load(context: fresh).sign(message) }
+        } catch let e as TKError where Self.refusedContext(e) {
+            forget(fresh)
+            throw ChangeRefused(code: nil, message: "Face ID or the passcode wasn’t accepted for this change. Try again.")
+        }
+    }
+
+    /// The key turned the context down: its check no longer counts.
+    private static func refusedContext(_ e: TKError) -> Bool {
+        e.code == .authenticationFailed || e.code == .authenticationNeeded
+    }
+
+    private func forget(_ ctx: LAContext) {
+        lock.withLock {
+            guard context === ctx else { return }
+            context?.invalidate()
+            context = nil
+            contextAt = nil
+        }
     }
 
     /// A context the owner unlocked within the last five minutes, asking now if there is none.
     private func authenticated() async throws -> LAContext {
         if let ctx = recent() { return ctx }
         let ctx = LAContext()
-        ctx.touchIDAuthenticationAllowableReuseDuration = Self.reuse
         var error: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
             throw ChangeRefused(code: nil, message: "Set a passcode on this iPhone to make changes on your computer from it.")

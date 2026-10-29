@@ -5,7 +5,7 @@ import { useStore, type Workspace } from '../store.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  BranchIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  BranchIcon, CheckIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
 import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
@@ -25,8 +25,9 @@ import { SessionPrLinks } from './SessionPrLinks.js';
  * place and a column of cards can be read down rather than each one decoded:
  *
  * 1. **Who and how it is.** Status dot, title, when it last replied.
- * 2. **What is running it.** Where the model comes from and which model it is
- *    ("Claude / Opus 5.5"), and how full its context window is.
+ * 2. **What is running it.** Which model it is ("Opus 5.5") and how full its
+ *    context window is, with where the model comes from ("Claude") as subtext
+ *    on the line under it, which the view menu can hide.
  * 3. **What it has shipped from where.** The branch (with the worktree glyph
  *    when it is a linked worktree), then each PR the chat made as its own
  *    link (`SessionPrLinks`). The project is not repeated: the card already
@@ -36,25 +37,25 @@ import { SessionPrLinks } from './SessionPrLinks.js';
  * Colour is load-bearing rather than decorative. Every fact carries the hue of
  * what it *is* (a branch is always the same colour, a limit is the colour of
  * how close to spent it is), so the eye can find the branch without reading.
- * A chat workspace gets an accent spine and a tinted active state; a terminal
+ * A chat card gets an accent edge and a tinted active state; a terminal
  * workspace deliberately does not, because the chat is the thing this app is
  * about and a sidebar where everything shouts says nothing.
  */
 
-export type AgentStatus = 'working' | 'input' | 'error';
+export type AgentStatus = 'working' | 'input' | 'error' | 'done' | 'idle';
 
 /** A board lane as the glyph `StatusIcon` draws: an interrupted turn is an error, any other block needs input. */
-export function agentStatusOfLane(lane: SessionLane, blocked?: BlockedReason): AgentStatus | undefined {
+export function agentStatusOfLane(lane: SessionLane, blocked?: BlockedReason, activeWatchCount = 0): AgentStatus {
   if (lane === 'working') return 'working';
-  if (lane !== 'needs-you') return undefined;
+  if (lane !== 'needs-you') return activeWatchCount > 0 ? 'idle' : 'done';
   return blocked === 'interrupted' ? 'error' : 'input';
 }
 
 /**
  * What an agent is doing, as a glyph rather than a dot, so the state reads by
  * shape before colour: a rocket in flight while it works, a question mark when
- * it is waiting on you, a warning when it stopped on an error, and "Zz" when it
- * has finished and is idle. `undefined` is the idle state.
+ * it is waiting on you, a warning when it stopped on an error, a gray check when it
+ * has finished, and "Zz" when an armed watch keeps it idle. `undefined` is done.
  */
 export function StatusIcon({ status, className = '' }: { status: AgentStatus | undefined; className?: string }) {
   const cls = `h-3 w-3 shrink-0 ${className}`;
@@ -67,8 +68,10 @@ export function StatusIcon({ status, className = '' }: { status: AgentStatus | u
   }
   if (status === 'input') {
     return (
-      <span className={`inline-grid place-items-center ${cls}`} style={{ color: 'var(--warning)' }} title="Needs your input" role="img" aria-label="Needs your input">
-        <QuestionIcon className="h-3 w-3" />
+      // Drawn larger than its slot, like the rocket, so the one state that is
+      // waiting on you stands out without pushing the title over.
+      <span className={`inline-grid place-items-center ${cls}`} style={{ color: 'var(--attention)' }} title="Needs your input" role="img" aria-label="Needs your input">
+        <QuestionIcon className="h-4 w-4" />
       </span>
     );
   }
@@ -80,8 +83,8 @@ export function StatusIcon({ status, className = '' }: { status: AgentStatus | u
     );
   }
   return (
-    <span className={`inline-grid place-items-center text-ink-faint ${cls}`} title="Done · idle" role="img" aria-label="Done, idle">
-      <SleepIcon className="h-3 w-3" />
+    <span className={`inline-grid place-items-center text-ink-faint ${cls}`} title={status === 'idle' ? 'Idle · watching' : 'Done'} role="img" aria-label={status === 'idle' ? 'Idle, watching' : 'Done'}>
+      {status === 'idle' ? <SleepIcon className="h-3 w-3" /> : <CheckIcon className="h-3 w-3" />}
     </span>
   );
 }
@@ -174,6 +177,7 @@ function WorkspaceCardImpl({
   projects,
   subAgentCount = 0,
   showMetadata = true,
+  showProvider = true,
   onOpen,
   onClose,
 }: {
@@ -191,6 +195,8 @@ function WorkspaceCardImpl({
   subAgentCount?: number;
   /** The lines under the title; off, the card is its title row alone. */
   showMetadata?: boolean;
+  /** The provider subtext under the model; off, the model line stands alone. */
+  showProvider?: boolean;
   onOpen: () => void;
   onClose: () => void | Promise<void>;
 }) {
@@ -252,37 +258,41 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* The spine: a chat workspace carries an accent edge that fills in when it
-         is the active one, so the thing this app is about is findable in a
-         column of cards without reading a word of any of them. */
-      className={`group w-full cursor-pointer rounded-lg border-l py-1.5 pl-2 pr-2 text-left transition-colors duration-150 ${
-        isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'
+      /* A chiplet: each card is its own small raised tile, so a column of them
+         reads as separate agents rather than one list. A chat's edge takes the
+         accent when it is the active one, so the thing this app is about is
+         findable without reading a word; a terminal's stays neutral. */
+      /* A card waiting on you (a question, or stopped on an error) takes the
+         active card's highlight too, so it is findable at a glance. */
+      className={`agent-chip group w-full cursor-pointer rounded-xl border px-2.5 py-1.5 text-left shadow-xs transition-colors duration-150 ${
+        isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'bg-surface hover:bg-surface-2'
       }`}
       style={{
-        borderLeftColor: isChat
-          ? isActive
-            ? 'var(--accent)'
-            : 'color-mix(in srgb, var(--accent) 30%, transparent)'
-          : 'transparent',
+        borderColor: isChat && isActive
+          ? 'color-mix(in srgb, var(--accent) 70%, transparent)'
+          : isChat && (status === 'input' || status === 'error')
+            ? 'color-mix(in srgb, var(--accent) 35%, transparent)'
+            : 'var(--line)',
       }}
+      data-agent-active={isActive || undefined}
       title={title}
     >
       <div className="flex items-center gap-1.5">
-        <StatusIcon status={status} />
+        <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
         <span className={`min-w-0 flex-1 truncate text-[13px] ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
           {title}
         </span>
-        {lastReply && !status && (
+        {lastReply && (!status || status === 'done' || status === 'idle') && (
           <time className="shrink-0 text-[10px] tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
         )}
         {/* A chat card archives rather than closes: closing used to look like
             deleting and then the chat was nowhere to be found. Archived chats
-            stay readable for 60 days. A shell has nothing to keep, so it closes. */}
+            stay readable until explicitly deleted. A shell has nothing to keep, so it closes. */}
         <button
           className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
-          title={isChat ? 'Complete this chat (kept for 60 days)' : 'Close this agent'}
+          title={isChat ? 'Complete this chat (kept until you delete it)' : 'Close this agent'}
           aria-label={isChat ? `Complete ${title}` : `Close ${title}`}
           onClick={async (e) => {
             e.stopPropagation();
@@ -298,9 +308,8 @@ function WorkspaceCardImpl({
         </button>
       </div>
 
-      {/* Line 2: what is running it: "source / model", then how full the
-          context window is. Source first because it answers "whose quota is
-          this spending" before "which model", and the two read as one fact. */}
+      {/* Line 2: what is running it: the model, then how full the context
+          window is. Where the model comes from is subtext on the next line. */}
       {showMetadata && <>
       <div className="mt-0.5 flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
         <Fact
@@ -309,9 +318,6 @@ function WorkspaceCardImpl({
           icon={isChat ? undefined : <TerminalIcon className="h-2.5 w-2.5 shrink-0" />}
           title={`${provider ? `${provider.label} / ` : ''}${session?.modelId ?? model}`}
         >
-          {provider && (
-            <span className="opacity-70">{isLocalProvider(provider.kind) ? 'Local' : provider.label} / </span>
-          )}
           {model}
         </Fact>
         {terminal && !terminal.running && (
@@ -337,6 +343,12 @@ function WorkspaceCardImpl({
           </Fact>
         )}
       </div>
+
+      {showProvider && provider && (
+        <div className="truncate pl-3 text-[10px] leading-[13px] text-ink-faint" data-card-provider>
+          {isLocalProvider(provider.kind) ? 'Local' : provider.label}
+        </div>
+      )}
 
       {/* Line 3: its git position, then the PRs it made. The project is the
           group heading the card sits under, so the card does not repeat it. */}

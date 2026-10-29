@@ -115,26 +115,26 @@ export function toDraft(wf?: Workflow): Draft {
 }
 
 /**
- * What Save sends. Cleared settings are sent as explicit `undefined` so an
- * update drops them (the host merges the patch over the stored workflow), and
- * fields that only mean something for some step kinds are dropped from others.
+ * What Save sends. Cleared settings are sent as `null`, not `undefined`: the
+ * patch reaches the daemon as JSON, which drops an `undefined` key, and the
+ * daemon only assigns the keys it receives (it reads `null` as unset). Fields
+ * that only mean something for some step kinds are dropped from others.
  */
 export function draftPatch(draft: Draft): NewWorkflow {
   const agent = (s: WorkflowStep) => s.kind === 'prompt' || s.kind === 'skill';
   return {
     name: draft.name.trim(),
-    description: draft.description.trim() || undefined,
+    description: draft.description.trim() || null,
     category: draft.category.trim() || UNCATEGORIZED,
     enabled: draft.enabled,
-    workspaceId: draft.workspaceId,
+    workspaceId: draft.workspaceId ?? null,
     notify: draft.notify,
     templateId: draft.templateId,
-    providerId: draft.providerId && draft.modelId ? draft.providerId : undefined,
-    modelId: draft.providerId && draft.modelId ? draft.modelId : undefined,
-    localModelOnly: draft.localModelOnly || undefined,
-    toolAccess: draft.toolAccess === 'workspace' ? undefined : draft.toolAccess,
-    prCheckout: draft.prCheckout || undefined,
-    // `null`, not `undefined`: the patch reaches the daemon as JSON, which drops an `undefined` key.
+    providerId: draft.providerId && draft.modelId ? draft.providerId : null,
+    modelId: draft.providerId && draft.modelId ? draft.modelId : null,
+    localModelOnly: draft.localModelOnly || null,
+    toolAccess: draft.toolAccess === 'workspace' ? null : draft.toolAccess,
+    prCheckout: draft.prCheckout || null,
     runPolicy: draft.runPolicy ?? null,
     steps: draft.steps.map((s) => {
       const { providerId, modelId, allowedTools, args, ...rest } = s;

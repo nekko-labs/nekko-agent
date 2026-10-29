@@ -1,7 +1,7 @@
 {
   "authorizeUrls": [
     {
-      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code."
+      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or choose Claude, then Subscription, to run your installed Claude Code."
     },
     {
       "value": "\"https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid+profile+email+offline_access&code_challenge=c%21*%27%28%29%7E&code_challenge_method=S256&state=%C3%A9+%C3%BC%26\""
@@ -47,7 +47,7 @@
   ],
   "exchangeRequests": [
     {
-      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code."
+      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or choose Claude, then Subscription, to run your installed Claude Code."
     },
     {
       "value": "{\"url\":\"https://auth.openai.com/oauth/token\",\"headers\":{\"Content-Type\":\"application/x-www-form-urlencoded\",\"Accept\":\"application/json\"},\"body\":\"grant_type=authorization_code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&code=c+d%26e&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&code_verifier=v%7E\"}"
@@ -108,7 +108,7 @@
   ],
   "refreshRequests": [
     {
-      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or connect Claude Agent to run your installed Claude Code."
+      "error": "Nekko Agent cannot sign in to Claude plans. Use Claude with an API key or a cloud account, or choose Claude, then Subscription, to run your installed Claude Code."
     },
     {
       "value": "{\"url\":\"https://auth.openai.com/oauth/token\",\"headers\":{\"Content-Type\":\"application/x-www-form-urlencoded\",\"Accept\":\"application/json\"},\"body\":\"grant_type=refresh_token&client_id=app_EMoamEEZ73f0CkXaXp7hrann&refresh_token=r+%3D%26\"}"

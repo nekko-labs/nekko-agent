@@ -68,6 +68,10 @@ data class ComputersState(
     val lastError: String? = null,
     /** When the list on screen is the phone's saved copy, when it was saved; null once the computer answers. */
     val savedListAt: Long? = null,
+    /** The computer lets a phone quit Nekko Agent there (`app:info` `quitFromPhone`, SK-3); false until it says. */
+    val quitFromPhone: Boolean = false,
+    /** When this phone stopped remote access on the active computer (SK-8); null otherwise. */
+    val remoteStoppedAt: Long? = null,
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
 }

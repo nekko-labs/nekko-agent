@@ -168,7 +168,11 @@ impl Installs {
                 if runtime == "mlx" { self.mlx.uninstall() } else { self.installer(runtime).uninstall() }
             }
             "engine:detect" => self.detect(text(0).unwrap_or("llama")).await,
-            "engine:installedBin" => json!(self.llama.installed_bin().await),
+            // Without the GPU probe, so the tray can ask every few seconds.
+            "engine:installedBin" => match text(0).unwrap_or("llama") {
+                "mlx" => json!(self.mlx.bin_path().await),
+                runtime => json!(self.installer(runtime).installed_bin().await),
+            },
             other => return Err(format!("{other} is not an install channel")),
         })
     }

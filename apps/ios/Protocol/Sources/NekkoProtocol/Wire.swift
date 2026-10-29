@@ -8,10 +8,20 @@ public enum Channels {
     /// Only the phone-settable keys (`PHONE_SETTINGS_KEYS`); anything else is refused.
     public static let settingsUpdate = "settings:update"
     public static let providersList = "providers:list"
+    /// Provider setup from a phone (decision 0016): the computer's sealing key, a sealed save, one provider's switch.
+    public static let providersSealKey = "providers:sealKey"
+    public static let providersSaveSealed = "providers:saveSealed"
+    public static let providersSetEnabled = "providers:setEnabled"
     public static let modelsList = "models:list"
     public static let sessionsSummaries = "sessions:summaries"
     public static let sessionCreate = "session:create"
     public static let sessionGet = "session:get"
+    /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
+    public static let sessionWatches = "session:watches"
+    /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
+    public static let machineSummary = "machine:summary"
+    /// The Monitors pane's one read (`PHONE_MONITOR_VIEW`), added on the computer in #989.
+    public static let monitorSummary = "monitor:summary"
     public static let sessionSetOptions = "session:setOptions"
     public static let sessionDelete = "session:delete"
     public static let voiceStatus = "voice:status"
@@ -24,7 +34,15 @@ public enum Channels {
     public static let chatAnswer = "chat:answer"
     public static let toolApprove = "tool:approve"
     public static let workspaceList = "workspace:list"
+    public static let workspaceAddByPath = "workspace:addByPath"
+    public static let workspaceRemove = "workspace:remove"
     public static let appInfo = "app:info"
+    /// SK-2: a single-use step-up challenge (read class).
+    public static let securityChallenge = "security:challenge"
+    /// SK-3 safety exits (agent class, never refused for Change off).
+    public static let appQuit = "app:quit"
+    public static let deviceSignOut = "device:signOut"
+    public static let remoteStop = "remote:stop"
     /// Names and descriptions only, never templates.
     public static let skillsRunnable = "skills:runnable"
     /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
@@ -47,6 +65,9 @@ public enum Channels {
     /// *Send a test notification*: answered by the computer's relay agent itself,
     /// so it is not on the phone allowlist (`PUSH_TEST_CHANNEL`) and not in `all`.
     public static let pushTest = "push:test"
+    /// The Live Activity card's level, focus or dismissal (`{ level?, focus?, dismiss? }`):
+    /// answered by the relay agent itself, like `pushTest`. Computers from before it refuse it.
+    public static let cardSet = "card:set"
 
     /// Git on a chat's folder (IO-33 FA-2, `Git.swift`). Reads: status, diffs,
     /// history, a commit, branches, compare, a PR's checks and diff.
@@ -86,18 +107,29 @@ public enum Channels {
     public static let logsRead = "logs:read"
     /// The change-class channels among these.
     public static let filesChange: Set<String> = [filesWrite]
+    /// What the agent linked in a chat (#1095), read only: a linked file, or a file a
+    /// linked page loads from its folder, and a GET/HEAD to a linked local preview server.
+    public static let artifactRead = "artifact:read"
+    public static let previewFetch = "preview:fetch"
+    /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
+    public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange)
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove])
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
+        chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
-        usageSummary, limitsGet,
+        usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
+        providersSealKey, providersSaveSealed, providersSetEnabled,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
+        // The Expert monitor and a chat's context gauge (Monitor.swift).
+        MonitorChannels.systemStats, MonitorChannels.gpuStats, MonitorChannels.engineStatus, MonitorChannels.contextPreview,
+        MonitorChannels.modelUnload,
+        artifactRead, previewFetch,
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
         TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
@@ -114,6 +146,127 @@ public enum Events {
 public let autoModelId = "__auto__"
 
 // MARK: - Models
+
+/// One durable `agent_watch` of a chat as the computer reports it
+/// (`PHONE_WATCH_VIEW`): joined to the arming call by `id`.
+public struct AgentWatch: Equatable, Sendable, Identifiable {
+    public enum Kind: String, Sendable { case timer, pr }
+    public enum Status: String, Sendable { case active, done, cancelled, error }
+    public let id: String
+    public let kind: Kind
+    public let url: String?
+    public let status: Status
+    /// Timer: when it wakes. PR: the latest it waits before waking anyway. Milliseconds since the epoch.
+    public let deadlineAt: Int64
+    /// A wake-up is due but the chat has not been continued yet (busy or failing).
+    public let pending: Bool
+    public let failures: Int
+    public let lastError: String?
+
+    public init(id: String, kind: Kind, url: String? = nil, status: Status, deadlineAt: Int64, pending: Bool = false, failures: Int = 0, lastError: String? = nil) {
+        self.id = id
+        self.kind = kind
+        self.url = url
+        self.status = status
+        self.deadlineAt = deadlineAt
+        self.pending = pending
+        self.failures = failures
+        self.lastError = lastError
+    }
+
+    public static func list(_ v: JSONValue?) -> [AgentWatch] {
+        (v?.array ?? []).compactMap { w in
+            guard let id = w.str("id"), let kind = w.str("kind").flatMap(Kind.init(rawValue:)),
+                  let status = w.str("status").flatMap(Status.init(rawValue:)), let deadline = w.long("deadlineAt") else { return nil }
+            return AgentWatch(id: id, kind: kind, url: w.str("url"), status: status, deadlineAt: deadline, pending: w.flag("pending"),
+                              failures: Int(w.long("failures") ?? 0), lastError: w.str("lastError"))
+        }
+    }
+}
+
+/// What a computer says about itself for its page (`machine:summary`): the
+/// daemon builds it without paths or addresses, and the phone shows it as is.
+public struct MachineSummary: Equatable, Sendable {
+    public struct Gpu: Equatable, Sendable, Identifiable {
+        public let name: String
+        public let vramBytes: Double?
+        public let cores: Int?
+        public var id: String { name }
+    }
+    public struct ResidentModel: Equatable, Sendable, Identifiable {
+        public let id: String
+        public let name: String
+        public let contextTokens: Int?
+    }
+
+    public let version: String?
+    public let platform: String?
+    public let edition: String?
+    public let uptimeMs: Int64
+    public let arch: String?
+    public let release: String?
+    public let cpuModel: String?
+    public let cpuCores: Int?
+    public let ramBytes: Double?
+    public let unified: Bool
+    public let gpus: [Gpu]
+    public let backends: [String]
+    public let engineBackend: String?
+    public let engineVersion: String?
+    public let diskFreeBytes: Double?
+    public let cpuPct: Double?
+    public let memUsedMB: Double?
+    public let memTotalMB: Double?
+    public let cpuC: Double?
+    public let gpuC: Double?
+    public let gpuUsedMB: Double?
+    public let gpuTotalMB: Double?
+    public let serverRunning: Bool
+    public let serverStartedAt: Int64?
+    public let resident: [ResidentModel]
+    public let loading: Int
+
+    public static func from(_ v: JSONValue?) -> MachineSummary? {
+        guard let v, v.object != nil else { return nil }
+        let hw = v["hardware"], live = v["live"], gpu = v["gpu"], engine = v["engine"]
+        let gpus: [Gpu] = (hw?["gpus"]?.array ?? []).compactMap { g in
+            g.str("name").map { Gpu(name: $0, vramBytes: g.dbl("vramBytes"), cores: g.long("cores").map(Int.init)) }
+        }
+        let resident: [ResidentModel] = (engine?["resident"]?.array ?? []).compactMap { m in
+            m.str("id").map { ResidentModel(id: $0, name: m.str("name") ?? $0, contextTokens: m.long("contextTokens").map(Int.init)) }
+        }
+        // The hottest GPU the profile reports, else the system sensor.
+        let gpuC = (gpu?["devices"]?.array ?? []).compactMap { $0.dbl("temperatureC") }.max() ?? live?["temps"]?.dbl("gpuC")
+        return MachineSummary(
+            version: v.str("version"), platform: v.str("platform"), edition: v.str("edition"), uptimeMs: v.long("uptimeMs") ?? 0,
+            arch: hw?.str("arch"), release: hw?.str("release"), cpuModel: hw?["cpu"]?.str("model") ?? live?.str("cpuModel"),
+            cpuCores: (hw?["cpu"]?.long("cores") ?? live?.long("cpuCores")).map(Int.init), ramBytes: hw?.dbl("ramBytes"),
+            unified: (hw?.flag("unified") ?? false) || (gpu?.flag("unified") ?? false), gpus: gpus,
+            backends: (hw?["backends"]?.array ?? []).compactMap(\.string),
+            engineBackend: hw?["engine"]?.str("backend"), engineVersion: hw?["engine"]?.str("version"), diskFreeBytes: hw?.dbl("diskFreeBytes"),
+            cpuPct: live?.dbl("cpuPct"), memUsedMB: live?.dbl("memUsedMB"), memTotalMB: live?.dbl("memTotalMB"),
+            cpuC: live?["temps"]?.dbl("cpuC"), gpuC: gpuC, gpuUsedMB: gpu?.dbl("usedMB"), gpuTotalMB: gpu?.dbl("totalMB"),
+            serverRunning: engine?.flag("running") ?? false, serverStartedAt: engine?.long("startedAt"), resident: resident,
+            loading: Int(engine?.long("loading") ?? 0))
+    }
+}
+
+/// `providers:saveSealed` and `providers:setEnabled` as the computer answers
+/// them: whether it worked, why not, and the models a saved provider offers.
+public struct ProviderSaveResult: Equatable, Sendable {
+    public struct Model: Equatable, Sendable, Identifiable {
+        public let id: String
+        public let name: String
+    }
+    public let ok: Bool
+    public let message: String?
+    public let models: [Model]
+
+    public static func from(_ v: JSONValue?) -> ProviderSaveResult {
+        let models: [Model] = (v?["models"]?.array ?? []).compactMap { m in m.str("id").map { Model(id: $0, name: m.str("name") ?? $0) } }
+        return ProviderSaveResult(ok: v?.flag("ok") ?? false, message: v?.str("message"), models: models)
+    }
+}
 
 public struct ToolCall: Equatable, Sendable {
     public let id: String
@@ -212,6 +365,8 @@ public struct Session: Equatable, Sendable {
     public var clientMessageIds: [String] = []
     /// A turn is running on the computer (`activeRun`): a prompt waits in its queue.
     public var running = false
+    /// The chat's effort (`EffortLevel`); nil follows the computer's setting.
+    public var effort: String?
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -225,7 +380,8 @@ public struct Session: Equatable, Sendable {
             updatedAt: v.long("updatedAt") ?? 0,
             queued: QueuedPrompt.list(v["queue"]),
             clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
-            running: v["activeRun"].map { !$0.isNull } ?? false)
+            running: v["activeRun"].map { !$0.isNull } ?? false,
+            effort: v.str("effort"))
     }
 }
 
@@ -248,6 +404,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     /// Manual position from the desktop sidebar's drag order.
     public let order: Double?
     public var pinned: Bool
+    public let activeWatchCount: Int64
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -260,7 +417,12 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             lastReplyText: v.str("lastReplyText"), firstUserText: v.str("firstUserText"), archived: archivedAt != nil,
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
-            order: v.dbl("order"), pinned: v.flag("pinned"))
+            order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0)
+    }
+
+    /// Every chat the computer listed, children and task chats included, as sent.
+    public static func list(_ list: JSONValue?) -> [SessionSummary] {
+        (list?.array ?? []).compactMap(from)
     }
 
     /// Every top-level chat, completed ones included, newest first.
@@ -318,6 +480,9 @@ public struct PublicProvider: Equatable, Sendable, Identifiable {
             return PublicProvider(id: id, kind: p.str("kind") ?? "", label: p.str("label") ?? id, enabled: p.flag("enabled"))
         }
     }
+
+    /// A model server on a computer (`LOCAL_PROVIDER_KINDS`, packages/shared/src/models.ts), not a cloud API.
+    public var isLocal: Bool { ["llamacpp", "ollama", "lmstudio", "vllm"].contains(kind) }
 }
 
 /// The settings fields the phone reads (`settings:get` returns the phone view only).
@@ -345,6 +510,7 @@ public struct PcSettings: Equatable, Sendable {
     public enum ChatMode: String, CaseIterable, Sendable { case ask, guardrails, yolo }
     public enum ChatAction: String, CaseIterable, Sendable { case complete, delete }
 
+    public var effort: Effort?
     public var defaultChatMode: ChatMode?
     public var chatPaneAction: ChatAction?
     public var skipDeleteConfirmation: Bool?
@@ -358,9 +524,10 @@ public struct PcSettings: Equatable, Sendable {
     /// The computer's automations are paused (set on the computer only).
     public var automationsPaused: Bool
 
-    public init(defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
+    public init(effort: Effort? = nil, defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
                 known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false, prompts: [SavedPrompt] = [],
                 automationsPaused: Bool = false) {
+        self.effort = effort
         self.defaultChatMode = defaultChatMode
         self.chatPaneAction = chatPaneAction
         self.skipDeleteConfirmation = skipDeleteConfirmation
@@ -378,7 +545,8 @@ public struct PcSettings: Equatable, Sendable {
 
     public static func from(_ v: JSONValue?) -> PcSettings {
         guard let v, v.object != nil else { return PcSettings() }
-        return PcSettings(defaultChatMode: v.str("defaultChatMode").flatMap(ChatMode.init(rawValue:)),
+        return PcSettings(effort: v.str("effort").flatMap(Effort.init(rawValue:)),
+                          defaultChatMode: v.str("defaultChatMode").flatMap(ChatMode.init(rawValue:)),
                           chatPaneAction: v.str("chatPaneAction").flatMap(ChatAction.init(rawValue:)),
                           skipDeleteConfirmation: v["skipDeleteConfirmation"]?.bool, known: true,
                           voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"),
@@ -530,21 +698,28 @@ public struct WorkspaceFolder: Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
 
-    public init(id: String, name: String) {
+    public let path: String?
+
+    public init(id: String, name: String, path: String? = nil) {
         self.id = id
         self.name = name
+        self.path = path
     }
 
     public static func list(_ v: JSONValue?) -> [WorkspaceFolder] {
-        (v?.array ?? []).compactMap { w in w.str("id").map { WorkspaceFolder(id: $0, name: w.str("name") ?? "Folder") } }
+        (v?.array ?? []).compactMap { w in w.str("id").map { WorkspaceFolder(id: $0, name: w.str("name") ?? "Folder", path: w.str("path")) } }
     }
 }
 
 public struct AppInfo: Equatable, Sendable {
     public let version: String?
     public let platform: String?
+    /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
+    public var quitFromPhone = false
 
-    public static func from(_ v: JSONValue?) -> AppInfo { AppInfo(version: v?.str("version"), platform: v?.str("platform")) }
+    public static func from(_ v: JSONValue?) -> AppInfo {
+        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false)
+    }
 }
 
 public struct VoiceInstall: Equatable, Sendable {

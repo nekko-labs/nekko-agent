@@ -13,7 +13,7 @@
  * between a wrapper and a model server.
  */
 
-import type { FitVerdict, KvCacheDtype } from './capacity.js';
+import type { FitVerdict, KvCacheDtype, SplitPreset, WeightLayout } from './capacity.js';
 import { ENGINE_PORT_DEFAULT } from './models.js';
 import type { ResidentModel } from './runtimes.js';
 
@@ -541,6 +541,8 @@ export interface LocalModel {
   kvHeads?: number;
   headDim?: number;
   maxContext?: number;
+  /** What the weights are made of, read from the tensor table. */
+  weightLayout?: WeightLayout;
   /**
    * The GGUF embeds `tokenizer.chat_template`, so llama.cpp can prompt it with
    * no sidecar. Absent templates fall back to a template file beside the model.
@@ -566,6 +568,8 @@ export interface LocalModel {
  * optional, absent meaning "decide from the budget" rather than "use zero".
  */
 export interface EngineLoadPreset {
+  /** Local model reasoning. Default on; configurable only under Expert. */
+  thinking?: boolean;
   contextTokens?: number;
   gpuLayers?: number;
   kvCacheDtype?: KvCacheDtype;
@@ -582,7 +586,15 @@ export interface EngineLoadPreset {
   speculative?: boolean;
   draftModelId?: string;
   ttlSeconds?: number;
-  /** The simple slider's position, kept so the two surfaces stay one state. */
+  cpuMoeLayers?: number;
+  cpuFfnLayers?: number;
+  moeCacheMiB?: number;
+  kvOnGpu?: boolean;
+  lazyTables?: boolean;
+  threadsBatch?: number;
+  /** Which Hybrid preset produced these settings, so the drawer reopens on it. */
+  splitPreset?: SplitPreset;
+  /** The old simple slider's position. Read for presets saved before the meter. */
   budgetFraction?: number;
   diffusion?: { clip_l?: string; clip_g?: string; t5xxl?: string; vae?: string; llm?: string; taesd?: string; standalone?: boolean; offloadToCpu?: boolean; clipOnCpu?: boolean };
 }

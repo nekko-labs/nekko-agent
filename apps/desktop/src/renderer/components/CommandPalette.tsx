@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore, viewEnabled, type View } from '../store.js';
 import { SHORTCUTS } from '../shortcuts.js';
 import { Modal } from './primitives/index.js';
+import { openFeedback } from './FeedbackSheet.js';
 
 interface Command {
   id: string;
@@ -36,16 +37,16 @@ export function CommandPalette() {
     return [
       { id: 'new-chat', label: 'New agent', hint: SHORTCUTS.newAgent.label, run: () => newChat() },
       { id: 'new-terminal', label: 'New terminal', hint: SHORTCUTS.newTerminal.label, run: () => newTerminal() },
-      go('chat', 'Go to Chat'),
       go('artifacts', 'Go to Artifacts'),
       go('skills', 'Go to Skills'),
-      go('models', 'Go to Model Providers'),
+      go('models', 'Go to Models'),
       go('modelserver', 'Go to Model Server'),
       go('connectors', 'Go to Connectors'),
       // Experimental destinations stay out of the palette while their flag is off.
       ...(viewEnabled('memory', settings) ? [go('memory', 'Go to Memory')] : []),
       go('settings', 'Go to Settings'),
       { id: 'toggle-context', label: 'Toggle context panel', run: () => toggleContextPanel() },
+      { id: 'feedback', label: 'Send feedback', hint: 'Help', run: openFeedback },
       // Only when there is a daemon to reach: an entry that can only fail is
       // worse than no entry. Connected, it is the way back to the tab.
       ...(hypergate
