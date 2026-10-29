@@ -267,7 +267,11 @@ mod tests {
         assert_eq!(keys, ["id", "title", "status", "kind", "createdAt", "updatedAt"]);
         // Verify fails: Build is picked up again (pass 2), then again (pass 3).
         let current = json!(plan);
-        let again = apply(Some(&current), json!({"steps":[{"id":"step_2","status":"active"},{"id":"step_3","status":"pending"}]}), 20);
+        let again = apply(
+            Some(&current),
+            json!({"steps":[{"id":"step_2","status":"active"},{"id":"step_3","status":"pending"}]}),
+            20,
+        );
         assert_eq!(again[1]["pass"], 2);
         assert!(again[2].get("pass").is_none());
         let current = json!(again);
