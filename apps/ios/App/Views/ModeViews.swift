@@ -4,15 +4,20 @@ import SwiftUI
 
 // MARK: - Simple and Expert
 
-/// Simple or Expert, at the left of the slim row under the title of a chat and
-/// of the chats list: a chat bubble for Simple and code brackets for Expert.
+/// Simple or Expert, in the floating pill of a chat and of the chats list: a
+/// chat bubble for Simple and code brackets for Expert.
 /// Simple hides the controls Settings > Simple mode keeps to Expert.
 struct ModeToggle: View {
+    /// Stacked, in the pill docked at a side.
+    var vertical = false
     @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
+    /// The pill is being dragged: the touch that lifted it doesn't also flip the mode.
+    @Environment(\.pillMoving) private var moving
 
     var body: some View {
-        HStack(spacing: 0) {
+        let layout = vertical ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+        layout {
             segment(expert: false)
             segment(expert: true)
         }
@@ -25,7 +30,7 @@ struct ModeToggle: View {
 
     private func segment(expert: Bool) -> some View {
         let on = prefs.expertMode == expert
-        return Button { prefs.expertMode = expert } label: {
+        return Button { if !moving { prefs.expertMode = expert } } label: {
             Image(systemName: Self.icon(expert: expert))
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(on ? palette.onAccent : palette.inkSoft)
@@ -579,52 +584,7 @@ struct HardwareDials: View {
     }
 }
 
-/// The slim row under the title, in a chat and in the chats list: the Simple
-/// and Expert switch on the left, the minimal monitor on the right while the
-/// hardware item shows, and a hairline under it. It slides down from under
-/// the title as the screen opens, and the monitor slides in when it appears.
-struct ModeRow: View {
-    /// The minimal monitor, when it shows.
-    var monitor: HardwareMonitorModel?
-    var openMonitor: () -> Void = {}
-    @Environment(\.palette) private var palette
-    @Environment(\.displayScale) private var scale
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var out = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                ModeToggle()
-                Spacer(minLength: 8)
-                if let monitor {
-                    MiniMonitor(monitor: monitor, open: openMonitor)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 32)
-            .padding(.bottom, 4)
-            .offset(y: out ? 0 : -36)
-            .opacity(out ? 1 : 0)
-            .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.12), value: monitor != nil)
-            Rectangle().fill(palette.line).frame(height: 1 / scale).accessibilityHidden(true)
-        }
-        // The ground's own colour at the top of the screen, so the row reads as part of the title area.
-        .background { RowGround() }
-        // Tucked under the title: its shadow falls on the row's top edge.
-        .overlay(alignment: .top) {
-            LinearGradient(colors: [.black.opacity(0.05), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 6).allowsHitTesting(false).accessibilityHidden(true)
-        }
-        .clipped()
-        .onAppear {
-            if reduceMotion { out = true } else { withAnimation(.spring(duration: 0.45, bounce: 0.15)) { out = true } }
-        }
-    }
-}
-
-/// The colour at the top of `AppBackdrop`, solid, behind the slim row and the search row.
+/// The colour at the top of `AppBackdrop`, solid, behind the chats list's search row.
 struct RowGround: View {
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var scheme
@@ -635,11 +595,13 @@ struct RowGround: View {
 }
 
 /// The computer's hardware at a glance: thin rings with their percentages,
-/// and how many models the Model Server holds. Tap for the agent's panel;
-/// hover over a gauge, or touch and hold it, for its reading in full.
+/// and how many models the Model Server holds. Tap for the agent's details;
+/// hover over a gauge with a pointer for its reading in full.
 struct MiniMonitor: View {
     let monitor: HardwareMonitorModel
     var open: () -> Void
+    /// Each gauge a ring over its percentage, stacked, in the pill docked at a side.
+    var vertical = false
     @Environment(\.palette) private var palette
     /// The gauge whose tooltip is open: a row's label, or `models`.
     @State private var tip: String?
@@ -652,14 +614,15 @@ struct MiniMonitor: View {
     var body: some View {
         let rows = Array(HardwareDials.rows(monitor).prefix(3))
         let count = monitor.engine?.resident.count ?? 0
-        HStack(spacing: 10) {
+        let layout = vertical ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        layout {
             if monitor.system == nil && monitor.gpu == nil {
                 Text(monitor.error == nil ? LocalizedStringKey("Reading…") : "No readings").font(.caption2).foregroundStyle(palette.inkFaint)
             } else {
                 ForEach(rows, id: \.label) { row in tipped(row.label) { gauge(row) } }
             }
             tipped(Self.models) {
-                HStack(spacing: 3) {
+                (vertical ? AnyLayout(VStackLayout(spacing: 2)) : AnyLayout(HStackLayout(spacing: 3))) {
                     Image(systemName: "cube").font(.caption2)
                     Text("\(count)").font(.caption2.monospacedDigit())
                 }
@@ -690,23 +653,19 @@ struct MiniMonitor: View {
         .accessibilityIdentifier("chat.monitor")
     }
 
-    /// A gauge that opens its tooltip on hover (a pointer) or touch and hold.
+    /// A gauge that opens its tooltip on hover (a pointer). Touch and hold moves the pill instead.
     private func tipped(_ id: String, @ViewBuilder _ content: () -> some View) -> some View {
         content()
             .contentShape(Rectangle())
             .onHover { inside in
                 if inside { tip = id } else if tip == id { tip = nil }
             }
-            .onLongPressGesture(minimumDuration: 0.35) {
-                Haptics.tap()
-                tip = id
-            }
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { frames[id] = $0 }
     }
 
     private func gauge(_ row: HardwareDials.Row) -> some View {
         let tone: Color = palette.tone(MonitorTone.of(row.fraction))
-        return HStack(spacing: 4) {
+        return (vertical ? AnyLayout(VStackLayout(spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))) {
             ZStack {
                 Circle().stroke(palette.surface2, lineWidth: 2)
                 Circle().trim(from: 0, to: row.fraction ?? 0)
@@ -809,59 +768,7 @@ struct MonitorFollow: ViewModifier {
     }
 }
 
-/// A panel that slides down from under the title: swipe it up, or tap
-/// outside it, to put it away.
-struct TopPanel<Panel: View>: ViewModifier {
-    @Binding var isPresented: Bool
-    @ViewBuilder var panel: () -> Panel
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var drag: CGFloat = 0
-
-    func body(content: Content) -> some View {
-        content.overlay(alignment: .top) {
-            ZStack(alignment: .top) {
-                if isPresented {
-                    Color.black.opacity(0.25)
-                        .onTapGesture { close() }
-                        .accessibilityLabel("Close")
-                        .accessibilityAddTraits(.isButton)
-                        .transition(.opacity)
-                    VStack(spacing: 0) {
-                        panel()
-                        Capsule().fill(palette.inkFaint.opacity(0.5)).frame(width: 36, height: 5)
-                            .frame(maxWidth: .infinity, minHeight: 24)
-                            .contentShape(Rectangle())
-                            .accessibilityHidden(true)
-                    }
-                    .background(palette.paper, in: UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22))
-                    .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
-                    .offset(y: min(0, drag))
-                    .simultaneousGesture(DragGesture(minimumDistance: 12)
-                        .onChanged { v in if v.translation.height < 0 { drag = v.translation.height } }
-                        .onEnded { v in
-                            if v.translation.height < -60 || v.predictedEndTranslation.height < -160 { close() }
-                            withAnimation(.snappy) { drag = 0 }
-                        })
-                    .accessibilityAction(.escape) { close() }
-                    .transition(.move(edge: .top))
-                }
-            }
-            .clipped()
-            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: isPresented)
-        }
-    }
-
-    private func close() { isPresented = false }
-}
-
-extension View {
-    func topPanel<Panel: View>(isPresented: Binding<Bool>, @ViewBuilder panel: @escaping () -> Panel) -> some View {
-        modifier(TopPanel(isPresented: isPresented, panel: panel))
-    }
-}
-
-/// The agent's details, in the panel that slides down from the title: the
+/// The agent's details, in the card the pill expands into: the
 /// hardware with temperatures, the models the Model Server holds (with
 /// Unload), and this chat's model, effort and context.
 struct AgentPanel: View {

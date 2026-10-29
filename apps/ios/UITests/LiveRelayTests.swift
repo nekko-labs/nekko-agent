@@ -582,14 +582,22 @@ final class LiveRelayTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(4))
         attach(app, "modes-3-expert")
         auditAccessibility(app, "modes-expert")
-        // Touch and hold a gauge: its reading in full, with Details into the panel.
-        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).press(forDuration: 0.6)
-        let details = app.buttons["monitor.tip.details"]
-        XCTAssertTrue(details.waitForExistence(timeout: 5), "holding a gauge opens its tooltip")
+        // Touch and hold the pill, drag it to the right edge: it docks there, its gauges stacked.
+        let window = app.windows.firstMatch
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.7, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.4)))
         settle()
-        attach(app, "modes-3b-gauge-tip")
-        details.tap()
-        // The agent's panel slides down from under the title.
+        XCTAssertGreaterThan(panel.frame.midX, window.frame.width * 0.7, "the pill docks on the right")
+        XCTAssertGreaterThan(panel.frame.height, panel.frame.width, "docked at a side, the gauges stack")
+        attach(app, "modes-3b-docked-right")
+        // And back under the bar, across.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.7, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.14)))
+        settle()
+        XCTAssertLessThan(panel.frame.height, panel.frame.width, "back across the top")
+        // A tap opens the pill into the agent's details.
+        panel.tap()
+        // The pill opens into the agent's details.
         // A list section header can read in capitals, so match its identifier or its words in any case.
         let models = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier == %@ OR label ==[c] %@", "monitor.models", "Loaded models")).firstMatch

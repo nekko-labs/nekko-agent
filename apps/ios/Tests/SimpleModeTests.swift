@@ -127,6 +127,36 @@ final class SimpleModeTests: XCTestCase {
         XCTAssertEqual(EffortSlider.index(at: 10, count: 4, width: 0), 0)
     }
 
+    func testThePillSettlesAtAnEdgeAcrossOrBackUnderTheBar() {
+        // A 400 pt wide screen; the pill's centre travels from y 30 to 630.
+        func drop(_ x: CGFloat, _ y: CGFloat) -> PillPlacement { .drop(center: CGPoint(x: x, y: y), width: 400, minY: 30, maxY: 630) }
+        XCTAssertEqual(drop(40, 330), PillPlacement(dock: .leading, y: 0.5))
+        XCTAssertEqual(drop(380, 30), PillPlacement(dock: .trailing, y: 0))
+        XCTAssertEqual(drop(200, 90), .standard, "within 72 pt of its place under the bar it snaps back")
+        XCTAssertEqual(drop(200, 330), PillPlacement(dock: .across, y: 0.5))
+        XCTAssertEqual(drop(200, 900), PillPlacement(dock: .across, y: 1), "below the space it stops at the bottom")
+        XCTAssertEqual(drop(-50, -50), PillPlacement(dock: .leading, y: 0))
+    }
+
+    func testThePillPlacementRoundTripsAndIgnoresBadValues() {
+        let p = PillPlacement(dock: .trailing, y: 0.25)
+        XCTAssertEqual(PillPlacement.parse(p.encoded), p)
+        XCTAssertEqual(PillPlacement.parse(nil), .standard)
+        XCTAssertEqual(PillPlacement.parse("sideways:0.5"), .standard)
+        XCTAssertEqual(PillPlacement.parse("leading:nan"), .standard)
+        XCTAssertEqual(PillPlacement.parse("leading:7"), PillPlacement(dock: .leading, y: 1))
+        XCTAssertTrue(PillPlacement.standard.isStandard)
+        XCTAssertFalse(PillPlacement(dock: .across, y: 0.4).isStandard)
+    }
+
+    func testThePillScrollsAwayOnTheWayOnAndBackOnTheWayBack() {
+        XCTAssertEqual(PillScrollHide.next(hidden: true, from: 40, to: 2, scrolling: false), false, "at the top it always shows")
+        XCTAssertEqual(PillScrollHide.next(hidden: false, from: 100, to: 140, scrolling: true), true)
+        XCTAssertEqual(PillScrollHide.next(hidden: true, from: 140, to: 100, scrolling: true), false)
+        XCTAssertNil(PillScrollHide.next(hidden: false, from: 100, to: 140, scrolling: false), "streamed output moving the view leaves it")
+        XCTAssertNil(PillScrollHide.next(hidden: false, from: 100, to: 103, scrolling: true), "a few points is not a scroll")
+    }
+
     func testIdsMatchThePhoneItemsOfTheDesktopList() {
         XCTAssertEqual(SimpleMode.items.map(\.id),
                        ["changes", "hardware", "ph-subtitle", "model", "effort", "context", "ph-policy", "thinking", "ph-git", "terminal", "ph-monitors"])

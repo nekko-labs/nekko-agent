@@ -7,7 +7,7 @@ Nekko Agent has two modes. **Simple** is the everyday app: you pick a model, typ
 The switch has two icons: a chat bubble for Simple and angle brackets for Expert.
 
 - **Desktop:** in the title bar, beside the page name.
-- **iPhone and Android:** in the slim row under the top bar, in a chat and in the chats list.
+- **iPhone and Android:** in the floating pill just under the top bar, in a chat and in the chats list.
 
 Each computer and phone remembers its own mode. A new install starts in Simple.
 
@@ -46,6 +46,7 @@ On the desktop, the row under the message box (folder, model, effort, context, c
 ## On the phones
 
 - **Effort** opens from the small dial beside the model's name: a bar you slide or tap to set how hard the model thinks. The fuller the bar, the higher the effort.
-- **Gauges:** while the gauges show, tap them for the agent's panel (hardware, loaded models, this chat). Touch and hold one gauge, or point at it with a mouse, for its reading in full.
+- **The pill:** while the gauges show, tap them and the pill opens into the agent's details (hardware, loaded models, this chat). Point at one gauge with a mouse for its reading in full. The pill slides away while you scroll on and comes back when you scroll back.
+- **Moving the pill:** touch and hold it, then drag. Let go near the left or right edge to dock it there, stacked; anywhere else it lies across the screen at that height. Drag it back near the top to put it under the bar again.
 - **Search** is in the computer menu at the top left: **Search chats**.
 - **Logs** in the same menu are grouped: what this phone logged, then each computer.

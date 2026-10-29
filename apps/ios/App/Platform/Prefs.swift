@@ -56,6 +56,9 @@ final class Prefs {
     /// Settings > Simple mode: per control, Show, Expert only or Hide, where it
     /// differs from the default. Saved as JSON on this device only.
     var simpleChoices: [String: SimpleVisibility] { didSet { d.set(SimpleMode.encode(simpleChoices), forKey: "simpleChoices") } }
+    /// Where the floating pill sits: across the top (the default) or wherever it was
+    /// dragged, or docked at a side. Saved on this device only.
+    var pillPlacement: PillPlacement { didSet { d.set(pillPlacement.encoded, forKey: "pillPlacement") } }
     /// Chats whose "getting long" note was closed in Simple, newest last (at most 200).
     var longChatDismissed: [String] { didSet { d.set(longChatDismissed, forKey: "longChatDismissed") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
@@ -105,6 +108,7 @@ final class Prefs {
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         simpleChoices = SimpleMode.parse(d.string(forKey: "simpleChoices"))
+        pillPlacement = PillPlacement.parse(d.string(forKey: "pillPlacement"))
         longChatDismissed = d.stringArray(forKey: "longChatDismissed") ?? []
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
         lastEffort = d.dictionary(forKey: "lastEffort") as? [String: String] ?? [:]

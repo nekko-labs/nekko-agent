@@ -28,8 +28,10 @@ struct ChatView: View {
     @Environment(Prefs.self) private var prefs
     /// Expert mode's hardware and loaded models, read while the chat is on screen.
     @State private var monitor: HardwareMonitorModel?
-    /// The agent's panel, slid down from under the title.
+    /// The pill opened into the agent's details.
     @State private var showPanel = false
+    /// The pill scrolled away.
+    @State private var pillHidden = false
     /// Simple: the turns whose folded steps were opened here (not saved).
     @State private var openSteps: Set<String> = []
     /// Tabletop (FD-6): the hinge in window points, from the pane host; nil elsewhere.
@@ -74,6 +76,9 @@ struct ChatView: View {
         .onDisappear { chat?.stop() }
         .onChange(of: store.conn) { _, s in chat?.connectionChanged(s) }
     }
+
+    /// The room the transcript leaves at its top for the pill in its standard place.
+    private var pillRoom: CGFloat { prefs.pillPlacement.isStandard ? AgentPillLayer.topMargin : 0 }
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
         let flex = self.flex
@@ -161,11 +166,13 @@ struct ChatView: View {
                         .onDisappear { atBottom = false }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
-                .frame(minHeight: geo.size.height, alignment: .bottom)
+                .frame(minHeight: max(0, geo.size.height - pillRoom), alignment: .bottom)
             }
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
+            .contentMargins(.top, pillRoom, for: .scrollContent)
+            .hidesPillOnScroll($pillHidden)
           }
             // Follow streamed output only while the reader is at the end, and
             // without animating every token (overlapping animations shudder).
@@ -185,6 +192,10 @@ struct ChatView: View {
                     .transition(.opacity)
                 }
             }
+            // Simple or Expert, and the minimal monitor while the hardware shows, floating
+            // over the transcript; tapped, it opens into the agent's details.
+            .agentPill(gauges: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
+                       monitor: monitor, chat: chat, hidden: pillHidden, expanded: $showPanel)
             .safeAreaInset(edge: .bottom) {
                 if flex == nil { bottomBar(chat) }
             }
@@ -215,14 +226,6 @@ struct ChatView: View {
                 RoundedRectangle(cornerRadius: 14).strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
                     .padding(6).allowsHitTesting(false).accessibilityHidden(true)
             }
-        }
-        // The slim row under the title: Simple or Expert, and the minimal monitor while the hardware shows.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            ModeRow(monitor: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
-                    openMonitor: { showPanel = true })
-        }
-        .topPanel(isPresented: $showPanel) {
-            if let monitor { AgentPanel(monitor: monitor, chat: chat) { showPanel = false } }
         }
         .modifier(MonitorFollow(monitor: $monitor, panelOpen: showPanel))
         .toolbar {

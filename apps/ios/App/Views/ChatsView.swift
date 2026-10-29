@@ -27,11 +27,13 @@ struct ChatsView: View {
     @State private var renameText = ""
     @State private var confirmDelete: SessionSummary?
     @State private var actionError: String?
-    /// The computer's monitors: the slim row's gauges, the Monitors row and the agent's panel.
+    /// The computer's monitors: the pill's gauges, the Monitors row and the agent's details.
     @State private var monitor: HardwareMonitorModel?
     @State private var showPanel = false
-    /// The search field shows in place of the slim row.
+    /// The search field shows under the title.
     @State private var searching = false
+    /// The pill scrolled away.
+    @State private var pillHidden = false
     @Environment(Prefs.self) private var prefs
 
     var body: some View {
@@ -47,10 +49,11 @@ struct ChatsView: View {
         .listStyle(.plain)
         .listRowSeparatorTint(palette.line)
         .appBackground()
+        // Room for the floating pill under the large title, while it sits there.
+        .contentMargins(.top, prefs.pillPlacement.isStandard && !searching ? AgentPillLayer.topMargin : 0, for: .scrollContent)
+        .hidesPillOnScroll($pillHidden)
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
-        // Nekko is the title; a large "Chats" left a band between the bar and the slim row.
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             RootMascot(working: store.activity.values.contains(.running))
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback, search: { searching = true }) }
@@ -61,19 +64,13 @@ struct ChatsView: View {
                     .accessibilityLabel("New chat")
             }
         }
-        // The slim row under the title: Simple or Expert, and the minimal monitor while the
-        // hardware shows; the search field in its place while searching (from the computer menu).
+        // Search (from the computer menu) under the title; the pill steps aside meanwhile.
         .safeAreaInset(edge: .top, spacing: 0) {
-            if searching {
-                SearchRow(query: $query) { query = ""; searching = false }
-            } else {
-                ModeRow(monitor: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
-                        openMonitor: { showPanel = true })
-            }
+            if searching { SearchRow(query: $query) { query = ""; searching = false } }
         }
-        .topPanel(isPresented: $showPanel) {
-            if let monitor { AgentPanel(monitor: monitor, chat: nil) { showPanel = false } }
-        }
+        // Simple or Expert, and the minimal monitor while the hardware shows, floating under the title.
+        .agentPill(gauges: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
+                   monitor: monitor, hidden: searching || pillHidden, expanded: $showPanel)
         .modifier(MonitorFollow(monitor: $monitor, ids: ["hardware", "ph-monitors"], panelOpen: showPanel))
         .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
         .modifier(dialogs)
@@ -632,7 +629,7 @@ struct ComputerMenu: View {
     }
 }
 
-/// The chat list's search, in place of the slim row: every word of the
+/// The chat list's search, under the title: every word of the
 /// search, in the title, first prompt or last reply. Cancel clears it.
 struct SearchRow: View {
     @Binding var query: String
