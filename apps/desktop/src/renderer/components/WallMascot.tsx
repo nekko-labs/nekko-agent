@@ -31,3 +31,9 @@ export function WallMascot({ status, label }: { status: AgentStatus | undefined;
     </span>
   );
 }
+
+/** An agent window's keyboard number, beside Nekko: Ctrl+1…9 selects it. */
+export function WallNumber({ n }: { n?: number }) {
+  if (n == null) return null;
+  return <span className="wall-number" title={`Agent window ${n}${n <= 9 ? `: Ctrl+${n} selects it` : ''}`} aria-label={`Window ${n}`}>{n}</span>;
+}

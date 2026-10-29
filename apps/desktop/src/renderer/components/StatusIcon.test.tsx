@@ -41,12 +41,14 @@ describe('agent status glyphs', () => {
     expect(idle).not.toContain('rounded-full');
   });
 
-  it('puts Nekko with its status badge after the numbered agent icon in wall window strips', async () => {
+  it('puts the window number, then Nekko with its status badge, as the agent icon in wall window strips', async () => {
     const wall = (await loadWall()).render(
       { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid', cols: 2, rows: 1 } },
       { sessions: [summary('a'), summary('b')], running: ['a'] },
     );
-    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon="true"><span class="numbered-agent-icon"[^]*?<\/span><\/span><span data-agent-status="true"><span class="wall-mascot" role="img" aria-label="Working"/);
+    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon="true"><span class="wall-number" title="Agent window 1: Ctrl\+1 selects it" aria-label="Window 1">1<\/span><span data-agent-status="true"><span class="wall-mascot" role="img" aria-label="Working"/);
+    // Nekko is the agent's icon now: no robot head.
+    expect(windowBody(wall, 'a')).not.toContain('numbered-agent-icon');
     expect(windowBody(wall, 'a')).toContain('pixel-nekko');
     expect(windowBody(wall, 'a')).toContain('style="background:#4dc28a"');
     expect(windowBody(wall, 'b')).toMatch(/data-agent-status="true"><span class="wall-mascot pixel-happy"[^>]*aria-label="Done"/);

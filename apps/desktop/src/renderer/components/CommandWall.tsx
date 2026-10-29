@@ -46,10 +46,9 @@ import { ChatPane } from './ChatPane.js';
 import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
 import { WorkingSubagents } from './WorkingSubagents.js';
-import { NumberedAgentIcon } from './NumberedChatIcon.js';
 import { TargetIcon } from '../icons.js';
 import { agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
-import { WallMascot } from './WallMascot.js';
+import { WallMascot, WallNumber } from './WallMascot.js';
 import { BrowserPane } from './BrowserPane.js';
 import { DiffPane } from './DiffPane.js';
 
@@ -834,8 +833,8 @@ export function CommandWall({
         <PaneFrame
           pane={pane}
           title={title}
-          // The window's type and number, then Nekko wearing its status badge (terminals too).
-          icon={pane.kind === 'chat' ? <><NumberedAgentIcon number={n} /><span data-agent-status><WallMascot status={agentStatus} /></span></>
+          // The window's number, then Nekko (the agent's own icon) wearing its status badge; a terminal shows its prompt icon first.
+          icon={pane.kind === 'chat' ? <><WallNumber n={n} /><span data-agent-status><WallMascot status={agentStatus} /></span></>
             : terminal ? <>{iconOf(pane.kind)}<span data-agent-status><WallMascot status={terminalStatus(terminal)} label={status?.label} /></span></> : iconOf(pane.kind)}
           badge={
             <>

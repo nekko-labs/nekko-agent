@@ -2085,6 +2085,8 @@
 .wall-mascot { position: relative; display: inline-block; width: 20px; height: 20px; flex-shrink: 0; line-height: 0; }
 .wall-mascot-badge { position: absolute; right: -4px; bottom: -3px; display: grid; place-items: center; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px var(--win, var(--surface)); }
 .wall-mascot-badge svg { width: 8px; height: 8px; }
+.wall-number { flex-shrink: 0; min-width: 10px; font-size: 11.5px; font-weight: 700; line-height: 1; text-align: center; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+[data-wall-selected] .wall-number, [data-wall-working] .wall-number { color: var(--accent); }
 .pixel-mascot .pixel-quiet { animation: pixel-quiet-hop 30s steps(1, end) infinite; }
 .pixel-mascot .pixel-quiet .pixel-eyes-open { opacity: 0; animation: pixel-quiet-open 24s steps(1, end) infinite; }
 .pixel-mascot .pixel-quiet .pixel-eyes-closed { opacity: 0; animation: pixel-quiet-blink 24s steps(1, end) infinite; }
