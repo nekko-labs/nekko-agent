@@ -123,12 +123,16 @@ import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.simple.SimpleView
 import com.nekko.android.data.SimpleMode
 import com.nekko.android.ui.chat.ModelEffortSheet
-import com.nekko.android.ui.chat.AgentPanel
+import com.nekko.android.ui.chat.AgentDetails
 import com.nekko.android.ui.chat.LongChatNudge
 import com.nekko.android.ui.chat.MiniMonitor
 import com.nekko.android.ui.simple.PollHardware
-import com.nekko.android.ui.simple.SlimBar
-import com.nekko.android.ui.simple.SlimReveal
+import com.nekko.android.ui.simple.ModePill
+import com.nekko.android.ui.simple.rememberModePill
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.nekko.android.data.ModelPick
 import com.nekko.android.data.SimpleVisibility
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -155,8 +159,9 @@ fun ChatScreen(
     val expert by vm.expert.collectAsStateWithLifecycle()
     val raw by vm.simpleChoices.collectAsStateWithLifecycle()
     val hardware by vm.hardware.state.collectAsStateWithLifecycle()
+    val pill by vm.pillPlace.collectAsStateWithLifecycle()
     val loaded = hardware.localModelLoaded
-    val simple = remember(expert, raw, loaded) { SimpleView(expert, SimpleMode.parse(raw), loaded, vm::setExpert) }
+    val simple = remember(expert, raw, loaded, pill) { SimpleView(expert, SimpleMode.parse(raw), loaded, pill, vm::setPillPlace, vm::setExpert) }
     CompositionLocalProvider(LocalSimple provides simple) {
         ChatScreenContent(vm, initialDraft, dictationOn, onBack, onOpenChat, pane, onNewChat, onStartFresh)
     }
@@ -188,17 +193,19 @@ private fun ChatScreenContent(
     val computers by vm.computers.collectAsStateWithLifecycle()
     val computerName = computers.active?.name ?: "your computer"
     var showModelEffort by remember { mutableStateOf(false) }
-    var showMonitor by remember { mutableStateOf(false) }
+    val list = rememberLazyListState()
+    val pill = rememberModePill { !list.canScrollBackward }
+    // The top bar's bottom and the message box's top (root coordinates): the pill moves between them.
+    var barBottom by remember { mutableFloatStateOf(0f) }
+    var floor by remember { mutableStateOf<Float?>(null) }
     val online = computers.conn == RelayState.ONLINE
     // The model's name for the row under the message box (the computer's list, cached for the connection).
     LaunchedEffect(chat.providerId, online) { if (online) chat.providerId?.let { vm.loadModels(it) } }
     // The Monitor names loaded models from the Model Server's own list.
-    LaunchedEffect(showMonitor, online) { if (showMonitor && online) vm.loadModels(ENGINE_PROVIDER_ID) }
+    LaunchedEffect(pill.expanded, online) { if (pill.expanded && online) vm.loadModels(ENGINE_PROVIDER_ID) }
     // The minimal monitor re-reads every 3 s while it shows; Simple otherwise asks the Model Server every 10 s
     // whether a local model is loaded (which brings the monitor in).
     PollHardware(vm.hardware, online, full = showHardware, light = !simple.expert && simple.visibility("hardware") == SimpleVisibility.EXPERT)
-    // A monitor that goes away (the local model unloaded in Simple) closes its panel for good, not just while hidden.
-    LaunchedEffect(showHardware) { if (!showHardware) showMonitor = false }
     // Simple's "chat getting long" line, until dismissed for this chat.
     var longChatDismissed by rememberSaveable(vm.sessionId) { mutableStateOf(false) }
     val savings = chat.context?.let { c -> SimpleMode.freshSavings(chat.contextTokens ?: c.usedTokens, c.contextWindow, c.sources) }
@@ -217,7 +224,6 @@ private fun ChatScreenContent(
     val p = Nekko.palette
     val mic = rememberMic(vm.dictation.takeIf { dictationOn })
     val attach = rememberAttach(vm)
-    val list = rememberLazyListState()
     val prompts by vm.prompts.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
@@ -324,212 +330,207 @@ private fun ChatScreenContent(
         )
     }
 
-    Scaffold(
-        containerColor = p.paper,
-        topBar = {
-            Column {
-                CenterAlignedTopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                    // A little shorter than the default, so the slim row sits right under the title.
-                    expandedHeight = 56.dp,
-                    actions = {
-                        if (changesAllowed && simple.shown("changes")) {
-                            IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
-                                Icon(Icons.Filled.Difference, contentDescription = "Changes")
-                            }
-                        }
-                        Box {
-                            IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = "More")
-                            }
-                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Git") },
-                                    leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
-                                    onClick = { showMenu = false; vm.openGit() },
-                                    modifier = Modifier.testTag("chat.git"),
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Files") },
-                                    leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
-                                    onClick = { showMenu = false; vm.openFiles() },
-                                    modifier = Modifier.testTag("chat.files"),
-                                )
-                                if (showTerminal) DropdownMenuItem(
-                                    text = { Text("Terminals") },
-                                    leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
-                                    onClick = { showMenu = false; vm.openTerminals() },
-                                    modifier = Modifier.testTag("chat.terminals"),
-                                )
-                            }
-                        }
-                        pane?.actions?.invoke(this)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    },
-                    title = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
-                                if (pane != null) {
-                                    PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = p.paper,
+            topBar = {
+                Column(Modifier.onGloballyPositioned { barBottom = it.boundsInRoot().bottom }) {
+                    CenterAlignedTopAppBar(
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                        // A little shorter than the default, so the mode pill sits right under the title.
+                        expandedHeight = 56.dp,
+                        actions = {
+                            if (changesAllowed && simple.shown("changes")) {
+                                IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
+                                    Icon(Icons.Filled.Difference, contentDescription = "Changes")
                                 }
-                                Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            if (simple.shown("ph-subtitle")) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
-                                Text(
-                                    chat.subtitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = p.inkFaint,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    },
-                )
-                SlimBar(simple.expert, simple.setExpert) {
-                    SlimReveal(showHardware) {
-                        MiniMonitor(hardware, onOpen = { showMonitor = !showMonitor }, compact = pane != null, modelName = vm::modelName)
-                    }
-                }
-            }
-        },
-    ) { padding ->
-        val transcript: @Composable (Modifier) -> Unit = { transcriptModifier ->
-            Box(transcriptModifier) {
-                when {
-                    !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
-                    keyed.isEmpty() && chat.error == null -> Text(
-                        "Ask your computer to do something. It can use its folders, tools and models.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = p.inkSoft,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp, vertical = 32.dp),
-                    )
-                    else -> LazyColumn(
-                        state = list,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        if (chat.omittedMessages > 0) {
-                            item(key = "omitted") {
-                                Text(
-                                    if (chat.omittedMessages == 1) "1 earlier message is on the computer."
-                                    else "${chat.omittedMessages} earlier messages are on the computer.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = p.inkFaint,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                )
-                            }
-                        }
-                        itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
-                            val run = (row as? TranscriptRow.Run)?.run
-                            when {
-                                row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
-                                    openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
+                            Box {
+                                IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
+                                    Icon(Icons.Filled.MoreVert, contentDescription = "More")
                                 }
-                                run is PurposeRun.Single -> {
-                                    val block = run.item.second
-                                    // Long press: Copy, and fork the chat from a saved message.
-                                    val fork = forkAction(block)
-                                    // In a pane a message can be dragged into the other pane's message box.
-                                    // A reply's links to files and loopback pages open previews from the computer (AN-35).
-                                    CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
-                                        val reasoning = (row as TranscriptRow.Run).stepsOpen
-                                        if (pane == null) BlockView(block, fork, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, reasoning) }
-                                    }
-                                }
-                                run is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
-                            }
-                        }
-                        item(key = "footer") {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                chat.error?.let { Notice(it, Tone.DANGER) }
-                                val rate = chat.rate
-                                if (!chat.running && rate != null) {
-                                    Text(
-                                        String.format(Locale.US, "%.1f tokens/s", rate),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = p.inkFaint,
+                                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Git") },
+                                        leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                                        onClick = { showMenu = false; vm.openGit() },
+                                        modifier = Modifier.testTag("chat.git"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Files") },
+                                        leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                                        onClick = { showMenu = false; vm.openFiles() },
+                                        modifier = Modifier.testTag("chat.files"),
+                                    )
+                                    if (showTerminal) DropdownMenuItem(
+                                        text = { Text("Terminals") },
+                                        leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
+                                        onClick = { showMenu = false; vm.openTerminals() },
+                                        modifier = Modifier.testTag("chat.terminals"),
                                     )
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-        val controls: @Composable () -> Unit = {
-            chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
-            chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
-            if (showGit) prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
-            // A completed chat reads like the desktop's: no message box until it is restored.
-            if (completedAt != null && !chat.running) CompletedBar(
-                restoring = restoring,
-                error = restoreError,
-                onRestore = {
-                    restoring = true
-                    restoreError = null
-                    scope.launch {
-                        try {
-                            vm.restore()
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            restoreError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t restore this chat."
-                        } finally {
-                            restoring = false
-                        }
-                    }
-                },
-                modifier = Modifier.navigationBarsPadding(),
-            ) else Column(Modifier.navigationBarsPadding()) {
-                if (!simple.expert && savings != null && !longChatDismissed) {
-                    LongChatNudge(
-                        savings,
-                        onStartFresh = onStartFresh?.let { go -> { go(chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } }) } },
-                        onDismiss = { longChatDismissed = true },
+                            pane?.actions?.invoke(this)
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        title = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
+                                    if (pane != null) {
+                                        PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
+                                    }
+                                    Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                if (simple.shown("ph-subtitle")) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
+                                    Text(
+                                        chat.subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = p.inkFaint,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        },
                     )
                 }
-                Composer(
-                    initialText = initialDraft,
-                    running = chat.running,
-                    blocked = chat.blocked,
-                    queued = chat.queued,
-                    onSend = { text, skill, images -> vm.send(text, skill, images) },
-                    onStop = vm::stop,
-                    // In a pane, text dragged from the other pane lands here (never sent by itself).
-                    modifier = if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote),
-                    mic = mic,
-                    skills = chat.skills,
-                    insert = insert,
-                    onInserted = vm::inserted,
-                    attach = attach,
-                    prompts = prompts,
-                    queuedPrompts = chat.queuedPrompts,
-                    onEditQueued = vm::editQueued,
-                    onNewAgent = onNewChat,
-                    onTerminal = if (showTerminal) vm::openTerminals else null,
-                )
-                ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
+            },
+        ) { padding ->
+            val transcript: @Composable (Modifier) -> Unit = { transcriptModifier ->
+                Box(transcriptModifier.onGloballyPositioned { floor = it.boundsInRoot().bottom }) {
+                    when {
+                        !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
+                        keyed.isEmpty() && chat.error == null -> Text(
+                            "Ask your computer to do something. It can use its folders, tools and models.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = p.inkSoft,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp, vertical = 32.dp),
+                        )
+                        else -> LazyColumn(
+                            state = list,
+                            modifier = Modifier.fillMaxSize().nestedScroll(pill.scroll),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = pill.topInset(simple.pill, otherwise = 16.dp)),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (chat.omittedMessages > 0) {
+                                item(key = "omitted") {
+                                    Text(
+                                        if (chat.omittedMessages == 1) "1 earlier message is on the computer."
+                                        else "${chat.omittedMessages} earlier messages are on the computer.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = p.inkFaint,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    )
+                                }
+                            }
+                            itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
+                                val run = (row as? TranscriptRow.Run)?.run
+                                when {
+                                    row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
+                                        openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
+                                    }
+                                    run is PurposeRun.Single -> {
+                                        val block = run.item.second
+                                        // Long press: Copy, and fork the chat from a saved message.
+                                        val fork = forkAction(block)
+                                        // In a pane a message can be dragged into the other pane's message box.
+                                        // A reply's links to files and loopback pages open previews from the computer (AN-35).
+                                        CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
+                                            val reasoning = (row as TranscriptRow.Run).stepsOpen
+                                            if (pane == null) BlockView(block, fork, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, reasoning) }
+                                        }
+                                    }
+                                    run is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
+                                }
+                            }
+                            item(key = "footer") {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    chat.error?.let { Notice(it, Tone.DANGER) }
+                                    val rate = chat.rate
+                                    if (!chat.running && rate != null) {
+                                        Text(
+                                            String.format(Locale.US, "%.1f tokens/s", rate),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = p.inkFaint,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-        }
-        Box {
+            val controls: @Composable () -> Unit = {
+                chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
+                chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
+                if (showGit) prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
+                // A completed chat reads like the desktop's: no message box until it is restored.
+                if (completedAt != null && !chat.running) CompletedBar(
+                    restoring = restoring,
+                    error = restoreError,
+                    onRestore = {
+                        restoring = true
+                        restoreError = null
+                        scope.launch {
+                            try {
+                                vm.restore()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                restoreError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t restore this chat."
+                            } finally {
+                                restoring = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.navigationBarsPadding(),
+                ) else Column(Modifier.navigationBarsPadding()) {
+                    if (!simple.expert && savings != null && !longChatDismissed) {
+                        LongChatNudge(
+                            savings,
+                            onStartFresh = onStartFresh?.let { go -> { go(chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } }) } },
+                            onDismiss = { longChatDismissed = true },
+                        )
+                    }
+                    Composer(
+                        initialText = initialDraft,
+                        running = chat.running,
+                        blocked = chat.blocked,
+                        queued = chat.queued,
+                        onSend = { text, skill, images -> vm.send(text, skill, images) },
+                        onStop = vm::stop,
+                        // In a pane, text dragged from the other pane lands here (never sent by itself).
+                        modifier = if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote),
+                        mic = mic,
+                        skills = chat.skills,
+                        insert = insert,
+                        onInserted = vm::inserted,
+                        attach = attach,
+                        prompts = prompts,
+                        queuedPrompts = chat.queuedPrompts,
+                        onEditQueued = vm::editQueued,
+                        onNewAgent = onNewChat,
+                        onTerminal = if (showTerminal) vm::openTerminals else null,
+                    )
+                    ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
+                }
+            }
             ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
-            // The agent's details slide down from under the header.
-            AgentPanel(
-                open = showMonitor && showHardware, state = hardware, chat = chat, computer = computerName, modelName = vm::modelName,
-                onUnload = vm.hardware::unload, onDismiss = { showMonitor = false },
-                modifier = Modifier.padding(top = padding.calculateTopPadding()),
-            )
         }
+        // The mode pill floats over the chat; tapping its gauges opens the agent's details.
+        ModePill(
+            pill, barBottom, floor,
+            gauges = if (showHardware) { vertical, open -> MiniMonitor(hardware, onOpen = open, compact = pane != null, vertical = vertical, modelName = vm::modelName) } else null,
+            details = { AgentDetails(hardware, chat, computerName, vm::modelName, vm.hardware::unload) },
+        )
     }
 }
 

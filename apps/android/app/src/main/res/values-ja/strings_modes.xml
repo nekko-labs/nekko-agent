@@ -65,4 +65,8 @@
     <string name="run_split">GPU + CPU</string>
     <string name="run_cpu">CPU のみ</string>
     <string name="model_context">コンテキスト %1$s</string>
+    <string name="pill_done">完了</string>
+    <string name="pill_move_top">上部に移動</string>
+    <string name="pill_dock_left">左にドック</string>
+    <string name="pill_dock_right">右にドック</string>
 </resources>

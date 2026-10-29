@@ -16,7 +16,6 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
@@ -39,6 +38,12 @@ import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.chat.ModeTags
 import com.nekko.android.ui.simple.EXPERT_DESCRIPTION
 import com.nekko.android.ui.simple.SIMPLE_DESCRIPTION
+import com.nekko.android.ui.simple.PILL_TAG
+import com.nekko.android.data.PillDock
+import com.nekko.android.data.PillPlace
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
 import com.nekko.android.ui.panes.PaneLabels
 import com.nekko.android.ui.panes.PanesHost
 import com.nekko.android.ui.panes.rememberWindowPosture
@@ -105,7 +110,7 @@ class ChatModesTest {
 
     @Test fun simpleAndExpert() {
         show()
-        // Simple with a local model loaded: the context ring, and the minimal monitor in the slim row.
+        // Simple with a local model loaded: the context ring, and the minimal monitor in the mode pill.
         compose.waitUntil(15_000) { computer.calls.contains(Channels.SYSTEM_STATS) }
         settle()
         assertTrue(compose.onAllNodesWithTag(ModeTags.MODEL_EFFORT).fetchSemanticsNodes().isNotEmpty())
@@ -113,14 +118,11 @@ class ChatModesTest {
         assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
         shot("1-simple-local-model")
 
-        // A long-press on a gauge shows that reading in full; Details opens the agent's panel from the top.
-        compose.onAllNodesWithContentDescription("CPU, 38%").onFirst().performTouchInput { longClick() }
-        settle()
-        assertTrue(compose.onAllNodes(hasText("16 cores")).fetchSemanticsNodes().isNotEmpty())
-        shot("1b-gauge-tooltip")
-        compose.onAllNodes(hasText("Details")).onFirst().performClick()
+        // A tap on a gauge opens the pill into the agent's details.
+        compose.onAllNodesWithContentDescription("CPU, 38%").onFirst().performClick()
         settle()
         assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodes(hasText("16 cores", substring = true)).fetchSemanticsNodes().isNotEmpty())
         shot("2-panel")
         compose.onAllNodes(hasText("Unload")).onFirst().performClick()
         compose.waitUntil(5_000) { computer.calls.contains(Channels.MODEL_UNLOAD) }
@@ -167,7 +169,7 @@ class ChatModesTest {
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
     }
 
-    /** The chats list in Simple with no local model: the slim row holds only the switch. */
+    /** The chats list in Simple with no local model: the mode pill holds only the switch. */
     @Test fun chatsListInSimple() {
         computer.resident = false
         val repo = repo()
@@ -183,6 +185,7 @@ class ChatModesTest {
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty() }
         settle()
         shot("chats-simple")
+        assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
         assertTrue(compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).fetchSemanticsNodes().isNotEmpty())
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
         assertEquals(0, compose.onAllNodes(hasText("Monitors")).fetchSemanticsNodes().size)
@@ -190,8 +193,8 @@ class ChatModesTest {
 
     /**
      * A chat in Simple: the turn's steps on one line that opens in place, then a local model
-     * loading brings the minimal monitor in, and it opens the panel. The switch and the monitor
-     * take touches over 48 dp although the row is 34 dp.
+     * loading brings the minimal monitor into the pill, and it opens the details. The switch and
+     * the monitor take touches over 48 dp.
      */
     @Test fun simpleChatStepsAndLocalModel() {
         computer.resident = false
@@ -226,7 +229,7 @@ class ChatModesTest {
         settle()
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().size)
 
-        // A tap 2 px from the top of the Expert segment, above the 34 dp row, still switches.
+        // A tap 2 px from the top of the Expert segment's 48 dp touch area still switches.
         val expertSegment = compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst()
         assertTrue(expertSegment.fetchSemanticsNode().boundsInRoot.height >= min)
         expertSegment.performTouchInput { click(Offset(centerX, 2f)) }
@@ -236,7 +239,7 @@ class ChatModesTest {
 
     /**
      * The computer menu at the top left: Sign out or disconnect, no pairing (that is in Computers),
-     * and Search chats, which takes the slim row's place until Cancel.
+     * and Search chats, which puts the mode pill away until Cancel.
      */
     @Test fun chatsMenuAndSearch() {
         computer.resident = false
@@ -272,6 +275,66 @@ class ChatModesTest {
         assertEquals(0, compose.onAllNodesWithTag("chats.search").fetchSemanticsNodes().size)
         assertTrue(compose.onAllNodesWithContentDescription(SIMPLE_DESCRIPTION).fetchSemanticsNodes().isNotEmpty())
         assertTrue(compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty())
+    }
+
+    /**
+     * The mode pill in Expert with a local model: at the top, a tap on its gauges opens the details
+     * (Done closes them), and a long press dragged to the right edge docks it upright there, saved
+     * for the phone.
+     */
+    @Test fun pillExpandsAndDocks() {
+        prefs.set(EXPERT_MODE, true)
+        show()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { computer.calls.contains(Channels.SYSTEM_STATS) }
+        settle()
+        val pill = compose.onAllNodesWithTag(PILL_TAG).onFirst()
+        val bar = pill.fetchSemanticsNode().boundsInRoot
+        shot("pill-top")
+
+        compose.onAllNodesWithContentDescription("CPU, 38%").onFirst().performClick()
+        settle()
+        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodes(hasText("Unload")).fetchSemanticsNodes().isNotEmpty())
+        shot("pill-expanded")
+        compose.onAllNodes(hasText("Done")).onFirst().performClick()
+        settle()
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().size)
+
+        // Long press, then drag to the right edge and let go a little lower down.
+        val width = compose.onRoot().fetchSemanticsNode().size.width
+        val dx = width - 24f - bar.center.x
+        compose.onAllNodesWithTag(PILL_TAG).onFirst().performTouchInput {
+            down(center)
+            advanceEventTime(700)
+            repeat(12) { moveBy(Offset(dx / 12, 20f)) }
+            up()
+        }
+        settle()
+        assertEquals(PillDock.RIGHT, prefs.get(PillPlace.KEY).dock)
+        val docked = compose.onAllNodesWithTag(PILL_TAG).onFirst().fetchSemanticsNode().boundsInRoot
+        assertTrue("upright: $docked", docked.height > docked.width)
+        assertTrue("on the right: $docked", docked.right > width * 0.9f)
+        shot("pill-docked-right")
+        prefs.reset(PillPlace.KEY)
+    }
+
+    /** In a long chat, reading on slides the pill away; scrolling back brings it back. */
+    @Test fun pillHidesOnScroll() {
+        computer.resident = false
+        computer.manyMessages = true
+        show()
+        assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
+        compose.onRoot().performTouchInput { swipeDown(startY = centerY - 300f, endY = centerY + 300f) }
+        settle()
+        assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
+        compose.onRoot().performTouchInput { swipeUp(startY = centerY + 200f, endY = centerY - 200f) }
+        settle()
+        assertEquals(0, compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().size)
+        shot("pill-scrolled-away")
+        compose.onRoot().performTouchInput { swipeDown(startY = centerY - 200f, endY = centerY + 200f) }
+        settle()
+        assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
     }
 
     /** Effort shows in Simple too: the slider in the sheet, and High sets it. */
@@ -404,6 +467,8 @@ class ChatModesTest {
         @Volatile var resident = true
         /** The chat has filled most of its window: Simple's "getting long" line. */
         @Volatile var longChat = false
+        /** Forty more exchanges before the last turn, so the chat scrolls. */
+        @Volatile var manyMessages = false
 
         private fun json(s: String): JsonElement = WireJson.parseToJsonElement(s)
 
@@ -418,6 +483,9 @@ class ChatModesTest {
             put(
                 "messages",
                 buildJsonArray {
+                    if (manyMessages) for (i in 0 until 40) {
+                        add(buildJsonObject { put("id", "$id-m$i"); put("role", if (i % 2 == 0) "user" else "assistant"); put("createdAt", T0 - 100_000 + i); put("content", "Earlier message $i about the release notes.") })
+                    }
                     add(buildJsonObject { put("id", "$id-u"); put("role", "user"); put("createdAt", T0); put("content", "Group the release notes by area and drop the duplicates.") })
                     // The turn's steps: a thought and two tool calls, which Simple folds into one line.
                     add(

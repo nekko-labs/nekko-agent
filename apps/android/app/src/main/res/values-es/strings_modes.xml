@@ -65,4 +65,8 @@
     <string name="run_split">GPU + CPU</string>
     <string name="run_cpu">Solo CPU</string>
     <string name="model_context">%1$s de contexto</string>
+    <string name="pill_done">Listo</string>
+    <string name="pill_move_top">Mover arriba</string>
+    <string name="pill_dock_left">Acoplar a la izquierda</string>
+    <string name="pill_dock_right">Acoplar a la derecha</string>
 </resources>

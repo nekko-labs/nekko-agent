@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.height
@@ -106,7 +105,6 @@ import com.nekko.android.data.modelGroups
 import com.nekko.android.monitors.HardwareState
 import com.nekko.android.ui.screens.ModelList
 import com.nekko.android.ui.simple.LocalSimple
-import com.nekko.android.ui.simple.PullDownPanel
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.ContextUsage
 import com.nekko.protocol.Effort
@@ -650,13 +648,14 @@ private fun ThinRing(fraction: Double?, size: Dp = 18.dp) {
 private data class MiniGauge(val name: String, val fraction: Double?, val value: String, val detail: String?, val spoken: String = "$name, $value", val models: Boolean = false)
 
 /**
- * The minimal monitor in the slim row under the header: a thin ring and its percentage for
- * the CPU, memory and the first GPU, and how many models the Model Server holds. Tap for the
- * agent's details; a long-press (or a mouse resting on a gauge) shows that reading in full.
- * [compact] (a folding phone's pane) drops the percentages.
+ * The minimal monitor in the mode pill: a thin ring and its percentage for the CPU, memory and
+ * the first GPU, and how many models the Model Server holds. Tap for the agent's details; a mouse
+ * resting on a gauge shows that reading in full (a long press moves the pill instead).
+ * [compact] (a folding phone's pane) drops the percentages; [vertical] stacks the gauges, each
+ * percentage under its ring (the pill docked on a side).
  */
 @Composable
-fun MiniMonitor(state: HardwareState, onOpen: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false, modelName: (String) -> String = { it }) {
+fun MiniMonitor(state: HardwareState, onOpen: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false, vertical: Boolean = false, modelName: (String) -> String = { it }) {
     val rows = hardwareRows(state)
     val loaded = state.engine?.resident.orEmpty()
     val models = MiniGauge(
@@ -666,13 +665,16 @@ fun MiniMonitor(state: HardwareState, onOpen: () -> Unit, modifier: Modifier = M
     )
     val label = stringResource(R.string.monitor)
     val gauges = (rows.take(2) + rows.drop(2).take(1)).map { MiniGauge(it.label, it.fraction, it.value, it.detail) } + models
-    // The gauges sit edge to edge (no gaps), so a touch anywhere on the row lands on one.
-    Row(
-        modifier.heightIn(min = 48.dp).padding(horizontal = 4.dp).testTag(ModeTags.MONITOR)
-            .semantics { isTraversalGroup = true; contentDescription = label },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        gauges.forEach { g -> MiniGaugeView(g, compact, loaded.isNotEmpty(), onOpen) }
+    // The gauges sit edge to edge (no gaps), so a touch anywhere on the monitor lands on one.
+    val group = Modifier.testTag(ModeTags.MONITOR).semantics { isTraversalGroup = true; contentDescription = label }
+    if (vertical) {
+        Column(modifier.then(group), horizontalAlignment = Alignment.CenterHorizontally) {
+            gauges.forEach { g -> MiniGaugeView(g, compact = false, vertical = true, anyLoaded = loaded.isNotEmpty(), onOpen = onOpen) }
+        }
+    } else {
+        Row(modifier.heightIn(min = 48.dp).padding(horizontal = 4.dp).then(group), verticalAlignment = Alignment.CenterVertically) {
+            gauges.forEach { g -> MiniGaugeView(g, compact, vertical = false, anyLoaded = loaded.isNotEmpty(), onOpen = onOpen) }
+        }
     }
 }
 
@@ -692,9 +694,8 @@ private fun Modifier.onHover(set: (Boolean) -> Unit) = pointerInput(Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
 @Composable
-private fun MiniGaugeView(g: MiniGauge, compact: Boolean, anyLoaded: Boolean, onOpen: () -> Unit) {
+private fun MiniGaugeView(g: MiniGauge, compact: Boolean, vertical: Boolean, anyLoaded: Boolean, onOpen: () -> Unit) {
     val p = Nekko.palette
-    val scope = rememberCoroutineScope()
     val tip = rememberTooltipState(isPersistent = true)
     var overGauge by remember { mutableStateOf(false) }
     var overTip by remember { mutableStateOf(false) }
@@ -720,21 +721,13 @@ private fun MiniGaugeView(g: MiniGauge, compact: Boolean, anyLoaded: Boolean, on
         enableUserInput = false,
         hasAction = true,
     ) {
-        Row(
-            Modifier
-                .heightIn(min = 48.dp)
-                .combinedClickable(
-                    role = Role.Button,
-                    onLongClickLabel = details,
-                    onLongClick = { scope.launch { tip.show() } },
-                    onClick = onOpen,
-                )
-                .onHover { overGauge = it }
-                .padding(horizontal = if (compact) 3.dp else 5.dp)
-                .semantics(mergeDescendants = true) { contentDescription = g.spoken },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (g.models) 3.dp else 4.dp),
-        ) {
+        val gauge = Modifier
+            .heightIn(min = 48.dp)
+            .widthIn(min = if (vertical) 48.dp else 0.dp)
+            .clickable(role = Role.Button, onClickLabel = details, onClick = onOpen)
+            .onHover { overGauge = it }
+            .semantics(mergeDescendants = true) { contentDescription = g.spoken }
+        val content: @Composable () -> Unit = {
             if (g.models) {
                 Icon(Icons.Filled.ViewInAr, contentDescription = null, tint = if (anyLoaded) p.accent else p.inkFaint, modifier = Modifier.size(15.dp))
                 Text(g.value, style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
@@ -743,64 +736,68 @@ private fun MiniGaugeView(g: MiniGauge, compact: Boolean, anyLoaded: Boolean, on
                 if (!compact) Text(g.value, style = MaterialTheme.typography.labelSmall, color = if (g.fraction == null) p.inkFaint else p.inkSoft, maxLines = 1)
             }
         }
+        if (vertical) {
+            Column(gauge.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)) { content() }
+        } else {
+            Row(
+                gauge.padding(horizontal = if (compact) 3.dp else 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(if (g.models) 3.dp else 4.dp),
+            ) { content() }
+        }
     }
 }
 
 /**
- * The agent's details, in the panel that slides down from under the header: the hardware on
- * larger dials with temperatures, the models the Model Server holds (with Unload), and, in a
- * chat, its model and effort and where its context goes.
+ * The agent's details, in the card the mode pill opens into: the hardware on larger dials with
+ * temperatures, the models the Model Server holds (with Unload), and, in a chat, its model and
+ * effort and where its context goes.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AgentPanel(
-    open: Boolean,
+fun AgentDetails(
     state: HardwareState,
     chat: ChatUi?,
     computer: String,
     modelName: (String) -> String,
     onUnload: suspend (String) -> String,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     var notice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
-    PullDownPanel(open, onDismiss, modifier) {
-        Column(Modifier.testTag(ModeTags.MONITOR_SHEET), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SectionTitle(stringResource(R.string.monitor_hardware))
-            if (state.system == null && state.gpu == null) {
-                Footnote(state.error ?: stringResource(R.string.monitor_reading, computer))
-            } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HardwareDials(hardwareRows(state), 56.dp)
+    Column(Modifier.testTag(ModeTags.MONITOR_SHEET), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionTitle(stringResource(R.string.monitor_hardware))
+        if (state.system == null && state.gpu == null) {
+            Footnote(state.error ?: stringResource(R.string.monitor_reading, computer))
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                HardwareDials(hardwareRows(state), 56.dp)
+            }
+        }
+        state.system?.takeIf { it.memTotalMB > 0 }?.let { s ->
+            val mem = MonitorFormat.memory(s.memUsedMB, s.memTotalMB)
+            Footnote(if (s.cpuCores > 0) stringResource(R.string.monitor_cores_memory, s.cpuCores, mem) else stringResource(R.string.monitor_memory, mem))
+        }
+        SectionTitle(stringResource(R.string.monitor_loaded_models))
+        Models(state, computer, modelName) { id ->
+            notice = null
+            scope.launch {
+                notice = try {
+                    onUnload(id) to true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    (e.message ?: "Couldn’t unload it.") to false
                 }
             }
-            state.system?.takeIf { it.memTotalMB > 0 }?.let { s ->
-                val mem = MonitorFormat.memory(s.memUsedMB, s.memTotalMB)
-                Footnote(if (s.cpuCores > 0) stringResource(R.string.monitor_cores_memory, s.cpuCores, mem) else stringResource(R.string.monitor_memory, mem))
-            }
-            SectionTitle(stringResource(R.string.monitor_loaded_models))
-            Models(state, computer, modelName) { id ->
-                notice = null
-                scope.launch {
-                    notice = try {
-                        onUnload(id) to true
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        (e.message ?: "Couldn’t unload it.") to false
-                    }
-                }
-            }
-            if (state.engine?.resident?.isNotEmpty() == true) Footnote(stringResource(R.string.monitor_unload_footer, computer))
-            notice?.let { (text, ok) -> Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) p.ink else p.danger) }
-            if (chat != null) {
-                SectionTitle(stringResource(R.string.monitor_this_chat))
-                BreakdownRow(stringResource(R.string.model_section), chat.modelName ?: chat.modelId ?: stringResource(R.string.model_choose), null)
-                BreakdownRow(stringResource(R.string.effort_section), chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), null)
-                if (chat.context != null) ContextBreakdown(chat, Modifier.clip16().background(p.surface).padding(12.dp))
-            }
+        }
+        if (state.engine?.resident?.isNotEmpty() == true) Footnote(stringResource(R.string.monitor_unload_footer, computer))
+        notice?.let { (text, ok) -> Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) p.ink else p.danger) }
+        if (chat != null) {
+            SectionTitle(stringResource(R.string.monitor_this_chat))
+            BreakdownRow(stringResource(R.string.model_section), chat.modelName ?: chat.modelId ?: stringResource(R.string.model_choose), null)
+            BreakdownRow(stringResource(R.string.effort_section), chat.effort?.let { effortLabel(it) } ?: stringResource(R.string.effort_computer_default), null)
+            if (chat.context != null) ContextBreakdown(chat, Modifier.clip16().background(p.surface).padding(12.dp))
         }
     }
 }
