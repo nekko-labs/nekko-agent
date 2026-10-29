@@ -7,10 +7,7 @@ use nekko_term::{
     resolve_shell,
 };
 use serde_json::{Value, json};
-use std::collections::HashMap;
-use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -83,8 +80,6 @@ pub struct Ctx {
     /// webhook listener, the local relay, network visibility). Only the desktop
     /// app: it needs `config.native`.
     pub desktop: Option<Arc<crate::desktop::Desktop>>,
-    /// Which handler answers each channel ([`Table`]).
-    pub routes: Arc<Table>,
 }
 
 /// The app around the daemon: its facts and the desktop bridge.
@@ -113,502 +108,10 @@ fn is_agent(id: &str) -> bool {
     id.starts_with(AGENT_PREFIX)
 }
 
-/// A channel's reply, still to be awaited.
-pub type Reply<'a> = Pin<Box<dyn Future<Output = Result<Value, String>> + Send + 'a>>;
-
-/// What answers a channel: called with the context, the channel's name and its arguments.
-pub type Handler = for<'a> fn(&'a Ctx, &'a str, Vec<Value>) -> Reply<'a>;
-
-/// A [`Handler`] from a body that may use `ctx`, `channel` and `args` and
-/// `return` early, as a match arm of the old router did.
-macro_rules! handler {
-    (|$ctx:ident, $channel:ident, $args:ident| $body:expr) => {{
-        #[allow(unused_variables, unused_mut)]
-        fn handle<'a>($ctx: &'a Ctx, $channel: &'a str, mut $args: Vec<Value>) -> Reply<'a> {
-            Box::pin(async move { $body })
-        }
-        handle as Handler
-    }};
-}
-
-/// Every channel the daemon serves, and its handler: built once at startup
-/// from the services that exist, so a call is one hash lookup. Each channel
-/// is registered once ([`Table::new`] asserts it).
-pub struct Table {
-    handlers: HashMap<&'static str, Handler>,
-    /// Channels registered twice: always empty (a unit test holds it so).
-    twice: Vec<&'static str>,
-}
-
-impl Table {
-    /// The first registration of a channel wins, as the first matching arm
-    /// of the old router's match did; a second is recorded in `twice`.
-    fn add(&mut self, channels: &[&'static str], h: Handler) {
-        for c in channels {
-            match self.handlers.entry(c) {
-                std::collections::hash_map::Entry::Occupied(_) => self.twice.push(c),
-                std::collections::hash_map::Entry::Vacant(v) => {
-                    v.insert(h);
-                }
-            }
-        }
-    }
-
-    pub fn get(&self, channel: &str) -> Option<Handler> {
-        self.handlers.get(channel).copied()
-    }
-
-    /// The table for a daemon with these optional services: `native` (the
-    /// desktop app's Electron-main channels, `Ctx::native`) and `desktop` (the
-    /// desktop backend's, `Ctx::desktop`).
-    pub fn new(native: bool, desktop: bool) -> Table {
-        let mut t = Table { handlers: HashMap::new(), twice: Vec::new() };
-        t.add(&["claude:policy"], handler!(|ctx, channel, args| Ok(ctx.claude_policy.status())));
-        t.add(
-            &["claude:capability"],
-            handler!(|ctx, channel, args| crate::claude_policy::capability_route(ctx, &args).await),
-        );
-        t.add(
-            &["claude:planUsage"],
-            handler!(|ctx, channel, args| crate::claude_policy::plan_usage_route(ctx, &args).await),
-        );
-        t.add(
-            &["claude:codeStatus"],
-            handler!(|ctx, channel, args| crate::claude_policy::code_status_route(ctx, &args).await),
-        );
-        t.add(
-            &["daemon:info"],
-            handler!(|ctx, channel, args| Ok(json!({
-                "app": "nekkod",
-                "version": env!("CARGO_PKG_VERSION"),
-                "pid": std::process::id(),
-            }))),
-        );
-        t.add(
-            &["terminals:list"],
-            handler!(|ctx, channel, args| {
-                // `{ sessionId }` narrows it to one chat's terminals and its agent log.
-                let only = arg(&args, 0).get("sessionId").and_then(Value::as_str);
-                let mut native = ctx.terminals.list();
-                let mut agent = ctx.turns.agent_logs.list();
-                if let Some(sid) = only {
-                    native.retain(|t| t.session_id.as_deref() == Some(sid));
-                    agent.retain(|t| t.get("agentSessionId").and_then(Value::as_str) == Some(sid));
-                }
-                let mut all = serde_json::to_value(native).unwrap_or(json!([]));
-                if let Value::Array(list) = &mut all {
-                    list.extend(agent);
-                }
-                Ok(all)
-            }),
-        );
-        t.add(
-            &["terminals:list:native"],
-            handler!(|ctx, channel, args| Ok(serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([])))),
-        );
-        t.add(
-            &["terminal:shells"],
-            handler!(|ctx, channel, args| Ok(serde_json::to_value(detect_shells()).unwrap_or(json!([])))),
-        );
-        t.add(&["terminal:create"], handler!(|ctx, channel, args| create_terminal(ctx, arg(&args, 0)).await));
-        t.add(
-            &["terminal:snapshot", "terminal:tail"],
-            handler!(|ctx, channel, args| {
-                let id = str_arg(&args, 0).unwrap_or_default().to_string();
-                let max = tail_bytes(channel, &args);
-                if is_agent(&id) {
-                    let snap = ctx.turns.agent_logs.route("terminal:snapshot", &id, &args).await?;
-                    return Ok(match max {
-                        Some(max) => cap_buffer(snap, max),
-                        None => snap,
-                    });
-                }
-                Ok(native_snapshot(&ctx.terminals, &id, max))
-            }),
-        );
-        t.add(
-            &[
-                "terminal:update",
-                "terminal:write",
-                "terminal:resize",
-                "terminal:run",
-                "terminal:signal",
-                "terminal:close",
-            ],
-            handler!(|ctx, channel, args| {
-                let id = str_arg(&args, 0).unwrap_or_default().to_string();
-                if is_agent(&id) {
-                    return ctx.turns.agent_logs.route(channel, &id, &args).await;
-                }
-                terminal_op(ctx, channel, &id, &args)
-            }),
-        );
-        t.add(
-            &["terminal:attach"],
-            handler!(|ctx, channel, args| attach_viewer(
-                &ctx.terminals,
-                str_arg(&args, 0).unwrap_or_default(),
-                arg(&args, 1)
-            )),
-        );
-        t.add(
-            &["terminal:detach"],
-            handler!(|ctx, channel, args| detach_viewer(
-                &ctx.terminals,
-                str_arg(&args, 0),
-                str_arg(&args, 1).unwrap_or_default()
-            )),
-        );
-        t.add(
-            &["ssh:hosts"],
-            handler!(|ctx, channel, args| {
-                let home = home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
-                let hosts = tokio::task::spawn_blocking(move || nekko_term::read_ssh_hosts(&home))
-                    .await
-                    .map_err(|e| e.to_string())?;
-                Ok(serde_json::to_value(hosts).unwrap_or(json!([])))
-            }),
-        );
-        t.add(
-            &["ssh:open"],
-            handler!(|ctx, channel, args| open_ssh(ctx, str_arg(&args, 0).unwrap_or_default(), arg(&args, 1)).await),
-        );
-        t.add(&["chat:turn"], handler!(|ctx, channel, args| ctx.turns.start(ctx.hub.clone(), arg(&args, 0).clone())));
-        t.add(
-            &["turn:abort"],
-            handler!(|ctx, channel, args| Ok(json!(ctx.turns.abort(str_arg(&args, 0).unwrap_or_default())))),
-        );
-        t.add(
-            &["turn:alive"],
-            handler!(|ctx, channel, args| Ok(json!(ctx.turns.is_running(str_arg(&args, 0).unwrap_or_default())))),
-        );
-        // The chats whose turn runs here.
-        t.add(&["turn:running"], handler!(|ctx, channel, args| Ok(json!(ctx.turns.running_sessions()))));
-        t.add(
-            &["turn:steer"],
-            handler!(|ctx, channel, args| Ok(json!(
-                ctx.turns.steer(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1).clone())
-            ))),
-        );
-        t.add(&["turn:pending"], handler!(|ctx, channel, args| Ok(ctx.turns.pending.snapshot())));
-        t.add(
-            &["turn:approve"],
-            handler!(|ctx, channel, args| Ok(json!(ctx.turns.pending.approve(
-                str_arg(&args, 0).unwrap_or_default(),
-                str_arg(&args, 1).unwrap_or_default(),
-                arg(&args, 2) == &json!(true)
-            )))),
-        );
-        t.add(
-            &["turn:answer"],
-            handler!(|ctx, channel, args| Ok(json!(ctx.turns.pending.answer(
-                str_arg(&args, 0).unwrap_or_default(),
-                str_arg(&args, 1).unwrap_or_default(),
-                arg(&args, 2).clone()
-            )))),
-        );
-        // The UI's side of pending input.
-        t.add(
-            &["tool:approve"],
-            handler!(|ctx, channel, args| {
-                let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
-                ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true));
-                Ok(Value::Null)
-            }),
-        );
-        t.add(
-            &["chat:answer"],
-            handler!(|ctx, channel, args| {
-                let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
-                ctx.turns.pending.answer(sid, cid, arg(&args, 2).clone());
-                Ok(Value::Null)
-            }),
-        );
-        t.add(
-            &["chat:pending"],
-            handler!(|ctx, channel, args| Ok(merge_pending(json!({}), ctx.turns.pending.snapshot()))),
-        );
-        t.add(&["chat:running"], handler!(|ctx, channel, args| Ok(json!(running_chats(ctx)))));
-        t.add(
-            &["chat:steer"],
-            handler!(|ctx, channel, args| {
-                let sid = str_arg(&args, 0).unwrap_or_default().to_string();
-                let content = nekko_js::trim(str_arg(&args, 1).unwrap_or_default()).to_string();
-                let store = ctx.sessions.clone();
-                if !content.is_empty() && ctx.turns.steer(&sid, crate::turns::Turns::steering_message(&content)) {
-                    return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
-                        .await
-                        .map_err(|e| e.to_string());
-                }
-                // Nothing running to steer: the text waits for after the turn, as `steerChat` queued it.
-                if content.is_empty() {
-                    return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
-                        .await
-                        .map_err(|e| e.to_string());
-                }
-                tokio::task::spawn_blocking(move || {
-                    store.queue(&sid, &json!(content)).map(|s| s.unwrap_or(Value::Null))
-                })
-                .await
-                .map_err(|e| e.to_string())?
-            }),
-        );
-        // Stop the chat's turn, image turn and dev servers at once.
-        t.add(
-            &["chat:abort"],
-            handler!(|ctx, channel, args| stop_chat(ctx, str_arg(&args, 0).unwrap_or_default()).await),
-        );
-        t.add(
-            &["changes:list"],
-            handler!(|ctx, channel, args| {
-                let (changes, id) = (ctx.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
-                let list =
-                    tokio::task::spawn_blocking(move || changes.list_changes(&id)).await.map_err(|e| e.to_string())?;
-                Ok(serde_json::to_value(list).unwrap_or(json!([])))
-            }),
-        );
-        t.add(
-            &["changes:accept"],
-            handler!(|ctx, channel, args| {
-                ctx.changes.accept_change(str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
-                Ok(Value::Null)
-            }),
-        );
-        t.add(
-            &["changes:acceptAll"],
-            handler!(|ctx, channel, args| {
-                ctx.changes.accept_all(str_arg(&args, 0).unwrap_or_default());
-                Ok(Value::Null)
-            }),
-        );
-        // The host snapshots a file here before its own tool executor writes it.
-        t.add(
-            &["changes:record"],
-            handler!(|ctx, channel, args| {
-                let changes = ctx.changes.clone();
-                let (id, path) = (
-                    str_arg(&args, 0).unwrap_or_default().to_string(),
-                    str_arg(&args, 1).unwrap_or_default().to_string(),
-                );
-                tokio::task::spawn_blocking(move || changes.record_original(&id, &path))
-                    .await
-                    .map_err(|e| e.to_string())?;
-                Ok(Value::Null)
-            }),
-        );
-        t.add(&["mcp:sync"], handler!(|ctx, channel, args| Ok(ctx.mcp.sync(arg(&args, 0)).await)));
-        t.add(
-            &["mcp:hypergate"],
-            handler!(|ctx, channel, args| {
-                let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
-                Ok(crate::hypergate::detect(&base).await.map_or(Value::Null, Value::Object))
-            }),
-        );
-        // Probe and claim a token here, save the entry, and run the server list.
-        t.add(
-            &["mcp:hypergate:connect"],
-            handler!(|ctx, channel, args| {
-                let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
-                let Some(info) = crate::hypergate::resolve(&base).await else { return Ok(Value::Null) };
-                let info = Value::Object(info);
-                let configured =
-                    crate::settings::current(ctx).await.get("mcpServers").and_then(Value::as_array).cloned();
-                let list = crate::hypergate::with_hypergate(&configured.unwrap_or_default(), &info);
-                let saved = crate::settings::update(ctx, json!({ "mcpServers": list })).await?;
-                let servers = saved.get("mcpServers").cloned().unwrap_or(json!([]));
-                ctx.mcp.sync(&servers).await;
-                Ok(info)
-            }),
-        );
-        t.add(&["mcp:call"], handler!(|ctx, channel, args| Ok(ctx.mcp.call(arg(&args, 0)).await)));
-        // Internal: a `spawn_agent` call checked, its child made and its turn admitted (spawn.rs).
-        t.add(
-            &["turn:spawnPrepare"],
-            handler!(|ctx, channel, args| Ok(crate::spawn::prepare(ctx, arg(&args, 0)).await)),
-        );
-        // Internal: one PR's live state, for an agent watch's snapshot (watches.rs).
-        t.add(
-            &["watch:prInfo"],
-            handler!(|ctx, channel, args| Ok(
-                crate::workspace::pr_info(ctx, str_arg(&args, 0).unwrap_or_default()).await
-            )),
-        );
-        // `mcpStatus`: sync the configured servers here, then report them.
-        t.add(
-            &["mcp:status"],
-            handler!(|ctx, channel, args| {
-                let settings = crate::settings::current(ctx).await;
-                let configs = settings.get("mcpServers").filter(|v| v.is_array()).cloned().unwrap_or(json!([]));
-                let snapshot = ctx.mcp.sync(&configs).await;
-                Ok(crate::mcp::status(&configs, &snapshot))
-            }),
-        );
-        t.add(&["provider:complete"], handler!(|ctx, channel, args| crate::sideband::complete(arg(&args, 0)).await));
-        t.add(crate::accounts::CHANNELS, handler!(|ctx, channel, args| ctx.accounts.route(channel, &args).await));
-        t.add(
-            crate::decisions::CHANNELS,
-            handler!(|ctx, channel, args| crate::decisions::route(ctx, ctx.workspace.data_dir(), channel, &args).await),
-        );
-        t.add(crate::context::CHANNELS, handler!(|ctx, channel, args| crate::context::route(ctx, channel, args).await));
-        t.add(crate::side::CHANNELS, handler!(|ctx, channel, args| crate::side::route(ctx, channel, &args).await));
-        t.add(
-            crate::privacy::CHANNELS,
-            handler!(|ctx, channel, args| crate::privacy::route(ctx, channel, &args).await),
-        );
-        t.add(&["chat:send"], handler!(|ctx, channel, args| crate::admission::send(ctx, &ctx.admission, args).await));
-        t.add(
-            &["chat:interruptQueued"],
-            handler!(|ctx, channel, args| crate::admission::interrupt_queued(ctx, &ctx.admission, args).await),
-        );
-        t.add(
-            crate::compaction::CHANNELS,
-            handler!(|ctx, channel, args| ctx.compactions.clone().route(ctx, channel, &args).await),
-        );
-        t.add(
-            &["chat:generateImage"],
-            handler!(|ctx, channel, args| ctx.image_turns.generate(ctx, arg(&args, 0)).await),
-        );
-        t.add(
-            crate::worktrees::CHANNELS,
-            handler!(|ctx, channel, args| crate::worktrees::route(ctx, channel, &args).await),
-        );
-        t.add(
-            crate::providers::CHANNELS,
-            handler!(|ctx, channel, args| crate::providers::route(ctx, channel, &args).await),
-        );
-        t.add(crate::oauth::CHANNELS, handler!(|ctx, channel, args| ctx.oauth.route(channel, &args).await));
-        t.add(crate::model_server::CHANNELS, handler!(|ctx, channel, args| ctx.server.route(channel, &args).await));
-        t.add(crate::installs::CHANNELS, handler!(|ctx, channel, args| ctx.installs.route(channel, &args).await));
-        t.add(crate::downloads::CHANNELS, handler!(|ctx, channel, args| ctx.downloads.route(channel, &args).await));
-        t.add(crate::library::CHANNELS, handler!(|ctx, channel, args| ctx.library.route(channel, &args).await));
-        t.add(
-            crate::catalog::CHANNELS,
-            handler!(|ctx, channel, args| crate::catalog::route(&ctx.catalog, channel, &args).await),
-        );
-        t.add(
-            crate::tooling::CHANNELS,
-            handler!(|ctx, channel, args| crate::tooling::route(ctx, channel, &args).await),
-        );
-        // An `agent_watch` call outside a turn.
-        t.add(
-            &["watch:tool"],
-            handler!(|ctx, channel, args| ctx
-                .turns
-                .watches
-                .tool(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1))
-                .await
-                .map(Value::String)
-                .or_else(|e| Ok(json!({ "error": e })))),
-        );
-        t.add(
-            &["session:nextWatch"],
-            handler!(|ctx, channel, args| Ok(ctx.turns.watches.next_wake_at(str_arg(&args, 0).unwrap_or_default()))),
-        );
-        t.add(
-            &["session:watches"],
-            handler!(|ctx, channel, args| Ok(ctx.turns.watches.views(str_arg(&args, 0).unwrap_or_default()))),
-        );
-        if native {
-            t.add(
-                crate::native::CHANNELS,
-                handler!(|ctx, channel, args| match &ctx.native {
-                    Some(native) => native.route(ctx, channel, &args).await,
-                    None => Err(format!("unknown channel {channel}")),
-                }),
-            );
-        }
-        if desktop {
-            t.add(
-                crate::desktop::CHANNELS,
-                handler!(|ctx, channel, args| match &ctx.desktop {
-                    Some(desktop) => desktop.route(ctx, channel, &args).await,
-                    None => Err(format!("unknown channel {channel}")),
-                }),
-            );
-        }
-        t.add(
-            crate::small_services::CHANNELS,
-            handler!(|ctx, channel, args| crate::small_services::route(ctx, channel, &args).await),
-        );
-        t.add(crate::sandbox::CHANNELS, handler!(|ctx, channel, args| ctx.sandboxes.route(ctx, channel, &args).await));
-        t.add(
-            crate::settings::CHANNELS,
-            handler!(|ctx, channel, args| crate::settings::route(&ctx.settings, channel, &args).await),
-        );
-        t.add(nekko_cloud::CHANNELS, handler!(|ctx, channel, args| ctx.cloud.route(channel, &args).await));
-        t.add(crate::voice::CHANNELS, handler!(|ctx, channel, args| ctx.voice.route(channel, &args).await));
-        let workspace = handler!(|ctx, channel, args| crate::workspace::route(ctx, channel, &args).await);
-        t.add(crate::workspace::CHANNELS, workspace);
-        t.add(crate::workspace::DATA_CHANNELS, workspace);
-        t.add(crate::logs::CHANNELS, handler!(|ctx, channel, args| crate::logs::route(ctx, channel, &args).await));
-        let automation = handler!(|ctx, channel, args| ctx.automation.route(channel, &args).await);
-        t.add(crate::automation::TASK_CHANNELS, automation);
-        t.add(crate::automation::WORKFLOW_CHANNELS, automation);
-        t.add(crate::automation::TRAINING_CHANNELS, automation);
-        t.add(&[crate::automation::TRAINING_TOOL], automation);
-        t.add(
-            crate::connectors::CHANNELS,
-            handler!(|ctx, channel, args| crate::connectors::route(ctx, channel, &args).await),
-        );
-        t.add(crate::remote::CHANNELS, handler!(|ctx, channel, args| ctx.remote.route(channel, &args).await));
-        t.add(crate::messaging::CHANNELS, handler!(|ctx, channel, args| ctx.messaging.route(channel)));
-        t.add(
-            crate::runtimes::CHANNELS,
-            handler!(|ctx, channel, args| crate::runtimes::route(ctx, &ctx.runtimes, channel, &args).await),
-        );
-        t.add(
-            crate::machine::CHANNELS,
-            handler!(|ctx, channel, args| crate::machine::route(&ctx.machine, channel, &args).await),
-        );
-        t.add(&["resource:queue"], handler!(|ctx, channel, args| ctx.resource_queue.route(&args).await));
-        t.add(
-            &["session:create"],
-            handler!(|ctx, channel, args| create_session(ctx, arg(&args, 0).as_str(), None, None).await),
-        );
-        t.add(
-            SESSION_CHANNELS,
-            handler!(|ctx, channel, args| {
-                // A deleted Claude Agent chat's Claude Code child goes with it.
-                if channel == "session:delete"
-                    && let Some(id) = args.first().and_then(Value::as_str)
-                {
-                    ctx.turns.harness.close(id).await;
-                }
-                session_op(ctx.sessions.clone(), ctx.turns.agent_logs.clone(), channel, args).await
-            }),
-        );
-        let engine = handler!(|ctx, channel, args| match crate::engine::route(&ctx.engine, channel, &args).await {
-            Some(r) => r,
-            None => Err(format!("unknown channel {channel}")),
-        });
-        t.add(crate::engine::CHANNELS, engine);
-        t.add(crate::decide::CHANNELS, engine);
-        t.add(
-            crate::remote_image::CHANNELS,
-            handler!(|ctx, channel, args| match crate::remote_image::route(ctx, channel, &args).await {
-                Some(r) => r,
-                None => Err(format!("unknown channel {channel}")),
-            }),
-        );
-        t.add(
-            crate::skill_sources::CHANNELS,
-            handler!(|ctx, channel, args| match crate::skill_sources::route(ctx, channel, &args).await {
-                Some(r) => r,
-                None => Err(format!("unknown channel {channel}")),
-            }),
-        );
-        // The Local Web UI's GitHub review (repository_review.rs).
-        t.add(
-            &["repository:review"],
-            handler!(|ctx, channel, args| crate::repository_review::review(ctx, arg(&args, 0)).await),
-        );
-        debug_assert!(t.twice.is_empty(), "channels registered twice: {:?}", t.twice);
-        t
-    }
-}
-
-/// Answer one call: the checks every caller gets, then the channel's handler.
 pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, String> {
+    if channel == "session:create" {
+        return create_session(ctx, arg(&args, 0).as_str(), None, None).await;
+    }
     if channel == "session:setOptions"
         && ["executionMode", "gitIsolation"].iter().any(|key| arg(&args, 1).get(*key).is_some())
     {
@@ -619,40 +122,276 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         }
     }
     if matches!(channel, "terminal:create" | "mcp:call" | "ssh:open") {
-        refuse_sandbox_work(ctx, channel, &args).await?;
+        // `ssh:open(alias, opts)` carries its options second.
+        let opts = arg(&args, if channel == "ssh:open" { 1 } else { 0 });
+        if opts.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
+            return Err(format!("{channel} cannot execute sandbox work natively; use the host container router"));
+        }
+        let session_id = opts
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .or_else(|| if channel == "mcp:call" { str_arg(&args, 1) } else { None });
+        if let Some(id) = session_id {
+            let (store, sid) = (ctx.sessions.clone(), id.to_string());
+            // Only the chat's own fields are read: its transcript is skipped, off the async workers.
+            let session = tokio::task::spawn_blocking(move || store.meta(&sid))
+                .await
+                .map_err(|e| e.to_string())?
+                .ok_or("Session not found")?;
+            if session.get("id").and_then(Value::as_str) != Some(id) || !session.messages_array {
+                return Err("Cannot verify session execution mode: session not found".into());
+            }
+            if session.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
+                return Err(format!("{channel} is unsupported for sandbox sessions; use the host container router"));
+            }
+        }
     }
-    match ctx.routes.get(channel) {
-        Some(handler) => handler(ctx, channel, args).await,
-        None => Err(format!("unknown channel {channel}")),
-    }
-}
-
-/// `terminal:create`, `mcp:call` and `ssh:open` never run a sandbox chat's work on the host.
-async fn refuse_sandbox_work(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<(), String> {
-    // `ssh:open(alias, opts)` carries its options second.
-    let opts = arg(args, if channel == "ssh:open" { 1 } else { 0 });
-    if opts.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
-        return Err(format!("{channel} cannot execute sandbox work natively; use the host container router"));
-    }
-    let session_id = opts
-        .get("sessionId")
-        .and_then(Value::as_str)
-        .or_else(|| if channel == "mcp:call" { str_arg(args, 1) } else { None });
-    if let Some(id) = session_id {
-        let (store, sid) = (ctx.sessions.clone(), id.to_string());
-        // Only the chat's own fields are read: its transcript is skipped, off the async workers.
-        let session = tokio::task::spawn_blocking(move || store.meta(&sid))
+    match channel {
+        "claude:policy" => Ok(ctx.claude_policy.status()),
+        "claude:capability" => crate::claude_policy::capability_route(ctx, &args).await,
+        "claude:planUsage" => crate::claude_policy::plan_usage_route(ctx, &args).await,
+        "claude:codeStatus" => crate::claude_policy::code_status_route(ctx, &args).await,
+        "daemon:info" => Ok(json!({
+            "app": "nekkod",
+            "version": env!("CARGO_PKG_VERSION"),
+            "pid": std::process::id(),
+        })),
+        "terminals:list" => {
+            // `{ sessionId }` narrows it to one chat's terminals and its agent log.
+            let only = arg(&args, 0).get("sessionId").and_then(Value::as_str);
+            let mut native = ctx.terminals.list();
+            let mut agent = ctx.turns.agent_logs.list();
+            if let Some(sid) = only {
+                native.retain(|t| t.session_id.as_deref() == Some(sid));
+                agent.retain(|t| t.get("agentSessionId").and_then(Value::as_str) == Some(sid));
+            }
+            let mut all = serde_json::to_value(native).unwrap_or(json!([]));
+            if let Value::Array(list) = &mut all {
+                list.extend(agent);
+            }
+            Ok(all)
+        }
+        "terminals:list:native" => Ok(serde_json::to_value(ctx.terminals.list()).unwrap_or(json!([]))),
+        "terminal:shells" => Ok(serde_json::to_value(detect_shells()).unwrap_or(json!([]))),
+        "terminal:create" => create_terminal(ctx, arg(&args, 0)).await,
+        "terminal:snapshot" | "terminal:tail" => {
+            let id = str_arg(&args, 0).unwrap_or_default().to_string();
+            let max = tail_bytes(channel, &args);
+            if is_agent(&id) {
+                let snap = ctx.turns.agent_logs.route("terminal:snapshot", &id, &args).await?;
+                return Ok(match max {
+                    Some(max) => cap_buffer(snap, max),
+                    None => snap,
+                });
+            }
+            Ok(native_snapshot(&ctx.terminals, &id, max))
+        }
+        "terminal:update" | "terminal:write" | "terminal:resize" | "terminal:run" | "terminal:signal"
+        | "terminal:close" => {
+            let id = str_arg(&args, 0).unwrap_or_default().to_string();
+            if is_agent(&id) {
+                return ctx.turns.agent_logs.route(channel, &id, &args).await;
+            }
+            terminal_op(ctx, channel, &id, &args)
+        }
+        "terminal:attach" => attach_viewer(&ctx.terminals, str_arg(&args, 0).unwrap_or_default(), arg(&args, 1)),
+        "terminal:detach" => detach_viewer(&ctx.terminals, str_arg(&args, 0), str_arg(&args, 1).unwrap_or_default()),
+        "ssh:hosts" => {
+            let home = home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
+            let hosts = tokio::task::spawn_blocking(move || nekko_term::read_ssh_hosts(&home))
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(hosts).unwrap_or(json!([])))
+        }
+        "ssh:open" => open_ssh(ctx, str_arg(&args, 0).unwrap_or_default(), arg(&args, 1)).await,
+        "chat:turn" => ctx.turns.start(ctx.hub.clone(), arg(&args, 0).clone()),
+        "turn:abort" => Ok(json!(ctx.turns.abort(str_arg(&args, 0).unwrap_or_default()))),
+        "turn:alive" => Ok(json!(ctx.turns.is_running(str_arg(&args, 0).unwrap_or_default()))),
+        // The chats whose turn runs here.
+        "turn:running" => Ok(json!(ctx.turns.running_sessions())),
+        "turn:steer" => Ok(json!(ctx.turns.steer(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1).clone()))),
+        "turn:pending" => Ok(ctx.turns.pending.snapshot()),
+        "turn:approve" => Ok(json!(ctx.turns.pending.approve(
+            str_arg(&args, 0).unwrap_or_default(),
+            str_arg(&args, 1).unwrap_or_default(),
+            arg(&args, 2) == &json!(true)
+        ))),
+        "turn:answer" => Ok(json!(ctx.turns.pending.answer(
+            str_arg(&args, 0).unwrap_or_default(),
+            str_arg(&args, 1).unwrap_or_default(),
+            arg(&args, 2).clone()
+        ))),
+        // The UI's side of pending input: answered here when a daemon turn
+        // waits on it, otherwise by the host (an in-process turn's).
+        "tool:approve" => {
+            let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true));
+            Ok(Value::Null)
+        }
+        "chat:answer" => {
+            let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            ctx.turns.pending.answer(sid, cid, arg(&args, 2).clone());
+            Ok(Value::Null)
+        }
+        "chat:pending" => Ok(merge_pending(json!({}), ctx.turns.pending.snapshot())),
+        "chat:running" => Ok(json!(running_chats(ctx))),
+        "chat:steer" => {
+            let sid = str_arg(&args, 0).unwrap_or_default().to_string();
+            let content = nekko_js::trim(str_arg(&args, 1).unwrap_or_default()).to_string();
+            let store = ctx.sessions.clone();
+            if !content.is_empty() && ctx.turns.steer(&sid, crate::turns::Turns::steering_message(&content)) {
+                return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
+                    .await
+                    .map_err(|e| e.to_string());
+            }
+            // Nothing running to steer: the text waits for after the turn, as `steerChat` queued it.
+            if content.is_empty() {
+                return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
+                    .await
+                    .map_err(|e| e.to_string());
+            }
+            tokio::task::spawn_blocking(move || store.queue(&sid, &json!(content)).map(|s| s.unwrap_or(Value::Null)))
+                .await
+                .map_err(|e| e.to_string())?
+        }
+        // Stop the chat's turn, image turn and dev servers at once.
+        "chat:abort" => stop_chat(ctx, str_arg(&args, 0).unwrap_or_default()).await,
+        "changes:list" => {
+            let (changes, id) = (ctx.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
+            let list =
+                tokio::task::spawn_blocking(move || changes.list_changes(&id)).await.map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(list).unwrap_or(json!([])))
+        }
+        "changes:accept" => {
+            ctx.changes.accept_change(str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+            Ok(Value::Null)
+        }
+        "changes:acceptAll" => {
+            ctx.changes.accept_all(str_arg(&args, 0).unwrap_or_default());
+            Ok(Value::Null)
+        }
+        // The host snapshots a file here before its own tool executor writes it.
+        "changes:record" => {
+            let changes = ctx.changes.clone();
+            let (id, path) =
+                (str_arg(&args, 0).unwrap_or_default().to_string(), str_arg(&args, 1).unwrap_or_default().to_string());
+            tokio::task::spawn_blocking(move || changes.record_original(&id, &path))
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(Value::Null)
+        }
+        "mcp:sync" => Ok(ctx.mcp.sync(arg(&args, 0)).await),
+        "mcp:hypergate" => {
+            let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+            Ok(crate::hypergate::detect(&base).await.map_or(Value::Null, Value::Object))
+        }
+        // Probe and claim a token here, save the entry, and run the server list.
+        "mcp:hypergate:connect" => {
+            let base = crate::hypergate::base(crate::hypergate::port_arg(arg(&args, 0)), |k| std::env::var(k).ok());
+            let Some(info) = crate::hypergate::resolve(&base).await else { return Ok(Value::Null) };
+            let info = Value::Object(info);
+            let configured = crate::settings::current(ctx).await.get("mcpServers").and_then(Value::as_array).cloned();
+            let list = crate::hypergate::with_hypergate(&configured.unwrap_or_default(), &info);
+            let saved = crate::settings::update(ctx, json!({ "mcpServers": list })).await?;
+            let servers = saved.get("mcpServers").cloned().unwrap_or(json!([]));
+            ctx.mcp.sync(&servers).await;
+            Ok(info)
+        }
+        "mcp:call" => Ok(ctx.mcp.call(arg(&args, 0)).await),
+        // Internal: a `spawn_agent` call checked, its child made and its turn admitted (spawn.rs).
+        "turn:spawnPrepare" => Ok(crate::spawn::prepare(ctx, arg(&args, 0)).await),
+        // Internal: one PR's live state, for an agent watch's snapshot (watches.rs).
+        "watch:prInfo" => Ok(crate::workspace::pr_info(ctx, str_arg(&args, 0).unwrap_or_default()).await),
+        // `mcpStatus`: sync the configured servers here, then report them.
+        "mcp:status" => {
+            let settings = crate::settings::current(ctx).await;
+            let configs = settings.get("mcpServers").filter(|v| v.is_array()).cloned().unwrap_or(json!([]));
+            let snapshot = ctx.mcp.sync(&configs).await;
+            Ok(crate::mcp::status(&configs, &snapshot))
+        }
+        "provider:complete" => crate::sideband::complete(arg(&args, 0)).await,
+        c if crate::accounts::CHANNELS.contains(&c) => ctx.accounts.route(c, &args).await,
+        c if crate::decisions::CHANNELS.contains(&c) => {
+            crate::decisions::route(ctx, ctx.workspace.data_dir(), c, &args).await
+        }
+        c if crate::context::CHANNELS.contains(&c) => crate::context::route(ctx, c, args).await,
+        c if crate::side::CHANNELS.contains(&c) => crate::side::route(ctx, c, &args).await,
+        c if crate::privacy::CHANNELS.contains(&c) => crate::privacy::route(ctx, c, &args).await,
+        "chat:send" => crate::admission::send(ctx, &ctx.admission, args).await,
+        "chat:interruptQueued" => crate::admission::interrupt_queued(ctx, &ctx.admission, args).await,
+        c if crate::compaction::CHANNELS.contains(&c) => ctx.compactions.clone().route(ctx, c, &args).await,
+        "chat:generateImage" => ctx.image_turns.generate(ctx, arg(&args, 0)).await,
+        c if crate::worktrees::CHANNELS.contains(&c) => crate::worktrees::route(ctx, c, &args).await,
+        c if crate::providers::CHANNELS.contains(&c) => crate::providers::route(ctx, c, &args).await,
+        c if crate::oauth::CHANNELS.contains(&c) => ctx.oauth.route(c, &args).await,
+        c if crate::model_server::CHANNELS.contains(&c) => ctx.server.clone().route(c, &args).await,
+        c if crate::installs::CHANNELS.contains(&c) => ctx.installs.clone().route(c, &args).await,
+        c if crate::downloads::CHANNELS.contains(&c) => ctx.downloads.clone().route(c, &args).await,
+        c if crate::library::CHANNELS.contains(&c) => ctx.library.clone().route(c, &args).await,
+        c if crate::catalog::CHANNELS.contains(&c) => crate::catalog::route(&ctx.catalog, c, &args).await,
+        c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        // An `agent_watch` call outside a turn.
+        "watch:tool" => ctx
+            .turns
+            .watches
+            .tool(str_arg(&args, 0).unwrap_or_default(), arg(&args, 1))
             .await
-            .map_err(|e| e.to_string())?
-            .ok_or("Session not found")?;
-        if session.get("id").and_then(Value::as_str) != Some(id) || !session.messages_array {
-            return Err("Cannot verify session execution mode: session not found".into());
+            .map(Value::String)
+            .or_else(|e| Ok(json!({ "error": e }))),
+        "session:nextWatch" => Ok(ctx.turns.watches.next_wake_at(str_arg(&args, 0).unwrap_or_default())),
+        "session:watches" => Ok(ctx.turns.watches.views(str_arg(&args, 0).unwrap_or_default())),
+        c if crate::native::CHANNELS.contains(&c) && ctx.native.is_some() => {
+            ctx.native.clone().expect("checked").route(ctx, c, &args).await
         }
-        if session.get("executionMode").and_then(Value::as_str) == Some("sandbox") {
-            return Err(format!("{channel} is unsupported for sandbox sessions; use the host container router"));
+        c if crate::desktop::CHANNELS.contains(&c) && ctx.desktop.is_some() => {
+            ctx.desktop.clone().expect("checked").route(ctx, c, &args).await
+        }
+        c if crate::small_services::CHANNELS.contains(&c) => crate::small_services::route(ctx, c, &args).await,
+        c if crate::sandbox::CHANNELS.contains(&c) => ctx.sandboxes.clone().route(ctx, c, &args).await,
+        c if crate::settings::CHANNELS.contains(&c) => crate::settings::route(&ctx.settings, c, &args).await,
+        c if nekko_cloud::CHANNELS.contains(&c) => ctx.cloud.route(c, &args).await,
+        c if crate::voice::CHANNELS.contains(&c) => ctx.voice.route(c, &args).await,
+        c if crate::workspace::serves(c) => crate::workspace::route(ctx, c, &args).await,
+        c if crate::logs::CHANNELS.contains(&c) => crate::logs::route(ctx, c, &args).await,
+        c if crate::automation::TASK_CHANNELS.contains(&c)
+            || crate::automation::WORKFLOW_CHANNELS.contains(&c)
+            || crate::automation::TRAINING_CHANNELS.contains(&c)
+            || c == crate::automation::TRAINING_TOOL =>
+        {
+            ctx.automation.route(c, &args).await
+        }
+        c if crate::connectors::CHANNELS.contains(&c) => crate::connectors::route(ctx, c, &args).await,
+        c if crate::remote::CHANNELS.contains(&c) => ctx.remote.route(c, &args).await,
+        c if crate::messaging::CHANNELS.contains(&c) => ctx.messaging.route(c),
+        c if crate::runtimes::CHANNELS.contains(&c) => crate::runtimes::route(ctx, &ctx.runtimes, c, &args).await,
+        c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
+        "resource:queue" => ctx.resource_queue.route(&args).await,
+        c if SESSION_CHANNELS.contains(&c) => {
+            // A deleted Claude Agent chat's Claude Code child goes with it.
+            if c == "session:delete"
+                && let Some(id) = args.first().and_then(Value::as_str)
+            {
+                ctx.turns.harness.close(id).await;
+            }
+            session_op(ctx.sessions.clone(), ctx.turns.agent_logs.clone(), channel, args).await
+        }
+        _ => {
+            if let Some(r) = crate::engine::route(&ctx.engine, channel, &args).await {
+                return r;
+            }
+            if let Some(r) = crate::remote_image::route(ctx, channel, &args).await {
+                return r;
+            }
+            if let Some(r) = crate::skill_sources::route(ctx, channel, &args).await {
+                return r;
+            }
+            // The Local Web UI's GitHub review (repository_review.rs).
+            if channel == "repository:review" {
+                return crate::repository_review::review(ctx, arg(&args, 0)).await;
+            }
+            Err(format!("unknown channel {channel}"))
         }
     }
-    Ok(())
 }
 
 /// `chat:abort`: stop the daemon's turn at once (and its image turn and its
@@ -933,6 +672,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "sessions:purgeArchived",
     "session:get",
     "session:images",
+    "session:create",
     "session:delete",
     "session:setOptions",
     "session:setWorkspace",
@@ -993,6 +733,7 @@ async fn session_op(
             "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
+            "session:create" => store.create(str_arg(&args, 0)),
             "session:delete" => {
                 delete_log(id)?;
                 store.delete(id).map(|()| Value::Null)
@@ -1067,31 +808,6 @@ mod tests {
         assert_eq!(attach_viewer(&reg, "term_x", &json!({ "id": "d" })).unwrap_err(), "Terminal not found");
         assert!(detach_viewer(&reg, None, "").is_err());
         assert_eq!(detach_viewer(&reg, None, "d").unwrap(), json!([]));
-    }
-
-    #[test]
-    fn every_channel_has_one_handler() {
-        for (native, desktop) in [(false, false), (true, false), (false, true), (true, true)] {
-            let t = Table::new(native, desktop);
-            assert!(t.twice.is_empty(), "registered twice: {:?}", t.twice);
-            assert_eq!(t.get("shell:openPath").is_some(), native);
-        }
-        let t = Table::new(true, true);
-        // `lms:probe` is the providers' (it was the first arm to match it).
-        assert!(!crate::runtimes::CHANNELS.contains(&"lms:probe"));
-        assert!(crate::providers::CHANNELS.contains(&"lms:probe"));
-        for c in [
-            "chat:send",
-            "session:create",
-            "session:get",
-            "decide:status",
-            "infer:list",
-            "image:fetch",
-            "repository:review",
-        ] {
-            assert!(t.get(c).is_some(), "{c}");
-        }
-        assert!(t.get("no:such").is_none());
     }
 
     #[test]

@@ -50,9 +50,6 @@ const LOCAL: &str = "Images from this computer or the local network are not load
 const ACCEPT: &str = "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.1";
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; NekkoAgent/1.0; +https://nekkoagent.com)";
 
-/// The channels [`route`] serves.
-pub const CHANNELS: &[&str] = &["image:fetch", "attachment:import"];
-
 /// `image:fetch` and `attachment:import`; None for any other channel.
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Option<Result<Value, String>> {
     match channel {

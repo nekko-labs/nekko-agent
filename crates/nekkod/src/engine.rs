@@ -76,10 +76,6 @@ fn arg(args: &[Value], i: usize) -> &Value {
     args.get(i).unwrap_or(&Value::Null)
 }
 
-/// The `infer:*` channels [`route`] serves (and `crate::decide::CHANNELS`).
-pub const CHANNELS: &[&str] =
-    &["infer:serve", "infer:stopServing", "infer:serving", "infer:spawn", "infer:kill", "infer:list", "infer:log"];
-
 /// The `infer:*` and `decide:*` channels.
 pub async fn route(engine: &Engine, channel: &str, args: &[Value]) -> Option<Result<Value, String>> {
     if channel.starts_with("decide:") {
