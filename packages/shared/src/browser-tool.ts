@@ -18,7 +18,6 @@ export const BROWSER_EXTRACT_KINDS = ['text', 'links'] as const;
 export const BROWSER_MAX_WAIT_MS = 20_000;
 
 export const isBrowserAction = (value: unknown): value is BrowserAction => (BROWSER_ACTIONS as readonly unknown[]).includes(value);
-export const isDedicatedOnlyBrowserAction = (value: unknown): boolean => (BROWSER_DEDICATED_ACTIONS as readonly unknown[]).includes(value);
 export const isHttpUrl = (value: unknown): value is string => typeof value === 'string' && /^https?:\/\//i.test(value);
 
 const optionalString = (input: Record<string, unknown>, key: string, max: number): string | undefined => {

@@ -415,23 +415,3 @@ export function marketToSkillDef(m: MarketplaceSkill): SkillDef {
     workflow: marketWorkflow(m),
   };
 }
-
-/** SKILL.md content for file-based installs (Claude Code / Codex convention). */
-export function skillToMarkdown(m: MarketplaceSkill): string {
-  // Skills that came with a verbatim SKILL.md (Vaizer) install it as-is.
-  if (m.markdown) return m.markdown.endsWith('\n') ? m.markdown : `${m.markdown}\n`;
-  return [
-    '---',
-    `name: ${m.name}`,
-    `description: ${m.description}`,
-    '---',
-    '',
-    `# ${m.name}`,
-    '',
-    m.instructions,
-    '',
-    `> Installed from the Nekko Agent skills marketplace (author: ${m.author}${m.url ? `, ${m.url}` : ''}).`,
-    ...(m.basedOn ? [`> Based on ${m.basedOn}; this is our own summary, see the original for its full text.`] : []),
-    '',
-  ].join('\n');
-}

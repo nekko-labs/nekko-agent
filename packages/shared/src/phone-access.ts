@@ -708,12 +708,6 @@ export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000, images: 40, 
  */
 export const PHONE_MAX_FRAME_BYTES = 9 * 1024 * 1024;
 
-/** The error a phone gets instead of a reply too large for the relay. */
-export function phoneFrameTooLarge(bytes: number): string {
-  const mb = (bytes / (1024 * 1024)).toFixed(1);
-  return `This reply is too large to send to a phone (${mb} MB). Open it on the computer.`;
-}
-
 export type PhoneAccessCode =
   | 'channel-denied'
   | 'setting-denied'
