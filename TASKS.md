@@ -6,6 +6,13 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Vercel builds only website changes (#1328)
+
+Vercel serves only the marketing site and docs but built a deployment for every push to every branch. Spec: [spec/platform/distribution-platforms.md](spec/platform/distribution-platforms.md).
+
+- [x] **T218, Ignored Build Step (2026-10-28).** `vercel.json` `ignoreCommand` runs `scripts/vercel-ignore.sh`, which diffs the site's inputs against `VERCEL_GIT_PREVIOUS_SHA` (falling back to `HEAD^` on previews, and building on production when that SHA is outside Vercel's 10-commit clone). `scripts/build-docs.test.mjs` checks its paths cover every path the Docs site workflow watches; that workflow was already path-filtered. Verified locally: a website commit builds, an iOS-only commit is skipped, production with an unknown previous SHA builds.
+- [ ] **T219, Live check** that a non-website PR shows Vercel's build as ignored and a website PR still gets its preview.
+
 ## Model Server inline download progress (#1221)
 
 - [x] **DLP-1, Show progress and block duplicate download clicks.** Model builds/recommendations, decisions and managed llama.cpp/image/MLX runtimes share immediate acquisition locks and existing grouped-job progress. Queued/downloading/verifying stay disabled, terminal states and rejected requests permit retry; runtime build and decision precision stay fixed in flight. Focused state tests and isolated 1100px/390px rapid-click/progress/retry assertions pass. Model/runtime before/after PNGs inspected. Spec: [Models and providers](spec/models/models-providers.md). Live downloads and packaged application not exercised; baseline macOS shortcut test failure tracked in #900.
