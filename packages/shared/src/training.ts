@@ -62,6 +62,10 @@ export interface RunArtifact {
 /** Status of one step in a goal run's execution plan. */
 export type PlanStepStatus = 'pending' | 'active' | 'done' | 'skipped';
 
+/** Where a step sits in the work loop: look, make, check, hand over. Verify failing sends work back to Build. */
+export type PlanStepKind = 'explore' | 'build' | 'verify' | 'ship';
+export const PLAN_STEP_KINDS: readonly PlanStepKind[] = ['explore', 'build', 'verify', 'ship'];
+
 export type PlanVerificationStatus = 'pending' | 'active' | 'passed' | 'failed' | 'blocked' | 'unknown';
 
 export interface PlanVerification {
@@ -77,6 +81,10 @@ export interface PlanStep {
   /** Concrete, verifiable step, e.g. "Wire the CSV parser + unit tests". */
   title: string;
   status: PlanStepStatus;
+  /** The step's place in the loop, when the agent says. */
+  kind?: PlanStepKind;
+  /** Set from 2 when a finished step is reopened (Verify sent the work back): which pass this is. */
+  pass?: number;
   /** Explicit inspection state, independent of generic completion; freshness uses updatedAt. */
   verification?: PlanVerification;
   /** One-line outcome, blocker, or the reason a step was skipped. */
@@ -335,6 +343,7 @@ export function applyPlanUpdate(
       ? (r.status as PlanStepStatus)
       : undefined;
     const note = typeof r.note === 'string' && r.note.trim() ? r.note.trim().slice(0, 240) : undefined;
+    const kind = typeof r.kind === 'string' && PLAN_STEP_KINDS.includes(r.kind as PlanStepKind) ? (r.kind as PlanStepKind) : undefined;
     const verification = sanitizeVerification(r.verification);
     let step = id ? next.find((s) => s.id === id) : undefined;
     // A fresh plan often starts numbering at step_1 again. Do not rename history.
@@ -344,13 +353,16 @@ export function applyPlanUpdate(
       const was = step.status;
       if (title) step.title = title;
       if (status && !(replace && (was === 'done' || was === 'skipped'))) step.status = status;
+      if (kind) step.kind = kind;
+      // A finished step picked up again is another pass through the loop.
+      if (was === 'done' && step.status === 'active') step.pass = (step.pass ?? 1) + 1;
       if (note) step.note = note;
       if (verification) step.verification = verification;
       step.updatedAt = now;
       if (step.status === 'done' && was !== 'done') finished.push(step);
       else if (step.status === 'skipped' && was !== 'skipped') skippedNow.push(step);
     } else if (title) {
-      next.push({ id: id && !next.some((s) => s.id === id) ? id : freshId(), title, status: status ?? 'pending', note, createdAt: now, updatedAt: now, ...(verification ? { verification } : {}) });
+      next.push({ id: id && !next.some((s) => s.id === id) ? id : freshId(), title, status: status ?? 'pending', ...(kind ? { kind } : {}), note, createdAt: now, updatedAt: now, ...(verification ? { verification } : {}) });
     }
   }
   if (!next.length) return { error: 'The plan cannot be empty; pass the full step list.' };

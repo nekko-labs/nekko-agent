@@ -495,6 +495,16 @@
           "skipped"
          ]
         },
+        "kind": {
+         "type": "string",
+         "enum": [
+          "explore",
+          "build",
+          "verify",
+          "ship"
+         ],
+         "description": "The step's place in the work loop: explore (read and investigate), build (change things), verify (check the result), ship (hand it over: PR, release, report). When a verify step fails, set the build step it sends you back to \"active\" again; the app counts that as another pass."
+        },
         "note": {
          "type": "string",
          "description": "One-line outcome, blocker, or skip reason."
