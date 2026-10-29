@@ -817,7 +817,7 @@ export function CommandWall({
           <p className="wall-zone-empty-title">Empty zone</p>
           <p>Drag in an agent chat or start a new one below.</p>
           <div className="wall-zone-create">
-            {CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind}
+            {CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind} aria-label={label} title={`${label} (${shortcut.label})`}
               onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image'); }}><PlusIcon className="wall-zone-plus h-3.5 w-3.5" />{icon}<span className="wall-zone-label">{label}</span><kbd className="kbd wall-zone-kbd">{shortcut.label}</kbd></button>)}
           </div>
         </div> : <>
