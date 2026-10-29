@@ -34,7 +34,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'hardware', area: 'Chat · header', label: 'Hardware strip', hint: 'CPU, memory and GPU dials under the title. Also shown in Simple while a local model is loaded', platforms: DP, default: 'expert', whenLocal: true },
   { id: 'ph-subtitle', area: 'Chat · header', label: 'Model and computer under the title', hint: 'Like "Opus 5.5 · Studio Mac"', platforms: P, default: 'expert' },
   { id: 'model', area: 'Chat · message box', label: 'Model name and picker', hint: 'Switch between Claude, ChatGPT or a local model', platforms: DP, default: 'show' },
-  { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'How hard the model thinks before it answers', platforms: DP, default: 'expert' },
+  { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'How hard the model thinks before it answers', platforms: DP, default: 'show' },
   { id: 'context', area: 'Chat · message box', label: 'Context ring and token count', hint: 'How full this chat is, in tokens', platforms: DP, default: 'show' },
   { id: 'cost', area: 'Chat · message box', label: 'Cost and limits', hint: 'What this chat has cost, and plan limits', platforms: D, default: 'expert' },
   { id: 'mode', area: 'Chat · message box', label: 'Mode panel', hint: 'Environment, approvals, tools and rules in one panel', platforms: D, default: 'expert' },

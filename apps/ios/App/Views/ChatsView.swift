@@ -30,6 +30,8 @@ struct ChatsView: View {
     /// The computer's monitors: the slim row's gauges, the Monitors row and the agent's panel.
     @State private var monitor: HardwareMonitorModel?
     @State private var showPanel = false
+    /// The search field shows in place of the slim row.
+    @State private var searching = false
     @Environment(Prefs.self) private var prefs
 
     var body: some View {
@@ -40,17 +42,18 @@ struct ChatsView: View {
                 List { rows }
             }
         }
-        // Hairline-separated rows on panels over the coloured ground, as the desktop's
-        // Agents panel and chat windows sit on its paper (2026-10-26).
-        .listStyle(.insetGrouped)
+        // Flat rows straight on the coloured ground, hairline separated, as the
+        // desktop's Agents panel (2026-10-24; the panels of 2026-10-26 went 2026-10-28).
+        .listStyle(.plain)
         .listRowSeparatorTint(palette.line)
         .appBackground()
-        .searchable(text: $query, prompt: "Search chats")
         .refreshable { await store.refresh() }
         .navigationTitle("Chats")
+        // Nekko is the title; a large "Chats" left a band between the bar and the slim row.
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             RootMascot(working: store.activity.values.contains(.running))
-            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
+            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback, search: { searching = true }) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
                 // Offline too: a chat started now begins when the computer is back.
@@ -58,10 +61,15 @@ struct ChatsView: View {
                     .accessibilityLabel("New chat")
             }
         }
-        // The slim row under the title: Simple or Expert, and the minimal monitor while the hardware shows.
+        // The slim row under the title: Simple or Expert, and the minimal monitor while the
+        // hardware shows; the search field in its place while searching (from the computer menu).
         .safeAreaInset(edge: .top, spacing: 0) {
-            ModeRow(monitor: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
-                    openMonitor: { showPanel = true })
+            if searching {
+                SearchRow(query: $query) { query = ""; searching = false }
+            } else {
+                ModeRow(monitor: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
+                        openMonitor: { showPanel = true })
+            }
         }
         .topPanel(isPresented: $showPanel) {
             if let monitor { AgentPanel(monitor: monitor, chat: nil) { showPanel = false } }
@@ -131,7 +139,7 @@ struct ChatsView: View {
             }
             if !store.outbox.pendingNewChats.isEmpty && query.isEmpty {
                 Section {
-                    ForEach(store.outbox.pendingNewChats) { item in PendingChatRow(item: item, path: $path).listRowBackground(palette.surface) }
+                    ForEach(store.outbox.pendingNewChats) { item in PendingChatRow(item: item, path: $path).listRowBackground(Color.clear) }
                 } header: {
                     Text("Waiting to send")
                 }
@@ -153,7 +161,7 @@ struct ChatsView: View {
                     NavigationLink(value: Route.monitors) {
                         Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").foregroundStyle(palette.ink)
                     }
-                    .listRowBackground(palette.surface)
+                    .listRowBackground(Color.clear)
                     .accessibilityIdentifier("chats.monitors")
                 }
             }
@@ -164,7 +172,7 @@ struct ChatsView: View {
         let split = ChatSections.split(g, activity: store.activity, now: nowMs)
         let all = !query.isEmpty || expanded.contains(g.key)
         if g.chats.isEmpty {
-            Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint).listRowBackground(palette.surface)
+            Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint).listRowBackground(Color.clear)
         }
         ForEach(all ? g.chats : split.shown) { row($0) }
         if query.isEmpty && split.hidden > 0 {
@@ -176,7 +184,7 @@ struct ChatsView: View {
                     .font(.footnote.weight(.medium)).foregroundStyle(palette.inkSoft)
             }
             .buttonStyle(.plain)
-            .listRowBackground(palette.surface)
+            .listRowBackground(Color.clear)
             .accessibilityIdentifier("chats.showMore")
         }
     }
@@ -320,7 +328,7 @@ struct ChatsView: View {
         NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id), showPreview: view.showPreviews)
         }
-        // On the panel like the rest of the list, with the attention bar on a chat that needs you.
+        // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
         .listRowBackground(RowBackground(needsYou: store.activity[s.id] == .needsYou,
                                          selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
@@ -431,7 +439,7 @@ struct RowBackground: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            palette.surface
+            Color.clear
             if selected { palette.accent.opacity(0.12) } else if needsYou { palette.warning.opacity(0.07) }
             if needsYou { Rectangle().fill(palette.warning).frame(width: 3).accessibilityHidden(true) }
         }
@@ -530,11 +538,14 @@ struct PendingChatRow: View {
     }
 }
 
-/// Switch computers, pair another, open settings, send feedback.
+/// Switch computers, search the chats, open settings, send feedback. Pairing
+/// another computer is on the Computers page.
 struct ComputerMenu: View {
     @Binding var path: [Route]
     /// Presents *Send feedback*; the sheet hangs on the chat list, not on the toolbar item.
     @Binding var feedback: Bool
+    /// Shows the chat list's search field; nil where there is no list to search.
+    var search: (() -> Void)?
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -553,15 +564,18 @@ struct ComputerMenu: View {
                     if c.id == store.activeId { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
                 }
             }
+            Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Divider()
-            Button { path.append(.pair) } label: { Label("Pair another computer", systemImage: "plus") }
+            if let search {
+                Button(action: search) { Label("Search chats", systemImage: "magnifyingglass") }
+                    .accessibilityIdentifier("chats.menu.search")
+            }
             Button { path.append(.automations) } label: { Label("Automations", systemImage: "bolt.badge.clock") }
             Button { path.append(.usage) } label: { Label("Usage and limits", systemImage: "gauge.with.dots.needle.33percent") }
             Button { path.append(.files) } label: { Label("Files", systemImage: "folder") }
                 .accessibilityIdentifier("computer.files")
             Button { path.append(.logs) } label: { Label("Logs", systemImage: "doc.text.magnifyingglass") }
                 .accessibilityIdentifier("computer.logs")
-            Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
             Button { feedback = true } label: { Label("Send feedback", systemImage: "envelope") }
                 .accessibilityIdentifier("computer.feedback")
@@ -570,25 +584,41 @@ struct ComputerMenu: View {
                 Divider()
                 Menu {
                     SafetyExitItems()
-                } label: { Label("Sign out or stop", systemImage: "hand.raised") }
+                } label: { Label("Sign out or disconnect", systemImage: "hand.raised") }
                     .accessibilityIdentifier("chats.menu.safety")
             }
         } label: {
             // The computer is the title's companion: its state, its name, and a chevron into the menu.
             HStack(spacing: 6) {
                 Circle().fill(dot).frame(width: 8, height: 8)
-                Text(store.active?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(store.active?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                    if let paired = Self.paired(store.computers.count) {
+                        Text(paired).font(.caption2).foregroundStyle(palette.inkSoft).lineLimit(1)
+                    }
+                }
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
             }
             .modifier(PillChrome())
             // One element with one label: the name inside the pill must not be read
             // (or matched by the UI tests) as a second label beside the menu's own.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Computers and settings, \(stateName(store.conn))")
+            .accessibilityLabel(label)
         }
-        .accessibilityLabel("Computers and settings, \(stateName(store.conn))")
+        .accessibilityLabel(label)
         .accessibilityIdentifier("chats.menu")
         .forgetDialog($forgetting)
+    }
+
+    private var label: String {
+        [String(localized: "Computers and settings, \(stateName(store.conn))"), Self.paired(store.computers.count)]
+            .compactMap { $0 }.joined(separator: ", ")
+    }
+
+    /// The pill's second line once there is more than one computer. Paired, not
+    /// connected: the phone is connected to one computer at a time.
+    static func paired(_ count: Int) -> String? {
+        count >= 2 ? String(localized: "\(count) paired") : nil
     }
 
     private var dot: Color {
@@ -599,6 +629,46 @@ struct ComputerMenu: View {
         case .denied: return palette.danger
         case .idle: return palette.inkFaint
         }
+    }
+}
+
+/// The chat list's search, in place of the slim row: every word of the
+/// search, in the title, first prompt or last reply. Cancel clears it.
+struct SearchRow: View {
+    @Binding var query: String
+    var cancel: () -> Void
+    @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var scale
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").font(.footnote).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
+                    TextField("Search chats", text: $query)
+                        .focused($focused)
+                        .textInputAutocapitalization(.never)
+                        .submitLabel(.search)
+                        .accessibilityIdentifier("chats.search")
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(palette.inkFaint) }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Clear")
+                    }
+                }
+                .padding(.horizontal, 10)
+                .frame(minHeight: 34)
+                .background(palette.surface2, in: Capsule())
+                Button("Cancel", action: cancel).font(.subheadline).frame(minHeight: 44)
+                    .accessibilityIdentifier("chats.search.cancel")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 2)
+            Rectangle().fill(palette.line).frame(height: 1 / scale).accessibilityHidden(true)
+        }
+        .background { RowGround() }
+        .onAppear { focused = true }
     }
 }
 

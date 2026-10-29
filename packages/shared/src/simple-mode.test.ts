@@ -6,14 +6,14 @@ describe('simple mode catalogue', () => {
     expect(new Set(SIMPLE_ITEMS.map((i) => i.id)).size).toBe(SIMPLE_ITEMS.length);
   });
 
-  it('shows only the model, context and suggestions in Simple by default', () => {
+  it('shows only the model, effort, context and suggestions in Simple by default', () => {
     const shown = SIMPLE_ITEMS.filter((i) => simpleShown(i.id, false)).map((i) => i.id);
-    expect(shown).toEqual(['model', 'context', 'suggest']);
+    expect(shown).toEqual(['model', 'effort', 'context', 'suggest']);
     expect(SIMPLE_ITEMS.every((i) => simpleShown(i.id, true))).toBe(true);
   });
 
   it('applies the three choices in each mode', () => {
-    expect(simpleShown('effort', false, { effort: 'show' })).toBe(true);
+    expect(simpleShown('cost', false, { cost: 'show' })).toBe(true);
     expect(simpleShown('model', false, { model: 'expert' })).toBe(false);
     expect(simpleShown('model', true, { model: 'expert' })).toBe(true);
     expect(simpleShown('effort', true, { effort: 'hide' })).toBe(false);
@@ -24,7 +24,7 @@ describe('simple mode catalogue', () => {
     expect(simpleShown('mon-hw', false, {}, true)).toBe(true);
     expect(simpleShown('hardware', false, {}, false)).toBe(false);
     expect(simpleShown('hardware', false, { hardware: 'hide' }, true)).toBe(false);
-    expect(simpleShown('effort', false, {}, true)).toBe(false);
+    expect(simpleShown('stats', false, {}, true)).toBe(false);
   });
 
   it('shows ids it does not know', () => {
@@ -33,7 +33,7 @@ describe('simple mode catalogue', () => {
   });
 
   it('parses saved choices defensively', () => {
-    expect(parseSimpleChoices('{"effort":"show","model":"show","bad":"hide","stats":"maybe"}')).toEqual({ effort: 'show' });
+    expect(parseSimpleChoices('{"effort":"expert","model":"show","bad":"hide","stats":"maybe"}')).toEqual({ effort: 'expert' });
     expect(parseSimpleChoices('not json')).toEqual({});
     expect(parseSimpleChoices(null)).toEqual({});
     expect(parseSimpleChoices([])).toEqual({});

@@ -41,7 +41,7 @@ enum SimpleMode {
         SimpleItem(id: "model", area: String(localized: "Chat · message box"), label: String(localized: "Model name and picker"),
                    hint: String(localized: "Switch between Claude, ChatGPT or a local model"), fallback: .show),
         SimpleItem(id: "effort", area: String(localized: "Chat · message box"), label: String(localized: "Effort"),
-                   hint: String(localized: "How hard the model thinks before it answers"), fallback: .expert),
+                   hint: String(localized: "How hard the model thinks before it answers"), fallback: .show),
         SimpleItem(id: "context", area: String(localized: "Chat · message box"), label: String(localized: "Context ring and token count"),
                    hint: String(localized: "How full this chat is, in tokens"), fallback: .show),
         SimpleItem(id: "ph-policy", area: String(localized: "Chat · message box"), label: String(localized: "Tool policy"),

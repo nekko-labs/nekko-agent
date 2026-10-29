@@ -480,7 +480,9 @@ struct FileEditorView: View {
     }
 }
 
-/// The computer's logs, read only (IO-33 FA-5), from the computer menu.
+/// Logs, from the computer menu, grouped by where they are kept: this
+/// phone's connection log first, then each paired computer. The connected
+/// computer's logs are read only (IO-33 FA-5); another computer offers to connect.
 struct LogsView: View {
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -488,34 +490,71 @@ struct LogsView: View {
 
     var body: some View {
         List {
-            if let model {
-                if let error = model.error {
-                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(palette.danger)
-                        .accessibilityIdentifier("logs.error")
-                } else if model.loaded && model.logs.isEmpty {
-                    Text("No logs yet.").foregroundStyle(palette.inkSoft)
-                }
-                ForEach(model.logs) { log in
-                    NavigationLink { LogDetailView(model: model, log: log) } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label(log.title, systemImage: icon(log.kind)).foregroundStyle(palette.ink).lineLimit(1)
-                            Text(detail(log)).font(.caption).foregroundStyle(palette.inkSoft)
-                        }
+            Section {
+                NavigationLink(value: Route.connection) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("Connection log", systemImage: "iphone").foregroundStyle(palette.ink).lineLimit(1)
+                        Text(phoneDetail).font(.caption).foregroundStyle(palette.inkSoft)
                     }
-                    .accessibilityIdentifier("logs.row")
                 }
-            } else {
-                ProgressView().frame(maxWidth: .infinity)
+                .accessibilityIdentifier("logs.phone")
+            } header: {
+                GroupHeading(String(localized: "On this phone"))
+            }
+            .listRowBackground(Color.clear)
+            ForEach(store.computers) { c in
+                Section {
+                    if c.id == store.activeId { computerLogs } else {
+                        Button { store.connect(c.id) } label: {
+                            Label("Connect to read its logs", systemImage: "bolt.horizontal").foregroundStyle(palette.accent)
+                        }
+                        .accessibilityIdentifier("logs.connect")
+                    }
+                } header: {
+                    GroupHeading(c.name)
+                }
+                .listRowBackground(Color.clear)
             }
         }
+        .listStyle(.plain)
         .appBackground()
         .navigationTitle("Logs")
         .accessibilityIdentifier("logs.list")
         .refreshable { await model?.load() }
-        .task {
-            if model == nil { model = LogsModel(store: store) }
+        // Another computer connected from here: read its logs instead.
+        .task(id: store.activeId) {
+            model = LogsModel(store: store)
             await model?.load()
         }
+    }
+
+    @ViewBuilder private var computerLogs: some View {
+        if let model {
+            if let error = model.error {
+                Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(palette.danger)
+                    .accessibilityIdentifier("logs.error")
+            } else if model.loaded && model.logs.isEmpty {
+                Text("No logs yet.").foregroundStyle(palette.inkSoft)
+            }
+            ForEach(model.logs) { log in
+                NavigationLink { LogDetailView(model: model, log: log) } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(log.title, systemImage: icon(log.kind)).foregroundStyle(palette.ink).lineLimit(1)
+                        Text(detail(log)).font(.caption).foregroundStyle(palette.inkSoft)
+                    }
+                }
+                .accessibilityIdentifier("logs.row")
+            }
+        } else {
+            ProgressView().frame(maxWidth: .infinity)
+        }
+    }
+
+    /// "12 events since the app started".
+    private var phoneDetail: String {
+        let n = store.connectionLog.entries.count
+        return n == 0 ? String(localized: "Nothing yet since the app started")
+                      : String(localized: "\(n) events since the app started")
     }
 
     private func icon(_ k: LogInfo.Kind) -> String {

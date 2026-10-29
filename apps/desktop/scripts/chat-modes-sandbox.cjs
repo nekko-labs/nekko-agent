@@ -48,7 +48,7 @@ app.whenReady().then(async () => {
     check('starts in Simple', await run(`document.querySelector('[data-chat-mode]')?.dataset.chatMode === 'simple'`));
     check('Simple: details panel sits inside the composer card', await has('.composer [data-composer-details]'));
     for (let i = 0; i < 30 && !(await has('[data-expert-monitor]')); i++) await sleep(200);
-    check('Simple: model and context shown; effort, tools and Mode out of sight', (await has('[data-composer-details] button[aria-haspopup="listbox"]')) && (await has('.context-bar')) && !(await has('[data-effort-index]')) && !(await has('[data-chat-mode-button]')) && !(await has('[data-agent-footer-controls] .ctl-menu')));
+    check('Simple: model, effort and context shown; tools and Mode out of sight', (await has('[data-composer-details] button[aria-haspopup="listbox"]')) && (await has('.context-bar')) && (await has('[data-effort-index]')) && !(await has('[data-chat-mode-button]')) && !(await has('[data-agent-footer-controls] .ctl-menu')));
     check('Simple: the hardware strip shows while a local model is loaded', await has('[data-expert-monitor]'));
     check('Simple: a nearly full chat says what starting fresh saves', /Starting fresh saves about 162k tokens/.test(await text('[data-chat-long]')));
     check('Simple: the turn\'s steps fold to one line', /Took 2 steps/.test(await text('[data-simple-steps]')));
@@ -81,22 +81,22 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 50 && !(await has('[data-simple-mode-settings]')); i++) await sleep(200);
     await sleep(800);
     check('settings list every desktop area', (await run(`document.querySelectorAll('[data-simple-area]').length`)) === 7);
-    check('Simple preview dashes effort', await run(`document.querySelector('[data-simple-area="Chat · message box"] [data-mock-item="effort"]').dataset.shown === 'false'`));
+    check('Simple preview dashes the Mode panel', await run(`document.querySelector('[data-simple-area="Chat · message box"] [data-mock-item="mode"]').dataset.shown === 'false'`));
     await capture('6-settings-simple-preview');
-    await click('[data-simple-item="effort"] button[role="radio"]:first-child');
-    check('choosing Show for Effort draws it in the Simple preview', await run(`document.querySelector('[data-mock-item="effort"]').dataset.shown === 'true'`));
+    await click('[data-simple-item="mode"] button[role="radio"]:first-child');
+    check('choosing Show for the Mode panel draws it in the Simple preview', await run(`document.querySelector('[data-mock-item="mode"]').dataset.shown === 'true'`));
     await run(`document.querySelector('[data-simple-area="Chat · message box"]').scrollIntoView({block:'start'})`);
     await run(`document.querySelector('[data-simple-item="context"]').dispatchEvent(new MouseEvent('mouseover', {bubbles:true}))`);
     await sleep(300);
-    await capture('7-settings-effort-shown');
+    await capture('7-settings-mode-shown');
     await run(`document.querySelector('[aria-label="Preview Expert"]').click()`); await sleep(300);
     check('Expert preview shows the context ring', await run(`document.querySelector('[data-mock-item="context"]').dataset.shown === 'true'`));
     await capture('8-settings-expert-preview');
     await run(`location.hash = ''; location.reload()`);
     for (let i = 0; i < 50 && !(await has('[data-session-id="alpha"] textarea')); i++) await sleep(200);
     await sleep(1000);
-    check('the chat honours the choice: effort shows in Simple', (await run(`document.querySelector('[data-chat-mode]')?.dataset.chatMode`)) === 'simple' && (await has('[data-effort-index]')));
-    await capture('9-simple-with-effort');
+    check('the chat honours the choice: the Mode panel shows in Simple', (await run(`document.querySelector('[data-chat-mode]')?.dataset.chatMode`)) === 'simple' && (await has('[data-chat-mode-button]')));
+    await capture('9-simple-with-mode');
     report.text = await text('[data-composer-details]');
   } catch (e) { report.errors.push(String(e && e.stack || e)); }
   fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report, null, 2));

@@ -520,6 +520,26 @@ final class LiveRelayTests: XCTestCase {
         tapSystemAlertIfShown()
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
 
+        // Search is in the computer menu, in place of the slim row; Cancel brings the row back.
+        let menu = app.buttons["chats.menu"].firstMatch
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let search = app.textFields["chats.search"]
+        XCTAssertTrue(app.buttons["chats.menu.search"].firstMatch.tapUntil { search.exists }, "the menu opens the search")
+        attach(app, "modes-0-search")
+        app.buttons["chats.search.cancel"].tap()
+        XCTAssertTrue(waitGone(search, 5), "Cancel closes the search")
+        XCTAssertTrue(app.buttons["Simple: everyday controls"].waitForExistence(timeout: 5), "the slim row is back")
+
+        // Logs: this phone's, then each computer's.
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["computer.logs"].firstMatch.tapUntil { app.navigationBars["Logs"].exists }, "the menu opens Logs")
+        XCTAssertTrue(app.buttons["logs.phone"].waitForExistence(timeout: 10), "Logs leads with this phone's connection log")
+        XCTAssertTrue(app.buttons["logs.row"].firstMatch.waitForExistence(timeout: 20), "then the computer's logs")
+        attach(app, "modes-0b-logs")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
         app.navigationBars.buttons["New chat"].tap()
         let prompt = app.input("What should your computer do?")
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
@@ -528,7 +548,7 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["Start"].tap()
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
 
-        // Simple: the model name and the context gauge, and no monitor (no local model is loaded).
+        // Simple: the model and effort control, the context gauge, and no monitor (no local model is loaded).
         let modelEffort = app.buttons["chat.modelEffort"]
         XCTAssertTrue(modelEffort.waitForExistence(timeout: 10), "the composer has the model control")
         XCTAssertTrue(app.buttons["chat.context"].exists, "Simple mode shows the context gauge")
@@ -545,21 +565,30 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the minimal monitor")
         XCTAssertTrue(app.buttons["chat.context"].exists, "Expert shows the context gauge")
 
-        // The effort sheet: pick High, and the control says so.
+        // The effort dropdown: pick High on the slider, and it says so.
         modelEffort.tap()
         let high = app.buttons["modelEffort.high"]
-        XCTAssertTrue(high.waitForExistence(timeout: 10), "the sheet offers the model's effort levels")
+        XCTAssertTrue(high.waitForExistence(timeout: 10), "the dropdown offers the model's effort levels")
+        let slider = app.descendants(matching: .any)["modelEffort.slider"]
+        XCTAssertTrue(slider.exists, "effort is a slider")
         high.tap()
-        XCTAssertTrue(app.staticTexts["High"].waitForExistence(timeout: 10), "the chat's effort is now High")
+        wait(for: [expectation(for: NSPredicate(format: "value == %@", "High"), evaluatedWith: slider)], timeout: 10)
         attach(app, "modes-2-model-effort")
-        app.buttons["Done"].firstMatch.tap()
+        // A popover goes with a tap outside it.
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
         XCTAssertTrue(modelEffort.waitForExistence(timeout: 5))
 
         // A reading or two: the panel reads every 3 seconds.
         RunLoop.current.run(until: Date().addingTimeInterval(4))
         attach(app, "modes-3-expert")
         auditAccessibility(app, "modes-expert")
-        panel.tap()
+        // Touch and hold a gauge: its reading in full, with Details into the panel.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).press(forDuration: 0.6)
+        let details = app.buttons["monitor.tip.details"]
+        XCTAssertTrue(details.waitForExistence(timeout: 5), "holding a gauge opens its tooltip")
+        settle()
+        attach(app, "modes-3b-gauge-tip")
+        details.tap()
         // The agent's panel slides down from under the title.
         // A list section header can read in capitals, so match its identifier or its words in any case.
         let models = app.descendants(matching: .any)

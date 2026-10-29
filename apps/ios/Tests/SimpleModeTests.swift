@@ -4,15 +4,15 @@ import NekkoProtocol
 
 @MainActor
 final class SimpleModeTests: XCTestCase {
-    func testDefaultsShowTheModelAndContextInSimpleAndEverythingInExpert() {
+    func testDefaultsShowTheModelEffortAndContextInSimpleAndEverythingInExpert() {
         let simple = SimpleMode.items.filter { SimpleMode.shown($0.id, expert: false, [:]) }.map(\.id)
-        XCTAssertEqual(simple, ["model", "context"])
+        XCTAssertEqual(simple, ["model", "effort", "context"])
         XCTAssertTrue(SimpleMode.items.allSatisfy { SimpleMode.shown($0.id, expert: true, [:]) })
     }
 
     func testEachChoiceInEachMode() {
-        XCTAssertTrue(SimpleMode.shown("effort", expert: false, ["effort": .show]))
-        XCTAssertTrue(SimpleMode.shown("effort", expert: true, ["effort": .show]))
+        XCTAssertTrue(SimpleMode.shown("thinking", expert: false, ["thinking": .show]))
+        XCTAssertTrue(SimpleMode.shown("thinking", expert: true, ["thinking": .show]))
         XCTAssertFalse(SimpleMode.shown("model", expert: false, ["model": .expert]))
         XCTAssertTrue(SimpleMode.shown("model", expert: true, ["model": .expert]))
         XCTAssertFalse(SimpleMode.shown("context", expert: false, ["context": .hide]))
@@ -28,7 +28,7 @@ final class SimpleModeTests: XCTestCase {
             XCTAssertFalse(SimpleMode.shown(id, expert: true, [id: .hide], localModelLoaded: true), id)
         }
         // Only the monitors follow the local model.
-        XCTAssertFalse(SimpleMode.shown("effort", expert: false, [:], localModelLoaded: true))
+        XCTAssertFalse(SimpleMode.shown("thinking", expert: false, [:], localModelLoaded: true))
     }
 
     private func usage(_ used: Int, window: Int?) throws -> ContextUsage {
@@ -87,24 +87,44 @@ final class SimpleModeTests: XCTestCase {
         XCTAssertEqual(SimpleMode.parse("{not json"), [:])
         XCTAssertEqual(SimpleMode.parse("[\"effort\"]"), [:])
         XCTAssertEqual(SimpleMode.parse(nil), [:])
-        XCTAssertEqual(SimpleMode.parse(#"{"effort":"show","nope":"hide","context":"sometimes","model":"show","terminal":3}"#),
-                       ["effort": .show])
+        XCTAssertEqual(SimpleMode.parse(#"{"effort":"expert","nope":"hide","context":"sometimes","model":"show","terminal":3}"#),
+                       ["effort": .expert])
     }
 
     func testEncodeKeepsOnlyChangesAndRoundTripsThroughPrefs() throws {
-        XCTAssertEqual(SimpleMode.encode(["effort": .show, "model": .show, "nope": .hide]), #"{"effort":"show"}"#)
+        XCTAssertEqual(SimpleMode.encode(["effort": .expert, "model": .show, "nope": .hide]), #"{"effort":"expert"}"#)
         let suite = "simple-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let prefs = Prefs(defaults: defaults)
         XCTAssertFalse(prefs.expertMode, "a new install starts in Simple")
-        XCTAssertFalse(prefs.shows("effort"))
-        prefs.simpleChoices["effort"] = .show
+        XCTAssertFalse(prefs.shows("thinking"))
+        prefs.simpleChoices["thinking"] = .show
         prefs.simpleChoices["model"] = .hide
         let again = Prefs(defaults: defaults)
-        XCTAssertEqual(again.simpleChoices, ["effort": .show, "model": .hide])
-        XCTAssertTrue(again.shows("effort"))
+        XCTAssertEqual(again.simpleChoices, ["thinking": .show, "model": .hide])
+        XCTAssertTrue(again.shows("thinking"))
         XCTAssertFalse(again.shows("model"))
+    }
+
+    func testThePillCountsPairedComputersFromTwo() {
+        XCTAssertNil(ComputerMenu.paired(0))
+        XCTAssertNil(ComputerMenu.paired(1))
+        XCTAssertEqual(ComputerMenu.paired(2), "2 paired")
+        XCTAssertEqual(ComputerMenu.paired(5), "5 paired")
+    }
+
+    func testTheEffortSliderSnapsToTheNearestLevel() {
+        // Four levels on a 200 pt bar: a column of 50 pt each, the stop in its middle.
+        XCTAssertEqual(EffortSlider.x(0, count: 4, width: 200), 25)
+        XCTAssertEqual(EffortSlider.x(3, count: 4, width: 200), 175)
+        XCTAssertEqual(EffortSlider.x(nil, count: 4, width: 200), 100, "no level sits in the middle")
+        XCTAssertEqual(EffortSlider.index(at: 0, count: 4, width: 200), 0)
+        XCTAssertEqual(EffortSlider.index(at: 74, count: 4, width: 200), 1)
+        XCTAssertEqual(EffortSlider.index(at: 199, count: 4, width: 200), 3)
+        XCTAssertEqual(EffortSlider.index(at: -40, count: 4, width: 200), 0, "a drag past the ends stays on the bar")
+        XCTAssertEqual(EffortSlider.index(at: 400, count: 4, width: 200), 3)
+        XCTAssertEqual(EffortSlider.index(at: 10, count: 4, width: 0), 0)
     }
 
     func testIdsMatchThePhoneItemsOfTheDesktopList() {
