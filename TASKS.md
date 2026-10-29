@@ -6,6 +6,11 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Rust migration review follow-ups (added 2026-10-28)
+
+From [the PF14 review](reports/rust-migration-review-2026-10-22.md). Behavior-preserving refactors: no spec change.
+
+- [x] **T219, Shared helpers, one atomic write, nekko-chat folded in, leaner Cargo (#1333).** C2: `now_ms`, `uuid`, `num`, `js_round`, `to_fixed_unsigned_zero`, `home_dir` and friends live once in `nekko-js` (`host` module). C3: `nekko_js::fs::atomic_write` (random temp name, rename retry, optional 0600 and fsync) for every store that saved through its own temp file, including the ones added since (agent log trim, quota history, process-group record, runner update ledger, measured speeds, nudges); `runners.json` keeps its fixed temp name because its failed-save tests depend on it. C7: `crates/nekko-chat` is nekkod's `chat_client` module (with the yielding client and its tests). C10: one `tokio-tungstenite`, workspace `base64` and `chrono`, `yaml-rust2` without `encoding`. `cargo test --workspace` green. Done: 2026-10-28
 ## Model Server inline download progress (#1221)
 
 - [x] **DLP-1, Show progress and block duplicate download clicks.** Model builds/recommendations, decisions and managed llama.cpp/image/MLX runtimes share immediate acquisition locks and existing grouped-job progress. Queued/downloading/verifying stay disabled, terminal states and rejected requests permit retry; runtime build and decision precision stay fixed in flight. Focused state tests and isolated 1100px/390px rapid-click/progress/retry assertions pass. Model/runtime before/after PNGs inspected. Spec: [Models and providers](spec/models/models-providers.md). Live downloads and packaged application not exercised; baseline macOS shortcut test failure tracked in #900.
