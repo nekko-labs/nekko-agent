@@ -35,6 +35,21 @@ function wall(s: CommandWallState, addContent?: React.ReactNode) {
   return <CommandWall state={s} setState={vi.fn()} sessions={[]} terminals={[]} running={new Set()} pending={{}} childrenOf={new Map()} projects={[]} flash={null} selectedId={null} onSelect={vi.fn()} onAspect={vi.fn()} onOpenChat={vi.fn()} onOpenTerminal={vi.fn()} onNewChat={vi.fn()} onNewTerminal={vi.fn()} onAddWindow={vi.fn()} addContent={addContent} />;
 }
 
+describe('empty zone', () => {
+  it('shows the sleeping Nekko and the plus menu options, Agent in the accent colour', () => {
+    const z: WbPane = { id: 'z', kind: 'zone', refId: 'z', zone: 'Zone 1' };
+    const html = renderToStaticMarkup(wall(state({ root: z, layout: layout('grid', 1, 1) })));
+    expect(html).toContain('wall-zone-art pixel-sleeping');
+    expect([...html.matchAll(/data-zone-create="(\w+)"/g)].map((m) => m[1])).toEqual(['chat', 'image', 'terminal']);
+    expect(html).toMatch(/class="btn btn-ghost wall-zone-option text-accent" data-zone-create="chat"/);
+    // Named by the label alone, so "Agent" stays "Agent" with its shortcut beside it (#1310 broke the e2e lookup).
+    expect(html).toMatch(/data-zone-create="chat" aria-label="Agent" title="Agent \([^)]+\)"/);
+    expect(html.match(/wall-zone-plus/g)).toHaveLength(3);
+    expect([...html.matchAll(/<kbd class="kbd wall-zone-kbd">([^<]+)<\/kbd>/g)]).toHaveLength(3);
+    expect(html).toContain('Drag in an agent chat or start a new one below.');
+  });
+});
+
 describe('command wall geometry', () => {
   it('nests creation details inside the Add tile without a pane-stage offset', () => {
     const html = renderToStaticMarkup(wall(state(), <div>New chat details</div>));

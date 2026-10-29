@@ -21,7 +21,7 @@ const en: Dict = {
   'nav.skills': 'Skills',
   'nav.training': 'Training',
   'nav.workflows': 'Workflows',
-  'nav.models': 'Model Providers',
+  'nav.models': 'Models',
   'nav.modelserver': 'Model Server',
   'nav.connectors': 'Connectors',
   'nav.memory': 'Memory',
@@ -59,7 +59,7 @@ const en: Dict = {
 
 const es: Dict = {
   'nav.command': 'Agentes',
-  'nav.models': 'Proveedores',
+  'nav.models': 'Modelos',
   'nav.modelserver': 'Servidor de modelos',
   'nav.connectors': 'Conectores',
   'nav.memory': 'Memoria',
@@ -95,7 +95,7 @@ const es: Dict = {
 
 const fr: Dict = {
   'nav.command': 'Agents',
-  'nav.models': 'Fournisseurs',
+  'nav.models': 'Modèles',
   'nav.modelserver': 'Serveur de modèles',
   'nav.connectors': 'Connecteurs',
   'nav.memory': 'Mémoire',
@@ -131,7 +131,7 @@ const fr: Dict = {
 
 const de: Dict = {
   'nav.command': 'Agenten',
-  'nav.models': 'Anbieter',
+  'nav.models': 'Modelle',
   'nav.modelserver': 'Modellserver',
   'nav.connectors': 'Konnektoren',
   'nav.memory': 'Speicher',
@@ -167,7 +167,7 @@ const de: Dict = {
 
 const pt: Dict = {
   'nav.command': 'Agentes',
-  'nav.models': 'Provedores',
+  'nav.models': 'Modelos',
   'nav.modelserver': 'Servidor de modelos',
   'nav.connectors': 'Conectores',
   'nav.memory': 'Memória',
@@ -203,7 +203,7 @@ const pt: Dict = {
 
 const ja: Dict = {
   'nav.command': 'エージェント',
-  'nav.models': 'モデル提供元',
+  'nav.models': 'モデル',
   'nav.modelserver': 'モデルサーバー',
   'nav.connectors': 'コネクタ',
   'nav.memory': 'メモリ',
@@ -239,7 +239,7 @@ const ja: Dict = {
 
 const zh: Dict = {
   'nav.command': '智能体',
-  'nav.models': '模型来源',
+  'nav.models': '模型',
   'nav.modelserver': '模型服务器',
   'nav.connectors': '连接器',
   'nav.memory': '记忆',

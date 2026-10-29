@@ -45,3 +45,45 @@ A Mac running Nekko Agent can become a CI runner ([spec](../../spec/automation/c
 - No helper to install means no extra permission prompt, and a smaller review.
 - If a user must run more than 2 macOS VMs or rent capacity, the license, not this design, is the limit (see the spec).
 - We were wrong if the NAT cannot hold download-heavy jobs at usable speed, or a guest reaches a non-public address.
+
+## Implementation notes (T211)
+
+Added 2026-10-24. These record how T211 built the decision above; the decision itself is unchanged.
+
+- P1 guests are IPv4 only (10.233.0.2/24, gateway 10.233.0.1). Every IPv6 frame from the guest is dropped.
+- DNS goes through the gateway: 53/udp and 53/tcp are forwarded to the host's resolvers, chosen by the supervisor and never a loopback resolver or 100.100.100.100. The gateway answers DHCP and DNS only.
+- At most 256 flows per VM, a 15 s host connect timeout, and an idle TCP timeout (60 s, with 30 s keep-alive probes) that resets a guest connection that stops answering and frees its slot.
+- `nekko-vm` alone carries `com.apple.security.virtualization`. Dev builds ad-hoc sign it; release packaging and signing land with T213/T214 together with a signed release dry-run.
+- The supervisor refuses to start a VM if the host's addresses cannot be read; there is no empty-list fallback.
+- `nekko-vm` gives the guest a display device with no view and no input devices: one `VZMacGraphicsDeviceConfiguration` (1024x768 at 72 ppi), no `VZVirtualMachineView`, no keyboard or pointing device. A macOS guest does not boot without a graphics device (measured in T211: with none it never brought up its network); with no view, nothing of its screen reaches the host. The device is a paravirtualized GPU, so the guest's GPU commands are processed in the host's VM process against the host GPU stack; that is an accepted risk, needed for macOS guests to boot, and it supersedes the original "no graphics" constraint. There is still no shared folder, clipboard, serial console, audio or USB.
+- A guest with a logged-in console session ignores `requestStop`, so SIGTERM ends in the helper's 20 s hard stop. That is acceptable: the clone is deleted after every job.
+- VPN routes never carry job traffic (decided by Philip 2026-10-25). `nekko-vm egress` reports the physical egress interface from `NWPathMonitor` (first wifi, wired or cellular interface on a monitor that prohibits `.other`) and whether a tunnel leads the default path. `net::Direct` binds every host socket, DNS upstreams included, to that interface with `IP_BOUND_IF` before connecting, and refuses every flow with no interface or before the first report. A full-tunnel VPN or exit node pauses the runner (soft gate `vpnCarriesAllTraffic`) unless the runner setting `allowDirectWithVpn` is on; either way traffic leaves by the physical interface. This replaces the earlier plan to refuse destinations by route. Implemented and unit-tested (binding on lo0); a check against a real tunnel (Tailscale exit node and subnet route, or a packet-tunnel VPN that enforces routes) is pending, owned by T212. Known risk: a packet-tunnel VPN with includeAllNetworks or enforceRoutes may capture or drop sockets bound to the physical interface (dropping is fail-safe).
+
+## Implementation notes (T212)
+
+Added 2026-10-25. The decision itself is unchanged.
+
+- The seed disk is a read-only ISO 9660 (Joliet) image made by `hdiutil makehybrid` from a private 0700 folder holding only `jit-config` (0600); the folder is removed whatever the outcome. macOS mounts an ISO read-only by nature, and no crate is added.
+- nekkod raises its open-file soft limit to 10240 at startup (capped by the hard limit, never lowered): each job VM's NAT holds a socket per guest flow, and the default 256 runs out.
+- DNS upstreams are the physical interface's scoped resolvers that pass the guest egress check, else 1.1.1.1 and 8.8.8.8. The router's WAN address is discovered from the router (NAT-PMP, then UPnP, 3 s) and added to the host's refused addresses.
+- A VM's `done` resolves only after the helper is reaped and its NAT has ended, so a clone is never deleted under a running helper. Leftover clones and seeds under `vms/` are reaped without following symlinks.
+- The GitHub App key is kept through `keyring` under a runner vault of its own (`nekko_cloud::vault::scoped_vault`, service `dev.nekkolabs.nekko-agent.runner.<hash of the data folder>`; a 0600 `runners/secrets.json` only where there is no keystore), as Cloud keeps its keys. It is written only after GitHub accepted it and connect passed every check.
+- The App JWT is signed RS256 with Security.framework (`SecKeyCreateWithData` and `SecKeyCreateSignature`); no crypto crate is added. GitHub calls go through `nekko_connectors::Http`, which gains PUT and DELETE.
+- nekkod starts the runner wiring (host readings, the helper's `egress` and `host` streams, the host-network refresh with the router's WAN address, every 5 min and on a gateway change) only when `nekko-vm` is staged beside it on Apple silicon; otherwise every runner reports that VM support is unavailable.
+
+## Implementation notes (T214)
+
+Added 2026-10-25. The decision itself is unchanged.
+
+- The guest runs one root LaunchDaemon (`dev.nekkolabs.runner-boot`) that owns the seed, the unmount and the shutdown, and starts the runner with `launchctl asuser` in the auto-login session of the standard user `runner`. There is no LaunchAgent: the root-only steps stay out of the job user's hands, and the job still gets a GUI session for simulators and the keychain.
+- Tart is used only to build images (`tart clone`, `run`, `exec` with `provision.sh`), never at job time; `provision.sh` removes the Tart guest agent from the image.
+- `nekko-vm` is signed with its own entitlements by the electron-builder `mac.sign` hook (`apps/desktop/scripts/sign-mac.cjs`) for Developer ID builds, and by `after-pack.cjs` for unsigned ones; `scripts/check-mac-entitlements.sh` fails a release if any other binary carries the virtualization entitlement.
+
+## Implementation notes (T215)
+
+Added 2026-10-25. The decision itself is unchanged.
+
+- GitLab has no single-use runner, so each VM gets its own runner and its own `glrt-` token. The job can read that token, so the runner is locked, protected-only by default, paused once nekkod sees it busy and deleted when the VM ends. Failed deletes are retried with backoff and a removed record is held up to 1 hour, after which a `notRemoved` audit line names the runner for manual deletion. Start-up deletes every `nekko-<host>-` runner in the scope; a group sweep never deletes a runner its own group does not own, and group records on one instance never sweep each other.
+- The access token is kept in the runner vault as `gitlab-token-<record id>`, written only after every connect check passes, and never sent to a guest. No request carrying it follows a redirect.
+- The instance must resolve only to public addresses, so a LAN, Tailscale or loopback GitLab is refused at connect. That check is about guest reachability; TLS and no redirects protect the token.
+- Known limits: never run against a live GitLab; no desktop connect sheet yet; the guest side (`gitlab-runner` in the image, seed file `gitlab-runner.toml`) is in the Layer E scripts and unverified in a real guest.

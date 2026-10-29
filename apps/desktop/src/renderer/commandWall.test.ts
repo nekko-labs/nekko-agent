@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingInput, SessionSummary, TerminalInfo } from '@nekko-agent/shared';
-import { allPanes, extent, isSplit, type WbPane } from './layout.js';
+import { allPanes, extent, findPane, isSplit, removePane, type WbPane } from './layout.js';
 import {
+  minimizeFinishedReply,
   DEFAULT_AGENT_PANEL,
   readAgentPanel,
   DEFAULT_WALL_STATE,
@@ -14,7 +15,13 @@ import {
   LEGACY_GRID_KEY,
   WALL_STATE_KEY,
   addPane,
+  addZone,
   applySnap,
+  clearZone,
+  fillZone,
+  nextZoneName,
+  startZones,
+  targetZone,
   autoShape,
   evenTree,
   filterTree,
@@ -172,47 +179,87 @@ describe('filterTree', () => {
 });
 
 describe('seedWall', () => {
-  it('starts with the chats touched in the last day and the shells still running, without panels in the tree', () => {
-    const now = 100 * 60 * 60_000;
-    const seeded = seedWall(
-      DEFAULT_WALL_STATE,
-      [chat('fresh', { updatedAt: now - 1000 }), chat('stale', { updatedAt: now - 48 * 60 * 60_000 }), chat('child', { updatedAt: now, parentSessionId: 'fresh' } as Partial<SessionSummary>)],
-      [term('live'), term('dead', false)],
-      now,
-    );
-    const kinds = allPanes(seeded.root).map((p) => `${p.kind}:${p.refId}`);
-    expect(kinds).toEqual(['chat:fresh', 'terminal:live']);
-    expect(seeded.watermark).toBe(now);
+  it('starts two zones side by side holding the two most recent top-level chats', () => {
+    const seeded = seedWall(DEFAULT_WALL_STATE, [
+      chat('old', { updatedAt: 1 }), chat('new', { updatedAt: 3 }), chat('mid', { updatedAt: 2 }),
+      chat('child', { updatedAt: 9, parentSessionId: 'new' } as Partial<SessionSummary>), chat('done', { updatedAt: 8, archivedAt: 8 } as Partial<SessionSummary>),
+    ], 5);
+    expect(seeded.root).toMatchObject({ dir: 'row', sizes: [0.5, 0.5] });
+    expect(allPanes(seeded.root).map((p) => `${p.zone}:${p.kind}:${p.refId}`)).toEqual(['Zone 1:chat:new', 'Zone 2:chat:mid']);
+    expect(seeded.zones).toBe(true);
+    expect(seeded.activeZone).toBe(allPanes(seeded.root)[0].id);
+  });
+  it('leaves a zone empty for each chat it does not have', () => {
+    expect(allPanes(seedWall(DEFAULT_WALL_STATE, [chat('a', { updatedAt: 1 })], 1).root).map((p) => `${p.kind}:${p.refId}`)).toEqual(['chat:a', 'zone:']);
+    expect(allPanes(seedWall(DEFAULT_WALL_STATE, [], 1).root).map((p) => p.kind)).toEqual(['zone', 'zone']);
   });
 });
 
 describe('reconcileWall', () => {
   const now = 10_000;
-  const seeded = seedWall(DEFAULT_WALL_STATE, [chat('a', { updatedAt: now })], [], now);
+  const seeded = seedWall(DEFAULT_WALL_STATE, [chat('a', { updatedAt: now })], now);
 
-  it('waits for the lists before seeding, then seeds once', () => {
-    expect(reconcileWall(DEFAULT_WALL_STATE, [], [], now)).toBe(DEFAULT_WALL_STATE);
-    expect(reconcileWall(DEFAULT_WALL_STATE, [chat('a', { updatedAt: now })], [], now).watermark).toBe(now);
+  it('seeds a wall that was never used from every chat, once', () => {
+    const next = reconcileWall(DEFAULT_WALL_STATE, [chat('a', { updatedAt: now })], [], now);
+    expect(refs(next.root)).toEqual(['a', '']);
+    expect(reconcileWall(next, [chat('a', { updatedAt: now })], [], now)).toBe(next);
   });
-  it('drops a chat that is gone or archived and adds one created since', () => {
+  it('moves a wall from before zones to its two most recent agents and minimizes the rest', () => {
+    const old = { ...DEFAULT_WALL_STATE, watermark: 5, root: tileTree([wallPane('chat', 'x'), wallPane('chat', 'y'), wallPane('chat', 'z'), wallPane('terminal', 't')]) };
+    // `w` is newer still but was not on the board, so it stays in the panel.
+    const next = reconcileWall(old, [chat('x', { updatedAt: 1 }), chat('y', { updatedAt: 3 }), chat('z', { updatedAt: 2 }), chat('w', { updatedAt: 9 })], [term('t')], now);
+    expect(allPanes(next.root).map((p) => `${p.kind}:${p.refId}`)).toEqual(['chat:y', 'chat:z']);
+    expect(next.zones).toBe(true);
+  });
+  it('empties the zone of a chat that is gone or archived, and never opens new chats by itself', () => {
     const next = reconcileWall(seeded, [chat('a', { archivedAt: 5 } as Partial<SessionSummary>), chat('b', { createdAt: now + 1 })], [], now + 5);
-    const kinds = allPanes(next.root).map((p) => `${p.kind}:${p.refId}`);
-    expect(kinds).not.toContain('chat:a');
-    expect(kinds).toContain('chat:b');
-    expect(next.watermark).toBe(now + 1);
-  });
-  it('does not add new chats while auto-add is off, but still moves the watermark', () => {
-    const next = reconcileWall({ ...seeded, autoAdd: false }, [chat('a', { updatedAt: now }), chat('b', { createdAt: now + 1 })], [], now + 5);
-    expect(allPanes(next.root).map((p) => p.refId)).not.toContain('b');
-    expect(next.watermark).toBe(now + 1);
-  });
-  it('keeps spawned delegates out of automatic windows', () => {
-    const next = reconcileWall(seeded, [chat('a', { updatedAt: now }), chat('child', { createdAt: now + 1, parentSessionId: 'a' })], [], now + 5);
-    expect(allPanes(next.root).map((p) => p.refId)).not.toContain('child');
-    expect(next.watermark).toBe(now + 1);
+    expect(allPanes(next.root).map((p) => `${p.zone}:${p.kind}:${p.refId}`)).toEqual(['Zone 1:zone:', 'Zone 2:zone:']);
   });
   it('returns the same object when nothing changed', () => {
-    expect(reconcileWall(seeded, [chat('a', { updatedAt: now })], [], now + 5)).toBe(seeded);
+    expect(reconcileWall(seeded, [chat('a', { updatedAt: now }), chat('b', { createdAt: now + 1 })], [], now + 5)).toBe(seeded);
+  });
+});
+
+describe('zones', () => {
+  const two = () => startZones(['a', 'b']);
+  it('names new zones after the first free number', () => {
+    const root = two();
+    expect(nextZoneName(root)).toBe('Zone 3');
+    expect(nextZoneName(removePane(root, allPanes(root)[0].id))).toBe('Zone 1');
+  });
+  it('fits a new zone to the row it is added beside, evening that row out', () => {
+    const root = two();
+    const [, b] = allPanes(root);
+    const { root: next, id } = addZone(root, { paneId: b.id, side: 'right' });
+    expect(next).toMatchObject({ dir: 'row', sizes: [1 / 3, 1 / 3, 1 / 3] });
+    expect(allPanes(next).map((p) => p.zone)).toEqual(['Zone 1', 'Zone 2', 'Zone 3']);
+    expect(findPane(next, id!)?.kind).toBe('zone');
+    // Under b only: a column of b over the new zone, a untouched.
+    const below = addZone(root, { paneId: b.id, side: 'down' }).root!;
+    expect(treeShape(below)).toBe(`row(${allPanes(root)[0].id},col(${b.id},${allPanes(below)[2].id}))`);
+  });
+  it('spans the whole side when asked', () => {
+    const root = two();
+    const { root: next, id } = addZone(root, { edge: 'down' });
+    expect(next).toMatchObject({ dir: 'col', sizes: [0.5, 0.5] });
+    expect(leafRects(next).get(id!)).toEqual({ x: 0, y: 0.5, width: 1, height: 0.5 });
+  });
+  it('keeps a zone when its agent leaves, and trades places rather than showing an agent twice', () => {
+    const root = two();
+    const [za, zb] = allPanes(root);
+    const cleared = clearZone(root, za.id);
+    expect(findPane(cleared, za.id)).toEqual({ id: za.id, kind: 'zone', refId: '', zone: 'Zone 1' });
+    const filled = fillZone(cleared, za.id, 'chat', 'b');
+    expect(allPanes(filled).map((p) => `${p.zone}:${p.kind}:${p.refId}`)).toEqual(['Zone 1:chat:b', 'Zone 2:zone:']);
+    expect(fillZone(root, zb.id, 'chat', 'b')).toBe(root);
+  });
+  it('opens an agent into the active zone, else the first empty one', () => {
+    const start = two();
+    const root = clearZone(start, allPanes(start)[0].id)!;
+    const [z1, z2] = allPanes(root);
+    expect(targetZone({ root, activeZone: z2.id })).toBe(z2.id);
+    expect(targetZone({ root, activeZone: 'gone' })).toBe(z1.id);
+    expect(targetZone({ root: null, activeZone: null })).toBeNull();
   });
 });
 
@@ -224,7 +271,7 @@ describe('persistence', () => {
 
   it('round-trips a wall and never mints a restored id again', () => {
     const storage = memory();
-    const state = seedWall(DEFAULT_WALL_STATE, [chat('a', { updatedAt: 1 }), chat('b', { updatedAt: 1 })], [], 1);
+    const state = seedWall(DEFAULT_WALL_STATE, [chat('a', { updatedAt: 1 }), chat('b', { updatedAt: 1 })], 1);
     saveWallState(storage, state);
     const loaded = loadWallState(storage);
     expect(loaded.root).toEqual(state.root);
@@ -267,14 +314,14 @@ describe('the setting', () => {
   };
   it('wins over the browser copy, which stays the fallback', () => {
     const storage = memory();
-    const local = seedWall(DEFAULT_WALL_STATE, [chat('local', { updatedAt: 1 })], [], 1);
+    const local = seedWall(DEFAULT_WALL_STATE, [chat('local', { updatedAt: 1 })], 1);
     saveWallState(storage, local);
-    const shared = seedWall(DEFAULT_WALL_STATE, [chat('shared', { updatedAt: 1 })], [], 2);
+    const shared = seedWall(DEFAULT_WALL_STATE, [chat('shared', { updatedAt: 1 })], 2);
     expect(allPanes(loadWallState(storage, toWallSetting(shared)).root).map((p) => p.refId)).toContain('shared');
     expect(allPanes(loadWallState(storage, null).root).map((p) => p.refId)).toContain('local');
   });
   it('round-trips through the setting shape', () => {
-    const state = seedWall({ ...DEFAULT_WALL_STATE, autoAdd: false, snap: true }, [chat('a', { updatedAt: 1 })], [term('t')], 5);
+    const state = seedWall({ ...DEFAULT_WALL_STATE, autoAdd: false, snap: true, zonesIntro: true }, [chat('a', { updatedAt: 1 })], 5);
     const back = loadWallState(undefined, toWallSetting(state));
     expect(back).toEqual(state);
   });
@@ -310,7 +357,6 @@ describe('wall preferences and panel migration', () => {
       monitorOrder: MONITORS.map(p => p.key),
       minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false, localModels: false },
       monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true, localModels: true } });
-    expect(seedWall(DEFAULT_WALL_STATE, [], [], 9).root).toBeNull();
     expect(DEFAULT_WALL_STATE.hero).toBeNull();
     expect(DEFAULT_WALL_STATE.folded).toEqual({});
   });
@@ -420,5 +466,42 @@ describe('agent panel preferences', () => {
     }
     expect(loadWallState({ getItem: () => JSON.stringify({ agentPanel: { show: 'no', orientation: 'diagonal' } }) }).agentPanel).toEqual(DEFAULT_AGENT_PANEL);
     expect(readAgentPanel(undefined)).toEqual({ show: true, orientation: 'vertical' });
+  });
+});
+
+
+describe('automatic reply minimization', () => {
+  const done = { type: 'done' as const, sessionId: 'a', messageId: 'reply', stop: 'complete' as const };
+  const state = () => ({ ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_LAYOUT, mode: 'grid' as const }, watermark: 1234, root: tileTree([wallPane('chat', 'a'), wallPane('chat', 'b'), wallPane('terminal', 'a')]) });
+  it.each([false, true])('minimizes only the finished chat (fixed grid: %s)', (fixedGrid) => {
+    const before = { ...state(), layout: { ...DEFAULT_WALL_LAYOUT, mode: 'grid' as const, fixedGrid } };
+    const after = minimizeFinishedReply(before, done, {});
+    // The chat leaves; its zone stays, empty.
+    expect(allPanes(after.root).map(p => [p.kind, p.refId])).toEqual([['zone', ''], ['chat', 'b'], ['terminal', 'a']]);
+    expect(after).toEqual({ ...before, root: after.root });
+    expect(allPanes(before.root).map(p => p.kind)).toEqual(['chat', 'chat', 'terminal']);
+  });
+  it('keeps Focused windows visible', () => {
+    const before = { ...state(), layout: { ...DEFAULT_WALL_LAYOUT, mode: 'focus' as const } };
+    expect(minimizeFinishedReply(before, done, {})).toBe(before);
+  });
+  it('keeps errors, loop and runaway stops visible', () => {
+    const before = state();
+    expect(minimizeFinishedReply(before, { type: 'error', sessionId: 'a', message: 'failed' }, {})).toBe(before);
+    for (const stop of ['loop', 'runaway'] as const) expect(minimizeFinishedReply(before, { ...done, stop }, {})).toBe(before);
+  });
+  it('keeps pending input visible but does not block on another chat', () => {
+    const before = state();
+    const input = {} as PendingInput;
+    expect(minimizeFinishedReply(before, done, { a: input })).toBe(before);
+    expect(minimizeFinishedReply(before, done, { b: input })).not.toBe(before);
+  });
+  it('accepts older successful events without stop metadata', () => {
+    expect(refs(minimizeFinishedReply(state(), { ...done, stop: undefined }, {}).root)).toEqual(['', 'b', 'a']);
+  });
+  it('is a no-op for absent panes and leaves a lone zone in place', () => {
+    const before = state();
+    expect(minimizeFinishedReply(before, { ...done, sessionId: 'missing' }, {})).toBe(before);
+    expect(minimizeFinishedReply({ ...before, root: wallPane('chat', 'a') }, done, {}).root).toMatchObject({ kind: 'zone', refId: '' });
   });
 });

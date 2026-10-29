@@ -18,10 +18,13 @@ export const LiveTurn = memo(function LiveTurn({
   sessionId,
   held,
   onImageClick,
+  pendingCallId,
 }: {
   sessionId: string;
   held: LiveRun | null;
   onImageClick?: (src: string) => void;
+  /** The call waiting for approval, which stays out of the purpose groups. */
+  pendingCallId?: string;
 }) {
   // A hidden pane stops repainting the reply until it is shown again.
   const live = useLiveRun(sessionId, !usePaneVisible());
@@ -32,7 +35,7 @@ export const LiveTurn = memo(function LiveTurn({
       {run.blocks.map((block, i) => (
         <Fragment key={i}>
           {block.kind === 'activity'
-            ? <ActivityGroup items={block.items} streaming={!!live && i === run.blocks.length - 1} toolActivity={live?.activity} />
+            ? <ActivityGroup items={block.items} streaming={!!live && i === run.blocks.length - 1} turnRunning={!!live} toolActivity={live?.activity} pendingCallId={pendingCallId} />
             : <MessageBubble message={{ id: `live_${i}`, role: 'assistant', content: block.text, createdAt: 0 }} onImageClick={onImageClick} chronological />}
         </Fragment>
       ))}

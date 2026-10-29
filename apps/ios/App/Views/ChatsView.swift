@@ -9,6 +9,8 @@ struct ChatsView: View {
     @Binding var path: [Route]
     /// iPad (regular width): the split view's selected chat. Nil on iPhone, where rows push.
     var selection: Binding<Route?>? = nil
+    /// In a pane: the chat open in the other pane, marked like a selection.
+    var highlighted: String? = nil
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -18,12 +20,15 @@ struct ChatsView: View {
     /// Groups showing every chat, past the first few recent ones.
     @State private var expanded: Set<String> = []
     @State private var reorderingGroups = false
+    @State private var sendingFeedback = false
     /// The heading a dragged group is over.
     @State private var dropTarget: String?
     @State private var renaming: SessionSummary?
     @State private var renameText = ""
     @State private var confirmDelete: SessionSummary?
     @State private var actionError: String?
+    /// Pull to refresh, played by the toolbar mascot.
+    @StateObject private var pull = PawPull()
 
     var body: some View {
         Group {
@@ -33,16 +38,17 @@ struct ChatsView: View {
                 List { rows }
             }
         }
-        // Flat rows on the paper, hairline separated, as the desktop's Agents panel (2026-10-24).
-        .listStyle(.plain)
+        // Hairline-separated rows on panels over the coloured ground, as the desktop's
+        // Agents panel and chat windows sit on its paper (2026-10-26).
+        .listStyle(.insetGrouped)
         .listRowSeparatorTint(palette.line)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .searchable(text: $query, prompt: "Search chats")
-        .refreshable { await store.refresh() }
+        .pawRefreshable(pull) { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path) }
+            RootMascot(working: store.activity.values.contains(.running), pull: pull)
+            ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
                 // Offline too: a chat started now begins when the computer is back.
@@ -53,8 +59,9 @@ struct ChatsView: View {
         .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
         .modifier(dialogs)
         .sheet(isPresented: $reorderingGroups) {
-            ReorderGroupsSheet(groups: sections.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
+            ReorderGroupsSheet(groups: sections.filter { $0.key != ChatGroup.general }.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
         }
+        .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
     }
 
     private func open(_ r: Route) {
@@ -113,7 +120,7 @@ struct ChatsView: View {
             }
             if !store.outbox.pendingNewChats.isEmpty && query.isEmpty {
                 Section {
-                    ForEach(store.outbox.pendingNewChats) { item in PendingChatRow(item: item, path: $path) }
+                    ForEach(store.outbox.pendingNewChats) { item in PendingChatRow(item: item, path: $path).listRowBackground(palette.surface) }
                 } header: {
                     Text("Waiting to send")
                 }
@@ -124,9 +131,19 @@ struct ChatsView: View {
             }
             ForEach(query.isEmpty || !filtered.isEmpty ? sections : []) { g in
                 Section {
-                    if !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
+                    if g.key == ChatGroup.general || !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
                 } header: {
-                    sectionHeading(g)
+                    if g.key != ChatGroup.general { sectionHeading(g) }
+                }
+            }
+            // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
+            if query.isEmpty && !store.computers.isEmpty {
+                Section {
+                    NavigationLink(value: Route.monitors) {
+                        Label("Monitors", systemImage: "gauge.with.dots.needle.50percent").foregroundStyle(palette.ink)
+                    }
+                    .listRowBackground(palette.surface)
+                    .accessibilityIdentifier("chats.monitors")
                 }
             }
     }
@@ -136,7 +153,7 @@ struct ChatsView: View {
         let split = ChatSections.split(g, activity: store.activity, now: nowMs)
         let all = !query.isEmpty || expanded.contains(g.key)
         if g.chats.isEmpty {
-            Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint).listRowBackground(Color.clear)
+            Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint).listRowBackground(palette.surface)
         }
         ForEach(all ? g.chats : split.shown) { row($0) }
         if query.isEmpty && split.hidden > 0 {
@@ -148,7 +165,7 @@ struct ChatsView: View {
                     .font(.footnote.weight(.medium)).foregroundStyle(palette.inkSoft)
             }
             .buttonStyle(.plain)
-            .listRowBackground(Color.clear)
+            .listRowBackground(palette.surface)
             .accessibilityIdentifier("chats.showMore")
         }
     }
@@ -162,7 +179,12 @@ struct ChatsView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkFaint)
                     .rotationEffect(.degrees(open ? 90 : 0))
-                GroupHeading(groupTitle(g), count: counts(g))
+                VStack(alignment: .leading, spacing: 3) {
+                    GroupHeading(groupTitle(g), count: counts(g))
+                    if let path = store.workspaces.first(where: { $0.id == g.key })?.path {
+                        Text(path).font(.caption).foregroundStyle(palette.inkSoft).textCase(nil)
+                    }
+                }
             }
             .contentShape(Rectangle())
             .overlay(alignment: .top) {
@@ -287,9 +309,9 @@ struct ChatsView: View {
         NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id), showPreview: view.showPreviews)
         }
-        // On the paper like the rest of the list, with the attention bar on a chat that needs you.
+        // On the panel like the rest of the list, with the attention bar on a chat that needs you.
         .listRowBackground(RowBackground(needsYou: store.activity[s.id] == .needsYou,
-                                         selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? false))
+                                         selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
@@ -342,7 +364,8 @@ struct ChatRow: View {
         // A glyph column says what the chat is doing before the title is read
         // (the desktop's StatusIcon); the facts sit under the preview as chips.
         HStack(alignment: .top, spacing: 10) {
-            glyph.frame(width: 22, height: 22).padding(.top, 1)
+            ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0, activeWatchCount: summary.activeWatchCount)
+                .frame(width: 22, height: 22).padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
@@ -372,21 +395,6 @@ struct ChatRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder private var glyph: some View {
-        switch activity {
-        case .running?: RunningDots()
-        case .needsYou?: Image(systemName: "hand.raised.fill").font(.caption.weight(.semibold)).foregroundStyle(palette.warning).accessibilityHidden(true)
-        case nil:
-            if waiting > 0 {
-                Image(systemName: "clock").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
-            } else if summary.archived {
-                Image(systemName: "checkmark").font(.caption.weight(.semibold)).foregroundStyle(palette.success).accessibilityHidden(true)
-            } else {
-                Image(systemName: "bubble.left").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
-            }
-        }
-    }
-
     private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
 
     private var preview: String? {
@@ -412,7 +420,8 @@ struct RowBackground: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            if selected { palette.accent.opacity(0.12) } else if needsYou { palette.warning.opacity(0.07) } else { Color.clear }
+            palette.surface
+            if selected { palette.accent.opacity(0.12) } else if needsYou { palette.warning.opacity(0.07) }
             if needsYou { Rectangle().fill(palette.warning).frame(width: 3).accessibilityHidden(true) }
         }
     }
@@ -510,9 +519,11 @@ struct PendingChatRow: View {
     }
 }
 
-/// Switch computers, pair another, open settings.
+/// Switch computers, pair another, open settings, send feedback.
 struct ComputerMenu: View {
     @Binding var path: [Route]
+    /// Presents *Send feedback*; the sheet hangs on the chat list, not on the toolbar item.
+    @Binding var feedback: Bool
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -541,6 +552,8 @@ struct ComputerMenu: View {
                 .accessibilityIdentifier("computer.logs")
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Button { path.append(.settings) } label: { Label("Settings", systemImage: "gearshape") }
+            Button { feedback = true } label: { Label("Send feedback", systemImage: "envelope") }
+                .accessibilityIdentifier("computer.feedback")
             // The safety exits for the active computer (SK-8), a submenu away from any chat list.
             if store.active != nil {
                 Divider()

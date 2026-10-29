@@ -83,3 +83,7 @@ This page describes how Nekko works, not legal advice. If something matters to y
 Nekko runs Claude Code on the computer it runs on. To use an account that lives on another machine (for example Claude Code inside WSL on a Windows desktop), open a terminal to it from **Terminal → SSH hosts** and run `claude` there: it appears as a terminal tab in the same window, with that machine's login, but not as a Nekko chat. Running a Claude subscription chat on another computer, with its approvals and transcript in this window, is not built yet.
 
 Your phone works the other way round: it drives the Nekko on your computer, with whatever accounts that computer has. See [Phone remote control](REMOTE.md).
+
+### Navigating provider setup
+
+In Models, the underlined section selects **Local model server** or **Cloud providers**. Click **More providers** (···) to open the full chooser. Click it again, click outside the setup area, or press Escape to close it without saving. Settings uses the same underlined section links. Its Skills and Connectors pages have a **Back to Settings** button.

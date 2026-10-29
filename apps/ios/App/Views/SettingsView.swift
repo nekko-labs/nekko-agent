@@ -50,6 +50,7 @@ struct ComputersView: View {
             }
             Section { NavigationLink(value: Route.pair) { Label("Pair another computer", systemImage: "plus") } }
         }
+        .appBackground()
         .navigationTitle("Computers")
         .alert("Rename computer", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $name)
@@ -83,6 +84,8 @@ struct SettingsView: View {
     @State private var error: String?
     @State private var testing = false
     @State private var testResult: (text: String, ok: Bool)?
+    @State private var sendingFeedback = false
+    @State private var voiceIntro = VoiceIntroGate()
 
     var body: some View {
         @Bindable var prefs = app.prefs
@@ -117,7 +120,7 @@ struct SettingsView: View {
                     UntestedHardwareNote()
                 }
             } header: { SectionHeader("Security") } footer: {
-                Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications and the Lock Screen free of chat details.")
+                Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications free of chat details. What the Lock Screen shows is set in Live Activities below.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
@@ -161,26 +164,34 @@ struct SettingsView: View {
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
-                Toggle("Live Activities", isOn: $prefs.liveActivities)
+                NavigationLink(value: Route.liveActivities) {
+                    LabeledContent("Live Activities", value: prefs.liveActivityLevel.label)
+                }
+                .accessibilityIdentifier("settings.liveActivities")
                 Toggle("Vibrate for approvals and questions", isOn: $prefs.hapticNeedsYou)
                 Toggle("Vibrate when a reply finishes", isOn: $prefs.hapticDone)
             } header: { SectionHeader("While a chat runs") } footer: {
-                Text("Running chats show on the Lock Screen and in the Dynamic Island, with Allow / Deny for approvals.")
+                Text("One card on the Lock Screen and in the Dynamic Island shows every running chat, with Allow / Deny for approvals.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
                 // Inline: both choices are short rows with a checkmark, never cut off.
                 Picker("Microphone", selection: $prefs.dictationHold) {
-                    Text("Tap to start and stop").tag(false)
+                    Text("Tap to keep listening").tag(false)
                     Text("Hold to talk").tag(true)
                 }
                 .pickerStyle(.inline)
                 Toggle("Use Whisper on the computer when available", isOn: $prefs.dictationOnComputer)
             } header: { SectionHeader("Dictation") } footer: {
-                Text(prefs.dictationHold
-                     ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
-                     : "Tap the microphone to start and tap stop when you’re done.")
-                    .foregroundStyle(palette.inkSoft)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(prefs.dictationHold
+                         ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
+                         : "Tap the microphone and talk: it keeps listening through pauses until you tap stop, lock the phone, or leave the chat, and the screen stays on while it listens. Start with “Nekko” for a command, like “Nekko, send it”. Without Whisper on the computer, speech is turned into text on this iPhone only, never on a server.")
+                        .foregroundStyle(palette.inkSoft)
+                    Button("Watch how voice works") { voiceIntro.replay() }
+                        .font(.footnote)
+                        .accessibilityIdentifier("settings.voiceIntro")
+                }
             }
             if store.active != nil {
                 Section {
@@ -228,12 +239,17 @@ struct SettingsView: View {
                 ProtocolBanner()
                 LabeledContent("Transport", value: store.active.map { "\(routeName($0.route)), end-to-end encrypted" } ?? "–")
                 Link("Remote access guide", destination: URL(string: "https://nekkoagent.com/docs/remote")!)
+                Button { sendingFeedback = true } label: { Label("Send feedback", systemImage: "envelope") }
+                    .accessibilityIdentifier("settings.feedback")
             } header: { SectionHeader("About") }
             Section {
                 Button("Forget everything on this iPhone", role: .destructive) { confirmWipe = true }
             }
         }
+        .appBackground()
         .navigationTitle("Settings")
+        .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
+        .sheet(isPresented: $voiceIntro.showing, onDismiss: { voiceIntro.closed(app.prefs) {} }) { VoiceIntroView() }
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {
             Button("Forget everything", role: .destructive) { app.forgetEverything() }
         }
@@ -314,6 +330,7 @@ private struct ThemeList: View {
                 }
             } header: { SectionHeader("Experimental") }
         }
+        .appBackground()
         .navigationTitle("Theme")
         .navigationBarTitleDisplayMode(.inline)
     }

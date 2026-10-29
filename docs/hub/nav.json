@@ -22,6 +22,12 @@
       "title": "Using Nekko Agent",
       "pages": [
         {
+          "slug": "chat-progress",
+          "title": "Verification and PR progress",
+          "source": "docs/chat-progress.md",
+          "description": "Follow verification checklists, device activity, CI checks and resolved or unresolved review threads in chat."
+        },
+        {
           "slug": "fonts-and-text",
           "title": "Fonts and text",
           "source": "docs/fonts-and-text.md",
@@ -32,6 +38,24 @@
           "title": "Browser automation",
           "source": "docs/browser-automation.md",
           "description": "Chat-owned browser actions, security boundaries and native driver migration status."
+        },
+        {
+          "slug": "connections",
+          "title": "Connections",
+          "source": "docs/connections.md",
+          "description": "Switch off every network connection at once or one by one, and see how often each one is used."
+        },
+        {
+          "slug": "usage-reports",
+          "title": "Usage and crash reports",
+          "source": "docs/usage-reports.md",
+          "description": "Opt in to anonymous usage and crash reports, what they contain, and how to see each send."
+        },
+        {
+          "slug": "voice",
+          "title": "Voice",
+          "source": "docs/voice.md",
+          "description": "Tap the mic once and talk: dictation that stays on, \"Nekko\" commands, and speech that never leaves your computer."
         },
         {
           "slug": "privacy-shield",
@@ -76,6 +100,12 @@
           "description": "Drive the agent on your computer from your phone, end-to-end encrypted."
         },
         {
+          "slug": "cloud-machines",
+          "title": "Nekko Cloud machines",
+          "source": "docs/CLOUD-MACHINES.md",
+          "description": "A sandboxed computer in the cloud your phone pairs with, seeing only what you put in its scope."
+        },
+        {
           "slug": "protect-this-computer-with-a-security-key",
           "title": "Protect this computer with a security key",
           "source": "docs/security-keys.md",
@@ -116,6 +146,18 @@
           "title": "Local CI runner",
           "source": "docs/git-runner.md",
           "description": "Run a GitHub or GitLab repo's builds and tests on your own machine."
+        },
+        {
+          "slug": "ci-runners",
+          "title": "CI runners on your Mac",
+          "source": "docs/ci-runners.md",
+          "description": "Run your GitHub Actions jobs on this Mac, each in a throwaway VM, without getting in your way."
+        },
+        {
+          "slug": "ci-runners-image",
+          "title": "Build the CI runner image",
+          "source": "docs/ci-runners-image.md",
+          "description": "Build the macOS image your CI runner jobs boot from, and check it in a VM."
         },
         {
           "slug": "decision-models",

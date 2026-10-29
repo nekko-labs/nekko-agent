@@ -8,11 +8,15 @@ name: Native iOS
 # (to tell which PR broke a red batch); pushes do not re-run it.
 # A PR or batch verifies dark mode only when it changes colours or a PR carries
 # `ci:theme`; the schedule and a branch dispatch run light and dark.
+# A `pick` job asks for the owner's idle Mac runner (scripts/pick-runner.mjs) and falls
+# back to xcode-27; only for the schedule and dispatches on main or ci/ios-batch, and only when
+# vars.NEKKO_MAC_RUNNERS is 'on'.
 on:
   pull_request:
     types: [labeled]
     paths:
       - 'apps/ios/**'
+      - 'vendor/mermaid/**'
       - 'apps/relay-server/src/**'
       - 'crates/nekko-remote/**'
       - 'crates/nekkod/src/remote.rs'
@@ -36,20 +40,50 @@ concurrency:
   group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ !inputs.batch }}
 jobs:
+  pick:
+    # Off until the pilot Mac is live (vars.NEKKO_MAC_RUNNERS). Only the schedule and dispatches on
+    # main or ci/ios-batch ask the picker: those are the refs the runner group allows (selected
+    # workflows), so a labeled PR always runs hosted. The picker is not the boundary against fork
+    # code (a fork PR's own workflow file could name the runner directly): that is the repo's
+    # fork-approval setting and the runner group (see docs/runbooks/ci-runner-pilot.md).
+    if: vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/ios-batch')
+    # A failed picker leaves its output empty (protocol-and-build falls back) and must not fail the run.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      runs-on: ${{ steps.pick.outputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/actions/pick-runner
+            scripts/pick-runner.mjs
+          sparse-checkout-cone-mode: false
+      - id: pick
+        uses: ./.github/actions/pick-runner
+        with:
+          token: ${{ secrets.MAC_RUNNER_STATUS_TOKEN }}
+          org: ${{ vars.NEKKO_MAC_RUNNER_ORG }}
+          fallback: xcode-27
   protocol-and-build:
-    if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))
-    runs-on: macos-14
-    timeout-minutes: 50
+    needs: pick
+    # !cancelled(): a skipped or failed picker must not skip this job.
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))) }}
+    runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
+    # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
+    # passing runs off mid-test.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
           # A PR checks out its merge commit and a batch is one commit on main:
           # either way HEAD^1 is the base, for the appearance scope.
           fetch-depth: 2
-      - name: Use the newest installed Xcode
+      # The xcode-27 image's default Xcode is its newest release (the newer ones on it are
+      # release candidates), matching what we build with locally.
+      - name: Show the Xcode
         run: |
-          x="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v beta | sort -V | tail -n1)"
-          [ -n "$x" ] && sudo xcode-select -s "$x/Contents/Developer"
           xcodebuild -version
           swift --version
       # Dark costs a second live journey (about 5 minutes), so a PR runs it only when
@@ -72,6 +106,8 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: |
           npm ci --no-audit --no-fund --ignore-scripts
+          # The app's bundled Mermaid is the lockfile's version, byte for byte (vendor/mermaid).
+          node scripts/vendor-mermaid.mjs --check
           npm run build:core
           npm run build --workspace=apps/cli
           npm run build -w @nekko-agent/local-web-ui
@@ -98,9 +134,13 @@ jobs:
       # and saved about 17 s overall (runs 40132995453, 40136579251, 40138086476).
       - name: Create the simulator
         run: |
-          RUNTIME=$(xcrun simctl list runtimes -j | ruby -rjson -e 'puts JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.last.fetch("identifier")')
-          TYPE=$(xcrun simctl list devicetypes -j | ruby -rjson -e 't = JSON.parse(STDIN.read)["devicetypes"].map { |d| d["identifier"] }; puts(t.select { |i| i =~ /iPhone-1[5-9]-Pro$/ }.last || t.select { |i| i.include?("iPhone") }.last)')
-          echo "DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")" >> "$GITHUB_ENV"
+          # The newest iPhone Pro on the newest iOS runtime that has one: the xcode-27 image's
+          # iOS 27.1 runtime only carries the iPhone Duo, a foldable the UI tests aren't laid out for.
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          echo "Simulator: $TYPE on $RUNTIME"
+          # An assignment, not an echo, so a failed create fails this step.
+          DEVICE=$(xcrun simctl create Nekko-CI "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
       # One build for the bundle checks and every test run below: for the test
       # device's architecture only, ad-hoc signed as the UI tests need.
       - name: Build the app and its tests for the simulator
@@ -115,8 +155,8 @@ jobs:
       - name: Verify bundle (launch screen, widget and share extensions, URL schemes, icon, privacy manifest)
         run: |
           APP=apps/ios/DerivedData/Build/Products/Debug-iphonesimulator/NekkoNative.app
-          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' $APP/Info.plist)" = LaunchScreen
-          test -d $APP/LaunchScreen.storyboardc
+          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchStoryboardName' $APP/Info.plist)" = Launch
+          test -d $APP/Launch.storyboardc
           test -d $APP/PlugIns/NekkoWidgets.appex
           # The Apple Watch glance ships inside the iPhone app, built for the watch simulator.
           test -d $APP/Watch/NekkoWatch.app
@@ -153,6 +193,8 @@ jobs:
           TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
           # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
+          # The first-run suite already asked for notifications; a fresh install gets the prompt again.
+          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           for THEME in $THEMES; do
             xcrun simctl ui "$DEVICE" appearance "$THEME"
             ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
@@ -179,6 +221,14 @@ jobs:
           TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/beyond.xcresult test-without-building \
             -only-testing:NekkoNativeUITests/LiveRelayTests/testQueueForkAutomationsAndUsageFromThePhone || failed=1
+          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+          # Simple and Expert: the model and effort control, the context gauge, the monitor panel and the whole monitor.
+          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-modes.env
+          . /tmp/stack-modes.env
+          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/modes.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testSimpleAndExpertModes || { failed=1; stack_logs modes; }
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.

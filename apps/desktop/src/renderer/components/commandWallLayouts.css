@@ -7,9 +7,11 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
-  padding: 14px 1px;
+  padding: 14px 1px 0;
 }
 .command-wall-stage { position: relative; min-height: 304px; }
+/* Windows stop one gap short of a composer docked below them. */
+.wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout { padding-bottom: var(--wall-gap); }
 /* Keep in step with WALL_PUSH_MS and WALL_PUSH_EASE in wallMotion.ts. */
 .command-wall-layout { --wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1); }
 /* A closing window's last picture folds away here, under the live windows. */
@@ -172,7 +174,7 @@ body:has(.wall-drag-shield) { user-select: none; }
 .command-wall-deck-window .command-wall-content { visibility:hidden; } .command-wall-card { position:absolute; inset:0; display:flex; flex-direction:column; gap:8px; padding:12px; text-align:left; color:var(--ink-soft); font-size:12px; } .command-wall-card span { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; } .command-wall-card small { margin-top:auto; color:var(--ink-faint); }
 
 /* The deck scroll offset moves only cards, never the hero or composer. */
-.command-wall-layout[data-wall-layout="focus"] { overflow-x:clip; }
+.command-wall-layout[data-wall-layout="focus"] { overflow-x:clip; scrollbar-gutter: auto; }
 .command-wall-deck-scroll { position:absolute; left:0; right:0; height:20px; overflow-x:auto; overflow-y:hidden; }
 .command-wall-deck-scroll:focus-visible { outline:2px solid var(--accent); }
 
@@ -219,8 +221,15 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 /* Tab placement remains independent of focus/grid/fixed window layout. */
 .wall-agent-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: 8px; }
-.wall-agent-workspace[data-tabs='top'] { flex-direction: column; gap: 8px; }
+/* The wall's 1px inset makes up the rest of the gap to the agent panel. */
+.wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: calc(var(--wall-gap) - 1px); }
+/* The vertical agent panel spans exactly the wall's windows: CommandCenterView
+   measures how far they sit from the column's top and bottom. Only beside the
+   wall: stacked above it (narrow), the measurement includes the panel itself. */
+@media (min-width: 721px) {
+  .wall-agent-workspace[data-tabs='left'] > .wall-agents-presence[data-orientation='vertical'] { margin-top: var(--wall-panes-top, 0px); margin-bottom: var(--wall-panes-bottom, 0px); }
+}
+.wall-agent-workspace[data-tabs='top'] { flex-direction: column; gap: 0; }
 /* The Agents panel's own controls: icon buttons whose meaning shows in a hover
    tooltip (HoverTip), so they never change size under the pointer. A stack in
    a column panel, a row in a row panel or when collapsed beside the wall
@@ -253,7 +262,8 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 /* The Agents panel as a row: each project is a strip of cards, the strip
    scrolls sideways, and the row stays about one card tall. */
-.agent-panel-row { max-height: 168px; }
+.agent-panel-row { max-height: 168px; padding-block: 0; }
+.agent-panel-row .collapse-wrap > div { padding-bottom: 0; }
 .agent-panel-row > * { flex: 0 0 auto; margin-bottom: 0 !important; }
 .agent-panel-row .collapse-wrap > div { display: flex; flex-direction: row; gap: 6px; }
 .agent-panel-row .collapse-wrap > div > * { flex: 0 0 240px; min-width: 0; }
@@ -296,11 +306,11 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 
 /* Presence changes are reversible CSS transitions, never queued animations. */
-.wall-agents-presence { display: flex; flex: 0 0 auto; min-width: 0; min-height: 0; max-height: 100%; opacity: 1; transform: translateX(0); interpolate-size: allow-keywords; width: max-content; overflow: clip; transition: width 220ms ease-out, transform 220ms ease-out; }
+.wall-agents-presence { display: flex; flex: 0 0 auto; min-width: 0; min-height: 0; max-height: 100%; opacity: 1; transform: translateX(0); interpolate-size: allow-keywords; width: max-content; overflow: visible; clip-path: inset(0 -10px); transition: width 220ms ease-out, transform 220ms ease-out; }
 .wall-agents-presence[data-orientation='horizontal'] { width: 100%; height: auto; transition: height 220ms ease-out, transform 220ms ease-out; }
 .wall-agents-presence > .agent-panel-host { min-height: 0; max-height: 100%; }
 .wall-agents-presence > .agent-panel-host > aside { min-height: 0; max-height: 100%; }
-.wall-agents-presence[data-panel-open='false'] { width: 0; transform: translateX(-100%); pointer-events: none; }
+.wall-agents-presence[data-panel-open='false'] { clip-path: inset(0); width: 0; transform: translateX(-100%); pointer-events: none; }
 .wall-agents-presence[data-orientation='horizontal'][data-panel-open='false'] { width: 100%; height: 0; transform: translateY(-100%); }
 @starting-style {
   .wall-agents-presence[data-panel-open='true'] { width: 0; transform: translateX(-100%); }
@@ -309,7 +319,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* Below md the list is an absolute drawer that this wrapper contains (its
    transform), so it keeps its old sizing: sized to the Agents button and
    clipped, it cut the drawer off and clicks fell through to the windows. */
-@media (max-width: 767px) { .wall-agents-presence { width: auto; overflow: visible; } }
+@media (max-width: 767px) { .wall-agents-presence { width: auto; overflow: visible; clip-path: none; } }
 @media (prefers-reduced-motion: reduce) { .wall-agents-presence { transition: none; transform: none; } }
 
 /* Separate project/status/date sections without inflating the agent cards. */
@@ -319,6 +329,120 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .agent-panel-row > .agent-panel-group + .agent-panel-group { margin-top: 0; }
 
 .hover-tip-multiline { max-width: min(420px, calc(100vw - 16px)); white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 400; }
+
+/* Keep the outboard resize target inside the open panel's clip region.
+   Closing still clips the panel to zero, with no permanent edge line. */
+.agent-list-resize { z-index: 5; }
+.agent-list-resize:focus-visible { outline: none; }
+.agent-list-resize > .pane-grip { background: color-mix(in srgb, var(--accent) 70%, white); box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 65%, transparent); pointer-events: none; }
+.agent-list-resize:is(:hover, :focus-visible, :active) > .pane-grip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .agent-list-resize > .pane-grip { transition: none; } }
+/* Five stacked controls must not set the row's height below its cards. */
+[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] > div { display: grid; grid-template-columns: repeat(2, 28px); gap: 4px; }
+[data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] .agent-panel-controls { display: contents; }
+
+/* ---------- Zones ---------- */
+/* A zone is a slim name bar over its window. The bar is the zone's handle:
+   drag it to move the zone, right-click it to close the zone. */
+.command-wall-window[data-zone] { flex-direction: column; gap: 3px; }
+.command-wall-window[data-zone] > .panel { flex: 1 1 0; }
+.wall-zone-header {
+  flex: 0 0 16px; display: flex; align-items: center; gap: 6px; padding: 0 6px;
+  border-radius: 6px; cursor: grab; user-select: none;
+  color: var(--ink-faint); font-size: 10.5px; font-weight: 500; letter-spacing: .02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wall-zone-header:hover { background: var(--surface-2); color: var(--ink-soft); }
+.command-wall-window[data-zone-active] > .wall-zone-header { color: var(--accent); }
+/* The active zone: the selection colour plus a slightly heavier ring. */
+.command-wall-window[data-zone-active] > .panel {
+  --panel-ring-color: color-mix(in srgb, var(--accent) 70%, var(--line)) !important;
+  --panel-ring-width: 2px !important;
+}
+/* An empty zone keeps its place, drawn dotted. */
+.wall-zone-empty {
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 16px; text-align: center; color: var(--ink-faint); font-size: 12px; line-height: 1.5;
+  border: 1.5px dotted color-mix(in srgb, var(--ink) 28%, transparent); border-radius: var(--pane-radius);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.wall-zone-empty-title { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.wall-zone-create { display: flex; flex-direction: column; align-items: stretch; max-width: 100%; margin-top: 4px; }
+.wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; }
+/* Each option leans in on hover and its plus turns a quarter; a press squeezes it and turns the plus on. */
+.wall-zone-empty .wall-zone-option { transition: transform 180ms cubic-bezier(.2, .8, .2, 1), background var(--dur-fast) ease, color var(--dur-fast) ease; }
+/* The label takes the slack so every shortcut lines up on the right. */
+.wall-zone-label { flex: 1; padding-right: 16px; text-align: left; }
+.wall-zone-kbd { opacity: .6; transition: opacity 140ms ease; }
+.wall-zone-option:is(:hover, :focus-visible) .wall-zone-kbd { opacity: 1; }
+.wall-zone-plus { opacity: .6; transition: transform 260ms cubic-bezier(.34, 1.56, .64, 1), opacity 140ms ease, color 140ms ease; }
+.wall-zone-empty .wall-zone-option:is(:hover, :focus-visible) { transform: translateX(3px); }
+.wall-zone-empty .wall-zone-option.text-accent:is(:hover, :focus-visible, :active) { color: var(--accent); }
+.wall-zone-option:is(:hover, :focus-visible) .wall-zone-plus { opacity: 1; color: var(--accent); transform: rotate(90deg) scale(1.15); }
+.wall-zone-empty .wall-zone-option:active { transform: translateX(3px) scale(.95); transition-duration: 70ms; }
+.wall-zone-option:active .wall-zone-plus { transform: rotate(180deg) scale(.9); transition-duration: 120ms; }
+@media (prefers-reduced-motion: reduce) { .wall-zone-empty .wall-zone-option, .wall-zone-plus { transition: none; transform: none !important; } }
+.wall-zone-art { position: relative; width: 88px; height: 52px; margin-bottom: 4px; opacity: .55; }
+.wall-zone-art > svg { display: block; }
+.wall-zone-art-cat { position: absolute; left: 26px; bottom: 4px; line-height: 0; }
+.command-wall-window[data-zone-active] > .wall-zone-empty { border-width: 2px; border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); }
+/* An agent dragged from the panel is over this zone. */
+.command-wall-window[data-zone-drop] > .wall-zone-empty,
+.command-wall-window[data-zone-drop] > .panel { --panel-ring-color: var(--accent) !important; --panel-ring-width: 2px !important; border-color: var(--accent); background: var(--accent-soft); }
+
+/* The add-zone rails along the right and bottom edges are the wall's gaps to
+   the dock and the composer, so they are --wall-gap wide; their pluses overhang. */
+/* A zoned board always fits its viewport, so it clips instead of scrolling:
+   an overhanging plus must not bring up a scrollbar and its gutter. */
+.command-wall-layout[data-zone-rails] { padding-right: var(--wall-gap); padding-bottom: var(--wall-gap); overflow: clip; overflow-clip-margin: calc(8px - var(--wall-gap) / 2); }
+.wall-zone-rail { position: absolute; width: var(--wall-gap); height: var(--wall-gap); }
+.wall-zone-add {
+  position: absolute; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px;
+  color: var(--ink-faint); opacity: .45; transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+.wall-zone-rail[data-side='right'] .wall-zone-add { left: calc(var(--wall-gap) / 2 - 8px); transform: translateY(-50%); }
+.wall-zone-rail[data-side='down'] .wall-zone-add { top: calc(var(--wall-gap) / 2 - 8px); transform: translateX(-50%); }
+.wall-zone-rail[data-side='down'] .wall-zone-span svg { transform: rotate(90deg); }
+.wall-zone-rail:hover .wall-zone-add { opacity: .8; }
+.wall-zone-add:hover, .wall-zone-add:focus-visible { opacity: 1 !important; color: var(--accent); background: var(--accent-soft); outline: none; }
+.wall-zone-add svg { stroke-width: 1.5; }
+/* Where a hovered plus would put the new zone. */
+.wall-zone-ghost {
+  position: absolute; z-index: 3; pointer-events: none; display: grid; place-items: center;
+  border: 2px dotted var(--accent); border-radius: var(--pane-radius);
+  background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+  color: var(--accent); font-size: 12px; font-weight: 600;
+}
+.wall-span-hint {
+  position: absolute; z-index: 4; transform: translate(-50%, -50%); pointer-events: none;
+  padding: 4px 10px; border-radius: 999px; background: var(--win); color: var(--ink-soft);
+  font-size: 11.5px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+}
+
+/* The agent row in the hand, dragged in from the panel. On a drop it flies
+   into the zone and grows to the window, then fades as the window shows. */
+.wall-agent-chip {
+  position: fixed; z-index: 9999; pointer-events: none; overflow: hidden;
+  border-radius: 10px; background: var(--win); border: 1px solid var(--accent);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .2), 0 2px 6px rgba(0, 0, 0, .1);
+  transform: rotate(-1.5deg) scale(.96);
+}
+.wall-agent-chip > * { width: 100%; }
+.wall-agent-chip[data-landing] {
+  transform: none; border-radius: var(--pane-radius); border-width: 2px;
+  transition: left 320ms cubic-bezier(.22, 1, .36, 1), top 320ms cubic-bezier(.22, 1, .36, 1), width 320ms cubic-bezier(.22, 1, .36, 1), height 320ms cubic-bezier(.22, 1, .36, 1), transform 320ms ease, opacity 180ms ease;
+}
+.wall-agent-chip[data-landing] > * { opacity: 0; transition: opacity 160ms ease; }
+.wall-agent-chip[data-landed] { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .wall-agent-chip { transform: none; }
+}
+
+/* The first-visit zones intro. */
+.zones-intro-demo { margin-top: 12px; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); }
+.zones-intro-dot { width: 7px; height: 7px; border-radius: 4px; background: var(--line); transition: width 160ms ease, background 160ms ease; }
+.zones-intro-dot[aria-current] { width: 18px; background: var(--accent); }
+.zones-intro-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Full tool arguments stay readable without widening the transcript row. */
 .hover-tip.hover-tip-details {

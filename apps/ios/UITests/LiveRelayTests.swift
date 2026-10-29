@@ -7,6 +7,18 @@ import XCTest
 ///
 /// Opt-in: the CI passes `TEST_RUNNER_NEKKO_ITEST_LINK`; without it this skips.
 final class LiveRelayTests: XCTestCase {
+    /// How long a step the computer drives may take to reach the phone: a
+    /// reply from the fake model, an approval or question card, a tool step,
+    /// a changed file, a queued prompt's turn. On a loaded runner each of these
+    /// has arrived after a 20 to 45 s wait ran out, a different one each run,
+    /// with the rest of the journey green (#831); the edited queued prompt,
+    /// which follows a whole slow reply, gets twice this.
+    private let computerWait: TimeInterval = 120
+    /// How long the phone itself may take to react (a card or sheet closing, a
+    /// line appearing) while a run is in flight: on a loaded runner one query of
+    /// the tree has taken 3 to 12 s there, so a 10 or 15 s wait saw two reads (#1019).
+    private let busyWait: TimeInterval = 60
+
     func testPairStreamAndApproveFromThePhone() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
@@ -14,8 +26,9 @@ final class LiveRelayTests: XCTestCase {
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         let app = XCUIApplication()
         // Settings persist across runs on one simulator: start each from the defaults it checks.
-        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "NO", "-notifyFinished", "YES", "-dictationHold", "NO",
-                               "-theme", theme == "dark" ? "dark" : "light", "-uiTestReset", "YES"]
+        // Live Activities stay off until the step that checks one (see there).
+        let defaults = ["-splash", "NO", "-appLock", "NO", "-notifyFinished", "YES", "-dictationHold", "NO", "-theme", theme == "dark" ? "dark" : "light"]
+        app.launchArguments = defaults + ["-onboarded", "NO", "-liveActivityLevel", "none", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
 
@@ -64,8 +77,24 @@ final class LiveRelayTests: XCTestCase {
         auditAccessibility(app, "\(theme)-new-chat")
         app.buttons["Start"].tap()
 
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the reply streamed in")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the reply streamed in")
         attach(app, "\(theme)-4-reply")
+
+        // + sits inside the message box and offers another agent or a terminal, as on the desktop.
+        // A Menu's label has no hit point for XCTest (the tap failed scrolling it into view,
+        // run 40562362238), so tap its centre, as the chats view menu.
+        let plus = app.buttons["composer.add"]
+        XCTAssertTrue(waitForFrame(plus, in: app, 10), "the + button never got a frame")
+        let newAgent = app.buttons["New agent"]
+        for _ in 0..<3 where !newAgent.exists {
+            plus.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            _ = newAgent.waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(newAgent.exists, "the + menu opens")
+        XCTAssertTrue(app.buttons["Terminal"].exists, "the + menu offers a terminal")
+        attach(app, "\(theme)-4b-plus-menu")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+        XCTAssertTrue(waitGone(app.buttons["New agent"], busyWait), "the + menu closes")
 
         let message = app.input("chat.message")
         XCTAssertTrue(message.waitForExistence(timeout: 10))
@@ -75,7 +104,7 @@ final class LiveRelayTests: XCTestCase {
         // The Live Activity starts in this stretch and the simulator slows down
         // with it: the card took 15 s in one pass and over 30 s in the next (#831).
         let card = app.staticTexts["Approve this tool?"]
-        XCTAssertTrue(card.waitForExistence(timeout: 60), "the guarded tool asks the phone")
+        XCTAssertTrue(card.waitForExistence(timeout: computerWait), "the guarded tool asks the phone")
         attach(app, "\(theme)-5-approval")
         // Known, unresolved: with the card up, the audit reports the transcript's
         // "Run rm -rf …" step as clipped (approval) or low-contrast (question),
@@ -83,8 +112,8 @@ final class LiveRelayTests: XCTestCase {
         // (two-line labels, scrolling after layout, a minimum-height transcript,
         // waiting for the keyboard to settle). Excluded only here; see the PR.
         auditAccessibility(app, "\(theme)-approval", ignoring: ["Run rm -rf ./nekko-itest-dist"])
-        app.buttons["Deny"].tap()
-        XCTAssertTrue(waitGone(card, 15))
+        // Deny and Answer are tapped again if a busy app dropped the tap (run 40447057708).
+        XCTAssertTrue(app.buttons["Deny"].tapUntil { !card.exists }, "the card closes after Deny")
         attach(app, "\(theme)-6-denied")
 
         // The agent asks; the phone answers.
@@ -92,7 +121,7 @@ final class LiveRelayTests: XCTestCase {
         message.typeText("ask me which platform")
         app.buttons["Send"].tap()
         let question = app.staticTexts["Which platform should I build first?"]
-        XCTAssertTrue(question.waitForExistence(timeout: 30), "the question reaches the phone")
+        XCTAssertTrue(question.waitForExistence(timeout: computerWait), "the question reaches the phone")
         attach(app, "\(theme)-6b-question")
         // Known, unresolved: with the card up, the audit reports the transcript's
         // "Run rm -rf …" step as clipped (approval) or low-contrast (question),
@@ -100,10 +129,11 @@ final class LiveRelayTests: XCTestCase {
         // (two-line labels, scrolling after layout, a minimum-height transcript,
         // waiting for the keyboard to settle). Excluded only here; see the PR.
         auditAccessibility(app, "\(theme)-question", ignoring: ["Run rm -rf ./nekko-itest-dist"])
-        app.buttons["iOS"].firstMatch.tap()
-        app.buttons["Answer"].tap()
-        XCTAssertTrue(waitGone(question, 15))
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: 30))
+        // A busy app can drop the option's tap, and Answer stays disabled until one is picked.
+        let ios = app.buttons["iOS"].firstMatch
+        XCTAssertTrue(ios.tapUntil { ios.isSelected }, "the option is picked")
+        XCTAssertTrue(app.buttons["Answer"].tapUntil { !question.exists }, "the question closes after Answer")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait))
 
         // The agent writes a file; the phone reads the change, read only (the
         // stack turns the computer's "Let phones see changes" on).
@@ -111,33 +141,44 @@ final class LiveRelayTests: XCTestCase {
         message.typeText("write a note")
         app.buttons["Send"].tap()
         let step = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "nekko-itest-note.txt")).firstMatch
-        XCTAssertTrue(step.waitForExistence(timeout: 30), "the write step shows in the chat")
+        XCTAssertTrue(step.waitForExistence(timeout: computerWait), "the write step shows in the chat")
         sleep(2)
         app.buttons["More"].tap()
         app.buttons["Changes"].tap()
         let note = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "nekko-itest-note.txt", "new file, 2 added")).firstMatch
-        XCTAssertTrue(note.waitForExistence(timeout: 20), "the changed file reaches the phone")
+        XCTAssertTrue(note.waitForExistence(timeout: computerWait), "the changed file reaches the phone")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Read only")).firstMatch.exists)
         XCTAssertFalse(app.buttons["Accept"].exists)
         attach(app, "\(theme)-6d-changes")
         auditAccessibility(app, "\(theme)-changes")
         // Ask about a change: the quote lands in the message box, unsent, and the sheet closes.
         let line = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Added line 2")).firstMatch
-        XCTAssertTrue(line.waitForExistence(timeout: 5))
-        line.press(forDuration: 1.0)
-        app.buttons["Ask about this change"].firstMatch.tap()
-        XCTAssertTrue(waitGone(note, 10))
-        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        XCTAssertTrue(line.waitForExistence(timeout: busyWait), "the diff shows its lines")
+        let ask = app.buttons["Ask about this change"].firstMatch
+        XCTAssertTrue(contextMenuItem(ask, afterLongPressOn: line), "the line's menu offers to ask about it")
+        XCTAssertTrue(ask.tapUntil { !note.exists }, "the changes sheet closes after Ask")
+        XCTAssertTrue(message.waitForExistence(timeout: busyWait))
         XCTAssertTrue((message.value as? String ?? "").contains("+written by the agent"), "the quote is in the message box: \(message.value ?? "")")
         attach(app, "\(theme)-6e-asked")
-        // Left in the box: the next prompt follows the quote, and the fake model still hears "slow".
 
         // A longer run, then Home: the Live Activity takes over in the Dynamic Island.
+        // In a launch of its own with Live Activities on: on for the whole journey, every
+        // run started one, and on a loaded runner the simulator then stopped answering
+        // XCTest's queries for 30 s or more right after Send (the approval card, the
+        // question, the slow reply; #1019). The request itself took under 0.7 s.
+        app.terminate()
+        app.launchArguments = defaults + ["-onboarded", "YES", "-liveActivityLevel", "standard"]
+        app.launch()
+        XCTAssertTrue(waitOnline(app, busyWait), "back online after the relaunch")
+        let chatRow = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
+        XCTAssertTrue(chatRow.waitForExistence(timeout: busyWait))
+        chatRow.tap()
+        XCTAssertTrue(message.waitForExistence(timeout: busyWait))
         message.tap()
         message.typeText("a slow one please")
         app.buttons["Send"].tap()
         // A slow simulator can take 15 s just to deliver the tap; the reply itself starts within seconds.
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word2")).firstMatch.waitForExistence(timeout: 45),
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word2")).firstMatch.waitForExistence(timeout: computerWait),
                       "the slow reply never started streaming")
         XCUIDevice.shared.press(.home)
         sleep(3)
@@ -148,18 +189,19 @@ final class LiveRelayTests: XCTestCase {
         add(shot)
         app.activate()
 
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.waitForExistence(timeout: busyWait))
+        XCTAssertTrue(back.tapUntil { menu.exists }, "back to the chats")
         attach(app, "\(theme)-7-chats-after")
 
         // Settings → Connection: the route, Tailscale on this phone, and what happened.
         // A coordinate tap: right after going back, XCTest can't "scroll to" the nav bar button.
-        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
-        XCTAssertTrue(menu.waitForExistence(timeout: 10))
         // Mid-transition the button exists with no frame yet, and asking XCTest whether it is
         // hittable then fails the test outright; wait for a real frame instead.
         XCTAssertTrue(waitForFrame(menu, in: app, 10), "the computer menu never got a frame")
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons["Settings"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Settings"].firstMatch.tapUntil { app.navigationBars["Settings"].exists }, "the menu opens Settings")
         let connection = app.buttons["Connection"].firstMatch
         XCTAssertTrue(reveal(connection, in: app), "Settings → Connection")
         connection.tap()
@@ -176,7 +218,7 @@ final class LiveRelayTests: XCTestCase {
         for _ in 0..<3 where !(check.exists && check.isHittable) { app.swipeUp() }
         check.tap()
         let answered = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "answered")).firstMatch
-        XCTAssertTrue(answered.waitForExistence(timeout: 30), "a relay hello came back")
+        XCTAssertTrue(answered.waitForExistence(timeout: computerWait), "a relay hello came back")
         attach(app, "\(theme)-7c-checks")
         // The results push Share diagnostics below the fold; a List only builds what's on screen.
         let share = app.buttons["share-diagnostics"].firstMatch
@@ -215,8 +257,9 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(reveal(hold, in: app), "Settings → Dictation")
         settle()
         hold.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hold the microphone while you speak")).firstMatch
-            .waitForExistence(timeout: 5))
+        // The section's footer can sit just below the screen, out of a lazy list's tree.
+        XCTAssertTrue(reveal(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Hold the microphone while you speak")).firstMatch, in: app),
+                      "the hold-to-talk hint")
         attach(app, "\(theme)-7f-settings-dictation")
         auditAccessibility(app, "\(theme)-settings-dictation")
 
@@ -266,12 +309,12 @@ final class LiveRelayTests: XCTestCase {
         prompt.tap()
         prompt.typeText("Say hello")
         app.buttons["Start"].tap()
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the first reply streamed in")
 
         // The relay goes away: the composer stays usable and says the prompt will wait.
         relay(ctl, "stop")
         let later = app.buttons["chat.sendLater"]
-        XCTAssertTrue(later.waitForExistence(timeout: 30), "the composer offers Send when online")
+        XCTAssertTrue(later.waitForExistence(timeout: computerWait), "the composer offers Send when online")
         let message = app.input("chat.message")
         message.tap()
         message.typeText("written while offline")
@@ -289,10 +332,10 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(waitGone(waiting, 90), "the waiting prompt was delivered")
         // A user bubble reads as one element, "You: …".
         let sent = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: written while offline"))
-        XCTAssertTrue(sent.firstMatch.waitForExistence(timeout: 20))
+        XCTAssertTrue(sent.firstMatch.waitForExistence(timeout: computerWait))
         let replies = app.staticTexts.matching(NSPredicate(format: "label == %@", "Hello from your computer."))
         let answered = expectation(for: NSPredicate(format: "count == 2"), evaluatedWith: replies)
-        wait(for: [answered], timeout: 30)
+        wait(for: [answered], timeout: computerWait)
         sleep(2)
         XCTAssertEqual(sent.count, 1, "delivered exactly once")
         XCTAssertEqual(replies.count, 2, "answered once")
@@ -343,7 +386,7 @@ final class LiveRelayTests: XCTestCase {
         prompt.tap()
         prompt.typeText("Say hello")
         app.buttons["Start"].tap()
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the first reply streamed in")
 
         // IO-22: a slow reply runs; a follow-up waits in the queue and is edited before it runs.
         let message = app.input("chat.message")
@@ -351,7 +394,7 @@ final class LiveRelayTests: XCTestCase {
         // "long run" streams for 90 s on the fake model: time for a slow simulator to type and edit.
         message.typeText("a long run please")
         app.buttons["Send"].tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word1")).firstMatch.waitForExistence(timeout: 45))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "word1")).firstMatch.waitForExistence(timeout: computerWait))
         message.tap()
         message.typeText("next one")
         let queue = app.buttons["Queue"]
@@ -368,24 +411,39 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "beyond-2-queue-editor")
         app.buttons["queue.editor.save"].tap()
         let edited = app.staticTexts["next one, edited"]
-        XCTAssertTrue(edited.waitForExistence(timeout: 10), "the edit reached the computer's queue")
+        XCTAssertTrue(edited.waitForExistence(timeout: computerWait), "the edit reached the computer's queue")
         attach(app, "beyond-3-queue-edited")
         auditAccessibility(app, "beyond-queue")
         // The edited prompt runs after the slow reply, as edited.
         let ranEdited = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: next one, edited"))
-        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 150), "the edited prompt ran")
+        XCTAssertTrue(ranEdited.firstMatch.waitForExistence(timeout: 2 * computerWait), "the edited prompt ran")
+        // Its reply streams on, and while it does the transcript keeps scrolling to the
+        // end, which cancels a long press (no menu after two presses, run 40447057708).
+        XCTAssertTrue(waitGone(app.buttons["Stop"].firstMatch, computerWait), "the edited prompt's reply finished")
 
         // IO-23: fork from the first prompt; the new chat has it in its message box.
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "You: Say hello")).firstMatch
-        XCTAssertTrue(first.waitForExistence(timeout: 10))
-        first.press(forDuration: 1.0)
-        let fork = app.buttons["Edit in a new chat"].firstMatch
-        XCTAssertTrue(fork.waitForExistence(timeout: 5), "the prompt's menu offers a fork")
+        // The transcript only draws what is near the screen, and the message box (taller since
+        // #1250) and keyboard leave it a strip: scroll back up to the first prompt. Drag near
+        // the top, where the transcript is; the middle of the screen is the message box.
+        // XCTest calls the bubble hittable while it is still under the navigation bar, where a
+        // long press opens nothing, so scroll until it is below the bar.
+        let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+        let barBottom = app.navigationBars.firstMatch.frame.maxY
+        for _ in 0..<12 where !(first.exists && first.frame.minY > barBottom + 8) {
+            top.press(forDuration: 0.05, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 160)))
+        }
+        settle()
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "the first prompt is on screen")
+        // The menu item carries the identifier `chat.fork` (#868); XCTest matches
+        // an element's identifier, not its label, once one is set.
+        let fork = app.buttons["chat.fork"].firstMatch
+        XCTAssertTrue(contextMenuItem(fork, afterLongPressOn: first), "the prompt's menu offers a fork")
         attach(app, "beyond-4-fork-menu")
         fork.tap()
         let forkedBox = app.input("chat.message")
         let seeded = expectation(for: NSPredicate(format: "value == %@", "Say hello"), evaluatedWith: forkedBox)
-        wait(for: [seeded], timeout: 20)
+        wait(for: [seeded], timeout: computerWait)
         attach(app, "beyond-5-forked")
 
         // The chat list, with its view menu (group, sort, show) in place of the old Continue card.
@@ -406,21 +464,21 @@ final class LiveRelayTests: XCTestCase {
         let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Computers and settings")).firstMatch
         XCTAssertTrue(waitForFrame(menu, in: app, 10))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons["Automations"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Automations"].firstMatch.tapUntil { app.navigationBars["Automations"].exists }, "the menu opens Automations")
         let run = app.buttons["Run Say hello nightly now"]
         XCTAssertTrue(run.waitForExistence(timeout: 15), "the task is listed with Run now")
         attach(app, "beyond-7-automations")
         auditAccessibility(app, "beyond-automations")
         run.tap()
         let result = app.staticTexts["Hello from your computer."]
-        XCTAssertTrue(result.waitForExistence(timeout: 60), "the run's answer shows as the last result")
+        XCTAssertTrue(result.waitForExistence(timeout: computerWait), "the run's answer shows as the last result")
         attach(app, "beyond-8-ran")
 
         // IO-29: usage, read only.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForFrame(menu, in: app, 10))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons["Usage and limits"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Usage and limits"].firstMatch.tapUntil { app.navigationBars["Usage and limits"].exists }, "the menu opens Usage and limits")
         XCTAssertTrue(app.navigationBars["Usage and limits"].waitForExistence(timeout: 10))
         sleep(2)
         attach(app, "beyond-9-usage")
@@ -430,14 +488,93 @@ final class LiveRelayTests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForFrame(menu, in: app, 10))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        app.buttons["computer.logs"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["computer.logs"].firstMatch.tapUntil { app.navigationBars["Logs"].exists }, "the menu opens Logs")
         XCTAssertTrue(app.navigationBars["Logs"].waitForExistence(timeout: 10))
         let log = app.buttons["logs.row"].firstMatch
-        XCTAssertTrue(log.waitForExistence(timeout: 15), "the computer lists its logs")
+        XCTAssertTrue(log.waitForExistence(timeout: computerWait), "the computer lists its logs")
         attach(app, "beyond-10-logs")
         log.tap()
         XCTAssertTrue(app.buttons["log.refresh"].waitForExistence(timeout: 10), "a log opens with Refresh")
         attach(app, "beyond-11-log")
+    }
+
+    /// Simple and Expert (2026-10-24): the composer's model and effort control
+    /// and context gauge, the effort sheet, Expert's monitor panel and the whole
+    /// monitor with the computer's real hardware.
+    func testSimpleAndExpertModes() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-expertMode", "NO", "-uiTestReset", "YES"]
+        app.launch()
+        allowSystemAlerts()
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
+
+        // Simple: the model and effort control and the context gauge, and no monitor.
+        let modelEffort = app.buttons["chat.modelEffort"]
+        XCTAssertTrue(modelEffort.waitForExistence(timeout: 10), "the composer has the model and effort control")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "the context gauge shows in Simple mode")
+        XCTAssertFalse(app.buttons["chat.monitor"].exists, "Simple mode has no monitor")
+        settle()
+        attach(app, "modes-1-simple")
+        auditAccessibility(app, "modes-simple")
+
+        // The effort sheet: pick High, and the control says so.
+        modelEffort.tap()
+        let high = app.buttons["modelEffort.high"]
+        XCTAssertTrue(high.waitForExistence(timeout: 10), "the sheet offers the model's effort levels")
+        high.tap()
+        XCTAssertTrue(app.staticTexts["High"].waitForExistence(timeout: 10), "the chat's effort is now High")
+        attach(app, "modes-2-model-effort")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(modelEffort.waitForExistence(timeout: 5))
+
+        // Expert: the monitor panel under the title, then the whole monitor.
+        app.buttons["chat.mode"].tap()
+        let expert = app.buttons["Expert"]
+        XCTAssertTrue(expert.waitForExistence(timeout: 5))
+        expert.tap()
+        let panel = app.buttons["chat.monitor"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the monitor panel")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "the context gauge stays in Expert mode")
+        // A reading or two: the panel reads every 3 seconds.
+        RunLoop.current.run(until: Date().addingTimeInterval(4))
+        attach(app, "modes-3-expert")
+        auditAccessibility(app, "modes-expert")
+        panel.tap()
+        XCTAssertTrue(app.navigationBars["Monitor"].waitForExistence(timeout: 10), "the whole monitor opens")
+        // A list section header can read in capitals, so match its identifier or its words in any case.
+        let models = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@ OR label ==[c] %@", "monitor.models", "Loaded models")).firstMatch
+        XCTAssertTrue(models.waitForExistence(timeout: 10), "the monitor lists the loaded models")
+        settle()
+        attach(app, "modes-4-monitor")
+        app.buttons["Done"].firstMatch.tap()
+
+        // Back to Simple: the panel goes.
+        app.buttons["chat.mode"].tap()
+        let simple = app.buttons["Simple"]
+        XCTAssertTrue(simple.waitForExistence(timeout: 5))
+        simple.tap()
+        XCTAssertTrue(waitGone(panel, 10), "Simple mode hides the monitor")
     }
 
     func testPairFromADeepLink() throws {
@@ -555,6 +692,20 @@ final class LiveRelayTests: XCTestCase {
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         } while Date() < deadline
+        return false
+    }
+
+    /// Long-presses `target` for its context menu and waits for `item` to show.
+    /// On a loaded simulator the first press sometimes lands while the app is
+    /// still busy and no menu opens (the fork step in run 40140666823, the
+    /// "Ask about this change" step in run 40154800339); the item is given
+    /// 10 s, and the press is made once more if it never showed (#1048).
+    private func contextMenuItem(_ item: XCUIElement, afterLongPressOn target: XCUIElement) -> Bool {
+        for attempt in 1...2 {
+            target.press(forDuration: 1.0)
+            if item.waitForExistence(timeout: 10) { return true }
+            if attempt == 1 { _ = target.waitForExistence(timeout: 5) }
+        }
         return false
     }
 

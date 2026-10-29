@@ -285,6 +285,7 @@ impl Drop for TitleFlight {
 }
 
 pub struct Turns {
+    connectivity: Arc<crate::connectivity::Connectivity>,
     title_flights: TitleFlights,
     store: Option<Arc<SessionStore>>,
     data_dir: Option<PathBuf>,
@@ -359,6 +360,7 @@ impl Turns {
         decide: Arc<DecideService>,
     ) -> Self {
         Self {
+            connectivity: crate::connectivity::Connectivity::new(),
             title_flights: TitleFlights::default(),
             store,
             data_dir,
@@ -513,6 +515,7 @@ impl Turns {
     pub fn abort(&self, turn_id: &str) -> bool {
         let Some(shared) = lock(&self.running).get(turn_id).cloned() else { return false };
         shared.cancel.cancel();
+        self.connectivity.forget(&shared.session_id);
         self.pending.release(&shared.session_id);
         true
     }
@@ -520,6 +523,7 @@ impl Turns {
     /// `chat:abort`: stop this session's turns here (a Claude Agent chat's
     /// may have one waiting behind a wake-up), if it has any.
     pub fn abort_session(&self, session_id: &str) -> bool {
+        self.connectivity.forget(session_id);
         let turns: Vec<Arc<Shared>> =
             lock(&self.running).values().filter(|s| s.session_id == session_id).cloned().collect();
         for shared in &turns {
@@ -687,6 +691,7 @@ impl Turns {
         if !nekko_store::valid_id(&session_id) {
             return Err("Session not found.".into());
         }
+        self.connectivity.forget(&session_id);
         let claude_code = spec.pointer("/facts/provider/kind").and_then(Value::as_str) == Some("claude-code");
         let (tx, rx) = mpsc::unbounded_channel();
         let shared = Arc::new(Shared {
@@ -747,7 +752,9 @@ impl Turns {
     /// on them) and the linked spec kept in sync with the chat. A sandbox turn
     /// runs neither.
     fn after_turn_hooks(self: &Arc<Self>, store: &Arc<SessionStore>, spec: &Value, summary: &Value) {
-        if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true)) {
+        if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true))
+            || summary.get("stop").and_then(Value::as_str) == Some("connectivity")
+        {
             return;
         }
         let session_id = str_at(&spec["opts"], "sessionId").unwrap_or_default().to_string();
@@ -777,7 +784,10 @@ impl Turns {
             let id = session_id.clone();
             let fresh = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
             let linked = fresh.as_ref().is_some_and(|s| {
-                js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
+                js::truthy(s.get("specLinked"))
+                    && !js::truthy(s.get("incognito"))
+                    && !js::truthy(s.get("offline"))
+                    && !nekko_net::all_off()
             });
             if linked {
                 let _ = d("spec:build".into(), vec![json!(session_id)]).await;
@@ -793,7 +803,9 @@ impl Turns {
         turn_id: &str,
         mut summary: Value,
     ) -> Value {
-        if summary.get("early") == Some(&Value::Bool(true)) {
+        if summary.get("early") == Some(&Value::Bool(true))
+            || summary.get("stop").and_then(Value::as_str) == Some("connectivity")
+        {
             return summary;
         }
         let opts = &spec["opts"];
@@ -805,7 +817,7 @@ impl Turns {
         // titleAuto guards a name the user typed; incognito and offline chats
         // skip the extra call, as does a turn whose provider never resolved.
         if !js::truthy(fresh.get("incognito"))
-            && !js::truthy(fresh.get("offline"))
+            && !crate::connections::offline(&fresh)
             && fresh.get("titleAuto") == Some(&Value::Bool(true))
             && spec.pointer("/facts/provider").is_some_and(Value::is_object)
             && let Some(flight) = self.title_flights.claim(&session_id)
@@ -905,7 +917,7 @@ impl Turns {
         // a Claude Code chat and an offline one have none.
         let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox && !claude_code).cloned();
         let mcp_tools = match &own_mcp {
-            Some(configs) if !js::truthy(loaded.get("offline")) => {
+            Some(configs) if !crate::connections::offline(&loaded) => {
                 let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
                 if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
             }
@@ -914,7 +926,7 @@ impl Turns {
         // The turn's composition: tools, context from disk, the system prompt.
         let tool_input = json!({
             "session": loaded,
-            "offline": js::truthy(loaded.get("offline")),
+            "offline": crate::connections::offline(&loaded),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
             "allowBrowserControl": spec.get("allowBrowserControl").cloned().unwrap_or(json!(false)),
             "mcpTools": mcp_tools,
@@ -1089,6 +1101,11 @@ impl Turns {
 
         // Privacy Shield: a cloud model gets placeholders for private values.
         let shield = crate::privacy::shield_for(&lock(&session), settings, &facts["provider"]);
+        // Only an admitted local-model Expert override can disable thinking.
+        // Legacy session flags (and off facts on cloud turns) never take effect.
+        let thinking = config.kind != ProviderKind::Llamacpp
+            || config.managed_cache_prompt != Some(true)
+            || facts.get("thinking") != Some(&json!(false));
         let provider = create_provider(config);
         // An Anthropic API key's own rate limits, read off each response.
         let client = if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
@@ -1109,6 +1126,93 @@ impl Turns {
             .filter(|_| facts.get("provider").is_some_and(crate::admission::offline_provider_allowed))
             .and_then(|mode| self.background.get().map(|b| b.gate(mode) as Arc<dyn nekko_chat::YieldGate>));
         let client = nekko_chat::YieldingClient::new(client, gate);
+        let internet =
+            crate::connectivity::needs_internet(&facts["provider"]) && !crate::connections::offline(&lock(&session));
+        let sink: crate::connectivity::Sink = {
+            let (st, sid, hub, logs) = (store.clone(), session_id.clone(), hub.clone(), self.agent_logs.clone());
+            Arc::new(move |notice: Value| {
+                let (st, sid, hub, logs) = (st.clone(), sid.clone(), hub.clone(), logs.clone());
+                Box::pin(async move {
+                    let n = notice.clone();
+                    let id = sid.clone();
+                    let written = if incognito {
+                        true
+                    } else {
+                        tokio::task::spawn_blocking(move || st.connectivity_notice(&id, n))
+                            .await
+                            .ok()
+                            .and_then(Result::ok)
+                            .unwrap_or(false)
+                    };
+                    if written {
+                        if !incognito && let Some(logs) = logs {
+                            let at = notice["createdAt"]
+                                .as_i64()
+                                .and_then(chrono::DateTime::from_timestamp_millis)
+                                .map(|d| d.to_rfc3339())
+                                .unwrap_or_default();
+                            let line = format!("\n[{at}] {}\n", notice["content"].as_str().unwrap_or_default());
+                            let id = sid.clone();
+                            let _ = tokio::task::spawn_blocking(move || logs.notice(&id, &line)).await;
+                        }
+                        hub.publish(
+                            "agent:event",
+                            json!({ "type": "session_meta", "sessionId": sid, "connectivityNotice": notice }),
+                            false,
+                        );
+                    }
+                })
+            })
+        };
+        let _connectivity = if internet {
+            Some(self.connectivity.observe(&session_id, shared.cancel.clone(), sink.clone()).await)
+        } else {
+            None
+        };
+        let allowed: crate::connectivity::Allowed = {
+            let admitted = lock(&session);
+            let (settings, st, sid, pid, spid, smid) = (
+                self.settings.clone(),
+                store.clone(),
+                session_id.clone(),
+                opts["providerId"].clone(),
+                admitted.get("providerId").cloned(),
+                admitted.get("modelId").cloned(),
+            );
+            Arc::new(move || {
+                let (settings, st, sid, pid, spid, smid) =
+                    (settings.clone(), st.clone(), sid.clone(), pid.clone(), spid.clone(), smid.clone());
+                Box::pin(async move {
+                    tokio::task::spawn_blocking(move || {
+                        let Some(settings) = &settings else { return false };
+                        let settings = settings.shared();
+                        if settings.get("autoResumeOnInternetRestore") != Some(&Value::Bool(true)) {
+                            return false;
+                        }
+                        let provider =
+                            settings["providers"].as_array().and_then(|ps| ps.iter().find(|p| p["id"] == pid));
+                        if !provider.is_some_and(|p| p["enabled"] == true) {
+                            return false;
+                        }
+                        st.meta(&sid).is_some_and(|s| {
+                            !js::truthy(s.get("archivedAt"))
+                                && !js::truthy(s.get("offline"))
+                                && nekko_net::allowed("model-providers")
+                                && s.get("providerId") == spid.as_ref()
+                                && s.get("modelId") == smid.as_ref()
+                        })
+                    })
+                    .await
+                    .unwrap_or(false)
+                })
+            })
+        };
+        let client = crate::connectivity::ConnectedClient::new(
+            client,
+            internet.then(|| self.connectivity.clone()),
+            allowed,
+            sink,
+        );
         // In code mode the tools behind `run_code` are still this chat's tools.
         let names: HashSet<String> = tools
             .iter()
@@ -1177,7 +1281,7 @@ impl Turns {
             tools,
             temperature: facts.get("temperature").and_then(Value::as_f64),
             effort: str_of(facts, "effort"),
-            think: lock(&session).get("thinking").and_then(Value::as_bool),
+            think: Some(thinking),
             prompt_caching: Some(facts.get("promptCaching").and_then(Value::as_bool).unwrap_or(true)),
             max_history_turns: opts.get("maxHistoryTurns").and_then(Value::as_f64),
             context_window: facts.get("contextWindow").and_then(Value::as_f64).filter(|w| *w > 0.0),
@@ -1406,6 +1510,9 @@ impl Turns {
         if let Some(stop) = last_stop {
             summary["stop"] = stop;
         }
+        if lock(&shared.last_error).as_deref() == Some(crate::connectivity::LOST) {
+            summary["stop"] = json!("connectivity");
+        }
         summary
     }
 }
@@ -1461,7 +1568,7 @@ async fn generate_title(
     let (st, id) = (store.clone(), session_id.clone());
     let Some(fresh) = tokio::task::spawn_blocking(move || st.get(&id)).await.ok().flatten() else { return };
     if js::truthy(fresh.get("incognito"))
-        || js::truthy(fresh.get("offline"))
+        || crate::connections::offline(&fresh)
         || fresh.get("titleAuto") != Some(&Value::Bool(true))
         || !facts.get("provider").is_some_and(Value::is_object)
     {
@@ -2198,7 +2305,7 @@ impl TurnTools {
     async fn agent_watch(&self, watches: &crate::watches::Watches, call: &Value) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(json!({}));
-        let offline = js::truthy(lock(&self.session).get("offline"));
+        let offline = crate::connections::offline(&lock(&self.session));
         let failed = |e: &str| error(id, format!("Agent watch failed: {e}"));
         if self.incognito || self.training || offline {
             return failed("Durable watches are unavailable in incognito, goal runs, or offline chats");
@@ -2350,7 +2457,10 @@ impl TurnTools {
             .get("disabledTools")
             .and_then(Value::as_array)
             .is_some_and(|d| d.iter().any(|t| t.as_str() == Some("spawn_agent")));
-        if js::truthy(session.get("incognito")) || js::truthy(session.get("offline")) || !self.allow_spawn || spawn_off
+        if js::truthy(session.get("incognito"))
+            || crate::connections::offline(&session)
+            || !self.allow_spawn
+            || spawn_off
         {
             return failure("delegation_unavailable", "Delegation discovery is unavailable in this chat.");
         }

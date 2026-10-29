@@ -2541,12 +2541,12 @@
    "error": "Not allowed from a paired phone (channel-denied): file:write"
   },
   {
-   "channel": "workspace:addByPath",
+   "channel": "dir:list",
    "args": [
     "/"
    ],
    "calls": [],
-   "error": "Not allowed from a paired phone (channel-denied): workspace:addByPath"
+   "error": "Not allowed from a paired phone (channel-denied): dir:list"
   },
   {
    "channel": "voice:install",

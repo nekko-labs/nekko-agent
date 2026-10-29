@@ -26,7 +26,8 @@ describe('Agents header placement', () => {
     // The brand mark stands alone (no wordmark), still named for assistive tech.
     expect(title).not.toContain('Nekko Agent</span>');
     expect(title).toContain('aria-label="Nekko Agent"');
-    expect(title).toContain('data-part="pixel-head"');
+    expect(title).not.toContain('data-part="pixel-head"');
+    expect(title).toContain('viewBox="0 -2.989 24 24"');
     expect(title).toContain('width="28"');
     expect(title).toContain('class="titlebar-heading');
     expect(title.indexOf('>Agents</h1>')).toBeLessThan(title.indexOf('data-version'));
@@ -35,7 +36,7 @@ describe('Agents header placement', () => {
     expect(toolbar()).not.toContain('<h1');
     expect(title).not.toContain('pr-[150px]');
   });
-  it.each([['settings', 'Settings'], ['models', 'Model Providers'], ['skills', 'Skills']])('names the %s view in the title bar, not Agents', (view, label) => {
+  it.each([['settings', 'Settings'], ['models', 'Models'], ['modelserver', 'Models'], ['skills', 'Skills']])('names the %s view in the title bar, not Agents', (view, label) => {
     state.view = view;
     const title = renderToStaticMarkup(<TitleBar />);
     expect(title).toContain('>' + label + '</h1>');
@@ -64,7 +65,8 @@ describe('Agents header placement', () => {
     // Adding lives in the toolbar's icon bar in every layout: agent, terminal,
     // without an overflow button. An agent's Changes/Files/Browser moved into
     // its own window header beside Logs.
-    for (const label of ['New agent', 'New image session', 'New terminal']) expect(html).toContain(`aria-label="${label}"`);
+    expect(html).toContain('aria-label="Create new"');
+    for (const label of ['New agent', 'New image session', 'New terminal']) expect(html).not.toContain(`aria-label="${label}"`);
     for (const label of ['Add window', 'Changes', 'Browser', 'Files']) expect(html).not.toContain(`aria-label="${label}"`);
     // The add bar leads the controls, left of the layout switcher.
     expect(html.indexOf('aria-label="Add to the wall"')).toBeLessThan(html.indexOf('aria-label="Wall layout"'));

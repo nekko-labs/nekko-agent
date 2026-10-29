@@ -5,7 +5,7 @@ import { Modal } from './primitives/index.js';
 /**
  * Camera QR scanner using getUserMedia + jsQR (pure JS, no native plugin, works
  * in the Capacitor webview and mobile browsers). Calls onResult with the decoded
- * text. The native app needs a camera usage description (see apps/mobile README).
+ * text. The native app needs a camera usage description (see apps/ios/Info.plist).
  */
 export function QrScanner({ onResult, onClose }: { onResult: (text: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);

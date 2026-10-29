@@ -1,4 +1,5 @@
-import { ASK_CANCELLED, ASK_UNATTENDED, parseAskRequest } from '@nekko-agent/shared';
+import { ASK_CANCELLED, ASK_UNATTENDED, groupByPurpose, parseAskRequest } from '@nekko-agent/shared';
+import type { PurposeCall, ToolPurpose } from '@nekko-agent/shared';
 import type { ChatMessage, ToolCall, ToolResult, PrInfo, PrState } from '@nekko-agent/shared';
 
 /** Display-only projection of the persisted tool reply, never model history.
@@ -31,7 +32,8 @@ function askReply(call: ToolCall, message: ChatMessage): ChatMessage | undefined
 /** One step of an assistant turn: a tool call, a reasoning block, or a bit of
  *  narration text between tools. Grouped into a single collapsible section. */
 export type Activity =
-  | { kind: 'tool'; call: ToolCall; result?: ToolResult }
+  /** `startedAt`/`endedAt`: when the call was made and when its result came back, for the row's elapsed time. `failed`: its result was an error. */
+  | { kind: 'tool'; call: ToolCall; result?: ToolResult; startedAt?: number; endedAt?: number; failed?: boolean }
   | { kind: 'reasoning'; text: string; duration: number | null }
   | { kind: 'note'; text: string };
 
@@ -59,6 +61,7 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
     if (reply) { replies.set(m, reply); answered.add(m.toolResult.toolCallId); }
   }
   const results = new Map(messages.flatMap((m) => m.toolResult ? [[m.toolResult.toolCallId, m.toolResult] as const] : []));
+  const resultAt = new Map(messages.flatMap((m) => m.toolResult ? [[m.toolResult.toolCallId, m.createdAt] as const] : []));
   const blocks: StreamBlock[] = [];
   let run: Activity[] = [];
   let runKey = '';
@@ -106,8 +109,9 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
       // splits the run in two: what led up to it, and what it went on to do.
       if (m.content.trim() && !isFinalAnswer) say(m, i);
       // Delegations, watches and memory saves show their outcome on the step itself.
-      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, ...((c.name === 'spawn_agent' || c.name === 'agent_watch' || c.name === 'remember') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
-      if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: m }); }
+      m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, startedAt: m.createdAt, endedAt: resultAt.get(c.id), ...(results.get(c.id)?.isError ? { failed: true } : {}), ...((c.name === 'spawn_agent' || c.name === 'agent_watch' || c.name === 'remember') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
+      // Reasoning already has its inline activity projection above.
+      if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: { ...m, reasoning: undefined } }); }
     } else {
       flush();
       blocks.push({ type: 'msg', message: m });
@@ -128,7 +132,12 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
  * once as a settled bubble with a Done row, once streaming below it. The
  * persisted tail comes back as soon as the live run is released.
  */
-export function transcriptBeforeLiveTurn(messages: ChatMessage[]): ChatMessage[] {
+export function transcriptBeforeLiveTurn(messages: ChatMessage[], transcriptThroughId?: string): ChatMessage[] {
+  if (transcriptThroughId) {
+    const tail = messages.findIndex((m) => m.id === transcriptThroughId);
+    // A missing anchor (for example after compaction) must not hide saved history.
+    return tail < 0 || tail === messages.length - 1 ? messages : messages.slice(0, tail + 1);
+  }
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'user') return i === messages.length - 1 ? messages : messages.slice(0, i + 1);
   }
@@ -285,7 +294,34 @@ export function stepKey(it: Activity, i: number): string {
   return it.kind === 'tool' ? `${it.call.id}_${i}` : `${it.kind}_${i}`;
 }
 
-export const fmtTok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`);
+/** Calls shown their own way (delegations, watches, memory saves): never folded into a purpose group. */
+const OWN_ROW_TOOLS = new Set(['spawn_agent', 'agent_watch', 'remember']);
+
+/** A step of an activity run with its 1-based place in the run, which its row shows. */
+export type IndexedActivity = { item: Activity; index: number };
+
+/** A row of an open activity run: one step, or adjacent same-purpose calls folded into one goal row. */
+export type ActivityRow =
+  | { kind: 'step'; step: IndexedActivity }
+  | { kind: 'group'; purpose: ToolPurpose; steps: IndexedActivity[]; calls: PurposeCall[] };
+
+/**
+ * An activity run's steps as purpose groups (spec/chat/tool-calls-grouped-by-purpose.md).
+ * Adjacent calls with one purpose fold into a group; a thought between them
+ * folds in with them. The call waiting for approval (`pendingCallId`), every
+ * question and the calls with their own rows stay single, as does a lone call.
+ */
+export function activityRows(items: Activity[], pendingCallId?: string): ActivityRow[] {
+  const steps = items.map((item, i) => ({ item, index: i + 1 }));
+  return groupByPurpose(steps, ({ item }) => item.kind !== 'tool' ? undefined : {
+    name: item.call.name,
+    input: item.call.input,
+    failed: item.failed,
+    standalone: OWN_ROW_TOOLS.has(item.call.name) || item.call.id === pendingCallId,
+  }).map((r) => r.kind === 'single' ? { kind: 'step', step: r.item } : { kind: 'group', purpose: r.purpose, steps: r.items, calls: r.calls });
+}
+
+export const fmtTok =(n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`);
 
 // Formatters are built once: toLocaleTimeString() and toLocaleString() build a
 // new one on every call, which is most of the cost of drawing a user bubble.
@@ -315,4 +351,12 @@ export function fmtTime(ts: number): string {
 export function fmtDateTime(ts: number): string {
   try { return formatter('datetime')?.format(ts) ?? new Date(ts).toLocaleString(); }
   catch { return ''; }
+}
+
+/** When a transcript row happened, for the swipe-left times: a message's send time, or a step run's first call. */
+export function transcriptRowStamp(row: TranscriptRow): string | undefined {
+  const at = row.kind === 'msg' || row.kind === 'compaction' ? row.message.createdAt
+    : row.kind === 'activity' ? row.items.find((it) => it.kind === 'tool')?.startedAt
+      : undefined;
+  return at ? fmtTime(at) || undefined : undefined;
 }

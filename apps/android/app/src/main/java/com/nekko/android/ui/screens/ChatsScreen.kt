@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -66,6 +67,13 @@ import com.nekko.android.ui.components.ConnectionBanner
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import com.nekko.protocol.ChatSearch
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.panes.PaneSlot
 import com.nekko.android.ui.security.rememberSafetyExits
@@ -110,6 +118,9 @@ fun ChatsScreen(
     var collapsed by rememberSaveable { mutableStateOf(setOf<String>()) }
     var showCompleted by rememberSaveable { mutableStateOf(setOf<String>()) }
     val groups = remember(s.summaries, s.workspaces) { ChatGroup.of(s.summaries, s.workspaces) }
+    // Search: every word, any case or accent, in the title, first prompt or last reply, completed chats too.
+    var query by rememberSaveable { mutableStateOf("") }
+    val found = remember(s.summaries, query) { if (query.isBlank()) emptyList() else ChatSearch.matches(s.summaries.filter { it.isVisible }, query) }
     val restore: (SessionSummary) -> Unit = { chat ->
         actionError = null
         scope.launch {
@@ -237,7 +248,34 @@ fun ChatsScreen(
                     }
                     item(key = "header") { SectionHeader("On ${active.name}") }
                     actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
-                    if (s.summaries.isEmpty()) {
+                    if (s.summaries.isNotEmpty()) {
+                        item(key = "search") {
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                placeholder = { Text("Search chats") },
+                                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") }
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.search"),
+                            )
+                        }
+                    }
+                    if (query.isNotBlank()) {
+                        if (found.isEmpty()) {
+                            item(key = "no-match") {
+                                Text("No chats match “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                            }
+                        }
+                        items(found, key = { "found:${it.id}" }) { summary ->
+                            if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
+                            else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                        }
+                    } else if (s.summaries.isEmpty()) {
                         item(key = "empty") {
                             Text(
                                 when {
@@ -253,7 +291,7 @@ fun ChatsScreen(
                     }
                     // The desktop's agent sidebar: General, then each folder; active
                     // chats first, completed ones folded away under Show completed.
-                    groups.forEach { g ->
+                    if (query.isBlank()) groups.forEach { g ->
                         val open = g.key !in collapsed
                         val showDone = g.key in showCompleted
                         item(key = "group:${g.key}") {
@@ -319,7 +357,7 @@ private fun ChatActionDialog(title: String, delete: Boolean, computer: String, o
 }
 
 @Composable
-private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
+internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
@@ -353,7 +391,14 @@ private fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> U
             when (activity) {
                 Activity.NEEDS_YOU -> Box(Modifier.padding(top = 4.dp)) { Pill("Needs you", Tone.WARNING, Icons.Filled.Warning) }
                 Activity.RUNNING -> Box(Modifier.padding(top = 4.dp)) { Pill("Running", Tone.ACCENT, Icons.Filled.Bolt) }
-                null -> Unit
+                null -> Box(Modifier.padding(top = 4.dp)) {
+                    if (s.activeWatchCount > 0) {
+                        Text("Zz", style = MaterialTheme.typography.labelMedium, color = p.inkFaint,
+                            modifier = Modifier.semantics { contentDescription = "Idle" })
+                    } else {
+                        Icon(Icons.Filled.Check, contentDescription = "Done", tint = p.inkFaint, modifier = Modifier.size(14.dp))
+                    }
+                }
             }
         }
     }

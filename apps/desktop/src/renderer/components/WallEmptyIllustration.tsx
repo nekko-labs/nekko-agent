@@ -67,3 +67,19 @@ export function WallEmptyIllustration({ variant }: { variant?: WallEmptyVariant 
     </div>
   );
 }
+
+/** An empty zone's placeholder: Nekko dozing until an agent arrives. Faded so the zone still reads as empty. */
+export function ZoneEmptyIllustration() {
+  return (
+    <div className="wall-zone-art pixel-sleeping" aria-hidden="true">
+      <svg viewBox="0 0 88 52" width="88" height="52" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 48h60" stroke="var(--line)" strokeWidth="1.5" />
+        <g stroke="var(--accent)" strokeWidth="1.5">
+          <path d="M64 20h5l-5 5h5" strokeOpacity="0.5" />
+          <path d="M71 7h7l-7 7h7" strokeOpacity="0.8" />
+        </g>
+      </svg>
+      <span className="wall-zone-art-cat"><NekkoAvatar size={36} stationary quiet /></span>
+    </div>
+  );
+}

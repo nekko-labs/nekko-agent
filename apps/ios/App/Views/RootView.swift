@@ -18,8 +18,12 @@ enum Route: Hashable {
     case logs
     case cloud
     case syncedChat(String)
+    /// The computer's Monitors: a pane on a folding phone or iPad, the list's last row elsewhere (FD-5).
+    case monitors
     /// Settings → Security: the active computer's step-up (SK-6).
     case security
+    /// Settings → Live Activities: the card's level, with a preview.
+    case liveActivities
 }
 
 struct RootView: View {
@@ -28,7 +32,8 @@ struct RootView: View {
     @Environment(\.scenePhase) private var phase
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
-    @State private var selected: Route?
+    /// Regular width (an open folding phone, iPad): the two panes (FD-3).
+    @State private var panes = PaneHost()
     /// First run: step 1 was passed with Continue (this launch).
     @State private var introDone = false
     @Environment(\.horizontalSizeClass) private var size
@@ -48,12 +53,17 @@ struct RootView: View {
             .onChange(of: phase) { _, _ in syncCover() }
             .onChange(of: app.prefs.theme) { _, _ in syncCover() }
             .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
-            // iPad: a new sidebar pick starts a fresh detail stack (Settings pushed
-            // earlier no longer covers it), and another computer drops this one's chat.
-            .onChange(of: selected) { _, _ in if size == .regular { path = [] } }
-            .onChange(of: store.activeId) { _, _ in
-                selected = nil
+            // Another computer drops this one's chat; its own panes come back.
+            .onChange(of: store.activeId) { _, id in
                 path = []
+                panes.sync(computer: id, prefs: app.prefs)
+            }
+            // Closing a folding phone: one column, on the chat that was focused.
+            // Opening it again restores the panes as they were.
+            .onChange(of: size) { old, new in
+                if old == .regular && new == .compact {
+                    path = panes.layout.focusedChatId.map { [Route.chat($0)] } ?? []
+                }
             }
             // Shared from another app: New chat opens with the text, nothing is sent.
             .onChange(of: app.sharedText, initial: true) { _, text in
@@ -65,8 +75,15 @@ struct RootView: View {
             }
             // The Control Center control: New chat on the active computer, nothing typed.
             .onChange(of: app.newChatRequested, initial: true) { _, _ in takeNewChat() }
+            .onChange(of: app.openSettings) { _, on in
+                guard on else { return }
+                app.openSettings = false
+                open(.settings)
+            }
             .onChange(of: app.openChat) { _, id in
                 guard let id else { return }
+                // A `?listen=1` for another chat is stale once this one opens.
+                if app.listenIn != id { app.listenIn = nil }
                 open(.chat(id))
                 app.openChat = nil
             }
@@ -93,35 +110,25 @@ struct RootView: View {
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 
     private func syncCover() {
-        guard covered else { return cover.hide() }
-        cover.show(LockView(phase: phase)
+        // Before the first unlock the cover is the launch screen's plain lavender, so
+        // the full opening animation underneath starts on it; after that it is the cat.
+        let lock = LockView(phase: phase, cat: app.lock.everUnlocked, opening: !covered) { cover.opened() }
             .environment(app)
-            .modifier(Themed(choice: app.prefs.theme, appearance: store.appearance)))
+            .modifier(Themed(choice: app.prefs.theme, appearance: store.appearance))
+        if covered { cover.show(lock) } else { cover.open(lock) }
     }
 
     @ViewBuilder private var content: some View {
         if !store.ready && !(app.prefs.appLock && app.lock.locked) {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(palette.paper)
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background { AppBackdrop() }
         } else if store.computers.isEmpty {
             NavigationStack {
                 if app.prefs.onboarded || introDone { WelcomeView() } else { FirstRunIntroView { introDone = true } }
             }
         } else if size == .regular {
-            // iPad and large landscape: chats in the sidebar, the selected one beside it.
-            NavigationSplitView {
-                ChatsView(path: $path, selection: $selected)
-            } detail: {
-                NavigationStack(path: $path) {
-                    Group {
-                        if let selected { destination(selected) } else {
-                            ContentUnavailableView("Pick a chat", systemImage: "bubble.left.and.text.bubble.right",
-                                                   description: Text("Or start a new one on \(store.active?.name ?? "your computer")."))
-                        }
-                    }
-                    .navigationDestination(for: Route.self) { destination($0) }
-                }
-                .id(selected)
-            }
+            // An open folding phone, iPad, large landscape: two panes by posture
+            // (Chats + Chat until another arrangement is picked).
+            PanesView(host: panes)
         } else {
             NavigationStack(path: $path) {
                 ChatsView(path: $path)
@@ -130,10 +137,37 @@ struct RootView: View {
         }
     }
 
-    @ViewBuilder private func destination(_ route: Route) -> some View {
+    private func destination(_ route: Route) -> some View {
+        RouteView(route: route, path: $path, openChat: { id in open(.chat(id)) })
+    }
+
+    /// Show a route: in a pane on a regular-width screen, pushed on iPhone.
+    private func open(_ r: Route) {
+        if size == .regular {
+            panes.sync(computer: store.activeId, prefs: app.prefs)
+            if let content = PaneHost.content(r) {
+                let running = Set(store.activity.compactMap { $0.value == .running || $0.value == .needsYou ? $0.key : nil })
+                panes.open(content, running: running)
+            } else {
+                panes.push(r)
+            }
+        } else {
+            path = [r]
+        }
+    }
+}
+
+/// One route's screen, pushed in the phone's stack or inside a pane.
+struct RouteView: View {
+    let route: Route
+    @Binding var path: [Route]
+    /// Show a chat created or picked here (New chat, Monitors).
+    var openChat: (String) -> Void
+
+    var body: some View {
         switch route {
         case .chat(let id): ChatView(sessionId: id)
-        case .newChat: NewChatView(path: $path, opened: { id in open(.chat(id)) })
+        case .newChat: NewChatView(path: $path, opened: openChat)
         case .computers: ComputersView()
         case .computer(let id): ComputerDetailView(computerId: id)
         case .settings: SettingsView()
@@ -145,17 +179,10 @@ struct RootView: View {
         case .logs: LogsView()
         case .cloud: CloudView()
         case .syncedChat(let id): SyncedChatView(chatId: id)
+        // Back from the chat returns to Monitors.
+        case .monitors: MonitorsView(open: { id in path.append(.chat(id)) })
         case .security: SecuritySettingsView()
-        }
-    }
-
-    /// Show a route: in the split view's detail on iPad, pushed on iPhone.
-    private func open(_ r: Route) {
-        if size == .regular {
-            path = []
-            selected = r
-        } else {
-            path = [r]
+        case .liveActivities: LiveActivitySettingsView()
         }
     }
 }
@@ -167,18 +194,23 @@ struct LinkBox: Identifiable {
 
 /// Hosts the lock cover in a window of its own over the app's, so it hides
 /// sheets, alerts and menus as well as the screen under them. Shown at once
-/// (the app switcher snapshot is taken as the app leaves), faded out.
+/// (the app switcher snapshot is taken as the app leaves); unlocked, its view
+/// plays the opening animation's dissolve and then the window goes.
 @MainActor
 final class CoverWindow {
     /// The scene RootView is in (iPad can have several).
     weak var scene: UIWindowScene?
     private var window: UIWindow?
+    /// The view is dissolving away.
+    private var opening = false
+    /// Each showing, so a half-run dissolve never leaves the next cover see-through.
+    private var run = 0
 
     func show(_ view: some View) {
-        if let window, let host = window.rootViewController as? UIHostingController<AnyView> {
-            host.rootView = AnyView(view)
-            window.layer.removeAllAnimations()
-            window.alpha = 1
+        if window?.isHidden != false || opening { run += 1 }
+        opening = false
+        if let window {
+            put(view, in: window)
             window.isHidden = false
             return
         }
@@ -186,20 +218,33 @@ final class CoverWindow {
         else { return }
         let w = UIWindow(windowScene: scene)
         w.windowLevel = .alert + 1
-        let host = UIHostingController(rootView: AnyView(view))
+        let host = UIHostingController(rootView: AnyView(view.id(run)))
         host.view.backgroundColor = .clear
         w.rootViewController = host
         w.isHidden = false
         window = w
     }
 
-    func hide() {
-        guard let window, !window.isHidden else { return }
-        UIView.animate(withDuration: 0.15, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
-            window.alpha = 0
-        } completion: { done in
-            if done { window.isHidden = true }
-        }
+    /// Unlocked: `view` dissolves and calls `opened` when it's gone.
+    func open(_ view: some View) {
+        guard let window, !window.isHidden, !opening else { return }
+        opening = true
+        put(view, in: window)
+    }
+
+    private func put(_ view: some View, in window: UIWindow) {
+        guard let host = window.rootViewController as? UIHostingController<AnyView> else { return }
+        host.rootView = AnyView(view.id(run))
+        // Coming back from the background, a new root view here is not drawn until
+        // something else lays the window out, so Face ID and the dissolve never started.
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+    }
+
+    func opened() {
+        guard opening else { return }
+        opening = false
+        window?.isHidden = true
     }
 }
 
@@ -225,33 +270,53 @@ struct SceneReader: UIViewRepresentable {
     }
 }
 
-/// Shown over everything while the app lock is on, on the app's own background.
+/// Shown over everything while the app lock is on: the opening animation's
+/// lavender and cat, so the return is one dissolve with Face ID in the middle.
+/// Unlock appears only if Face ID was cancelled or failed.
 struct LockView: View {
     /// RootView's: the cover's window is not part of the SwiftUI scene, so it
     /// would not see the phase change.
     let phase: ScenePhase
+    /// Unlocked: dissolve, then `opened`.
+    var opening = false
+    var opened: () -> Void = {}
     @Environment(AppModel.self) private var app
-    @Environment(\.palette) private var palette
     @State private var prompted = false
+    /// Fixed for this showing: the first unlock flips `everUnlocked` before the cover goes.
+    @State private var cat: Bool
+
+    init(phase: ScenePhase, cat: Bool, opening: Bool = false, opened: @escaping () -> Void = {}) {
+        self.phase = phase
+        self.opening = opening
+        self.opened = opened
+        _cat = State(initialValue: cat)
+    }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            BrandMark().frame(width: 88, height: 88)
-            Text("Nekko Agent").font(.title2.weight(.semibold)).foregroundStyle(palette.ink)
-            if app.lock.locked && phase == .active {
-                Button {
-                    Task { await app.lock.unlock() }
-                } label: {
-                    Label("Unlock", systemImage: "faceid").frame(maxWidth: 220).padding(.vertical, 6).foregroundStyle(palette.onAccent)
-                }
-                .buttonStyle(.borderedProminent)
-                if let e = app.lock.error { Text(e).font(.footnote).foregroundStyle(palette.danger) }
+        ZStack {
+            if cat {
+                SplashView(kind: .resume, ready: opening, onDone: opened)
+            } else {
+                SplashView.ground.ignoresSafeArea()
             }
-            Spacer()
+            if app.lock.locked && phase == .active && prompted && !app.lock.authenticating {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Button {
+                        Task { await app.lock.unlock() }
+                    } label: {
+                        Label("Unlock", systemImage: "faceid").frame(maxWidth: 220).padding(.vertical, 6).foregroundStyle(SplashView.ground)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.white)
+                    if let e = app.lock.error { Text(e).font(.footnote).foregroundStyle(.white).multilineTextAlignment(.center) }
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 96)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.paper.ignoresSafeArea())
+        // Without the cat there is nothing to dissolve: the opening animation underneath takes over.
+        .onChange(of: opening) { _, on in if on && !cat { opened() } }
         // Ask once per return to the app: the Face ID sheet itself makes the
         // scene inactive and active again, which used to ask again after Cancel.
         .task(id: phase) {

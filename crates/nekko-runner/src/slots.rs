@@ -2,6 +2,8 @@
 //! framework allows two macOS guests at once, and that budget is shared with
 //! any other app's VMs, so the cap counts theirs too.
 
+use serde::{Deserialize, Serialize};
+
 use crate::settings::{Priority, RunnerSettings};
 
 /// Apple's limit on concurrent macOS guests per Mac.
@@ -58,6 +60,48 @@ pub fn macos_slots_available(s: &RunnerSettings, host: &HostFacts) -> u8 {
     let by_memory = runner_memory_mb(s, host) / u64::from(s.memory_per_vm_mb.max(1));
     let by_cap = MAX_MACOS_VMS.saturating_sub(host.other_macos_vms);
     s.macos_slots.min(by_cap).min(by_memory.min(u64::from(MAX_MACOS_VMS)) as u8)
+}
+
+/// Which bound cut the slot count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SlotLimit {
+    AppleCap,
+    OtherApps,
+    Memory,
+}
+
+/// [`macos_slots_available`] plus the bound that cut it below what was asked
+/// (the request, at most Apple's cap). `None` when nothing cut it.
+pub fn macos_slots_explained(s: &RunnerSettings, host: &HostFacts) -> (u8, Option<SlotLimit>) {
+    let avail = macos_slots_available(s, host);
+    let target = s.macos_slots.min(MAX_MACOS_VMS);
+    let by_cap = MAX_MACOS_VMS.saturating_sub(host.other_macos_vms);
+    let by_memory = (runner_memory_mb(s, host) / u64::from(s.memory_per_vm_mb.max(1))).min(u64::from(MAX_MACOS_VMS));
+    let limit = if avail < target {
+        // The smaller bound produced the count; a tie goes to the other apps.
+        if by_memory < u64::from(by_cap) { Some(SlotLimit::Memory) } else { Some(SlotLimit::OtherApps) }
+    } else {
+        (s.macos_slots > MAX_MACOS_VMS).then_some(SlotLimit::AppleCap)
+    };
+    (avail, limit)
+}
+
+/// VMs the supervisor should have: the warm count or demand, whichever is more, within what is available.
+pub fn vms_wanted(available: u8, warm: u8, busy: u8, queued: u32) -> u8 {
+    let demand = u32::from(busy).saturating_add(queued);
+    u32::from(available).min(u32::from(warm).max(demand)) as u8
+}
+
+/// The owner's usual memory use: nearest-rank 95th percentile, once there are
+/// at least 36 samples (6 hours at 10 minutes).
+pub fn usual_memory_mb(samples_mb: &[u64]) -> Option<u64> {
+    if samples_mb.len() < 36 {
+        return None;
+    }
+    let mut v = samples_mb.to_vec();
+    v.sort_unstable();
+    Some(v[(v.len() * 95).div_ceil(100) - 1])
 }
 
 /// vCPUs per VM: the explicit setting or the mode's default, always at least 2

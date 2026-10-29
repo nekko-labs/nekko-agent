@@ -3,9 +3,9 @@
  * each group is in, and what it shows. A per-window preference, remembered like
  * the panel's width, not a setting.
  *
- * The defaults are the panel as it always was: grouped by project, in the order
- * cards were dragged into (newest first for the rest), every detail and every
- * group shown.
+ * The defaults group the cards by activity (what each agent is doing), in the
+ * order cards were dragged into (newest first for the rest), every detail and
+ * every group shown.
  */
 
 export type AgentGroupBy = 'project' | 'status' | 'date' | 'none';
@@ -27,7 +27,7 @@ export type AgentPanelView = {
 };
 
 export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
-  groupBy: 'project',
+  groupBy: 'status',
   sortBy: 'manual',
   direction: 'desc',
   showMetadata: true,
@@ -38,7 +38,7 @@ export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
 
 export const GROUP_BY_LABELS: Record<AgentGroupBy, string> = {
   project: 'Project',
-  status: 'Status',
+  status: 'Activity',
   date: 'Date',
   none: 'None',
 };
@@ -126,16 +126,16 @@ export function compareCards(view: Pick<AgentPanelView, 'sortBy' | 'direction'>)
   };
 }
 
-/** The status groups, most urgent first. */
+/** The activity groups, most urgent first. */
 export const STATUS_GROUPS = [
   { key: 'status:input', name: 'Needs input' },
   { key: 'status:working', name: 'Working' },
   { key: 'status:error', name: 'Error' },
-  { key: 'status:idle', name: 'Idle' },
+  { key: 'status:done', name: 'Done' },
 ] as const;
 
-export function statusGroupOf(status: 'working' | 'input' | 'error' | undefined): string {
-  return status ? `status:${status}` : 'status:idle';
+export function statusGroupOf(status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+  return !status || status === 'idle' ? 'status:done' : `status:${status}`;
 }
 
 /** The date groups, newest first. */

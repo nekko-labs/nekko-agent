@@ -11,12 +11,13 @@ const out = path.join(repo, '.shots/layout-evidence', label);
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   const source = process.env.NEKKO_TEST_SOURCE || repo;
-  let entry = path.join(__dirname, 'layout-evidence-fixture.tsx');
+  const fixture = path.basename(process.env.NEKKO_LAYOUT_FIXTURE || 'layout-evidence-fixture.tsx');
+  let entry = path.join(__dirname, fixture);
   if (source !== repo) {
     entry = path.join(out, 'fixture.tsx');
-    fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, 'layout-evidence-fixture.tsx'), 'utf8').replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer')));
+    fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, fixture), 'utf8').replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/')));
   }
-  await require(path.join(modules, 'esbuild')).build({ entryPoints: [entry], bundle: true, jsx: 'automatic', conditions: ['style', 'browser', 'import', 'default'], format: 'iife', outfile: path.join(out, 'fixture.js'), nodePaths: [modules], alias: { '@nekko-agent/shared': path.join(source, 'packages/shared/src/index.ts') }, loader: { '.woff2': 'dataurl', '.svg': 'dataurl', '.png': 'dataurl', '.wasm': 'file' }, logLevel: 'error' });
+  await require(path.join(modules, 'esbuild')).build({ entryPoints: [entry], bundle: true, jsx: 'automatic', conditions: ['style', 'browser', 'import', 'default'], format: 'iife', outfile: path.join(out, 'fixture.js'), nodePaths: [modules], alias: { react: path.join(modules, 'react'), 'react-dom/server': path.join(modules, 'react-dom/server.browser.js'), 'react-dom/client': path.join(modules, 'react-dom/client.js'), 'react-dom': path.join(modules, 'react-dom/index.js'), '@nekko-agent/shared': path.join(source, 'packages/shared/src/index.ts') }, loader: { '.woff2': 'dataurl', '.svg': 'dataurl', '.png': 'dataurl', '.wasm': 'file' }, logLevel: 'error' });
   const css = await require(path.join(modules, 'postcss'))([require(path.join(modules, '@tailwindcss/postcss/dist/index.js'))({ base: source })]).process(fs.readFileSync(path.join(out, 'fixture.css'), 'utf8'), { from: path.join(out, 'fixture.css') });
   fs.writeFileSync(path.join(out, 'styled.css'), css.css);
   fs.writeFileSync(path.join(out, 'index.html'), '<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\' data: blob:; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; connect-src \'none\'"><link rel="stylesheet" href="styled.css"></head><body style="margin:0;height:100vh"><div id="root" style="height:100%"></div><script src="fixture.js"></script></body></html>');

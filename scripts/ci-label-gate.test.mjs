@@ -5,13 +5,13 @@ import { LABEL_WORKFLOWS, groupPrNumbers, labelRuns, needsMacos, queueBlockers }
 
 const run = (id, path, status, conclusion = null) => ({ id, name: path.split('/').pop(), path, status, conclusion, html_url: `https://example/${id}` });
 const ios = '.github/workflows/ios-native.yml';
-const mobile = '.github/workflows/mobile.yml';
+const devIdentity = '.github/workflows/dev-identity.yml';
 
 test('waits on the newest run of each label workflow, ignoring others', () => {
   const state = labelRuns([
     run(1, ios, 'completed', 'skipped'), // opened, before the label
     run(2, ios, 'queued'), // labelled: the real run
-    run(3, mobile, 'completed', 'success'),
+    run(3, devIdentity, 'completed', 'success'),
     run(4, '.github/workflows/ci.yml', 'in_progress'), // gate's own workflow
     run(5, '.github/workflows/auto-merge.yml', 'in_progress'), // waits on gate
   ]);
@@ -23,7 +23,7 @@ test('waits on the newest run of each label workflow, ignoring others', () => {
 test('a failed or cancelled run fails; skipped and neutral pass', () => {
   const state = labelRuns([
     run(1, ios, 'completed', 'failure'),
-    run(2, mobile, 'completed', 'cancelled'),
+    run(2, '.github/workflows/nekkod-npm.yml', 'completed', 'cancelled'),
     run(3, '.github/workflows/codeql.yml', 'completed', 'neutral'),
     run(4, '.github/workflows/dev-identity.yml', 'completed', 'skipped'),
   ]);
@@ -75,8 +75,25 @@ test('Native iOS passes on a green batch status, a green run, or neither when th
   assert.equal(labelRuns([], { batch: status('pending'), iosRequired: true }).pending.length, 1);
   assert.equal(labelRuns([], { batch: status('failure'), iosRequired: true }).failed[0].html_url, 'https://example/batch');
   // A pushed head no batch has taken yet: wait.
-  assert.equal(labelRuns([run(2, mobile, 'completed', 'success')], { iosRequired: true }).pending[0].name, 'Native iOS');
+  assert.equal(labelRuns([run(2, devIdentity, 'completed', 'success')], { iosRequired: true }).pending[0].name, 'Native iOS');
   // A green run on the PR (a dispatch to tell which PR broke a batch) beats a red batch.
   assert.deepEqual(labelRuns([run(3, ios, 'completed', 'success')], { batch: status('failure'), iosRequired: true }).passed.map(r => r.id), [3]);
   assert.deepEqual(labelRuns([], { iosRequired: false }), { pending: [], failed: [], passed: [] });
+});
+
+test('retired Expo runs cannot block native workflows or the merge queue', () => {
+  const retired = '.github/workflows/mobile.yml';
+  assert.ok(!LABEL_WORKFLOWS.includes(retired));
+  for (const status of ['queued', 'in_progress', 'completed']) {
+    assert.deepEqual(labelRuns([run(99, retired, status, 'failure')]), { pending: [], failed: [], passed: [] });
+  }
+  const state = labelRuns([run(99, retired, 'completed', 'failure'), run(1, ios, 'queued')]);
+  assert.deepEqual(state.pending.map(r => r.id), [1]);
+  assert.deepEqual(state.failed, []);
+});
+
+test('desktop icon generation does not recreate the retired phone app', () => {
+  const icons = readFileSync(new URL('../apps/desktop/scripts/make-icons.cjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(icons, /MOBILE|join\(.*'mobile'/);
+  for (const artifact of ['icon.svg', 'icon.png', 'icon.ico', 'installerSidebar.bmp']) assert.ok(icons.includes(artifact));
 });

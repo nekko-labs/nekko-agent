@@ -94,7 +94,7 @@ final class StepUpComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
     func nudge() {}
     func reconnect() {}
     func registerPush(token: String) async throws {}
-    func registerActivity(tag: String, token: String) async throws {}
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {}
 }
 
 /// What the step-up sheet was asked, and what it answers.

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ASK_CANCELLED, ASK_UNATTENDED, formatAskAnswers, parseAskRequest } from '../../../../../../packages/shared/src/ask.js';
 import type { ChatMessage } from '@nekko-agent/shared';
 import { collectSessionPrUrls, extractPrUrls } from '../../../../../../packages/shared/src/pr.js';
-import { estimateRowHeight, fmtDateTime, fmtTime, toTranscriptRows, transcriptBeforeLiveTurn } from './transcript.js';
+import { activityRows, estimateRowHeight, fmtDateTime, fmtTime, toStreamBlocks, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type Activity } from './transcript.js';
+import { fmtElapsed } from './ActivityGroup.js';
 
 const msg = (id: string, role: ChatMessage['role'], content: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({
   id, role, content, createdAt: 0, ...extra,
@@ -43,6 +44,14 @@ describe('toTranscriptRows', () => {
     const r = rows(transcriptBeforeLiveTurn(turn));
     expect(r.map((x) => x.kind)).toEqual(['msg', 'msg', 'msg']);
     expect(r.filter((x) => x.kind === 'msg' && x.message.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('keeps the interrupted reply on retry, hiding only new checkpoints', () => {
+    const saved = [msg('u', 'user', 'Fix it'), msg('a', 'assistant', 'Completed the first step.'), msg('t', 'tool', 'saved result')];
+    expect(transcriptBeforeLiveTurn(saved, 't')).toBe(saved);
+    const checkpoint = [...saved, msg('new', 'assistant', 'Continuing')];
+    expect(transcriptBeforeLiveTurn(checkpoint, 't')).toEqual(saved);
+    expect(transcriptBeforeLiveTurn(saved, 'compacted-away')).toBe(saved);
   });
 
   it('anchors discoveries including tool-only PRs instead of moving them after new messages', () => {
@@ -214,5 +223,101 @@ describe('compaction rows', () => {
     const summaries = rows.filter((r) => r.kind === 'compaction');
     expect(summaries.map((r) => r.kind === 'compaction' && r.latest)).toEqual([false, true]);
     expect(estimateRowHeight(summaries[1], 600)).toBeGreaterThan(estimateRowHeight(summaries[0], 600));
+  });
+});
+
+describe('step timing', () => {
+  const at = new Date(2026, 9, 24, 15, 42).getTime();
+  const messages = [
+    { id: 'u', role: 'user', content: 'go', createdAt: at - 1000 },
+    { id: 'a', role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'bash', input: {} }], createdAt: at },
+    { id: 't', role: 'tool', content: '', toolResult: { toolCallId: 'c1', output: 'ok' }, createdAt: at + 1500 },
+  ] as ChatMessage[];
+
+  it('gives a persisted tool call its start and end', () => {
+    const run = toStreamBlocks(messages).find((b) => b.type === 'activity');
+    expect(run?.type === 'activity' && run.items[0]).toMatchObject({ startedAt: at, endedAt: at + 1500 });
+  });
+
+  it('stamps message and step rows with their time', () => {
+    expect(rows(messages).map(transcriptRowStamp)).toEqual([fmtTime(at - 1000), fmtTime(at)]);
+  });
+
+  it('formats elapsed times compactly', () => {
+    expect([400, 12_300, 125_000, 3_720_000].map(fmtElapsed)).toEqual(['0.4s', '12s', '2m 5s', '1h 2m']);
+  });
+});
+
+describe('purpose groups (spec/chat/tool-calls-grouped-by-purpose.md)', () => {
+  const tool = (id: string, name: string, input: Record<string, unknown>, extra: { failed?: boolean } = {}): Activity => ({ kind: 'tool', call: { id, name, input }, ...extra });
+  const shape = (items: Activity[], pending?: string) => activityRows(items, pending).map((r) => (r.kind === 'group' ? `${r.purpose}:${r.steps.map((s) => s.index).join(',')}` : String(r.step.index)));
+
+  it('folds only adjacent calls of one purpose, keeping each step\'s number', () => {
+    expect(shape([
+      tool('a', 'read_file', { path: 'AGENTS.md' }),
+      tool('b', 'read_file', { path: 'CLAUDE.md' }),
+      { kind: 'reasoning', text: 'So the parser is the place.', duration: 1 },
+      tool('c', 'read_file', { path: 'src/parser.ts' }),
+      tool('d', 'grep', { pattern: 'parse' }),
+      tool('e', 'edit_file', { path: 'src/parser.ts' }),
+      tool('f', 'bash', { command: 'npm test' }),
+      tool('g', 'bash', { command: 'npx vitest run' }),
+    ])).toEqual(['guidance:1,2', '3', 'explore:4,5', '6', 'check:7,8']);
+  });
+
+  it('folds a thought between same-purpose calls in with them', () => {
+    expect(shape([
+      tool('a', 'read_file', { path: 'a.ts' }),
+      { kind: 'reasoning', text: 'Next file.', duration: 1 },
+      tool('b', 'read_file', { path: 'b.ts' }),
+    ])).toEqual(['explore:1,2,3']);
+  });
+
+  it('keeps the approval-pending call, questions and delegations out of groups', () => {
+    expect(shape([
+      tool('a', 'bash', { command: 'npm install' }),
+      tool('b', 'bash', { command: 'node x.mjs' }),
+      tool('c', 'bash', { command: 'rm -rf build' }),
+    ], 'c')).toEqual(['run:1,2', '3']);
+    expect(shape([
+      tool('a', 'read_file', { path: 'a.ts' }),
+      tool('q', 'ask_user', { questions: [] }),
+      tool('b', 'read_file', { path: 'b.ts' }),
+      tool('s', 'spawn_agent', { task: 'x' }),
+      tool('t', 'spawn_agent', { task: 'y' }),
+    ])).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  it('keeps a failed call in its group and marks it failed from the result', () => {
+    const blocks = toStreamBlocks([
+      msg('u', 'user', 'test it'),
+      msg('a', 'assistant', '', { toolCalls: [{ id: 'x', name: 'bash', input: { command: 'npm test' } }, { id: 'y', name: 'bash', input: { command: 'npm run lint' } }] }),
+      msg('t1', 'tool', 'ok', { toolResult: { toolCallId: 'x', output: 'ok' } }),
+      msg('t2', 'tool', 'bad', { toolResult: { toolCallId: 'y', output: 'bad', isError: true } }),
+    ]);
+    const act = blocks.find((b) => b.type === 'activity');
+    const items = act && act.type === 'activity' ? act.items : [];
+    expect(items.map((it) => it.kind === 'tool' && !!it.failed)).toEqual([false, true]);
+    const [group] = activityRows(items);
+    expect(group.kind === 'group' && group.calls.filter((c) => c.failed).length).toBe(1);
+  });
+
+  it('streams new calls into the open group', () => {
+    const items: Activity[] = [tool('a', 'read_file', { path: 'AGENTS.md' })];
+    expect(shape(items)).toEqual(['1']);
+    items.push(tool('b', 'read_file', { path: 'CLAUDE.md' }));
+    expect(shape(items)).toEqual(['guidance:1,2']);
+    items.push(tool('c', 'read_file', { path: 'docs/runbooks/landing-a-pr.md' }));
+    expect(shape(items)).toEqual(['guidance:1,2,3']);
+  });
+});
+
+describe('inline thought projection', () => {
+  it('does not repeat the thought in a final answer that also called a tool', () => {
+    const blocks = toStreamBlocks([msg('a', 'assistant', 'Finished', {
+      reasoning: 'Check first', toolCalls: [{ id: 'c', name: 'read_file', input: {} }],
+    })]);
+    expect(blocks[0].type === 'activity' && blocks[0].items[0]).toMatchObject({ kind: 'reasoning', text: 'Check first' });
+    expect(blocks[1].type === 'msg' && blocks[1].message.reasoning).toBeUndefined();
   });
 });

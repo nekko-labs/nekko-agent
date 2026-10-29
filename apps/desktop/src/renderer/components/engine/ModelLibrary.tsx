@@ -504,6 +504,7 @@ export function ModelLibrary({
                   <EngineLoadDrawer
                     providerId={providerId}
                     model={m}
+                    loadedParams={residentById.get(m.id)?.params}
                     autoloaded={autoloadIds?.has(m.id) ?? false}
                     onToggleAutoload={(on) => void toggleAutoload(m, on)}
                     onFetchCompanions={() => void fetchCompanions(m)}

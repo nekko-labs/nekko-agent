@@ -1,3 +1,4 @@
+import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
 import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
@@ -52,11 +53,13 @@ function makeWebClient(): NekkoApi {
   const tasksCbs = new Set<(t: import('@nekko-agent/shared').AutomationTask[]) => void>();
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
+  const runnerCbs = new Set<(views: import('@nekko-agent/shared').RunnerView[]) => void>();
   const oauthStatusCbs = new Set<(s: OAuthStatus) => void>();
   const cloudStatusCbs = new Set<(s: import('@nekko-agent/shared').CloudStatus) => void>();
   const limitsUpdatedCbs = new Set<(e: { tokenKey: string; limits: SubscriptionLimits }) => void>();
   const downloadsUpdatedCbs = new Set<(jobs: import('@nekko-agent/shared').DownloadJob[]) => void>();
   const modelsUpdatedCbs = new Set<(e: { providerId: string }) => void>();
+  const backgroundCbs = new Set<(state: import('@nekko-agent/shared').BackgroundState) => void>();
   const skillsUpdatedCbs = new Set<(catalog: import('@nekko-agent/shared').VaizerCatalog) => void>();
   const replayCbs = new Set<(r: AgentReplay) => void>();
   // Narrowing the agent event stream: only over the server's own socket to nekkod.
@@ -69,8 +72,10 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.terminalEvent) terminalCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.changesUpdated) changesCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.tasksUpdated) tasksCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerChanged) runnerCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.oauthStatus) oauthStatusCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.cloudStatus) cloudStatusCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.limitsUpdated) limitsUpdatedCbs.forEach((cb) => cb(payload));
@@ -302,7 +307,7 @@ function makeWebClient(): NekkoApi {
 
   return {
     getSettings: () => call(IpcChannels.settingsGet),
-    updateSettings: (patch) => call(IpcChannels.settingsUpdate, patch),
+    updateSettings: (patch) => call(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
 
     listProviders: () => call(IpcChannels.providersList),
     saveProvider: (p) => call(IpcChannels.providersSave, p),
@@ -327,6 +332,8 @@ function makeWebClient(): NekkoApi {
     runtimePlan: (providerId, modelId, req) => call(IpcChannels.runtimePlan, providerId, modelId, req),
     runtimeAutoFit: (providerId, modelId, budgetFraction, parallelSlots) =>
       call(IpcChannels.runtimeAutoFit, providerId, modelId, budgetFraction, parallelSlots),
+    runtimePlace: (providerId, modelId, req) => call(IpcChannels.runtimePlace, providerId, modelId, req),
+    runtimeRecommend: (providerId, modelId, opts) => call(IpcChannels.runtimeRecommend, providerId, modelId, opts),
     cloudStatus: () => call(IpcChannels.cloudStatus),
     cloudRefresh: () => call(IpcChannels.cloudRefresh),
     cloudSendCode: (email) => call(IpcChannels.cloudSendCode, email),
@@ -334,6 +341,11 @@ function makeWebClient(): NekkoApi {
     cloudBeginOAuth: (provider) => call(IpcChannels.cloudBeginOAuth, provider),
     cloudCancelOAuth: () => call(IpcChannels.cloudCancelOAuth),
     cloudSignOut: () => call(IpcChannels.cloudSignOut),
+    connectionsStatus: () => call(IpcChannels.connectionsStatus),
+    connectionsEvents: (id, limit) => call(IpcChannels.connectionsEvents, id, limit),
+    connectionsClear: () => call(IpcChannels.connectionsClear),
+    telemetryCapture: (event, props) => call(IpcChannels.telemetryCapture, event, props),
+    telemetryStatus: () => call(IpcChannels.telemetryStatus),
     feedbackInfo: () => call(IpcChannels.feedbackInfo),
     feedbackSend: (message, includeAppInfo) => call(IpcChannels.feedbackSend, message, includeAppInfo),
     syncTurnOn: () => call(IpcChannels.syncTurnOn),
@@ -398,12 +410,14 @@ function makeWebClient(): NekkoApi {
     machineReadiness: (language) => call(IpcChannels.machineReadiness, language),
     machineProfile: (opts) => call(IpcChannels.machineProfile, opts),
     machineRecommendations: (opts) => call(IpcChannels.machineRecommendations, opts),
+    backgroundState: () => call(IpcChannels.backgroundState),
     machineDismissNudge: (task) => call(IpcChannels.machineDismissNudge, task ?? null),
     getGpuStats: () => call(IpcChannels.gpuStats),
     getSystemStats: () => call(IpcChannels.systemStats),
 
     listSessions: () => call(IpcChannels.sessionsList),
     nextAgentWatchAt: (sessionId) => call(IpcChannels.sessionNextWatch, sessionId),
+    cancelAgentWatch: (sessionId, id) => call(IpcChannels.sessionCancelWatch, sessionId, id),
     listAgentWatches: (sessionId) => call(IpcChannels.sessionWatches, sessionId),
     listSessionSummaries: () => call(IpcChannels.sessionsSummaries),
     createSession: (workspaceId) => call(IpcChannels.sessionCreate, workspaceId),
@@ -460,10 +474,15 @@ function makeWebClient(): NekkoApi {
   sandboxStatus: (id) => call(IpcChannels.sandboxStatus, id),
   sandboxDiff: (id) => call(IpcChannels.sandboxDiff, id),
   applySandboxDiff: (id, identity, diffId, paths) => call(IpcChannels.sandboxApplyDiff, id, identity, diffId, paths) as Promise<never>,
-  setSessionOptions: (id, patch) => call(IpcChannels.sessionSetOptions, id, patch),
+  setSessionOptions: (id, patch) => setChatOptionsAndDefaults({
+    setSessionOptions: (id, patch) => call(IpcChannels.sessionSetOptions, id, patch),
+    updateSettings: (patch) => call(IpcChannels.settingsUpdate, settingsPatchWithModeReset(patch)),
+  }, id, patch),
     truncateSession: (id, messageId) => call(IpcChannels.sessionTruncate, id, messageId),
     clearSessions: (scope) => call(IpcChannels.sessionsClear, scope),
     purgeExpiredArchives: () => call(IpcChannels.sessionsPurgeArchived),
+  getHistoryUsage: () => call(IpcChannels.sessionsHistoryUsage),
+  clearHistory: (range) => call(IpcChannels.sessionsClearHistory, range),
     forkSession: (id, beforeMessageId) => call(IpcChannels.sessionFork, id, beforeMessageId),
     resetSettings: () => call(IpcChannels.settingsReset),
     listFonts: () => call(IpcChannels.fontsList),
@@ -589,6 +608,11 @@ function makeWebClient(): NekkoApi {
     listWorkflowRuns: (workflowId) => call(IpcChannels.workflowRuns, workflowId),
     listWorkflowSkillDefs: () => call(IpcChannels.workflowSkillDefs),
     dispatchWorkflowEvent: (event) => call(IpcChannels.workflowEvent, event),
+    listRunners: () => call(IpcChannels.runnerList),
+    connectRunner: (req) => call(IpcChannels.runnerConnect, req),
+    updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
+    removeRunner: (id) => call(IpcChannels.runnerRemove, id),
+    setRunnerEnabled: (id, enabled) => call(IpcChannels.runnerSetEnabled, id, enabled),
 
     listConnectors: () => call(IpcChannels.connectorsList),
     connectConnector: (kind, t, settings) => call(IpcChannels.connectorConnect, kind, t, settings),
@@ -723,6 +747,10 @@ function makeWebClient(): NekkoApi {
       tasksCbs.add(cb);
       return () => tasksCbs.delete(cb);
     },
+    onBackgroundUpdated: (cb) => {
+      backgroundCbs.add(cb);
+      return () => backgroundCbs.delete(cb);
+    },
     onTrainingUpdated: (cb) => {
       trainingCbs.add(cb);
       return () => trainingCbs.delete(cb);
@@ -730,6 +758,10 @@ function makeWebClient(): NekkoApi {
     onWorkflowsUpdated: (cb) => {
       workflowCbs.add(cb);
       return () => workflowCbs.delete(cb);
+    },
+    onRunnersChanged: (cb) => {
+      runnerCbs.add(cb);
+      return () => runnerCbs.delete(cb);
     },
     onLimitsUpdated: (cb) => {
       limitsUpdatedCbs.add(cb);
@@ -750,6 +782,7 @@ function makeWebClient(): NekkoApi {
     // A browser tab has no OS handing it `nekko-agent://` URLs, so this is the
     // honest implementation rather than a missing one.
     onDeepLink: () => () => {},
+    onVoiceLockStop: () => () => {},
     onUpdateEvent: (cb) => {
       // Poll the server version; emit 'available' once it differs from load.
       let stopped = false;

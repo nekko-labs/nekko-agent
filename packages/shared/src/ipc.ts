@@ -24,6 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
+import type { ConnectRequest, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -68,6 +69,8 @@ export const IpcChannels = {
   runtimeFacts: 'runtime:facts',
   runtimePlan: 'runtime:plan',
   runtimeAutoFit: 'runtime:autoFit',
+  runtimePlace: 'runtime:place',
+  runtimeRecommend: 'runtime:recommend',
 
   engineStatus: 'engine:status',
   engineInstallPreview: 'engine:installPreview',
@@ -115,6 +118,8 @@ export const IpcChannels = {
   /** One phone-safe read for a computer's page: version, hardware, live stats, the model server (2026-10-24). */
   machineSummary: 'machine:summary',
   machineRecommendations: 'machine:recommendations',
+  /** Background automations on a local model, and how many are paused for the user. */
+  backgroundState: 'background:state',
   machineDismissNudge: 'machine:dismissNudge',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
@@ -124,6 +129,7 @@ export const IpcChannels = {
   sessionsList: 'sessions:list',
   sessionNextWatch: 'session:nextWatch',
   sessionWatches: 'session:watches',
+  sessionCancelWatch: 'session:cancelWatch',
   sessionsSummaries: 'sessions:summaries',
   sessionCreate: 'session:create',
   sessionGet: 'session:get',
@@ -182,6 +188,8 @@ export const IpcChannels = {
   sessionTruncate: 'session:truncate',
   sessionsClear: 'sessions:clear',
   sessionsPurgeArchived: 'sessions:purgeArchived',
+  sessionsHistoryUsage: 'sessions:historyUsage',
+  sessionsClearHistory: 'sessions:clearHistory',
   sessionFork: 'session:fork',
   settingsReset: 'settings:reset',
   fontsList: 'fonts:list',
@@ -224,6 +232,9 @@ export const IpcChannels = {
   /** The app's, the engine's and each chat's agent logs, redacted (IO-33 FA-5). */
   logsList: 'logs:list',
   logsRead: 'logs:read',
+  /** What the agent linked in a chat, for a phone (#1095): a linked file or a page's asset, and a linked local preview server. */
+  artifactRead: 'artifact:read',
+  previewFetch: 'preview:fetch',
   /** What Privacy Shield would hide from a cloud model in a chat and its draft. */
   privacyPreview: 'privacy:preview',
   attachmentImport: 'attachment:import',
@@ -312,6 +323,12 @@ export const IpcChannels = {
    * makes it the endpoint a Slack app or a git provider webhook posts to.
    */
   workflowEvent: 'workflow:event',
+  /** CI runners (T213), served by nekkod's runner supervisor; never by a phone. */
+  runnerList: 'runner:list',
+  runnerConnect: 'runner:connect',
+  runnerUpdate: 'runner:update',
+  runnerRemove: 'runner:remove',
+  runnerSetEnabled: 'runner:setEnabled',
 
   connectorsList: 'connectors:list',
   connectorConnect: 'connector:connect',
@@ -407,6 +424,13 @@ export const IpcChannels = {
   syncSetEnabled: 'sync:setEnabled',
   syncSetIncludeLocalOnly: 'sync:setIncludeLocalOnly',
   syncDeleteAll: 'sync:deleteAll',
+  // Settings > Connections (crates/nekkod/src/connections.rs).
+  connectionsStatus: 'connections:status',
+  connectionsEvents: 'connections:events',
+  connectionsClear: 'connections:clear',
+  // Opt-in usage and crash reports (crates/nekkod/src/telemetry.rs).
+  telemetryCapture: 'telemetry:capture',
+  telemetryStatus: 'telemetry:status',
   // Send feedback (crates/nekkod/src/feedback.rs): no sign-in needed.
   feedbackInfo: 'feedback:info',
   feedbackSend: 'feedback:send',
@@ -430,8 +454,12 @@ export const IpcEvents = {
   terminalViewers: 'terminal:viewers',
   changesUpdated: 'changes:updated',
   tasksUpdated: 'tasks:updated',
+  /** `BackgroundState` changed: a background turn started, ended, paused or resumed. */
+  backgroundUpdated: 'background:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
+  /** Every runner's `RunnerView`, after any change. */
+  runnerChanged: 'runner:changed',
   limitsUpdated: 'limits:updated',
   /** The look a paired phone mirrors changed: `appearanceOf(settings)`, never anything else. */
   appearanceUpdated: 'appearance:updated',
@@ -441,6 +469,8 @@ export const IpcEvents = {
   /** The skills marketplace catalog refreshed. */
   skillsUpdated: 'skills:updated',
   deepLink: 'app:deepLink',
+  /** The screen locked or the computer is going to sleep: stop listening (desktop only). */
+  voiceLockStop: 'voice:lockStop',
   /** SK-4: a phone signed itself out, stopped remote access or quit the app (`RemoteSafetyExit`). */
   remoteSafetyExit: 'remote:safetyExit',
 } as const;
@@ -472,6 +502,16 @@ export interface NekkoApi {
   cloudBeginOAuth(provider: import('./cloud.js').CloudOAuthProvider): Promise<{ authUrl: string }>;
   cloudCancelOAuth(): Promise<import('./cloud.js').CloudStatus>;
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
+  /** Settings > Connections: the switch and each connection's counts. */
+  connectionsStatus(): Promise<import('./connections.js').ConnectionsStatus>;
+  /** A connection's recent events, newest first. */
+  connectionsEvents(id: string, limit?: number): Promise<import('./connections.js').ConnectionEvent[]>;
+  /** Forget every logged event. */
+  connectionsClear(): Promise<import('./connections.js').ConnectionsStatus>;
+  /** Opt-in reports: queue a UI event (`screen_viewed`, `feature_used`, `error`); ignored while reports are off. */
+  telemetryCapture(event: 'screen_viewed' | 'feature_used' | 'error', props: Record<string, string | number | boolean>): Promise<null>;
+  /** Whether reports are on, whether this build has a project to send to, and how many events wait. */
+  telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
   feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
   /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`. */
@@ -559,6 +599,21 @@ export interface NekkoApi {
     budgetFraction: number,
     parallelSlots?: number,
   ): Promise<import('./capacity.js').AutoFitSummary | null>;
+  /** Where a load's bytes land: graphics memory, system memory or the SSD. */
+  runtimePlace(
+    providerId: string,
+    modelId: string,
+    req: import('./capacity.js').PlacementRequest,
+  ): Promise<import('./capacity.js').PlacementPlan | null>;
+  /**
+   * The fastest setup that fits (`speed`), the most context (`context`), or the
+   * lightest split that keeps `request`'s context (`fill`), each choice explained.
+   */
+  runtimeRecommend(
+    providerId: string,
+    modelId: string,
+    opts?: { goal?: import('./capacity.js').RecommendGoal; request?: import('./capacity.js').PlacementRequest },
+  ): Promise<import('./capacity.js').Recommendation | null>;
 
   /** The built-in engine: install state, server state, resident models. */
   engineStatus(): Promise<import('./engine.js').EngineStatus>;
@@ -669,6 +724,8 @@ export interface NekkoApi {
   machineProfile(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').HardwareProfile>;
   /** Which model to run for each task here, with expected speed and memory headroom, before any download. */
   machineRecommendations(opts?: { refresh?: boolean }): Promise<import('./recommendations.js').Recommendations>;
+  /** Background automations on a local model, and how many are paused for the user (`background:state`). */
+  backgroundState(): Promise<import('./background.js').BackgroundState>;
   /** Keep a task's current pick as seen (every task with none), so its upgrade nudge goes. */
   machineDismissNudge(task?: string): Promise<{ ok: boolean }>;
   /** GPU/VRAM stats for the metrics bar + Agent board (null if unavailable). */
@@ -680,6 +737,7 @@ export interface NekkoApi {
   /** Earliest deadline of this chat's active durable watches, or null. */
   nextAgentWatchAt(sessionId: string): Promise<number | null>;
   /** This chat's durable watches as the UI shows them; never their continuation prompts. */
+  cancelAgentWatch(sessionId: string, id: string): Promise<void>;
   listAgentWatches(sessionId: string): Promise<import('./chat.js').AgentWatchView[]>;
   /**
    * Every chat without its transcript: what the sidebar, the board and the
@@ -803,8 +861,12 @@ export interface NekkoApi {
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
   clearSessions(scope: import('./chat.js').ChatClearScope): Promise<number>;
-  /** Delete archived chats past the retention window; returns how many were removed. */
+  /** Compatibility no-op: completed history is retained indefinitely. */
   purgeExpiredArchives(): Promise<number>;
+  /** All local chat JSON and command-log bytes; count is completed chats only. Symlinks are not followed. */
+  getHistoryUsage(): Promise<{ bytes: number; count: number }>;
+  /** Delete completed chats in the selected updatedAt range; returns how many were removed. */
+  clearHistory(range: 'today' | 'last-week' | 'older-2-weeks' | 'older-1-month' | 'older-6-months'): Promise<number>;
   /** A new chat with this one's conversation before `beforeMessageId` (all of it when omitted). */
   forkSession(id: string, beforeMessageId?: string): Promise<Session | null>;
   /** Reset all settings to defaults (keeps chats). */
@@ -1007,6 +1069,14 @@ export interface NekkoApi {
   listWorkflowSkillDefs(): Promise<import('./skills.js').SkillDef[]>;
   /** Offer an event to every listening workflow; returns the runs it started. */
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
+  /** CI runners on this Mac. Rejects where the daemon serves none (not macOS, or an older daemon). */
+  listRunners(): Promise<RunnerView[]>;
+  connectRunner(req: ConnectRequest): Promise<RunnerView>;
+  /** Resolves with the settings the daemon kept, which may be clamped. */
+  /** A patch: only the keys to change. */
+  updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
+  removeRunner(id: string): Promise<null>;
+  setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
 
   listConnectors(): Promise<ConnectorConfig[]>;
   connectConnector(kind: ConnectorKind, token: string, settings?: Record<string, string>): Promise<ConnectorConfig[]>;
@@ -1175,10 +1245,12 @@ export interface NekkoApi {
   onChangesUpdated(cb: (e: { sessionId: string }) => void): () => void;
   /** Fires when the automation-task list changes (created/updated/fired/deleted). */
   onTasksUpdated(cb: (tasks: AutomationTask[]) => void): () => void;
+  onBackgroundUpdated(cb: (state: import('./background.js').BackgroundState) => void): () => void;
   /** Fires when any training/goal run changes (experiments, hints, status). */
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */
   onWorkflowsUpdated(cb: (snapshot: WorkflowsSnapshot) => void): () => void;
+  onRunnersChanged(cb: (views: RunnerView[]) => void): () => void;
   /** Fires when subscription limits are captured or polled for any token key. */
   onLimitsUpdated(cb: (e: { tokenKey: string; limits: SubscriptionLimits }) => void): () => void;
   /** Fires as engine and model downloads progress, finish, or fail. */
@@ -1193,4 +1265,6 @@ export interface NekkoApi {
    * web transport has no OS to hand it one.
    */
   onDeepLink(cb: (url: string) => void): () => void;
+  /** Fires when the screen locks or the computer sleeps, so dictation stops. Desktop only. */
+  onVoiceLockStop(cb: () => void): () => void;
 }

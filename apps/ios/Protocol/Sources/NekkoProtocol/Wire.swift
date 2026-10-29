@@ -34,6 +34,8 @@ public enum Channels {
     public static let chatAnswer = "chat:answer"
     public static let toolApprove = "tool:approve"
     public static let workspaceList = "workspace:list"
+    public static let workspaceAddByPath = "workspace:addByPath"
+    public static let workspaceRemove = "workspace:remove"
     public static let appInfo = "app:info"
     /// SK-2: a single-use step-up challenge (read class).
     public static let securityChallenge = "security:challenge"
@@ -63,6 +65,9 @@ public enum Channels {
     /// *Send a test notification*: answered by the computer's relay agent itself,
     /// so it is not on the phone allowlist (`PUSH_TEST_CHANNEL`) and not in `all`.
     public static let pushTest = "push:test"
+    /// The Live Activity card's level, focus or dismissal (`{ level?, focus?, dismiss? }`):
+    /// answered by the relay agent itself, like `pushTest`. Computers from before it refuse it.
+    public static let cardSet = "card:set"
 
     /// Git on a chat's folder (IO-33 FA-2, `Git.swift`). Reads: status, diffs,
     /// history, a commit, branches, compare, a PR's checks and diff.
@@ -102,21 +107,29 @@ public enum Channels {
     public static let logsRead = "logs:read"
     /// The change-class channels among these.
     public static let filesChange: Set<String> = [filesWrite]
+    /// What the agent linked in a chat (#1095), read only: a linked file, or a file a
+    /// linked page loads from its folder, and a GET/HEAD to a linked local preview server.
+    public static let artifactRead = "artifact:read"
+    public static let previewFetch = "preview:fetch"
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange)
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove])
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatPending, chatAnswer, toolApprove, workspaceList, appInfo, skillsRunnable, changesList,
+        chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
+        // The Expert monitor and a chat's context gauge (Monitor.swift).
+        MonitorChannels.systemStats, MonitorChannels.gpuStats, MonitorChannels.engineStatus, MonitorChannels.contextPreview,
+        MonitorChannels.modelUnload,
+        artifactRead, previewFetch,
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
         TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
@@ -352,6 +365,8 @@ public struct Session: Equatable, Sendable {
     public var clientMessageIds: [String] = []
     /// A turn is running on the computer (`activeRun`): a prompt waits in its queue.
     public var running = false
+    /// The chat's effort (`EffortLevel`); nil follows the computer's setting.
+    public var effort: String?
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -365,7 +380,8 @@ public struct Session: Equatable, Sendable {
             updatedAt: v.long("updatedAt") ?? 0,
             queued: QueuedPrompt.list(v["queue"]),
             clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
-            running: v["activeRun"].map { !$0.isNull } ?? false)
+            running: v["activeRun"].map { !$0.isNull } ?? false,
+            effort: v.str("effort"))
     }
 }
 
@@ -388,6 +404,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     /// Manual position from the desktop sidebar's drag order.
     public let order: Double?
     public var pinned: Bool
+    public let activeWatchCount: Int64
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -400,7 +417,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             lastReplyText: v.str("lastReplyText"), firstUserText: v.str("firstUserText"), archived: archivedAt != nil,
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
-            order: v.dbl("order"), pinned: v.flag("pinned"))
+            order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0)
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.
@@ -493,6 +510,7 @@ public struct PcSettings: Equatable, Sendable {
     public enum ChatMode: String, CaseIterable, Sendable { case ask, guardrails, yolo }
     public enum ChatAction: String, CaseIterable, Sendable { case complete, delete }
 
+    public var effort: Effort?
     public var defaultChatMode: ChatMode?
     public var chatPaneAction: ChatAction?
     public var skipDeleteConfirmation: Bool?
@@ -506,9 +524,10 @@ public struct PcSettings: Equatable, Sendable {
     /// The computer's automations are paused (set on the computer only).
     public var automationsPaused: Bool
 
-    public init(defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
+    public init(effort: Effort? = nil, defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
                 known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false, prompts: [SavedPrompt] = [],
                 automationsPaused: Bool = false) {
+        self.effort = effort
         self.defaultChatMode = defaultChatMode
         self.chatPaneAction = chatPaneAction
         self.skipDeleteConfirmation = skipDeleteConfirmation
@@ -526,7 +545,8 @@ public struct PcSettings: Equatable, Sendable {
 
     public static func from(_ v: JSONValue?) -> PcSettings {
         guard let v, v.object != nil else { return PcSettings() }
-        return PcSettings(defaultChatMode: v.str("defaultChatMode").flatMap(ChatMode.init(rawValue:)),
+        return PcSettings(effort: v.str("effort").flatMap(Effort.init(rawValue:)),
+                          defaultChatMode: v.str("defaultChatMode").flatMap(ChatMode.init(rawValue:)),
                           chatPaneAction: v.str("chatPaneAction").flatMap(ChatAction.init(rawValue:)),
                           skipDeleteConfirmation: v["skipDeleteConfirmation"]?.bool, known: true,
                           voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"),
@@ -678,13 +698,16 @@ public struct WorkspaceFolder: Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
 
-    public init(id: String, name: String) {
+    public let path: String?
+
+    public init(id: String, name: String, path: String? = nil) {
         self.id = id
         self.name = name
+        self.path = path
     }
 
     public static func list(_ v: JSONValue?) -> [WorkspaceFolder] {
-        (v?.array ?? []).compactMap { w in w.str("id").map { WorkspaceFolder(id: $0, name: w.str("name") ?? "Folder") } }
+        (v?.array ?? []).compactMap { w in w.str("id").map { WorkspaceFolder(id: $0, name: w.str("name") ?? "Folder", path: w.str("path")) } }
     }
 }
 

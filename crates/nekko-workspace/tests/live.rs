@@ -120,7 +120,8 @@ async fn falls_back_to_the_rest_api_without_gh() {
     );
     // Cached for a minute.
     prs.cached_info(url, Some("tok"), false).await;
-    assert_eq!(seen.lock().unwrap().len(), 2);
+    assert_eq!(seen.lock().unwrap().len(), 3);
+    assert!(info.get("checkProgress").is_none(), "404 progress is not zero");
     let diff = prs.diff(url, None).await;
     assert_eq!(diff["files"][0]["status"], json!("added"));
     assert_eq!(diff["truncated"], json!(false));
@@ -152,7 +153,9 @@ async fn native_stack_reads_prevent_an_ordinary_daemon_merge() {
     let result = prs.action(url, "merge", Some("tok")).await;
     assert_eq!(result["ok"], json!(false));
     assert!(result["message"].as_str().unwrap().contains("all included layers"));
-    assert!(seen.lock().unwrap().iter().all(|request| request.starts_with("GET ")));
+    assert!(
+        seen.lock().unwrap().iter().all(|request| request.starts_with("GET ") || request.starts_with("POST /graphql "))
+    );
     assert_eq!(prs.action("https://github.com/o/r/pull/404", "merge", Some("tok")).await["ok"], json!(false));
 }
 
@@ -181,12 +184,12 @@ async fn successful_stack_link_refreshes_session_membership_before_cache_expiry(
     assert!(initial[0].get("stack").is_none());
     linked.store(true, Ordering::SeqCst);
     assert!(prs.session_prs(&messages, Some("tok"), false).await[0].get("stack").is_none());
-    assert_eq!(seen.lock().unwrap().len(), 1, "ordinary polling keeps its cached read");
+    assert_eq!(seen.lock().unwrap().len(), 2, "ordinary polling keeps its cached read");
     let fresh = prs.session_prs(&messages, Some("tok"), true).await;
     assert_eq!(fresh[0]["stack"], json!({"number": 3, "size": 2}));
-    assert_eq!(seen.lock().unwrap().len(), 2, "Link stack explicitly re-reads membership");
+    assert_eq!(seen.lock().unwrap().len(), 4, "Link stack explicitly re-reads membership");
     assert_eq!(prs.session_prs(&messages, Some("tok"), false).await[0]["stack"], fresh[0]["stack"]);
-    assert_eq!(seen.lock().unwrap().len(), 2, "the refreshed membership survives the next poll");
+    assert_eq!(seen.lock().unwrap().len(), 4, "the refreshed membership survives the next poll");
     assert!(prs.session_prs(&[], Some("tok"), true).await.is_empty());
 }
 
@@ -222,4 +225,31 @@ async fn the_vaizer_catalog_is_offline_first_and_caches_a_refresh() {
     assert_eq!(v.skill_md("good-one").await, json!("\"legacy body\""));
     assert_eq!(v.skill_md("../etc").await, Value::Null);
     let _ = std::fs::remove_dir_all(data);
+}
+
+#[tokio::test]
+async fn progress_paginates_with_connector_token_and_is_cached() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let page = Arc::new(AtomicUsize::new(0));
+    let server_page = page.clone();
+    let (base, seen) = fake_api(move |method, path| {
+        if method != "POST" || path != "/graphql" { return github(method, path); }
+        let second = server_page.fetch_add(1, Ordering::SeqCst) > 0;
+        let contexts = json!({"nodes": if second {json!([{"__typename":"StatusContext","context":"legacy","state":"PENDING"}])} else {json!([{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS"}])},
+            "totalCount":2,"pageInfo":{"hasNextPage":!second,"endCursor":if second {"two"} else {"one"}}});
+        (200, json!({"data":{"repository":{"pullRequest":{"headRefOid":"abc",
+            "commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":contexts}}}]},
+            "reviewThreads":{"nodes":[{"isResolved":true},{"isResolved":false}],"totalCount":2,"pageInfo":{"hasNextPage":false,"endCursor":"threads"}}
+        }}}}))
+    }).await;
+    let prs = Prs::new("nekko-no-such-gh", &base);
+    let url = "https://github.com/o/r/pull/5";
+    let info = prs.cached_info(url, Some("tok"), false).await;
+    assert_eq!(info["checkProgress"]["total"], 2);
+    assert_eq!(info["checkProgress"]["completed"], 1);
+    assert_eq!(info["checkProgress"]["pending"], 1);
+    assert_eq!(info["reviewThreads"], json!({"total":2,"resolved":1,"unresolved":1}));
+    assert_eq!(prs.cached_info(url, Some("tok"), false).await, info);
+    assert_eq!(page.load(Ordering::SeqCst), 2);
+    assert!(seen.lock().unwrap().iter().filter(|r| r.starts_with("POST /graphql")).all(|r| r.ends_with("(token)")));
 }

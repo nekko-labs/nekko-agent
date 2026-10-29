@@ -18,12 +18,11 @@ struct AutomationsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Automations")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = AutomationsModel(store: store) }
             await model?.load()
@@ -163,12 +162,11 @@ struct UsageView: View {
             if let model { content(model) }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Usage and limits")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = UsageModel(store: store) }
             await model?.load()

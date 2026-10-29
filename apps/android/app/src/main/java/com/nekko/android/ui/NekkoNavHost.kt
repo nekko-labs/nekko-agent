@@ -26,7 +26,12 @@ import com.nekko.android.voice.Dictation
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs
+import com.nekko.android.ui.files.FilesScreen
+import com.nekko.android.ui.files.LogsScreen
+import com.nekko.android.ui.screens.ProvidersScreen
+import com.nekko.android.ui.screens.AutomationsScreen
 import com.nekko.android.ui.screens.ChatScreen
+import com.nekko.android.ui.screens.UsageScreen
 import com.nekko.android.ui.screens.ChatsScreen
 import com.nekko.android.ui.screens.ComputersScreen
 import com.nekko.android.ui.screens.NewChatScreen
@@ -77,6 +82,11 @@ object Routes {
     const val SETTINGS = "settings"
     const val LICENSES = "settings/licenses"
     const val MONITORS = "monitors"
+    const val AUTOMATIONS = "settings/automations"
+    const val USAGE = "settings/usage"
+    const val FILES = "settings/files"
+    const val LOGS = "settings/logs"
+    const val PROVIDERS = "settings/providers"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
@@ -176,7 +186,14 @@ fun NekkoNavHost(
             // Text shared into a chat that was just created; taken once, never sent by itself.
             val draft = remember(id) { shareInbox.takeDraft(id) }
             val dictationOn by phonePrefs.flow(Dictation.ENABLED).collectAsStateWithLifecycle()
-            ChatScreen(vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = { nav.popBackStack() })
+            ChatScreen(
+                vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = { nav.popBackStack() },
+                onOpenChat = { newId, text ->
+                    text?.let { shareInbox.putDraft(newId, it) }
+                    nav.navigate(Routes.chat(newId))
+                },
+                onNewChat = { nav.navigate(Routes.NEW) },
+            )
         }
         composable(Routes.NEW) {
             // The phone's default model for the active computer (Settings → New chats).
@@ -221,6 +238,21 @@ fun NekkoNavHost(
         }
         composable(Routes.LICENSES) {
             LicensesScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.AUTOMATIONS) {
+            AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.PROVIDERS) {
+            ProvidersScreen(repo = repo, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.LOGS) {
+            LogsScreen(repo = repo, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.FILES) {
+            FilesScreen(repo = repo, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.USAGE) {
+            UsageScreen(repo = repo, onBack = { nav.popBackStack() })
         }
         composable(Routes.COMPUTERS) {
             ComputersScreen(
@@ -306,7 +338,14 @@ private fun Panes(
                     }
                     // Text shared into a chat that was just created; taken once, never sent by itself.
                     val draft = remember(id) { shareInbox.takeDraft(id) }
-                    ChatScreen(vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = slot.back, pane = slot)
+                    ChatScreen(
+                        vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = slot.back, pane = slot,
+                        onOpenChat = { newId, text ->
+                            text?.let { shareInbox.putDraft(newId, it) }
+                            slot.open(newId)
+                        },
+                        onNewChat = { nav.navigate(Routes.NEW) },
+                    )
                 }
             }
         }

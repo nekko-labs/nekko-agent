@@ -189,49 +189,96 @@
         }
       }
     },
+    "NSPhotoLibraryAddUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichere ein Diagramm aus einem Chat in deinen Fotos."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save a diagram from a chat to your photos."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda en tus fotos un diagrama de un chat."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrez un diagramme d’une discussion dans vos photos."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットの図を写真に保存します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salve nas suas fotos um diagrama de um chat."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将聊天中的图表保存到你的照片。"
+          }
+        }
+      }
+    },
     "NSSpeechRecognitionUsageDescription": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wandle dein Diktat in Text um, wenn dein Computer das nicht kann."
+            "value": "Wandelt dein Diktat auf diesem iPhone in Text um, wenn dein Computer es nicht kann. Es verlässt das Telefon nie."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Turn your dictation into text when your computer can’t."
+            "value": "Turn your dictation into text on this iPhone when your computer can’t. It never leaves the phone."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Convierte tu dictado en texto cuando tu computadora no pueda."
+            "value": "Convierte tu dictado en texto en este iPhone cuando tu ordenador no puede. Nunca sale del teléfono."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Convertissez votre dictée en texte lorsque votre ordinateur ne peut pas le faire."
+            "value": "Transforme ta dictée en texte sur cet iPhone quand ton ordinateur ne le peut pas. Elle ne quitte jamais le téléphone."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "コンピュータで処理できない場合に、音声入力をテキストに変換します。"
+            "value": "コンピュータで文字起こしできないときは、このiPhone上で音声入力をテキストに変換します。音声がiPhoneの外に出ることはありません。"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transforme seu ditado em texto quando seu computador não puder."
+            "value": "Transforma seu ditado em texto neste iPhone quando seu computador não consegue. Ele nunca sai do telefone."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "当你的电脑无法转写时，将你的听写转换为文本。"
+            "value": "当电脑无法处理时，在这台 iPhone 上将你的听写转为文字。语音不会离开手机。"
           }
         }
       }

@@ -1,15 +1,20 @@
-import type { CommandWallSetting, PendingInput, SessionSummary, TerminalInfo, WallLayout, MonitorsDock, MonitorKey } from '@nekko-agent/shared';
+import type { AgentEvent, CommandWallSetting, PendingInput, SessionSummary, TerminalInfo, WallLayout, MonitorsDock, MonitorKey } from '@nekko-agent/shared';
 import { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK, BLOCKED_META, isArchived, sessionLane } from '@nekko-agent/shared';
 import {
   allPanes,
   canSplit,
+  dockPane,
   extent,
+  findPane,
+  findPaneByRef,
   isSplit,
+  MAX_ACROSS,
   newPaneId,
   newSplitId,
   removePane,
   reserveIdSeq,
   splitPane,
+  swapPanes,
   type Direction,
   type PaneKind,
   type WbNode,
@@ -30,6 +35,15 @@ import {
  * windows is tiled from scratch, and how the saved grid of the previous
  * design is carried over.
  */
+
+/** Successful replies leave Dynamic's stage without changing the chat's lifecycle. */
+export function minimizeFinishedReply(state: CommandWallState, event: AgentEvent, pending: Record<string, PendingInput>): CommandWallState {
+  if (state.layout.mode === 'focus' || event.type !== 'done' || (event.stop && event.stop !== 'complete') || pending[event.sessionId]) return state;
+  const panes = allPanes(state.root).filter((p) => p.kind === 'chat' && p.refId === event.sessionId);
+  if (!panes.length) return state;
+  // The agent leaves; its zone stays, empty.
+  return { ...state, root: panes.reduce((root, pane) => clearZone(root, pane.id), state.root) };
+}
 
 export type WallFilter = 'all' | 'chat' | 'terminal';
 
@@ -119,6 +133,12 @@ export interface CommandWallState {
   agentPanel?: AgentPanelPrefs;
   /** Snap to grid: windows stay evenly spaced, and dividers snap back to even spacing. */
   snap?: boolean;
+  /** The board is laid out in zones (every leaf is one); false until a pre-zones wall is migrated. */
+  zones?: boolean;
+  /** The zone clicked last: where an agent picked in the panel goes. */
+  activeZone?: string | null;
+  /** The zones intro has been shown (or dismissed) once. */
+  zonesIntro?: boolean;
 }
 
 export interface AgentPanelPrefs {
@@ -136,10 +156,6 @@ export function readAgentPanel(raw: unknown): AgentPanelPrefs {
 export const NARROW_WIDTH = 720;
 /** A window on a stacked (phone-width) wall gets this much height. */
 export const NARROW_ROW_H = 440;
-/** Chats seeded onto a fresh wall: the ones touched in the last day, newest first, this many at most. */
-const SEED_CHATS = 8;
-const SEED_TERMINALS = 4;
-const DAY = 24 * 60 * 60_000;
 /** The stage's shape when nothing has measured it yet: a typical landscape window. */
 export const DEFAULT_ASPECT = 1.7;
 
@@ -161,6 +177,9 @@ export const DEFAULT_WALL_STATE: CommandWallState = {
   tabs: 'top',
   agentPanel: DEFAULT_AGENT_PANEL,
   snap: false,
+  zones: false,
+  activeZone: null,
+  zonesIntro: false,
 };
 
 export const WALL_STATE_KEY = 'nekko.commandWall';
@@ -356,16 +375,27 @@ export function addPane(root: WbNode | null, pane: WbPane, aspect = DEFAULT_ASPE
 }
 
 /**
- * Open a window from the toolbar or sidebar: add it when the wall lacks it,
- * make a chat (or anything, in Focus) the hero, and show it past the filter.
+ * Open a chat or shell from the panel, the toolbar or anywhere else: it goes
+ * into the active zone (an agent already on the board trades places with what
+ * the zone held), and a chat becomes the hero. In Focus an agent already on
+ * the board is only shown, so the Dynamic board behind it does not shuffle.
  * Returns the same state when nothing changed, so reselecting a chat neither
  * re-renders the wall nor saves it again.
  */
-export function openWallPane(state: CommandWallState, kind: PaneKind, refId: string, aspect = DEFAULT_ASPECT): CommandWallState {
-  const root = hasPane(state.root, kind, refId) ? state.root : addPane(state.root, wallPane(kind, refId), aspect);
+export function openWallPane(state: CommandWallState, kind: PaneKind, refId: string): CommandWallState {
+  let { root, activeZone = null } = state;
+  const zone = state.layout.mode === 'focus' ? zoneOf(root, kind, refId) ?? targetZone(state) : targetZone(state);
+  if (!zone) {
+    const pane = { ...emptyZone(null), kind, refId };
+    root = pane;
+    activeZone = pane.id;
+  } else {
+    root = fillZone(root, zone, kind, refId);
+    activeZone = zone;
+  }
   const hero = kind === 'chat' || state.layout.mode === 'focus' ? refId : state.hero;
   const filter = state.filter === 'all' || state.filter === kind ? state.filter : 'all';
-  return root === state.root && hero === state.hero && filter === state.filter ? state : { ...state, root, hero, filter };
+  return root === state.root && hero === state.hero && filter === state.filter && activeZone === state.activeZone ? state : { ...state, root, hero, filter, activeZone };
 }
 
 export function addPanes(root: WbNode | null, panes: WbPane[], aspect = DEFAULT_ASPECT): WbNode | null {
@@ -387,52 +417,123 @@ function wallChat(s: SessionSummary): boolean {
 }
 
 /**
- * What a wall that has never been used starts with: the chats touched in the
- * last day (newest first) and the shells still running, tiled without monitors. The watermark is set so only chats created
- * from now on are added automatically.
+ * What a wall starts with, and what a wall from before zones becomes: two
+ * zones side by side holding the two most recently active chats of `pool`
+ * (an empty zone for each one missing). Everything else is minimized, which
+ * only takes it off the board: no chat is completed.
  */
-export function seedWall(state: CommandWallState, sessions: SessionSummary[], terminals: TerminalInfo[], now: number, aspect = DEFAULT_ASPECT): CommandWallState {
-  const chats = sessions
-    .filter((s) => wallChat(s) && !s.parentSessionId && now - s.updatedAt < DAY)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, SEED_CHATS)
-    .map((s) => wallPane('chat', s.id));
-  const shells = terminals
-    .filter((t) => t.running && !t.agentSessionId)
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, SEED_TERMINALS)
-    .map((t) => wallPane('terminal', t.id));
-  const root = tileTree([...chats, ...shells], aspect);
-  return { ...state, root, watermark: now };
+export function seedWall(state: CommandWallState, pool: SessionSummary[], now: number): CommandWallState {
+  const ids = pool.filter((s) => wallChat(s) && !s.parentSessionId).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, START_ZONES).map((s) => s.id);
+  const root = startZones(ids);
+  return { ...state, root, zones: true, activeZone: allPanes(root)[0].id, watermark: now };
 }
 
 /**
- * Keep the wall honest against what exists: drop windows whose chat is gone
- * or archived (completing a chat takes it off the wall) and whose terminal is
- * gone, and, when auto-add is on, add every chat created since the last look,
- * excluding sub-agents (opened explicitly from their parent's rail). Returns the same object when nothing changed.
+ * Keep the wall honest against what exists: a zone whose chat is gone or
+ * archived (completing a chat takes it off the board) or whose terminal is
+ * gone is emptied, never removed. New chats are not opened on the board by
+ * themselves; they wait in the agents panel. Called once both lists have
+ * loaded; returns the same object when nothing changed.
  */
-export function reconcileWall(state: CommandWallState, sessions: SessionSummary[], terminals: TerminalInfo[], now: number, aspect = DEFAULT_ASPECT, accept: (sessionId: string) => boolean = () => true): CommandWallState {
-  // Seed once, and only once the lists have arrived: the view mounts with
-  // empty lists, and seeding against those would watermark every chat that
-  // already exists out of the wall.
-  if (state.watermark === 0) return sessions.length === 0 && terminals.length === 0 ? state : seedWall(state, sessions, terminals, now, aspect);
+export function reconcileWall(state: CommandWallState, sessions: SessionSummary[], terminals: TerminalInfo[], now: number): CommandWallState {
   const chatById = new Map(sessions.map((s) => [s.id, s]));
+  if (!state.zones) {
+    // A wall that was never seeded draws from every chat; one from before zones keeps the two newest it showed.
+    const pool = state.watermark === 0 ? sessions : wallAgents(state.root).flatMap((p) => chatById.get(p.refId) ?? []);
+    return seedWall(state, pool, now);
+  }
   const termIds = new Set(terminals.map((t) => t.id));
   let root = state.root;
   for (const p of allPanes(state.root)) {
     const keep = p.kind === 'chat' ? !!chatById.get(p.refId) && wallChat(chatById.get(p.refId)!) : p.kind === 'terminal' ? termIds.has(p.refId) : true;
-    if (!keep) root = removePane(root, p.id);
+    if (!keep) root = clearZone(root, p.id);
   }
-  let watermark = state.watermark;
-  for (const s of sessions) {
-    // `accept` is multi-monitor placement: with several screens on, a new chat
-    // joins only the wall of the screen that owns it.
-    if (s.createdAt > state.watermark && state.autoAdd && wallChat(s) && !s.parentSessionId && !hasPane(root, 'chat', s.id) && accept(s.id)) root = addPane(root, wallPane('chat', s.id), aspect);
-    watermark = Math.max(watermark, s.createdAt);
+  return root === state.root ? state : { ...state, root };
+}
+
+/* ---------- zones ---------- */
+
+/** How many zones a fresh board starts with, side by side. */
+export const START_ZONES = 2;
+
+/** The first "Zone N" not already on the board. */
+export function nextZoneName(root: WbNode | null): string {
+  const taken = new Set(allPanes(root).map((p) => p.zone));
+  let n = 1;
+  while (taken.has(`Zone ${n}`)) n++;
+  return `Zone ${n}`;
+}
+
+/** A zone with nothing in it, named after the ones already on `root`. */
+export function emptyZone(root: WbNode | null): WbPane {
+  return { id: newPaneId(), kind: 'zone', refId: '', zone: nextZoneName(root) };
+}
+
+/** Two zones side by side holding `chatIds` in order; empty where there are fewer. */
+export function startZones(chatIds: string[]): WbSplit {
+  const children: WbPane[] = Array.from({ length: START_ZONES }, (_, i) => ({ id: newPaneId(), kind: chatIds[i] ? 'chat' : 'zone', refId: chatIds[i] ?? '', zone: `Zone ${i + 1}` }));
+  return { id: newSplitId(), dir: 'row', children, sizes: children.map(() => 1 / START_ZONES) };
+}
+
+function mapLeaf(node: WbNode | null, id: string, fn: (p: WbPane) => WbPane): WbNode | null {
+  if (!node) return null;
+  if (!isSplit(node)) return node.id === id ? fn(node) : node;
+  return { ...node, children: node.children.map((c) => mapLeaf(c, id, fn)!) };
+}
+
+/** Take the agent (or shell) out of a zone and leave the zone, empty, where it was. */
+export function clearZone(root: WbNode | null, paneId: string): WbNode | null {
+  return mapLeaf(root, paneId, (p) => ({ ...p, kind: 'zone', refId: '', zone: p.zone ?? nextZoneName(root) }));
+}
+
+/**
+ * Put a chat or shell in a zone. One already on the board trades places with
+ * whatever the zone held, so an agent is never on the board twice.
+ */
+export function fillZone(root: WbNode | null, zoneId: string, kind: PaneKind, refId: string): WbNode | null {
+  if (!findPane(root, zoneId)) return root;
+  const there = findPaneByRef(root, kind, refId);
+  if (there) return there.id === zoneId ? root : swapPanes(root, there.id, zoneId);
+  return mapLeaf(root, zoneId, (p) => ({ ...p, kind, refId }));
+}
+
+/** Where an agent opened without a place goes: the active zone, else the first empty one, else the first. */
+export function targetZone(state: Pick<CommandWallState, 'root' | 'activeZone'>): string | null {
+  const zones = allPanes(state.root);
+  return (zones.find((p) => p.id === state.activeZone) ?? zones.find((p) => p.kind === 'zone') ?? zones[0])?.id ?? null;
+}
+
+/** The zone showing this chat or shell, if any. */
+export const zoneOf = (root: WbNode | null, kind: PaneKind, refId: string): string | null => findPaneByRef(root, kind, refId)?.id ?? null;
+
+/** Where a new zone goes: beside a zone along one side, fitting its row or column, or along a whole side of the board. */
+export type ZoneSpot = { paneId: string; side: Direction } | { edge: Direction };
+
+/**
+ * Add an empty zone. Beside a zone it joins that zone's row (or column) and
+ * the row is evened out; along an edge it spans the whole board that way.
+ * The tree is unchanged when the 8×8 ceiling leaves no room.
+ */
+export function addZone(root: WbNode | null, spot: ZoneSpot): { root: WbNode | null; id: string | null } {
+  const zone = emptyZone(root);
+  if (!root) return { root: zone, id: zone.id };
+  let next: WbNode;
+  if ('edge' in spot) next = dockPane(root, zone, spot.edge);
+  else if (findPane(root, spot.paneId)) next = evenAround(splitPane(root, spot.paneId, spot.side, zone), zone.id);
+  else return { root, id: null };
+  const { across, down } = extent(next);
+  return across <= MAX_ACROSS && down <= MAX_ACROSS ? { root: next, id: zone.id } : { root, id: null };
+}
+
+/** Even out only the split that directly holds `id`, by how many zones each child spans. */
+function evenAround(node: WbNode, id: string): WbNode {
+  if (!isSplit(node)) return node;
+  if (node.children.some((c) => !isSplit(c) && c.id === id)) {
+    const weights = node.children.map((c) => (node.dir === 'row' ? extent(c).across : extent(c).down));
+    const total = weights.reduce((a, b) => a + b, 0) || 1;
+    return { ...node, sizes: weights.map((w) => w / total) };
   }
-  if (root === state.root && watermark === state.watermark) return state;
-  return { ...state, root, watermark };
+  return { ...node, children: node.children.map((c) => evenAround(c, id)) };
 }
 
 /* ---------- persistence ---------- */
@@ -469,9 +570,11 @@ function sanitize(node: unknown, reserve: (id: string) => void, dock: MonitorsDo
     dock.monitors[n.kind] = true;
     return null;
   }
+  const zone = typeof n.zone === 'string' && n.zone ? { zone: n.zone } : {};
+  if (n.kind === 'zone') { reserve(n.id); return { id: n.id, kind: 'zone', refId: '', ...zone }; }
   if (!WALL_KINDS.includes(n.kind as WallKind) || typeof n.refId !== 'string') return null;
   reserve(n.id);
-  return { id: n.id, kind: n.kind as PaneKind, refId: n.refId };
+  return { id: n.id, kind: n.kind as PaneKind, refId: n.refId, ...zone };
 }
 
 function record(raw: unknown): Record<string, unknown> {
@@ -624,6 +727,9 @@ export function loadWallState(storage: Pick<Storage, 'getItem'> | undefined, set
       tabs: saved.tabs === 'left' || saved.tabs === 'hidden' ? saved.tabs : 'top',
       agentPanel: readAgentPanel(saved.agentPanel),
       snap: saved.snap === true,
+      zones: saved.zones === true,
+      activeZone: typeof saved.activeZone === 'string' ? saved.activeZone : null,
+      zonesIntro: saved.zonesIntro === true,
     };
   } catch {
     return DEFAULT_WALL_STATE;
@@ -640,7 +746,7 @@ export function saveWallState(storage: Pick<Storage, 'setItem'> | undefined, sta
 
 /** The wall as the setting stores it: the same fields, typed loosely for the shared schema. */
 export function toWallSetting(state: CommandWallState): CommandWallSetting {
-  return { layout: state.layout, dock: state.dock, hero: state.hero, folded: state.folded, root: state.root, autoAdd: state.autoAdd, filter: state.filter, insights: state.insights, watermark: state.watermark, composer: state.composer, tabs: state.tabs, agentPanel: state.agentPanel, snap: !!state.snap };
+  return { layout: state.layout, dock: state.dock, hero: state.hero, folded: state.folded, root: state.root, autoAdd: state.autoAdd, filter: state.filter, insights: state.insights, watermark: state.watermark, composer: state.composer, tabs: state.tabs, agentPanel: state.agentPanel, snap: !!state.snap, zones: !!state.zones, activeZone: state.activeZone ?? null, zonesIntro: !!state.zonesIntro };
 }
 
 /* ---------- the ribbon ---------- */

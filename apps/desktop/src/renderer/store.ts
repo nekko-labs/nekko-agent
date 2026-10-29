@@ -3,7 +3,7 @@ import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import { rememberSplashColours } from './splash.js';
 import type { AppSettings, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
-import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent, findThemePreset, resolveThemePreset, themePresetOf } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
@@ -285,9 +285,10 @@ interface UiState {
   pushToast: (kind: Toast['kind'], message: string) => void;
   dismissToast: (id: string) => void;
   setPaletteOpen: (open: boolean) => void;
+  chatFinderOpen: boolean;
   newChat: (workspaceId?: string) => Promise<void>;
   /** A new Image chat on this image model, starting from its family's tuned steps and CFG. */
-  newImageChat: (modelId: string, defaults?: { steps: number; cfgScale: number }) => Promise<void>;
+  newImageChat: (modelId?: string, defaults?: { steps: number; cfgScale: number }) => Promise<void>;
   setMascotMood: (m: MascotMood) => void;
   setView: (v: View) => void;
   setOnboardingOpen: (open: boolean) => void;
@@ -303,6 +304,8 @@ interface UiState {
   toggleContextPanel: () => void;
   togglePlanRail: (sessionId: string) => void;
   applyTheme: () => void;
+  /** The preset whose colours `applyTheme` applied: System resolves to Nekko Dark or Lilac. */
+  resolvedPreset: string | undefined;
   /** Settings > Style: the user's fonts folder and the families loaded from it. */
   customFonts: { dir: string; families: string[] } | null;
   loadCustomFonts: () => Promise<void>;
@@ -669,6 +672,7 @@ export const useStore = create<UiState>((set, get) => ({
   openLocalModelSettings: (modelId) =>
     set((s) => (viewEnabled('modelserver', s.settings) ? { view: 'modelserver', localModelFocus: modelId } : { view: 'command' })),
   clearLocalModelFocus: () => set({ localModelFocus: null }),
+  chatFinderOpen: false,
   newChat: async (workspaceId) => {
     await get().refreshProviders();
     if (needsProviderSetup(get().providers, get().activeModelId ?? get().models[0]?.id)) {
@@ -693,7 +697,7 @@ export const useStore = create<UiState>((set, get) => ({
     const created = await window.nekko.createSession(defaultChatFolder(get()));
     const s = (await window.nekko.setSessionOptions(created.id, {
       chatType: 'image',
-      imageParams: { ...DEFAULT_IMAGE_CHAT_PARAMS, modelId, ...(defaults ?? {}) },
+      imageParams: { ...DEFAULT_IMAGE_CHAT_PARAMS, ...(modelId ? { modelId } : {}), ...(defaults ?? {}) },
     })) ?? created;
     putCachedSession(s);
     addCreatedSession(s);
@@ -855,25 +859,30 @@ export const useStore = create<UiState>((set, get) => ({
       return { planRailOpenBySession };
     }),
 
+  resolvedPreset: undefined,
   applyTheme: () => {
     const settings = get().settings;
     const theme = settings?.theme ?? 'system';
-    const resolved =
-      theme === 'system'
-        ? window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light'
-        : theme;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // System follows the computer with the branded looks: Nekko Dark or Lilac.
+    const picked = themePresetOf(settings);
+    const presetId = resolveThemePreset(picked, prefersDark);
+    const preset = presetId ? THEME_PRESETS.find((p) => p.id === presetId) : undefined;
+    const resolved = picked === 'system' && preset ? preset.mode : theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;
     const root = document.documentElement;
     root.setAttribute('data-theme', resolved);
 
-    const presetId = settings?.themePreset;
     if (presetId) root.setAttribute('data-preset', presetId);
     else root.removeAttribute('data-preset');
-    const preset = presetId ? THEME_PRESETS.find((p) => p.id === presetId) : undefined;
+    if (get().resolvedPreset !== presetId) set({ resolvedPreset: presetId });
 
-    const accent = currentPresetAccent(presetId, settings?.accent);
-    const accent2 = currentPresetAccent(presetId, settings?.accent2);
+    // Picking System saved its own old accents; only colours the user changed
+    // from those override the branded look.
+    const systemPreset = picked === 'system' ? findThemePreset('system') : undefined;
+    const own = (saved: string | undefined, shipped: string | undefined) =>
+      systemPreset && saved?.toLowerCase() === shipped ? undefined : saved;
+    const accent = currentPresetAccent(presetId, own(settings?.accent, systemPreset?.accent));
+    const accent2 = currentPresetAccent(presetId, own(settings?.accent2, systemPreset?.accent2));
     if (accent) root.style.setProperty('--accent', accent);
     else if (preset) root.style.setProperty('--accent', preset.accent);
     else root.style.removeProperty('--accent');
@@ -1243,7 +1252,7 @@ export const useStore = create<UiState>((set, get) => ({
         } catch { /* Leave the tip eligible if its seen state could not be saved. */ }
         finally { completionTipPending = false; }
       }
-      get().pushToast('success', 'Chat completed. Find it under Show completed in the left panel for 60 days.');
+      get().pushToast('success', 'Chat completed. Find it under Show completed in the left panel until you delete it.');
     } catch (e) {
       get().pushToast('error', `Could not complete the chat: ${(e as Error).message}`);
     }

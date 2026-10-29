@@ -1,7 +1,7 @@
 // First, so every module below sees the real packaging state in dev.
 import './devRuntime.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNotificationView, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, shell, systemPreferences } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
 import { existsSync, readFileSync } from 'fs';
@@ -15,7 +15,9 @@ import { EngineProcess } from './engine-process.js';
 import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
 import { createTrayCompanion } from './trayCompanion.js';
+import { createForegroundGuard, holdNotices, type ForegroundGuard } from './foregroundGuard.js';
 import { startAgentBrowser } from './agentBrowser.js';
+import { guardSession } from './connectionsGuard.js';
 import { registerArtifactPreview } from './artifactPreview.js';
 import { offerLegacyCleanup } from './legacyPrompt.js';
 import { createCloseIntent, readWParam, WM_CLOSE, WM_SYSCOMMAND } from './closeIntent.js';
@@ -41,17 +43,43 @@ const notificationSessions = new Map<number, string | null>();
 /** Each window's view on screen, so a workflow run notice stays quiet on the Workflows view. */
 const notificationViews = new Map<number, string | null>();
 
+/** Holds windows and notices while a full-screen app (a game) is in front (foregroundGuard.ts). */
+let foreground: ForegroundGuard | undefined;
+
+/** Run `fn`, which brings a window forward, once no full-screen app is in front. */
+function whenFree(fn: () => void): void {
+  if (foreground) void foreground.whenFree(fn);
+  else fn();
+}
+
+/** Restore, show and focus `win`, unless it has gone in the meantime. */
+function raise(win: BrowserWindow): void {
+  whenFree(() => {
+    if (win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  });
+}
+
 function showWindow(): void {
   trayCompanion?.dismiss();
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win) { createWindow(); return; }
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
+  raise(win);
 }
 
 /** The engine (nekkod); set once the app is ready. */
 let engine: EngineProcess | null = null;
+/** Settings > Connections, for the pages Chromium loads itself (connectionsGuard.ts). */
+const readConnections = async () => (await engine?.call<AppSettings>(IpcChannels.settingsGet))?.connections;
+const webviewGuests = new Set<number>();
+// Opt-in crash reports (telemetry.rs drops them while reports are off). A
+// monitor only: Node still crashes the way it did.
+process.on('uncaughtExceptionMonitor', (err) => {
+  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: String(err?.message ?? err), stack: String(err?.stack ?? '') }).catch(() => {});
+});
+let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;
 import {
@@ -119,10 +147,8 @@ function deliverLink(url: string): void {
     if (!win) createWindow();
     return;
   }
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
   win.webContents.send(IpcEvents.deepLink, url);
+  raise(win);
 }
 
 /**
@@ -258,6 +284,15 @@ function wireAppWindow(win: BrowserWindow): void {
     event.preventDefault();
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
   });
+  // The browser pane's pages share the default session: guard only theirs.
+  win.webContents.on('did-attach-webview', (_event, guest) => {
+    webviewGuests.add(guest.id);
+    guest.once('destroyed', () => webviewGuests.delete(guest.id));
+    if (!webviewGuarded) {
+      webviewGuarded = true;
+      guardSession(guest.session, 'browser-pane', readConnections, (id: number | undefined) => id != null && webviewGuests.has(id));
+    }
+  });
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     if (!/^https?:\/\//i.test(params.src) && params.src !== 'about:blank') {
       event.preventDefault();
@@ -292,13 +327,14 @@ function createWindow(): void {
 
   mainWindow = win;
   win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
-  win.on('ready-to-show', () => {
+  win.on('ready-to-show', () => whenFree(() => {
+    if (win.isDestroyed()) return;
     if (maximized) win.maximize();
     win.show();
     // Without focus, Windows may leave a window opened from a terminal behind
     // others, flashing in the taskbar instead of coming to the front.
     win.focus();
-  });
+  }));
   const closeIntent = createCloseIntent();
   if (process.platform === 'win32') {
     win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));
@@ -475,9 +511,7 @@ function claimSingleInstance(): boolean {
     // window they already have rather than doing nothing at all.
     const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
     if (win) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
+      raise(win);
     } else {
       createWindow();
     }
@@ -582,7 +616,7 @@ app.whenReady().then(async () => {
   // The bridge also carries what nekkod asks of the window shell: the app
   // window's handle for owning its dialogs, dialogs it cannot draw (macOS),
   // and quitting so an update can install.
-  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()) });
+  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()), guard: (s) => guardSession(s, 'web-tools', readConnections) });
   app.once('will-quit', () => agentBrowser.close());
   engine = new EngineProcess({
     browserBridge: { url: agentBrowser.url, token: agentBrowser.token },
@@ -602,11 +636,16 @@ app.whenReady().then(async () => {
     mainDir: __dirname,
   });
   engine.start();
+  const nekkod = engine;
+  foreground = createForegroundGuard({
+    ask: () => nekkod.running ? nekkod.call<{ quiet?: unknown }>('activity:fullscreen') : Promise.resolve(null),
+    ownFocus: () => BrowserWindow.getFocusedWindow() != null,
+  });
   nativeNotifications = createNativeNotificationPoster({
     isSupported: () => Notification.isSupported(),
     create: options => new Notification(options),
   }, url => { showWindow(); deliverLink(url); }, resolveWindowIcon());
-  stopNotifications = startMainNotifications(engine, nativeNotifications.post, undefined, () => {
+  stopNotifications = startMainNotifications(engine, holdNotices(foreground, nativeNotifications.post), undefined, () => {
     const focused = BrowserWindow.getFocusedWindow();
     const owned = focused && applicationWindows.has(focused.webContents.id) ? focused : null;
     const id = owned?.webContents.id;
@@ -626,6 +665,10 @@ app.whenReady().then(async () => {
   pendingLink = linkFromArgv(process.argv);
   createWindow();
   registerDisplayWindows(dataDir);
+  // Always-on dictation never keeps listening behind a locked screen or through sleep.
+  const stopVoice = () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IpcEvents.voiceLockStop); };
+  powerMonitor.on('lock-screen', stopVoice);
+  powerMonitor.on('suspend', stopVoice);
   const iconPath = resolveWindowIcon();
   if (iconPath) {
     desktopTray = createDesktopTray({
@@ -678,6 +721,7 @@ app.on('before-quit', (event) => {
   trayCompanion?.dispose();
   stopNotifications?.();
   stopNotifications = undefined;
+  foreground?.dispose();
   nativeNotifications?.dispose();
   if (engineStopped || !engine) { desktopTray?.dispose(); desktopTray = null; return; }
   event.preventDefault();

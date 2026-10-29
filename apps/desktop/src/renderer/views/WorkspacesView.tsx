@@ -1,17 +1,18 @@
+import { HoverTip } from '../components/HoverTip.js';
+import { CreateMenuRows } from '../components/CreateMenu.js';
 import { confirmDeletion } from '../components/DeleteConfirmation.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, archiveDaysLeft, archiveDeletesAt } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { StatusIcon, WorkspaceCard, type AgentStatus } from '../components/WorkspaceCard.js';
+import { StatusIcon, WorkspaceCard, agentStatusOfLane, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
-import { CheckIcon, PhotoIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
+import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
-import { NekkoAvatar } from '../components/Mascot.js';
 import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../completionExit.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
@@ -20,6 +21,8 @@ import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
+import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
+import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import {
   DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
@@ -79,33 +82,6 @@ function readSidebarWidth(): number {
   return SIDEBAR_DEFAULT_W;
 }
 
-/** One colored row of the create menu: a tinted icon tile and a label. */
-function CreateRow({
-  tone,
-  icon,
-  label,
-  title,
-  onClick,
-}: {
-  tone: string;
-  icon: React.ReactNode;
-  label: string;
-  title?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left"
-      style={{ '--row-tone': tone } as React.CSSProperties}
-      title={title}
-      onClick={onClick}
-    >
-      <span className="create-tile">{icon}</span>
-      <span className="min-w-0 flex-1 whitespace-nowrap text-[13px] font-medium leading-snug">{label}</span>
-    </button>
-  );
-}
-
 /**
  * Sort by manual drag order when set, else by a fallback (recency for chats,
  * age for terminals). Manually-ordered items sort above never-dragged ones.
@@ -137,6 +113,7 @@ function projectOfWorkspace(w: Workspace, sessions: SessionSummary[], terminals:
  */
 export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): AgentStatus | null | undefined {
   switch (type) {
+    case 'session_meta': return undefined;
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':
@@ -326,9 +303,13 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const newMenuPopRef = useRef<HTMLDivElement>(null);
   const newMenuButtonRef = useRef<HTMLButtonElement>(null);
   const newMenuTimer = useRef<number>(0);
-  const [finderOpen, setFinderOpen] = useState(false);
+  const finderOpen = useStore((s) => s.chatFinderOpen);
   const finderButtonRef = useRef<HTMLButtonElement>(null);
-  const closeFinder = useCallback(() => setFinderOpen(false), []);
+  const closeFinder = useCallback(() => useStore.setState({ chatFinderOpen: false }), []);
+  useEffect(() => {
+    if (finderOpen && window.matchMedia('(max-width: 767px)').matches) setMobileNav(true);
+  }, [finderOpen]);
+
   // The menu renders in a portal at the document root, positioned under the +.
   // The panel clips its overflow and the wall's windows stack above it, so a
   // menu drawn inside the panel was cut off or hidden behind them.
@@ -338,7 +319,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     const place = () => {
       const r = newMenuButtonRef.current?.getBoundingClientRect();
       if (!r) return;
-      const width = 256;
+      const width = newMenuPopRef.current?.getBoundingClientRect().width ?? 256;
       setNewMenuPos({ top: r.bottom + 6, left: Math.max(8, Math.min(window.innerWidth - width - 8, r.right - width)) });
     };
     place();
@@ -481,10 +462,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
    * in manual order this is exactly the bucket list drag-and-drop writes to;
    * every other arrangement is a read-only view of the same cards.
    */
-  const shown = (e: Entry) => view.showAutomations || !e.s?.taskId;
+  const utilityKind = (e: Entry) => e.w?.anchor.kind === 'terminal' ? 'terminal' : e.s?.chatType === 'image' ? 'media' : null;
+  const shown = (e: Entry) => !utilityKind(e) && (view.showAutomations || !e.s?.taskId);
   const shownDone = (s: SessionSummary) => view.showAutomations || !s.taskId;
   const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
-  const groups: PanelGroup[] = (() => {
+  const utilityEntries = buckets.flatMap((b) => bucketEntries(b.key));
+  const utilityGroups: PanelGroup[] = [
+    { key: '__terminals', name: 'Terminals', items: order(utilityEntries.filter((e) => utilityKind(e) === 'terminal')), done: [] },
+    { key: '__media', name: 'Photos and videos', items: order(utilityEntries.filter((e) => utilityKind(e) === 'media')), done: [] },
+  ].filter((g) => g.items.length > 0);
+  const groups: PanelGroup[] = [...utilityGroups, ...(() => {
     if (view.groupBy === 'project') {
       return buckets.flatMap((b): PanelGroup[] => {
         const items = order(bucketEntries(b.key).filter(shown));
@@ -509,7 +496,42 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       }),
       ...completed,
     ];
-  })();
+  })()];
+
+  // When a card changes group (Working to Done), note where every card was
+  // before this render commits, then fly the movers from there. Not when the
+  // grouping itself changed: then every card moves and none of them is news.
+  const listRef = useRef<HTMLDivElement>(null);
+  const layoutSig = view.groupBy + '|' + groups.map((g) => g.key + ':' + g.items.map((e) => e.key).join(',')).join('|');
+  const lastLayout = useRef(layoutSig);
+  const cardsBefore = useRef<Map<string, CardSpot> | null>(null);
+  if (lastLayout.current !== layoutSig) {
+    const sameGrouping = lastLayout.current.split('|', 1)[0] === view.groupBy;
+    cardsBefore.current = sameGrouping && view.groupBy !== 'project' ? measureCards(listRef.current) : null;
+    lastLayout.current = layoutSig;
+  }
+  useLayoutEffect(() => {
+    if (cardsBefore.current) flyMovedCards(listRef.current, cardsBefore.current);
+    cardsBefore.current = null;
+  }, [layoutSig]);
+
+  const activeRowRef = useRef<HTMLDivElement>(null);
+  const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));
+  const selectedGroupKey = selectedGroup?.key;
+  const selectedCompleted = !!selectedGroup?.done.some((s) => s.id === selectedId);
+  useEffect(() => {
+    setSelected([]);
+    if (!selectedGroupKey) return;
+    setCollapsed((previous) => {
+      if (!previous.has(selectedGroupKey)) return previous;
+      const next = new Set(previous); next.delete(selectedGroupKey); return next;
+    });
+    if (selectedCompleted) setShowCompleted((previous) => new Set(previous).add(selectedGroupKey));
+  }, [selectedId, selectedGroupKey, selectedCompleted]);
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => activeRowRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }));
+    return () => cancelAnimationFrame(frame);
+  }, [selectedId, collapsed, showCompleted, horizontal]);
 
   // --- Sidebar drag-and-drop (reorder projects; reorder / re-file workspaces) ---
   const startDrag = (e: React.DragEvent, item: DragItem) => {
@@ -595,18 +617,17 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           >
             <SlidersIcon className="h-4 w-4" />
           </button>
-          <button
+          <HoverTip label={`Search chats (${SHORTCUTS.searchChats.label})`}><span className="inline-flex"><button
             ref={finderButtonRef}
             className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
-            title="Search chats"
             aria-label="Search chats"
             aria-haspopup="dialog"
             aria-expanded={finderOpen}
             data-chat-finder-toggle
-            onClick={() => { closeNewMenu(); setFinderOpen((o) => !o); }}
+            onClick={() => { closeNewMenu(); useStore.setState((s) => ({ chatFinderOpen: !s.chatFinderOpen })); }}
           >
             <SearchIcon className="h-4 w-4" />
-          </button>
+          </button></span></HoverTip>
           {finderOpen && (
             <ChatFinder
               anchorRef={finderButtonRef}
@@ -617,14 +638,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           <button
             ref={newMenuButtonRef}
             className={`agent-panel-plus btn btn-ghost px-1.5 py-1 ${newMenuOpen ? 'is-open' : ''}`}
-            title="New agent with a terminal"
+            title="New agent"
             aria-label="New agent"
             aria-haspopup="menu"
             aria-expanded={newMenuOpen}
             onMouseEnter={openNewMenu}
             onMouseLeave={closeNewMenuSoon}
             onFocus={openNewMenu}
-            onClick={() => { closeNewMenu(); void newTerminalWorkspace().catch(e => useStore.getState().pushToast('error', e.message)); }}
+            onClick={() => { closeNewMenu(); void newChat().catch(e => useStore.getState().pushToast('error', e.message)); }}
           >
             <PlusIcon className="h-[22px] w-[22px]" />
           </button>
@@ -632,47 +653,25 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
             <div
               ref={newMenuPopRef}
               data-new-agent-menu
-              className="card fixed z-[1000] w-max min-w-48 p-1 shadow-lg"
-              style={{ background: 'var(--paper)', top: newMenuPos.top, left: newMenuPos.left }}
+              className="create-menu card fixed z-[1000] w-max min-w-48 p-1 shadow-lg"
+              style={{ top: newMenuPos.top, left: newMenuPos.left }}
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
             >
-              {/* The hero row. Everything else in this menu opens a window; this
-                  one starts the work, so it gets the brand wash and the rest
-                  get a hue apiece rather than four identical grey lines. */}
-              <button
-                className="create-row create-row-hero flex w-full items-center gap-2 rounded-md px-2 py-1 text-left"
-                title="A fresh chat, with room for windows around it"
-                onClick={() => { closeNewMenu(); void Promise.resolve(newChat()).catch((e: Error) => useStore.getState().pushToast('error', `Could not start an agent: ${e.message}`)); }}
-              >
-                <span className="create-tile">
-                  <NekkoAvatar size={16} stationary eyes={false} />
-                </span>
-                <span className="min-w-0 flex-1 text-[13px] font-semibold leading-snug">Agent</span>
-                <kbd className="kbd">{SHORTCUTS.newAgent.label}</kbd>
-              </button>
-
-              <CreateRow
-                tone="var(--accent)"
-                icon={<PhotoIcon className="h-4 w-4" />}
-                label="Create or Edit Photos and Videos"
-                onClick={() => { closeNewMenu(); void newImageChat().catch((e: Error) => useStore.getState().pushToast('error', e.message)); }}
-              />
-              <CreateRow
-                tone="var(--success)"
-                icon={<TerminalIcon className="h-4 w-4" />}
-                label="Terminal"
-                onClick={() => { closeNewMenu(); void newTerminalWorkspace().catch((e: Error) => useStore.getState().pushToast('error', e.message)); }}
-              />
+              <CreateMenuRows onCreate={(kind) => {
+                closeNewMenu();
+                const action = kind === 'chat' ? newChat() : kind === 'image' ? newImageChat() : newTerminalWorkspace();
+                void Promise.resolve(action).catch((e: Error) => useStore.getState().pushToast('error', e.message));
+              }} />
             </div>,
             document.body,
           )}
         </div>
       </div>
-      <div className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
+      <div ref={listRef} className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
         {groups.map((b) => {
           const { items, done } = b;
-          const byProject = view.groupBy === 'project';
+          const byProject = view.groupBy === 'project' && !utilityGroups.includes(b);
           // The Completed group is its own fold: open means its rows show.
           const completedGroup = b.key === COMPLETED_GROUP;
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
@@ -740,7 +739,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               {/* Collapsed means gone: hidden, out of the tab order, and taking
                   no room in the row layout either, not just squashed to 0fr. */}
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
-                <div className="min-h-0 space-y-0.5 overflow-hidden pb-1">
+                <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
                     <p className="px-3.5 py-1 text-[11px] text-ink-faint">No active agents</p>
                   )}
@@ -750,13 +749,20 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     return (
                       <div
                         key={entry.key}
+                        ref={(s?.id === selectedId || entry.t?.id === selectedId) ? activeRowRef : undefined}
                         {...(s ? { [COMPLETION_ROW_ATTR]: s.id } : {})}
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
-                        draggable={reorderable}
-                        onDragStart={reorderable ? (e) => startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id }) : undefined}
-                        onDragEnd={endDrag}
+                        draggable={reorderable || !!s || !!entry.t}
+                        {...{ [CARD_ATTR]: entry.key }}
+                        onDragStart={(e) => {
+                          if (reorderable) startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id });
+                          // Any agent or terminal row can also be dropped into a zone on the board.
+                          if (s) startAgentDrag(e, 'chat', s.id);
+                          else if (entry.t) startAgentDrag(e, 'terminal', entry.t.id);
+                        }}
+                        onDragEnd={() => { endDrag(); endAgentDrag(); }}
                         onDragOver={reorderable ? (e) => overTarget(e, 'card:' + entry.key, (d) => d.kind === 'workspace') : undefined}
                         onDrop={!reorderable ? undefined : (e) => {
                            // Project drops belong to the containing group, even over a card.
@@ -785,13 +791,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
                         {kids.map((kid) => (
-                          <SubAgentRow
-                            key={kid.id}
+                          <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
                             isActive={kid.id === selectedId}
                             onOpen={() => onOpenChat(kid.id)}
-                          />
+                          /></div>
                         ))}
                       </div>
                     );
@@ -819,14 +824,13 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
                       </div>}
                       {completedOpen && done.map((s) => (
-                        <CompletedRow
-                          key={s.id}
+                        <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><CompletedRow
                           session={s}
                           now={now}
                           isActive={selectedId === s.id}
                           onOpen={() => { onOpenChat(s.id); setMobileNav(false); }}
                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
-                        />
+                        /></div>
                       ))}
                     </div>
                   )}
@@ -897,7 +901,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         aria-valuemax={SIDEBAR_MAX_W}
         aria-valuenow={sidebarW}
         tabIndex={0}
-        className="group relative hidden shrink-0 cursor-col-resize md:block"
+        className="agent-list-resize group relative hidden shrink-0 cursor-col-resize md:block"
         style={{ width: 'var(--pane-gap)', marginInline: 'calc(-1 * var(--pane-gap))' }}
         onPointerDown={(e) => {
           e.preventDefault();
@@ -951,14 +955,13 @@ function CompletedRow({
   session: SessionSummary; now: number; isActive: boolean; onOpen: () => void; onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const at = s.archivedAt as number;
-  const days = archiveDaysLeft(at, now);
   return (
     <button
       onClick={onOpen}
       onContextMenu={onContextMenu}
       data-completed-row={s.id}
       className={`flex w-full items-center gap-1.5 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
-      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nDeleted on ${new Date(archiveDeletesAt(at)).toLocaleDateString()} unless restored (${days} day${days === 1 ? '' : 's'} left)`}
+      title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nKept until you delete it`}
     >
       <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">
         <CheckIcon className="h-3 w-3" />
@@ -966,7 +969,7 @@ function CompletedRow({
       <span className={`min-w-0 flex-1 truncate text-[12px] line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.title}</span>
       <time
         className="shrink-0 text-[10px] tabular-nums"
-        style={{ color: days <= 7 ? 'var(--warning)' : 'var(--ink-faint)' }}
+        style={{ color: 'var(--ink-faint)' }}
         dateTime={new Date(at).toISOString()}
       >
         {completedDate(at, now)}
@@ -993,7 +996,7 @@ function SubAgentRow({
         className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
       />
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
-      {status && <StatusIcon status={status} />}
+      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, session.activeWatchCount)} />
     </button>
   );
 }

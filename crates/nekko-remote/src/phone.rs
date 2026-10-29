@@ -84,6 +84,8 @@ pub struct Policy {
     pub terminal: crate::phone_terminal::Limits,
     /// Files and logs from a phone (IO-33 FA-1, FA-5): limits and views (phone_files.rs).
     pub files: crate::phone_files::FilesPolicy,
+    /// What the agent linked in a chat, opened on a phone (#1095; phone_artifacts.rs).
+    pub artifacts: crate::phone_artifacts::ArtifactsPolicy,
     /// Git from a phone (IO-33 FA-2): limits, option keys and views (phone_git.rs).
     pub git: crate::phone_git::GitPolicy,
     /// `stepUpPolicy()` (SK-2; step_up.rs).
@@ -143,6 +145,7 @@ pub fn policy() -> &'static Policy {
             activity_limit: v["activityLimit"].as_u64().unwrap_or(200) as usize,
             terminal: crate::phone_terminal::Limits::from_policy(&v),
             files: crate::phone_files::FilesPolicy::from_policy(&v["files"]),
+            artifacts: crate::phone_artifacts::ArtifactsPolicy::from_policy(&v["artifacts"]),
             git: crate::phone_git::GitPolicy::from_policy(&v["git"]),
             step_up: crate::step_up::Limits::from_policy(&v["stepUp"]),
         }
@@ -302,12 +305,25 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         let args = crate::phone_files::screen(channel, args, &policy().files)?;
         return Ok(Screened { args: Some(args), ..Screened::default() });
     }
+    if crate::phone_artifacts::is_artifacts(channel) {
+        let args = crate::phone_artifacts::screen(channel, args, &policy().artifacts)?;
+        return Ok(Screened { args: Some(args), ..Screened::default() });
+    }
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let mut out = Screened::default();
     let id = |i: usize, what: &str| -> Result<(), Denied> {
         if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
     };
     match channel {
+        "workspace:addByPath" | "workspace:remove" => {
+            let what = if channel == "workspace:addByPath" { "folder path" } else { "workspace id" };
+            if arg(0).as_str().is_none_or(|s| s.trim().is_empty() || s.contains('\0')) {
+                return Err(denied("value-invalid", what));
+            }
+            if args.len() > 1 {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
         "changes:list" | "session:watches" => id(0, "chat id")?,
         "providers:saveSealed" => {
             crate::phone_providers::screen_save(arg(0)).map_err(|r| denied(r.code, r.detail))?;
@@ -348,6 +364,11 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         "task:runNow" => id(0, "task id")?,
         "workflow:run" => id(0, "workflow id")?,
         "limits:get" => id(0, "provider id")?,
+        "context:preview" => id(0, "chat id")?,
+        "model:unload" => {
+            id(0, "provider id")?;
+            id(1, "model id")?;
+        }
         "settings:update" => out.settings = Some(check_settings_patch(arg(0))?),
         "session:setOptions" => {
             keys_within(arg(1), &policy().session_option_keys, "chat options")?;
@@ -514,8 +535,20 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "providers:saveSealed" | "providers:setEnabled" => crate::phone_providers::result_view(&result),
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
+        "system:stats" => crate::phone_views::system(&result, &policy().views),
+        "gpu:stats" => crate::phone_views::gpu(&result, &policy().views),
+        "engine:status" => crate::phone_views::engine(&result, &policy().views),
+        "context:preview" => crate::phone_views::context(&result, &policy().views),
+        "model:unload" => {
+            if result.is_object() {
+                pick(&result, &["message".into(), "ok".into()])
+            } else {
+                Value::Null
+            }
+        }
         c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
         c if crate::phone_files::is_files(c) => crate::phone_files::view(c, &result, &policy().files),
+        c if crate::phone_artifacts::is_artifacts(c) => crate::phone_artifacts::view(c, &result, &policy().artifacts),
         c if crate::phone_git::is_git(c) => crate::phone_git::view(c, &result, &policy().git, &policy().views.pr),
         _ => result,
     }
@@ -675,6 +708,10 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
     let args: Vec<Value> = match channel.as_str() {
         "task:runNow" | "workflow:run" => vec![first.clone()],
         "tasks:list" | "workflows:list" | "usage:summary" => Vec::new(),
+        "system:stats" | "gpu:stats" | "engine:status" => Vec::new(),
+        // A chat's own context only: the phone never attaches a path.
+        "context:preview" => vec![first.clone(), json!([])],
+        "model:unload" => vec![first.clone(), args[1].clone()],
         "session:fork" => match args.get(1) {
             None | Some(Value::Null) => vec![first.clone()],
             Some(m) => vec![first.clone(), m.clone()],
@@ -1652,6 +1689,39 @@ mod tests {
         }
 
         #[test]
+        fn saved_folders_require_change_proofs_and_keep_positional_payloads() {
+            let k = signer(31);
+            for (channel, value, detail) in [
+                ("workspace:addByPath", "/Users/me/project", "folder path"),
+                ("workspace:remove", "ws_123", "workspace id"),
+            ] {
+                let r = policy_rig(DeviceAccess { read: false, change: true }, Some(&k), None, "guardrails");
+                let args = json!([value]);
+                assert_eq!(r.ask(channel, args.clone(), None), refused("proof-required", channel));
+                let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+                assert!(r.ask(channel, args.clone(), Some(p.clone())).is_ok());
+                assert_eq!(r.ask(channel, args.clone(), Some(p)), refused("proof-replayed", channel));
+                assert_eq!(*r.calls.lock().unwrap(), vec![(channel.to_string(), args.clone())]);
+                let off = policy_rig(DeviceAccess { read: true, change: false }, Some(&k), None, "guardrails");
+                let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+                assert_eq!(off.ask(channel, args, Some(p)), refused("change-off", channel));
+                assert!(off.calls.lock().unwrap().is_empty());
+                for invalid in [Value::Null, json!(1), json!({}), json!([]), json!(""), json!("  "), json!("a\0b")] {
+                    assert_eq!(screen(channel, &[invalid]).err().unwrap(), denied("value-invalid", detail));
+                }
+                assert_eq!(screen(channel, &[]).err().unwrap(), denied("value-invalid", detail));
+                assert_eq!(
+                    screen(channel, &[json!(value), json!({})]).err().unwrap(),
+                    denied("option-denied", "extra argument")
+                );
+                assert_eq!(
+                    r.log(),
+                    vec![(false, Some("proof-required".into())), (true, None), (false, Some("proof-replayed".into()))]
+                );
+            }
+        }
+
+        #[test]
         fn git_goes_through_the_policy_classes() {
             let k = signer(13);
             let devices = Arc::new(MemDevices::default());
@@ -2250,6 +2320,10 @@ mod tests {
                 assert!(has(&p.read_channels, c), "{c}");
             }
             assert!(has(&p.change_channels, "files:write"));
+            // #1095: what the agent linked in a chat, read only.
+            for c in ["artifact:read", "preview:fetch"] {
+                assert!(has(&p.read_channels, c) && !has(&p.change_channels, c), "{c}");
+            }
             for c in p.read_channels.iter().chain(&p.change_channels) {
                 assert!(!has(&p.read_channels, c) || !has(&p.change_channels, c), "{c} is in both classes");
             }
@@ -2284,8 +2358,6 @@ mod tests {
             "terminal:snapshot",
             "terminals:list:native",
             "file:write",
-            "workspace:addByPath",
-            "workspace:remove",
             "voice:install",
             "connector:connect",
             "mcp:status",
@@ -2368,5 +2440,115 @@ mod tests {
             calls.last().unwrap().1,
             json!([{ "voice": { "enabled": true, "language": "it", "modelPath": "/m.bin" } }])
         );
+    }
+
+    /// The Expert monitor's channels (2026-10-24), as phone-monitor.test.ts holds the TS.
+    mod monitor {
+        use super::*;
+
+        fn call_with(results: Value, channel: &str, args: Value) -> (Result<Value, String>, Vec<Value>) {
+            let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
+            let seen = calls.clone();
+            let host: Dispatcher = Arc::new(move |c: String, a: Value| {
+                seen.lock().unwrap().push(json!([c, a]));
+                Box::pin(std::future::ready(Ok(results.get(&c).cloned().unwrap_or(Value::Null))))
+            });
+            let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+            let got = rt.block_on(call(&host, channel.to_string(), args));
+            let calls = calls.lock().unwrap().clone();
+            (got, calls)
+        }
+
+        #[test]
+        fn classes_the_reads_as_read_and_unload_as_agent() {
+            for c in ["system:stats", "gpu:stats", "engine:status", "context:preview"] {
+                assert!(has(&policy().read_channels, c), "{c}");
+            }
+            assert!(has(&policy().agent_channels, "model:unload"));
+            for c in ["engine:settings", "engine:install", "engine:deleteModel"] {
+                assert_eq!(screen(c, &[]).err(), Some(denied("channel-denied", c)));
+            }
+        }
+
+        #[test]
+        fn sends_hardware_as_named_numbers() {
+            let results = json!({
+                "system:stats": { "cpuPct": 41, "cpuCores": 16, "cpuModel": "Ryzen", "memUsedMB": 9000, "memTotalMB": 32000, "temps": { "cpuC": 61, "sensorPath": "/sys/x" }, "pid": 7 },
+                "gpu:stats": { "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "name": "RTX", "utilizationPct": 77, "uuid": "GPU-1" }] },
+            });
+            let (got, calls) = call_with(results.clone(), "system:stats", json!(["ignored"]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "cpuPct": 41, "cpuCores": 16, "memUsedMB": 9000, "memTotalMB": 32000, "temps": { "cpuC": 61 } })
+            );
+            assert_eq!(calls, vec![json!(["system:stats", []])]);
+            let (got, _) = call_with(results, "gpu:stats", json!([]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "utilizationPct": 77 }] })
+            );
+        }
+
+        #[test]
+        fn sends_the_model_server_without_paths_log_or_settings() {
+            let results = json!({ "engine:status": {
+                "install": { "binPath": "C:/secret/llama-server.exe" }, "running": true, "port": 8080, "log": ["C:/models/x.gguf"],
+                "settings": { "modelsDir": "C:/models" },
+                "resident": [{ "id": "google/gemma-4-e4b", "contextLength": 32768, "loadedOn": "gpu", "path": "C:/m.gguf" }],
+                "loading": [{ "id": "qwen", "phase": "loading", "startedAt": 1, "path": "x" }],
+                "memory": { "budgetBytes": 24, "kind": "vram" },
+            }});
+            let (got, _) = call_with(results, "engine:status", json!([]));
+            assert_eq!(
+                got.unwrap(),
+                json!({
+                    "running": true, "installed": true,
+                    "resident": [{ "id": "google/gemma-4-e4b", "contextLength": 32768, "loadedOn": "gpu" }],
+                    "loading": [{ "id": "qwen", "phase": "loading", "startedAt": 1 }],
+                    "memory": { "budgetBytes": 24, "kind": "vram" },
+                })
+            );
+            let (got, _) =
+                call_with(json!({ "engine:status": { "install": {}, "running": false } }), "engine:status", json!([]));
+            assert_eq!(got.unwrap(), json!({ "running": false, "installed": false, "resident": [], "loading": [] }));
+        }
+
+        #[test]
+        fn sends_a_chat_context_as_totals() {
+            let results = json!({ "context:preview": { "contextWindow": 131072, "items": [
+                { "source": "system", "tokens": 1200, "included": true, "preview": "You are" },
+                { "source": "attached-file", "tokens": 800, "included": true, "origin": "/home/me/secret.txt" },
+                { "source": "conversation", "tokens": 3000, "included": true },
+                { "source": "memory", "tokens": 500, "included": false },
+                { "source": "alien", "tokens": 10, "included": true },
+            ]}});
+            let (got, calls) = call_with(results.clone(), "context:preview", json!(["s1", ["/etc/passwd"]]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "usedTokens": 5010, "contextWindow": 131072, "sources": { "system": 1200, "attached-file": 800, "conversation": 3000 } })
+            );
+            assert_eq!(calls, vec![json!(["context:preview", ["s1", []]])]);
+            assert_eq!(
+                call_with(results, "context:preview", json!([""])).0.unwrap_err(),
+                denied("value-invalid", "chat id").to_string()
+            );
+        }
+
+        #[test]
+        fn unloads_a_model_by_provider_and_id() {
+            let results = json!({ "model:unload": { "ok": true, "message": "Unloaded.", "extra": 1 } });
+            let (got, calls) =
+                call_with(results.clone(), "model:unload", json!(["nekko-local", "google/gemma-4-e4b", "x"]));
+            assert_eq!(got.unwrap(), json!({ "ok": true, "message": "Unloaded." }));
+            assert_eq!(calls, vec![json!(["model:unload", ["nekko-local", "google/gemma-4-e4b"]])]);
+            assert_eq!(
+                call_with(results.clone(), "model:unload", json!(["nekko-local"])).0.unwrap_err(),
+                denied("value-invalid", "model id").to_string()
+            );
+            assert_eq!(
+                call_with(results, "model:unload", json!([3, "m"])).0.unwrap_err(),
+                denied("value-invalid", "provider id").to_string()
+            );
+        }
     }
 }

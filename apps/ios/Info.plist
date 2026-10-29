@@ -16,7 +16,8 @@
     <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key><true/>
-    <key>UILaunchStoryboardName</key><string>LaunchScreen</string>
+    <!-- Renamed from LaunchScreen when it turned lavender: iOS kept showing its cached dark one. -->
+    <key>UILaunchStoryboardName</key><string>Launch</string>
     <key>UIApplicationSceneManifest</key>
     <dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
     <key>UISupportedInterfaceOrientations</key>
@@ -44,7 +45,8 @@
     <key>NSCameraUsageDescription</key><string>Scan the pairing code your computer shows in Settings → Remote access.</string>
     <key>NSFaceIDUsageDescription</key><string>Unlock Nekko Agent and confirm changes it makes on your computer.</string>
     <key>NSMicrophoneUsageDescription</key><string>Dictate a message. The recording is turned into text and then deleted.</string>
-    <key>NSSpeechRecognitionUsageDescription</key><string>Turn your dictation into text when your computer can’t.</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>Turn your dictation into text on this iPhone when your computer can’t. It never leaves the phone.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key><string>Save a diagram from a chat to your photos.</string>
     <key>NSLocalNetworkUsageDescription</key><string>Reach the relay on your computer over your local network or Tailscale, and list computers on this Wi-Fi when you tap Look on this network.</string>
     <key>NSBonjourServices</key><array><string>_nekko-agent._tcp</string></array>
     <!-- canOpenURL(tailscale://) for Open Tailscale (TS-4); without it iOS always answers no. -->

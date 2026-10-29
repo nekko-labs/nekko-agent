@@ -102,6 +102,11 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     assert_eq!(notify["deviceId"], "phone-1");
     let (_, res) = next_agent_frame(&mut agent, &key).await;
     assert_eq!(res.unwrap(), json!({ "type": "res", "id": 32, "result": { "ok": true } }));
+    // The iPhone's Live Activity card level: the agent keeps it itself (no chats yet, so no card frame).
+    let card = json!({ "type": "req", "id": 34, "channel": "card:set", "args": [{ "level": "standard" }] });
+    agent.send(client("c1", card)).await.unwrap();
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap(), json!({ "type": "res", "id": 34, "result": { "ok": true } }));
     // A request replayed byte for byte is dropped, and the connection goes
     // back to the handshake: the phone says hello to the new challenge.
     let once = client("c1", json!({ "type": "req", "id": 33, "channel": "app:info", "args": [] }));

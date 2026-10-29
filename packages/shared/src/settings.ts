@@ -137,6 +137,12 @@ export interface CommandWallSetting {
   composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right'; width?: number; height?: number };
   /** Snap to grid: the wall keeps its windows evenly spaced. Absent means off. */
   snap?: boolean;
+  /** The board is laid out in zones. Absent on a wall saved before zones, which is migrated once. */
+  zones?: boolean;
+  /** The pane id of the active zone. */
+  activeZone?: string | null;
+  /** The zones intro has been seen. */
+  zonesIntro?: boolean;
 }
 
 /**
@@ -209,6 +215,8 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /** Default off: continuing a model request after internet restoration can incur charges. */
+  autoResumeOnInternetRestore?: boolean;
   /** Default on: request provider prompt/KV reuse, never store prompts on disk. */
   promptCaching?: boolean;
   voice?: import('./voice.js').VoiceSettings;
@@ -235,6 +243,8 @@ export interface AppSettings {
   pullRequests?: { linkIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean };
   theme: ThemeMode;
   navOrder?: string[];
+  /** Optional sidebar shortcuts. Both remain available from Settings. */
+  sidebarViews?: { skills?: boolean; connectors?: boolean };
   accent: string;
   /** Secondary accent used for the brand gradient and border beam. */
   accent2?: string;
@@ -286,6 +296,12 @@ export interface AppSettings {
   savedModes?: import('./saved-modes.js').SavedMode[];
   /** The saved mode new chats start in. Unset = new chats keep the last-used defaults. */
   defaultSavedModeId?: string;
+  /** Last changed Mode choices, merged by field by the daemon, snapshotted for new chats. Null clears a choice. */
+  defaultSessionOptions?: Partial<Pick<import('./chat.js').Session,
+    'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'cloudOnly' | 'incognito' |
+    'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' |
+    'memory' | 'guidance' | 'toolApproach' | 'autoModel' | 'autoProviderSwitch'>>;
+
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
   completionTipSeen?: boolean;
@@ -415,6 +431,10 @@ export interface AppSettings {
    * enabled with an explicit allowlist of chat ids. See messaging.ts.
    */
   messaging?: import('./messaging.js').MessagingSettings;
+  /** Settings > Connections: All connections off, and the connections switched off one by one. See connections.ts. */
+  connections?: import('./connections.js').ConnectionSettings;
+  /** Opt-in usage and crash reports (crates/nekkod/src/telemetry.rs). Off unless turned on; `installId` is random and replaced each time it is turned on. */
+  telemetry?: { enabled?: boolean; installId?: string };
 }
 
 /**

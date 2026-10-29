@@ -117,7 +117,7 @@ test('CodeQL analyses the languages a change is in', () => {
   assert.deepEqual(langs(['apps/ios/UITests/ComputersTests.swift'], ['ci:macos']), ['swift']);
   assert.deepEqual(langs(['apps/desktop/src/renderer/App.tsx', 'scripts/x.mjs']), ['javascript-typescript']);
   assert.deepEqual(langs(['crates/nekkod/src/main.rs', 'Cargo.lock']), ['rust']);
-  assert.deepEqual(langs(['scripts/perf/plot.py', '.github/workflows/mobile.yml']), ['actions', 'python']);
+  assert.deepEqual(langs(['scripts/perf/plot.py', '.github/workflows/android-native.yml']), ['actions', 'python']);
   assert.deepEqual(langs(['docs/guide.md', 'spec/README.md']), []);
   // Unknown or CI changes: every Linux language, Swift too with ci:macos on a PR; never Swift in the queue.
   assert.deepEqual(langs([]), ['actions', 'javascript-typescript', 'python', 'rust']);

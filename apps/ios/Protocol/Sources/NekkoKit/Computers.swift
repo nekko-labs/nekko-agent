@@ -30,7 +30,8 @@ public protocol RemoteConnection: Caller {
     func registerPush(token: String) async throws
     /// `kinds`: the pushes this phone wants; nil asks for all.
     func registerPush(token: String, kinds: [String]?) async throws
-    func registerActivity(tag: String, token: String) async throws
+    /// The Live Activity card's push tokens and level (`RelayClient.registerCard`).
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws
     /// Frames from the relay itself (`RelayControl`).
     func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?)
     /// The phone moved to another network (`RelayClient.networkChanged`).
@@ -157,6 +158,19 @@ public final class ComputersStore {
     public var pushKinds: [PushKind]? {
         didSet { if pushKinds != oldValue { registerPushNow() } }
     }
+    /// The Live Activity card's level and its ActivityKit push tokens (the card
+    /// that is up, and the one that starts a card). On every connect and change
+    /// they go to the relay, and the level to the computer (`card:set`), which
+    /// then sends the card for the relay to push while iOS has suspended the app.
+    public var cardLevel: LiveLevel = .none {
+        didSet { if cardLevel != oldValue { registerCardNow(level: true) } }
+    }
+    public var cardToken: String? {
+        didSet { if cardToken != oldValue { registerCardNow(level: false) } }
+    }
+    public var cardStartToken: String? {
+        didSet { if cardStartToken != oldValue { registerCardNow(level: false) } }
+    }
     /// An approval or a question was handled somewhere: remove the needs-you
     /// notification for the chat with this tag (`E2E.activityTag`).
     public var onDismiss: ((String) -> Void)?
@@ -239,6 +253,7 @@ public final class ComputersStore {
     private var generation = 0
     private var pump: Task<Void, Never>?
     private var summariesTask: Task<Void, Never>?
+    private var summariesDirty = false
     private var listeners: [UUID: (AgentEvent) -> Void] = [:]
     /// Open terminal screens (IO-33 FA-3): the computer sends only the output of terminals this phone opened.
     private var terminalListeners: [UUID: (TerminalEvent) -> Void] = [:]
@@ -646,6 +661,16 @@ public final class ComputersStore {
 
     /// Make `id` the active computer and (re)connect to it.
     public func connect(_ id: String) {
+        // The computer left behind must not push (or start) a card on this phone any more:
+        // tell it and its relay, best effort, then close that connection. The switch never waits.
+        if id != activeId, conn == .online, let old = client, let computer = active {
+            client = nil
+            Task {
+                try? await old.registerCard(token: nil, startToken: nil, level: .none, computerId: computer.id, computerName: computer.name)
+                _ = try? await old.call(Channels.cardSet, [["level": "none"]], timeout: 3)
+                old.close()
+            }
+        }
         disconnect()
         guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
@@ -729,6 +754,7 @@ public final class ComputersStore {
                     await outbox.flush()
                 }
                 registerPushNow()
+                registerCardNow(level: true)
             }
         case .welcome(let version):
             hostProtocol = version
@@ -767,6 +793,7 @@ public final class ComputersStore {
         pump = nil
         summariesTask?.cancel()
         summariesTask = nil
+        summariesDirty = false
         graceTask?.cancel()
         graceTask = nil
         suspended = false
@@ -929,9 +956,28 @@ public final class ComputersStore {
         return TestPushResult.decide(computerAnswered: answered, hasToken: pushToken != nil, relayDelivers: relayDelivers)
     }
 
-    /// A Live Activity's push token for `sessionId` (see `RelayClient.registerActivity`).
-    public func registerActivity(sessionId: String, token: String) async {
-        try? await client?.registerActivity(tag: E2E.activityTag(sessionId), token: token)
+    /// The last card registration: each waits for it, so the relay keeps the newest.
+    private var cardRegistration: Task<Void, Never>?
+
+    private func registerCardNow(level: Bool) {
+        guard conn == .online, let c = client, let computer = active else { return }
+        let (token, start, cardLevel, previous) = (cardToken, cardStartToken, cardLevel, cardRegistration)
+        cardRegistration = Task {
+            await previous?.value
+            try? await c.registerCard(token: token, startToken: start, level: cardLevel, computerId: computer.id, computerName: computer.name)
+            if level { _ = try? await c.call(Channels.cardSet, [["level": .string(cardLevel.rawValue)]], timeout: 15) }
+        }
+    }
+
+    /// A chip tap (`focus`) or the close button under a finished chat (`dismiss`) on
+    /// the card, so the card the computer pushes shows the same. A computer from
+    /// before `card:set` refuses it; the card on this phone has it either way.
+    public func cardAction(focus: String? = nil, dismiss: String? = nil) async {
+        guard let c = client else { return }
+        var args: [String: JSONValue] = [:]
+        if let focus { args["focus"] = .string(focus) }
+        if let dismiss { args["dismiss"] = .string(dismiss) }
+        _ = try? await c.call(Channels.cardSet, [.object(args)], timeout: 15)
     }
 
     // MARK: Reading the computer
@@ -975,6 +1021,33 @@ public final class ComputersStore {
                 summariesLoaded = true
                 lastError = error.localizedDescription
             }
+        }
+    }
+
+    /// Saved folders belong to the computer, not the phone's file system.
+    public func addWorkspace(path: String) async throws {
+        let path = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard WorkspacePath.isAbsolute(path) else { throw RelayError("Enter an absolute folder path on the computer.") }
+        try await changeWorkspace(Channels.workspaceAddByPath, path)
+    }
+
+    /// Removes only the saved entry. The computer never deletes the folder on disk.
+    public func removeWorkspace(_ id: String) async throws {
+        try await changeWorkspace(Channels.workspaceRemove, id, refreshSummaries: true)
+    }
+
+    private func changeWorkspace(_ channel: String, _ value: String, refreshSummaries: Bool = false) async throws {
+        guard conn == .online else { throw RelayError("Connect to the computer to manage folders.") }
+        let c = try remote()
+        let result = try await call(change: channel, [.string(value)])
+        guard client === c else { return }
+        workspaces = WorkspaceFolder.list(result)
+        saveList()
+        if refreshSummaries {
+            let list = try await c.call(Channels.sessionsSummaries)
+            guard client === c else { return }
+            summaries = SessionSummary.visible(list)
+            saveList()
         }
     }
 
@@ -1100,17 +1173,29 @@ public final class ComputersStore {
     }
 
     private func scheduleSummaries() {
-        guard summariesTask == nil, let c = client else { return }
+        guard let c = client else { return }
+        summariesDirty = true
+        guard summariesTask == nil else { return }
         let delay = summariesDebounce
+        let gen = generation
         summariesTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1e9))
             guard let self else { return }
-            defer { self.summariesTask = nil }
-            guard self.client === c, !Task.isCancelled else { return }
-            if let list = try? await c.call(Channels.sessionsSummaries), self.client === c {
-                self.summaries = SessionSummary.visible(list)
-                self.saveList()
+            defer {
+                if self.generation == gen { self.summariesTask = nil }
             }
+            repeat {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1e9))
+                guard self.client === c, !Task.isCancelled else { return }
+                // Notifications during the debounce are covered by this call.
+                self.summariesDirty = false
+                let list = try? await c.call(Channels.sessionsSummaries)
+                guard self.client === c, !Task.isCancelled else { return }
+                if let list {
+                    self.summaries = SessionSummary.visible(list)
+                    self.saveList()
+                }
+                // Only a new invalidation retries, never a failed call alone.
+            } while self.summariesDirty
         }
     }
 

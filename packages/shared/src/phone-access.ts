@@ -70,6 +70,19 @@ import {
   PHONE_WATCH_VIEW,
   PHONE_WORKFLOW_RUN_VIEW,
   PHONE_WORKFLOW_VIEW,
+  PHONE_CONTEXT_SOURCES,
+  PHONE_ENGINE_MEMORY_VIEW,
+  PHONE_ENGINE_VIEW,
+  PHONE_GPU_DEVICE_VIEW,
+  PHONE_GPU_VIEW,
+  PHONE_LOADING_VIEW,
+  PHONE_RESIDENT_VIEW,
+  PHONE_SYSTEM_VIEW,
+  PHONE_TEMPS_VIEW,
+  phoneContextView,
+  phoneEngineView,
+  phoneGpuView,
+  phoneSystemView,
   phoneLimitsKey,
   phoneLimitsView,
   phoneMachineView,
@@ -82,10 +95,23 @@ import {
   phoneUsageView,
   phoneWorkflowsView,
 } from './phone-views.js';
+import {
+  PHONE_ARTIFACT_CHANNELS,
+  PHONE_ARTIFACT_READ_CHANNELS,
+  PHONE_ARTIFACT_VIEW,
+  PHONE_ARTIFACTS_VIEW,
+  PHONE_PREVIEW_HEADERS,
+  PHONE_PREVIEW_METHODS,
+  PHONE_PREVIEW_VIEW,
+  PhoneArtifactsRefusal,
+  phoneArtifactsView,
+  screenPhoneArtifacts,
+} from './phone-artifacts.js';
+import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
 
 /**
  * Channels a paired phone may call. Built from what the phone clients send
- * (apps/mobile/src/lib/protocol.ts, apps/android/protocol Wire.kt `Channels`,
+ * (apps/android/protocol Wire.kt `Channels`,
  * apps/ios/Protocol Wire.swift `Channels`), plus the ones the next phone
  * releases need: settings (filtered), completing or deleting a chat the way
  * the desktop does (`session:setOptions` with `archivedAt`, `session:delete`)
@@ -102,10 +128,17 @@ import {
  * folder's files (list, search, read; save as a Change action) and the
  * computer's logs, read only (phone-files.ts). FA-3 / FA-6 add the chat's
  * terminals and SSH (`PHONE_TERMINAL_CHANNELS`, phone-terminal.ts).
+ * The Expert monitor (2026-10-24) reads the computer's hardware, the Model
+ * Server's loaded models and a chat's context totals, and unloads a model
+ * (`PHONE_MONITOR_READ_CHANNELS`, `model:unload`).
+ * Issue #1095 adds what the agent linked in a chat, read only: its files
+ * (`artifact:read`) and its local preview servers (`preview:fetch`),
+ * phone-artifacts.ts and chat-links.ts.
  */
 export const PHONE_CHANNELS = [
   'app:info',
   'app:quit',
+  'artifact:read',
   'changes:list',
   'chat:abort',
   'chat:answer',
@@ -113,7 +146,9 @@ export const PHONE_CHANNELS = [
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'context:preview',
   'device:signOut',
+  'engine:status',
   'files:list',
   'files:read',
   'files:search',
@@ -130,10 +165,12 @@ export const PHONE_CHANNELS = [
   'git:stage',
   'git:switch',
   'git:unstage',
+  'gpu:stats',
   'limits:get',
   'logs:list',
   'logs:read',
   'machine:summary',
+  'model:unload',
   'models:list',
   'monitor:summary',
   'pr:action',
@@ -141,6 +178,7 @@ export const PHONE_CHANNELS = [
   'pr:create',
   'pr:diff',
   'pr:sessionList',
+  'preview:fetch',
   'providers:list',
   'providers:saveSealed',
   'providers:sealKey',
@@ -159,6 +197,7 @@ export const PHONE_CHANNELS = [
   'skills:runnable',
   'ssh:hosts',
   'ssh:open',
+  'system:stats',
   'task:runNow',
   'tasks:list',
   'terminal:close',
@@ -174,8 +213,10 @@ export const PHONE_CHANNELS = [
   'voice:transcribe',
   'workflow:run',
   'workflows:list',
+  'workspace:addByPath',
   'workspace:gitStatus',
   'workspace:list',
+  'workspace:remove',
 ] as const;
 
 /** A family of channels a phone may not call: exact names, and whole prefixes. */
@@ -256,8 +297,6 @@ export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undeci
       'workflow:duplicate',
       'workflow:event',
       'workflow:update',
-      'workspace:addByPath',
-      'workspace:remove',
     ],
     /** MCP servers. */
     prefixes: ['mcp:'],
@@ -315,11 +354,19 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'workflows:list',
   'workspace:list',
 ];
+/**
+ * The Expert monitor's reads (2026-10-24): the computer's hardware, the Model
+ * Server's state and a chat's context totals, each a narrow projection.
+ */
+export const PHONE_MONITOR_READ_CHANNELS: readonly string[] = ['context:preview', 'engine:status', 'gpu:stats', 'system:stats'];
 export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_CHAT_READ_CHANNELS,
+  ...PHONE_MONITOR_READ_CHANNELS,
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
+  // #1095: what the agent linked in a chat, scoped to those links (phone-artifacts.ts).
+  ...PHONE_ARTIFACT_READ_CHANNELS,
   // SK-2: a step-up challenge; the daemon's gate answers it itself (step-up.ts).
   STEP_UP_CHALLENGE.channel,
 ];
@@ -328,8 +375,9 @@ export const PHONE_READ_CHANNELS: readonly string[] = [
  * the agent act or changes the computer's settings or chats. Sending,
  * queueing and editing prompts, stopping a run, approving a tool, answering a
  * question, making, forking and deleting chats and changing their options,
- * the phone-settable settings, running an automation and transcribing a voice
- * prompt. The Change switch applies; each call is written to the activity
+ * the phone-settable settings, running an automation, transcribing a voice
+ * prompt and unloading a local model (it frees memory and reloads on the next
+ * reply, so it is undone by using the model; 2026-10-24). The Change switch applies; each call is written to the activity
  * list. Raising a chat's mode is the exception that needs a proof
  * (`PHONE_MODE_PROOF`).
  */
@@ -350,6 +398,7 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
   'chat:editQueued',
   'chat:queue',
   'chat:send',
+  'model:unload',
   'session:create',
   'session:delete',
   'session:fork',
@@ -370,6 +419,9 @@ export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
  */
 export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
+  // Saved-folder access changes need a signed proof, including revocation.
+  'workspace:addByPath',
+  'workspace:remove',
   ...PHONE_PROVIDER_CHANGE_CHANNELS,
   ...PHONE_GIT_CHANGE_CHANNELS,
   ...PHONE_FILES_CHANGE_CHANNELS,
@@ -504,6 +556,8 @@ export const PHONE_SETTINGS_VIEW = [
   'defaultModelId',
   'defaultProviderId',
   'favoriteModels',
+  // Read-only: show the computer's effort before the phone has a saved choice.
+  'effort',
   // Whether this computer shows phones the agent's changes (set on the computer only).
   'phoneChanges',
   // The saved prompts, as names and text (`PHONE_PROMPT_VIEW`).
@@ -802,6 +856,14 @@ export function screenPhoneCall(
       throw e;
     }
   }
+  if (PHONE_ARTIFACT_CHANNELS.includes(channel)) {
+    try {
+      return { callArgs: screenPhoneArtifacts(channel, args) };
+    } catch (e) {
+      if (e instanceof PhoneArtifactsRefusal) throw new PhoneAccessError(e.code, e.detail);
+      throw e;
+    }
+  }
   if (PHONE_FILES_CHANNELS.includes(channel)) {
     try {
       return { callArgs: screenPhoneFiles(channel, args) };
@@ -811,6 +873,13 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'workspace:addByPath':
+    case 'workspace:remove':
+      if (typeof args[0] !== 'string' || args[0].trim() === '' || args[0].includes('\0')) {
+        throw new PhoneAccessError('value-invalid', channel === 'workspace:addByPath' ? 'folder path' : 'workspace id');
+      }
+      if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
     case 'providers:saveSealed':
       screenPhoneProviderSave(args[0]);
       if (args.length > 1) throw new PhoneAccessError('option-denied', 'extra argument');
@@ -848,6 +917,13 @@ export function screenPhoneCall(
       return {};
     case 'limits:get':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
+      return {};
+    case 'context:preview':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      return {};
+    case 'model:unload':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'model id');
       return {};
     case 'settings:update':
       return { settingsPatch: checkPhoneSettingsPatch(args[0]) };
@@ -989,6 +1065,16 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneUsageView(result);
     case 'limits:get':
       return phoneLimitsView(result);
+    case 'system:stats':
+      return phoneSystemView(result);
+    case 'gpu:stats':
+      return phoneGpuView(result);
+    case 'engine:status':
+      return phoneEngineView(result);
+    case 'context:preview':
+      return phoneContextView(result);
+    case 'model:unload':
+      return isObj(result) ? pick(result, ['message', 'ok']) : null;
     case 'terminals:list':
     case 'terminal:tail':
     case 'ssh:hosts':
@@ -1001,6 +1087,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneTerminalResult(channel, result);
     default:
       if (PHONE_GIT_CHANNELS.includes(channel)) return phoneGitView(channel, result);
+      if (PHONE_ARTIFACT_CHANNELS.includes(channel)) return phoneArtifactsView(channel, result);
       return PHONE_FILES_CHANNELS.includes(channel) ? phoneFilesView(channel, result) : result;
   }
 }
@@ -1141,6 +1228,10 @@ export async function callFromPhone(
   // Only what the computer's own call takes: an id, or nothing.
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
   if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
+  if (channel === 'system:stats' || channel === 'gpu:stats' || channel === 'engine:status') callArgs = [];
+  // A chat's own context only: the phone never attaches a path.
+  if (channel === 'context:preview') callArgs = [args[0], []];
+  if (channel === 'model:unload') callArgs = [args[0], args[1]];
   if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
@@ -1217,12 +1308,33 @@ export function phoneAccessPolicy() {
     monitorView: { ...PHONE_MONITOR_VIEW },
     monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
+    expertMonitor: {
+      systemView: [...PHONE_SYSTEM_VIEW],
+      tempsView: [...PHONE_TEMPS_VIEW],
+      gpuView: [...PHONE_GPU_VIEW],
+      gpuDeviceView: [...PHONE_GPU_DEVICE_VIEW],
+      engineView: [...PHONE_ENGINE_VIEW],
+      residentView: [...PHONE_RESIDENT_VIEW],
+      loadingView: [...PHONE_LOADING_VIEW],
+      engineMemoryView: [...PHONE_ENGINE_MEMORY_VIEW],
+      contextSources: [...PHONE_CONTEXT_SOURCES],
+    },
     files: {
       view: { ...PHONE_FILES_VIEW },
       entryView: [...PHONE_FILE_ENTRY_VIEW],
       fileView: [...PHONE_FILE_VIEW],
       writeView: [...PHONE_FILE_WRITE_VIEW],
       logView: [...PHONE_LOG_VIEW],
+    },
+    artifacts: {
+      view: { ...PHONE_ARTIFACTS_VIEW },
+      artifactView: [...PHONE_ARTIFACT_VIEW],
+      previewView: [...PHONE_PREVIEW_VIEW],
+      previewHeaders: [...PHONE_PREVIEW_HEADERS],
+      previewMethods: [...PHONE_PREVIEW_METHODS],
+      linkExt: [...CHAT_LINK_EXT],
+      assetExt: [...CHAT_ASSET_EXT],
+      loopbackHosts: [...LOOPBACK_HOSTS],
     },
     git: {
       view: { ...PHONE_GIT_VIEW },

@@ -8,11 +8,13 @@ import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { GearIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { SecuritySettings } from '../components/security/SecuritySettings.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
+import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
+import { UsageReportsSection } from '../components/UsageReports.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
@@ -23,6 +25,8 @@ import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
+import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
+import { HistorySettings } from '../components/HistorySettings.js';
 import { StyleSection } from './StyleSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -47,6 +51,7 @@ export const SETTINGS_GROUPS = [
   { id: 'style', label: 'Style', icon: SlidersIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
+  { id: 'connections', label: 'Connections', icon: GlobeIcon },
   { id: 'tools', label: 'Tools', icon: WrenchIcon },
   { id: 'system', label: 'System', icon: GearIcon },
 ] as const;
@@ -73,7 +78,7 @@ export function activeGroup(scroller: HTMLElement): SettingsGroupId {
 }
 
 export function SettingsView() {
-  const { applyTheme, onboardingOpen, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
+  const { applyTheme, onboardingOpen, wavePreset, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, wavePreset: s.resolvedPreset, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -135,10 +140,17 @@ export function SettingsView() {
   if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto" onScroll={onScroll}>
-      <div ref={pageRef} className="mx-auto max-w-5xl px-8 py-8">
+    <div ref={scrollRef} className="settings-panel h-full overflow-y-auto" onScroll={onScroll}>
+      <div ref={pageRef} className="settings-page">
         {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
+        <div aria-label="Skills and connectors" className="mb-7 flex flex-wrap gap-3">
+          {([{ view: 'skills', label: tr('nav.skills'), Icon: SkillsColorIcon }, { view: 'connectors', label: tr('nav.connectors'), Icon: ConnectorsColorIcon }] as const).map(({ view, label, Icon }) => (
+            <button key={view} type="button" onClick={() => useStore.getState().setView(view)} className="flex min-h-16 flex-1 items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-4 text-left text-[16px] font-semibold hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+              <Icon className="h-7 w-7 shrink-0" />{label}<span aria-hidden="true" className="ml-auto">↗</span>
+            </button>
+          ))}
+        </div>
         <div className="flex flex-col gap-6 md:flex-row md:gap-8">
           <nav aria-label="Settings sections" className="settings-nav" data-settings-search>
             {SETTINGS_GROUPS.map((g) => (
@@ -153,8 +165,18 @@ export function SettingsView() {
               </button>
             ))}
           </nav>
-          <div className="min-w-0 max-w-3xl flex-1">
+          <div className="min-w-0 flex-1">
             <SettingsGroup id="general">
+              <section className="card mt-6 p-5">
+                <h2 className="font-semibold">View settings</h2>
+                <p className="mt-1 text-[12px] text-ink-faint">Optional sidebar shortcuts. Skills and Connectors are always available at the top of Settings.</p>
+                {(['skills', 'connectors'] as const).map((view) => (
+                  <div key={view} className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+                    <span className="text-[13px]">Show {tr(`nav.${view}`)} in sidebar</span>
+                    <Toggle aria-label={`Show ${view === 'skills' ? 'Skills' : 'Connectors'} in sidebar`} on={settings.sidebarViews?.[view] === true} onChange={(v) => update({ sidebarViews: { ...settings.sidebarViews, [view]: v } })} />
+                  </div>
+                ))}
+              </section>
               {/* Appearance */}
               <section className="card mt-6 p-5">
                 <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2><SettingsSearch root={pageRef} /></div>
@@ -164,9 +186,9 @@ export function SettingsView() {
                   <div className="min-w-0">
                     <span className="text-[13px]">Background animation</span>
                     <p id="background-animation-hint" className="text-[11px] text-ink-faint">
-                      {pixelWaveFor(settings.themePreset)
-                        ? 'The moving pixel dots behind this theme. Turn off for a still background and lower power use.'
-                        : 'The moving pixel dots behind Lilac, Lavender and the Experimental themes. This theme has none.'}
+                      {pixelWaveFor(wavePreset)
+                        ? 'Moving pixel dots only in empty new-agent windows. Turn off for lower power use.'
+                        : 'Pixel dots in empty new-agent windows with Lilac, Lavender and Experimental themes. This theme has none.'}
                     </p>
                   </div>
                   <Toggle
@@ -196,7 +218,7 @@ export function SettingsView() {
                 <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
                   <div className="min-w-0">
                     <label htmlFor="chat-pane-action" className="text-[13px]">Chat pane top-right action</label>
-                    <p className="text-[11px] text-ink-faint">The X completes a chat and keeps it under Completed for 60 days. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
+                    <p className="text-[11px] text-ink-faint">The X completes a chat and keeps it under Completed until you delete it. Delete asks for confirmation unless you explicitly skip it. Close remains in the title-bar menu.</p>
                   </div>
                   <select
                     id="chat-pane-action"
@@ -259,6 +281,7 @@ export function SettingsView() {
               <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="phone">
               {/* Remote access (relay) */}
@@ -382,6 +405,9 @@ export function SettingsView() {
               {/* Guardrails */}
               <ErrorBoundary label="Guardrails"><GuardrailsSection settings={settings} update={update} updateGuardrail={updateGuardrail} /></ErrorBoundary>
             </SettingsGroup>
+            <SettingsGroup id="connections">
+              <ErrorBoundary label="Connections"><ConnectionsSettings settings={settings} update={update} /></ErrorBoundary>
+            </SettingsGroup>
             <SettingsGroup id="tools">
               <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Project management"><ProjectManagementSection settings={settings} update={update} /></ErrorBoundary>
@@ -435,6 +461,8 @@ export function SettingsView() {
               {/* Backup & restore */}
               <ErrorBoundary label="Backup"><BackupSection settings={settings} onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
 
+              <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
+
               {/* Data & privacy */}
               <ErrorBoundary label="Data and privacy"><DataSection onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
             </SettingsGroup>
@@ -477,6 +505,7 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
         Nekko Agent keeps working until the task is finished or you press Stop. Loop detection catches repeated tool
         calls and error streaks; output safeguards remain active.
       </p>
+      <InternetRecoverySetting settings={settings} update={update} />
       <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="text-[13px]">Prompt caching</span>
@@ -1447,4 +1476,19 @@ export function NotificationsSection({ settings, update }: { settings: AppSettin
       </div>
     </section>
   );
+}
+
+/** Explicit opt-in: unlike ordinary provider retries this can restart a call after an outage. */
+export function InternetRecoverySetting({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  return <div id="internet-recovery" className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+    <div className="min-w-0">
+      <span className="text-[13px]">Automatically resume after internet restoration</span>
+      <p id="internet-recovery-hint" className="text-[11px] text-ink-faint">
+        Off by default. Continue the same interrupted online model request when this computer reconnects (up to 30 minutes).
+        Additional provider usage may incur charges. Completed tools are not replayed. Ordinary provider retries are unchanged.
+      </p>
+    </div>
+    <Toggle on={settings.autoResumeOnInternetRestore === true} onChange={(v) => update({ autoResumeOnInternetRestore: v })}
+      aria-label="Automatically resume after internet restoration" aria-describedby="internet-recovery-hint" />
+  </div>;
 }

@@ -9,6 +9,8 @@ import com.nekko.protocol.ActivityTracker
 import com.nekko.protocol.AgentEvent
 import com.nekko.protocol.Appearance
 import com.nekko.protocol.AppInfo
+import com.nekko.android.security.ChangeCalls
+import com.nekko.protocol.ChangeSigner
 import com.nekko.protocol.Channels
 import com.nekko.protocol.E2E
 import com.nekko.protocol.Events
@@ -24,7 +26,11 @@ import com.nekko.protocol.SavedChatList
 import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.StepUpChallenge
 import com.nekko.protocol.StepUpProof
+import com.nekko.protocol.TerminalChannels
+import com.nekko.protocol.TerminalEvent
 import com.nekko.protocol.WorkspaceFolder
+import com.nekko.protocol.WorkspacePath
+import com.nekko.android.previews.PreviewLoader
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
@@ -37,6 +43,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -98,6 +106,8 @@ class ComputersRepository(
     private val exitTimeoutMs: Long = 8_000,
     /** How long a queued sign-out waits for the computer to come online at app start. */
     private val outboxConnectMs: Long = 20_000,
+    /** Signs Change actions (AN-32): the Keystore key in the app, a software key in tests, none where unset. */
+    private val changeSigner: ChangeSigner? = null,
 ) {
     /** *Sign out this phone* not yet heard by the computer (SK-8). */
     private val signOuts = SignOutOutbox(store)
@@ -130,11 +140,34 @@ class ComputersRepository(
     /** Every `agent:event` from the active computer. Chat screens filter by session. */
     val events: SharedFlow<AgentEvent> = _events.asSharedFlow()
 
+    /**
+     * What is open over each chat (Git, the Terminals), by chat id. Kept here,
+     * not in a chat screen, so opening or folding the phone (a new activity,
+     * and a chat pane instead of a full screen) keeps it open and its
+     * terminals attached.
+     */
+    private val _overlays = MutableStateFlow<Map<String, Any>>(emptyMap())
+    val overlays: StateFlow<Map<String, Any>> = _overlays.asStateFlow()
+
+    fun setOverlay(chatId: String, overlay: Any?) {
+        _overlays.update { if (overlay == null) it - chatId else it + (chatId to overlay) }
+    }
+
+    /** Work that outlives a screen (leaving a terminal after its page is gone). */
+    val appScope: CoroutineScope get() = scope
+
+    private val _terminalEvents = MutableSharedFlow<TerminalEvent>(extraBufferCapacity = 512)
+    /** The output of the terminals this phone opened on the active computer (AN-31). */
+    val terminalEvents: SharedFlow<TerminalEvent> = _terminalEvents.asSharedFlow()
+
     private val lock = Mutex()
     @Volatile private var client: Remote? = null
     private var connJob: Job? = null
     private var summariesJob: Job? = null
+    private var summariesDirty = false
     private var cachedDeviceId: String? = null
+    /** Change actions on the live connection: its key registration is per connection. */
+    @Volatile private var changeCalls: Pair<Remote, ChangeCalls>? = null
     /** The live list has been read since connecting, so it may be saved. */
     @Volatile private var liveList = false
 
@@ -155,6 +188,39 @@ class ComputersRepository(
     }
 
     fun remote(): Remote = client ?: throw RelayException("Not connected to a computer.")
+
+    /** Files and loopback pages the agent linked, read for the preview window and cards (AN-35), cached per chat. */
+    val previews: PreviewLoader by lazy { PreviewLoader(read = { r -> caller.call(r.channel, *r.args.toTypedArray()) }) }
+
+    /**
+     * A Change action on the active computer (IO-33, AN-32): signed with this
+     * phone's key (the fingerprint, face or screen lock within the last 5
+     * minutes), the key registered on first use. A refusal is thrown with
+     * words for the owner, e.g. "Changes from this phone are turned off on Studio".
+     */
+    suspend fun callChange(channel: String, args: List<JsonElement>, stepUp: StepUpProof? = null, timeoutMs: Long? = null): JsonElement {
+        val r = remote()
+        val signer = changeSigner ?: throw RelayException("This phone can’t confirm changes with a fingerprint or screen lock.")
+        val calls = changeCalls?.takeIf { it.first === r }?.second
+            ?: ChangeCalls(r, signer, deviceId(), _state.value.active?.name ?: "your computer").also { changeCalls = r to it }
+        return calls.call(channel, args, stepUp, timeoutMs)
+    }
+
+    /**
+     * A call that may raise a chat's tool policy: `session:setOptions` with a
+     * more permissive `mode`, or `settings:update` raising `defaultChatMode`
+     * (ask < guardrails < yolo). Sent plain first; when the computer answers
+     * `proof-required` (it was a raise), sent again signed ([callChange]), so
+     * the phone asks for the fingerprint or screen lock. Lowering or keeping
+     * the mode never asks. A `step-up-required` refusal is thrown for the
+     * step-up sheet, which sends it again through [callChange] with its answer.
+     */
+    suspend fun callRaising(channel: String, args: List<JsonElement>): JsonElement = try {
+        remote().call(channel, *args.toTypedArray())
+    } catch (e: RelayException) {
+        if (e.refusal?.code != "proof-required" || changeSigner == null) throw e
+        callChange(channel, args)
+    }
 
     /**
      * Read the paired computers and connect to one: [preferredId] (the phone's
@@ -209,6 +275,8 @@ class ComputersRepository(
             onForget(id)
             val next = _state.value.computers.filter { it.id != id }
             saveIndex(next)
+            // No computer knows the Change key any more: the next pairing makes a new one.
+            if (next.isEmpty()) runCatching { changeSigner?.forget() }
             val activeId = if (wasActive) next.firstOrNull()?.id else _state.value.activeId
             store.set(ACTIVE_KEY, activeId)
             _state.update {
@@ -289,6 +357,10 @@ class ComputersRepository(
                         _state.update { it.copy(appearance = Appearance.from(payload)) }
                         return@collect
                     }
+                    if (channel == TerminalChannels.EVENT) {
+                        TerminalEvent.from(payload)?.let { _terminalEvents.emit(it) }
+                        return@collect
+                    }
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
                     _events.emit(e)
@@ -308,8 +380,10 @@ class ComputersRepository(
     fun disconnect() {
         connJob?.cancel(); connJob = null
         summariesJob?.cancel(); summariesJob = null
+        summariesDirty = false
         client?.close()
         client = null
+        changeCalls = null
         _state.update { it.copy(conn = RelayState.IDLE) }
     }
 
@@ -326,8 +400,8 @@ class ComputersRepository(
      * reduced view, so the screen shows what was actually saved there.
      */
     suspend fun updatePcSettings(patch: JsonObject, stepUp: StepUpProof? = null) {
-        val r = remote()
-        val reply = if (stepUp == null) r.call(Channels.SETTINGS_UPDATE, patch) else r.callWithStepUp(stepUp, Channels.SETTINGS_UPDATE, patch)
+        // A step-up only follows a raise, which is signed too.
+        val reply = if (stepUp == null) callRaising(Channels.SETTINGS_UPDATE, listOf(patch)) else callChange(Channels.SETTINGS_UPDATE, listOf(patch), stepUp)
         _state.update { it.copy(pcSettings = PcSettings.from(reply)) }
     }
 
@@ -563,23 +637,51 @@ class ComputersRepository(
         cache.save(id, SavedChatList(now(), s.summaries, s.workspaces))
     }
 
+    /** Save a folder on the computer by its absolute path there (a signed Change). */
+    suspend fun addWorkspace(path: String) {
+        val p = path.trim()
+        if (!WorkspacePath.isAbsolute(p)) throw RelayException("Enter an absolute folder path on the computer.")
+        changeWorkspace(Channels.WORKSPACE_ADD_BY_PATH, p)
+    }
+
+    /** Forget a saved folder (a signed Change). The computer never deletes the folder on disk. */
+    suspend fun removeWorkspace(id: String) {
+        changeWorkspace(Channels.WORKSPACE_REMOVE, id)
+        reloadList()
+    }
+
+    private suspend fun changeWorkspace(channel: String, value: String) {
+        if (_state.value.conn != RelayState.ONLINE) throw RelayException("Connect to the computer to manage folders.")
+        val c = remote()
+        val list = WorkspaceFolder.list(callChange(channel, listOf(JsonPrimitive(value))))
+        if (client === c) _state.update { it.copy(workspaces = list) }
+    }
+
+    /** Read the chat list again soon (a chat was forked or created from here). */
+    fun reloadList() = scheduleSummaries()
+
     private fun scheduleSummaries() {
-        if (summariesJob?.isActive == true) return
         val c = client ?: return
+        summariesDirty = true
+        if (summariesJob?.isActive == true) return
         summariesJob = scope.launch {
-            delay(summariesDebounceMs)
-            if (client !== c) return@launch
-            try {
-                val list = SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES))
-                if (client === c) {
+            do {
+                delay(summariesDebounceMs)
+                if (client !== c) return@launch
+                // Notifications during the debounce are covered by this call.
+                summariesDirty = false
+                try {
+                    val list = SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES))
+                    ensureActive()
+                    if (client !== c) return@launch
                     _state.update { it.copy(summaries = list) }
                     saveList()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Only a new invalidation retries, never a failed call alone.
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // The next refresh will catch up.
-            }
+            } while (isActive && client === c && summariesDirty)
         }
     }
 

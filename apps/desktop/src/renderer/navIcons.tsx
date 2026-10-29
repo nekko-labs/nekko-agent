@@ -79,7 +79,7 @@ export const ModelsColorIcon = (p: P) => (
 /**
  * Model Server — a stack of racked units with a live indicator.
  *
- * Deliberately a machine rather than another chip: Model Providers is where the
+ * Deliberately a machine rather than another chip: Models is where the
  * models come *from*, and this is the box on this desk that runs them.
  */
 export const ModelServerColorIcon = (p: P) => (

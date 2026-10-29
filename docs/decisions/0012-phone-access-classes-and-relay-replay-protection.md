@@ -32,7 +32,7 @@ Option 2 for both. Every channel a phone may call is in exactly one class (read,
 ## Consequences
 
 - Turning Change off now really stops a phone driving the agent; the activity list gets an entry for every prompt, approval and run from a phone, so it fills faster (200 kept per phone).
-- An iPhone confirms Guardrails or YOLO with Face ID; Android can't raise a mode until its signer (AN-30).
+- An iPhone confirms Guardrails or YOLO with Face ID; Android can't raise a mode until its signer (AN-30). Since 2026-10-26 Android confirms with the fingerprint, face or screen lock (AN-32).
 - A legacy phone is still replayable until IO-35 turns legacy off; a new phone talking to an old computer waits 3 seconds before its legacy HELLO, and an active attacker who suppresses the challenge can force that downgrade while legacy is accepted. Once a phone has seen a challenge it never falls back in that session.
 - The agent's replies and events are not counter-protected (they are sealed once for all phones); a replayed event can mislead a phone's screen but cannot make the computer act.
 - Spec: [spec/phone/phone-access-classes-and-relay-replay-protection.md](../../spec/phone/phone-access-classes-and-relay-replay-protection.md). Tasks: IO-34, IO-35 in [TASKS.md](../../TASKS.md).

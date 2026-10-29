@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<!-- English only for now: the rest of the app is not translated yet (strings_modes.xml is). -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="app_name">Nekko Agent</string>
     <string name="widget_description">How many chats need you and how many are working. Counts only, never what they say.</string>
     <string name="shortcut_new_chat">New chat</string>

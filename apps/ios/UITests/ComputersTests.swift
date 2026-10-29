@@ -11,25 +11,23 @@ final class ComputersTests: XCTestCase {
 
         pair(app)
         openMenu(app)
-        app.buttons["Computers"].tap()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "relay.example.com")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Computers"].tapUntil { row.exists }, "the menu opens Computers")
 
         // The row opens the computer's page; Rename and Forget live in its Edit menu.
         row.tap()
         let edit = app.buttons["computer.edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5), "the computer's page")
         tapBarButton(edit, in: app)
-        app.buttons["Rename"].tap()
         let name = app.alerts.textFields.firstMatch
-        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Rename"].tapUntil { name.exists }, "Edit offers Rename")
         name.clearAndType("Studio")
         app.alerts.buttons["Save"].tap()
         let renamed = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Studio")).firstMatch
         XCTAssertTrue(renamed.waitForExistence(timeout: 5), "Rename saved")
 
         tapBarButton(edit, in: app)
-        app.buttons["Forget…"].tap()
+        XCTAssertTrue(app.buttons["Forget…"].tapUntil { app.buttons.matching(NSPredicate(format: "label == %@", "Forget")).firstMatch.exists }, "Edit offers Forget")
         confirmForget(app)
         // Forgetting the only computer leaves the app with nothing paired: the
         // page either says so or the stack unwinds to the pairing invitation.
@@ -43,13 +41,10 @@ final class ComputersTests: XCTestCase {
         app.launch()
         pair(app)
         openMenu(app)
-        // Not the connection banner's "More for My computer" menu (SK-8), which shows while
-        // relay.example.com can't be reached and can match first.
-        let computer = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND identifier != %@", "computer", "banner.menu"))
-            .element(boundBy: 0)
+        let computer = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "computer")).element(boundBy: 0)
         XCTAssertTrue(computer.waitForExistence(timeout: 5))
-        computer.tap()
-        app.buttons["Forget…"].tap()
+        XCTAssertTrue(computer.tapUntil { app.buttons["Forget…"].exists }, "the computer opens its submenu")
+        XCTAssertTrue(app.buttons["Forget…"].tapUntil { app.buttons.matching(NSPredicate(format: "label == %@", "Forget")).firstMatch.exists }, "the computer's submenu offers Forget")
         confirmForget(app)
         XCTAssertTrue(app.buttons["Pair with your computer"].waitForExistence(timeout: 10), "Forget from the menu removed the only computer")
     }

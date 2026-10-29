@@ -514,17 +514,23 @@ pub async fn fetch_url(
         } else {
             pinned.clone()
         };
-        let request = client
-            .get(at.as_str())
-            .header("accept", "text/html, application/xhtml+xml, text/plain;q=0.9, application/json;q=0.8, */*;q=0.5")
-            .header("accept-language", "en, *;q=0.5")
-            .send();
+        let request = nekko_net::send(
+            "web-tools",
+            client
+                .get(at.as_str())
+                .header(
+                    "accept",
+                    "text/html, application/xhtml+xml, text/plain;q=0.9, application/json;q=0.8, */*;q=0.5",
+                )
+                .header("accept-language", "en, *;q=0.5"),
+        );
         let res = tokio::select! {
             r = request => match r {
                 Ok(r) => r,
-                Err(e) if netguard::is_blocked(&e) => {
+                Err(nekko_net::Error::Http(e)) if netguard::is_blocked(&e) => {
                     return Err(FetchError::Local { url: at.to_string(), host: netguard::host_key(&at) });
                 }
+                Err(e) if e.is_blocked() => return Err(format!("Could not fetch {url}: {e}").into()),
                 Err(_) => return Err(format!("Could not fetch {url}: fetch failed").into()),
             },
             _ = tokio::time::sleep_until(deadline) => {

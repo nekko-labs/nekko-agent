@@ -42,6 +42,12 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    // The computer's log redaction cases, checked on a device too: Android's
+    // regex (ICU) is not the JVM's the unit tests run on (LogShareDeviceTest).
+    sourceSets["androidTest"].assets.directories += "../../../crates/nekkod/tests/golden"
+    // And the sealed box's vectors: the provider key is sealed by Android's own crypto providers (SealedBoxDeviceTest).
+    sourceSets["androidTest"].assets.directories += "../../../crates/nekko-sync/tests/golden"
 }
 
 kotlin {

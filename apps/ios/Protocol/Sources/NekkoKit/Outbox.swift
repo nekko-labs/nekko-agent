@@ -141,6 +141,8 @@ public final class Outbox {
     let confirmTimeout: TimeInterval
     /// The last `error` event per chat: the reason a `chat:send` the computer answered was not taken.
     private var lastErrors: [String: String] = [:]
+    /// `sendWaiting`'s prompts, and the reason one was refused.
+    private var awaited: [String: String?] = [:]
 
     public init(files: OfflineFiles?, drafts: DraftStore, caller: @escaping () -> Caller?,
                 defaults: @escaping () -> RemoteDefaults = { RemoteDefaults() },
@@ -192,6 +194,24 @@ public final class Outbox {
             return
         }
         items = (v["items"]?.array ?? []).compactMap(OutboxItem.from)
+    }
+
+    /// The Live Activity's mic: `text` to `chatId` through the outbox (one `session:get`,
+    /// then `chat:queue` mid-run or `chat:send`), waiting up to `wait` seconds. True once
+    /// delivered; false while still on its way (the outbox delivers it later). A refusal
+    /// throws its reason, and the words are back in the chat's draft, saying why.
+    public func sendWaiting(chatId: String, text: String, wait: TimeInterval) async throws -> Bool {
+        let id = add(chatId: chatId, text: text).id
+        awaited[id] = .some(nil)
+        defer { awaited[id] = nil }
+        Task { await flush() }
+        let deadline = Date().addingTimeInterval(wait)
+        while items.contains(where: { $0.id == id }) {
+            if Date() > deadline { return false }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        if let reason = awaited[id] ?? nil { throw RelayError(reason) }
+        return true
     }
 
     /// Put a prompt in the outbox, saved before this returns. `chatId` nil
@@ -300,6 +320,7 @@ public final class Outbox {
                 save()
                 onDelivered?(current, chatId)
             case .refused(let reason):
+                if awaited[item.id] != nil { awaited[item.id] = reason }
                 let current = items.first { $0.id == item.id } ?? item
                 drafts.handBack(current.draftKey, current.asDraft(refusal: reason))
                 items.removeAll { $0.id == item.id }
