@@ -27,7 +27,7 @@ export function QuestionCard({
   onAnswer,
   onSkip,
   compact = false,
-  tone = 'accent',
+  tone = 'attention',
 }: {
   request: AskRequest;
   onAnswer: (answers: AskAnswer[]) => void;
@@ -35,8 +35,8 @@ export function QuestionCard({
   /** Board cards are narrower and sit among other cards, so they sit tighter. */
   compact?: boolean;
   /**
-   * `attention`: the card is how an agent window says it is waiting on you, so
-   * it wears the warning tone of the window's ring rather than the accent.
+   * Unanswered questions default to the orange attention highlight.
+   * An explicit accent tone is available for branded surfaces.
    */
   tone?: 'accent' | 'attention';
 }) {
@@ -178,9 +178,13 @@ export function QuestionCard({
       ref={rootRef}
       className="rounded-xl border p-3 outline-hidden"
       data-question-tone={tone}
-      style={tone === 'attention'
-        ? { borderColor: 'color-mix(in srgb, var(--warning) 70%, transparent)', borderWidth: 1.5, background: 'color-mix(in srgb, var(--warning) 12%, var(--surface))', boxShadow: '0 0 0 3px color-mix(in srgb, var(--warning) 14%, transparent)' }
-        : { borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)', background: 'var(--accent-soft)' }}
+      style={{
+        ...(tone === 'attention' ? { '--accent': 'var(--warning)', '--brand-grad': 'var(--warning)', '--on-accent': '#201609' } : {}),
+        borderColor: `color-mix(in srgb, ${hue} 70%, transparent)`,
+        borderWidth: 1.5,
+        background: `color-mix(in srgb, ${hue} 8%, var(--surface-2))`,
+        boxShadow: `0 0 0 3px color-mix(in srgb, ${hue} 14%, transparent)`,
+      } as React.CSSProperties}
       role="group"
       aria-label="The agent is asking a question"
       tabIndex={-1}
@@ -217,12 +221,12 @@ export function QuestionCard({
                 );
               })}
             </span>
-            <span className="text-[10.5px] text-ink-faint">
+            <span className="text-[10.5px] text-ink-soft">
               {index + 1} of {total}
             </span>
           </>
         )}
-        {total === 1 && <span className="ml-auto text-[10.5px] text-ink-faint">1 question</span>}
+        {total === 1 && <span className="ml-auto text-[10.5px] text-ink-soft">1 question</span>}
       </div>
 
       {/* Keyed on the question so each step animates in as its own thing rather
@@ -231,7 +235,7 @@ export function QuestionCard({
         <div className="mb-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
           <span className="chip shrink-0 text-[9.5px] uppercase tracking-wide">{q.header}</span>
           <span className={`${compact ? 'text-[12px]' : tone === 'attention' ? 'text-[14px] font-semibold' : 'text-[12.5px]'} font-medium text-ink`}>{q.question}</span>
-          <span className="text-[10px] text-ink-faint">{q.multiSelect ? 'pick any' : 'pick one'}</span>
+          <span className="text-[10px] text-ink-soft">{q.multiSelect ? 'pick any' : 'pick one'}</span>
         </div>
 
         <div
@@ -249,10 +253,10 @@ export function QuestionCard({
                 style={{
                   borderColor: on ? 'var(--accent)' : here ? 'color-mix(in srgb, var(--accent) 40%, var(--line))' : 'var(--line)',
                   background: on
-                    ? 'color-mix(in srgb, var(--accent) 18%, transparent)'
+                    ? 'color-mix(in srgb, var(--accent) 18%, var(--surface-2))'
                     : here
-                      ? 'var(--surface-2)'
-                      : 'var(--surface)',
+                      ? 'color-mix(in srgb, white 8%, var(--surface-2))'
+                      : 'color-mix(in srgb, white 4%, var(--surface-2))',
                 }}
                 role={q.multiSelect ? 'checkbox' : 'radio'}
                 aria-checked={on}
@@ -271,20 +275,20 @@ export function QuestionCard({
                     {o.label}
                   </span>
                   {o.description && (
-                    <span className="mt-0.5 block text-[10.5px] leading-snug text-ink-faint">{o.description}</span>
+                    <span className="mt-0.5 block text-[10.5px] leading-snug text-ink-soft">{o.description}</span>
                   )}
                 </span>
-                {!compact && <span className="mt-0.5 shrink-0 text-[10px] text-ink-faint">{i + 1}</span>}
+                {!compact && <span className="mt-0.5 shrink-0 text-[10px] text-ink-soft">{i + 1}</span>}
               </button>
             );
           })}
 
           {!otherShown ? (
             <button
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-2.5 py-1.5 text-left text-[11.5px] text-ink-faint transition-colors hover:text-ink"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-2.5 py-1.5 text-left text-[11.5px] text-ink-soft transition-colors hover:text-ink"
               style={{
                 borderColor: cursor >= q.options.length ? 'color-mix(in srgb, var(--accent) 40%, var(--line))' : 'var(--line)',
-                background: cursor >= q.options.length ? 'var(--surface-2)' : 'var(--surface)',
+                background: cursor >= q.options.length ? 'color-mix(in srgb, white 8%, var(--surface-2))' : 'color-mix(in srgb, white 4%, var(--surface-2))',
               }}
               onMouseEnter={() => setCursor(q.options.length)}
               onClick={() => setOtherOpen((p) => ({ ...p, [q.id]: true }))}
@@ -321,7 +325,7 @@ export function QuestionCard({
           {last ? `Send answer${total > 1 || !complete ? 's' : ''}` : hasAnswer ? 'Next' : 'Skip'}
         </button>
         {!compact && (
-          <span className="ml-1 truncate text-[10px] text-ink-faint">
+          <span className="ml-1 truncate text-[10px] text-ink-soft">
             ↑↓ or 1–{q.options.length} to pick, ↵ for {last ? 'send' : 'next'}
           </span>
         )}
@@ -377,7 +381,7 @@ function Marker({ on, multi }: { on: boolean; multi: boolean }) {
     <span
       className={`mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center border ${multi ? 'rounded-[4px]' : 'rounded-full'}`}
       style={{
-        borderColor: on ? 'var(--accent)' : 'var(--line)',
+        borderColor: on ? 'var(--accent)' : 'var(--ink-faint)',
         background: on ? 'var(--accent)' : 'transparent',
       }}
       aria-hidden
