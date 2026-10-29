@@ -15,6 +15,7 @@ import { SecuritySettings } from '../components/security/SecuritySettings.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
 import { UsageReportsSection } from '../components/UsageReports.js';
+import { EXPERIMENTAL_FLAGS, saveSettings } from '../settingsIndex.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
@@ -117,13 +118,7 @@ export function SettingsView() {
     prevOnboardingOpen.current = onboardingOpen;
   }, [onboardingOpen, reload]);
 
-  const update = async (patch: Partial<AppSettings>) => {
-    try {
-      const next = await window.nekko.updateSettings(patch);
-      useStore.setState({ settings: next, settingsError: null });
-      applyTheme();
-    } catch (e) { useStore.getState().pushToast('error', (e as Error).message); }
-  };
+  const update = saveSettings;
 
   /** Reopen the first-run wizard: clear the completion flag, then show it. */
   const replaySetup = async () => {
@@ -167,7 +162,8 @@ export function SettingsView() {
           </nav>
           <div className="min-w-0 flex-1">
             <SettingsGroup id="general">
-              <section className="card mt-6 p-5">
+              <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
+              <section className="card mt-5 p-5">
                 <h2 className="font-semibold">View settings</h2>
                 <p className="mt-1 text-[12px] text-ink-faint">Optional sidebar shortcuts. Skills and Connectors are always available at the top of Settings.</p>
                 {(['skills', 'connectors'] as const).map((view) => (
@@ -436,13 +432,7 @@ export function SettingsView() {
                   In-progress surfaces, kept out of the sidebar until you switch them on here. Off by default; turning one off hides the tab again.
                 </p>
                 <div className="mt-3">
-                  {([
-                    { key: 'resourceQueue', label: 'Developer resource queue', desc: 'Experimental outbound coordinator: register this machine and manually claim prompt jobs in Model Server. No automatic pickup.' },
-                    { key: 'training', label: 'Model training', desc: 'Show the Training tab: launch and watch data-scientist agent runs.' },
-                    { key: 'design', label: 'Design board', desc: 'Show the Design tab: sketch or describe a UI and generate live prototypes.' },
-                    { key: 'memory', label: 'Memory', desc: 'Show the Memory tab: browse and edit global and per-project memory.' },
-                    { key: 'workflowLoopbackListener', label: 'Workflow loopback listener', desc: 'Listen on 127.0.0.1:1441 for inbound workflow webhooks (desktop only).' },
-                  ] as const).map((f) => (
+                  {EXPERIMENTAL_FLAGS.map((f) => (
                     <div key={f.key} className="flex min-h-[40px] items-center justify-between gap-3">
                       <div className="min-w-0">
                         <span className="text-[13px]">{f.label}</span>
@@ -461,7 +451,6 @@ export function SettingsView() {
               {/* Backup & restore */}
               <ErrorBoundary label="Backup"><BackupSection settings={settings} onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>
 
-              <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
 
               {/* Data & privacy */}
               <ErrorBoundary label="Data and privacy"><DataSection onSettings={(s) => { useStore.setState({ settings: s }); applyTheme(); }} /></ErrorBoundary>

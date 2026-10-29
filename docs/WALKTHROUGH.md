@@ -157,6 +157,8 @@ list dirs, run shell commands).
 | `Ctrl/Cmd + Shift + M` | Minimize the focused agent or terminal board window |
 | `Ctrl/Cmd + Shift + Delete` | Delete the focused chat or close its terminal, with confirmation |
 
+Typing in the palette also finds settings, including partial words (`notif`, `git base`). A switch or choice shows its control right in the row, so you can change it without opening Settings: click it, or highlight the row and press **Enter** to flip a switch or step to the next choice (**Shift+Enter** steps back). The palette stays open after a change. A matching Settings group (for example **Settings: Safety** for `guardrail`) opens Settings at that group.
+
 ![Command palette](screenshots/command-palette.png)
 
 **Find in this chat**: click the magnifier in the chat window's header (the first icon, left of Changes and Files), or press `Ctrl/Cmd + F`. A small bar opens at the top right of the conversation. Type a word or phrase and every place it appears is highlighted, with the one you are on in solid yellow and a count that always starts at **1 of 29** (the first match from the top). Matching is by whole word and ignores case, so `scroll` finds *Scroll* and *SCROLL* but not *scroller* or *autoscroll*. Use the up and down arrows (or **Enter** / **Shift+Enter**, or the arrow keys) to step through matches; they wrap around at the ends, and a match far up the conversation is brought into view. **Esc** or the **X** closes the bar and clears the highlights. It searches the message text you see, not tool steps, reasoning or link addresses. On the Agents wall each window has its own magnifier in its title bar, and the shortcut from the shared composer searches the window it is talking to.
