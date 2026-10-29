@@ -15,29 +15,21 @@ pub mod records;
 pub mod summary;
 
 use serde_json::{Map, Value};
-use std::cmp::Ordering;
-use std::sync::OnceLock;
 
 pub use limits::{
-    LimitsError, Problem, classify_limits_error, limits_backoff_ms, parse_anthropic_api_headers, parse_chatgpt_usage,
-    parse_openrouter_key, parse_retry_after,
+    CLAUDE_CODE_STALE_MS, LimitsError, Problem, classify_limits_error, limits_backoff_ms, parse_anthropic_api_headers,
+    parse_chatgpt_usage, parse_claude_code_usage, parse_openrouter_key, parse_retry_after,
 };
 pub use pricing::{Tokens, estimate_cost, model_price};
 pub use records::{quota_history_record, side_usage_record, turn_reply_record, turn_usage_record};
 pub use summary::{UsageFiles, summarize_replies, usage_summary};
 
+// The JavaScript semantics the usage records were built on, shared with every other port.
+pub use nekko_js::{js_order, js_round, locale_compare};
+
 /// A number as a JSON value, `null` where JavaScript's `JSON.stringify`
-/// would print `null` (`NaN`, the infinities).
-pub fn num(f: f64) -> Value {
-    serde_json::Number::from_f64(f).map_or(Value::Null, |n| {
-        // Whole numbers stay integers, so a line prints `5`, never `5.0`.
-        if f.fract() == 0.0 && f.abs() < 9_007_199_254_740_992.0 && !(f == 0.0 && f.is_sign_negative()) {
-            Value::from(f as i64)
-        } else {
-            Value::Number(n)
-        }
-    })
-}
+/// would print `null` (`NaN`, the infinities); `-0` stays a float.
+pub use nekko_js::num_signed_zero as num;
 
 /// `obj[key]` for a parsed JSON value: `None` is `undefined` (a missing key,
 /// or a property read on a number, string or array).
@@ -75,70 +67,18 @@ pub fn or_zero(v: Option<&Value>) -> f64 {
     }
 }
 
-/// A canonical array index (`"0"`, `"7"`, not `"07"`): JavaScript lists those
-/// keys first, in numeric order, whatever order they were added in.
-fn array_index(k: &str) -> Option<u32> {
-    if k.is_empty() || (k.len() > 1 && k.starts_with('0')) || !k.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    k.parse::<u32>().ok().filter(|&n| n != u32::MAX)
-}
-
-/// An object's keys in JavaScript's property order, all the way down: what
-/// `JSON.stringify` of the TS object would print.
-pub fn js_order(v: Value) -> Value {
-    match v {
-        Value::Object(m) => Value::Object(js_order_map(m)),
-        Value::Array(a) => Value::Array(a.into_iter().map(js_order).collect()),
-        other => other,
-    }
-}
-
-fn js_order_map(m: Map<String, Value>) -> Map<String, Value> {
-    let mut indexed: Vec<(u32, String, Value)> = Vec::new();
-    let mut rest: Vec<(String, Value)> = Vec::new();
-    for (k, v) in m {
-        match array_index(&k) {
-            Some(n) => indexed.push((n, k, js_order(v))),
-            None => rest.push((k, js_order(v))),
-        }
-    }
-    indexed.sort_by_key(|(n, _, _)| *n);
-    indexed.into_iter().map(|(_, k, v)| (k, v)).chain(rest).collect()
-}
-
 /// `Object.entries(obj)` order for a parsed object.
 pub fn js_entries(m: &Map<String, Value>) -> Vec<(&String, &Value)> {
     let mut indexed: Vec<(u32, &String, &Value)> = Vec::new();
     let mut rest = Vec::new();
     for (k, v) in m {
-        match array_index(k) {
+        match nekko_js::array_index(k) {
             Some(n) => indexed.push((n, k, v)),
             None => rest.push((k, v)),
         }
     }
     indexed.sort_by_key(|(n, _, _)| *n);
     indexed.into_iter().map(|(_, k, v)| (k, v)).chain(rest).collect()
-}
-
-/// `a.localeCompare(b)`: V8 hands it to ICU's root collation.
-pub fn locale_compare(a: &str, b: &str) -> Ordering {
-    use icu_collator::options::CollatorOptions;
-    use icu_collator::{Collator, CollatorBorrowed};
-    static C: OnceLock<Option<CollatorBorrowed<'static>>> = OnceLock::new();
-    match C.get_or_init(|| Collator::try_new(Default::default(), CollatorOptions::default()).ok()).as_ref() {
-        Some(c) => c.compare(a, b),
-        None => a.cmp(b),
-    }
-}
-
-/// `Math.round`: halves go up (toward +Infinity), unlike `f64::round`.
-pub fn js_round(x: f64) -> f64 {
-    if !x.is_finite() {
-        return x;
-    }
-    let f = x.floor();
-    if x - f >= 0.5 { f + 1.0 } else { f }
 }
 
 /// `parseFloat(s)`: the longest decimal prefix after leading whitespace.

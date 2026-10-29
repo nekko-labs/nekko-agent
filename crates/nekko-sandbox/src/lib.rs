@@ -244,15 +244,6 @@ pub fn plain_read(target: &Path) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-fn uuid() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
-}
-
 fn is_token(t: &str) -> bool {
     t.len() == 36 && t.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase() || b == b'-')
 }
@@ -607,7 +598,7 @@ impl ContainerSandbox {
         for (i, root) in roots.iter().enumerate() {
             walk(Path::new(root), Path::new(""), i, &mut files, &mut bytes, &limits)?;
         }
-        let token = uuid();
+        let token = nekko_js::uuid();
         let mut baseline = Map::new();
         for (p, b) in &files {
             baseline.insert(p.clone(), json!(sha256(b)));

@@ -8,10 +8,11 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
-base64 = "0.22"
+base64.workspace = true
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 getrandom.workspace = true
 nekko-js = { path = "../nekko-js" }
+nekko-net = { path = "../nekko-net" }
 # native-tls: the cloud providers are HTTPS. It is the TLS stack ort's
 # download already builds (schannel, Security.framework, OpenSSL), so this adds
 # only reqwest's glue to it.

@@ -28,7 +28,6 @@
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The message a user's Stop ends the turn with, as Nekko's own loop does.
 pub const USER_STOPPED: &str = "Stopped";
@@ -37,10 +36,6 @@ pub const USER_STOPPED: &str = "Stopped";
 const SIGNED_OUT: &str = "Claude Code is not signed in. Open a terminal, run `claude` and sign in with /login, then send your message again.";
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
-}
 
 fn base36(mut n: u64) -> String {
     const D: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
@@ -59,7 +54,7 @@ fn base36(mut n: u64) -> String {
 /// `msg_<time base36>_<counter>`, the shape Nekko's loop gives its messages.
 fn new_id() -> String {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
-    format!("msg_{}_h{n}", base36(now_ms()))
+    format!("msg_{}_h{n}", base36(nekko_js::now_ms()))
 }
 
 fn str_at<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
@@ -86,6 +81,10 @@ pub enum Mapped {
     Command { uuid: String, state: String },
     /// `result`: Claude Code's turn is over.
     End(TurnEnd),
+    /// Plan usage Claude Code reported itself: a `rate_limit_event`, or an
+    /// assistant message carrying `/usage`'s `usage_report`. The raw event,
+    /// for `nekko_usage::parse_claude_code_usage`.
+    PlanUsage(Value),
     /// A stdout line that was not JSON (kept for an exit's diagnostics).
     Unparsed(String),
 }
@@ -321,7 +320,13 @@ impl Mapper {
             Some("stream_event") if parent.is_none() => {
                 self.stream_event(v.get("event").unwrap_or(&Value::Null), &mut out)
             }
-            Some("assistant") => self.assistant(v, parent, &mut out),
+            Some("assistant") => {
+                if v.get("usage_report").is_some_and(Value::is_object) {
+                    out.push(Mapped::PlanUsage(v.clone()));
+                }
+                self.assistant(v, parent, &mut out)
+            }
+            Some("rate_limit_event") => out.push(Mapped::PlanUsage(v.clone())),
             // A message Nekko wrote, echoed as Claude Code takes it up.
             Some("user") if v.get("isReplay") == Some(&Value::Bool(true)) => out
                 .push(Mapped::Command { uuid: str_at(v, "uuid").unwrap_or_default().into(), state: "started".into() }),
@@ -441,7 +446,7 @@ impl Mapper {
         self.draft.get_or_insert_with(|| Draft {
             claude_id: claude_id.to_string(),
             id: new_id(),
-            created_at: now_ms(),
+            created_at: nekko_js::now_ms(),
             ..Default::default()
         })
     }
@@ -530,7 +535,7 @@ impl Mapper {
                 "role": "tool",
                 "content": "",
                 "toolResult": result,
-                "createdAt": now_ms(),
+                "createdAt": nekko_js::now_ms(),
             })));
             out.push(self.event("tool_result", json!({ "result": result })));
         }
@@ -711,5 +716,18 @@ mod tests {
             "a\nb"
         );
         assert_eq!(result_text(None), "");
+    }
+
+    #[test]
+    fn plan_usage_is_handed_up_raw() {
+        let mut m = Mapper::new("s");
+        let event =
+            json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "allowed", "utilization": 0.3 } });
+        assert_eq!(m.map(&event), vec![Mapped::PlanUsage(event.clone())]);
+        let report = json!({ "type": "assistant", "message": { "id": "m1", "content": [] },
+            "usage_report": { "rate_limits": { "limits": [] } } });
+        assert!(m.map(&report).contains(&Mapped::PlanUsage(report.clone())));
+        let plain = json!({ "type": "assistant", "message": { "id": "m2", "content": [] } });
+        assert!(!m.map(&plain).iter().any(|o| matches!(o, Mapped::PlanUsage(_))));
     }
 }

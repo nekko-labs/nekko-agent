@@ -176,6 +176,12 @@ impl Engine {
         d("chat:send".into(), vec![opts]).await.map(|_| ())
     }
 
+    /// `activity:state`, through the router (the machine and the chats are its).
+    async fn activity(&self, idle_after_secs: f64) -> Option<Value> {
+        let d = self.dispatch.get()?;
+        d("activity:state".into(), vec![json!({ "idleAfterSeconds": idle_after_secs })]).await.ok()
+    }
+
     async fn delete_session(&self, id: String) {
         // Through the router: the chat's command log first, then the chat.
         if let Some(d) = self.dispatch.get() {
@@ -211,6 +217,10 @@ impl TaskHost for Engine {
 
     fn notify(&self, list: &Value) {
         self.hub.publish("tasks:updated", list.clone(), false);
+    }
+
+    fn activity(&self, idle_after_secs: f64) -> tasks::BoxFut<'_, Option<Value>> {
+        Box::pin(Engine::activity(self, idle_after_secs))
     }
 }
 
@@ -300,7 +310,7 @@ impl WorkflowHost for Engine {
                 .flatten()
                 .filter_map(|w| w.get("path").and_then(Value::as_str).map(str::to_string))
                 .collect();
-            let home = crate::workspace::home_dir();
+            let home = nekko_js::home_dir_string();
             tokio::task::spawn_blocking(move || nekko_workspace::skills::resolve_skill_defs(&dir, &home, &roots))
                 .await
                 .unwrap_or_default()
@@ -337,7 +347,7 @@ impl WorkflowHost for Engine {
                 })
             };
             let out = ShellRunner
-                .run(RunRequest { command: &cmd, cwd: &cwd, limits, cancel: &cancel, on_output: &|_| {} })
+                .run(RunRequest { command: &cmd, cwd: &cwd, limits, cancel: &cancel, on_output: &|_| {}, env: &[] })
                 .await;
             timer.abort();
             match out.failure {
@@ -367,6 +377,10 @@ impl WorkflowHost for Engine {
 
     fn notify(&self, snapshot: &Value) {
         self.hub.publish("workflows:updated", snapshot.clone(), false);
+    }
+
+    fn activity(&self, idle_after_secs: f64) -> BoxFut<'_, Option<Value>> {
+        Box::pin(Engine::activity(self, idle_after_secs))
     }
 
     fn next_run(&self, wf: &Value, from: f64) -> Option<f64> {

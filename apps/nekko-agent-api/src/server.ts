@@ -3,6 +3,8 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { registerAccount, type SignInConfig } from "./account.js";
 import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
+import { registerFeedback } from "./feedback.js";
+import { registerMachines, type MachinesOptions } from "./machines.js";
 import { parseSignup, recordSignup } from "./signups.js";
 import { registerSync } from "./sync.js";
 
@@ -20,6 +22,10 @@ export interface ServerOptions {
   authRateLimit?: { max: number; windowMs: number };
   /** Donations per IP per window before 429. */
   donationRateLimit?: { max: number; windowMs: number };
+  /** Feedback notes per IP per window before 429. */
+  feedbackRateLimit?: { max: number; windowMs: number };
+  /** Nekko Cloud machines (decision 0017); without it the /v1/machines routes are absent. */
+  machines?: MachinesOptions;
   logger?: boolean;
 }
 
@@ -91,6 +97,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs });
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
+  registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 });
+  if (opts.machines) registerMachines(app, opts.db, opts.machines);
 
   return app;
 }

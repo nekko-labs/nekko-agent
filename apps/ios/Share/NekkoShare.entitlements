@@ -4,6 +4,6 @@
 <dict>
     <!-- Hands the shared text to the app (ShareInbox); the same group as the app and the widget. -->
     <key>com.apple.security.application-groups</key>
-    <array><string>group.com.nekko.native.ios</string></array>
+    <array><string>group.dev.nekkolabs.nekkoagent</string></array>
 </dict>
 </plist>

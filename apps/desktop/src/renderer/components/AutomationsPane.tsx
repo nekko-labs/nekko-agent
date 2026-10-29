@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AutomationTask } from '@nekko-agent/shared';
-import { taskCadence } from '@nekko-agent/shared';
+import { runPolicyNote, taskCadence } from '@nekko-agent/shared';
 import { PanelList } from './primitives/index.js';
 import { TrashIcon } from '../icons.js';
 import { PaneMetadata } from './PaneFrame.js';
@@ -46,10 +46,12 @@ const TASK_KIND_META: Record<AutomationTask['kind'], { icon: string; label: stri
   background: { icon: '♾️', label: 'Background' },
 };
 
-/** Status resolution for an automation row: running now > next up > paused > done/error. */
+/** Status resolution for an automation row: running now > waiting for idle > next up > paused > done/error. */
 function taskState(t: AutomationTask, running: Set<string>, now: number): { label: string; color: string; live: boolean } {
   if (t.lastSessionId && running.has(t.lastSessionId)) return { label: 'running now', color: 'var(--success)', live: true };
   if (t.status === 'active') {
+    // Due, but held by its run policy until the computer is free (run_policy.rs).
+    if (t.waitingSince) return { label: 'waiting for you to be away', color: 'var(--info)', live: false };
     if (t.nextRunAt) return { label: inTime(t.nextRunAt - now), color: 'var(--warning)', live: false };
     return { label: 'active', color: 'var(--success)', live: false };
   }
@@ -59,7 +61,7 @@ function taskState(t: AutomationTask, running: Set<string>, now: number): { labe
 }
 
 /**
- * The automations window on the Command Center wall: what fired, what's
+ * The automations window on the Agent board wall: what fired, what's
  * planned next, what's parked. The window's strip names it, so the body
  * starts straight at the count and the rows.
  */
@@ -99,8 +101,9 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
           {sorted.map((t) => {
             const meta = TASK_KIND_META[t.kind];
             const st = taskState(t, running, now);
+            const ran = runPolicyNote(t.lastRunLowPriority, t.lastRunWaitedMs);
             return (
-              <div key={t.id} className="group px-4 py-2.5">
+              <div key={t.id} className="group px-4 py-2.5" data-task-row={t.id}>
                 <div className="flex items-center gap-2.5">
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[13px]" style={{ background: 'var(--surface-2)' }} title={meta.label}>{meta.icon}</span>
                   <button
@@ -112,7 +115,12 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
                     {t.title}
                   </button>
                   <span className="shrink-0 text-[11px] text-ink-faint">{taskCadence(t)}</span>
-                  <span className="ml-auto flex shrink-0 items-center gap-1.5 tabular-nums text-[11.5px] font-medium" style={{ color: st.color }}>
+                  <span
+                    className="ml-auto flex shrink-0 items-center gap-1.5 tabular-nums text-[11.5px] font-medium"
+                    style={{ color: st.color }}
+                    data-task-state
+                    title={t.waitingSince ? `Due ${relTime(now - t.waitingSince)}. It runs once nobody is using this computer, or after 2 hours. Run now starts it at once.` : undefined}
+                  >
                     {st.live && <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: st.color }} />}
                     {st.label}
                   </span>
@@ -129,7 +137,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-baseline gap-2 pl-[34px] text-[11.5px] text-ink-faint">
-                  {t.runCount > 0 && <span className="shrink-0 tabular-nums">{t.runCount} run{t.runCount === 1 ? '' : 's'}{t.lastRunAt ? ` · last ${relTime(now - t.lastRunAt)}` : ''}</span>}
+                  {t.runCount > 0 && <span className="shrink-0 tabular-nums">{t.runCount} run{t.runCount === 1 ? '' : 's'}{t.lastRunAt ? ` · last ${relTime(now - t.lastRunAt)}` : ''}{ran ? ` · ${ran}` : ''}</span>}
                   {t.lastResult && <span className="min-w-0 truncate text-ink-soft" title={t.lastResult}>{t.lastResult}</span>}
                 </div>
               </div>

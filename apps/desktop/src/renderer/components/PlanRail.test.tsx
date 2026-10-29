@@ -5,28 +5,29 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Session } from '@nekko-agent/shared';
 vi.mock('../store.js', () => ({ useStore: (selector: (state: unknown) => unknown) => selector({ sessions: [], openChatPane: () => {}, settings: {} }) }));
 import { PlanRail, PLAN_CHANGE_REQUEST } from './PlanRail.js';
+import { PlanSheet } from './PlanSheet.js';
 import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 
 const session = { agentPlan: [{ id: 'one', title: 'Inspect code', status: 'active' }] } as Session;
 describe('change plan action', () => {
   it('offers the action while a plan is shown', () => {
-    const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={session} streaming onChangePlan={() => {}} />);
+    const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={session} streaming prs={[]} onChangePlan={() => {}} />);
     expect(markup).toContain('Change plan</button>');
     expect(markup).not.toContain('Want to change the approach?');
   });
   it('disables the action when editing is unavailable and hides it without a plan', () => {
-    expect(renderToStaticMarkup(<PlanRail sessionId="s" session={session} streaming={false} />)).toContain('disabled=""');
-    expect(renderToStaticMarkup(<PlanRail sessionId="s" session={null} streaming={false} />)).not.toContain('Change plan');
+    expect(renderToStaticMarkup(<PlanSheet sessionId="s" session={session} streaming={false} prs={[]} />)).toContain('disabled=""');
+    expect(renderToStaticMarkup(<PlanSheet sessionId="s" session={null} streaming={false} prs={[]} />)).not.toContain('Change plan');
   });
 });
 
 describe('minimize button', () => {
   it('sits at the far right of the header, only when minimizing is wired', () => {
-    const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={null} streaming={false} onMinimize={() => {}} />);
+    const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={null} onMinimize={() => {}} />);
     const header = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'));
     expect(header).toContain('aria-label="Minimize Agent Monitor"');
     expect(header.indexOf('data-plan-minimize')).toBeGreaterThan(header.indexOf('Agent Monitor</span>'));
-    expect(renderToStaticMarkup(<PlanRail sessionId="s" session={null} streaming={false} />)).not.toContain('data-plan-minimize');
+    expect(renderToStaticMarkup(<PlanRail sessionId="s" session={null} />)).not.toContain('data-plan-minimize');
   });
 });
 
@@ -47,19 +48,20 @@ describe('plan change prompt', () => {
   it('sends the standing request followed by what was typed', () => {
     expect(planChangeMessage('  skip the migration  ')).toBe(`${PLAN_CHANGE_REQUEST}skip the migration`);
   });
-  it('is offered in a chat\'s Agent Monitor, and not in an archived (read-only) chat', async () => {
+  it('is offered on the plan sheet, and not in an archived (read-only) chat', async () => {
     const { renderChatPane, chatSession, withProvider } = await chatHarness();
     withProvider();
     const plan = chatSession({ agentPlan: session.agentPlan });
-    /** The opening tag of the Agent Monitor's Change plan button. */
+    /** The opening tag of the plan sheet's Change plan button. */
     const button = (html: string) => {
-      const rail = html.slice(html.indexOf('aria-label="Plan and sub-agents"'));
+      const rail = html.slice(html.indexOf('data-plan-sheet'));
       const end = rail.indexOf('Change plan</button>');
       return end < 0 ? null : rail.slice(rail.lastIndexOf('<button', end), rail.indexOf('>', rail.lastIndexOf('<button', end)) + 1);
     };
     expect(button(renderChatPane(plan))).not.toBeNull();
     expect(button(renderChatPane(plan))).not.toContain('disabled=""');
-    expect(button(renderChatPane(plan, { readOnly: true }))).toContain('disabled=""');
+    // An archived chat has no composer, so no plan sheet to change it from.
+    expect(button(renderChatPane(plan, { readOnly: true }))).toBeNull();
   });
 
   // Source pin, pending the plan-and-mode e2e journey: the prompt opens from a
@@ -68,7 +70,8 @@ describe('plan change prompt', () => {
   it('pops up where questions do, in both the full chat and a wall window, and steers a running agent (source pin)', () => {
     const pane = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
     expect(pane).toMatch(/surface === 'transcript' && planChangeOpen && !question/);
-    expect(pane).toMatch(/surface !== 'composer' && planChangeOpen && !question/);
+    expect(pane).toMatch(/\{planChangeOpen && !question && \(\s*<div className="composer-question is-open" data-plan-change-pop>/);
+    expect(pane).toMatch(/\{!cleanStart && !planChangeOpen && !question && \(\s*<PlanSheet/);
     expect(pane).toMatch(/if \(streamingRef\.current\) \{\s*const updated = await window\.nekko\.steerChat\(sessionId, text\)/);
     expect(pane).toMatch(/await send\(text\);/);
   });
@@ -88,10 +91,11 @@ async function chatHarness() {
   return import('../tests/renderChatPane.js');
 }
 
-it('lists sub-agents above the agent plan', () => {
-  const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={session} streaming={false} />);
-  expect(markup.indexOf('>Sub-agents<')).toBeGreaterThan(-1);
-  expect(markup.indexOf('>Sub-agents<')).toBeLessThan(markup.indexOf('>Agent plan<'));
+it('keeps sub-agents in the Agent Monitor and leaves the plan to the composer sheet', () => {
+  const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={session} />);
+  expect(markup).toContain('>Sub-agents<');
+  expect(markup).not.toContain('Inspect code');
+  expect(markup).not.toContain('Change plan');
 });
 
 describe('per-step plan status icons', () => {
@@ -103,7 +107,7 @@ describe('per-step plan status icons', () => {
     { id: 'e', createdAt: 1, updatedAt: 1, title: 'Animate', status: 'skipped' },
   ] } as Session;
   it.each([true, false])('shows every active step as Working, streaming=%s', (streaming) => {
-    const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={parallel} streaming={streaming} />);
+    const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={parallel} streaming={streaming} prs={[]} />);
     expect(markup.match(/aria-label="Working"/g)).toHaveLength(2);
     for (const status of ['Working', 'Done', 'Pending', 'Skipped']) expect(markup).toContain('title="' + status + '"');
     expect(markup).toContain('line-through');
@@ -114,12 +118,12 @@ describe('per-step plan status icons', () => {
   });
   it('pauses all active entries only for an explicitly interrupted, non-running chat', () => {
     const interrupted = { ...parallel, messages: [{ role: 'assistant', content: 'Stopped', interrupted: true }] } as Session;
-    const paused = renderToStaticMarkup(<PlanRail sessionId="s" session={interrupted} streaming={false} />);
+    const paused = renderToStaticMarkup(<PlanSheet sessionId="s" session={interrupted} streaming={false} prs={[]} />);
     expect(paused.match(/aria-label="Paused"/g)).toHaveLength(2);
     expect(paused).not.toContain('aria-label="Working"');
     expect(paused).toContain('M8 5v14M16 5v14');
     for (const running of [interrupted, { ...interrupted, activeRun: { startedAt: 1 } }]) {
-      const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={running} streaming={running === interrupted} />);
+      const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={running} streaming={running === interrupted} prs={[]} />);
       expect(markup.match(/aria-label="Working"/g)).toHaveLength(2);
     }
   });

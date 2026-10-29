@@ -22,10 +22,6 @@ pub const INTERRUPTED_NOTE: &str =
 const SWEEP_FIRST: Duration = Duration::from_secs(60);
 const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
-}
-
 /// `auto_start_engine` off (a one-shot CLI command): the model server is left as it is.
 pub fn start(ctx: &Ctx, auto_start_engine: bool) {
     let marked = reconcile_interrupted(&ctx.sessions);
@@ -90,11 +86,14 @@ fn interrupted_reply() -> Value {
     let _ = getrandom::fill(&mut rand);
     let r = crate::turns::base36(u32::from_le_bytes(rand) as u64);
     let mut m = Map::new();
-    m.insert("id".into(), json!(format!("msg_{}_{}", crate::turns::base36(now_ms()), &format!("{r:0>6}")[..6])));
+    m.insert(
+        "id".into(),
+        json!(format!("msg_{}_{}", crate::turns::base36(nekko_js::now_ms()), &format!("{r:0>6}")[..6])),
+    );
     m.insert("role".into(), json!("assistant"));
     m.insert("content".into(), json!(format!("_The app closed while this reply was running._\n\n{INTERRUPTED_NOTE}")));
     m.insert("interrupted".into(), json!(true));
-    m.insert("createdAt".into(), json!(now_ms()));
+    m.insert("createdAt".into(), json!(nekko_js::now_ms()));
     Value::Object(m)
 }
 

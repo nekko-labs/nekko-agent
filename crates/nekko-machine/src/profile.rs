@@ -11,7 +11,7 @@
 use crate::probe::{Machine, engine_record, run_ok};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 const FILE: &str = "machine-profile.json";
 const FORMAT: u32 = 1;
@@ -69,10 +69,6 @@ pub struct HardwareProfile {
     pub disk_free_bytes: Option<f64>,
 }
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
-}
-
 /// `"gpu-core-count" = 40` from `ioreg -c IOAccelerator`.
 pub fn ioreg_gpu_cores(stdout: &str) -> Option<u32> {
     let at = stdout.find("\"gpu-core-count\"")?;
@@ -97,9 +93,7 @@ pub fn still_current(saved: &HardwareProfile, engine: &Option<EngineBuild>, now:
 }
 
 fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
-    let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
+    nekko_js::fs::atomic_write(path, text.as_bytes(), Default::default())
 }
 
 impl Machine {
@@ -121,7 +115,7 @@ impl Machine {
                 .as_ref()
                 .and_then(|p| std::fs::read(p).ok())
                 .and_then(|b| serde_json::from_slice::<HardwareProfile>(&b).ok())
-            && still_current(&saved, &engine, now_ms())
+            && still_current(&saved, &engine, nekko_js::now_ms())
         {
             return HardwareProfile { disk_free_bytes: disk_free, ..saved };
         }
@@ -155,7 +149,7 @@ impl Machine {
         };
         HardwareProfile {
             format: FORMAT,
-            probed_at: now_ms(),
+            probed_at: nekko_js::now_ms(),
             platform: facts.platform,
             arch: facts.arch,
             release: facts.release,

@@ -23,7 +23,7 @@ export interface Vitals {
 }
 
 /**
- * The Command Center's analytics: the panels the user ticked in the gear menu,
+ * The Agent board's analytics: the panels the user ticked in the gear menu,
  * flowing into as many columns as the box is wide enough for, so the same box
  * reads as a strip in a narrow window and a dashboard in a wide one. On the
  * wall it is a window like any other (the gear rides in the window's strip);
@@ -474,7 +474,7 @@ function ServicesPanel({ providers, usage }: { providers: ProviderConfig[]; usag
           </div>
         ))}
         {providers.length === 0 && mcp.length === 0 && (
-          <div className="rounded-xl border border-line p-3 text-[12px] text-ink-faint">No model providers yet, add one in Model Providers.</div>
+          <div className="rounded-xl border border-line p-3 text-[12px] text-ink-faint">No model providers yet, add one in Models.</div>
         )}
       </div>
     </div>

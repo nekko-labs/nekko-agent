@@ -8,9 +8,10 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
-base64 = "0.22"
+base64.workspace = true
 futures-util.workspace = true
 nekko-js = { path = "../nekko-js" }
+nekko-net = { path = "../nekko-net" }
 nekko-usage = { path = "../nekko-usage" }
 # native-tls: every connector is HTTPS. It is the TLS stack reqwest already uses here.
 reqwest = { workspace = true, features = ["native-tls"] }

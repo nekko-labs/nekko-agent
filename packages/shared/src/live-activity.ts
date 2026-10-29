@@ -135,6 +135,12 @@ export function reduceLiveActivity(
       // through a two-minute backoff.
       a.thinking = '';
       a.tail = '';
+      if (event.paused) {
+        // A background reply stepped aside for the person at the computer: it
+        // carries on, from where it stood, once they are away.
+        push(a, { id: `retry_${now}_${a.steps.length}`, kind: 'note', label: 'Paused', detail: 'Someone is using this computer, or it is on battery or hot. It carries on from here once it is free.', at: now });
+        break;
+      }
       push(a, {
         id: `retry_${now}_${a.steps.length}`,
         kind: 'note',
@@ -231,6 +237,7 @@ const TOOL_VERBS: Record<string, string> = {
   update_plan: 'Planning',
   report_experiment: 'Recording',
   report_artifact: 'Recording',
+  remember: 'Remembering',
   start_process: 'Starting',
   read_process: 'Checking',
   kill_process: 'Stopping',
@@ -281,6 +288,8 @@ export function shortLiveStatus(a: LiveActivity | undefined): string {
   }
 
   if (a.image) return a.image;
+  // A background reply waiting for the person at the computer to leave.
+  if (last?.kind === 'note' && last.label === 'Paused') return 'Paused';
   if (a.thinking.trim()) return 'Thinking';
   if (a.tail.trim()) return 'Writing reply';
 

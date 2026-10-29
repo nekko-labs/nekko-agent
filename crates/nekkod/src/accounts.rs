@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 /// The channels served here.
 pub const CHANNELS: &[&str] = &["usage:summary", "limits:get", "limits:problem", "limits:poll", "limits:clear"];
@@ -26,10 +26,6 @@ const CHATGPT_BASE: &str = "https://chatgpt.com/backend-api";
 const OPENROUTER_BASE: &str = "https://openrouter.ai/api/v1";
 /// A quota read that takes longer than this is a network failure.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
-
-fn now_ms() -> f64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -107,8 +103,31 @@ pub struct Accounts {
     pub oauth: std::sync::OnceLock<std::sync::Weak<crate::oauth::OAuth>>,
 }
 
+/// `quota-history.jsonl` lines kept, by age (#1035). Nothing reads older ones back.
+const QUOTA_HISTORY_DAYS: f64 = 30.0;
+
+/// Drop quota-history lines older than [`QUOTA_HISTORY_DAYS`]. A line without
+/// a readable time is kept. Rewritten through a temporary file, at startup only.
+fn prune_quota_history(path: &std::path::Path, now_ms: f64) {
+    let Ok(text) = std::fs::read_to_string(path) else { return };
+    let cutoff = now_ms - QUOTA_HISTORY_DAYS * 86_400_000.0;
+    let kept: Vec<&str> = text
+        .lines()
+        .filter(|l| {
+            let at = serde_json::from_str::<Value>(l).ok().and_then(|v| v.get("timestamp").and_then(Value::as_f64));
+            at.is_none_or(|t| t >= cutoff)
+        })
+        .collect();
+    if kept.len() == text.lines().count() {
+        return;
+    }
+    let body: String = kept.iter().map(|l| format!("{l}\n")).collect();
+    let _ = nekko_js::fs::atomic_write(path, body.as_bytes(), Default::default());
+}
+
 impl Accounts {
     pub fn new(dir: PathBuf, hub: Hub) -> Self {
+        prune_quota_history(&dir.join("quota-history.jsonl"), nekko_oauth::now_ms());
         let http = reqwest::Client::builder().timeout(READ_TIMEOUT).build().unwrap_or_default();
         Self { dir, hub, http, state: Mutex::default(), append: Mutex::new(()), oauth: std::sync::OnceLock::new() }
     }
@@ -158,7 +177,7 @@ impl Accounts {
 
     /// `recordUsage(turnUsageRecord(...))` for one model call of a turn.
     pub fn turn_usage(&self, opts: &Value, account: &TurnAccount, event: &Value) {
-        let rec = nekko_usage::turn_usage_record(opts, &account.provider, event, now_ms() as u64);
+        let rec = nekko_usage::turn_usage_record(opts, &account.provider, event, nekko_js::now_ms_f64() as u64);
         self.append_line("usage.jsonl", &nekko_js::stringify(&rec), false);
     }
 
@@ -170,8 +189,13 @@ impl Accounts {
 
     pub fn side_usage(&self, provider: &Value, model_id: Option<&Value>, session_id: &str, usage: &[Value]) {
         for item in usage {
-            let rec =
-                nekko_usage::side_usage_record(provider, model_id, Some(&json!(session_id)), item, now_ms() as u64);
+            let rec = nekko_usage::side_usage_record(
+                provider,
+                model_id,
+                Some(&json!(session_id)),
+                item,
+                nekko_js::now_ms_f64() as u64,
+            );
             self.append_line("usage.jsonl", &nekko_js::stringify(&rec), false);
         }
     }
@@ -185,7 +209,14 @@ impl Accounts {
         done: &Value,
         stats: Option<&Value>,
     ) {
-        let reply = nekko_usage::turn_reply_record(opts, account.incognito, started_at, done, stats, now_ms() as u64);
+        let reply = nekko_usage::turn_reply_record(
+            opts,
+            account.incognito,
+            started_at,
+            done,
+            stats,
+            nekko_js::now_ms_f64() as u64,
+        );
         if let Some(r) = reply {
             self.append_line("replies.jsonl", &nekko_js::stringify(&r), false);
         }
@@ -261,7 +292,7 @@ impl Accounts {
     /// provider's `provider:<id>` key. Each response reports every window, so
     /// the snapshot is replaced rather than merged.
     pub fn record_api_headers(&self, key: &str, pairs: &[(String, String)]) -> Option<Value> {
-        let parsed = nekko_usage::parse_anthropic_api_headers(pairs, now_ms());
+        let parsed = nekko_usage::parse_anthropic_api_headers(pairs, nekko_js::now_ms_f64());
         if parsed.get("windows").and_then(Value::as_array).is_none_or(Vec::is_empty) {
             return self.get(key);
         }
@@ -276,7 +307,7 @@ impl Accounts {
         let fresh = |v: &Value| {
             let at = v.get("updatedAt").and_then(Value::as_f64).unwrap_or(f64::NAN);
             let stale = v.get("staleAfterMs").and_then(Value::as_f64).unwrap_or(f64::NAN);
-            at + stale > now_ms()
+            at + stale > nekko_js::now_ms_f64()
         };
         if !refresh && let Some(s) = self.get(key).filter(fresh) {
             return Some(s);
@@ -286,7 +317,7 @@ impl Accounts {
 
     fn record_problem(&self, key: &str, e: &Problem) {
         let LimitsError { kind, status, retry_after_ms } = nekko_usage::classify_limits_error(e);
-        let now = now_ms();
+        let now = nekko_js::now_ms_f64();
         let mut s = lock(&self.state);
         let failures = s.problems.get(key).map_or(0.0, |p| p.failures) + 1.0;
         // A dead sign-in will not fix itself: wait for the user.
@@ -314,7 +345,7 @@ impl Accounts {
         }
         let gate = lock(&self.state).gates.entry(key.to_string()).or_default().clone();
         let _held = gate.lock().await;
-        let now = now_ms();
+        let now = nekko_js::now_ms_f64();
         {
             let s = lock(&self.state);
             if now - s.last_poll.get(key).copied().unwrap_or(0.0) < POLL_INTERVAL_MS {
@@ -350,11 +381,11 @@ impl Accounts {
                     }
                     self.notify(key, next);
                 }
-                lock(&self.state).last_poll.insert(key.to_string(), now_ms());
+                lock(&self.state).last_poll.insert(key.to_string(), nekko_js::now_ms_f64());
                 next.or_else(|| self.get(key))
             }
             Err(e) => {
-                lock(&self.state).last_poll.insert(key.to_string(), now_ms());
+                lock(&self.state).last_poll.insert(key.to_string(), nekko_js::now_ms_f64());
                 self.record_problem(key, &e);
                 self.get(key)
             }
@@ -367,7 +398,7 @@ impl Accounts {
         let usable = |t: &Value| {
             let expires = token_expires_at(t);
             match expires {
-                Some(e) => e - 60_000.0 > now_ms(),
+                Some(e) => e - 60_000.0 > nekko_js::now_ms_f64(),
                 None => !nekko_js::truthy(t.get("refreshToken")),
             }
         };
@@ -407,7 +438,7 @@ impl Accounts {
                     .header("ChatGPT-Account-Id", account);
                 let (status, body) = send(req).await?;
                 let json = body.as_ref().and_then(Value::as_object).ok_or(unreadable(status))?;
-                Ok(Some(nekko_usage::parse_chatgpt_usage(json, now_ms())))
+                Ok(Some(nekko_usage::parse_chatgpt_usage(json, nekko_js::now_ms_f64())))
             }
             Some("openrouter") => read_openrouter(&self.http, &base_for(OPENROUTER_BASE), &access).await.map(Some),
             _ => Ok(None),
@@ -470,7 +501,10 @@ fn unreadable(status: u16) -> Problem {
 /// One quota read: the status and the body as JSON (`None` when it does not
 /// parse), or the failure a non-2xx answer or the network is.
 async fn send(req: reqwest::RequestBuilder) -> Result<(u16, Option<Value>), Problem> {
-    let res = req.send().await.map_err(|e| Problem::Message(format!("fetch failed: {e}")))?;
+    // A blocked read is quiet: it lands as a problem and the backoff applies.
+    let res = nekko_net::send("limits", req)
+        .await
+        .map_err(|e| Problem::Message(if e.is_blocked() { e.to_string() } else { format!("fetch failed: {e}") }))?;
     let status = res.status().as_u16();
     if !res.status().is_success() {
         let retry = res.headers().get("retry-after").and_then(|v| v.to_str().ok()).map(str::to_string);
@@ -479,7 +513,7 @@ async fn send(req: reqwest::RequestBuilder) -> Result<(u16, Option<Value>), Prob
             429 => LimitsError {
                 kind: "rate_limited",
                 status: Some(429),
-                retry_after_ms: nekko_usage::parse_retry_after(retry.as_deref(), now_ms()),
+                retry_after_ms: nekko_usage::parse_retry_after(retry.as_deref(), nekko_js::now_ms_f64()),
             },
             _ => LimitsError::new("http", Some(status)),
         }));
@@ -491,11 +525,31 @@ async fn send(req: reqwest::RequestBuilder) -> Result<(u16, Option<Value>), Prob
 async fn read_openrouter(http: &reqwest::Client, base: &str, bearer: &str) -> Result<Value, Problem> {
     let url = format!("{}/key", base.trim_end_matches('/'));
     let (status, body) = send(http.get(url).header("Authorization", format!("Bearer {bearer}"))).await?;
-    nekko_usage::parse_openrouter_key(body.as_ref(), status, now_ms()).map_err(Problem::Read)
+    nekko_usage::parse_openrouter_key(body.as_ref(), status, nekko_js::now_ms_f64()).map_err(Problem::Read)
 }
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn quota_history_keeps_thirty_days() {
+        let d = std::env::temp_dir().join(format!("nekko-quota-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let p = d.join("quota-history.jsonl");
+        let day = 86_400_000.0;
+        let now = 100.0 * day;
+        std::fs::write(
+            &p,
+            format!("{{\"timestamp\":{}}}\n{{\"timestamp\":{}}}\nnot json\n", now - 40.0 * day, now - day),
+        )
+        .unwrap();
+        super::prune_quota_history(&p, now);
+        let kept = std::fs::read_to_string(&p).unwrap();
+        assert_eq!(kept.lines().count(), 2, "{kept}");
+        assert!(kept.contains(&format!("{}", now - day)) && kept.contains("not json"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {

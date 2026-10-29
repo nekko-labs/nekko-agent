@@ -39,7 +39,10 @@ public final class ChatModel {
     /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
     private var shownIds: [String: String] = [:]
     public private(set) var turn = LiveTurn() {
-        didSet { if running != turn.running { running = turn.running } }
+        didSet {
+            if running != turn.running { running = turn.running }
+            countContext()
+        }
     }
     /// `turn.running`, changing only when it does: views that need just this
     /// (the composer's Send / Stop) don't redraw on every streamed token.
@@ -54,11 +57,24 @@ public final class ChatModel {
     /// The computer's runnable skills, re-read with the chat.
     public private(set) var skills: [SkillSummary] = []
     public private(set) var sending = false
+    /// The chat's context window as the computer counts it (`context:preview`,
+    /// totals only): read with the chat and after each turn. Kept when a read
+    /// fails; nil from a computer too old to answer.
+    public private(set) var context: ContextUsage? {
+        didSet { countContext() }
+    }
+    /// The chat's durable watches (`session:watches`), for the watch rows' live chips.
+    public private(set) var watches: [AgentWatch] = []
+    /// This chat's subagent chats (the list hides them), for the delegation rows' status and model.
+    public private(set) var children: [SessionSummary] = []
 
     private let store: ComputersStore
     private let now: () -> Int64
     private var subscription: UUID?
     private var reloadTask: Task<Void, Never>?
+    /// Events and answers so far, so a re-read can tell whether the cards changed while it waited.
+    private var cardChanges = 0
+    private var agentStateTask: Task<Void, Never>?
     private var lastConn: RelayState = .idle
 
     public init(sessionId: String, store: ComputersStore, now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }) {
@@ -75,6 +91,32 @@ public final class ChatModel {
         subscription = store.subscribe { [weak self] e in self?.onEvent(e) }
         showSavedCopy()
         Task { await reload() }
+        pollAgentState()
+    }
+
+    /// While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
+    private func pollAgentState() {
+        agentStateTask?.cancel()
+        agentStateTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                if self.watches.contains(where: { $0.status == .active }) { await self.refreshAgentState() }
+            }
+        }
+    }
+
+    /// Re-read what the agent-work rows show beyond the transcript: the watches,
+    /// and the child chats when the transcript delegates. Failures keep the last state.
+    public func refreshAgentState() async {
+        guard let r = try? store.remote() else { return }
+        let hasWatch = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.watchTool } else { return false } }
+        let hasAgent = blocks.contains { if case .tool(_, let name, _, _, _, _) = $0 { return name == AgentRows.subagentTool } else { return false } }
+        if hasWatch, let raw = try? await r.call(Channels.sessionWatches, [.string(sessionId)]) { watches = AgentWatch.list(raw) }
+        if hasAgent, let raw = try? await r.call(Channels.sessionsSummaries) {
+            let id = sessionId
+            children = SessionSummary.list(raw).filter { $0.parentSessionId == id }
+        }
     }
 
     /// Paint the saved copy while nothing better is on screen.
@@ -88,6 +130,8 @@ public final class ChatModel {
     public func stop() {
         if let subscription { store.unsubscribe(subscription) }
         subscription = nil
+        agentStateTask?.cancel()
+        agentStateTask = nil
     }
 
     /// The connection came back: re-read, in case events were missed.
@@ -97,12 +141,16 @@ public final class ChatModel {
     }
 
     public func reload() async {
+        let cardChangesBefore = cardChanges
         do {
             let r = try store.remote()
             async let raw = r.call(Channels.sessionGet, [.string(sessionId)])
             async let pendingRaw = orNil { try await r.call(Channels.chatPending) }
             let (s, p) = (try await raw, await pendingRaw)
             Task { await loadSkills() }
+            // Between turns only: while one runs the live estimate covers it, and the
+            // computer is busy with the reply (done, send and session_meta all re-read).
+            if !turn.running { Task { await loadContext() } }
             guard let session = Session.from(s) else {
                 loadError = "This chat was deleted on your computer."
                 store.transcripts.remove(sessionId)
@@ -122,18 +170,25 @@ public final class ChatModel {
             // re-read session already holds. After the turn the session has it all.
             var t = turn
             if !t.running { t.blocks = [] }
-            t.approval = mine?.approval
-            t.question = mine?.question
+            // The computer's pending inputs are the authority, unless an event or an
+            // answer came in while the re-read was in flight: then that is newer than its
+            // answer. A stale "nothing pending" took a card down while the computer still
+            // waited on it, and a stale "waiting" would bring an answered one back (#1228).
+            if cardChanges == cardChangesBefore {
+                t.approval = mine?.approval
+                t.question = mine?.question
+            }
             t.running = t.running || mine != nil
             turn = t
             // Keep the ids of what was on screen when the saved transcript replaces the live one.
             let carried = Transcript.carriedIds(shown: shown, next: Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
             if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
+            await refreshAgentState()
         } catch {
             // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
             showSavedCopy()
             if savedAt != nil, !((error as? RelayError)?.fromComputer ?? false) { return }
-            loadError = error.localizedDescription
+            loadError = store.readable(error).localizedDescription
         }
     }
 
@@ -141,6 +196,48 @@ public final class ChatModel {
     public func changes() async throws -> PhoneChanges {
         PhoneChanges.from(try await store.remote().call(Channels.changesList, [.string(sessionId)]))
     }
+
+    /// One `context:preview` at a time; a re-read asked for meanwhile is dropped.
+    public func loadContext() async {
+        guard !readingContext else { return }
+        readingContext = true
+        defer { readingContext = false }
+        guard let r = try? store.remote(), let raw = try? await r.call(MonitorChannels.contextPreview, [.string(sessionId)]),
+              let c = ContextUsage.from(raw) else { return }
+        context = c
+    }
+    private var readingContext = false
+
+    /// Tokens in the window now: the computer's count, plus what the running
+    /// reply has streamed since (about four characters a token, as the
+    /// desktop's live gauge counts), since it is replayed in the next request.
+    /// While a reply streams it moves in steps of `contextStep`, so the gauge
+    /// redraws a few times a reply rather than on every streamed token (which
+    /// also kept the app from ever going idle under UI tests).
+    public private(set) var contextTokens: Int64?
+    public nonisolated static let contextStep: Int64 = 256
+
+    private func countContext() {
+        var next: Int64? = nil
+        if let context {
+            next = context.usedTokens
+            if turn.running {
+                let chars = turn.blocks.reduce(0) { n, b in
+                    switch b {
+                    case .assistant(_, let text, let reasoning, _, _): return n + text.utf16.count + (reasoning?.utf16.count ?? 0)
+                    case .tool(_, _, let label, _, let output, _): return n + label.utf16.count + (output?.utf16.count ?? 0)
+                    case .user(_, let text, _, _): return n + text.utf16.count
+                    }
+                }
+                let streamed = Int64((chars + 3) / 4)
+                next = context.usedTokens + streamed / Self.contextStep * Self.contextStep
+            }
+        }
+        if next != contextTokens { contextTokens = next }
+    }
+
+    /// The chat's own effort; nil follows the computer's setting.
+    public var effort: Effort? { session?.effort.flatMap(Effort.init(rawValue:)) }
 
     public func loadSkills() async {
         guard let r = try? store.remote(), let raw = try? await r.call(Channels.skillsRunnable) else { return }
@@ -150,9 +247,12 @@ public final class ChatModel {
     /// Fold one event; re-reads the saved transcript when the turn ends.
     public func onEvent(_ e: AgentEvent) {
         guard e.sessionId == sessionId else { return }
+        cardChanges += 1
         turn = Transcript.apply(turn, e)
         switch e {
         case .done, .error, .sessionMeta: scheduleReload()
+        // A watch is armed or cancelled at a tool result; a delegation's child appears then too.
+        case .toolResult: Task { await refreshAgentState() }
         default: break
         }
     }
@@ -199,7 +299,7 @@ public final class ChatModel {
                 outbox.drop(id)
             } catch let e as RelayError where e.fromComputer {
                 outbox.drop(id)
-                throw e
+                throw store.readable(e)
             } catch {
                 // No answer: the outbox finds out, with the same id, when the computer is back.
                 outbox.endDirect(id)
@@ -239,7 +339,7 @@ public final class ChatModel {
                     // The computer turned it down: the prompt goes back to the composer.
                     outbox.drop(id)
                     if !started { self.unsent = UnsentPrompt(text: text, skill: skill, images: images) }
-                    t.error = e.message
+                    t.error = self.store.readable(e).localizedDescription
                 } else {
                     // No answer (the connection dropped): it may or may not have
                     // arrived. The outbox sends it again with the same id once the
@@ -284,12 +384,13 @@ public final class ChatModel {
         guard let a = turn.approval else { return }
         guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
         turn.approval = nil
+        cardChanges += 1
         do {
             _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(ok)])
         } catch {
             // The computer is still waiting: keep the card so the user can try again.
             if turn.approval == nil { turn.approval = a }
-            throw error
+            throw store.readable(error)
         }
     }
 
@@ -297,11 +398,12 @@ public final class ChatModel {
         guard let q = turn.question else { return }
         guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
         turn.question = nil
+        cardChanges += 1
         do {
             _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
         } catch {
             if turn.question == nil { turn.question = q }
-            throw error
+            throw store.readable(error)
         }
     }
 
@@ -316,20 +418,31 @@ public final class ChatModel {
         return insert
     }
 
+    /// Photos dropped on the chat (from the other pane, or another app), as
+    /// JPEG data URLs: taken once by the composer, never sent by the drop.
+    public private(set) var insertImages: [String] = []
+    public func attach(images: [String]) { insertImages += images }
+    public func takeImages() -> [String] {
+        defer { insertImages = [] }
+        return insertImages
+    }
+
     /// The prompt to put back in the composer after a failed send, once.
     public func takeUnsent() -> UnsentPrompt? {
         defer { unsent = nil }
         return unsent
     }
 
-    /// Change this chat's model or tool policy on the computer.
-    public func setOptions(providerId: String? = nil, modelId: String? = nil, mode: PcSettings.ChatMode? = nil) async throws {
+    /// Change this chat's model, effort or tool policy on the computer.
+    public func setOptions(providerId: String? = nil, modelId: String? = nil, mode: PcSettings.ChatMode? = nil, effort: Effort? = nil) async throws {
         var o: [String: JSONValue] = [:]
         if let providerId { o["providerId"] = .string(providerId) }
         if let modelId { o["modelId"] = .string(modelId) }
         if let mode { o["mode"] = .string(mode.rawValue) }
+        if let effort { o["effort"] = .string(effort.rawValue) }
         guard !o.isEmpty else { return }
-        _ = try await store.remote().call(Channels.sessionSetOptions, [.string(sessionId), .object(o)])
+        // Raising the mode (fewer approvals) needs Face ID; the computer says when.
+        _ = try await store.call(raising: Channels.sessionSetOptions, [.string(sessionId), .object(o)])
         await reload()
     }
 
@@ -351,7 +464,7 @@ public final class ChatModel {
         } catch {
             // Show the queue as it is now, whatever happened to this edit.
             await reload()
-            throw error
+            throw store.readable(error)
         }
         await reload()
     }
@@ -410,6 +523,13 @@ public final class ChatModel {
     }
 
     public var modelId: String? { Self.resolveModel(session, store.defaults).1 }
+    public var providerId: String? { Self.resolveModel(session, store.defaults).0 }
+
+    /// The chat's model as its provider names it, else its id.
+    public var modelName: String? {
+        guard let id = modelId else { return nil }
+        return providerId.flatMap { store.models[$0]?.first { $0.id == id }?.name } ?? id
+    }
 
     public var blocks: [Block] {
         let merged = Transcript.mergeLive(saved: savedBlocks, live: turn.blocks)

@@ -15,7 +15,7 @@ const { reconnectProviderConfig } = await import('./AddProvider.js');
 const apiKeyCard: ProviderConfig = {
   id: 'anthropic-k1',
   kind: 'anthropic',
-  label: 'Anthropic (Claude)',
+  label: 'Claude API',
   baseUrl: 'https://api.anthropic.com',
   auth: 'apikey',
   enabled: true,
@@ -41,7 +41,7 @@ describe('reconnectProviderConfig', () => {
   it('keeps the card identity: id, label, baseUrl, custom model', () => {
     const next = reconnectProviderConfig({ ...apiKeyCard, customModelId: 'claude-opus-5' }, status);
     expect(next.id).toBe('anthropic-k1');
-    expect(next.label).toBe('Anthropic (Claude)');
+    expect(next.label).toBe('Claude API');
     expect(next.baseUrl).toBe('https://api.anthropic.com');
     expect(next.customModelId).toBe('claude-opus-5');
     expect(next.enabled).toBe(true);

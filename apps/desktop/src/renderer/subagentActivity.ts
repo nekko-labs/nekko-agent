@@ -56,7 +56,7 @@ export function foldSubagentActivity(event: AgentEvent, now = Date.now()): void 
       break;
     }
     case 'reasoning': next = { status: 'working', detail: 'Thinking through the task.' }; break;
-    case 'retry': next = { status: 'waiting', detail: 'Waiting to retry the provider.' }; break;
+    case 'retry': next = { status: 'waiting', detail: event.paused ? 'Paused while someone uses this computer.' : 'Waiting to retry the provider.' }; break;
     case 'tool_result': next = { status: 'working', detail: event.result.isError ? 'A tool failed; the child is still working.' : 'Reviewing the tool result.' }; break;
     case 'error': {
       const stopped = /^(aborted|stopped)$/i.test(event.message.trim());

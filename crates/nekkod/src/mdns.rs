@@ -278,13 +278,6 @@ pub struct Advertisement {
     pub port: u16,
 }
 
-/// JavaScript's `\s`.
-pub fn js_space(c: char) -> bool {
-    matches!(c, '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2028}' | '\u{2029}')
-        || ('\u{2000}'..='\u{200a}').contains(&c)
-        || matches!(c, '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}')
-}
-
 /// `/\.local\.?$/i` removed.
 fn strip_local(raw: &str) -> &str {
     let s = raw.strip_suffix('.').unwrap_or(raw);
@@ -303,7 +296,7 @@ pub fn service_label(raw: &str) -> String {
     let mut clean = String::new();
     let mut space = false;
     for c in replaced.chars() {
-        if js_space(c) {
+        if nekko_js::is_js_space(c) {
             space = true;
             continue;
         }
@@ -612,11 +605,21 @@ impl NetworkVisibility {
         self.status()
     }
 
+    /// Settings > Connections changed: go quiet, or announce again.
+    pub async fn recheck(self: &Arc<Self>) {
+        self.refresh().await;
+    }
+
     /// App shutdown: say goodbye, keep the switch as it is.
     pub fn close(&self) {
+        lock(&self.live).watching = false;
+        self.hush();
+    }
+
+    /// Say goodbye and close the socket, but keep watching (Settings > Connections).
+    fn hush(&self) {
         let (socket, current) = {
             let mut live = lock(&self.live);
-            live.watching = false;
             if let Some(stop) = live.stop.take() {
                 stop.notify_one();
             }
@@ -644,6 +647,11 @@ impl NetworkVisibility {
     async fn refresh(self: &Arc<Self>) {
         let _one = self.refreshing.lock().await;
         if !lock(&self.live).enabled {
+            return;
+        }
+        if !nekko_net::allowed("network-visibility") {
+            self.hush();
+            lock(&self.live).error = Some(nekko_net::blocked_message("network-visibility"));
             return;
         }
         let next = self.advertisement();

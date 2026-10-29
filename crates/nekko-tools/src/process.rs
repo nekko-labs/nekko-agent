@@ -14,9 +14,11 @@
 //! replacement characters), and a kill takes the whole tree on Windows too
 //! (a job object, where Node's `taskkill /T` could miss a reparented child).
 
+use crate::allowlist::{Dialect, runs_git};
 use crate::bash::{Utf8Carry, shell, spawn_code, tree::Tree};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
-use crate::guardrails::{Action, classify_command, default_guardrails};
+use crate::gitguard::hardened_git_env;
+use crate::guardrails::{Action, NOT_READ_ONLY, classify_command, default_guardrails};
 use crate::sandbox::{asks_everything, first_workspace, process_cwd, resolve_path};
 use nekko_js as js;
 use serde_json::Value;
@@ -24,7 +26,7 @@ use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::sync::Notify;
 
@@ -36,10 +38,6 @@ pub const READ_MAX: usize = 60_000;
 pub const READ_WAIT_MAX_MS: f64 = 120_000.0;
 /// Processes one chat may have running at once.
 pub const PROCESS_LIMIT: usize = 8;
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -117,6 +115,8 @@ pub struct StartRequest<'a> {
     pub command: &'a str,
     pub cwd: &'a str,
     pub name: Option<String>,
+    /// Environment changes on top of the daemon's own (and the platform's).
+    pub env: &'a [crate::gitguard::EnvChange],
 }
 
 impl Processes {
@@ -126,7 +126,7 @@ impl Processes {
 
     fn next_id(&self) -> String {
         let n = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
-        format!("p_{}_{}", base36(now_ms()), base36(n))
+        format!("p_{}_{}", base36(nekko_js::now_ms()), base36(n))
     }
 
     fn push_output(&self, id: &str, text: &str) {
@@ -145,7 +145,7 @@ impl Processes {
     fn set_exit(&self, id: &str, exit: Exit) {
         if let Some(e) = lock(&self.entries).get_mut(id) {
             e.info.exit = Some(exit);
-            e.info.ended_at = Some(now_ms());
+            e.info.ended_at = Some(nekko_js::now_ms());
         }
         self.wake.notify_waiters();
     }
@@ -183,6 +183,7 @@ impl Processes {
             .env("NO_COLOR", "1")
             .env("CI", std::env::var("CI").unwrap_or_else(|_| "1".into()))
             .kill_on_drop(true);
+        crate::bash::apply_env(&mut cmd, req.env);
         let spawned = cmd.spawn();
         let mut info = ProcessInfo {
             id: self.next_id(),
@@ -191,7 +192,7 @@ impl Processes {
             command: req.command.to_string(),
             cwd: req.cwd.to_string(),
             name: req.name,
-            started_at: now_ms(),
+            started_at: nekko_js::now_ms(),
             exit: None,
             ended_at: None,
         };
@@ -205,7 +206,7 @@ impl Processes {
                 // Node's spawn reports this as an 'error' event after start returns.
                 let message = format!("[could not start: spawn {shell} {}]\n", spawn_code(req.cwd, &e));
                 info.exit = Some(Exit::Code(-1));
-                info.ended_at = Some(now_ms());
+                info.ended_at = Some(nekko_js::now_ms());
                 let units: Vec<u16> = message.encode_utf16().collect();
                 lock(&self.entries)
                     .insert(id.clone(), Entry { info: info.clone(), unread: units.clone(), all: units, tree: None });
@@ -443,11 +444,24 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 }
             };
             let decision = classify_command(&command, rules);
-            let labels = decision.matches.iter().map(|m| m.label.as_str()).collect::<Vec<_>>().join(", ");
+            // "Not a read-only command" says nothing the prompt's own wording does not.
+            let labels = decision
+                .matches
+                .iter()
+                .filter(|m| m.rule_id != NOT_READ_ONLY)
+                .map(|m| m.label.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
             if decision.action == Action::Deny {
                 return Ok(ToolResult::err(call, format!("Blocked by guardrail ({labels}).")));
             }
             let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
+            // An auto-run git gets an environment that keeps repo config from running anything.
+            let env = if !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host()) {
+                hardened_git_env()
+            } else {
+                Vec::new()
+            };
             if needs_approval {
                 let reason = if labels.is_empty() { "Start a background process" } else { labels.as_str() };
                 let ok = tokio::select! {
@@ -484,6 +498,7 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 command: &command,
                 cwd: &cwd,
                 name,
+                env: &env,
             };
             match procs.start(req, mirror) {
                 Ok(info) => {
@@ -505,7 +520,7 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 Some(Value::String(id)) if !id.is_empty() => id.clone(),
                 _ => {
                     let list = procs.list(sid);
-                    let now = now_ms();
+                    let now = nekko_js::now_ms();
                     return Ok(ToolResult::ok(
                         call,
                         if list.is_empty() {
@@ -533,7 +548,7 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
             };
             match read {
                 Some((info, output, truncated)) if info.session_id == sid => {
-                    let head = describe_process(&info, now_ms());
+                    let head = describe_process(&info, nekko_js::now_ms());
                     let body = if output.is_empty() {
                         "(no new output)".to_string()
                     } else {
@@ -559,7 +574,10 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 return Ok(ToolResult::err(call, format!("No process {id} in this chat.")));
             };
             if info.exit.is_some() {
-                return Ok(ToolResult::ok(call, format!("{} (already exited)", describe_process(&info, now_ms()))));
+                return Ok(ToolResult::ok(
+                    call,
+                    format!("{} (already exited)", describe_process(&info, nekko_js::now_ms())),
+                ));
             }
             procs.kill(&id);
             Ok(ToolResult::ok(call, format!("Stopping {}.", label(&info))))
@@ -624,7 +642,10 @@ mod tests {
         let mirror: Mirror = Arc::new(move |_, _, t| lock(&s2).push_str(t));
         let cmd = echo("hello");
         let info = procs
-            .start(StartRequest { session_id: "s", workspace_id: None, command: &cmd, cwd: &cwd, name: None }, mirror)
+            .start(
+                StartRequest { session_id: "s", workspace_id: None, command: &cmd, cwd: &cwd, name: None, env: &[] },
+                mirror,
+            )
             .unwrap();
         let mut out = String::new();
         for _ in 0..50 {
@@ -651,10 +672,11 @@ mod tests {
         let mirror: Mirror = Arc::new(|_, _, _| {});
         let mut ids = Vec::new();
         for _ in 0..PROCESS_LIMIT {
-            let req = StartRequest { session_id: "s", workspace_id: None, command: sleep, cwd: &cwd, name: None };
+            let req =
+                StartRequest { session_id: "s", workspace_id: None, command: sleep, cwd: &cwd, name: None, env: &[] };
             ids.push(procs.start(req, mirror.clone()).unwrap().id);
         }
-        let req = StartRequest { session_id: "s", workspace_id: None, command: sleep, cwd: &cwd, name: None };
+        let req = StartRequest { session_id: "s", workspace_id: None, command: sleep, cwd: &cwd, name: None, env: &[] };
         assert!(procs.start(req, mirror.clone()).unwrap_err().contains("already has 8 processes"));
         assert_eq!(procs.kill_session("s"), PROCESS_LIMIT);
         for id in &ids {
@@ -680,6 +702,7 @@ mod tests {
             command: "echo x",
             cwd: "/definitely/not/here/nekko",
             name: Some("x".into()),
+            env: &[],
         };
         let info = procs.start(req, mirror).unwrap();
         assert!(info.pid.is_none());

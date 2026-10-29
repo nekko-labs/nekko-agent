@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, unsupportedPlatformReason } from '@nekko-agent/shared';
-import { runRelayAgent } from './relay-agent.js';
+import { parseCloudScope, runRelayAgent } from './relay-agent.js';
 import { runCli } from 'nekko-agent/run';
 import { isLoopbackHost, tokenMatches, validateBindSecurity } from './security.js';
 import { createApiSecurityHook, type RequestSecurityOptions } from './request-security.js';
@@ -72,6 +72,9 @@ async function main() {
       key: env('PAIR_KEY') || randomUUID().slice(0, 8),
       dataDir: DATA_DIR,
       here: __dirname,
+      // A Nekko Cloud machine: its pairing code was minted by Nekko Cloud, and its scope says what it may see.
+      pairCode: env('PAIR_CODE') || undefined,
+      scope: parseCloudScope(env('CLOUD_SCOPE')),
     });
     return;
   }

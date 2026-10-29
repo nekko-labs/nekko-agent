@@ -35,6 +35,9 @@ import java.util.concurrent.TimeUnit
  * OpenAI-compatible model. Proves the phone path end to end: enrollment with
  * the one-time code, the host's channels, a streamed chat turn, a guarded tool
  * call approved from the phone, and denial of strangers and a spent code.
+ * The TS agent never sends a challenge, so this also covers the legacy
+ * (protocol 3) HELLO after [RelayConfig.challengeWaitMs]; the challenged
+ * handshake is covered by RelayClientTest against the shared golden file.
  *
  * Opt-in. Needs a root build (shared, core, host, server, relay) and Node:
  *   NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegrationTest*'
@@ -184,6 +187,7 @@ class RelayIntegrationTest {
         assertFalse("the phone never gets whole files", rawChanges.toString().contains("\"original\""))
         val refused = runCatching { c.call("changes:accept", JsonPrimitive(sw.id), JsonPrimitive("nekko-itest-note.txt")) }.exceptionOrNull()
         assertTrue("accepting from a phone is refused: $refused", refused?.message?.contains("Not allowed from a paired phone") == true)
+        assertTrue("the refusal is parsed: $refused", (refused as? RelayException)?.refusal != null)
         println("itest: the phone read ${changes.files.size} changed file(s), and accepting from it was refused")
 
         // 3. The computer's skills: names only reach the phone, and a skill turn is expanded there.

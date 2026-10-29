@@ -22,23 +22,77 @@ struct FoldersView: View {
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
 
+    @State private var adding = false
+    @State private var folderPath = ""
+    @State private var removing: WorkspaceFolder?
+    @State private var busy = false
+    @State private var error: String?
+
     var body: some View {
         List {
+            ConnectionBanner()
             if store.workspaces.isEmpty {
-                Text("No saved folders on \(store.active?.name ?? "this computer"). Add one in Nekko Agent there.")
+                Text("No saved folders on \(store.active?.name ?? "this computer").")
                     .foregroundStyle(palette.inkSoft)
             }
             ForEach(store.workspaces) { w in
                 NavigationLink { FilesScreen(root: .folder(w.id), title: w.name) } label: {
-                    Label(w.name, systemImage: "folder")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(w.name, systemImage: "folder")
+                        if let path = w.path { Text(path).font(.caption).foregroundStyle(palette.inkSoft) }
+                    }
                 }
                 .accessibilityIdentifier("files.folder")
+                .swipeActions(allowsFullSwipe: false) {
+                    Button(role: .destructive) { removing = w } label: { Label("Remove saved folder", systemImage: "minus.circle") }
+                        .disabled(unavailable)
+                }
+                .contextMenu {
+                    Button(role: .destructive) { removing = w } label: { Label("Remove saved folder", systemImage: "minus.circle") }
+                        .disabled(unavailable)
+                }
+            }
+            Section {
+                Button { folderPath = ""; adding = true } label: { Label("Add computer folder", systemImage: "plus") }
+                    .disabled(unavailable)
+                    .accessibilityIdentifier("files.addFolder")
+                if busy { ProgressView() }
+            } footer: {
+                Text("Use an absolute path on the computer, not on this iPhone. Removing a saved folder never deletes files on disk.")
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Files")
         .accessibilityIdentifier("files.folders")
+        .alert("Add computer folder", isPresented: $adding) {
+            TextField("Absolute computer path", text: $folderPath)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            Button("Cancel", role: .cancel) {}
+            Button("Add") { act { try await store.addWorkspace(path: folderPath) } }
+                .disabled(unavailable || !WorkspacePath.isAbsolute(folderPath.trimmingCharacters(in: .whitespacesAndNewlines)))
+        } message: {
+            Text("Enter the full folder path on \(store.active?.name ?? "the computer").")
+        }
+        .confirmationDialog("Remove saved folder?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove saved folder", role: .destructive) {
+                if let folder = removing { act { try await store.removeWorkspace(folder.id) } }
+            }.disabled(unavailable)
+        } message: {
+            Text("Only the saved entry is removed. The folder and its files stay on the computer.")
+        }
+        .alert("Couldn’t update folders", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(error ?? "") }
+    }
+
+    private var unavailable: Bool { busy || store.conn != .online }
+
+    private func act(_ action: @escaping () async throws -> Void) {
+        busy = true
+        Task {
+            defer { busy = false }
+            do { try await action() } catch { self.error = error.localizedDescription }
+        }
     }
 }
 
@@ -69,6 +123,7 @@ private struct FolderList: View {
     let path: String
     let title: String
     @Environment(\.palette) private var palette
+    @Environment(\.inPanes) private var inPanes
     @State private var listing: FileListing?
     @State private var error: String?
     @State private var query = ""
@@ -87,13 +142,12 @@ private struct FolderList: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle(path.isEmpty ? title : (path as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "Find a file by name")
         .accessibilityIdentifier("files.list")
-        .refreshable { await load() }
+        .pawRefreshable { await load() }
         .task { if listing == nil { await load() } }
         .task(id: query) { await search() }
     }
@@ -152,6 +206,8 @@ private struct FolderList: View {
             }
         }
         .accessibilityIdentifier(e.dir ? "files.folderRow" : "files.fileRow")
+        // On a folding phone or iPad, a file dragged to a chat pane adds its path to the message (FD-4).
+        .modifier(PaneDraggable(text: e.dir || !inPanes ? nil : e.path))
     }
 
     private func failure(_ message: String) -> some View {
@@ -266,7 +322,10 @@ struct FileDetailView: View {
             ScrollView([.vertical]) {
                 VStack(alignment: .leading, spacing: 0) {
                     banners(f)
-                    if rendered, f.markdown, let text = f.text {
+                    if MermaidRules.isMermaidFile(f.name), !rendered, !f.truncated, let text = f.text {
+                        // A .mmd or .mermaid file draws as its diagram, as a fence in a chat does (MM-2).
+                        MermaidBlock(source: text, closed: true, style: .standard(palette)).padding(12)
+                    } else if rendered, f.markdown, let text = f.text {
                         MarkdownText(text: text).padding(12)
                     } else {
                         CodeLines(lines: Array(f.lines.prefix(Self.maxLines)))
@@ -276,7 +335,7 @@ struct FileDetailView: View {
                     }
                 }
             }
-            .refreshable { await load() }
+            .pawRefreshable { await load() }
             .accessibilityIdentifier("file.view")
         }
     }
@@ -449,11 +508,10 @@ struct LogsView: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Logs")
         .accessibilityIdentifier("logs.list")
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = LogsModel(store: store) }
             await model?.load()

@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { ciScope, FILE_LIST_CAP } from './ci-scope.mjs';
+import { ciScope, codeqlLanguages, FILE_LIST_CAP } from './ci-scope.mjs';
 
 const pr = (files, labels = []) => ciScope({ event: 'pull_request', files, labels });
 const queue = (files) => ciScope({ event: 'merge_group', files });
-const full = { daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true };
-// Every PR result carries itests: false; every queue result, itests: true.
-const p = (scope) => ({ ...scope, itests: false });
-const q = (scope) => ({ ...scope, itests: true });
+const full = { build: true, daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true };
+// Every PR result carries itests: false; every queue result, itests: true. Both build, unless a test says not.
+const p = (scope) => ({ build: true, ...scope, itests: false });
+const q = (scope) => ({ build: true, ...scope, itests: true });
 const none = { daemon_os: [], capture_os: [], perf: false };
 
 test('the schedule, main pushes and manual dispatches run every job on every OS', () => {
@@ -50,7 +50,8 @@ test('a profile change runs capture but not the daemon', () => {
 });
 
 test('labels opt a PR into macOS and the speed contract', () => {
-  assert.deepEqual(pr(['README.md'], ['ci:macos']), p({ daemon_os: ['macos-latest'], capture_os: ['macos-latest'], perf: false }));
+  assert.deepEqual(pr(['crates/nekkod/src/main.rs', 'apps/desktop/src/main/index.ts'], ['ci:macos']),
+    p({ daemon_os: ['ubuntu-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: false }));
   assert.equal(pr(['README.md'], ['ci:perf']).perf, true);
   assert.equal(pr(['scripts/perf/budgets.mjs']).perf, false);
   assert.equal(queue(['scripts/perf/budgets.mjs']).perf, true);
@@ -90,4 +91,46 @@ test('ci.yml runs the itests job from the scope and keeps it out of gate', () =>
   const gate = yml.match(/^ {2}gate:\n {4}needs: \[([^\]]*)\]/m)?.[1];
   assert.ok(gate, 'a gate job');
   assert.ok(!gate.split(',').map((s) => s.trim()).includes('itests'), 'gate does not wait for itests');
+});
+
+test('ci:macos adds macOS only to the jobs a change already needs', () => {
+  // #1023: two Swift UI test files with ci:macos ran the Rust daemon and desktop capture on macOS.
+  assert.deepEqual(pr(['apps/ios/UITests/ComputersTests.swift'], ['ci:macos']), p({ build: false, daemon_os: [], capture_os: [], perf: false }));
+  assert.deepEqual(pr(['README.md'], ['ci:macos']), p({ daemon_os: [], capture_os: [], perf: false }));
+  assert.deepEqual(pr(['crates/nekkod/src/main.rs'], ['ci:macos']).capture_os, []);
+});
+
+test('a change only to the native phone apps skips build, on the PR and in the queue', () => {
+  const native = ['apps/ios/App/AppModel.swift', 'apps/ios/project.yml', 'apps/android/app/src/main/java/Main.kt'];
+  assert.deepEqual(pr(native), p({ build: false, daemon_os: [], capture_os: [], perf: false }));
+  assert.deepEqual(queue(native), { build: false, daemon_os: [], capture_os: [], perf: false, itests: false });
+  // Anything else alongside, even docs, builds; so does an unknown list.
+  assert.equal(pr([...native, 'docs/guide.md']).build, true);
+  assert.equal(pr([...native, 'packages/shared/src/phone-access.ts']).build, true);
+  assert.equal(pr([]).build, true);
+  assert.equal(ciScope({ event: 'schedule', files: native }).build, true);
+});
+
+test('CodeQL analyses the languages a change is in', () => {
+  const langs = (files, labels = [], event = 'pull_request') => codeqlLanguages({ event, files, labels });
+  assert.deepEqual(langs(['apps/ios/UITests/ComputersTests.swift']), []);
+  assert.deepEqual(langs(['apps/ios/UITests/ComputersTests.swift'], ['ci:macos']), ['swift']);
+  assert.deepEqual(langs(['apps/desktop/src/renderer/App.tsx', 'scripts/x.mjs']), ['javascript-typescript']);
+  assert.deepEqual(langs(['crates/nekkod/src/main.rs', 'Cargo.lock']), ['rust']);
+  assert.deepEqual(langs(['scripts/perf/plot.py', '.github/workflows/android-native.yml']), ['actions', 'python']);
+  assert.deepEqual(langs(['docs/guide.md', 'spec/README.md']), []);
+  // Unknown or CI changes: every Linux language, Swift too with ci:macos on a PR; never Swift in the queue.
+  assert.deepEqual(langs([]), ['actions', 'javascript-typescript', 'python', 'rust']);
+  assert.deepEqual(langs(['.github/workflows/codeql.yml'], ['ci:macos']), ['actions', 'javascript-typescript', 'python', 'rust', 'swift']);
+  assert.deepEqual(langs(['apps/ios/A.swift'], ['ci:macos'], 'merge_group'), []);
+  assert.deepEqual(langs(['README.md'], [], 'schedule'), ['actions', 'javascript-typescript', 'python', 'rust', 'swift']);
+});
+
+test('ci.yml skips build from the scope, and the compliance check runs in scope for every change', () => {
+  const yml = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  assert.match(yml, /^ {6}build: \$\{\{ steps\.scope\.outputs\.build \}\}$/m);
+  const job = name => yml.match(new RegExp(`^ {2}${name}:\\n([\\s\\S]*?)(?=^ {2}\\S)`, 'm'))?.[1] ?? '';
+  assert.match(job('build'), /^ {4}if: needs\.scope\.outputs\.run == 'true' && needs\.scope\.outputs\.build == 'true'$/m);
+  assert.ok(job('scope').includes('node scripts/check-claude-compliance.mjs'));
+  assert.ok(!job('scope').includes('sparse-checkout'), 'the compliance check scans the whole tree');
 });

@@ -17,6 +17,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     let lock = NSLock()
     var calls: [(String, [JSONValue])] = []
     var replies: [String: ([JSONValue]) throws -> JSONValue] = [:]
+    var summariesReply: (@MainActor () async throws -> JSONValue)?
     var connected = false
     var closed = false
     var pushTokens: [String] = []
@@ -56,14 +57,20 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func control(_ c: RelayControl) { onControl?(c) }
     /// The computer's protocol version in its welcome.
     var welcomeProtocol = 1
-    var activities: [(String, String)] = []
-    func registerActivity(tag: String, token: String) async throws { lock.lock(); activities.append((tag, token)); lock.unlock() }
+    var cards: [JSONValue] = []
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {
+        lock.lock()
+        cards.append(["token": token.map(JSONValue.string) ?? .null, "startToken": startToken.map(JSONValue.string) ?? .null,
+                      "level": .string(level.rawValue), "computerId": .string(computerId), "computerName": .string(computerName)])
+        lock.unlock()
+    }
 
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
         lock.lock()
         calls.append((channel, args))
         let r = replies[channel]
         lock.unlock()
+        if channel == Channels.sessionsSummaries, let summariesReply { return try await summariesReply() }
         guard let r else { return .null }
         return try r(args)
     }
@@ -253,6 +260,89 @@ final class StoreTests: XCTestCase {
         s.unsubscribe(sub)
     }
 
+    func testSummaryInvalidationsDuringPendingCallReadFinalWatchCount() async throws {
+        let s = makeStore()
+        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let c = try XCTUnwrap(connections.last)
+        c.online()
+        await settle()
+        var pending: CheckedContinuation<JSONValue, Error>?
+        var requests = 0
+        c.summariesReply = {
+            requests += 1
+            if requests == 1 {
+                return try await withCheckedThrowingContinuation { pending = $0 }
+            }
+            return [["id": "s1", "activeWatchCount": 0]]
+        }
+        c.event(["type": "session_meta", "sessionId": "s1"])
+        c.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        XCTAssertEqual(requests, 1, "debounce notifications coalesce")
+        XCTAssertNotNil(pending)
+        c.event(["type": "session_meta", "sessionId": "s1"])
+        c.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        pending?.resume(returning: [["id": "s1", "activeWatchCount": 1]])
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 1)
+        await settle()
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 0)
+        XCTAssertEqual(requests, 2)
+        await settle()
+        XCTAssertEqual(requests, 2)
+        s.disconnect()
+    }
+
+    func testSummaryReconnectDiscardsPendingReplyAndDirtyRetry() async throws {
+        let s = makeStore()
+        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let old = try XCTUnwrap(connections.last)
+        old.online()
+        await settle()
+        var pending: CheckedContinuation<JSONValue, Error>?
+        var requests = 0
+        old.summariesReply = {
+            requests += 1
+            return try await withCheckedThrowingContinuation { pending = $0 }
+        }
+        old.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        old.event(["type": "session_meta", "sessionId": "s1"])
+        await settle()
+        s.connect(id)
+        let fresh = try XCTUnwrap(connections.last)
+        fresh.online()
+        await settle()
+        var freshPending: CheckedContinuation<JSONValue, Error>?
+        var freshRequests = 0
+        fresh.summariesReply = {
+            freshRequests += 1
+            if freshRequests == 1 {
+                return try await withCheckedThrowingContinuation { freshPending = $0 }
+            }
+            return [["id": "s1", "activeWatchCount": 0]]
+        }
+        fresh.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        pending?.resume(returning: [["id": "s1", "activeWatchCount": 99]])
+        await settle()
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 0)
+        fresh.event(["type": "session_meta", "sessionId": "s1"])
+        await settle()
+        XCTAssertEqual(freshRequests, 1, "old cleanup must not clear the new task")
+        freshPending?.resume(throwing: RelayError("failed"))
+        await settle()
+        XCTAssertEqual(freshRequests, 2, "a pending invalidation survives failure")
+        fresh.summariesReply = { freshRequests += 1; throw RelayError("failed") }
+        fresh.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        await settle()
+        XCTAssertEqual(freshRequests, 3, "failure alone must not loop")
+        s.disconnect()
+    }
+
     func testDenialAndForget() async throws {
         let s = makeStore()
         s.load()
@@ -270,6 +360,24 @@ final class StoreTests: XCTestCase {
         s.forget(a)
         XCTAssertNil(s.activeId)
         XCTAssertTrue(s.computers.isEmpty)
+    }
+
+    /// The computer left behind must not start a second card on this phone.
+    func testSwitchingComputersTellsTheOldOneToStopTheCard() async throws {
+        let s = makeStore()
+        s.load()
+        _ = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
+        let first = try XCTUnwrap(connections.last)
+        first.online()
+        s.cardLevel = .standard
+        await settle()
+        XCTAssertEqual(first.cards.last?.str("level"), "standard")
+        _ = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        XCTAssertFalse(connections.last === first, "the switch did not wait")
+        await settle()
+        XCTAssertEqual(first.cards.last?.str("level"), "none")
+        XCTAssertEqual(first.callsTo(Channels.cardSet).last, [["level": "none"]])
+        XCTAssertTrue(first.closed, "closed once it has said so")
     }
 
     func testTheConnectionLogFollowsTheActiveComputer() async throws {
@@ -305,10 +413,10 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.summaries.first?.archived, false)
         try await s.renameChat("s1", to: " New name ")
         XCTAssertEqual(s.summaries.first?.title, "New name")
-        let id = try await s.createChat(providerId: "p", modelId: "m", workspaceId: "w", mode: .guardrails)
+        let id = try await s.createChat(providerId: "p", modelId: "m", workspaceId: "w", mode: .guardrails, effort: .high)
         XCTAssertEqual(id, "new")
         XCTAssertEqual(c.callsTo(Channels.sessionCreate).last, ["w"])
-        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["new", ["providerId": "p", "modelId": "m", "mode": "guardrails"]])
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["new", ["providerId": "p", "modelId": "m", "mode": "guardrails", "effort": "high"]])
         try await s.updatePcSettings(PcSettings.patch(mode: .yolo))
         XCTAssertEqual(s.pcSettings.effectiveMode, .yolo)
         try await s.deleteChat("s1")
@@ -319,9 +427,27 @@ final class StoreTests: XCTestCase {
         s.setPushToken("apns-token")
         await settle()
         XCTAssertEqual(c.pushTokens.last, "apns-token")
-        await s.registerActivity(sessionId: "s1", token: "abcd")
-        XCTAssertEqual(c.activities.last?.0, E2E.activityTag("s1"))
-        XCTAssertEqual(c.activities.last?.1, "abcd")
+        // The Live Activity card: its tokens and level go to the relay, the level to the computer.
+        s.cardLevel = .standard
+        s.cardStartToken = "cd34"
+        s.cardToken = "ab12"
+        await settle()
+        let name = try XCTUnwrap(s.active?.name)
+        XCTAssertEqual(c.cards.last, ["token": "ab12", "startToken": "cd34", "level": "standard", "computerId": .string(s.activeId ?? ""),
+                                      "computerName": .string(name)])
+        XCTAssertEqual(c.callsTo(Channels.cardSet).last, [["level": "standard"]])
+        await s.cardAction(focus: "s1")
+        await s.cardAction(dismiss: "s2")
+        XCTAssertEqual(c.callsTo(Channels.cardSet).suffix(2), [[["focus": "s1"]], [["dismiss": "s2"]]])
+        let before = (c.cards.count, c.callsTo(Channels.cardSet).count)
+        s.cardToken = "ab12"
+        await settle()
+        XCTAssertEqual(c.cards.count, before.0, "nothing changed: not sent again")
+        // Every connect registers again (a relay restart forgets).
+        c.online()
+        await settle()
+        XCTAssertEqual(c.cards.count, before.0 + 1)
+        XCTAssertEqual(c.callsTo(Channels.cardSet).count, before.1 + 1)
     }
 }
 
@@ -396,6 +522,25 @@ final class ChatModelTests: XCTestCase {
         chat.stop()
     }
 
+    /// A Send tapped just as a reply finishes goes as a new turn: the re-read that
+    /// still says "running" is stale until the debounced reload after `done`.
+    func testASendRightAfterDoneStartsATurnNotAQueue() async throws {
+        let (s, c) = try await makeOnline()
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "activeRun": ["startedAt": 1]] }
+        let chat = ChatModel(sessionId: "s", store: s)
+        chat.start()
+        await settle()
+        c.event(["type": "text", "sessionId": "s", "delta": "Hi"])
+        c.event(["type": "done", "sessionId": "s"])
+        for _ in 0..<20 { await Task.yield() }
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": []] }
+        try await chat.send("next")
+        await settle()
+        XCTAssertEqual(c.callsTo(Channels.chatSend).first?.first?.str("text"), "next", "a new turn")
+        XCTAssertTrue(c.callsTo(Channels.chatQueue).isEmpty, "an idle chat's queue never runs")
+        chat.stop()
+    }
+
     func testApprovalsQuestionsAndStop() async throws {
         let (s, c) = try await makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
@@ -416,6 +561,40 @@ final class ChatModelTests: XCTestCase {
         chat.abort()
         await settle()
         XCTAssertEqual(c.callsTo(Channels.chatAbort).last, ["s"])
+    }
+
+    func testAReReadInFlightKeepsACardThatArrivedMeanwhile() async throws {
+        let (s, c) = try await makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s)
+        chat.start()
+        await settle()
+        // The computer answers "nothing pending" from before the approval, and the
+        // approval's event reaches the phone before that answer does.
+        c.replies[Channels.chatPending] = { _ in
+            c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
+            Thread.sleep(forTimeInterval: 0.3)
+            return [:]
+        }
+        await chat.reload()
+        XCTAssertEqual(chat.turn.approval?.call.id, "t", "the computer still waits on it, so the card stays")
+        // With no events in flight the re-read is the authority: an approval answered elsewhere goes.
+        c.replies[Channels.chatPending] = { _ in [:] }
+        await chat.reload()
+        XCTAssertNil(chat.turn.approval)
+
+        // The other way round: a re-read from before an answer doesn't bring the answered card back.
+        c.event(["type": "question", "sessionId": "s", "request": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]])
+        await settle()
+        c.replies[Channels.chatPending] = { _ in
+            Thread.sleep(forTimeInterval: 0.3)
+            return ["s": ["question": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]]]
+        }
+        async let stale: Void = chat.reload()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        try await chat.answer([AskAnswer(questionId: "x", labels: ["A"])])
+        await stale
+        XCTAssertNil(chat.turn.question, "answered, so the card stays down")
+        chat.stop()
     }
 
     func testAFailedAnswerKeepsTheCardSoItCanBeRetried() async throws {

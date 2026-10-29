@@ -112,6 +112,8 @@ struct Fake {
     checkouts: Mutex<Vec<Value>>,
     removed: Mutex<Vec<Value>>,
     checkout_error: Mutex<Option<String>>,
+    /// A synthetic `activity:state`, in place of the OS reading (none: cannot tell).
+    activity: Mutex<Option<Value>>,
 }
 
 impl WorkflowHost for Fake {
@@ -235,6 +237,10 @@ impl WorkflowHost for Fake {
     }
     fn next_run(&self, wf: &Value, from: f64) -> Option<f64> {
         rules::next_scheduled_run(&chrono_tz::UTC, wf, from)
+    }
+    fn activity(&self, _idle_after_secs: f64) -> BoxFut<'_, Option<Value>> {
+        let a = self.activity.lock().unwrap().clone();
+        Box::pin(async move { a })
     }
     fn resolve_path(&self, root: &str, rel: &str) -> String {
         if rel.starts_with('/') { rel.to_string() } else { format!("{root}/{rel}") }
@@ -614,6 +620,39 @@ fn saves(fake: &Fake) -> Vec<Value> {
 }
 
 #[tokio::test]
+async fn an_update_clears_the_settings_it_sends_as_null() {
+    let (engine, fake, dir) = engine_with("clear-null", local_settings());
+    fake.replies.lock().unwrap().push_back(json!({ "reply": "done" }));
+    let wf = engine
+        .create(&json!({ "name": "C", "description": "Old", "localModelOnly": true, "toolAccess": "read",
+            "prCheckout": true, "providerId": "local", "modelId": "m", "steps": [prompt_step("a", json!({}))] }))
+        .await
+        .unwrap();
+    let id = wf["id"].as_str().unwrap();
+    // What the editor sends when every one of them is cleared (JSON has no undefined).
+    let wf = engine
+        .update(
+            id,
+            &json!({ "description": null, "localModelOnly": null, "toolAccess": null, "prCheckout": null,
+            "providerId": null, "modelId": null }),
+        )
+        .unwrap();
+    for k in ["description", "localModelOnly", "toolAccess", "prCheckout", "providerId", "modelId"] {
+        assert!(wf[k].is_null(), "{k}: {wf}");
+    }
+    // The run reads them as unset: the default model, online, full workspace access.
+    assert_eq!(engine.run(id).await.unwrap()["status"], "success");
+    let saves = saves(&fake);
+    assert!(!saves.is_empty());
+    for fields in saves {
+        for k in ["providerId", "modelId", "offline", "toolAccess", "disabledTools"] {
+            assert!(fields.get(k).is_none(), "{k}: {fields}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn a_skill_step_fills_its_arguments_and_runs_under_its_skills_allowlist() {
     let (engine, fake, dir) = engine_with("skill-args", local_settings());
     fake.replies.lock().unwrap().push_back(json!({ "reply": "LGTM" }));
@@ -728,5 +767,59 @@ async fn without_pr_checkout_a_pr_run_uses_the_workspace_as_before() {
     assert_eq!(runs[0]["status"], "success");
     assert!(fake.checkouts.lock().unwrap().is_empty());
     assert!(saves(&fake)[0].get("gitWorktrees").is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn a_local_schedule_waits_for_idle_and_an_event_never_waits() {
+    let (engine, fake, dir) = engine_with("idle-gate", local_settings());
+    fake.replies.lock().unwrap().extend([json!({ "reply": "one" }), json!({ "reply": "two" })]);
+    *fake.activity.lock().unwrap() = Some(json!({ "userActive": true, "strain": [] }));
+    let wf = engine
+        .create(&json!({ "name": "Nightly", "providerId": "local", "modelId": "m",
+            "triggers": [{ "id": "s", "kind": "schedule", "intervalMs": 60_000 },
+                { "id": "c", "kind": "connector", "connector": "github", "event": "pr_opened" }],
+            "steps": [prompt_step("a", json!({}))] }))
+        .await
+        .unwrap();
+    let id = wf["id"].as_str().unwrap();
+    assert!(engine.dispatch_scheduled(id).await.is_none(), "held while the user is active");
+    assert!(fake.turns.lock().unwrap().is_empty());
+    assert_eq!(engine.list()[0]["waitingSince"], json!(1000));
+
+    // An event is not something to drop: it runs at once, beside the user.
+    let runs = engine.dispatch_event(&pr_event("MEMBER", false)).await;
+    assert_eq!(runs[0]["status"], "success", "{runs:?}");
+    assert_eq!(runs[0]["lowPriority"], json!(true));
+    assert_eq!(fake.turns.lock().unwrap()[0]["background"], json!("lowPriority"));
+    assert!(engine.list()[0].get("waitingSince").is_none(), "a run started: no longer waiting");
+
+    *fake.activity.lock().unwrap() = Some(json!({ "userActive": false, "strain": [] }));
+    let run = engine.dispatch_scheduled(id).await.unwrap();
+    assert_eq!(run["status"], "success", "{run}");
+    assert!(run.get("lowPriority").is_none(), "{run}");
+    assert_eq!(fake.turns.lock().unwrap().len(), 2);
+    assert_eq!(fake.turns.lock().unwrap()[1]["background"], json!("idle"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn a_cloud_schedule_and_a_manual_run_do_not_wait() {
+    let (engine, fake, dir) = engine_with("idle-cloud", local_settings());
+    *fake.activity.lock().unwrap() = Some(json!({ "userActive": true, "strain": ["hot"] }));
+    let cloud = engine
+        .create(&json!({ "name": "Cloud", "triggers": [{ "id": "s", "kind": "schedule", "intervalMs": 60_000 }],
+            "steps": [prompt_step("a", json!({}))] }))
+        .await
+        .unwrap();
+    assert!(engine.dispatch_scheduled(cloud["id"].as_str().unwrap()).await.is_some(), "the default is cloud");
+    let local = engine
+        .create(
+            &json!({ "name": "Local", "providerId": "local", "modelId": "m", "steps": [prompt_step("a", json!({}))] }),
+        )
+        .await
+        .unwrap();
+    assert!(engine.run(local["id"].as_str().unwrap()).await.is_some(), "a person asked");
+    assert_eq!(fake.turns.lock().unwrap().len(), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }

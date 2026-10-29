@@ -32,11 +32,11 @@
 //! of the same chain, so `chat:send` answers once the queue is worked through.
 
 use crate::accounts::{Accounts, TurnAccount};
+use crate::chat_client::{ProviderClient, ShieldedClient};
 use crate::decide::DecideService;
 use crate::hub::Hub;
 use crate::mcp::Mcp;
 use nekko_agent::{ProviderConfig, ProviderKind, create_provider};
-use nekko_chat::{ProviderClient, ShieldedClient};
 use nekko_js as js;
 use nekko_loop::{Cancel, RunOptions, Steering, ToolRunner, run_agent};
 use nekko_store::SessionStore;
@@ -49,7 +49,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
 /// The built-in tools the daemon runs itself (`nekko-tools`).
@@ -69,9 +69,8 @@ const NATIVE: &[&str] = &[
 /// Of [`NATIVE`], the background-process tools (`nekko_tools::process`).
 const PROCESS_TOOLS: &[&str] = &["start_process", "read_process", "kill_process"];
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+/// `fetch_url`'s answer when the user turns down a local address.
+const LOCAL_FETCH_REFUSED: &str = "Fetch not approved by user: the address is on this computer or the local network.";
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -130,7 +129,8 @@ impl Pending {
         let mut p = lock(&self.inner);
         let id = str_at(call, "id").unwrap_or_default().to_string();
         p.approvals.insert(id, (session_id.into(), tx));
-        let approval = json!({ "call": call, "reason": reason, "severity": severity, "requestedAt": now_ms() });
+        let approval =
+            json!({ "call": call, "reason": reason, "severity": severity, "requestedAt": nekko_js::now_ms() });
         p.set(session_id, "approval", Some(approval));
         rx
     }
@@ -282,6 +282,7 @@ impl Drop for TitleFlight {
 }
 
 pub struct Turns {
+    connectivity: Arc<crate::connectivity::Connectivity>,
     title_flights: TitleFlights,
     store: Arc<SessionStore>,
     data_dir: PathBuf,
@@ -326,6 +327,8 @@ pub struct Turns {
     watched: Mutex<HashMap<String, usize>>,
     /// Set once at startup when the daemon admits `chat:send`.
     preparer: OnceLock<Preparer>,
+    /// The gates background turns on a local model step aside by (background.rs).
+    background: OnceLock<Arc<crate::background::Background>>,
     /// The router (`routes::route`), for a tool that asks another service
     /// (`delegation_targets` lists a provider's models).
     dispatch: OnceLock<crate::automation::Dispatcher>,
@@ -358,6 +361,7 @@ impl Turns {
         training: Arc<nekko_automation::Training>,
     ) -> Self {
         Self {
+            connectivity: crate::connectivity::Connectivity::new(),
             title_flights: TitleFlights::default(),
             store,
             data_dir,
@@ -380,8 +384,19 @@ impl Turns {
             chained: Mutex::default(),
             watched: Mutex::default(),
             preparer: OnceLock::new(),
+            background: OnceLock::new(),
             dispatch: OnceLock::new(),
         }
+    }
+
+    /// `background:state`: how many background turns run, and how many are paused.
+    pub fn background_state(&self) -> Value {
+        self.background.get().map_or_else(|| json!({ "running": 0, "paused": 0, "reason": null }), |b| b.state())
+    }
+
+    /// Who decides when background turns step aside, set once the context exists.
+    pub fn set_background(&self, b: Arc<crate::background::Background>) {
+        let _ = self.background.set(b);
     }
 
     /// The router, set once the context exists.
@@ -470,6 +485,7 @@ impl Turns {
     pub fn abort(&self, turn_id: &str) -> bool {
         let Some(shared) = lock(&self.running).get(turn_id).cloned() else { return false };
         shared.cancel.cancel();
+        self.connectivity.forget(&shared.session_id);
         self.pending.release(&shared.session_id);
         true
     }
@@ -477,6 +493,7 @@ impl Turns {
     /// `chat:abort`: stop this session's turns here (a Claude Agent chat's
     /// may have one waiting behind a wake-up), if it has any.
     pub fn abort_session(&self, session_id: &str) -> bool {
+        self.connectivity.forget(session_id);
         let turns: Vec<Arc<Shared>> =
             lock(&self.running).values().filter(|s| s.session_id == session_id).cloned().collect();
         for shared in &turns {
@@ -501,10 +518,10 @@ impl Turns {
         let _ = getrandom::fill(&mut rand);
         let r = u32::from_le_bytes(rand) as u64 ^ n;
         json!({
-            "id": format!("msg_{}_{}", base36(now_ms()), &format!("{:0>6}", base36(r))[..6]),
+            "id": format!("msg_{}_{}", base36(nekko_js::now_ms()), &format!("{:0>6}", base36(r))[..6]),
             "role": "user",
             "content": content,
-            "createdAt": now_ms(),
+            "createdAt": nekko_js::now_ms(),
         })
     }
 
@@ -644,6 +661,7 @@ impl Turns {
         if !nekko_store::valid_id(&session_id) {
             return Err("Session not found.".into());
         }
+        self.connectivity.forget(&session_id);
         let claude_code = spec.pointer("/facts/provider/kind").and_then(Value::as_str) == Some("claude-code");
         let (tx, rx) = mpsc::unbounded_channel();
         let shared = Arc::new(Shared {
@@ -702,7 +720,9 @@ impl Turns {
     /// on them) and the linked spec kept in sync with the chat. A sandbox turn
     /// runs neither.
     fn after_turn_hooks(self: &Arc<Self>, store: &Arc<SessionStore>, spec: &Value, summary: &Value) {
-        if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true)) {
+        if spec.pointer("/facts/sandbox") == Some(&Value::Bool(true))
+            || summary.get("stop").and_then(Value::as_str) == Some("connectivity")
+        {
             return;
         }
         let session_id = str_at(&spec["opts"], "sessionId").unwrap_or_default().to_string();
@@ -732,7 +752,10 @@ impl Turns {
             let id = session_id.clone();
             let fresh = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
             let linked = fresh.as_ref().is_some_and(|s| {
-                js::truthy(s.get("specLinked")) && !js::truthy(s.get("incognito")) && !js::truthy(s.get("offline"))
+                js::truthy(s.get("specLinked"))
+                    && !js::truthy(s.get("incognito"))
+                    && !js::truthy(s.get("offline"))
+                    && !nekko_net::all_off()
             });
             if linked {
                 let _ = d("spec:build".into(), vec![json!(session_id)]).await;
@@ -748,7 +771,9 @@ impl Turns {
         turn_id: &str,
         mut summary: Value,
     ) -> Value {
-        if summary.get("early") == Some(&Value::Bool(true)) {
+        if summary.get("early") == Some(&Value::Bool(true))
+            || summary.get("stop").and_then(Value::as_str) == Some("connectivity")
+        {
             return summary;
         }
         let opts = &spec["opts"];
@@ -760,7 +785,7 @@ impl Turns {
         // titleAuto guards a name the user typed; incognito and offline chats
         // skip the extra call, as does a turn whose provider never resolved.
         if !js::truthy(fresh.get("incognito"))
-            && !js::truthy(fresh.get("offline"))
+            && !crate::connections::offline(&fresh)
             && fresh.get("titleAuto") == Some(&Value::Bool(true))
             && spec.pointer("/facts/provider").is_some_and(Value::is_object)
             && let Some(flight) = self.title_flights.claim(&session_id)
@@ -844,7 +869,7 @@ impl Turns {
         // own tools, so none of Nekko's tools or MCP servers are set up.
         let claude_code = facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code");
         if claude_code && sandbox {
-            return early("Claude Agent chats run Claude Code on this computer, so they cannot use a sandbox.");
+            return early("Claude subscription chats run Claude Code on this computer, so they cannot use a sandbox.");
         }
         if js::truthy(loaded.get("unattended")) {
             shared.unattended.on.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -859,7 +884,7 @@ impl Turns {
         // a Claude Code chat and an offline one have none.
         let own_mcp = facts.get("mcpServers").filter(|s| s.is_array() && !sandbox && !claude_code).cloned();
         let mcp_tools = match &own_mcp {
-            Some(configs) if !js::truthy(loaded.get("offline")) => {
+            Some(configs) if !crate::connections::offline(&loaded) => {
                 let any = configs.as_array().is_some_and(|a| a.iter().any(|c| c.get("enabled") == Some(&json!(true))));
                 if any { self.mcp.sync(configs).await["specs"].clone() } else { self.mcp.snapshot()["specs"].clone() }
             }
@@ -868,7 +893,7 @@ impl Turns {
         // The turn's composition: tools, context from disk, the system prompt.
         let tool_input = json!({
             "session": loaded,
-            "offline": js::truthy(loaded.get("offline")),
+            "offline": crate::connections::offline(&loaded),
             "orchestration": settings.get("orchestration").cloned().unwrap_or(Value::Null),
             "allowBrowserControl": spec.get("allowBrowserControl").cloned().unwrap_or(json!(false)),
             "mcpTools": mcp_tools,
@@ -947,7 +972,7 @@ impl Turns {
         let wake = spec.get("wake") == Some(&Value::Bool(true));
         let mut session_value = loaded;
         if !wake {
-            turn::apply_turn_input(&mut session_value, opts, now_ms());
+            turn::apply_turn_input(&mut session_value, opts, nekko_js::now_ms());
         }
         let session = Arc::new(Mutex::new(session_value));
         let queued = spec.get("queued").filter(|q| !q.is_null()).cloned();
@@ -984,12 +1009,12 @@ impl Turns {
 
         // On disk while the turn runs, so a restart knows it was cut off.
         if let Some(obj) = lock(&session).as_object_mut() {
-            obj.insert("activeRun".into(), json!({ "startedAt": now_ms() }));
+            obj.insert("activeRun".into(), json!({ "startedAt": nekko_js::now_ms() }));
         }
         persist(&store, &session, incognito).await;
 
         let turn_from = lock(&session).get("messages").and_then(Value::as_array).map_or(0, Vec::len);
-        let started_at = now_ms();
+        let started_at = nekko_js::now_ms();
         let mut identity = Map::new();
         identity.insert("providerId".into(), opts.get("providerId").cloned().unwrap_or(Value::Null));
         identity.insert("modelId".into(), opts.get("modelId").cloned().unwrap_or(Value::Null));
@@ -1024,12 +1049,29 @@ impl Turns {
                 Some(slot) => slot,
                 None => self.harness.take(&session_id).await,
             };
-            self.claude_code_turn(shared, slot, &store, &session, incognito, &workspaces, opts, &mode, wake).await;
+            self.claude_code_turn(
+                shared,
+                slot,
+                &store,
+                &session,
+                incognito,
+                &workspaces,
+                opts,
+                &facts["provider"],
+                &mode,
+                wake,
+            )
+            .await;
             return self.end_turn(&store, shared, &session, forwarder, incognito).await;
         }
 
         // Privacy Shield: a cloud model gets placeholders for private values.
         let shield = crate::privacy::shield_for(&lock(&session), settings, &facts["provider"]);
+        // Only an admitted local-model Expert override can disable thinking.
+        // Legacy session flags (and off facts on cloud turns) never take effect.
+        let thinking = config.kind != ProviderKind::Llamacpp
+            || config.managed_cache_prompt != Some(true)
+            || facts.get("thinking") != Some(&json!(false));
         let provider = create_provider(config);
         // An Anthropic API key's own rate limits, read off each response.
         let client = if let Some(key) = str_at(facts, "apiLimitsKey").map(str::to_string) {
@@ -1044,6 +1086,98 @@ impl Turns {
             ProviderClient::new(provider)
         };
         let client = ShieldedClient::new(client, shield.clone());
+        // An automation's turn on a model on this computer steps aside for the
+        // person at it (background.rs); any other turn runs as it is.
+        let gate = crate::background::Mode::from_opts(opts)
+            .filter(|_| facts.get("provider").is_some_and(crate::admission::offline_provider_allowed))
+            .and_then(|mode| self.background.get().map(|b| b.gate(mode) as Arc<dyn crate::chat_client::YieldGate>));
+        let client = crate::chat_client::YieldingClient::new(client, gate);
+        let internet =
+            crate::connectivity::needs_internet(&facts["provider"]) && !crate::connections::offline(&lock(&session));
+        let sink: crate::connectivity::Sink = {
+            let (st, sid, hub, logs) = (store.clone(), session_id.clone(), hub.clone(), self.agent_logs.clone());
+            Arc::new(move |notice: Value| {
+                let (st, sid, hub, logs) = (st.clone(), sid.clone(), hub.clone(), logs.clone());
+                Box::pin(async move {
+                    let n = notice.clone();
+                    let id = sid.clone();
+                    let written = if incognito {
+                        true
+                    } else {
+                        tokio::task::spawn_blocking(move || st.connectivity_notice(&id, n))
+                            .await
+                            .ok()
+                            .and_then(Result::ok)
+                            .unwrap_or(false)
+                    };
+                    if written {
+                        if !incognito {
+                            let at = notice["createdAt"]
+                                .as_i64()
+                                .and_then(chrono::DateTime::from_timestamp_millis)
+                                .map(|d| d.to_rfc3339())
+                                .unwrap_or_default();
+                            let line = format!("\n[{at}] {}\n", notice["content"].as_str().unwrap_or_default());
+                            let id = sid.clone();
+                            let _ = tokio::task::spawn_blocking(move || logs.notice(&id, &line)).await;
+                        }
+                        hub.publish(
+                            "agent:event",
+                            json!({ "type": "session_meta", "sessionId": sid, "connectivityNotice": notice }),
+                            false,
+                        );
+                    }
+                })
+            })
+        };
+        let _connectivity = if internet {
+            Some(self.connectivity.observe(&session_id, shared.cancel.clone(), sink.clone()).await)
+        } else {
+            None
+        };
+        let allowed: crate::connectivity::Allowed = {
+            let admitted = lock(&session);
+            let (settings, st, sid, pid, spid, smid) = (
+                self.settings.clone(),
+                store.clone(),
+                session_id.clone(),
+                opts["providerId"].clone(),
+                admitted.get("providerId").cloned(),
+                admitted.get("modelId").cloned(),
+            );
+            Arc::new(move || {
+                let (settings, st, sid, pid, spid, smid) =
+                    (settings.clone(), st.clone(), sid.clone(), pid.clone(), spid.clone(), smid.clone());
+                Box::pin(async move {
+                    tokio::task::spawn_blocking(move || {
+                        let settings = settings.shared();
+                        if settings.get("autoResumeOnInternetRestore") != Some(&Value::Bool(true)) {
+                            return false;
+                        }
+                        let provider =
+                            settings["providers"].as_array().and_then(|ps| ps.iter().find(|p| p["id"] == pid));
+                        if !provider.is_some_and(|p| p["enabled"] == true) {
+                            return false;
+                        }
+                        st.meta(&sid).is_some_and(|s| {
+                            !js::truthy(s.get("archivedAt"))
+                                && !js::truthy(s.get("offline"))
+                                && nekko_net::allowed("model-providers")
+                                && s.get("providerId") == spid.as_ref()
+                                && s.get("modelId") == smid.as_ref()
+                        })
+                    })
+                    .await
+                    .unwrap_or(false)
+                })
+            })
+        };
+        let client = crate::connectivity::ConnectedClient::new(
+            client,
+            internet.then(|| self.connectivity.clone()),
+            allowed,
+            sink,
+        );
         // In code mode the tools behind `run_code` are still this chat's tools.
         let names: HashSet<String> = tools
             .iter()
@@ -1111,7 +1245,7 @@ impl Turns {
             tools,
             temperature: facts.get("temperature").and_then(Value::as_f64),
             effort: str_of(facts, "effort"),
-            think: lock(&session).get("thinking").and_then(Value::as_bool),
+            think: Some(thinking),
             prompt_caching: Some(facts.get("promptCaching").and_then(Value::as_bool).unwrap_or(true)),
             max_history_turns: opts.get("maxHistoryTurns").and_then(Value::as_f64),
             context_window: facts.get("contextWindow").and_then(Value::as_f64).filter(|w| *w > 0.0),
@@ -1153,10 +1287,11 @@ impl Turns {
         incognito: bool,
         workspaces: &[Value],
         opts: &Value,
+        provider: &Value,
         mode: &str,
         wake: bool,
     ) {
-        use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode};
+        use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode, provider_account};
         use nekko_harness::{Mapped, Mapper, SessionStart, TurnExit, TurnInput};
 
         let session_id = shared.session_id.clone();
@@ -1177,13 +1312,27 @@ impl Turns {
         let paths: Vec<PathBuf> =
             workspaces.iter().filter_map(|w| str_at(w, "path")).filter(|p| !p.is_empty()).map(PathBuf::from).collect();
         let Some((cwd, rest)) = paths.split_first() else {
-            return fail("A Claude Agent chat needs a workspace folder to run in.", &history);
+            return fail("A Claude subscription chat needs a workspace folder to run in.", &history);
+        };
+        // The provider's Claude Code account. Its sessions live in its own
+        // folder, so one saved under another account (the chat switched) is
+        // not resumed: the next launch starts a new Claude Code session.
+        let account = provider_account(provider).map(str::to_string);
+        let config_dir = match nekko_harness::account_config_dir(account.as_deref()) {
+            Ok(dir) => dir,
+            Err(e) => return fail(&e, &history),
         };
         let wanted = Wanted {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
             model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
             permission_mode: permission_mode(mode),
+            config_dir,
+        };
+        let same_account = |s: &Value| str_at(s, "claudeCodeAccount") == account.as_deref();
+        let set_account = |obj: &mut serde_json::Map<String, Value>| match &account {
+            Some(a) => obj.insert("claudeCodeAccount".into(), json!(a)),
+            None => obj.shift_remove("claudeCodeAccount"),
         };
 
         // One turn per chat at a time: the slot stays taken until the end.
@@ -1198,7 +1347,10 @@ impl Turns {
                 Ok(bin) => bin,
                 Err(e) => return fail(&e, &history),
             };
-            let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
+            let stored = {
+                let s = lock(session);
+                str_at(&s, "claudeCodeSessionId").filter(|_| same_account(&s)).map(str::to_string)
+            };
             let mut spec = wanted.launch(bin, stored.as_deref());
             // Every permission prompt goes to Nekko through the bridge; with
             // no bridge Claude Code does not start (fail closed).
@@ -1211,6 +1363,7 @@ impl Turns {
                 // Saved before the launch, so a crash mid-turn still resumes.
                 if let Some(obj) = lock(session).as_object_mut() {
                     obj.insert("claudeCodeSessionId".into(), json!(id));
+                    set_account(obj);
                 }
                 persist(store, session, incognito).await;
             }
@@ -1238,6 +1391,9 @@ impl Turns {
                 seen = Some(init.session_id);
                 model = init.model.or(model.take());
             }
+            Mapped::PlanUsage(event) => {
+                self.harness.note_plan_usage(str_at(provider, "id").unwrap_or_default(), &event)
+            }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })
@@ -1258,6 +1414,7 @@ impl Turns {
                     Some(id) => obj.insert("claudeCodeSessionId".into(), json!(id)),
                     None => obj.shift_remove("claudeCodeSessionId"),
                 };
+                set_account(obj);
             }
             changed = true;
         }
@@ -1317,6 +1474,9 @@ impl Turns {
         if let Some(stop) = last_stop {
             summary["stop"] = stop;
         }
+        if lock(&shared.last_error).as_deref() == Some(crate::connectivity::LOST) {
+            summary["stop"] = json!("connectivity");
+        }
         summary
     }
 }
@@ -1372,7 +1532,7 @@ async fn generate_title(
     let (st, id) = (store.clone(), session_id.clone());
     let Some(fresh) = tokio::task::spawn_blocking(move || st.get(&id)).await.ok().flatten() else { return };
     if js::truthy(fresh.get("incognito"))
-        || js::truthy(fresh.get("offline"))
+        || crate::connections::offline(&fresh)
         || fresh.get("titleAuto") != Some(&Value::Bool(true))
         || !facts.get("provider").is_some_and(Value::is_object)
     {
@@ -1385,7 +1545,7 @@ async fn generate_title(
         "provider": facts["provider"],
         "request": {
             "model": opts.get("modelId").cloned().unwrap_or(Value::Null),
-            "messages": [{ "id": "title", "role": "user", "createdAt": now_ms(), "content": content }],
+            "messages": [{ "id": "title", "role": "user", "createdAt": nekko_js::now_ms(), "content": content }],
             "temperature": 0.2,
             "maxOutputTokens": 24,
             "think": false,
@@ -1664,7 +1824,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             }
             // Stats go on the transcript before the checkpoint writes it, so a
             // pane that re-reads the chat on `done` already finds them.
-            let mut finished = f.stats.finish(now_ms() as f64, event.get("steps"), event.get("stop"));
+            let mut finished = f.stats.finish(nekko_js::now_ms() as f64, event.get("steps"), event.get("stop"));
             if let (Some(stats), Some(tally)) = (finished.as_mut(), &f.code_mode) {
                 let calls = stats.get("calls").and_then(Value::as_u64).unwrap_or(0);
                 stats["codeMode"] = tally.summary(calls);
@@ -1991,6 +2151,7 @@ impl TurnTools {
         }
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
+            "remember" => return Ok(self.remember(id, &input).await),
             "complete_session" => return Ok(self.complete(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
@@ -2099,7 +2260,7 @@ impl TurnTools {
     async fn agent_watch(&self, watches: &crate::watches::Watches, call: &Value) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(json!({}));
-        let offline = js::truthy(lock(&self.session).get("offline"));
+        let offline = crate::connections::offline(&lock(&self.session));
         let failed = |e: &str| error(id, format!("Agent watch failed: {e}"));
         if self.incognito || self.training || offline {
             return failed("Durable watches are unavailable in incognito, goal runs, or offline chats");
@@ -2125,8 +2286,6 @@ impl TurnTools {
         }
     }
 
-    /// `fetch_url` (tools.ts): reading a page is as safe as reading a file,
-    /// so only ask mode or the ask-everything sandbox asks.
     /// A sandbox chat's call (`executeSandboxTool`): anything but the
     /// container's tools is refused without asking; each call asks first (the
     /// live yolo policy aside), then runs in the chat's container, and the
@@ -2177,6 +2336,9 @@ impl TurnTools {
         }
     }
 
+    /// `fetch_url` (tools.ts): reading a public page is as safe as reading a
+    /// file, so only ask mode or the ask-everything sandbox asks; reaching
+    /// this computer or the local network asks in every mode but YOLO.
     async fn fetch_url(&self, call: &Value) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         let input = call.get("input").cloned().unwrap_or(Value::Null);
@@ -2184,18 +2346,50 @@ impl TurnTools {
             Some(Value::String(u)) if !js::trim(u).is_empty() => u.clone(),
             _ => return error(id, "A URL is required."),
         };
+        // A page on this computer or the local network (a dev server, a
+        // router, the cloud metadata address) is fetched only with the user's
+        // approval, in every mode but YOLO: a page the agent read could have
+        // asked for it. That approval also stands for the plain "Fetch" one.
+        let mut approved = std::collections::HashSet::new();
+        let first_local = nekko_web::fetch::parse_url(&url).ok().and_then(|u| nekko_web::netguard::local_host(&u));
         let asks = self.mode == "ask" || self.sandbox_mode.as_deref() == Some("ask-everything");
-        if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await {
+        if let Some(host) = first_local {
+            if !self.approve_local_fetch(call, &url, &host).await {
+                return error(id, LOCAL_FETCH_REFUSED);
+            }
+            approved.insert(host);
+        } else if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await
+        {
             return error(id, "Fetch not approved by user.");
         }
         let cancel = nekko_tools::Cancel::new();
         let c2 = cancel.clone();
         self.shared.cancel.on_cancel(move || c2.cancel());
         let max = input.get("max_chars").and_then(Value::as_f64);
-        match nekko_web::fetch_url(&url, max, &cancel).await {
-            Ok(page) => result(id, nekko_web::describe_fetched(&page)),
-            Err(e) => error(id, e),
+        loop {
+            match nekko_web::fetch_url(&url, max, &cancel, &approved).await {
+                Ok(page) => return result(id, nekko_web::describe_fetched(&page)),
+                // A redirect, or a name that resolved, into the local network.
+                Err(nekko_web::FetchError::Local { url: at, host }) => {
+                    if approved.contains(&host) || approved.len() >= 4 {
+                        return error(id, format!("Could not fetch {url}: too many local redirects."));
+                    }
+                    if !self.approve_local_fetch(call, &at, &host).await {
+                        return error(id, LOCAL_FETCH_REFUSED);
+                    }
+                    approved.insert(host);
+                }
+                Err(nekko_web::FetchError::Failed(e)) => return error(id, e),
+            }
         }
+    }
+
+    /// Ask before `fetch_url` reaches `host` on this computer or the local network.
+    async fn approve_local_fetch(&self, call: &Value, url: &str, host: &str) -> bool {
+        let reason = format!(
+            "Fetch {url}? {host} is on this computer or your local network, not the public internet. Approve only if you expected the agent to read it."
+        );
+        self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
     }
 
     /// `spawn_agent` (chat.ts `runSubAgent`): ask first when the policy says
@@ -2215,7 +2409,10 @@ impl TurnTools {
             .get("disabledTools")
             .and_then(Value::as_array)
             .is_some_and(|d| d.iter().any(|t| t.as_str() == Some("spawn_agent")));
-        if js::truthy(session.get("incognito")) || js::truthy(session.get("offline")) || !self.allow_spawn || spawn_off
+        if js::truthy(session.get("incognito"))
+            || crate::connections::offline(&session)
+            || !self.allow_spawn
+            || spawn_off
         {
             return failure("delegation_unavailable", "Delegation discovery is unavailable in this chat.");
         }
@@ -2401,6 +2598,24 @@ impl TurnTools {
         result(id, "Chat title updated.")
     }
 
+    /// `remember`: a global memory note. The chat's memory card reads the
+    /// call's title and body and this result's first word after "Memory".
+    async fn remember(&self, id: &str, input: &Value) -> Value {
+        let dir = self.turns.data_dir.clone();
+        let text = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
+        let (title, body) = (text("title"), text("body"));
+        let saved = tokio::task::spawn_blocking(move || nekko_workspace::memory::remember(&dir, &title, &body))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+        match saved {
+            Ok((note, updated)) => {
+                let action = if updated { "updated" } else { "added" };
+                result(id, format!("Memory {action}: {}", js::display(&note["title"])))
+            }
+            Err(e) => error(id, format!("Memory was not saved: {e}")),
+        }
+    }
+
     async fn complete(&self, id: &str, input: &Value) -> Value {
         if input.as_object().is_some_and(|o| !o.is_empty()) {
             return error(id, "complete_session takes no arguments and only completes the current chat.");
@@ -2408,7 +2623,7 @@ impl TurnTools {
         let Some(disk) = self.disk().await else {
             return error(id, "Session not found; completion was not saved.");
         };
-        let at = disk.get("archivedAt").filter(|v| !v.is_null()).cloned().unwrap_or(json!(now_ms()));
+        let at = disk.get("archivedAt").filter(|v| !v.is_null()).cloned().unwrap_or(json!(nekko_js::now_ms()));
         let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
         let saved = tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "archivedAt": at }))).await.ok();
         let Some(Ok(Some(saved))) = saved else {
@@ -2426,12 +2641,12 @@ impl TurnTools {
 
     async fn update_plan(&self, id: &str, input: &Value) -> Value {
         let current = lock(&self.session).get("agentPlan").cloned();
-        let output = match turn::apply_plan_update(current.as_ref(), input, now_ms()) {
+        let output = match turn::apply_plan_update(current.as_ref(), input, nekko_js::now_ms()) {
             turn::PlanOutcome::Applied { plan, .. } => {
                 let echo = turn::plan_echo(&plan);
                 if let Some(obj) = lock(&self.session).as_object_mut() {
                     obj.insert("agentPlan".into(), Value::Array(plan));
-                    obj.insert("updatedAt".into(), json!(now_ms()));
+                    obj.insert("updatedAt".into(), json!(nekko_js::now_ms()));
                 }
                 echo
             }
@@ -2448,10 +2663,11 @@ impl TurnTools {
     async fn ask(&self, call: &Value) -> String {
         let c = turn::catalog::catalog();
         let call_id = str_at(call, "id").unwrap_or_default().to_string();
-        let request = match turn::parse_ask_request(&call_id, call.get("input").unwrap_or(&Value::Null), now_ms()) {
-            Ok(r) => r,
-            Err(e) => return e,
-        };
+        let request =
+            match turn::parse_ask_request(&call_id, call.get("input").unwrap_or(&Value::Null), nekko_js::now_ms()) {
+                Ok(r) => r,
+                Err(e) => return e,
+            };
         let session_id = self.shared.session_id.clone();
         let rx = self.turns.pending.park_question(&session_id, &request);
         self.shared.emit(json!({ "type": "question", "sessionId": session_id, "request": request }));

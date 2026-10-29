@@ -12,8 +12,11 @@ Any PR that changes what the app looks like ships the proof in its description:
 - **A short screen recording** (a few seconds, mp4 or gif) whenever the change touches
   animation, transition, gesture, scroll, or timing. A still frame cannot show motion,
   so screenshots alone do not cover those changes.
+- Use the default Nekko Agent theme for screenshots and recordings. A separate
+  light/dark theme pair is not required; keep before/after captures in that same
+  default theme.
 - Cover every surface the change actually affects: mobile and desktop widths on web,
-  iOS and Android for native, light and dark theme if both shift.
+  iOS and Android for native.
 - Media belongs in the PR description, not in git. Use the shared `pr-media`
   pre-release series for all screenshots and recordings; never create a release
   per PR. GitHub caps a release at 1,000 assets, so when the newest release cannot
@@ -38,4 +41,40 @@ Any PR that changes what the app looks like ships the proof in its description:
 
 ## Verification must preserve the user desktop
 
-Routine agent verification must run hidden, with non-focusable windows and isolated profiles. Full viewport/virtualization fixtures may stay mapped off-screen, with showInactive, when hidden rendering changes layout or animation behavior. Never place them over any user monitor. Use capturePage with stayHidden:true for renderer evidence and DOM/CDP interaction rather than OS input. Native-window evidence may use an off-screen, non-focusable owned fixture with showInactive; never position it over the active desktop, minimize/restore user windows, or claim hidden renderer pixels prove OS chrome. Launch child processes with windowsHide:true on Windows. Do not launch the normal app or run foreground native branding/permission tests during local verification. Use a disposable CI desktop for OS focus/permission behavior; local visible verification requires an explicit user request. Timing/motion modes and inspection holds must preserve the same background constraints.
+Routine agent verification must run hidden, with non-focusable windows and isolated profiles. Full viewport/virtualization fixtures may stay mapped off-screen, with showInactive, when hidden rendering changes layout or animation behavior. Never place them over any user monitor. Use capturePage with stayHidden:true for renderer evidence and DOM/CDP interaction rather than OS input. On macOS a shown window placed off-screen is moved back onto a display (one created at x:-5000 reports x:0 once shown), so showInactive there puts the fixture over the desktop: on macOS keep it `show: false` and check the run's recorded window bounds. Native-window evidence may use an off-screen, non-focusable owned fixture with showInactive; never position it over the active desktop, minimize/restore user windows, or claim hidden renderer pixels prove OS chrome. Launch child processes with windowsHide:true on Windows. Do not launch the normal app or run foreground native branding/permission tests during local verification. Use a disposable CI desktop for OS focus/permission behavior; local visible verification requires an explicit user request. Timing/motion modes and inspection holds must preserve the same background constraints.
+
+## Capturing renderer evidence
+
+`apps/desktop/scripts/layout-evidence-integration.cjs` bundles the real App
+against a stub bridge and captures it in a hidden, off-screen, non-focusable
+window. `NEKKO_TEST_LABEL` names the output folder (`.shots/layout-evidence/<label>`),
+and `NEKKO_LAYOUT_SANDBOX=<name>-sandbox.cjs` picks the capture script (default
+`layout-evidence-sandbox.cjs`). Run it once before editing for the "before" shots.
+
+- Create capture windows with `show: false`, `focusable: false` and
+  `webPreferences.backgroundThrottling: false` (leave `paintWhenInitiallyHidden`
+  at its default, true), and capture with `capturePage(rect, { stayHidden: true })`.
+  Never call `show()` or `showInactive()` for a hidden capture.
+- `win.webContents.sendInputEvent({ type: 'mouseMove', x, y })` triggers real
+  CSS `:hover` in the hidden window: it is renderer input, not OS input.
+- For a GIF without ffmpeg, encode the PNG frames with `pngjs` and `omggif`
+  (both in `node_modules`). Build the palette from the frames' own most common
+  colors; a fixed color cube washes pale tints out to white.
+- The stub bridge logs a few console errors of its own. Compare the report's
+  `errors` against a run on `main` before blaming your change.
+
+## Running the Local Web UI for verification
+
+The server reads only `NEKKO_`-prefixed variables (`ENV_PREFIXES` in
+`packages/shared/src/brand-env.ts`); any other prefix is ignored silently, and
+the server then starts on 1440 against your real data folder. Point it at a
+throwaway one:
+
+```
+NEKKO_DATA_DIR="$(mktemp -d)" NEKKO_PORT=1450 npm run start -w @nekko-agent/local-web-ui
+```
+
+Check the startup log's `data dir:` line before touching the UI. To get
+provider cards without real settings, seed that folder with a `settings.json`
+holding a `providers` array. `.claude/launch.json` is tracked: keep temporary
+preview entries out of it, or out of your commit.

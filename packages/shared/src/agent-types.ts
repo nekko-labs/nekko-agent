@@ -1,5 +1,5 @@
 /**
- * Agent "type" classification. In a busy Command Center a team needs to tell at
+ * Agent "type" classification. In a busy Agent board a team needs to tell at
  * a glance what each running agent *is*, a code-review bot, a production
  * monitor, a research agent, a build agent, so this derives a type from the
  * signals we already have: the skill in play, the task kind/condition, the

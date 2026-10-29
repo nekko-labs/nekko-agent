@@ -34,6 +34,20 @@ function setup(context: Context = () => ({ windowHidden: true, visibleSessionId:
 }
 
 describe('main desktop notifications', () => {
+  it('tells the owner about a phone’s safety exit even with notifications off, once', async () => {
+    const s = setup(); await flush(); s.sockets[0].onopen?.();
+    s.enable(false);
+    const exit = { channel: 'remote:stop', deviceId: 'p1', name: 'Philip’s iPhone', at: Date.now() };
+    const frame = { data: JSON.stringify({ channel: IpcEvents.remoteSafetyExit, payload: exit }) };
+    s.sockets[0].onmessage?.(frame); s.sockets[0].onmessage?.(frame); await flush();
+    expect(s.post).toHaveBeenCalledTimes(1);
+    expect(s.post).toHaveBeenCalledWith(expect.objectContaining({ kind: 'safety-exit', title: 'Remote access was stopped', link: 'nekko-agent://settings' }));
+    expect(s.post.mock.calls[0][0].body).toContain('from Philip’s iPhone at');
+    // One from before this watcher started is old news.
+    s.sockets[0].onmessage?.({ data: JSON.stringify({ channel: IpcEvents.remoteSafetyExit, payload: { ...exit, at: 1 } }) }); await flush();
+    expect(s.post).toHaveBeenCalledTimes(1);
+  });
+
   it('subscribes directly with token, defaults on and deduplicates without any renderer', async () => {
     const s = setup(); await flush();
     expect(s.urls).toEqual(['ws://127.0.0.1:123/api/ws?sessions=&token=a%20b']);

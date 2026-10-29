@@ -36,7 +36,7 @@ describe('Use in chat attaches a skill chip', () => {
       // No text routed to the composer: the draft stays exactly as typed.
       expect(useStore.getState().composerInbox).toBeNull();
       expect(useStore.getState().draftBySession[existing.id]).toBe('half-typed idea');
-      expect(useStore.getState().view).toBe('chat');
+      expect(useStore.getState().view).toBe('command');
       expect(open).toHaveBeenCalledWith(existing.id);
       expect(window.nekko.createSession).not.toHaveBeenCalled();
     } finally { open.mockRestore(); }

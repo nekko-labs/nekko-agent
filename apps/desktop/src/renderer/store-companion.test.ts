@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 
 describe('wall companions', () => {
-  it.each([['diff', 'chat_a'], ['browser', 'about:blank'], ['files', '']] as const)('opens %s beside the chat without leaving the Command Center', (kind, refId) => {
+  it.each([['diff', 'chat_a'], ['browser', 'about:blank'], ['files', '']] as const)('opens %s beside the chat without leaving the Agent board', (kind, refId) => {
     expect(useStore.getState().openCompanion('chat_a', kind)).toBe(true);
     const s = useStore.getState();
     expect(s.view).toBe('command');

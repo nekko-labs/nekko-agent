@@ -49,6 +49,7 @@ const CENTRE_ICON: Record<PaneKind, (p: { className?: string }) => React.JSX.Ele
   insights: LayoutIcon,
   subscriptions: LayoutIcon,
   resources: LayoutIcon,
+  zone: LayoutIcon,
 };
 
 const DIRECTIONS: Direction[] = ['up', 'right', 'down', 'left'];

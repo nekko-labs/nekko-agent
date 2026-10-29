@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { MemoryEntry, MemoryScope } from '@nekko-agent/shared';
 import { PlusIcon, TrashIcon } from '../icons.js';
 import { hasAppChrome } from '../chrome.js';
+import { useStore } from '../store.js';
 
 export function MemoryView() {
   const [scope, setScope] = useState<MemoryScope>('global');
@@ -10,6 +11,20 @@ export function MemoryView() {
 
   const load = async () => setEntries(await window.nekko.listMemory(scope));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [scope]);
+
+  // A chat's memory card opens the note it saved, which is always global.
+  const memoryFocus = useStore((s) => s.memoryFocus);
+  useEffect(() => {
+    if (!memoryFocus) return;
+    useStore.setState({ memoryFocus: null });
+    setScope('global');
+    window.nekko.listMemory('global').then((all) => {
+      setEntries(all);
+      const want = memoryFocus.trim().toLowerCase();
+      const note = all.find((m) => m.title.trim().toLowerCase() === want);
+      if (note) setEditing(note);
+    });
+  }, [memoryFocus]);
 
   const blank = (): MemoryEntry => ({
     id: `m_${Date.now().toString(36)}`,

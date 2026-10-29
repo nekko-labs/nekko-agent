@@ -4,6 +4,6 @@
 <dict>
     <!-- The status widget reads the app's snapshot (counts only) from the shared group. -->
     <key>com.apple.security.application-groups</key>
-    <array><string>group.com.nekko.native.ios</string></array>
+    <array><string>group.dev.nekkolabs.nekkoagent</string></array>
 </dict>
 </plist>

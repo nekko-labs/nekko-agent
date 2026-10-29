@@ -18,11 +18,20 @@ pub fn fake_claude() {
     let args = split_args(&std::env::var("FAKE_CLAUDE_ARGS").unwrap_or_default());
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     let session = flag("--session-id").or_else(|| flag("--resume")).unwrap_or_default();
+    // Which Claude Code folder each launch ran on, and whether it resumed.
+    if let Some(dir) = std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from) {
+        let _ = std::fs::create_dir_all(&dir);
+        let how = if flag("--resume").is_some() { "resume" } else { "new" };
+        let mut log =
+            std::fs::OpenOptions::new().create(true).append(true).open(dir.join("fake-launches.log")).unwrap();
+        let _ = writeln!(log, "{how} {session}");
+    }
     let (token, url) = flag("--mcp-config")
         .and_then(|p| std::fs::read_to_string(p).ok())
         .and_then(|s| serde_json::from_str::<Value>(&s).ok())
         .map(|c| {
-            let a = &c["mcpServers"]["nekko_bridge"]["args"];
+            let server = &c["mcpServers"]["nekko_bridge"];
+            let a = &server["args"];
             let at = |name: &str| {
                 a.as_array()
                     .and_then(|v| v.iter().position(|x| x == name))
@@ -30,7 +39,7 @@ pub fn fake_claude() {
                     .unwrap_or_default()
                     .to_string()
             };
-            (at("--bridge"), at("--url"))
+            (server["env"]["NEKKO_BRIDGE_TOKEN"].as_str().unwrap_or_default().to_string(), at("--url"))
         })
         .unwrap_or_default();
     let down = token.is_empty() || std::env::var("NEKKOD_TEST_BRIDGE_DOWN").is_ok();
@@ -264,9 +273,13 @@ fn rig_env(name: &str, mode: &str, cli: bool, extra: &[(&str, Option<&str>)]) ->
 fn spec(rig: &Rig, turn_id: &str, text: &str) -> Value {
     let provider =
         json!({ "id": "cc", "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true });
+    spec_on(rig, turn_id, text, provider)
+}
+
+fn spec_on(rig: &Rig, turn_id: &str, text: &str, provider: Value) -> Value {
     json!({
         "turnId": turn_id,
-        "opts": { "sessionId": "s_cc", "providerId": "cc", "modelId": "opus", "text": text },
+        "opts": { "sessionId": "s_cc", "providerId": provider["id"], "modelId": "opus", "text": text },
         "allowBrowserControl": false,
         "settings": { "providers": [provider], "defaultChatMode": "guardrails", "unattendedQuestionMinutes": 0 },
         "facts": {
@@ -440,4 +453,50 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     turn_record(&rig, "ccW2", "s_cc").await;
     let replies = assistant_texts(&saved(&rig));
     assert!(replies.last().unwrap().ends_with(": again"), "{replies:?}");
+}
+
+/// A Claude Agent on a second Claude Code account runs with that account's
+/// folder, and a chat that switches account starts a new Claude Code session
+/// there instead of resuming one from the other account's folder.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_second_account_runs_in_its_own_folder_and_a_switch_starts_afresh() {
+    let home = std::env::temp_dir().join(format!("nekkod-cc-home-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let h = home.to_string_lossy().into_owned();
+    let rig = rig_env("account", "guardrails", true, &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
+    let launches = |dir: &Path| std::fs::read_to_string(dir.join("fake-launches.log")).unwrap_or_default();
+    let default_dir = rig.data.join("claude-config");
+    let work_dir = home.join(".claude-work");
+    let work = json!({ "id": "cc-work", "kind": "claude-code", "label": "Claude Agent · Work", "baseUrl": "", "enabled": true, "claudeCode": { "account": "work" } });
+
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "a1", "hello")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "a1", "s_cc").await;
+    let first = saved(&rig);
+    let s1 = first["claudeCodeSessionId"].as_str().unwrap().to_string();
+    assert!(first.get("claudeCodeAccount").is_none(), "{first}");
+    assert_eq!(launches(&default_dir), format!("new {s1}\n"));
+
+    let (status, _) =
+        post(rig.d.port, "chat:turn", json!([spec_on(&rig, "a2", "switched", work.clone())]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "a2", "s_cc").await;
+    let second = saved(&rig);
+    let s2 = second["claudeCodeSessionId"].as_str().unwrap().to_string();
+    assert_ne!(s1, s2, "a session from the other account is never resumed");
+    assert_eq!(second["claudeCodeAccount"], "work");
+    assert_eq!(launches(&work_dir), format!("new {s2}\n"));
+
+    // Back on the default login: again a new session, in the default folder.
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "a3", "back")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "a3", "s_cc").await;
+    let third = saved(&rig);
+    assert!(third.get("claudeCodeAccount").is_none(), "{third}");
+    let log = launches(&default_dir);
+    assert_eq!(log.lines().count(), 2, "{log}");
+    assert!(log.lines().all(|l| l.starts_with("new ")), "{log}");
+    drop(rig);
+    let _ = std::fs::remove_dir_all(&home);
 }

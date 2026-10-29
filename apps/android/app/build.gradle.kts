@@ -42,6 +42,12 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    // The computer's log redaction cases, checked on a device too: Android's
+    // regex (ICU) is not the JVM's the unit tests run on (LogShareDeviceTest).
+    sourceSets["androidTest"].assets.directories += "../../../crates/nekkod/tests/golden"
+    // And the sealed box's vectors: the provider key is sealed by Android's own crypto providers (SealedBoxDeviceTest).
+    sourceSets["androidTest"].assets.directories += "../../../crates/nekko-sync/tests/golden"
 }
 
 kotlin {
@@ -64,12 +70,18 @@ dependencies {
     // App lock: the system fingerprint / face / screen-lock prompt. BiometricPrompt needs a FragmentActivity.
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment.ktx)
+    // Step-up (SK-7): security keys and passkeys through Credential Manager.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    // Folding phones: WindowInfoTracker's FoldingFeature and the window size class (Posture.from).
+    implementation(libs.androidx.window)
+    implementation(libs.compose.material3.adaptive)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
@@ -79,4 +91,6 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.espresso.core)
+    // Fakes a FoldingFeature (Fold-in, Fold-out, Surface Duo) for the pane tests.
+    androidTestImplementation(libs.androidx.window.testing)
 }

@@ -5,7 +5,7 @@ import Foundation
 /// wake it now and then (`BGAppRefreshTask`) to try delivering them. When and
 /// whether it runs is up to iOS; coming back to the foreground always tries.
 enum OutboxRefresh {
-    static let id = "com.nekko.native.ios.outbox"
+    static let id = "dev.nekkolabs.nekkoagent.outbox"
 
     /// Before the app finishes launching (BackgroundTasks requires it).
     static func register() {

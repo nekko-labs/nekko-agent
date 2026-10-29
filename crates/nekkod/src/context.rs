@@ -109,9 +109,17 @@ pub fn preview(
         Some(v) if !v.is_null() => nekko_js::display(v),
         _ => catalog.default_turn_wrapper.clone(),
     };
+    let system_instructions = [
+        settings.get("systemInstructions").and_then(Value::as_str).unwrap_or_default().to_string(),
+        nekko_turn::plan::work_tracking(settings),
+    ]
+    .into_iter()
+    .filter(|s| !s.is_empty())
+    .collect::<Vec<_>>()
+    .join("\n\n");
     let system_text = nekko_context::build_system_prompt(&nekko_context::PromptContext {
         workspaces: &folders,
-        system_instructions: settings.get("systemInstructions").and_then(Value::as_str),
+        system_instructions: Some(&system_instructions),
         turn_wrapper: Some(&turn_wrapper),
         about_user: settings.get("aboutUser").and_then(Value::as_str),
         context_block: "",

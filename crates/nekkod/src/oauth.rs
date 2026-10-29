@@ -409,7 +409,9 @@ impl OAuth {
         for (k, v) in &req.headers {
             r = r.header(*k, *v);
         }
-        let res = r.send().await.map_err(|e| format!("fetch failed: {e}"))?;
+        let res = nekko_net::send("sign-in", r)
+            .await
+            .map_err(|e| if e.is_blocked() { e.to_string() } else { format!("fetch failed: {e}") })?;
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
         Ok((status.is_success(), status.as_u16(), text))
@@ -488,7 +490,7 @@ impl OAuth {
     /// credentials are never read: Anthropic does not let other apps collect
     /// or reuse them.
     fn import_cli_auth(&self) -> Value {
-        let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+        let home = nekko_js::home_dir();
         let mut result = json!({ "claude": false, "chatgpt": false, "openrouter": false });
         let Some(home) = home else { return result };
         let Ok(bytes) = std::fs::read(home.join(".codex").join("auth.json")) else { return result };

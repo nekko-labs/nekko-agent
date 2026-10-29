@@ -1,9 +1,13 @@
 import React from 'react';
+import { startTelemetry } from './telemetry.js';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { ensureNekko } from './web-client.js';
 import { CloudLogin, cloudAuthRequired } from './components/CloudLogin.js';
 import { UpdateProvider } from './components/UpdateBanner.js';
+// The website's two fonts, bundled so the app never fetches them (--font-sans, --font-mono).
+import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/jetbrains-mono';
 import './styles.css';
 import { useStore } from './store.js';
 import { playSplash } from './splash.js';
@@ -37,6 +41,7 @@ function startApp(root: ReturnType<typeof createRoot>) {
   // signed-in account's Bearer token). Either way the UI below is identical.
   ensureNekko();
   registerServiceWorker();
+  startTelemetry();
   root.render(
     <React.StrictMode>
       <UpdateProvider>

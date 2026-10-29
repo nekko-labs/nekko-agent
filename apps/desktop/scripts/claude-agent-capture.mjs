@@ -40,9 +40,19 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto('file://' + path.join(out, `index-${theme}.html`).replaceAll('\\', '/'));
-    for (const scene of ['choices', 'missing', 'signedOut', 'plan', 'apiKey', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect']) {
+    for (const scene of ['choices', 'checking', 'missing', 'signedOut', 'plan', 'apiKey', 'api', 'connected', 'another', 'confirm', 'blocked', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect']) {
       await page.evaluate((s) => window.integration.show(s), scene);
       await page.waitForTimeout(250);
+      if (scene === 'missing') await page.getByRole('button', { name: 'Install Claude Code' }).click();
+      if (scene === 'api') {
+        await page.getByRole('radio', { name: 'API' }).click();
+        await page.getByRole('button', { name: 'Connect: add a key or cloud account' }).click();
+      }
+      if (['another', 'confirm', 'blocked'].includes(scene)) {
+        await page.getByRole('button', { name: '+ Another subscription account' }).click();
+        await page.getByLabel('Name for the other account').fill('Work');
+        await page.waitForTimeout(700);
+      }
       await page.screenshot({ path: path.join(out, `${scene}-${theme}.png`), fullPage: true });
     }
     if (errors.length) throw new Error(`page errors (${theme}): ${errors.join('; ')}`);

@@ -31,19 +31,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
-fn uuid() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
-}
-
 /// One running compaction.
 struct Job {
     abort: AbortController,
@@ -253,10 +240,10 @@ async fn run(
     }
 
     let marker = v::summary_message(
-        &format!("compact_{}", uuid()),
+        &format!("compact_{}", nekko_js::uuid()),
         &summary,
         plan.summarized,
-        plan.created_at.as_ref().unwrap_or(&json!(now_ms())),
+        plan.created_at.as_ref().unwrap_or(&json!(nekko_js::now_ms())),
     );
     let target_new = lock(&job.progress).get("target") == Some(&json!("new"));
     let (st, id, before) = (store.clone(), session_id.clone(), session.clone());
@@ -341,8 +328,8 @@ impl SummaryCalls {
             None => v::SUMMARY_SYSTEM.to_string(),
         };
         let mut user = ChatMessage::new(Role::User, prompt);
-        user.id = uuid();
-        user.extra.insert("createdAt".into(), json!(now_ms()));
+        user.id = nekko_js::uuid();
+        user.extra.insert("createdAt".into(), json!(nekko_js::now_ms()));
         let request = ChatRequest {
             model: self.model.clone(),
             messages: vec![user],
@@ -369,7 +356,7 @@ impl SummaryCalls {
                             &self.model,
                             &self.session_id,
                             &item,
-                            now_ms() as f64,
+                            nekko_js::now_ms() as f64,
                         );
                         self.ctx.accounts.usage_line(&record);
                     }

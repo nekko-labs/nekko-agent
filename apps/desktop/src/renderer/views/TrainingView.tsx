@@ -75,7 +75,7 @@ export function TrainingView() {
             onCancel={mine.length ? () => setCreating(false) : undefined}
           />
         ) : (
-          <RunDashboard run={selected} onOpenChat={(sid) => { openChatPane(sid); setView('chat'); }} />
+          <RunDashboard run={selected} onOpenChat={(sid) => { openChatPane(sid); setView('command'); }} />
         )}
       </div>
     </div>

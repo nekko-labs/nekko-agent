@@ -51,9 +51,34 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let seal = |v: Value| {
         json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()
     };
-    let client = |cid: &str, v: Value| Message::text(json!({ "type": "c", "cid": cid, "data": seal(v) }).to_string());
+    // A protocol 4 phone (relay replay protection): its HELLO answers the
+    // connection's challenge, and each request carries it and the next seq.
+    let phone: std::sync::Mutex<(String, u64)> = Default::default();
+    let client = |cid: &str, mut v: Value| {
+        let mut p = phone.lock().unwrap();
+        match v["type"].as_str() {
+            Some("hello") => {
+                v["protocol"] = json!(4);
+                v["challenge"] = json!(p.0);
+                p.1 = 0;
+            }
+            Some("req") => {
+                p.1 += 1;
+                v["seq"] = json!(p.1);
+                v["challenge"] = json!(p.0);
+            }
+            _ => {}
+        }
+        Message::text(json!({ "type": "c", "cid": cid, "data": seal(v) }).to_string())
+    };
 
     agent.send(Message::text(json!({ "type": "client-open", "cid": "c1" }).to_string())).await.unwrap();
+    // The agent challenges each new connection before anything else.
+    let (f, challenge) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(f["cid"], "c1");
+    let challenge = challenge.unwrap();
+    assert_eq!(challenge["type"], "challenge", "{challenge}");
+    phone.lock().unwrap().0 = challenge["challenge"].as_str().unwrap().to_string();
     // Nothing is served before the handshake.
     agent.send(client("c1", json!({ "type": "req", "id": 1, "channel": "tasks:list", "args": [] }))).await.unwrap();
     let (_, res) = next_agent_frame(&mut agent, &key).await;
@@ -77,6 +102,28 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     assert_eq!(notify["deviceId"], "phone-1");
     let (_, res) = next_agent_frame(&mut agent, &key).await;
     assert_eq!(res.unwrap(), json!({ "type": "res", "id": 32, "result": { "ok": true } }));
+    // The iPhone's Live Activity card level: the agent keeps it itself (no chats yet, so no card frame).
+    let card = json!({ "type": "req", "id": 34, "channel": "card:set", "args": [{ "level": "standard" }] });
+    agent.send(client("c1", card)).await.unwrap();
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap(), json!({ "type": "res", "id": 34, "result": { "ok": true } }));
+    // A request replayed byte for byte is dropped, and the connection goes
+    // back to the handshake: the phone says hello to the new challenge.
+    let once = client("c1", json!({ "type": "req", "id": 33, "channel": "app:info", "args": [] }));
+    agent.send(once.clone()).await.unwrap();
+    let (_, res) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(res.unwrap()["id"], 33);
+    agent.send(once).await.unwrap();
+    let (_, again) = next_agent_frame(&mut agent, &key).await;
+    let again = again.unwrap();
+    assert_eq!(again["type"], "challenge", "{again}");
+    phone.lock().unwrap().0 = again["challenge"].as_str().unwrap().to_string();
+    agent
+        .send(client("c1", json!({ "type": "hello", "deviceId": "phone-1", "name": "Pixel", "platform": "android" })))
+        .await
+        .unwrap();
+    let (_, welcome) = next_agent_frame(&mut agent, &key).await;
+    assert_eq!(welcome.unwrap()["type"], "welcome");
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
     assert_eq!(saved["devices"][0]["id"], "phone-1");
 
@@ -155,10 +202,12 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let res = ask_res(42, "remote:activity", json!(["phone-1"])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (channel-denied): remote:activity");
     let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
-    assert_eq!(activity.as_array().map(Vec::len), Some(1), "{activity}");
-    assert_eq!(activity[0]["channel"], "device:registerKey");
-    assert_eq!(activity[0]["ok"], false);
-    assert_eq!(activity[0]["reason"], "proof-required");
+    // The three settings updates above are agent-class: logged, allowed or not.
+    assert_eq!(activity.as_array().map(Vec::len), Some(4), "{activity}");
+    let channels: Vec<&str> = activity.as_array().unwrap().iter().map(|a| a["channel"].as_str().unwrap()).collect();
+    assert_eq!(channels, ["settings:update", "settings:update", "settings:update", "device:registerKey"]);
+    assert_eq!(activity[3]["ok"], false);
+    assert_eq!(activity[3]["reason"], "proof-required");
     let (_, devices) = post(d.port, "remote:setAccess", json!(["phone-1", { "change": false }]), Some(TOKEN)).await;
     assert_eq!(devices[0]["access"], json!({ "read": true, "change": false }), "{devices}");
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("remote.json")).unwrap()).unwrap();
@@ -174,9 +223,9 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let res = ask_res(45, "git:push", json!(["session:nope", { "setUpstream": true }])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (change-off): git:push", "{res}");
     let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
-    assert_eq!(activity.as_array().map(Vec::len), Some(2), "reads are not logged: {activity}");
-    assert_eq!(activity[1]["channel"], "git:push", "oldest first: {activity}");
-    assert_eq!(activity[1]["reason"], "change-off");
+    assert_eq!(activity.as_array().map(Vec::len), Some(5), "reads are not logged: {activity}");
+    assert_eq!(activity[4]["channel"], "git:push", "oldest first: {activity}");
+    assert_eq!(activity[4]["reason"], "change-off");
     post(d.port, "remote:setAccess", json!(["phone-1", { "read": false }]), Some(TOKEN)).await;
     let res = ask_res(46, "workspace:gitStatus", json!(["session:nope"])).await;
     assert_eq!(res["error"], "Not allowed from a paired phone (read-off): workspace:gitStatus", "{res}");
@@ -247,7 +296,6 @@ async fn the_daemon_runs_the_phone_relay_agent() {
 
 /// Reads the agent's frames until `cid`'s reply to request `id`, keeping
 /// every `terminal:event` it passes as `(cid, payload)`.
-#[cfg(unix)]
 async fn reply_to(
     agent: &mut RelaySide,
     key: &nekko_remote::e2e::Key,
@@ -267,7 +315,6 @@ async fn reply_to(
 }
 
 /// A Change proof signed by `k`, as the iPhone's Secure Enclave key signs it.
-#[cfg(unix)]
 fn change_proof(k: &p256::ecdsa::SigningKey, device: &str, channel: &str, args: &Value, ts: i64) -> Value {
     use base64::Engine;
     use p256::ecdsa::signature::Signer;
@@ -392,6 +439,403 @@ async fn a_phone_attaches_to_a_chat_terminal_over_the_relay() {
     post(d.port, "terminal:close", json!([id]), Some(TOKEN)).await;
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
+}
+
+/// The relying-party id and app origin the test's `security.json` holds,
+/// as the desktop's Settings → Security writes them (SK-4).
+const RP_ID: &str = "nekko-computer:itest";
+const ORIGIN: &str = "nekko-app://desktop";
+
+/// An ES256 signature in the DER form a FIDO2 authenticator sends.
+fn der(sig: &p256::ecdsa::Signature) -> Vec<u8> {
+    let raw = sig.to_bytes();
+    let int = |b: &[u8]| {
+        let b = &b[b.iter().position(|x| *x != 0).unwrap_or(31)..];
+        let mut v = vec![0x02];
+        if b[0] & 0x80 != 0 {
+            v.extend([b.len() as u8 + 1, 0]);
+        } else {
+            v.push(b.len() as u8);
+        }
+        v.extend_from_slice(b);
+        v
+    };
+    let body = [int(&raw[..32]), int(&raw[32..])].concat();
+    [vec![0x30, body.len() as u8], body].concat()
+}
+
+/// `security.json` with step-up on, as Settings → Security leaves it: one
+/// security key (`k`, named `name`) and a one-time code, for `rp_id`.
+fn security_json(rp_id: &str, k: &p256::ecdsa::SigningKey, credential: &[u8], name: &str) -> Value {
+    let public = nekko_remote::step_up::to_b64url(k.verifying_key().to_encoded_point(false).as_bytes());
+    json!({
+        "version": 1, "enabled": true, "rpId": rp_id, "origins": [ORIGIN],
+        "credentials": [{
+            "id": nekko_remote::step_up::to_b64url(credential), "publicKey": public, "counter": 0,
+            "name": name, "kind": "security-key", "addedAt": 1,
+        }],
+        "totp": { "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "addedAt": 1 },
+        "recoveryHashes": [nekko_remote::step_up::hash_recovery_code("abcde-fghij")],
+    })
+}
+
+/// Turns step-up on or off in `security.json`, keeping everything the daemon
+/// wrote (counters, rate limit). The desktop's own guarded calls (remote:enable,
+/// remote:attach, remote:pair, remote:setAccess) ask for a step-up too (SK-4),
+/// so these tests set the computer up with it off, as an owner does before
+/// turning it on, and test the phone gate with it on.
+fn set_step_up(data: &std::path::Path, on: bool) {
+    let path = data.join("security.json");
+    let mut v: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    v["enabled"] = json!(on);
+    std::fs::write(&path, v.to_string()).unwrap();
+}
+
+/// A software FIDO2 authenticator's assertion for `challenge` on `rp_id`:
+/// the authenticator data (rpIdHash, flags UP and UV, `counter`), the client
+/// data a WebAuthn caller writes, and the signature over both (SK-11).
+fn fido2_assertion(
+    k: &p256::ecdsa::SigningKey,
+    rp_id: &str,
+    credential: &[u8],
+    challenge: &str,
+    counter: u32,
+) -> Value {
+    use p256::ecdsa::signature::Signer;
+    use sha2::{Digest, Sha256};
+    let mut auth = Sha256::digest(rp_id.as_bytes()).to_vec();
+    auth.push(0x05);
+    auth.extend(counter.to_be_bytes());
+    let cdj = json!({ "type": "webauthn.get", "challenge": challenge, "origin": ORIGIN }).to_string();
+    let mut signed = auth.clone();
+    signed.extend(Sha256::digest(cdj.as_bytes()));
+    let sig: p256::ecdsa::Signature = k.sign(&signed);
+    let u = nekko_remote::step_up::to_b64url;
+    json!({
+        "credentialId": u(credential),
+        "authenticatorData": u(&auth),
+        "clientDataJSON": u(cdj.as_bytes()),
+        "signature": u(&der(&sig)),
+    })
+}
+
+/// SK-11 over the real relay agent: with step-up on in `security.json`, a
+/// phone's mode raise is refused `step-up-required` after its Change proof,
+/// runs with a software FIDO2 authenticator's answer to a `security:challenge`,
+/// and the same answer again is `step-up-replayed`. Then `remote:stop` from a
+/// phone kicks every phone (the relay closes each with 4001) and the agent
+/// hangs up within a second.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
+    use base64::Engine;
+    let data = std::env::temp_dir().join(format!("nekkod-remote-stepup-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // Step-up on, as Settings → Security leaves it: a security key and a one-time code.
+    let fido = p256::ecdsa::SigningKey::from_slice(&[9; 32]).unwrap();
+    let credential = [3u8; 16];
+    let security = security_json(RP_ID, &fido, &credential, "YubiKey 5 NFC");
+    std::fs::write(data.join("security.json"), security.to_string()).unwrap();
+    let d = start_with(&data);
+    set_step_up(&data, false);
+    let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let relay_port = relay.local_addr().unwrap().port();
+    post(d.port, "remote:enable", json!([format!("ws://127.0.0.1:{relay_port}/")]), Some(TOKEN)).await;
+    let (_, pairing) = post(d.port, "remote:pairing", json!([]), Some(TOKEN)).await;
+    let (room, secret) = (pairing["room"].as_str().unwrap().to_string(), pairing["key"].as_str().unwrap().to_string());
+    let (tcp, _) =
+        tokio::time::timeout(Duration::from_secs(20), relay.accept()).await.expect("the agent dials").unwrap();
+    let mut agent = tokio_tungstenite::accept_async(tcp).await.unwrap();
+    let key = nekko_remote::e2e::derive_key(&secret, &room);
+    let seal = |v: Value| {
+        json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()
+    };
+    let client = |cid: &str, v: Value| Message::text(json!({ "type": "c", "cid": cid, "data": seal(v) }).to_string());
+    let mut events = Vec::new();
+    for (cid, device, name) in [("c1", "phone-1", "Pixel"), ("c2", "phone-2", "Philip's iPhone")] {
+        let (_, grant) = post(d.port, "remote:pair", json!([]), Some(TOKEN)).await;
+        agent.send(Message::text(json!({ "type": "client-open", "cid": cid }).to_string())).await.unwrap();
+        let hello =
+            json!({ "type": "hello", "deviceId": device, "name": name, "platform": "ios", "pair": grant["code"] });
+        agent.send(client(cid, hello)).await.unwrap();
+        loop {
+            let (f, sealed) = next_agent_frame(&mut agent, &key).await;
+            if f["cid"] == cid && sealed.is_some_and(|s| s["type"] == "welcome") {
+                break;
+            }
+        }
+    }
+    set_step_up(&data, true);
+    // A chat in Ask; the phone will raise it to YOLO.
+    post(d.port, "settings:update", json!([{ "defaultChatMode": "ask" }]), Some(TOKEN)).await;
+    let (_, chat) = post(d.port, "session:create", json!([]), Some(TOKEN)).await;
+    let sid = chat["id"].as_str().expect("a chat id").to_string();
+
+    // phone-1 registers its Change key (the Secure Enclave key, not the security key).
+    let change = p256::ecdsa::SigningKey::from_slice(&[7; 32]).unwrap();
+    let public =
+        base64::engine::general_purpose::STANDARD.encode(change.verifying_key().to_encoded_point(false).as_bytes());
+    let now = || std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    let args = json!([public]);
+    let proof = change_proof(&change, "phone-1", "device:registerKey", &args, now());
+    let req = json!({ "type": "req", "id": 1, "channel": "device:registerKey", "args": args, "proof": proof });
+    agent.send(client("c1", req)).await.unwrap();
+    let res = reply_to(&mut agent, &key, "c1", 1, &mut events).await;
+    assert_eq!(res["result"], json!({ "registered": true }), "{res}");
+
+    // Each raise carries a fresh Change proof, so only the step-up decides.
+    let raise_args = json!([sid, { "mode": "yolo" }]);
+    let mut ts = now();
+    let mut raise = |id: u32, step_up: Option<Value>| {
+        ts += 1;
+        let proof = change_proof(&change, "phone-1", "session:setOptions", &raise_args, ts);
+        let mut req =
+            json!({ "type": "req", "id": id, "channel": "session:setOptions", "args": raise_args, "proof": proof });
+        if let Some(s) = step_up {
+            req["stepUp"] = s;
+        }
+        client("c1", req)
+    };
+    agent.send(raise(2, None)).await.unwrap();
+    let res = reply_to(&mut agent, &key, "c1", 2, &mut events).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (step-up-required): session:setOptions", "{res}");
+    let (_, saved) = post(d.port, "session:get", json!([sid]), Some(TOKEN)).await;
+    assert_ne!(saved["mode"], "yolo", "a refused raise changed nothing: {saved}");
+
+    // The phone fetches a challenge: single use, two minutes, and only the kinds of method.
+    let req = json!({ "type": "req", "id": 3, "channel": "security:challenge", "args": [] });
+    agent.send(client("c1", req)).await.unwrap();
+    let res = reply_to(&mut agent, &key, "c1", 3, &mut events).await;
+    let c = &res["result"];
+    assert_eq!(c["required"], true, "{res}");
+    assert_eq!(c["methods"], json!(["security-key", "totp"]), "{res}");
+    // The relying-party id rides along so the phone's FIDO2 client can name it (SK-6); it is no secret.
+    assert_eq!(c["rpId"], RP_ID, "{res}");
+    assert_eq!(c.as_object().map(|o| o.len()), Some(5), "nothing else about the methods: {res}");
+    assert!(!res.to_string().contains("YubiKey"), "no method names reach a phone: {res}");
+    let challenge = c["challenge"].as_str().expect("a challenge").to_string();
+
+    // The key answers it, and the raise runs.
+    let assertion = fido2_assertion(&fido, RP_ID, &credential, &challenge, 1);
+    agent.send(raise(4, Some(assertion.clone()))).await.unwrap();
+    let res = reply_to(&mut agent, &key, "c1", 4, &mut events).await;
+    assert!(res.get("error").is_none(), "{res}");
+    let (_, saved) = post(d.port, "session:get", json!([sid]), Some(TOKEN)).await;
+    assert_eq!(saved["mode"], "yolo", "{saved}");
+    let stored: Value = serde_json::from_str(&std::fs::read_to_string(data.join("security.json")).unwrap()).unwrap();
+    assert_eq!(stored["credentials"][0]["counter"], 1, "the counter is kept: {stored}");
+    assert!(stored["credentials"][0]["lastUsedAt"].is_number(), "{stored}");
+
+    // The desktop puts the chat back in Ask; the same assertion again is a
+    // replay, even inside the five-minute cover, and the chat stays in Ask.
+    post(d.port, "session:setOptions", json!([sid, { "mode": "ask" }]), Some(TOKEN)).await;
+    agent.send(raise(5, Some(assertion))).await.unwrap();
+    let res = reply_to(&mut agent, &key, "c1", 5, &mut events).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (step-up-replayed): session:setOptions", "{res}");
+    let (_, saved) = post(d.port, "session:get", json!([sid]), Some(TOKEN)).await;
+    assert_eq!(saved["mode"], "ask", "{saved}");
+    let (_, activity) = post(d.port, "remote:activity", json!(["phone-1"]), Some(TOKEN)).await;
+    let reasons: Vec<Value> = activity
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["channel"] == "session:setOptions")
+        .map(|a| a["reason"].clone())
+        .collect();
+    assert_eq!(reasons, [json!("step-up-required"), Value::Null, json!("step-up-replayed")], "{activity}");
+
+    // phone-2 has Change off: it may still stop remote access (a safety exit,
+    // no proof, no step-up). Every phone is kicked and the agent hangs up
+    // within a second.
+    set_step_up(&data, false);
+    post(d.port, "remote:setAccess", json!(["phone-2", { "change": false }]), Some(TOKEN)).await;
+    let started = Instant::now();
+    agent.send(client("c2", json!({ "type": "req", "id": 6, "channel": "remote:stop", "args": [] }))).await.unwrap();
+    let mut kicked = Vec::new();
+    let mut push_removed = Vec::new();
+    let hung_up = tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            match agent.next().await {
+                Some(Ok(Message::Text(t))) => {
+                    let f: Value = serde_json::from_str(t.as_str()).unwrap();
+                    // The relay closes each kicked phone with 4001 (apps/relay-server).
+                    if f["type"] == "kick" {
+                        kicked.push(f["cid"].as_str().unwrap().to_string());
+                    }
+                    if f["type"] == "push-remove" {
+                        push_removed.push(f["deviceId"].clone());
+                    }
+                }
+                Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                Some(Ok(_)) => {}
+            }
+        }
+    })
+    .await;
+    assert!(hung_up.is_ok(), "the agent was still up after {:?}", started.elapsed());
+    kicked.sort();
+    assert_eq!(kicked, ["c1", "c2"], "every phone was kicked");
+    // Disconnected, not signed out: each phone keeps its push token.
+    assert!(push_removed.is_empty(), "remote:stop dropped push for {push_removed:?}");
+    let (_, status) = post(d.port, "remote:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(status["enabled"], false, "{status}");
+    assert_eq!(status["stoppedBy"]["deviceId"], "phone-2", "{status}");
+    assert_eq!(status["stoppedBy"]["name"], "Philip's iPhone", "{status}");
+    let (_, activity) = post(d.port, "remote:activity", json!(["phone-2"]), Some(TOKEN)).await;
+    let stop = activity.as_array().unwrap().iter().find(|a| a["channel"] == "remote:stop").cloned();
+    assert_eq!(stop.map(|a| a["ok"].clone()), Some(json!(true)), "{activity}");
+    // It stays down: the agent does not dial the relay again.
+    let redial = tokio::time::timeout(Duration::from_millis(1500), relay.accept()).await;
+    assert!(redial.is_err(), "the agent dialled the relay again after remote:stop");
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// One Nekko Cloud machine as the image runs it in relay-agent mode
+/// (apps/local-web-ui/src/relay-agent.ts): nekkod on the machine's own data
+/// directory with its own `security.json`, `remote:attach` to the room Nekko
+/// Cloud minted, one phone paired with the printed code (its Change key
+/// registered) and a chat in Ask.
+struct Machine {
+    d: Daemon,
+    agent: RelaySide,
+    key: nekko_remote::e2e::Key,
+    change: p256::ecdsa::SigningKey,
+    sid: String,
+    data: std::path::PathBuf,
+    next: i64,
+}
+
+impl Machine {
+    async fn start(name: &str, security: &Value) -> Self {
+        use base64::Engine;
+        let data = std::env::temp_dir().join(format!("nekkod-cloud-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        std::fs::create_dir_all(data.join("sessions")).unwrap();
+        std::fs::write(data.join("security.json"), security.to_string()).unwrap();
+        let d = start_with(&data);
+        set_step_up(&data, false);
+        let relay = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://127.0.0.1:{}/", relay.local_addr().unwrap().port());
+        let (room, secret) = (format!("room-{name}"), format!("pair-key-{name}"));
+        let (status, _) =
+            post(d.port, "remote:attach", json!([{ "relayUrl": url, "room": room, "secret": secret }]), Some(TOKEN))
+                .await;
+        assert_eq!(status, 200);
+        let (tcp, _) =
+            tokio::time::timeout(Duration::from_secs(20), relay.accept()).await.expect("the agent dials").unwrap();
+        let mut agent = tokio_tungstenite::accept_async(tcp).await.unwrap();
+        let key = nekko_remote::e2e::derive_key(&secret, &room);
+        let (_, grant) = post(d.port, "remote:pair", json!([]), Some(TOKEN)).await;
+        agent.send(Message::text(json!({ "type": "client-open", "cid": "c1" }).to_string())).await.unwrap();
+        let hello = json!({ "type": "hello", "deviceId": "phone-1", "name": "Pixel", "platform": "android", "pair": grant["code"] });
+        let mut m = Machine {
+            d,
+            agent,
+            key,
+            change: p256::ecdsa::SigningKey::from_slice(&[7; 32]).unwrap(),
+            sid: String::new(),
+            data,
+            next: 0,
+        };
+        m.send(hello).await;
+        loop {
+            let (_, sealed) = next_agent_frame(&mut m.agent, &m.key).await;
+            if sealed.is_some_and(|s| s["type"] == "welcome") {
+                break;
+            }
+        }
+        set_step_up(&m.data, true);
+        post(m.d.port, "settings:update", json!([{ "defaultChatMode": "ask" }]), Some(TOKEN)).await;
+        let (_, chat) = post(m.d.port, "session:create", json!([]), Some(TOKEN)).await;
+        m.sid = chat["id"].as_str().expect("a chat id").to_string();
+        let public = base64::engine::general_purpose::STANDARD
+            .encode(m.change.verifying_key().to_encoded_point(false).as_bytes());
+        let res = m.call("device:registerKey", json!([public]), true, None).await;
+        assert_eq!(res["result"], json!({ "registered": true }), "{res}");
+        m
+    }
+
+    async fn send(&mut self, v: Value) {
+        let data = json!({ "enc": nekko_remote::e2e::seal_with_iv(&self.key, &v, nekko_remote::e2e::random_iv()) });
+        let frame = json!({ "type": "c", "cid": "c1", "data": data.to_string() });
+        self.agent.send(Message::text(frame.to_string())).await.unwrap();
+    }
+
+    /// The phone's call, with a fresh Change proof when `signed`.
+    async fn call(&mut self, channel: &str, args: Value, signed: bool, step_up: Option<Value>) -> Value {
+        self.next += 1;
+        let id = self.next as u32;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+        let mut req = json!({ "type": "req", "id": id, "channel": channel, "args": args });
+        if signed {
+            req["proof"] = change_proof(&self.change, "phone-1", channel, &args, now + self.next);
+        }
+        if let Some(s) = step_up {
+            req["stepUp"] = s;
+        }
+        self.send(req).await;
+        reply_to(&mut self.agent, &self.key, "c1", id, &mut Vec::new()).await
+    }
+
+    async fn raise(&mut self, step_up: Option<Value>) -> Value {
+        let args = json!([self.sid, { "mode": "yolo" }]);
+        self.call("session:setOptions", args, true, step_up).await
+    }
+
+    fn security(&self) -> Value {
+        serde_json::from_str(&std::fs::read_to_string(self.data.join("security.json")).unwrap()).unwrap()
+    }
+}
+
+/// SK-9: a Nekko Cloud machine is a computer like any other. In relay-agent
+/// mode its nekkod runs the same step-up gate, against `security.json` in
+/// that machine's own data directory: methods are per machine, so a key
+/// registered on one machine answers nothing on another (the rpId differs),
+/// and the challenge a phone gets names only the kinds of method.
+#[tokio::test(flavor = "multi_thread")]
+async fn each_cloud_machine_asks_for_its_own_step_up() {
+    let (key_a, cred_a, rp_a) =
+        (p256::ecdsa::SigningKey::from_slice(&[11; 32]).unwrap(), [0xa1u8; 16], "nekko-computer:machine-a");
+    let (key_b, cred_b, rp_b) =
+        (p256::ecdsa::SigningKey::from_slice(&[12; 32]).unwrap(), [0xb2u8; 16], "nekko-computer:machine-b");
+    let mut a = Machine::start("a", &security_json(rp_a, &key_a, &cred_a, "Key for machine A")).await;
+    let mut b = Machine::start("b", &security_json(rp_b, &key_b, &cred_b, "Key for machine B")).await;
+    for m in [&mut a, &mut b] {
+        let res = m.raise(None).await;
+        assert_eq!(res["error"], "Not allowed from a paired phone (step-up-required): session:setOptions", "{res}");
+    }
+
+    // Machine A's key, even for machine B's own challenge, is not one of B's methods.
+    let c = b.call("security:challenge", json!([]), false, None).await;
+    assert_eq!(c["result"]["methods"], json!(["security-key", "totp"]), "{c}");
+    assert!(!c.to_string().contains("machine B"), "no method names reach a phone: {c}");
+    let challenge = c["result"]["challenge"].as_str().unwrap().to_string();
+    let res = b.raise(Some(fido2_assertion(&key_a, rp_a, &cred_a, &challenge, 1))).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (step-up-invalid): session:setOptions", "{res}");
+    // Nor is machine B's key with machine A's rpId (a credential is bound to one machine).
+    let c = b.call("security:challenge", json!([]), false, None).await;
+    let challenge = c["result"]["challenge"].as_str().unwrap().to_string();
+    let res = b.raise(Some(fido2_assertion(&key_b, rp_a, &cred_b, &challenge, 1))).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (step-up-invalid): session:setOptions", "{res}");
+    // Machine B's own key on its own rpId answers.
+    let c = b.call("security:challenge", json!([]), false, None).await;
+    let challenge = c["result"]["challenge"].as_str().unwrap().to_string();
+    let res = b.raise(Some(fido2_assertion(&key_b, rp_b, &cred_b, &challenge, 2))).await;
+    assert!(res.get("error").is_none(), "{res}");
+    assert_eq!(b.security()["credentials"][0]["counter"], 2);
+    // Machine A is untouched by what happened on machine B, and still asks.
+    assert_eq!(a.security()["credentials"][0]["counter"], 0);
+    let res = a.raise(None).await;
+    assert_eq!(res["error"], "Not allowed from a paired phone (step-up-required): session:setOptions", "{res}");
+    let c = a.call("security:challenge", json!([]), false, None).await;
+    let challenge = c["result"]["challenge"].as_str().unwrap().to_string();
+    let res = a.raise(Some(fido2_assertion(&key_a, rp_a, &cred_a, &challenge, 1))).await;
+    assert!(res.get("error").is_none(), "{res}");
+    for m in [a, b] {
+        drop(m.d);
+        let _ = std::fs::remove_dir_all(&m.data);
+    }
 }
 
 /// A loopback stand-in for Telegram's Bot API: records every call (method

@@ -1,0 +1,124 @@
+//! What the user configures for a runner. One struct, camelCase JSON, with
+//! every missing field falling back to the spec's default so older config
+//! files keep loading as fields are added.
+
+use serde::{Deserialize, Serialize};
+
+/// How hard the runner may lean on the Mac.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Priority {
+    /// "Only run when I'm idle".
+    DoNotDisturb,
+    /// "In the background".
+    Balanced,
+    /// "Runner first".
+    RunnerFirst,
+}
+
+/// Whether the runner keeps the Mac from sleeping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum KeepAwake {
+    SystemDefault,
+    WhileActive,
+    Always,
+}
+
+/// What a runner is registered against: a whole org or a single repo.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Scope {
+    Org { org: String },
+    Repo { owner: String, repo: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RunnerSettings {
+    pub enabled: bool,
+    pub priority: Priority,
+    pub keep_awake: KeepAwake,
+    pub macos_slots: u8,
+    pub linux_slots: u8,
+    pub memory_per_vm_mb: u32,
+    /// Total memory all runner VMs may use. `None` means the recommendation
+    /// for this Mac (see `slots::recommended_runner_memory_mb`).
+    pub runner_memory_mb: Option<u32>,
+    /// `None` means the mode's default share of the cores.
+    pub cpus_per_vm: Option<u8>,
+    pub disk_budget_gb: u32,
+    pub disk_floor_gb: u32,
+    pub max_job_minutes: u32,
+    pub only_on_power: bool,
+    pub trusted_networks_only: bool,
+    pub never_on_hotspot: bool,
+    /// "Let jobs use the internet directly while a VPN is on": take jobs while
+    /// a VPN carries all the Mac's traffic. Job traffic still leaves by the
+    /// physical interface, never the tunnel.
+    pub allow_direct_with_vpn: bool,
+    pub allow_fork_prs: bool,
+    pub rerun_lost_jobs: bool,
+    pub trusted_cache: bool,
+    /// Networks the owner approved, as `gw:<router MAC>` ids.
+    pub trusted_networks: Vec<String>,
+}
+
+impl Default for RunnerSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            priority: Priority::DoNotDisturb,
+            keep_awake: KeepAwake::WhileActive,
+            macos_slots: 1,
+            linux_slots: 0,
+            memory_per_vm_mb: 8192,
+            runner_memory_mb: None,
+            cpus_per_vm: None,
+            disk_budget_gb: 150,
+            disk_floor_gb: 25,
+            max_job_minutes: 120,
+            only_on_power: true,
+            trusted_networks_only: true,
+            never_on_hotspot: true,
+            allow_direct_with_vpn: false,
+            allow_fork_prs: false,
+            rerun_lost_jobs: true,
+            trusted_cache: true,
+            trusted_networks: Vec::new(),
+        }
+    }
+}
+
+impl RunnerSettings {
+    /// Clamp a hand-edited or UI-supplied value into the ranges the spec allows.
+    pub fn sanitized(mut self) -> Self {
+        self.macos_slots = self.macos_slots.min(crate::slots::MAX_MACOS_VMS);
+        self.linux_slots = 0; // P1 has no Linux slots
+        self.memory_per_vm_mb =
+            if self.memory_per_vm_mb == 0 { 8192 } else { self.memory_per_vm_mb.clamp(4096, 65536) };
+        self.runner_memory_mb = self.runner_memory_mb.filter(|m| *m >= 4096);
+        self.cpus_per_vm = self.cpus_per_vm.map(|v| v.max(2));
+        self.disk_budget_gb = self.disk_budget_gb.clamp(50, 4000);
+        self.disk_floor_gb = self.disk_floor_gb.clamp(10, 1000);
+        self.max_job_minutes = self.max_job_minutes.clamp(10, 1440);
+        let mut seen = std::collections::HashSet::new();
+        self.trusted_networks = self
+            .trusted_networks
+            .iter()
+            .map(|n| n.trim().to_string())
+            .filter(|n| !n.is_empty() && seen.insert(n.clone()))
+            .take(32)
+            .collect();
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunnerConfig {
+    pub id: String,
+    pub scope: Scope,
+    pub label: String,
+    pub settings: RunnerSettings,
+}

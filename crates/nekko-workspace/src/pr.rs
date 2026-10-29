@@ -24,21 +24,9 @@ fn re(cell: &'static OnceLock<Regex>, src: &str, flags: &str) -> &'static Regex 
     cell.get_or_init(|| Regex::with_flags(src, flags).expect("PR pattern compiles"))
 }
 
-/// `Number(x)` as JSON: an integral value prints without a fraction, and NaN
-/// or an infinity as `null`, as `JSON.stringify` writes them.
-pub fn js_num(f: f64) -> Value {
-    if !f.is_finite() {
-        Value::Null
-    } else if f.fract() == 0.0 && f.abs() < 9_007_199_254_740_992.0 {
-        json!(f as i64)
-    } else {
-        json!(f)
-    }
-}
-
 /// `Number(v ?? 0)`.
 fn num_or_zero(v: Option<&Value>) -> Value {
-    if js::nullish(v) { json!(0) } else { js_num(js::to_number(v)) }
+    if js::nullish(v) { json!(0) } else { js::num(js::to_number(v)) }
 }
 
 /// `(v as string) || fallback`: the value itself when truthy.
@@ -423,7 +411,7 @@ impl Prs {
     }
 
     async fn api_json(&self, url: &str, token: Option<&str>) -> Option<Value> {
-        let res = self.http.get(url).headers(self.headers(token)).send().await.ok()?;
+        let res = nekko_net::send("github", self.http.get(url).headers(self.headers(token))).await.ok()?;
         if !res.status().is_success() {
             return None;
         }
@@ -449,14 +437,15 @@ impl Prs {
                 return None;
             }
         }
-        let response = self
-            .http
-            .get(format!("{}/{path}", self.api))
-            .headers(self.headers(token))
-            .header("X-GitHub-Api-Version", "2026-03-10")
-            .send()
-            .await
-            .ok()?;
+        let response = nekko_net::send(
+            "github",
+            self.http
+                .get(format!("{}/{path}", self.api))
+                .headers(self.headers(token))
+                .header("X-GitHub-Api-Version", "2026-03-10"),
+        )
+        .await
+        .ok()?;
         if !response.status().is_success() {
             return None;
         }
@@ -512,7 +501,9 @@ impl Prs {
         if let Some(numbers) = body {
             req = req.body(js::stringify(&json!({ "pull_requests": numbers })));
         }
-        let res = req.send().await.map_err(|_| "fetch failed".to_string())?;
+        let res = nekko_net::send("github", req)
+            .await
+            .map_err(|e| if e.is_blocked() { e.to_string() } else { "fetch failed".to_string() })?;
         if !res.status().is_success() {
             return Err(format!(
                 "GitHub request failed ({}). Check repository access and GitHub stack availability.",
@@ -520,6 +511,98 @@ impl Prs {
             ));
         }
         res.json().await.map_err(|e| e.to_string())
+    }
+
+    async fn progress_query(&self, query: &str, token: Option<&str>) -> Option<Value> {
+        if self.cooling() {
+            return None;
+        }
+        if !self.gh_missing.load(Ordering::SeqCst) {
+            let arg = format!("query={query}");
+            let out = self.gh_read(&["api", "graphql", "-f", &arg], Duration::from_secs(20), None).await;
+            if out.missing {
+                self.gh_missing.store(true, Ordering::SeqCst);
+            }
+            if out.ok {
+                let value: Value = serde_json::from_str(&out.stdout).ok()?;
+                if value.get("errors").is_none() {
+                    return Some(value);
+                }
+            }
+        }
+        if token.is_none() || self.cooling() {
+            return None;
+        }
+        let response = nekko_net::send(
+            "github",
+            self.http.post(format!("{}/graphql", self.api)).headers(self.headers(token)).json(&json!({"query": query})),
+        )
+        .await
+        .ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let value: Value = response.json().await.ok()?;
+        if value.get("errors").is_some() {
+            return None;
+        }
+        Some(value)
+    }
+
+    async fn enrich_progress(&self, info: &mut Value, owner: &str, repo: &str, number: u64, token: Option<&str>) {
+        // Each connection is independently paginated. Never publish a partial total.
+        let mut check_cursor = Value::Null;
+        let mut thread_cursor = Value::Null;
+        let (mut checks_done, mut threads_done) = (false, false);
+        let (mut checks, mut threads) = (Vec::new(), Vec::new());
+        let mut head = None;
+        for _ in 0..100 {
+            let query = format!(
+                r#"query {{ repository(owner:{owner}, name:{repo}) {{ pullRequest(number:{number}) {{ headRefOid commits(last:1) {{ nodes {{ commit {{ statusCheckRollup {{ contexts(first:100, after:{check_cursor}) {{ nodes {{ __typename ... on CheckRun {{ name status conclusion detailsUrl startedAt completedAt }} ... on StatusContext {{ context state targetUrl description }} }} pageInfo {{ hasNextPage endCursor }} totalCount }} }} }} }} }} reviewThreads(first:100, after:{thread_cursor}) {{ nodes {{ isResolved }} pageInfo {{ hasNextPage endCursor }} totalCount }} }} }} }}"#,
+                owner = json!(owner),
+                repo = json!(repo)
+            );
+            let Some(value) = self.progress_query(&query, token).await else {
+                break;
+            };
+            let pr = &value["data"]["repository"]["pullRequest"];
+            let Some(oid) = pr["headRefOid"].as_str() else {
+                break;
+            };
+            if head.as_deref().is_some_and(|h| h != oid) {
+                return;
+            }
+            head = Some(oid.to_string());
+            if !checks_done {
+                let rollup = &pr["commits"]["nodes"][0]["commit"]["statusCheckRollup"];
+                if pr["commits"]["nodes"][0]["commit"].get("statusCheckRollup") == Some(&Value::Null) {
+                    checks_done = true;
+                } else if let Some(done) = progress_page(&rollup["contexts"], &mut checks, &mut check_cursor) {
+                    checks_done = done;
+                } else {
+                    break;
+                }
+            }
+            if !threads_done {
+                if let Some(done) = progress_page(&pr["reviewThreads"], &mut threads, &mut thread_cursor) {
+                    threads_done = done;
+                } else {
+                    break;
+                }
+            }
+            if checks_done && threads_done {
+                break;
+            }
+        }
+        info["checkedAt"] = json!(now_ms());
+        if checks_done {
+            info["checkProgress"] = check_progress(&checks);
+        }
+        if threads_done && threads.iter().all(|t| t["isResolved"].is_boolean()) {
+            let resolved = threads.iter().filter(|t| t["isResolved"] == true).count();
+            info["reviewThreads"] =
+                json!({"total": threads.len(), "resolved": resolved, "unresolved": threads.len() - resolved});
+        }
     }
 
     /// `refreshPrInfo(url)`: the by-URL read, forced.
@@ -547,6 +630,7 @@ impl Prs {
                 if let Some(native) = self.native_pr(&slug, number, token).await {
                     add_stack(&mut info, &native);
                 }
+                self.enrich_progress(&mut info, &owner, &repo, number, token).await;
                 return info;
             }
         }
@@ -560,6 +644,7 @@ impl Prs {
         }
         let mut info = pr_info_from_api(url, &owner, &repo, number, &j, checks);
         add_stack(&mut info, &j);
+        self.enrich_progress(&mut info, &owner, &repo, number, token).await;
         info
     }
 
@@ -574,7 +659,14 @@ impl Prs {
                 return v;
             }
         }
-        let v = self.fetch_info(url, token).await;
+        let mut v = self.fetch_info(url, token).await;
+        // Preserve the last observation on transport failure. checkedAt is not
+        // advanced, so consumers can label it stale rather than inventing zeros.
+        if v.is_null()
+            && let Some((previous, _, _)) = self.info.lock().unwrap_or_else(|e| e.into_inner()).get(url)
+        {
+            v = previous.clone();
+        }
         self.info
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -702,29 +794,32 @@ impl Prs {
         let h = self.headers(Some(token));
         let sent = match action {
             "approve" => {
-                self.http
-                    .post(format!("{base}/pulls/{number}/reviews"))
-                    .headers(h)
-                    .body(r#"{"event":"APPROVE"}"#)
-                    .send()
-                    .await
+                nekko_net::send(
+                    "github",
+                    self.http.post(format!("{base}/pulls/{number}/reviews")).headers(h).body(r#"{"event":"APPROVE"}"#),
+                )
+                .await
             }
             "merge" => {
-                self.http
-                    .put(format!("{base}/pulls/{number}/merge"))
-                    .headers(h)
-                    .body(r#"{"merge_method":"merge"}"#)
-                    .send()
-                    .await
+                nekko_net::send(
+                    "github",
+                    self.http
+                        .put(format!("{base}/pulls/{number}/merge"))
+                        .headers(h)
+                        .body(r#"{"merge_method":"merge"}"#),
+                )
+                .await
             }
             _ => {
                 let state = if action == "reopen" { "open" } else { "closed" };
-                self.http
-                    .patch(format!("{base}/pulls/{number}"))
-                    .headers(h)
-                    .body(json!({ "state": state }).to_string())
-                    .send()
-                    .await
+                nekko_net::send(
+                    "github",
+                    self.http
+                        .patch(format!("{base}/pulls/{number}"))
+                        .headers(h)
+                        .body(json!({ "state": state }).to_string()),
+                )
+                .await
             }
         };
         let r = match sent {
@@ -896,14 +991,15 @@ impl Prs {
                 .ok_or("Could not read the repository's default branch.")?,
         };
         let payload = json!({ "title": title, "body": body, "head": head, "base": base, "draft": draft });
-        let res = self
-            .http
-            .post(format!("{}/repos/{slug}/pulls", self.api))
-            .headers(self.headers(Some(token)))
-            .body(payload.to_string())
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let res = nekko_net::send(
+            "github",
+            self.http
+                .post(format!("{}/repos/{slug}/pulls", self.api))
+                .headers(self.headers(Some(token)))
+                .body(payload.to_string()),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
         let status = res.status();
         let j: Value = res.json().await.unwrap_or(Value::Null);
         if !status.is_success() {
@@ -1047,4 +1143,146 @@ pub fn checks_result(url: &str, items: Vec<Value>, source: &str) -> Value {
         "passing"
     };
     json!({ "url": url, "checks": rollup, "items": items, "source": source })
+}
+
+// Reject missing page metadata, repeated cursors and truncated connections.
+fn progress_page(connection: &Value, items: &mut Vec<Value>, cursor: &mut Value) -> Option<bool> {
+    let nodes = connection["nodes"].as_array()?;
+    let total = connection["totalCount"].as_u64()? as usize;
+    let more = connection["pageInfo"]["hasNextPage"].as_bool()?;
+    if nodes.iter().any(Value::is_null) {
+        return None;
+    }
+    items.extend(nodes.iter().cloned());
+    if items.len() > total {
+        return None;
+    }
+    if more {
+        let next = connection["pageInfo"]["endCursor"].as_str()?;
+        if nodes.is_empty() || cursor.as_str() == Some(next) {
+            return None;
+        }
+        *cursor = json!(next);
+        Some(false)
+    } else if items.len() == total {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+fn check_progress(contexts: &[Value]) -> Value {
+    let mut items = Vec::new();
+    let (mut completed, mut pending, mut failing, mut unknown) = (0, 0, 0, 0);
+    for c in contexts {
+        let run = c["__typename"] == "CheckRun";
+        let state = if run {
+            match (c["status"].as_str(), c["conclusion"].as_str()) {
+                (Some("COMPLETED"), Some("SUCCESS" | "NEUTRAL" | "SKIPPED")) => "completed",
+                (
+                    Some("COMPLETED"),
+                    Some("FAILURE" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" | "STARTUP_FAILURE" | "STALE"),
+                ) => "failing",
+                (Some("QUEUED" | "IN_PROGRESS" | "WAITING" | "PENDING" | "REQUESTED"), _) => "pending",
+                _ => "unknown",
+            }
+        } else if c["__typename"] == "StatusContext" {
+            match c["state"].as_str() {
+                Some("SUCCESS") => "completed",
+                Some("FAILURE" | "ERROR") => "failing",
+                Some("PENDING" | "EXPECTED") => "pending",
+                _ => "unknown",
+            }
+        } else {
+            "unknown"
+        };
+        match state {
+            "completed" => completed += 1,
+            "pending" => pending += 1,
+            "failing" => failing += 1,
+            _ => unknown += 1,
+        }
+        let link = c[if run { "detailsUrl" } else { "targetUrl" }]
+            .as_str()
+            .and_then(|s| reqwest::Url::parse(s).ok())
+            .filter(|u| {
+                matches!(u.scheme(), "http" | "https")
+                    && u.host_str().is_some()
+                    && u.username().is_empty()
+                    && u.password().is_none()
+            })
+            .map(|u| u.to_string());
+        items.push(json!({"name": c[if run {"name"} else {"context"}].as_str().unwrap_or("Unknown check"), "state": state, "link": link}));
+    }
+    json!({"total": items.len(), "completed": completed, "pending": pending, "failing": failing, "unknown": unknown, "items": items})
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+
+    #[test]
+    fn progress_states_and_links_are_conservative() {
+        let result = check_progress(&[
+            json!({"__typename":"CheckRun","name":"ok","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://example.com/check"}),
+            json!({"__typename":"CheckRun","status":"COMPLETED","conclusion":null,"detailsUrl":"javascript:alert(1)"}),
+            json!({"__typename":"CheckRun","status":"COMPLETED","conclusion":"CANCELLED"}),
+            json!({"__typename":"CheckRun","status":"WAITING"}),
+            json!({"__typename":"StatusContext","state":"SUCCESS"}),
+            json!({"__typename":"StatusContext","state":"ERROR","targetUrl":"file:///tmp/check"}),
+            json!({"__typename":"CheckRun","status":"COMPLETED","conclusion":"SKIPPED"}),
+        ]);
+        assert_eq!(result["total"], 7);
+        assert_eq!(result["completed"], 3);
+        assert_eq!(result["pending"], 1);
+        assert_eq!(result["failing"], 2);
+        assert_eq!(result["unknown"], 1);
+        assert_eq!(result["items"][0]["link"], "https://example.com/check");
+        assert!(result["items"][1]["link"].is_null());
+        assert!(result["items"][5]["link"].is_null());
+    }
+
+    #[test]
+    fn pagination_requires_complete_counts_and_advancing_cursor() {
+        let mut nodes = Vec::new();
+        let mut cursor = Value::Null;
+        let page =
+            json!({"nodes":[{"isResolved":true}],"totalCount":2,"pageInfo":{"hasNextPage":true,"endCursor":"one"}});
+        assert_eq!(progress_page(&page, &mut nodes, &mut cursor), Some(false));
+        let last =
+            json!({"nodes":[{"isResolved":false}],"totalCount":2,"pageInfo":{"hasNextPage":false,"endCursor":"two"}});
+        assert_eq!(progress_page(&last, &mut nodes, &mut cursor), Some(true));
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(
+            progress_page(
+                &json!({"nodes":[],"totalCount":2,"pageInfo":{"hasNextPage":false}}),
+                &mut Vec::new(),
+                &mut Value::Null
+            ),
+            None
+        );
+        assert_eq!(progress_page(&page, &mut Vec::new(), &mut json!("one")), None);
+        assert_eq!(progress_page(&Value::Null, &mut Vec::new(), &mut Value::Null), None);
+    }
+
+    #[tokio::test]
+    async fn failed_refresh_retains_observation_without_freshening_it() {
+        let prs = Prs::new("/nonexistent/gh-progress-test", "http://127.0.0.1:1");
+        let url = "https://github.com/owner/repo/pull/1";
+        let previous = json!({"url":url,"checkedAt":1,"reviewThreads":{"resolved":2,"unresolved":1,"total":3}});
+        prs.info.lock().unwrap().insert(url.into(), (previous.clone(), 0, 0));
+        assert_eq!(prs.cached_info(url, None, true).await, previous);
+        assert_eq!(prs.cached_info(url, None, false).await["checkedAt"], 1);
+    }
+
+    #[tokio::test]
+    async fn unavailable_progress_is_not_zero() {
+        let prs = Prs::new("/nonexistent/gh-progress-test", "http://127.0.0.1:1");
+        let mut info = json!({"updatedAt":"old"});
+        prs.enrich_progress(&mut info, "owner", "repo", 1, None).await;
+        assert!(info.get("checkProgress").is_none());
+        assert!(info.get("reviewThreads").is_none());
+        assert!(info["checkedAt"].is_u64());
+        assert_eq!(info["updatedAt"], "old");
+    }
 }

@@ -1,6 +1,7 @@
+import { rememberedConnectivityNotices } from './components/ConnectivityNotices.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '@nekko-agent/shared';
-import { LIVE_STREAM_MAX, __resetLiveRuns, applyEvent, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
+import { LIVE_STREAM_MAX, __resetLiveRuns, applyEvent, beginResumedRun, applyReplay, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
 
 // The registry repaints on an animation frame; the folding itself is synchronous
 // and is what these tests are about, so the scheduler is stubbed out.
@@ -30,6 +31,34 @@ describe('liveRuns', () => {
     expect(blocks[2]).toEqual({ kind: 'text', text: 'I found the problem. Updating the composer.' });
     applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
     expect(takeFinishedRun('a')!.blocks).toEqual(blocks);
+  });
+
+  it('retains a resume boundary through events, replay and the persisted handoff', () => {
+    beginResumedRun('a', 'saved-tool-result');
+    expect(getLiveRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent(text('a', 'Continuing'));
+    applyReplay({ sessionId: 'a', events: [{ type: 'text', delta: 'Continuing' }] } as any);
+    expect(getLiveRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
+    expect(takeFinishedRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent(text('a', 'Next turn'));
+    expect(getLiveRun('a')?.transcriptThroughId).toBeUndefined();
+  });
+
+  it('times each tool call from its call to its result', () => {
+    applyEvent(call('a', 'bash'), 1_000);
+    applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'c_bash', output: 'ok' } }, 3_500);
+    const block = getLiveRun('a')!.blocks[0];
+    expect(block.kind === 'activity' && block.items[0]).toMatchObject({ kind: 'tool', startedAt: 1_000, endedAt: 3_500 });
+  });
+
+  it('retains live connectivity notices without starting or resurrecting a run', () => {
+    const notice = { id: 'outage1', kind: 'restored' as const, createdAt: 1000, content: 'Reachability restored; select Continue.' };
+    applyEvent({ type: 'session_meta', sessionId: 'incognito', connectivityNotice: notice });
+    applyEvent({ type: 'session_meta', sessionId: 'incognito', connectivityNotice: notice });
+    expect(rememberedConnectivityNotices('incognito')).toEqual([notice]);
+    expect(getLiveRun('incognito')).toBeUndefined();
+    expect(runningSessionIds()).toEqual([]);
   });
 
   it('does not reopen a finished turn for a late session_meta', () => {

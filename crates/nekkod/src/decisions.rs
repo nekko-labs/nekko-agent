@@ -100,40 +100,6 @@ fn ok(ok: bool, message: impl Into<String>) -> Value {
     json!({ "ok": ok, "message": message.into() })
 }
 
-/// `Number.prototype.toFixed` for the small, non-negative values shown here:
-/// the exact decimal value rounded half up (Rust's own rounding ties to even).
-pub fn to_fixed(x: f64, digits: usize) -> String {
-    if !x.is_finite() {
-        return nekko_js::number_to_string(x);
-    }
-    let negative = x < 0.0;
-    // Enough digits to print the double exactly, so ties are real ties.
-    let exact = format!("{:.1100}", x.abs());
-    let (int, frac) = exact.split_once('.').unwrap_or((&exact, ""));
-    let mut digits_vec: Vec<u8> = int.bytes().chain(frac.bytes().take(digits)).map(|b| b - b'0').collect();
-    let round_up = frac.as_bytes().get(digits).is_some_and(|d| *d >= b'5');
-    if round_up {
-        let mut i = digits_vec.len();
-        loop {
-            if i == 0 {
-                digits_vec.insert(0, 1);
-                break;
-            }
-            i -= 1;
-            if digits_vec[i] == 9 {
-                digits_vec[i] = 0;
-            } else {
-                digits_vec[i] += 1;
-                break;
-            }
-        }
-    }
-    let s: String = digits_vec.iter().map(|d| char::from(b'0' + d)).collect();
-    let (i, f) = s.split_at(s.len() - digits);
-    let body = if digits == 0 { i.to_string() } else { format!("{i}.{f}") };
-    if negative && body.chars().any(|c| c != '0' && c != '.') { format!("-{body}") } else { body }
-}
-
 /// Where the catalog's files are fetched from (`decision-catalog.json`'s
 /// `releaseUrl`).
 pub fn release_url() -> String {
@@ -429,7 +395,7 @@ impl Decisions {
             bytes += size as f64;
         }
         Ok(if queued > 0 {
-            ok(true, format!("Downloading {name} {p} ({} GB).", to_fixed(bytes / 1e9, 2)))
+            ok(true, format!("Downloading {name} {p} ({} GB).", nekko_js::to_fixed_unsigned_zero(bytes / 1e9, 2)))
         } else {
             ok(true, format!("{name} {p} is already downloaded."))
         })
@@ -526,7 +492,10 @@ impl Decisions {
                 let shown = s.get("precision").filter(|p| !p.is_null()).cloned().unwrap_or(chosen);
                 let ep = s.get("ep").filter(|e| !e.is_null()).map_or_else(|| "the CPU".to_string(), nekko_js::display);
                 let took = if nekko_js::truthy(s.get("loadMs")) {
-                    format!(" in {} s", to_fixed(nekko_js::to_number(s.get("loadMs")) / 1000.0, 1))
+                    format!(
+                        " in {} s",
+                        nekko_js::to_fixed_unsigned_zero(nekko_js::to_number(s.get("loadMs")) / 1000.0, 1)
+                    )
                 } else {
                     String::new()
                 };
@@ -566,16 +535,16 @@ impl Decisions {
         };
         let model = if nekko_js::truthy(body.get("model")) { body["model"].clone() } else { json!("jev-latest") };
         body.insert("model".into(), model);
-        let res = self
+        let req = self
             .http
             .post(format!("{}/systemone", self.typesafe_url))
             .header("Authorization", format!("Bearer {key}"))
             .header("Content-Type", "application/json")
             .body(nekko_js::stringify(&Value::Object(body)))
-            .timeout(Duration::from_secs(60))
-            .send()
+            .timeout(Duration::from_secs(60));
+        let res = nekko_net::send("decide", req)
             .await
-            .map_err(|_| "fetch failed".to_string())?;
+            .map_err(|e| if e.is_blocked() { e.to_string() } else { "fetch failed".to_string() })?;
         let status = res.status();
         let text = res.text().await.map_err(|e| e.to_string())?;
         let parsed: Value =
@@ -604,15 +573,14 @@ impl Decisions {
     /// A key check that costs nothing: TypeSafe's model list.
     async fn check_typesafe(&self) -> Value {
         let Some(key) = self.typesafe_key().await else { return ok(false, "No TypeSafe API key is set.") };
-        let res = match self
+        let req = self
             .http
             .get(format!("{}/models", self.typesafe_url))
             .header("Authorization", format!("Bearer {key}"))
-            .timeout(Duration::from_secs(15))
-            .send()
-            .await
-        {
+            .timeout(Duration::from_secs(15));
+        let res = match nekko_net::send("decide", req).await {
             Ok(r) => r,
+            Err(e) if e.is_blocked() => return ok(false, e.to_string()),
             Err(_) => return ok(false, "Could not reach TypeSafe: fetch failed"),
         };
         let status = res.status().as_u16();

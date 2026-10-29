@@ -34,6 +34,12 @@ pub struct Admission {
     interrupting: Arc<Mutex<HashSet<String>>>,
     /// `sessionId` and `clientMessageId` of each `chat:send` still running here, so a resend meanwhile is a repeat.
     sending: Arc<Mutex<HashSet<String>>>,
+    /// How many `chat:send`s a person started (not an automation) are being
+    /// admitted or driven here: someone is using the computer (`activity:state`).
+    attended: Arc<std::sync::atomic::AtomicUsize>,
+    /// Those of them on a model on this computer: what a low-priority
+    /// background turn steps aside for (background.rs).
+    attended_local: Arc<std::sync::atomic::AtomicUsize>,
     compactions: Arc<crate::compaction::Compactions>,
     /// The desktop app's host lets the agent drive a browser; the Local Web UI's does not.
     pub allow_browser_control: bool,
@@ -45,6 +51,8 @@ impl Admission {
             pending: Mutex::default(),
             interrupting: Arc::default(),
             sending: Arc::default(),
+            attended: Arc::default(),
+            attended_local: Arc::default(),
             compactions,
             allow_browser_control,
         })
@@ -66,6 +74,27 @@ impl Admission {
         let key = format!("{session_id}\n{client_id}");
         let fresh = self.sending.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone());
         fresh.then(|| InterruptGuard { set: self.sending.clone(), id: key })
+    }
+
+    /// Count a person's `chat:send` until the guard drops.
+    fn begin_attended(&self) -> AttendedGuard {
+        self.attended.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        AttendedGuard(self.attended.clone())
+    }
+
+    fn begin_attended_local(&self) -> AttendedGuard {
+        self.attended_local.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        AttendedGuard(self.attended_local.clone())
+    }
+
+    /// Whether a chat a person started is replying here on a local model.
+    pub fn attended_local_running(&self) -> bool {
+        self.attended_local.load(std::sync::atomic::Ordering::Relaxed) > 0
+    }
+
+    /// Whether a chat a person started is replying here.
+    pub fn attended_running(&self) -> bool {
+        self.attended.load(std::sync::atomic::Ordering::Relaxed) > 0
     }
 
     /// Whether a `chat:send` for this chat is being admitted or driven here.
@@ -109,6 +138,13 @@ struct InterruptGuard {
 impl Drop for InterruptGuard {
     fn drop(&mut self) {
         self.set.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.id);
+    }
+}
+
+struct AttendedGuard(Arc<std::sync::atomic::AtomicUsize>);
+impl Drop for AttendedGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -246,6 +282,15 @@ pub(crate) fn host_provider_config(ctx: &Ctx, config: &Value) -> Value {
     Value::Object(out)
 }
 
+/// Thinking is on unless this is our local model with an explicit Expert override.
+/// Legacy per-chat flags are deliberately not an input, including after Auto routing.
+fn effective_thinking(provider: &Value, model: &Value) -> bool {
+    !(s(provider, "kind") == "llamacpp"
+        && provider.get("managedCachePrompt") == Some(&json!(true))
+        && s(model, "format") != "mlx"
+        && model.pointer("/preset/thinking") == Some(&json!(false)))
+}
+
 /// `/[a-z0-9_]{4,}/g` over the lowercased prompt: whether the index has anything to search for.
 fn has_index_words(text: &str) -> bool {
     let lower = text.to_lowercase();
@@ -325,6 +370,18 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
 async fn send_with(ctx: &Ctx, adm: &Arc<Admission>, opts: Value, queued: Option<Value>) -> Result<Value, String> {
     let session_id = s(&opts, "sessionId").to_string();
     let pending = adm.begin(&session_id)?;
+    let attended = !crate::claude_policy::is_unattended(&opts);
+    let _attended = attended.then(|| adm.begin_attended());
+    let _attended_local = if attended {
+        let settings = crate::settings::current(ctx).await;
+        let provider = settings
+            .get("providers")
+            .and_then(Value::as_array)
+            .and_then(|ps| ps.iter().find(|p| p.get("id") == opts.get("providerId")));
+        provider.is_some_and(offline_provider_allowed).then(|| adm.begin_attended_local())
+    } else {
+        None
+    };
     let result = admit(ctx, adm, opts.clone(), queued, false, &pending.cancel).await?;
     if pending.cancel.is_cancelled() && !matches!(&result, Admit::Ended) {
         stopped(ctx, &session_id).await?;
@@ -448,7 +505,7 @@ async fn admit(
     }
 
     let mode_name = crate::worktrees::execution_mode(&session);
-    let offline = nekko_js::truthy(session.get("offline"));
+    let offline = crate::connections::offline(&session);
     let incognito = nekko_js::truthy(session.get("incognito"));
     if mode_name == "worktree"
         && !incognito
@@ -556,6 +613,11 @@ async fn admit(
     if !sandbox {
         facts.insert("hookRules".into(), settings.get("hooks").filter(|h| h.is_array()).cloned().unwrap_or(json!([])));
     }
+    // Opt-in usage reports: the provider's kind only, never its name, model or the prompt.
+    crate::telemetry::capture(
+        "turn_started",
+        &json!({ "provider": kind, "local": is_local(kind), "offline": offline, "mode": mode_name, "sandbox": sandbox }),
+    );
     // The turn runs its tools in this daemon's container for the chat (turns.rs).
     facts.insert("sandbox".into(), json!(sandbox));
     facts.insert("connectorSnippets".into(), connector_snippets);
@@ -571,6 +633,14 @@ async fn admit(
         );
     }
     facts.insert("promptCaching".into(), json!(settings.get("promptCaching") != Some(&json!(false))));
+    let mut thinking = true;
+    if let Some(p) = &resolved
+        && p.get("managedCachePrompt") == Some(&json!(true))
+    {
+        let model = ctx.library.find(model_id).await?.unwrap_or(Value::Null);
+        thinking = effective_thinking(p, &model);
+    }
+    facts.insert("thinking".into(), json!(thinking));
     // The loaded window, for the loop to keep a long run inside (nekko-loop fit.rs).
     facts.insert("contextWindow".into(), json!(crate::providers::context_window_for(ctx, &provider, model_id).await));
     // False for a model the provider lists without image input: pictures go as a note.
@@ -749,6 +819,43 @@ fn terminal_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thinking_is_on_except_for_a_managed_local_expert_override() {
+        let off = json!({ "preset": { "thinking": false } });
+        for kind in [
+            "anthropic",
+            "openai",
+            "openrouter",
+            "chatgpt",
+            "claude-code",
+            "ollama",
+            "lmstudio",
+            "vllm",
+            "openai-compat",
+        ] {
+            assert!(effective_thinking(&json!({ "kind": kind, "thinking": false }), &off), "{kind}");
+        }
+        assert!(effective_thinking(&json!({ "kind": "llamacpp" }), &off));
+        let managed = json!({ "kind": "llamacpp", "managedCachePrompt": true });
+        assert!(!effective_thinking(&managed, &off));
+        assert!(effective_thinking(&managed, &json!({ "preset": { "thinking": true } })));
+        assert!(effective_thinking(&managed, &json!({})));
+        assert!(effective_thinking(&managed, &json!({ "format": "mlx", "preset": { "thinking": false } })));
+    }
+
+    #[test]
+    fn a_person_s_chat_counts_while_it_runs() {
+        let adm = Admission::new(crate::compaction::Compactions::new(), false);
+        assert!(!adm.attended_running());
+        let one = adm.begin_attended();
+        let two = adm.begin_attended();
+        assert!(adm.attended_running());
+        drop(one);
+        assert!(adm.attended_running(), "the other chat still replies");
+        drop(two);
+        assert!(!adm.attended_running());
+    }
 
     #[test]
     fn offline_needs_a_local_provider_on_a_loopback_address() {

@@ -1,12 +1,13 @@
 import ActivityKit
 import AppIntents
+import NekkoProtocol
 import SwiftUI
 import WidgetKit
 
 @main
 struct NekkoWidgets: WidgetBundle {
     var body: some Widget {
-        AgentRunLiveActivity()
+        NekkoCardLiveActivity()
         StatusWidget()
         if #available(iOS 18.0, *) { NewChatControl() }
     }
@@ -20,7 +21,7 @@ struct NewChatControl: ControlWidget {
     static let url = URL(string: "nekko-agent://new")!
 
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "com.nekko.native.ios.new-chat") {
+        StaticControlConfiguration(kind: "dev.nekkolabs.nekkoagent.new-chat") {
             ControlWidgetButton(action: OpenURLIntent(Self.url)) {
                 Label("New chat", systemImage: "square.and.pencil")
             }
@@ -65,149 +66,38 @@ struct StatusProvider: TimelineProvider {
     }
 }
 
-/// A chat running on the computer: what it's doing, how long, and — when it
-/// waits on you — Allow / Deny right there. The buttons run
-/// `AllowToolIntent` / `AnswerApprovalIntent` in the app's process, which holds the relay.
-struct AgentRunLiveActivity: Widget {
+/// The one card for all of the computer's chats. The Lock Screen and the
+/// expanded Dynamic Island are both `LiveCardView`.
+struct NekkoCardLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: AgentRunAttributes.self) { context in
-            LockScreenView(context: context)
-                .activityBackgroundTint(Color.black.opacity(0.65))
+        ActivityConfiguration(for: NekkoCardAttributes.self) { context in
+            LiveCardView(state: context.state, level: context.attributes.level, interactive: true)
+                .padding(14)
+                .activityBackgroundTint(LiveCardView.background.opacity(0.92))
                 .activitySystemActionForegroundColor(.white)
-                .widgetURL(URL(string: "nekko-agent://chat/\(context.attributes.sessionId)"))
+                .widgetURL(chatURL(context.state.focusId))
         } dynamicIsland: { context in
-            DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) {
-                    PhaseIcon(phase: context.state.phase).font(.title3).padding(.leading, 4)
-                }
-                DynamicIslandExpandedRegion(.trailing) {
-                    if context.state.phase == .running && context.state.hasStart {
-                        Text(context.state.startedAt, style: .timer).monospacedDigit().font(.caption).frame(maxWidth: 56)
-                    }
-                }
-                DynamicIslandExpandedRegion(.center) {
-                    Text(context.attributes.chatTitle).font(.subheadline.weight(.semibold)).lineLimit(1)
-                }
+            let urgent = context.state.chats.first?.state ?? .working
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(context.state.displayStep).font(.caption.monospaced()).lineLimit(2).foregroundStyle(.secondary)
-                        Buttons(context: context)
-                    }
+                    LiveCardView(state: context.state, level: context.attributes.level, interactive: true)
                 }
             } compactLeading: {
-                PhaseIcon(phase: context.state.phase)
+                PixelCat().frame(width: 22, height: 22)
             } compactTrailing: {
-                if context.state.phase == .running && context.state.hasStart {
-                    Text(context.state.startedAt, style: .timer).monospacedDigit().frame(maxWidth: 44)
-                } else {
-                    Text(shortLabel(context.state.phase)).font(.caption2.weight(.semibold))
+                HStack(spacing: 3) {
+                    LiveStatusGlyph(state: urgent, size: 14)
+                    Text("\(context.state.chats.count + context.state.more)").font(.caption2.weight(.semibold)).monospacedDigit()
                 }
             } minimal: {
-                PhaseIcon(phase: context.state.phase)
+                LiveStatusGlyph(state: urgent, size: 14)
             }
-            .widgetURL(URL(string: "nekko-agent://chat/\(context.attributes.sessionId)"))
-            .keylineTint(color(context.state.phase))
-        }
-    }
-}
-
-private struct LockScreenView: View {
-    let context: ActivityViewContext<AgentRunAttributes>
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                PhaseIcon(phase: context.state.phase)
-                Text(context.attributes.chatTitle).font(.headline).lineLimit(1)
-                Spacer()
-                if context.state.phase == .running && context.state.hasStart {
-                    Text(context.state.startedAt, style: .timer).monospacedDigit().font(.caption).foregroundStyle(.secondary).frame(maxWidth: 60)
-                }
-            }
-            Text(context.state.displayStep).font(.subheadline.monospaced()).lineLimit(2)
-            HStack {
-                Text("\(context.attributes.computerName) · ^[\(context.state.steps) step](inflect: true)").font(.caption2).foregroundStyle(.secondary)
-                Spacer()
-            }
-            Buttons(context: context)
-        }
-        .padding(14)
-        .foregroundStyle(.white)
-    }
-}
-
-private struct Buttons: View {
-    let context: ActivityViewContext<AgentRunAttributes>
-
-    var body: some View {
-        switch context.state.phase {
-        case .approval:
-            if let callId = context.state.callId {
-                HStack {
-                    Button(intent: AnswerApprovalIntent(sessionId: context.attributes.sessionId, callId: callId, allow: false)) {
-                        Text("Deny").frame(maxWidth: .infinity)
-                    }.tint(.red)
-                    Button(intent: AllowToolIntent(sessionId: context.attributes.sessionId, callId: callId)) {
-                        Text("Allow").frame(maxWidth: .infinity)
-                    }.tint(.green)
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        case .running:
-            Button(intent: StopRunIntent(sessionId: context.attributes.sessionId)) {
-                Label("Stop", systemImage: "stop.fill").font(.caption)
-            }
-            .buttonStyle(.bordered)
-            .tint(.white)
-        default:
-            EmptyView()
-        }
-    }
-}
-
-private struct PhaseIcon: View {
-    let phase: AgentRunAttributes.Phase
-
-    var body: some View {
-        Image(systemName: symbol).foregroundStyle(color(phase)).accessibilityLabel(label)
-    }
-
-    private var label: String {
-        switch phase {
-        case .running: return "Working"
-        case .approval: return "Waiting for your approval"
-        case .question: return "Waiting for your answer"
-        case .done: return "Finished"
-        case .failed: return "Failed"
+            .widgetURL(chatURL(context.state.focusId))
+            .keylineTint(urgent.tint)
         }
     }
 
-    private var symbol: String {
-        switch phase {
-        case .running: return "sparkles"
-        case .approval: return "hand.raised.fill"
-        case .question: return "questionmark.bubble.fill"
-        case .done: return "checkmark.circle.fill"
-        case .failed: return "exclamationmark.triangle.fill"
-        }
-    }
-}
-
-private func color(_ phase: AgentRunAttributes.Phase) -> Color {
-    switch phase {
-    case .running: return Color(red: 0.55, green: 0.49, blue: 1)
-    case .approval, .question: return .orange
-    case .done: return .green
-    case .failed: return .red
-    }
-}
-
-private func shortLabel(_ phase: AgentRunAttributes.Phase) -> String {
-    switch phase {
-    case .running: return ""
-    case .approval: return "Approve?"
-    case .question: return "Asks"
-    case .done: return "Done"
-    case .failed: return "Error"
+    private func chatURL(_ id: String?) -> URL? {
+        id.flatMap { URL(string: "nekko-agent://chat/\($0)") }
     }
 }

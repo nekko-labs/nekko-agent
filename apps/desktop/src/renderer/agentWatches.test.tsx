@@ -94,6 +94,49 @@ describe('subagent model', () => {
   it('puts the running dots before the text in a fixed box', () => {
     const html = renderToStaticMarkup(<ActivityGroup items={[{ kind: 'tool', call: { id: 'r', name: 'read_file', input: { path: 'a' } } }]} streaming />);
     expect(html.indexOf('dots dots-lead')).toBeGreaterThan(-1);
-    expect(html.indexOf('dots dots-lead')).toBeLessThan(html.indexOf('Working · read_file'));
+    // Live, the headline is the newest row's goal in the present tense.
+    expect(html.indexOf('dots dots-lead')).toBeLessThan(html.indexOf('>Looking through the code<'));
+  });
+});
+
+
+describe('activity summary readability', () => {
+  it('summarises the run by purpose and lists each group with its count in a multiline tip', () => {
+    const items = ['bash', 'kill_process', 'bash', 'update_plan', 'agent_watch'].map((name, i) => ({ kind: 'tool' as const, call: { id: String(i), name, input: {} } }));
+    const html = renderToStaticMarkup(<ActivityGroup items={items} />);
+    expect(html).toContain('min-w-0 truncate font-medium text-ink-soft');
+    expect(html).toContain('>Ran 3 commands, updated the plan, used agent_watch<');
+    expect(html).toContain('data-hover-tip="Ran 3 commands, updated the plan, used agent_watch\n• Ran 3 commands (3)\n• Updated the plan\n• Used agent_watch"');
+    expect(html).not.toContain('Worked on');
+  });
+
+  it('reads a guidance, explore, edit and test turn as its goals, and opens to purpose groups', () => {
+    // These steps already returned; missing results now correctly mean an
+    // unfinished parallel call, even when a newer call has arrived.
+    const tool = (id: string, name: string, input: Record<string, unknown>, failed = false) => ({ kind: 'tool' as const, call: { id, name, input }, result: { toolCallId: id, output: failed ? 'failed' : 'done' }, ...(failed ? { failed } : {}) });
+    const items = [
+      tool('1', 'read_file', { path: 'AGENTS.md' }),
+      tool('2', 'read_file', { path: 'CLAUDE.md' }),
+      tool('3', 'read_file', { path: 'src/a.ts' }),
+      tool('4', 'grep', { pattern: 'x' }),
+      tool('5', 'edit_file', { path: 'src/a.ts' }),
+      tool('6', 'bash', { command: 'npm test', description: 'Run the desktop tests' }),
+      tool('7', 'bash', { command: 'npx vitest run' }, true),
+    ];
+    const closed = renderToStaticMarkup(<ActivityGroup items={items} />);
+    expect(closed).toContain('>Read guidance, looked through the code, edited 1 file, ran the tests<');
+    expect(closed).toContain('data-activity-failed');
+    // Live, the run is open: guidance and explore fold into groups, the
+    // lone edit is a plain row, and the group with a failure starts open.
+    const open = renderToStaticMarkup(<ActivityGroup items={items} streaming />);
+    expect(open).toContain('data-purpose-group="guidance"');
+    expect(open).toContain(">Read the project&#x27;s guidance<");
+    expect(open).toContain('AGENTS.md, CLAUDE.md');
+    expect(open).toContain('data-purpose-group="explore"');
+    expect(open).not.toContain('data-purpose-group="edit"');
+    expect(open).toContain('>Run the desktop tests<');
+    expect(open).toContain('text-danger">· 1 failed<');
+    // The failed group is open, so its calls show.
+    expect(open).toContain('npx vitest run');
   });
 });

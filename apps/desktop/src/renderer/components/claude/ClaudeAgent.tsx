@@ -12,17 +12,17 @@ import { Modal } from '../primitives/index.js';
  */
 
 /** How the user's Claude Code is set up, re-read whenever the window regains focus. */
-export function useClaudeCodeStatus(providerId?: string): { status: ClaudeCodeStatus | null; checking: boolean; refresh: () => void } {
+export function useClaudeCodeStatus(providerId?: string, account?: string): { status: ClaudeCodeStatus | null; checking: boolean; refresh: () => void } {
   const [status, setStatus] = useState<ClaudeCodeStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const refresh = useCallback(() => {
     setChecking(true);
     window.nekko
-      .getClaudeCodeStatus(providerId)
+      .getClaudeCodeStatus(providerId, account)
       .then(setStatus)
       .catch((e) => setStatus({ installed: false, message: String(e) }))
       .finally(() => setChecking(false));
-  }, [providerId]);
+  }, [providerId, account]);
   useEffect(() => {
     refresh();
     window.addEventListener('focus', refresh);
@@ -52,7 +52,7 @@ export function useClaudeCapability(providerId: string | undefined, capability: 
 }
 
 /** The policy nekkod enforces (shipped table plus any signed override). */
-function useClaudePolicy(): ClaudePolicy {
+export function useClaudePolicy(): ClaudePolicy {
   const [policy, setPolicy] = useState<ClaudePolicy>(CLAUDE_POLICY);
   useEffect(() => {
     window.nekko
@@ -149,57 +149,4 @@ export function claudeAuthLabel(status: ClaudeCodeStatus): string {
   if (status.auth === 'api_key') return 'an Anthropic API key';
   if (status.auth === 'subscription') return 'your Claude plan';
   return status.authMethod;
-}
-
-/**
- * The Claude Agent setup states: not installed, installed but signed out, and
- * ready. Sign-in happens in Claude Code (a Nekko terminal runs `claude`, where
- * the user types /login); Nekko only reads `claude auth status`.
- */
-export function ClaudeAgentSetup({ onSave, saving }: { onSave: () => void; saving: boolean }) {
-  const { status, checking, refresh } = useClaudeCodeStatus();
-  const signIn = useStore((s) => s.openClaudeCodeSignIn);
-  return (
-    <div className="claude-setup col-span-2" aria-live="polite">
-      <p className="text-[13px] font-medium">Claude Agent runs your installed Claude Code</p>
-      <p className="mt-0.5 text-[12px] text-ink-faint">
-        Sign-in happens in Claude Code, not in Nekko. Nekko never sees your Claude login. <ClaudeWhyLink label="What works with a Claude plan?" />
-      </p>
-      <div className="claude-setup-state mt-3" data-state={!status ? 'checking' : !status.installed ? 'missing' : status.loggedIn ? 'ready' : 'signed-out'}>
-        {!status ? (
-          <span className="text-[12px] text-ink-faint">Looking for Claude Code…</span>
-        ) : !status.installed ? (
-          <>
-            <strong>Claude Code is not installed</strong>
-            <span>Install it from Anthropic, then come back here.</span>
-            <div className="claude-setup-actions">
-              <a className="btn btn-outline" href="https://code.claude.com/docs/en/setup" target="_blank" rel="noreferrer">How to install Claude Code</a>
-              <button className="btn btn-ghost" onClick={refresh} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</button>
-            </div>
-          </>
-        ) : !status.loggedIn ? (
-          <>
-            <strong>Claude Code {status.version} is installed, but not signed in</strong>
-            <span>Open it, type <code>/login</code>, and finish signing in with Anthropic.</span>
-            <div className="claude-setup-actions">
-              <button className="btn btn-primary" onClick={() => void signIn()}>Open Claude Code to sign in</button>
-              <button className="btn btn-ghost" onClick={refresh} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <strong>Signed in to Claude Code {status.version}</strong>
-            <span>Using {claudeAuthLabel(status)}.</span>
-            <div className="claude-setup-actions">
-              <button className="btn btn-primary" onClick={onSave} disabled={saving}>{saving ? 'Adding…' : 'Add Claude Agent'}</button>
-              <button className="btn btn-ghost" onClick={refresh} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</button>
-            </div>
-          </>
-        )}
-      </div>
-      <div className="mt-4">
-        <ClaudeComparison />
-      </div>
-    </div>
-  );
 }

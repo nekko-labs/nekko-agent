@@ -40,6 +40,8 @@ final class FakeComputer: Caller, @unchecked Sendable {
     var turnsKeepRunning = false
     /// A computer from before exactly-once delivery: its phone gate refuses `clientMessageId`.
     var old = false
+    /// `session:setOptions` setting one of these modes is a raise: refused without a Change proof.
+    var raisedModes: Set<String> = []
     var created = 0
 
     init(chats: [String] = []) {
@@ -68,6 +70,9 @@ final class FakeComputer: Caller, @unchecked Sendable {
             chats[id] = Chat()
             return view(id)
         case Channels.sessionSetOptions:
+            if let mode = args.dropFirst().first?.str("mode"), raisedModes.contains(mode) {
+                throw RelayError("Not allowed from a paired phone (proof-required): \(channel)", fromComputer: true)
+            }
             return .null
         case Channels.chatSend:
             let o = args.first ?? .null
@@ -260,6 +265,42 @@ final class OutboxTests: XCTestCase {
         XCTAssertEqual(sendB?.str("modelId"), "m", "the computer's default model")
     }
 
+    /// The Live Activity mic: through the outbox (one `session:get`, then queue or send), waiting for the answer.
+    func testSendWaitingSaysDeliveredAndQueuesMidRun() async throws {
+        let pc = FakeComputer(chats: ["a"])
+        pc.set { $0.chats["a"]?.running = true }
+        let o = outbox(pc, drafts: drafts())
+        let delivered = try await o.sendWaiting(chatId: "a", text: "Fix it.", wait: 2)
+        XCTAssertTrue(delivered)
+        XCTAssertEqual(pc.chat("a").queued, ["Fix it."])
+        XCTAssertEqual(pc.count(Channels.chatSend), 0)
+        XCTAssertTrue(o.items.isEmpty)
+    }
+
+    func testSendWaitingThrowsARefusalAndParksTheWords() async {
+        let pc = FakeComputer(chats: ["a"])
+        pc.refuseSend = "Model gone."
+        let d = drafts()
+        let o = outbox(pc, drafts: d)
+        do {
+            _ = try await o.sendWaiting(chatId: "a", text: "Fix it.", wait: 2)
+            XCTFail("a refusal is said")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Model gone.")
+        }
+        XCTAssertEqual(d.draft("a").text, "Fix it.", "the words wait in the chat's draft")
+        XCTAssertEqual(d.draft("a").refusal, "Model gone.")
+    }
+
+    func testSendWaitingTimesOutLeavingItInTheOutbox() async throws {
+        let pc = FakeComputer(chats: ["a"])
+        pc.unreachable = true
+        let o = outbox(pc, drafts: drafts())
+        let delivered = try await o.sendWaiting(chatId: "a", text: "Fix it.", wait: 0.2)
+        XCTAssertFalse(delivered)
+        XCTAssertEqual(o.items.map(\.text), ["Fix it."], "the outbox delivers it later")
+    }
+
     func testNothingGetsThroughSoItWaitsThenGoesOnce() async {
         let pc = FakeComputer(chats: ["a"])
         pc.unreachable = true
@@ -359,6 +400,21 @@ final class OutboxTests: XCTestCase {
         XCTAssertEqual(pc.lastCall(Channels.sessionSetOptions), ["made-1", ["providerId": "p2", "modelId": "m2", "mode": "ask"]])
         XCTAssertEqual(pc.chat("made-1").prompts, ["new idea"])
         XCTAssertEqual(pc.lastCall(Channels.chatSend)?.first?.str("modelId"), "m2")
+    }
+
+    func testAQueuedNewChatThatCantRaiseItsModeGoesOutUnderTheDefault() async {
+        let pc = FakeComputer()
+        pc.raisedModes = ["yolo"]
+        let o = outbox(pc, drafts: drafts())
+        var delivered: [OutboxItem] = []
+        o.onDelivered = { item, _ in delivered.append(item) }
+        o.add(chatId: nil, text: "go fast", newChat: NewChatSpec(providerId: "p2", modelId: "m2", mode: "yolo"))
+        await o.flush()
+        XCTAssertTrue(o.items.isEmpty)
+        XCTAssertEqual(pc.chat("made-1").prompts, ["go fast"], "the prompt still goes out")
+        XCTAssertEqual(pc.firstCall(Channels.sessionSetOptions), ["made-1", ["providerId": "p2", "modelId": "m2", "mode": "yolo"]])
+        XCTAssertEqual(pc.lastCall(Channels.sessionSetOptions), ["made-1", ["providerId": "p2", "modelId": "m2"]])
+        XCTAssertEqual(delivered.first?.lastError, Outbox.modeNotRaised)
     }
 
     func testARefusedNewChatGoesBackToNewChatWithItsChoices() async {

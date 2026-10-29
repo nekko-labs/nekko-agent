@@ -3,7 +3,7 @@
 //! `tests/golden/capacity.json`. Pure, like the TS: facts in, projection out.
 //! Numbers follow JavaScript's (`NaN` propagates through `Math.max`/`min`).
 
-use crate::{js_round, num, to_fixed};
+use crate::{js_round, num};
 use serde_json::{Map, Value, json};
 
 const GB: f64 = 1024.0 * 1024.0 * 1024.0;
@@ -15,6 +15,12 @@ const GRAPH_CONTEXT_CAP: f64 = 8192.0;
 const MAX_SUGGESTIONS: usize = 3;
 const MIN_CONTEXT: f64 = 512.0;
 const CONTEXT_STOPS: [f64; 7] = [131072.0, 65536.0, 32768.0, 16384.0, 8192.0, 4096.0, 2048.0];
+/// llama.cpp's default `--ubatch-size`: a sliding-window layer holds its window plus one micro-batch.
+const UBATCH_TOKENS: f64 = 512.0;
+/// The sequences `llama-server` serves when it is not given `--parallel`
+/// (`n_parallel = auto`, one unified cache), which is how the engine starts a
+/// one-slot load.
+const AUTO_SEQUENCES: f64 = 4.0;
 
 /// `Math.max(a, b)`: `NaN` if either is.
 pub fn jmax(a: f64, b: f64) -> f64 {
@@ -31,6 +37,93 @@ fn truthy(n: Option<f64>) -> bool {
     n.is_some_and(|n| n != 0.0 && !n.is_nan())
 }
 
+/// The KV cache a GGUF really keeps, read layer by layer from its tensors
+/// (`gguf.rs`), in cache elements (keys plus values) per token of context.
+///
+/// The uniform `layers x kvHeads x headDim` overstates modern models several
+/// times over: a recurrent layer of a hybrid model keeps no cache, a
+/// sliding-window layer stops growing at its window, and layers that share
+/// another's cache add nothing. Gemma 4 12B at 32k: 992 MiB in llama.cpp,
+/// about 51 GB by the uniform formula.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct KvLayout {
+    /// Elements per token on the full-attention layers.
+    pub full_per_token: f64,
+    /// Elements per token on the sliding-window layers.
+    pub sliding_per_token: f64,
+    /// Their window, in tokens (0 when there are none).
+    pub sliding_window: f64,
+}
+
+impl KvLayout {
+    pub fn from_value(v: &Value) -> Option<Self> {
+        let n = |k: &str| v.get(k).and_then(Value::as_f64);
+        Some(Self {
+            full_per_token: n("fullPerToken")?,
+            sliding_per_token: n("slidingPerToken").unwrap_or(0.0),
+            sliding_window: n("slidingWindow").unwrap_or(0.0),
+        })
+    }
+
+    pub fn to_value(&self) -> Value {
+        let mut o = Map::new();
+        o.insert("fullPerToken".into(), num(self.full_per_token));
+        if self.sliding_per_token > 0.0 {
+            o.insert("slidingPerToken".into(), num(self.sliding_per_token));
+            o.insert("slidingWindow".into(), num(self.sliding_window));
+        }
+        Value::Object(o)
+    }
+}
+
+/// What the weights are made of, read from a GGUF's tensor table (`gguf.rs`),
+/// as shares of every tensor byte it lists. This is what lets the placement
+/// planner move a mixture-of-experts model's experts (most of its bytes, few
+/// of its reads per token) to RAM, or page a lookup table from disk.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct WeightLayout {
+    /// Routed expert tensors (`blk.N.ffn_*_exps`).
+    pub expert_share: f64,
+    /// Dense feed-forward tensors (`blk.N.ffn_{up,down,gate}`), for `--n-cpu-ffn`.
+    pub ffn_share: f64,
+    /// Lookup tables llama.cpp's `--lazy-mode` reads row by row from the file
+    /// (n-gram and per-layer embeddings).
+    pub table_share: f64,
+    pub experts: Option<f64>,
+    pub experts_used: Option<f64>,
+}
+
+impl WeightLayout {
+    pub fn from_value(v: &Value) -> Option<Self> {
+        let n = |k: &str| v.get(k).and_then(Value::as_f64);
+        Some(Self {
+            expert_share: n("expertShare")?,
+            ffn_share: n("ffnShare").unwrap_or(0.0),
+            table_share: n("tableShare").unwrap_or(0.0),
+            experts: n("experts"),
+            experts_used: n("expertsUsed"),
+        })
+    }
+
+    pub fn to_value(&self) -> Value {
+        let mut o = Map::new();
+        o.insert("expertShare".into(), num(self.expert_share));
+        o.insert("ffnShare".into(), num(self.ffn_share));
+        o.insert("tableShare".into(), num(self.table_share));
+        if let Some(e) = self.experts {
+            o.insert("experts".into(), num(e));
+        }
+        if let Some(e) = self.experts_used {
+            o.insert("expertsUsed".into(), num(e));
+        }
+        Value::Object(o)
+    }
+
+    pub fn is_moe(&self) -> bool {
+        self.expert_share > 0.0
+    }
+}
+
 /// What we know about a model, normalized across runtimes (`ModelFacts`).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ModelFacts {
@@ -40,6 +133,11 @@ pub struct ModelFacts {
     pub kv_heads: Option<f64>,
     pub head_dim: Option<f64>,
     pub max_context: Option<f64>,
+    /// Read from the GGUF when the engine holds the file; preferred over the
+    /// uniform geometry above, and sized as `llama-server` allocates.
+    pub kv_layout: Option<KvLayout>,
+    /// Read from the GGUF too; only the placement planner uses it.
+    pub weight_layout: Option<WeightLayout>,
 }
 
 impl ModelFacts {
@@ -52,6 +150,8 @@ impl ModelFacts {
             kv_heads: n("kvHeads"),
             head_dim: n("headDim"),
             max_context: n("maxContext"),
+            kv_layout: v.get("kvLayout").and_then(KvLayout::from_value),
+            weight_layout: v.get("weightLayout").and_then(WeightLayout::from_value),
         }
     }
 }
@@ -144,7 +244,32 @@ pub fn kv_bytes_per_element(dtype: &str) -> f64 {
 }
 
 /// `kvCacheBytes`: `None` when the geometry is unknown.
+///
+/// With a layout read from the file, as `llama-server` allocates it: the
+/// full-attention layers hold the whole context once, however many slots
+/// share it. Sliding-window layers hold a window per sequence: with one slot
+/// the engine passes no `--parallel`, so the server runs four sequences over
+/// one unified cache (`4 x window + ubatch` cells); with `--parallel N` each
+/// slot keeps `window + ubatch` of its `context / N`. Checked against
+/// llama-server b11429 on Gemma 4 12B at 32k: 1440 MiB of window cache
+/// unified, 960 MiB with two slots.
+///
+/// Otherwise the uniform estimate, with a full cache per slot, which is what
+/// Ollama allocates (`num_ctx` per parallel request).
 pub fn kv_cache_bytes(facts: &ModelFacts, req: &FitRequest) -> Option<f64> {
+    if let Some(l) = &facts.kv_layout {
+        let slots = jmax(1.0, req.parallel_slots);
+        let ctx = jmax(0.0, req.context_tokens);
+        let window_cells = if l.sliding_window <= 0.0 {
+            ctx
+        } else if slots <= 1.0 {
+            jmin(ctx, AUTO_SEQUENCES * l.sliding_window + UBATCH_TOKENS)
+        } else {
+            slots * jmin((ctx / slots).floor(), l.sliding_window + UBATCH_TOKENS)
+        };
+        let elements = l.full_per_token * ctx + l.sliding_per_token * window_cells;
+        return Some(elements * kv_bytes_per_element(&req.kv_cache_dtype));
+    }
     if !truthy(facts.layers) || !truthy(facts.kv_heads) || !truthy(facts.head_dim) {
         return None;
     }
@@ -448,7 +573,7 @@ fn suggest_fixes(
     let format_bytes = |n: f64| {
         let gb = n / GB;
         if gb >= 1.0 {
-            format!("{} GB", to_fixed(gb, 1))
+            format!("{} GB", nekko_js::to_fixed_unsigned_zero(gb, 1))
         } else {
             format!("{} MB", nekko_js::number_to_string(js_round(n / MB)))
         }
@@ -634,7 +759,7 @@ pub fn auto_fit(input: &AutoFitInput) -> Value {
 
     let format_bytes = |n: f64| {
         if n >= GB {
-            format!("{} GB", to_fixed(n / GB, 1))
+            format!("{} GB", nekko_js::to_fixed_unsigned_zero(n / GB, 1))
         } else {
             format!("{} MB", nekko_js::number_to_string(jmax(0.0, js_round(n / MB))))
         }

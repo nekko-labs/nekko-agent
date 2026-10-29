@@ -17,6 +17,8 @@ pub struct Engine {
     pub router: EngineRouter,
     /// The resident decision model, shared by the `decide:*` channels and the router.
     pub decide: Arc<DecideService>,
+    /// Where the router's decode speeds go, once the daemon has a library (`speeds.rs`).
+    pub speeds: Arc<crate::speeds::SpeedMeter>,
 }
 
 impl Engine {
@@ -24,9 +26,11 @@ impl Engine {
         let supervisor = Arc::new(Supervisor::new());
         let decide = DecideService::new();
         let server: Arc<std::sync::OnceLock<Arc<nekko_engine::server::ModelServer>>> = Arc::default();
+        let speeds: Arc<crate::speeds::SpeedMeter> = Arc::default();
         let router = EngineRouter::new(supervisor.clone(), Arc::new(ServerPolicy { server: server.clone() }))
-            .with_decisions(Arc::new(RouterDecisions(decide.clone())));
-        Self { supervisor, server, router, decide }
+            .with_decisions(Arc::new(RouterDecisions(decide.clone())))
+            .with_meter(speeds.clone());
+        Self { supervisor, server, router, decide, speeds }
     }
 
     pub fn shutdown(&self) {

@@ -9,11 +9,15 @@ import Observation
 @Observable
 final class AppLock {
     private(set) var locked: Bool
-    private(set) var everUnlocked = false
+    /// The app has been open this launch: unlocked once, or started with the lock off.
+    private(set) var everUnlocked: Bool
     private(set) var error: String?
-    private var authenticating = false
+    private(set) var authenticating = false
 
-    init(enabled: Bool) { locked = enabled }
+    init(enabled: Bool) {
+        locked = enabled
+        everUnlocked = !enabled
+    }
 
     /// The app left the screen.
     func didEnterBackground(enabled: Bool) {

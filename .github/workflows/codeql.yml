@@ -3,8 +3,9 @@ name: CodeQL
 # Advanced setup, replacing GitHub's default setup. Default setup analysed Swift
 # on a macOS runner for every PR, whatever it changed, and could not be told
 # otherwise; the Team plan's 5 macOS runners are shared by every workflow (see
-# ci.yml). Here the Linux languages run on every PR and in the merge queue, and
-# Swift (apps/ios) runs on the weekly schedule and when a PR carries `ci:macos`.
+# ci.yml). Here a PR or queue group analyses only the languages its files are in
+# (scripts/ci-scope.mjs, codeqlLanguages); Swift (apps/ios) needs macOS, so it
+# runs on the weekly schedule and on a PR that changes Swift and carries `ci:macos`.
 #
 # Swift needs a build for CodeQL to trace; the protocol package is a plain
 # SwiftPM package, so `swift build` covers it. The app targets need Xcode and
@@ -28,21 +29,54 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      languages: ${{ steps.scope.outputs.codeql }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts
+      - name: Changed files
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.merge_group.head_sha }}
+        # Failure leaves the list empty, which ci-scope treats as "every language".
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
+          else
+            gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq '.files[].filename' > "$RUNNER_TEMP/changed.txt" || true
+          fi
+      - id: scope
+        env:
+          CI_CHANGED_FILES: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/changed.txt', runner.temp) || '' }}
+          CI_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node scripts/ci-scope.mjs
+
   analyze:
+    needs: scope
+    if: needs.scope.outputs.languages != '[]'
     name: Analyze (${{ matrix.language }})
     runs-on: ${{ matrix.language == 'swift' && 'macos-latest' || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        # Swift (macOS) only on the schedule, by hand, or with `ci:macos` on a PR.
-        language: ${{ fromJSON(((github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'ci:macos')) || github.event_name == 'merge_group') && '["actions","javascript-typescript","python","rust"]' || '["actions","javascript-typescript","python","rust","swift"]') }}
+        language: ${{ fromJSON(needs.scope.outputs.languages) }}
     steps:
       - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.language == 'swift' && 'manual' || 'none' }}
+          # Third-party bundles pinned by hash (vendor/mermaid: scripts/vendor-mermaid.mjs) are not our source.
+          config: |
+            paths-ignore:
+              - vendor/mermaid
       - name: Build the Swift protocol package
         if: matrix.language == 'swift'
         working-directory: apps/ios/Protocol

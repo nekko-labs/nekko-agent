@@ -1,7 +1,6 @@
 import { FirstProviderSetup } from '../components/providers/FirstProviderSetup.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { columnsFor, packGroups } from './providerLayout.js';
+import { useEffect, useRef, useState } from 'react';
 import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
 import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing, oauthProviderOffered } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -9,11 +8,11 @@ import { useStore } from '../store.js';
 import { Badge, Toggle } from '../components/primitives/index.js';
 import { SubscriptionSignIn } from '../components/SubscriptionSignIn.js';
 import { AddProvider, SUBSCRIPTION_KINDS, reconnectProviderConfig } from '../components/providers/AddProvider.js';
-import { ClaudeWhyLink } from '../components/claude/ClaudeAgent.js';
-import { PlusIcon, TrashIcon, CheckIcon, StarIcon } from '../icons.js';
+import { ClaudeWhyLink, useClaudeCodeStatus } from '../components/claude/ClaudeAgent.js';
+import { claudeSourceLine, isClaudeKind } from '../components/claude/ClaudeSetup.js';
+import { TrashIcon, CheckIcon, StarIcon } from '../icons.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
-import { hasAppChrome } from '../chrome.js';
 import { matchesModelQuery } from '../components/agent-console/modelPickerInteractions.js';
 import { MODEL_FILTER_THRESHOLD, modelListProblem } from './modelListProblem.js';
 
@@ -49,19 +48,30 @@ function formatExpiry(expiresAt?: number): string | null {
   return `Session expires in ${days} day${days === 1 ? '' : 's'}`;
 }
 
-export function ModelsView() {
-  const { providers, refreshProviders, pushToast, setView } = useStore(
+export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
+  const { providers, refreshProviders, pushToast } = useStore(
     useShallow((s) => ({
       providers: s.providers,
       refreshProviders: s.refreshProviders,
       pushToast: s.pushToast,
-      setView: s.setView,
     })),
   );
   // Keep this flow mounted through saving so its completion step does not disappear.
   const [firstSetup] = useState(() => needsProviderSetup(providers, useStore.getState().activeModelId ?? useStore.getState().models[0]?.id));
   const [adding, setAdding] = useState(false);
-  // A notice action ("Connect Claude Agent", "Add API key") opens the form on a kind.
+  const setupRef = useRef<HTMLDivElement>(null);
+  const shortcutsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!adding) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !setupRef.current?.contains(event.target) && !shortcutsRef.current?.contains(event.target)) setAdding(false);
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setAdding(false); };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+  }, [adding]);
+  // A notice action ("Use my subscription", "Add API key") opens the form on a kind.
   const [addKind, setAddKind] = useState<ProviderKind | undefined>();
   const requestedKind = useStore((s) => s.addProviderKind);
   useEffect(() => {
@@ -88,78 +98,80 @@ export function ModelsView() {
       : 'No new local servers found on localhost. Running on another host/port? Add it manually.');
   };
 
-  // The built-in engine lives on the Model Server tab: it is the one local
-  // server Nekko Agent installs, holds models for, and configures, so a generic
-  // provider card could never have carried it.
-  const local = providers.filter((p) => isLocal(p.kind) && p.kind !== 'llamacpp');
-  const cloud = providers.filter((p) => !isLocal(p.kind));
+  const visible = providers.filter((p) => p.kind !== 'llamacpp' && isLocal(p.kind) === localOnly);
+  const openAdd = (kind?: ProviderKind) => { setAddKind(kind); setAdding((open) => !(open && kind === addKind)); };
 
-  if (firstSetup) return <div className="h-full overflow-y-auto"><FirstProviderSetup /></div>;
+  if (firstSetup && !localOnly) return <div className="h-full overflow-y-auto"><FirstProviderSetup /></div>;
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[2200px] px-8 py-8">
-        <div className="flex items-center justify-between">
-          <div>
-            {!hasAppChrome && <h1 className="view-title">Model Providers</h1>}
-            <p className="mt-1 text-[13px] text-ink-faint">
-              Where models come from: cloud APIs, subscriptions, and model servers already running on this
-              machine or another one.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button className="btn btn-outline" onClick={discover} disabled={discovering}>
-              {discovering ? 'Scanning…' : 'Auto-discover local'}
-            </button>
-            <button className="btn btn-primary" onClick={() => { setAddKind(undefined); setAdding((v) => !v); }}>
-              <PlusIcon /> Add provider
-            </button>
-          </div>
+    <section className="models-providers" aria-label={localOnly ? 'Connected local servers' : 'Cloud providers'}>
+      <div className="models-provider-bar">
+        <div className="models-connected" aria-label="Current providers">
+          {visible.map((p) => <a key={p.id} href={`#provider-${p.id}`} className="models-connected-provider" title={p.label}>
+            <ProviderMark kind={p.kind} />
+            <span>{p.label}</span>
+          </a>)}
+          {!visible.length && <span className="text-[13px] text-ink-faint">{localOnly ? 'Connect a local server' : 'Add your first provider'}</span>}
         </div>
-
-        {adding && <AddProvider key={addKind ?? 'any'} initialKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />}
-
-        <ProviderSections
-          groups={[
-            {
-              key: 'local',
-              title: 'Connected local servers',
-              accent: 'var(--success)',
-              subtitle: 'Servers you already run: Ollama, LM Studio, vLLM.',
-              providers: local,
-            },
-            {
-              key: 'cloud',
-              title: 'Cloud',
-              accent: 'var(--info)',
-              subtitle: 'Hosted APIs, Anthropic, OpenAI, OpenRouter, or any compatible endpoint.',
-              providers: cloud,
-            },
-          ]}
-          onChanged={refreshProviders}
-        />
-
-        <section className="mx-auto mt-7 max-w-6xl">
-          <div className="card flex flex-wrap items-center gap-3 p-5">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-[15px] font-semibold">Nekko Agent's own engine</h2>
-              <p className="mt-0.5 text-[12px] text-ink-faint">
-                The models this machine runs itself, the folders they come from, and the address it serves them on
-                now have their own tab.
-              </p>
-            </div>
-            <button className="btn btn-outline shrink-0 py-1.5 text-[12px]" onClick={() => setView('modelserver')}>
-              Open Model Server
-            </button>
-          </div>
-        </section>
-
-        <p className="mt-8 text-center text-[12px] text-ink-faint">
-          Token usage and live worker status now live on the Agents screen.
-        </p>
+        <div ref={shortcutsRef}><ProviderShortcuts localOnly={localOnly} onAdd={openAdd} moreExpanded={adding && !addKind} /></div>
       </div>
-    </div>
+      {localOnly && <button className="btn btn-outline mb-4 text-[12px]" onClick={discover} disabled={discovering}>
+        {discovering ? 'Scanning…' : 'Discover local servers'}
+      </button>}
+      {adding && <div ref={setupRef} className="mb-5" data-provider-setup={addKind ?? 'any'}>
+        <button type="button" className="btn btn-ghost float-right" aria-label="Close provider setup" onClick={() => setAdding(false)}>×</button>
+        <AddProvider key={addKind ?? 'any'} fixedKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />
+      </div>}
+      <div className="models-provider-grid">
+        {visible.map((p) => <div key={p.id} id={`provider-${p.id}`}><ProviderCard provider={p} onChanged={refreshProviders} /></div>)}
+      </div>
+    </section>
   );
+}
+
+const PROVIDER_MARKS: Partial<Record<ProviderKind, string>> = {
+  chatgpt: 'openai', openai: 'openai', anthropic: 'anthropic', 'claude-code': 'anthropic',
+  vertex: 'google', openrouter: 'openrouter', ollama: 'ollama', lmstudio: 'lmstudio', vllm: 'vllm',
+};
+const CLOUD_SHORTCUTS: { kind: ProviderKind; label: string; color: string }[] = [
+  { kind: 'chatgpt', label: 'ChatGPT', color: '#167d65' },
+  { kind: 'anthropic', label: 'Claude', color: '#bc694d' },
+  { kind: 'openai', label: 'OpenAI API', color: '#354759' },
+  { kind: 'openrouter', label: 'OpenRouter', color: '#5555a6' },
+  { kind: 'vertex', label: 'Claude via Google Vertex AI', color: '#315db0' },
+];
+const LOCAL_SHORTCUTS = [
+  { kind: 'ollama' as const, label: 'Ollama', color: '#42424c' },
+  { kind: 'lmstudio' as const, label: 'LM Studio', color: '#6850b8' },
+  { kind: 'vllm' as const, label: 'vLLM', color: '#246676' },
+];
+
+function ProviderMark({ kind }: { kind: ProviderKind }) {
+  const icon = PROVIDER_MARKS[kind];
+  return icon ? <img src={`./providers/${icon}.svg`} alt="" width="22" height="22" />
+    : <span aria-hidden="true">{kind === 'vertex' ? 'G' : '↗'}</span>;
+}
+
+export function ProviderShortcuts({ localOnly = false, onAdd, moreExpanded = false }: { localOnly?: boolean; moreExpanded?: boolean; onAdd: (kind?: ProviderKind) => void }) {
+  return <div className="models-add-strip" role="group" aria-label="Add provider">
+    {(localOnly ? LOCAL_SHORTCUTS : CLOUD_SHORTCUTS).map(({ kind, label, color }) =>
+      <button key={kind} type="button" className="models-add-provider" style={{ background: color }} title={`Add ${label}`} aria-label={`Add ${label}`} onClick={() => onAdd(kind)}>
+        <ProviderMark kind={kind} />
+        <span className="models-add-plus" aria-hidden="true">+</span>
+      </button>)}
+    <button type="button" className="models-add-provider models-add-more" title="More providers" aria-label="More providers" aria-expanded={moreExpanded} onClick={() => onAdd()}>···</button>
+  </div>;
+}
+
+/** Where a Claude card's models come from (subscription or API, and which account). */
+function ClaudeSource({ provider }: { provider: ProviderConfig }) {
+  // Only a subscription account needs Claude Code's own status; API cards describe themselves.
+  return provider.kind === 'claude-code' ? <ClaudeCodeSource provider={provider} /> : <p className="claude-source">{claudeSourceLine(provider)}</p>;
+}
+
+function ClaudeCodeSource({ provider }: { provider: ProviderConfig }) {
+  const { status } = useClaudeCodeStatus(provider.id);
+  return <p className="claude-source">{claudeSourceLine(provider, status)}</p>;
 }
 
 const LIMIT_STATUS_COLOR: Record<LimitWindow['status'], string> = {
@@ -205,104 +217,6 @@ function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | nu
   );
 }
 
-interface ProviderGroup {
-  key: string;
-  title: string;
-  subtitle: string;
-  accent: string;
-  providers: ProviderConfig[];
-}
-
-const CARD_MIN_WIDTH = 340;
-const CARD_GAP = 16;
-/** Inner padding of a group's tinted container; column sizing budgets for it. */
-const GROUP_PAD = 14;
-
-/**
- * Provider groups laid out side by side when there is room. Each group is one
- * bordered container that is never split: cards beyond a line wrap inside it
- * (see packGroups).
- */
-function ProviderSections({ groups, onChanged }: { groups: ProviderGroup[]; onChanged: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [columns, setColumns] = useState(1);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // Each card slot also carries its share of a group container's padding.
-    const measure = () => setColumns(columnsFor(el.clientWidth, CARD_MIN_WIDTH + 2 * GROUP_PAD, CARD_GAP));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const byKey = new Map(groups.map((g) => [g.key, g]));
-  const rows = packGroups(groups.map((g) => ({ key: g.key, items: g.providers })), columns);
-
-  return (
-    <div ref={ref}>
-      {rows.map((row, i) => (
-        <div
-          key={row.map((s) => `${s.group}:${s.items[0]?.id}`).join('|') || i}
-          className="mt-7 grid items-start"
-          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, columnGap: CARD_GAP }}
-        >
-          {(() => {
-            let start = 1;
-            return row.map((seg) => {
-              const g = byKey.get(seg.group)!;
-              const gridColumn = `${start} / span ${seg.span}`;
-              start += seg.span;
-              // Each group sits in a faint container tinted with its accent. It
-              // spans both rows as a subgrid: headings sit on row 1 and cards on
-              // row 2, so groups sharing a line keep their cards top-aligned even
-              // when their subtitles wrap differently.
-              return (
-                <div
-                  key={g.key}
-                  data-provider-group={g.key}
-                  className="grid min-w-0 rounded-2xl border"
-                  style={{
-                    gridColumn,
-                    gridRow: '1 / span 2',
-                    alignSelf: 'stretch',
-                    gridTemplateRows: 'subgrid',
-                    rowGap: 0,
-                    padding: GROUP_PAD,
-                    borderColor: `color-mix(in srgb, ${g.accent} 22%, var(--line))`,
-                    background: `color-mix(in srgb, ${g.accent} 3%, transparent)`,
-                  }}
-                >
-                  <div className="mb-3 min-w-0" style={{ gridRow: 1 }}>
-                      <div className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: g.accent }} />
-                        <h2 className="text-[15px] font-semibold">{g.title} models</h2>
-                        <span className="chip">{g.providers.length}</span>
-                      </div>
-                      <p className="mt-0.5 text-[12px] text-ink-faint">{g.subtitle}</p>
-                  </div>
-                  <div
-                    className="grid min-w-0 items-start"
-                    style={{
-                      gridRow: 2,
-                      gridTemplateColumns: `repeat(${seg.span}, minmax(0, 1fr))`,
-                      gap: CARD_GAP,
-                    }}
-                  >
-                    {seg.items.map((p) => (
-                      <ProviderCard key={p.id} provider={p} onChanged={onChanged} />
-                    ))}
-                  </div>
-                </div>
-              );
-            });
-          })()}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /**
  * A Claude plan card from an older build. Nekko Agent no longer signs in to
@@ -343,7 +257,7 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
     <div className="mt-3 space-y-2 rounded-xl border p-3 text-[12px]" style={{ borderColor: 'var(--line)' }}>
       <p className="text-ink-soft">
         Nekko Agent no longer signs in to Claude plans, so this card is turned off and its saved Claude sign-in was deleted.
-        Add an Anthropic API key to keep using it, billed per token to your Anthropic account, or keep using your plan through Claude Agent, which runs your installed Claude Code.
+        Add an Anthropic API key to keep using it, billed per token to your Anthropic account, or keep using your plan through the Subscription option, which runs your installed Claude Code.
       </p>
       <div className="flex gap-2">
         <input
@@ -360,7 +274,7 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
       </div>
       {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use Claude Agent instead</button>
+        <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use my subscription instead</button>
         <ClaudeWhyLink label="What works with a Claude plan?" />
       </div>
     </div>
@@ -634,7 +548,8 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
             )}
             {provider.discovered && <span className="chip">discovered</span>}
           </div>
-          {(!local || !enabled) && <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{provider.baseUrl}</p>}
+          {isClaudeKind(provider.kind) && <ClaudeSource provider={provider} />}
+          {(!local || !enabled) && provider.baseUrl && <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{provider.baseUrl}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
         <Toggle

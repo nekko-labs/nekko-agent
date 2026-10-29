@@ -76,12 +76,14 @@ pub fn start_with_env(data_dir: &std::path::Path, extra: Value, env: &[(&str, Op
         };
     }
     let mut child = cmd
-        .env("NEKKOD_CONFIG", config.to_string())
+        .arg("--config-stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
         .expect("nekkod starts");
+    // The config is the first line of stdin; stdin stays open (its end stops the daemon).
+    std::io::Write::write_all(child.stdin.as_mut().unwrap(), format!("{config}\n").as_bytes()).unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let line = lines.next().expect("a ready line").unwrap();
     let ready: Value = serde_json::from_str(line.strip_prefix("NEKKOD_READY ").expect("ready prefix")).unwrap();
@@ -356,6 +358,11 @@ pub type Events = std::sync::Arc<std::sync::Mutex<Vec<Value>>>;
 /// of its own, until the daemon goes away. Connected before this returns, so
 /// a turn started after it is heard from its first event.
 pub fn record_events(port: u16) -> Events {
+    record_channel(port, "agent:event")
+}
+
+/// [`record_events`] for any pushed `channel`.
+pub fn record_channel(port: u16, channel: &'static str) -> Events {
     let url = format!("ws://127.0.0.1:{port}/api/events?token={TOKEN}");
     let (mut socket, _) = tokio_tungstenite::tungstenite::connect(url).expect("the events socket opens");
     let events = Events::default();
@@ -364,7 +371,7 @@ pub fn record_events(port: u16) -> Events {
         while let Ok(msg) = socket.read() {
             if let Message::Text(text) = msg
                 && let Ok(frame) = serde_json::from_str::<Value>(text.as_str())
-                && frame["channel"] == "agent:event"
+                && frame["channel"] == channel
             {
                 into.lock().unwrap().push(frame["payload"].clone());
             }

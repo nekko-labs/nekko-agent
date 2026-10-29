@@ -10,7 +10,7 @@ User intent (Philip): the right-side dock's cards are **monitors** (the Budget m
 
 - **Monitors** `[implemented; unit-tested]`. Code, types and settings call the dock's cards monitors: `MonitorsDock`, `MonitorKey`, `MONITORS`, `dock.monitors` and `dock.monitorOrder` (were `WallDock`, `WallDockPanel`, `DOCK_PANELS`, `dock.panels`, `dock.panelOrder`). Saved settings with the old `panels`/`panelOrder` keys load unchanged; the new keys win when both exist. Accessible names read "Budget monitor", "Minimize Budget monitor", "Configure monitors". The wall toolbar toggle reads **Monitors**; the dock's own visible "Panels" heading is intentionally unchanged.
 - **Seamless dock** `[implemented; renderer-verified in an isolated fixture]`: the dock has no background of its own; only the monitor cards are surfaces. **Configure** uses a three-vertical-slider icon instead of the gear.
-- **Agents header** `[implemented; renderer-verified in an isolated fixture]`: in the column layout, Hide agents and Row/Column sit at the left of the header and + stays at the right. The row layout's stacked strip is unchanged.
+- **Agents header** `[implemented; renderer-verified in an isolated fixture]`: in the column layout, Hide agents and Row/Column sit at the left of the header and + stays at the right. The row layout uses a compact two-column controls strip so the buttons do not add empty height below the cards.
 - **+ menu** `[implemented; renderer-verified in an isolated fixture]`: Agent shows the Nekko mark, **Create or Edit Photos and Videos** (was "Media gen") the photo glyph, Terminal the terminal glyph.
 
 Not verified: packaged app and native window chrome.
@@ -32,3 +32,12 @@ Not verified: packaged app, native window chrome, and a real engine (the fixture
 - **Implemented — Agent Monitor Tasks.** The Tasks section only appears once at least one task connector is connected, with one tab per connected source. It lists open items, has Refresh, and clicking an item drops a prompt (title, link and details) into that chat's composer; nothing is sent until the user sends it.
 - **Implemented — focus-mode clean start.** In Focused layout, an empty chat shows only a centered greeting and composer: no header, transcript, footer controls or monitor. The first send (or a question, approval or model choice) ends it, and the window becomes the full chat.
 - **Planned / not done.** Completing or updating tasks from the panel; one-click OAuth for these services; a file picker for the Tasks file path; a transition animation between clean start and full chat.
+
+
+## Viewport-safe configuration and steady reordering
+
+Implemented: Configure opens in the browser top layer, outside the dock's animated clipping surface, while retaining dock descendant styles and inherited theme tokens. Its fixed position follows the anchor on scroll, resize and dock-position changes, clamped to 12px inside the viewport. A constrained menu scrolls internally. Escape closes it and restores focus to Configure; clicking outside closes it.
+
+Implemented: reorder landing outlines use the lifted monitor's measured height, with the inter-monitor gap outside the outline. The scroll surface disables overflow anchoring and reserves its scrollbar gutter, preventing a reorder from moving the scroll origin or changing card width. Saved order and drag announcements are unchanged.
+
+Verification: focused tests plus hidden full-App renderer captures test both side menus at 720x800, control hit-testing, Escape/outside dismissal, and synthetic DOM monitor dragging with stable scroll origin and width. A GIF records the reorder. Native drag initiation, OS focus/chrome, packaged builds and pixel-level visual inspection are not verified by this fixture. No real provider, host data or network access is used.

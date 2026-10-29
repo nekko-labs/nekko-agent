@@ -18,17 +18,33 @@ pub trait Vault: Send + Sync {
     fn kind(&self) -> &'static str;
 }
 
-/// The vault for this platform.
+/// The vault for this platform: Nekko Cloud's keys.
 pub fn default_vault(dir: &Path) -> Box<dyn Vault> {
+    scoped_vault(dir, "cloud", dir.join("secrets.json"))
+}
+
+/// A vault of its own for one part of the app (`name`), scoped to `dir`;
+/// `file` is the fallback where there is no OS keystore.
+pub fn scoped_vault(dir: &Path, name: &str, file: PathBuf) -> Box<dyn Vault> {
     #[cfg(any(target_os = "macos", windows))]
     {
-        use sha2::{Digest, Sha256};
-        let scope = Sha256::digest(dir.to_string_lossy().as_bytes());
-        let hex: String = scope[..6].iter().map(|b| format!("{b:02x}")).collect();
-        return Box::new(KeychainVault { service: format!("dev.nekkolabs.nekko-agent.cloud.{hex}") });
+        let _ = file;
+        return Box::new(KeychainVault { service: service(dir, name) });
     }
     #[allow(unreachable_code)]
-    Box::new(FileVault::new(dir.join("secrets.json")))
+    {
+        let _ = (dir, name);
+        Box::new(FileVault::new(file))
+    }
+}
+
+/// The keystore service: `dev.nekkolabs.nekko-agent.<name>.<12 hex of sha256(dir)>`.
+#[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
+fn service(dir: &Path, name: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let scope = Sha256::digest(dir.to_string_lossy().as_bytes());
+    let hex: String = scope[..6].iter().map(|b| format!("{b:02x}")).collect();
+    format!("dev.nekkolabs.nekko-agent.{name}.{hex}")
 }
 
 #[cfg(any(target_os = "macos", windows))]
@@ -74,30 +90,11 @@ impl FileVault {
     }
 
     fn write(&self, map: &BTreeMap<String, String>) -> Result<(), String> {
-        if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        }
-        let tmp = self.path.with_extension("json.tmp");
         let text = serde_json::to_vec_pretty(map).map_err(|e| e.to_string())?;
-        write_private(&tmp, &text).map_err(|e| format!("could not save the cloud keys: {e}"))?;
-        std::fs::rename(&tmp, &self.path).map_err(|e| format!("could not save the cloud keys: {e}"))
+        // Readable by its owner only.
+        nekko_js::fs::atomic_write(&self.path, &text, nekko_js::fs::AtomicWrite::PRIVATE)
+            .map_err(|e| format!("could not save the cloud keys: {e}"))
     }
-}
-
-/// Create or replace a file readable by its owner only.
-fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    let _ = std::fs::remove_file(path);
-    let mut opts = std::fs::OpenOptions::new();
-    opts.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
-    }
-    let mut f = opts.open(path)?;
-    f.write_all(bytes)?;
-    f.sync_all()
 }
 
 impl Vault for FileVault {
@@ -129,6 +126,15 @@ impl Vault for FileVault {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scoped_services_keep_the_cloud_name_and_separate_others() {
+        let dir = Path::new("/data/cloud");
+        let cloud = service(dir, "cloud");
+        assert!(cloud.starts_with("dev.nekkolabs.nekko-agent.cloud.") && cloud.len() == 44);
+        assert_eq!(service(dir, "runner"), cloud.replace(".cloud.", ".runner."));
+        assert_ne!(service(Path::new("/other"), "cloud"), cloud);
+    }
 
     #[test]
     fn a_file_vault_round_trips_and_is_private() {

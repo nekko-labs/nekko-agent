@@ -57,15 +57,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
-}
-
-/// JavaScript's `String.prototype.trim`.
-pub fn js_trim(s: &str) -> &str {
-    s.trim_matches(crate::mdns::js_space)
-}
-
 fn str_of<'a>(s: &'a Value, key: &str) -> &'a str {
     s.get(key).and_then(Value::as_str).unwrap_or("")
 }
@@ -98,7 +89,7 @@ pub fn with_defaults(saved: Option<&Value>) -> Value {
 pub fn bind_host(s: &Value) -> String {
     match str_of(s, "bind") {
         "lan" => "0.0.0.0".into(),
-        "custom" => Some(js_trim(str_of(s, "host"))).filter(|h| !h.is_empty()).unwrap_or("127.0.0.1").into(),
+        "custom" => Some(nekko_js::trim(str_of(s, "host"))).filter(|h| !h.is_empty()).unwrap_or("127.0.0.1").into(),
         _ => "127.0.0.1".into(),
     }
 }
@@ -114,7 +105,7 @@ pub fn url(s: &Value, host: &str) -> String {
 
 /// `apiServerClientUrl`: what the user advertised, else what is bound.
 pub fn client_url(s: &Value, host: &str) -> String {
-    let advertised = js_trim(str_of(s, "advertisedUrl"));
+    let advertised = nekko_js::trim(str_of(s, "advertisedUrl"));
     if advertised.is_empty() { url(s, host) } else { advertised.trim_end_matches('/').to_string() }
 }
 
@@ -124,13 +115,13 @@ pub fn refusal(s: &Value) -> Option<&'static str> {
     if !port.is_some_and(|p| p.fract() == 0.0 && (1024.0..=65535.0).contains(&p)) {
         return Some("Pick a port between 1024 and 65535.");
     }
-    if js_trim(str_of(s, "token")).is_empty() {
+    if nekko_js::trim(str_of(s, "token")).is_empty() {
         return Some("A token is required. Anything that can reach this port can otherwise run the agent.");
     }
-    if str_of(s, "bind") == "custom" && js_trim(str_of(s, "host")).is_empty() {
+    if str_of(s, "bind") == "custom" && nekko_js::trim(str_of(s, "host")).is_empty() {
         return Some("Enter the address to bind, or pick one of the presets.");
     }
-    let advertised = js_trim(str_of(s, "advertisedUrl"));
+    let advertised = nekko_js::trim(str_of(s, "advertisedUrl"));
     if !advertised.is_empty() && !full_url(advertised) {
         return Some("The address clients use must be a full URL, e.g. http://nekko.tailnet.ts.net:1439.");
     }
@@ -141,7 +132,7 @@ pub fn refusal(s: &Value) -> Option<&'static str> {
 fn full_url(s: &str) -> bool {
     let lower = s.to_ascii_lowercase();
     let rest = lower.strip_prefix("http://").or_else(|| lower.strip_prefix("https://"));
-    rest.and_then(|r| r.chars().next()).is_some_and(|c| c != '/' && !crate::mdns::js_space(c))
+    rest.and_then(|r| r.chars().next()).is_some_and(|c| c != '/' && !nekko_js::is_js_space(c))
 }
 
 /// A fresh bearer token: 24 random bytes, url-safe (`newApiToken`).
@@ -218,7 +209,7 @@ struct App {
 impl ApiServer {
     /// Bring the server in line with the saved settings. Safe to call repeatedly.
     pub async fn sync(&self, ctx: &Ctx, settings: &Value) {
-        let enabled = nekko_js::truthy(settings.get("enabled"));
+        let enabled = nekko_js::truthy(settings.get("enabled")) && nekko_net::allowed("api-server");
         {
             let live = lock(&self.live);
             if enabled && live.running.is_some() && live.applied.as_ref() == Some(&applied_of(settings)) {
@@ -340,7 +331,7 @@ fn bearer_of(req: &Request, url: &url::Url) -> Option<String> {
         && h.is_char_boundary(7)
         && h[..7].eq_ignore_ascii_case("bearer ")
     {
-        return Some(js_trim(&h[7..]).to_string());
+        return Some(nekko_js::trim(&h[7..]).to_string());
     }
     url.query_pairs().find(|(k, _)| k == "token").map(|(_, v)| v.into_owned())
 }
@@ -382,7 +373,7 @@ async fn handle(State(app): State<App>, req: Request) -> Response {
         }
     };
     app.counters.requests.fetch_add(1, Ordering::SeqCst);
-    app.counters.last_request_at.store(now_ms(), Ordering::SeqCst);
+    app.counters.last_request_at.store(nekko_js::now_ms(), Ordering::SeqCst);
     let unknown = || format!("Unknown channel: {channel}");
     if WINDOW_ONLY.contains(&channel.as_str()) {
         return send(StatusCode::INTERNAL_SERVER_ERROR, json!({ "error": unknown() }));

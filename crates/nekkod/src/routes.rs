@@ -10,18 +10,20 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+type ProtectedSession = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
 #[derive(Clone)]
 pub struct Ctx {
     pub terminals: Arc<Registry>,
     pub hub: Hub,
     pub engine: Arc<crate::engine::Engine>,
-    /// Session reads and writes (`nekko-store`).
+    /// Session reads (`nekko-store`).
     pub sessions: Arc<nekko_store::SessionStore>,
     /// Pending changes the agent's file tools recorded (`changes:*`).
     pub changes: Arc<nekko_tools::ChangeTracker>,
-    /// MCP servers, synced and called by turns (and `mcp:status`, `mcp:call`).
+    /// MCP servers, synced and called by turns (and `mcp:sync`, `mcp:call`).
     pub mcp: Arc<crate::mcp::Mcp>,
-    /// Whole chat turns and the input they wait on.
+    /// Whole chat turns (`chat:turn`) and the input they wait on.
     pub turns: Arc<crate::turns::Turns>,
     /// Usage, reply and limit accounting (`usage:summary`, `limits:*`).
     pub accounts: Arc<crate::accounts::Accounts>,
@@ -33,7 +35,7 @@ pub struct Ctx {
     pub cloud: Arc<nekko_cloud::Cloud>,
     /// Sign-in and tokens.json (`oauth:*`).
     pub oauth: Arc<crate::oauth::OAuth>,
-    /// `chat:send`: checks, provisions and starts a turn.
+    /// `chat:send` admitted here.
     pub admission: Arc<crate::admission::Admission>,
     /// The model catalog (with the settings store, for the Hugging Face token).
     pub catalog: Arc<nekko_engine::catalog::Catalog>,
@@ -43,9 +45,16 @@ pub struct Ctx {
     pub automation: Arc<crate::automation::Automation>,
     /// Phone remote access (`remote:*`) and the relay agent.
     pub remote: Arc<crate::remote::Remote>,
+    /// Settings → Security and the step-up check on the desktop's and the
+    /// Local Web UI's guarded calls (`security:*`, SK-4/SK-5). Reached from the
+    /// wire only (wire.rs), never through `route`, so a phone cannot call it.
+    pub security: Arc<crate::security::Security>,
     /// GPU and system stats, the readiness advisor, the hardware profile and model
     /// recommendations (`gpu:stats`, `system:stats`, `machine:*`).
     pub machine: Arc<nekko_machine::Machine>,
+    /// CI runners (`runner:*`).
+    #[cfg(unix)]
+    pub runners: Arc<crate::runner::Runners>,
     /// The experimental resource-queue client.
     pub resource_queue: Arc<crate::resource_queue::ResourceQueue>,
     /// Sandbox chats' containers (sandbox.rs).
@@ -62,7 +71,7 @@ pub struct Ctx {
     pub server: Arc<crate::model_server::Server>,
     /// Chats being compacted (`chat:compact`).
     pub compactions: Arc<crate::compaction::Compactions>,
-    /// Image-generation turns (`chat:generateImage`).
+    /// Image-generation turns (`chat:generateImage`), with the model server.
     pub image_turns: Arc<crate::image_turns::ImageTurns>,
     /// What `app:info` reports, and the desktop bridge `workspace:add` opens the picker through.
     pub app: Arc<AppCtx>,
@@ -73,12 +82,10 @@ pub struct Ctx {
     pub claude_policy: Arc<crate::claude_policy::ClaudePolicyStore>,
     /// The messaging bridges (`messaging:status`).
     pub messaging: Arc<crate::messaging::Messaging>,
-    /// What Electron main used to answer (dialogs, shell, microphone, updater).
-    /// Only the desktop app: it needs `config.native` and the browser bridge.
+    /// What Electron main used to answer (dialogs, shell, microphone, updater), for the desktop app.
     pub native: Option<Arc<crate::native::Native>>,
     /// What the TS desktop backend used to serve (the local API server, CLI install, the
-    /// webhook listener, the local relay, network visibility). Only the desktop
-    /// app: it needs `config.native`.
+    /// webhook listener, the local relay, network visibility), for the desktop app.
     pub desktop: Option<Arc<crate::desktop::Desktop>>,
 }
 
@@ -197,7 +204,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "terminal:attach" => attach_viewer(&ctx.terminals, str_arg(&args, 0).unwrap_or_default(), arg(&args, 1)),
         "terminal:detach" => detach_viewer(&ctx.terminals, str_arg(&args, 0), str_arg(&args, 1).unwrap_or_default()),
         "ssh:hosts" => {
-            let home = home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
+            let home = nekko_js::home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
             let hosts = tokio::task::spawn_blocking(move || nekko_term::read_ssh_hosts(&home))
                 .await
                 .map_err(|e| e.to_string())?;
@@ -238,13 +245,14 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         "chat:steer" => {
             let sid = str_arg(&args, 0).unwrap_or_default().to_string();
             let content = nekko_js::trim(str_arg(&args, 1).unwrap_or_default()).to_string();
-            let store = ctx.sessions.clone();
             if !content.is_empty() && ctx.turns.steer(&sid, crate::turns::Turns::steering_message(&content)) {
+                let store = ctx.sessions.clone();
                 return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
                     .await
                     .map_err(|e| e.to_string());
             }
             // Nothing running to steer: the text waits for after the turn, as `steerChat` queued it.
+            let store = ctx.sessions.clone();
             if content.is_empty() {
                 return tokio::task::spawn_blocking(move || store.get(&sid).unwrap_or(Value::Null))
                     .await
@@ -330,6 +338,14 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::library::CHANNELS.contains(&c) => ctx.library.clone().route(c, &args).await,
         c if crate::catalog::CHANNELS.contains(&c) => crate::catalog::route(&ctx.catalog, c, &args).await,
         c if crate::tooling::CHANNELS.contains(&c) => crate::tooling::route(ctx, c, &args).await,
+        // Elsewhere runner:* falls through to the unknown-channel reply.
+        #[cfg(unix)]
+        c if crate::runner::CHANNELS.contains(&c) => ctx.runners.route(c, &args).await,
+        c if crate::telemetry::CHANNELS.contains(&c) => crate::telemetry::route(c, &args).await,
+        c if crate::connections::CHANNELS.contains(&c) => {
+            crate::connections::route(Some(ctx.workspace.data_dir()), c, &args).await
+        }
+        c if crate::feedback::CHANNELS.contains(&c) => crate::feedback::route(ctx, c, &args).await,
         // An `agent_watch` call outside a turn.
         "watch:tool" => ctx
             .turns
@@ -339,6 +355,16 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             .map(Value::String)
             .or_else(|e| Ok(json!({ "error": e }))),
         "session:nextWatch" => Ok(ctx.turns.watches.next_wake_at(str_arg(&args, 0).unwrap_or_default())),
+        "session:cancelWatch" => {
+            ctx.turns
+                .watches
+                .tool(
+                    str_arg(&args, 0).unwrap_or_default(),
+                    &json!({ "action": "cancel", "id": str_arg(&args, 1).unwrap_or_default() }),
+                )
+                .await?;
+            Ok(Value::Null)
+        }
         "session:watches" => Ok(ctx.turns.watches.views(str_arg(&args, 0).unwrap_or_default())),
         c if crate::native::CHANNELS.contains(&c) && ctx.native.is_some() => {
             ctx.native.clone().expect("checked").route(ctx, c, &args).await
@@ -351,6 +377,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::settings::CHANNELS.contains(&c) => crate::settings::route(&ctx.settings, c, &args).await,
         c if nekko_cloud::CHANNELS.contains(&c) => ctx.cloud.route(c, &args).await,
         c if crate::voice::CHANNELS.contains(&c) => ctx.voice.route(c, &args).await,
+        // What the agent linked in a chat, for a phone (#1095).
+        c if crate::artifacts::CHANNELS.contains(&c) => crate::artifacts::route(ctx, c, &args).await,
         c if crate::workspace::serves(c) => crate::workspace::route(ctx, c, &args).await,
         c if crate::logs::CHANNELS.contains(&c) => crate::logs::route(ctx, c, &args).await,
         c if crate::automation::TASK_CHANNELS.contains(&c)
@@ -364,7 +392,12 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
         c if crate::remote::CHANNELS.contains(&c) => ctx.remote.route(c, &args).await,
         c if crate::messaging::CHANNELS.contains(&c) => ctx.messaging.route(c),
         c if crate::runtimes::CHANNELS.contains(&c) => crate::runtimes::route(ctx, &ctx.runtimes, c, &args).await,
-        c if crate::machine::CHANNELS.contains(&c) => crate::machine::route(&ctx.machine, c, &args).await,
+        crate::machine::SUMMARY => Ok(crate::machine::summary(ctx).await),
+        c if crate::machine::CHANNELS.contains(&c) => {
+            crate::machine::route(&ctx.machine, Some(&ctx.library), c, &args).await
+        }
+        c if crate::activity::CHANNELS.contains(&c) => crate::activity::route(ctx, c, &args).await,
+        c if crate::background::CHANNELS.contains(&c) => Ok(ctx.turns.background_state()),
         "resource:queue" => ctx.resource_queue.route(&args).await,
         c if SESSION_CHANNELS.contains(&c) => {
             // A deleted Claude Agent chat's Claude Code child goes with it.
@@ -373,7 +406,33 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             {
                 ctx.turns.harness.close(id).await;
             }
-            session_op(ctx.sessions.clone(), ctx.turns.agent_logs.clone(), channel, args).await
+            let closing = c == "session:delete"
+                || (c == "session:setOptions" && arg(&args, 1).get("archivedAt").is_some_and(|v| !v.is_null()));
+            let id = str_arg(&args, 0).unwrap_or_default().to_string();
+            let protected: Option<ProtectedSession> = if c == "sessions:clearHistory" {
+                let (turns, image_turns, admission) =
+                    (ctx.turns.clone(), ctx.image_turns.clone(), ctx.admission.clone());
+                Some(Arc::new(move |id| {
+                    turns.running_sessions().iter().any(|running| running == id)
+                        || image_turns.running_sessions().iter().any(|running| running == id)
+                        || admission.is_admitting(id)
+                }))
+            } else {
+                None
+            };
+            let result = session_op(
+                ctx.sessions.clone(),
+                Some(ctx.turns.agent_logs.clone()),
+                Some(ctx.turns.watches.clone()),
+                protected,
+                channel,
+                args,
+            )
+            .await?;
+            if closing {
+                stop_chat(ctx, &id).await?;
+            }
+            Ok(result)
         }
         _ => {
             if let Some(r) = crate::engine::route(&ctx.engine, channel, &args).await {
@@ -397,11 +456,33 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
 /// `chat:abort`: stop the daemon's turn at once (and its image turn and its
 /// admission) and the chat's dev servers.
 pub async fn stop_chat(ctx: &Ctx, session_id: &str) -> Result<Value, String> {
-    ctx.admission.abort(session_id);
-    ctx.image_turns.abort(session_id);
-    ctx.turns.abort_session(session_id);
-    // A dev server the agent started belongs to the work it was doing.
-    ctx.turns.processes.kill_session(session_id);
+    // Include detached delegated descendants: their parent turn may already have ended.
+    let mut ids = vec![session_id.to_string()];
+    {
+        let metas = ctx.sessions.list_meta();
+        loop {
+            let before = ids.len();
+            for meta in &metas {
+                if let (Some(parent), Some(id)) =
+                    (meta.get("parentSessionId").and_then(Value::as_str), meta.get("id").and_then(Value::as_str))
+                    && ids.iter().any(|s| s == parent)
+                    && !ids.iter().any(|s| s == id)
+                {
+                    ids.push(id.to_string());
+                }
+            }
+            if ids.len() == before {
+                break;
+            }
+        }
+    }
+    for id in &ids {
+        ctx.admission.abort(id);
+        ctx.image_turns.abort(id);
+        ctx.turns.abort_session(id);
+        ctx.turns.processes.kill_session(id);
+        ctx.turns.watches.cancel_session(id).await?;
+    }
     Ok(Value::Null)
 }
 
@@ -505,11 +586,7 @@ fn resolve_cwd(settings: &Value, workspace_id: Option<&str>, cwd: Option<&str>) 
     if let Some(p) = workspaces.first().and_then(path_of).filter(|p| Path::new(p).is_dir()) {
         return p.into();
     }
-    home_dir().unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()))
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+    nekko_js::home_dir().unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()))
 }
 
 /// The scroll-back cap a snapshot call asks for: `terminal:tail(id, maxBytes?)`
@@ -597,7 +674,7 @@ fn detach_viewer(reg: &Registry, id: Option<&str>, viewer_id: &str) -> Result<Va
 /// running the system `ssh` to a host alias from `~/.ssh/config`. The alias
 /// must be one the config lists; it is passed as its own argument.
 async fn open_ssh(ctx: &Ctx, alias: &str, opts: &Value) -> Result<Value, String> {
-    let home = home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
+    let home = nekko_js::home_dir().ok_or("No home folder to read ~/.ssh/config from.")?;
     let alias = alias.to_string();
     let found = tokio::task::spawn_blocking(move || {
         let hosts = nekko_term::read_ssh_hosts(&home);
@@ -628,6 +705,13 @@ async fn create_terminal(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
     let s = |k: &str| opts.get(k).and_then(Value::as_str);
     let shell = resolve_shell(s("shell"), settings.get("defaultShellPath").and_then(Value::as_str));
+    // `claudeAccount`: a terminal for signing in to a second Claude Code
+    // account, so a `claude` typed there uses that account's folder. Only a
+    // checked account name is accepted, never a path or other variables.
+    let env = match nekko_harness::account_config_dir(s("claudeAccount"))? {
+        Some(dir) => vec![("CLAUDE_CONFIG_DIR".to_string(), dir.to_string_lossy().into_owned())],
+        None => Vec::new(),
+    };
     let spec = CreateSpec {
         title: s("title").map(str::to_string),
         workspace_id: s("workspaceId").map(str::to_string),
@@ -636,7 +720,7 @@ async fn create_terminal(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
         shell,
         cols: dim(opts, "cols", 80),
         rows: dim(opts, "rows", 24),
-        env: Vec::new(),
+        env,
     };
     Ok(serde_json::to_value(ctx.terminals.create(spec)).unwrap_or(Value::Null))
 }
@@ -664,11 +748,14 @@ pub fn forward_terminal_events(ctx: &Ctx) {
     });
 }
 
-/// The channels `nekko-store` serves.
+/// The channels `nekko-store` serves when the daemon knows the data dir.
+/// Running-turn checkpoints still stay with the TS host (PF14).
 const SESSION_CHANNELS: &[&str] = &[
     "sessions:summaries",
     "sessions:list",
     "sessions:clear",
+    "sessions:clearHistory",
+    "sessions:historyUsage",
     "sessions:purgeArchived",
     "session:get",
     "session:images",
@@ -708,28 +795,66 @@ pub async fn create_session(
         }
     }
     let (w, p) = (workspace_id.map(str::to_string), parent_id.map(str::to_string));
-    tokio::task::spawn_blocking(move || store.create_with(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings))
-        .await
-        .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || {
+        store.create_with_mode_defaults(w.as_deref(), p.as_deref(), supporting.as_ref(), &settings, true)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// `deleteAgentLog` for a chat being removed, from a blocking caller.
+pub fn delete_agent_log(logs: Option<&crate::agent_logs::AgentLogs>, id: &str) -> Result<(), String> {
+    match logs {
+        Some(logs) => logs.delete_blocking(id),
+        None => Ok(()),
+    }
 }
 
 /// Session reads and the UI's own writes, off the async threads: a listing
 /// reads every changed chat file, and one image chat can be tens of megabytes.
 async fn session_op(
     store: Arc<nekko_store::SessionStore>,
-    logs: Arc<crate::agent_logs::AgentLogs>,
+    logs: Option<Arc<crate::agent_logs::AgentLogs>>,
+    watches: Option<Arc<crate::watches::Watches>>,
+    protected: Option<ProtectedSession>,
     channel: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
     let channel = channel.to_string();
     tokio::task::spawn_blocking(move || {
         let id = str_arg(&args, 0).unwrap_or_default();
-        let delete_log = |id: &str| logs.delete_blocking(id);
+        let delete_log = |id: &str| delete_agent_log(logs.as_deref(), id);
         let or_null = |r: Result<Option<Value>, String>| r.map(|v| v.unwrap_or(Value::Null));
         match channel.as_str() {
-            "sessions:summaries" => Ok(Value::Array(store.summaries())),
-            "sessions:list" => Ok(Value::Array(store.list())),
+            "sessions:summaries" | "sessions:list" => {
+                let mut sessions = if channel == "sessions:summaries" { store.summaries() } else { store.list() };
+                // One watch-file read per listing, not per chat. A due or pending
+                // delivery is still active until the scheduler finishes it.
+                let mut counts = std::collections::HashMap::<String, usize>::new();
+                for watch in watches.as_ref().and_then(|w| w.list(None).ok()).unwrap_or_default() {
+                    if watch.get("status").and_then(Value::as_str) == Some("active")
+                        && let Some(id) = watch.get("sessionId").and_then(Value::as_str)
+                    {
+                        *counts.entry(id.to_string()).or_default() += 1;
+                    }
+                }
+                for session in &mut sessions {
+                    let count =
+                        session.get("id").and_then(Value::as_str).and_then(|id| counts.get(id)).copied().unwrap_or(0);
+                    if let Some(obj) = session.as_object_mut() {
+                        obj.insert("activeWatchCount".into(), json!(count));
+                    }
+                }
+                Ok(Value::Array(sessions))
+            }
             "sessions:clear" => store.clear_with(id, delete_log).map(|n| json!(n)),
+            "sessions:clearHistory" => store
+                .clear_history_with(id, |id| protected.as_ref().is_some_and(|protected| protected(id)), delete_log)
+                .map(|n| json!(n)),
+            "sessions:historyUsage" => {
+                let (bytes, count) = store.history_usage();
+                Ok(json!({ "bytes": bytes, "count": count }))
+            }
             "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
@@ -759,6 +884,104 @@ async fn session_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn session_listings_count_only_active_watches_and_preserve_phone_summaries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(nekko_store::SessionStore::new(tmp.path()));
+        std::fs::create_dir_all(store.dir()).unwrap();
+        for (id, updated) in [("s1", 1), ("s2", 2), ("s3", 3)] {
+            let session = json!({ "id": id, "title": id, "updatedAt": updated, "workspaceId": "w1",
+                "archivedAt": 42, "activeWatchCount": 99,
+                "messages": [{ "role": "assistant", "content": "reply", "createdAt": 1 }] });
+            std::fs::write(store.dir().join(format!("{id}.json")), session.to_string()).unwrap();
+        }
+        let path = tmp.path().join("agent-watches.json");
+        std::fs::write(&path, json!([
+            { "sessionId": "s1", "status": "active", "kind": "timer", "deadlineAt": 9999999999999_u64, "prompt": "private continuation" },
+            { "sessionId": "s1", "status": "active", "kind": "pr", "deadlineAt": 0 },
+            { "sessionId": "s1", "status": "active", "pending": true, "deadlineAt": 0, "failures": 2, "lastError": "private error" },
+            { "sessionId": "s1", "status": "done" },
+            { "sessionId": "s1", "status": "cancelled", "pending": true },
+            { "sessionId": "s1", "status": "error" },
+            { "sessionId": "s2", "status": "active" },
+            { "sessionId": "s3", "status": "done" },
+            { "sessionId": "missing", "status": "active" },
+            { "status": "active" },
+            { "sessionId": "s1" }
+        ]).to_string()).unwrap();
+        let watches = crate::watches::Watches::new(tmp.path().to_path_buf(), store.clone(), Hub::new());
+        for channel in ["sessions:list", "sessions:summaries"] {
+            let got = session_op(store.clone(), None, Some(watches.clone()), None, channel, vec![]).await.unwrap();
+            let rows = got.as_array().unwrap();
+            assert_eq!(rows.iter().map(|s| s["id"].as_str().unwrap()).collect::<Vec<_>>(), ["s3", "s2", "s1"]);
+            assert_eq!(rows.iter().map(|s| s["activeWatchCount"].as_u64().unwrap()).collect::<Vec<_>>(), [0, 1, 3]);
+            let mut expected = if channel == "sessions:list" { store.list() } else { store.summaries() };
+            for (session, count) in expected.iter_mut().zip([0, 1, 3]) {
+                session["activeWatchCount"] = json!(count);
+            }
+            assert_eq!(got, json!(expected), "all other metadata and transcript behavior stays unchanged");
+            if channel == "sessions:summaries" {
+                assert!(nekko_remote::phone::screen(channel, &[]).is_ok());
+                let phone = nekko_remote::phone::redact(channel, got.clone());
+                assert_eq!(phone, got);
+                for row in phone.as_array().unwrap() {
+                    assert!(row.get("messages").is_none());
+                    assert!(row.get("prompt").is_none());
+                    assert!(row.get("lastError").is_none());
+                }
+                assert!(!phone.to_string().contains("private"));
+            }
+        }
+        // Counts are live even when the session summaries came from the cache.
+        std::fs::write(path, "[]").unwrap();
+        let got = session_op(store, None, Some(watches), None, "sessions:summaries", vec![]).await.unwrap();
+        assert!(got.as_array().unwrap().iter().all(|s| s["activeWatchCount"] == 0));
+    }
+
+    #[tokio::test]
+    async fn session_listings_default_watch_counts_to_zero_when_unavailable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(nekko_store::SessionStore::new(tmp.path()));
+        store.create(None).unwrap();
+        let watches = crate::watches::Watches::new(tmp.path().to_path_buf(), store.clone(), Hub::new());
+        for state in [None, Some("not json")] {
+            if let Some(state) = state {
+                std::fs::write(tmp.path().join("agent-watches.json"), state).unwrap();
+            }
+            for channel in ["sessions:list", "sessions:summaries"] {
+                for watches in [None, Some(watches.clone())] {
+                    let got = session_op(store.clone(), None, watches, None, channel, vec![]).await.unwrap();
+                    assert_eq!(got[0]["activeWatchCount"], 0);
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn clear_history_skips_a_protected_running_chat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(nekko_store::SessionStore::new(tmp.path()));
+        std::fs::create_dir_all(store.dir()).unwrap();
+        for id in ["s_busy", "s_idle"] {
+            let session = json!({ "id": id, "updatedAt": 1, "archivedAt": 1, "messages": [] });
+            std::fs::write(store.dir().join(format!("{id}.json")), session.to_string()).unwrap();
+        }
+        let protected: ProtectedSession = Arc::new(|id| id == "s_busy");
+        let removed = session_op(
+            store.clone(),
+            None,
+            None,
+            Some(protected),
+            "sessions:clearHistory",
+            vec![json!("older-2-weeks")],
+        )
+        .await
+        .unwrap();
+        assert_eq!(removed, json!(1));
+        assert!(store.dir().join("s_busy.json").exists());
+        assert!(!store.dir().join("s_idle.json").exists());
+    }
 
     #[test]
     fn cwd_prefers_the_explicit_directory_then_the_project() {

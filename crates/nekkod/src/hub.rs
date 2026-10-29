@@ -19,7 +19,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
 /// Who an event is for.
@@ -135,10 +135,6 @@ fn approx_size(v: &Value) -> usize {
         Value::Object(o) => o.iter().map(|(k, v)| k.len() + 3 + approx_size(v)).sum::<usize>() + 2,
         _ => 8,
     }
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 impl Hub {
@@ -285,7 +281,7 @@ fn append(turn: &mut Turn, event_type: &str, payload: &Value) {
     } else {
         turn.bytes += approx_size(payload);
         turn.events.push_back(Arc::new(payload.clone()));
-        turn.at.push_back(now_ms());
+        turn.at.push_back(nekko_js::now_ms());
     }
     while turn.bytes > REPLAY_MAX_BYTES && turn.events.len() > 1 {
         let Some(dropped) = turn.events.pop_front() else { break };

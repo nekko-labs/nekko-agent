@@ -40,8 +40,10 @@ let mermaidQueue: Promise<unknown> = Promise.resolve();
  * the frame element itself (see `ZoomFrame`). Every diagram frame therefore
  * stays `sandbox=""` with no network and no bridge.
  */
-export function diagramDocument(svg: string): string {
-  const style = '<style>html,body{margin:0;height:100%;background:#fff;overflow:hidden}#w{height:100%;display:flex;align-items:center;justify-content:center}#w svg{max-width:100%;max-height:100%;height:auto;width:auto}</style>';
+export function diagramDocument(svg: string, background = '#16161c', dots = '#8a8a97'): string {
+  // A matching opaque canvas also avoids Chromium's white iframe backing store.
+  const safe = (value: string, fallback: string) => /^#[0-9a-f]{3,8}$/i.test(value) ? value : fallback;
+  const style = `<style>html,body{margin:0;height:100%;background:${safe(background, '#16161c')};overflow:hidden}body{background-image:radial-gradient(circle,color-mix(in srgb,${safe(dots, '#8a8a97')} 25%,transparent) .75px,transparent .85px);background-size:18px 18px}#w{height:100%;display:flex;align-items:center;justify-content:center}#w svg{max-width:100%;max-height:100%;height:auto;width:auto;background:transparent!important}</style>`;
   return isolatedDocument(`${style}<div id="w">${svg}</div>`);
 }
 
@@ -74,7 +76,7 @@ export function ZoomFrame({ srcDoc, title }: { srcDoc: string; title: string }) 
     <div
       ref={wrap}
       data-zoom-frame
-      className="relative min-h-0 flex-1 overflow-hidden bg-white"
+      className="relative min-h-0 flex-1 overflow-hidden diagram-canvas"
       style={{ cursor: drag.current ? 'grabbing' : 'grab', touchAction: 'none' }}
       onPointerDown={(e) => { drag.current = { dx: e.clientX - view.x, dy: e.clientY - view.y }; e.currentTarget.setPointerCapture(e.pointerId); }}
       onPointerMove={(e) => { const d = drag.current; if (d) setView((v) => ({ ...v, x: e.clientX - d.dx, y: e.clientY - d.dy })); }}
@@ -86,12 +88,25 @@ export function ZoomFrame({ srcDoc, title }: { srcDoc: string; title: string }) 
         title={title}
         sandbox=""
         srcDoc={srcDoc}
-        className="absolute inset-0 h-full w-full border-0 bg-white"
+        className="absolute inset-0 h-full w-full border-0 bg-transparent"
         style={{ pointerEvents: 'none', transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, transformOrigin: 'center center' }}
       />
       <span className="pointer-events-none absolute bottom-2 right-3 rounded-md bg-black/50 px-1.5 py-0.5 font-mono text-[10px] text-white" aria-live="polite">{Math.round(view.z * 100)}%</span>
     </div>
   );
+}
+
+/** Only app theme colors, never diagram source, enter Mermaid's theme CSS. */
+function diagramTheme() {
+  const root = typeof document === 'undefined' ? null : document.documentElement;
+  const css = root ? getComputedStyle(root) : null;
+  const color = (token: string, fallback: string) => {
+    const value = css?.getPropertyValue(token).trim() ?? '';
+    return /^#[0-9a-f]{3,8}$/i.test(value) ? value : fallback;
+  };
+  return { background: color('--surface', '#16161c'), foreground: color('--ink', '#eceaf3'),
+    secondary: color('--surface-2', '#202027'), line: color('--ink-faint', '#8a8a97'),
+    dark: root?.dataset.theme !== 'light' };
 }
 
 /**
@@ -105,6 +120,12 @@ export function MermaidDiagram({ code }: { code: string }) {
   const [error, setError] = useState('');
   const [full, setFull] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [theme, setTheme] = useState(diagramTheme);
+  useEffect(() => {
+    const observer = new MutationObserver(() => setTheme(diagramTheme()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-preset', 'style', 'class'] });
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     let live = true;
     setSvg(''); setError('');
@@ -113,13 +134,23 @@ export function MermaidDiagram({ code }: { code: string }) {
       if (!live) return;
       try {
         const { default: mermaid } = await import('mermaid');
-        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', maxTextSize: 30_000, suppressErrorRendering: true });
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', maxTextSize: 30_000, suppressErrorRendering: true,
+          theme: 'base', themeVariables: { darkMode: theme.dark, background: theme.background,
+            primaryColor: theme.secondary, primaryTextColor: theme.foreground, primaryBorderColor: theme.line,
+            secondaryColor: theme.background, tertiaryColor: theme.secondary,
+            lineColor: theme.line, textColor: theme.foreground, mainBkg: theme.secondary,
+            nodeBorder: theme.line, clusterBkg: theme.background, clusterBorder: theme.line,
+            edgeLabelBackground: theme.background, titleColor: theme.foreground,
+            actorBkg: theme.secondary, actorBorder: theme.line, actorTextColor: theme.foreground,
+            signalColor: theme.foreground, signalTextColor: theme.foreground,
+            noteBkgColor: theme.secondary, noteTextColor: theme.foreground, noteBorderColor: theme.line,
+          } });
         const result = await mermaid.render(`diagram${id}`, code);
         if (live) setSvg(result.svg);
       } catch { if (live) setError('Diagram could not be rendered. Check the Mermaid source below.'); }
     });
     return () => { live = false; };
-  }, [code, id]);
+  }, [code, id, theme]);
   useEffect(() => {
     if (!full) return;
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setFull(false); } };
@@ -130,10 +161,10 @@ export function MermaidDiagram({ code }: { code: string }) {
     navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); });
   };
   const toolbarButton = 'rounded-md border border-line px-1.5 py-0.5 text-[10px] text-ink-faint hover:text-ink';
-  return <div className="group/diagram relative my-2 rounded-xl border border-line p-3" data-mermaid-diagram>
+  return <div className="group/diagram relative my-2 rounded-xl p-3 diagram-canvas diagram-card" data-mermaid-diagram>
     {error ? <p role="status" className="text-[12px] text-ink-soft">{error}</p> : svg
       ? <>
-          <iframe title="Mermaid diagram" sandbox="" srcDoc={diagramDocument(svg)} className="h-80 w-full border-0 bg-white" />
+          <iframe title="Mermaid diagram" sandbox="" srcDoc={diagramDocument(svg, theme.background, theme.line)} className="h-80 w-full border-0 bg-transparent" />
           <div className="absolute right-4 top-4 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/diagram:opacity-100">
             <button type="button" className={toolbarButton} style={{ background: 'var(--surface)' }} onClick={copy} title="Copy Mermaid source">{copied ? '✓ copied' : 'Copy'}</button>
             <button type="button" className={toolbarButton} style={{ background: 'var(--surface)' }} onClick={() => setFull(true)} title="Open the diagram in a full window" data-mermaid-expand>Expand</button>
@@ -150,7 +181,7 @@ export function MermaidDiagram({ code }: { code: string }) {
             <button type="button" className={toolbarButton} onClick={copy}>{copied ? '✓ copied' : 'Copy source'}</button>
             <button type="button" className={toolbarButton} onClick={() => setFull(false)} aria-label="Close full window" title="Close (Esc)">Close</button>
           </div>
-          <ZoomFrame title="Mermaid diagram, full window" srcDoc={diagramDocument(svg)} />
+          <ZoomFrame title="Mermaid diagram, full window" srcDoc={diagramDocument(svg, theme.background, theme.line)} />
         </div>
       </div>,
       document.body,

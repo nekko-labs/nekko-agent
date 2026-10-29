@@ -34,19 +34,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_ms() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
-
-fn uuid() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
-}
-
 /// One sandbox chat's container and what has happened to it.
 struct Runtime {
     sandbox: ContainerSandbox,
@@ -379,10 +366,12 @@ impl Sandboxes {
                 self.session(ctx, &id).await?;
                 let store = ctx.sessions.clone();
                 let image = arg(1).as_str().map(str::to_string).unwrap_or_else(|| js::display(&arg(1)));
-                let (sid, ident) = (id.clone(), uuid());
-                let s = tokio::task::spawn_blocking(move || store.configure_sandbox(&sid, &image, &ident, now_ms()))
-                    .await
-                    .map_err(|e| e.to_string())??;
+                let (sid, ident) = (id.clone(), nekko_js::uuid());
+                let s = tokio::task::spawn_blocking(move || {
+                    store.configure_sandbox(&sid, &image, &ident, nekko_js::now_ms_f64())
+                })
+                .await
+                .map_err(|e| e.to_string())??;
                 let r = self.runtime(ctx, &s).await?;
                 if let Err(e) = r.sandbox.initialize().await {
                     lock(&r.state).error = Some(e.clone());

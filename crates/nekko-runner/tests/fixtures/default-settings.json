@@ -1,0 +1,21 @@
+{
+  "enabled": false,
+  "priority": "doNotDisturb",
+  "keepAwake": "whileActive",
+  "macosSlots": 1,
+  "linuxSlots": 0,
+  "memoryPerVmMb": 8192,
+  "runnerMemoryMb": null,
+  "cpusPerVm": null,
+  "diskBudgetGb": 150,
+  "diskFloorGb": 25,
+  "maxJobMinutes": 120,
+  "onlyOnPower": true,
+  "trustedNetworksOnly": true,
+  "neverOnHotspot": true,
+  "allowDirectWithVpn": false,
+  "allowForkPrs": false,
+  "rerunLostJobs": true,
+  "trustedCache": true,
+  "trustedNetworks": []
+}

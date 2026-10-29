@@ -22,13 +22,16 @@
   color-scheme: light;
   --topbar-bg: rgba(255, 255, 255, 0.9);
 }
-/* colourful mode, chosen on the homepage: lavender ground, dark ink, white reading surface */
+/* colourful mode (the default): a lavender top bar, pale lilac side columns
+   and a white column for the article, so the colour frames the reading
+   rather than sitting under it */
 :root[data-theme='colour'] {
-  --bg: #9d8ce6; --bg-2: #ffffff; --bg-3: #e7e1fc;
-  --line: rgba(23, 21, 31, 0.14); --line-2: rgba(23, 21, 31, 0.22);
-  --muted: #2c2640; --accent: #2e2570; --accent-2: #241d5c;
-  --code-bg: #f1edff; --topbar-bg: rgba(178, 164, 238, 0.9);
+  --bg: #f1edff; --bg-2: #ffffff; --bg-3: #e2dbfb;
+  --line: rgba(69, 58, 146, 0.14); --line-2: rgba(69, 58, 146, 0.24);
+  --muted: #4a4366; --accent: #4b3fa0; --accent-2: #3b2f86;
+  --code-bg: #f3f0ff; --topbar-bg: rgba(157, 140, 230, 0.94);
 }
+:root[data-theme='colour'] main { background: var(--bg-2); border-inline: 1px solid var(--line); }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-padding-top: calc(var(--top) + 20px); -webkit-text-size-adjust: 100%; }

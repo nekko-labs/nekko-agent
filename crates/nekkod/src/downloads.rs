@@ -53,10 +53,6 @@ pub struct ModelDownloads {
     seen: Mutex<HashMap<String, String>>,
 }
 
-fn now() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
-}
-
 fn landed(p: &str) -> bool {
     std::fs::metadata(p).is_ok_and(|m| m.len() > 0)
 }
@@ -65,7 +61,7 @@ impl ModelDownloads {
     pub fn new(fetch: Arc<dyn Fetch>, library: Arc<Library>, catalog: Arc<Catalog>, hub: Hub) -> Arc<Self> {
         Arc::new_cyclic(|me: &std::sync::Weak<ModelDownloads>| {
             let me = me.clone();
-            let queue = Downloads::new(fetch, Arc::new(now), move |jobs| {
+            let queue = Downloads::new(fetch, Arc::new(nekko_js::now_ms_f64), move |jobs| {
                 if let Some(me) = me.upgrade() {
                     me.changed(jobs);
                 }
@@ -247,5 +243,51 @@ impl ModelDownloads {
             }
             other => Err(format!("{other} is not a download channel")),
         }
+    }
+}
+
+/// A `<file>.part` untouched this long is an abandoned download (#1035).
+pub const STALE_PART: std::time::Duration = std::time::Duration::from_secs(7 * 86_400);
+
+/// Remove `.part` files under `dir` not written for [`STALE_PART`]; the queue
+/// is not kept across restarts, so only a new download of the same file would
+/// have resumed one. Returns the bytes freed. Never follows a symlink.
+pub fn sweep_stale_parts(dir: &std::path::Path, now: std::time::SystemTime) -> u64 {
+    let mut freed = 0;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let Ok(meta) = std::fs::symlink_metadata(e.path()) else { continue };
+            if meta.is_dir() {
+                stack.push(e.path());
+            } else if meta.is_file()
+                && e.path().extension().is_some_and(|x| x == "part")
+                && meta.modified().ok().and_then(|m| now.duration_since(m).ok()).is_some_and(|age| age >= STALE_PART)
+                && std::fs::remove_file(e.path()).is_ok()
+            {
+                freed += meta.len();
+            }
+        }
+    }
+    freed
+}
+
+#[cfg(test)]
+mod stale_parts_tests {
+    use super::*;
+
+    #[test]
+    fn only_old_part_files_go() {
+        let d = std::env::temp_dir().join(format!("nekko-parts-{}", std::process::id()));
+        std::fs::create_dir_all(d.join("gguf/repo")).unwrap();
+        std::fs::write(d.join("gguf/repo/a.gguf.part"), b"12345").unwrap();
+        std::fs::write(d.join("gguf/repo/b.gguf"), b"model").unwrap();
+        let soon = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        assert_eq!(sweep_stale_parts(&d, soon), 0, "a fresh .part stays");
+        let later = std::time::SystemTime::now() + STALE_PART + std::time::Duration::from_secs(60);
+        assert_eq!(sweep_stale_parts(&d, later), 5);
+        assert!(!d.join("gguf/repo/a.gguf.part").exists());
+        assert!(d.join("gguf/repo/b.gguf").exists(), "finished models are never touched");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 }

@@ -13,13 +13,8 @@
 
 use crate::routes::Ctx;
 use serde_json::{Value, json};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const CHANNELS: &[&str] = &["chat:suggest", "chat:fillPrompt"];
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
 
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let arg = |i: usize| args.get(i).and_then(Value::as_str).unwrap_or_default().to_string();
@@ -83,7 +78,7 @@ async fn complete(
         "provider": resolved,
         "request": {
             "model": model_id,
-            "messages": [{ "id": purpose, "role": "user", "createdAt": now_ms(), "content": content }],
+            "messages": [{ "id": purpose, "role": "user", "createdAt": nekko_js::now_ms(), "content": content }],
             "temperature": 0.4,
             "maxOutputTokens": max_output_tokens,
             "think": false,

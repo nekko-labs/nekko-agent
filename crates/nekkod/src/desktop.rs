@@ -49,10 +49,6 @@ pub struct Desktop {
     webhooks: Arc<WebhookListener>,
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
-}
-
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
     tokio::task::spawn_blocking(f).await.map_err(|e| e.to_string())
 }
@@ -106,7 +102,7 @@ impl Desktop {
         // On by default, and a fresh install has no token yet: minted here so
         // on-by-default actually serves.
         let s = api_settings(ctx).await;
-        if nekko_js::truthy(s.get("enabled")) && api_server::js_trim(s["token"].as_str().unwrap_or("")).is_empty() {
+        if nekko_js::truthy(s.get("enabled")) && nekko_js::trim(s["token"].as_str().unwrap_or("")).is_empty() {
             let mut next = s.clone();
             next["token"] = json!(api_server::new_token());
             let _ = save_api(ctx, next).await;
@@ -132,7 +128,7 @@ impl Desktop {
             "url": api_server::client_url(&s, &lan()),
             "token": s["token"],
             "enabled": false,
-            "updatedAt": now_ms(),
+            "updatedAt": nekko_js::now_ms(),
         });
         cli_install::write_cli_link(&cli_install::cli_link_dir(), &link);
         self.relay.close().await;
@@ -173,7 +169,7 @@ impl Desktop {
             "url": api_server::client_url(&s, &lan()),
             "token": s["token"],
             "enabled": s["enabled"],
-            "updatedAt": now_ms(),
+            "updatedAt": nekko_js::now_ms(),
             "pid": std::process::id(),
         });
         let dir = cli_install::cli_link_dir();
@@ -182,7 +178,7 @@ impl Desktop {
         // Only tools that already carry an entry, and of those only the ones
         // this app wrote (`integrations:refresh`, small_services.rs).
         tokio::task::spawn_blocking(move || {
-            let _ = crate::small_services::refresh_all(&crate::small_services::home_dir(), &target);
+            let _ = crate::small_services::refresh_all(&nekko_js::home_dir_string(), &target);
         });
     }
 
@@ -232,6 +228,13 @@ impl Desktop {
             "networkVisibility:stop" => Ok(self.visibility.stop().await),
             other => Err(format!("{other} is not a desktop channel")),
         }
+    }
+
+    /// Settings > Connections changed: every listener here follows at once.
+    pub async fn connections_changed(&self, ctx: &Ctx) {
+        self.api.sync(ctx, &api_settings(ctx).await).await;
+        self.relay.recheck().await;
+        self.visibility.recheck().await;
     }
 
     /// A new port, address or token reaches the server, the CLI's link file

@@ -8,7 +8,7 @@ use crate::routes::Ctx;
 use nekko_connectors::{Http, Net};
 use serde_json::{Value, json};
 use std::sync::{Arc, LazyLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 pub const CHANNELS: &[&str] = &["connectors:list", "connector:connect", "connector:disconnect", "connector:fetch"];
 
@@ -20,10 +20,6 @@ pub static NET: LazyLock<Arc<dyn Http>> = LazyLock::new(|| Arc::new(Net::default
 
 fn connectors_of(settings: &Value) -> Vec<Value> {
     settings.get("connectors").and_then(Value::as_array).cloned().unwrap_or_default()
-}
-
-fn now_ms() -> f64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
 }
 
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
@@ -46,7 +42,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             if let Some(s) = args.get(2) {
                 entry.insert("settings".into(), s.clone());
             }
-            entry.insert("connectedAt".into(), nekko_connectors::js::num(now_ms()));
+            entry.insert("connectedAt".into(), nekko_connectors::js::num(nekko_js::now_ms_f64()));
             connectors.push(Value::Object(entry));
             let next = crate::settings::update(ctx, json!({ "connectors": connectors })).await?;
             Ok(next.get("connectors").cloned().unwrap_or(json!([])))

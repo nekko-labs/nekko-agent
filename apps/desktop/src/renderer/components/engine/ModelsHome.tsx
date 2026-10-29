@@ -3,8 +3,10 @@ import type { CatalogModel, EngineMemory, EngineSettings, LoadingModel, Resident
 import { ModelLibrary } from './ModelLibrary.js';
 import { ResidentModels } from './ResidentModels.js';
 import { ModelDetail } from './ModelDetail.js';
+import { RecommendedModels } from './RecommendedModels.js';
 import { CheckIcon } from '../../icons.js';
 import { groupModelFamilies, gpuGuidance, type LibraryModel } from './modelFamilies.js';
+import { VoiceSettings } from '../VoiceSettings.js';
 
 /**
  * Models, one surface.
@@ -80,6 +82,8 @@ export function ModelsHome({
   const selectedRepo = repositories.includes(repoId ?? '') ? repoId! : repositories[0];
 
   return (
+    <>
+    <RecommendedModels models={models} onQueued={onChanged} />
     <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.6fr)]">
       <div className="min-w-0 lg:border-r lg:border-line lg:pr-5">
         <input className="input w-full text-[12.5px]" aria-label="Search models" placeholder="Search models and Hugging Face" value={query} onChange={e => setQuery(e.target.value)} spellCheck={false} />
@@ -105,6 +109,13 @@ export function ModelsHome({
         <div className="mb-4">
           <ResidentModels providerId={providerId} resident={resident} loading={loading} models={models} settings={settings} onChanged={onChanged} />
         </div>
+        {/* Speech recognizers are models too, but the OS or Nekko Voice runs
+            them, not the engine: they get their own block with install, remove
+            and "use for dictation" instead of a Load button. */}
+        <details className="mb-4 rounded-xl border border-line px-3 py-2" aria-label="System models">
+          <summary className="cursor-pointer text-[14px] font-semibold">System models</summary>
+          <div className="mt-2"><VoiceSettings compact /></div>
+        </details>
         {selected ? <>
           <h3 className="break-words text-lg font-semibold">{selected.name}</h3>
           <p className="mt-1 text-[12px] text-ink-faint">Choose a variant to download, load or configure. B means billions of parameters.</p>
@@ -115,5 +126,6 @@ export function ModelsHome({
         </> : <><p className="py-8 text-[13px] text-ink-faint">Select a model to see its details and variants.</p><ModelLibrary providerId={providerId} models={[]} canLoad={canLoad} onChanged={onChanged} /></>}
       </div>
     </div>
+    </>
   );
 }

@@ -11,6 +11,7 @@ import { InsightsBox, type Vitals } from './InsightsBox.js';
 import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { useMonitors, useResourceSample } from './ResourceMonitor.js';
+import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
 import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, SlidersIcon, CloseIcon, MinimizeIcon, CubeIcon, PanelIcon } from '../icons.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
@@ -18,6 +19,7 @@ import './monitorsDock.css';
 import type { OAuthStatus } from '@nekko-agent/shared';
 import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
+import { usePanelPresence } from '../usePanelPresence.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
 
 const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
@@ -36,7 +38,7 @@ export interface MonitorsDockProps {
   onOpenModels: () => void;
 }
 
-const DEFAULT_DOCK_WIDTH = 368;
+const DEFAULT_DOCK_WIDTH = 276;
 
 /**
  * The dock's show/hide button: an icon (the agent panel's pill, mirrored), with
@@ -58,6 +60,8 @@ export function MonitorsToggle({ show, side, onToggle }: { show: boolean; side: 
 export function MonitorsDock(props: MonitorsDockProps) {
   const { state, setState } = props;
   const { dock } = state;
+  const background = useBackgroundState();
+  const present = usePanelPresence(dock.show);
   const reorderDrag = useRef<MonitorKey | null>(null);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const sideDock = dock.side === 'left' || dock.side === 'right';
@@ -133,6 +137,30 @@ export function MonitorsDock(props: MonitorsDockProps) {
   const [configure, setConfigure] = useState(false);
   const configureRef = useRef<HTMLDivElement>(null);
   const configureButton = useRef<HTMLButtonElement>(null);
+  const configurePopover = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!configure) return;
+    const menu = configurePopover.current;
+    if (!menu) return;
+    menu.showPopover();
+    const position = () => {
+      const anchor = configureButton.current?.getBoundingClientRect();
+      if (!anchor) return;
+      const bounds = menu.getBoundingClientRect();
+      const left = Math.max(12, Math.min(anchor.right - bounds.width, window.innerWidth - bounds.width - 12));
+      const preferred = dock.side === 'bottom' ? anchor.top - bounds.height - 6 : anchor.bottom + 6;
+      menu.style.left = `${left}px`;
+      menu.style.top = `${Math.max(12, Math.min(preferred, window.innerHeight - bounds.height - 12))}px`;
+    };
+    position();
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
+    return () => {
+      window.removeEventListener('resize', position);
+      window.removeEventListener('scroll', position, true);
+      if (menu.matches(':popover-open')) menu.hidePopover();
+    };
+  }, [configure, dock.side]);
   useEffect(() => {
     if (!configure) return;
     const down = (e: MouseEvent) => { if (!configureRef.current?.contains(e.target as Node)) setConfigure(false); };
@@ -161,15 +189,18 @@ export function MonitorsDock(props: MonitorsDockProps) {
   const setShow = (show: boolean) => setState((s) => ({ ...s, dock: { ...s.dock, show } }));
   // Hidden, the dock leaves only its own show button where it was, the way the
   // agent panel leaves its controls, so the way back is where it went.
-  if (!dock.show) return (
+  const collapsed = !dock.show && (
     <div className="monitors-dock-collapsed" data-dock-side={dock.side}>
       <MonitorsToggle show={false} side={dock.side} onToggle={() => setShow(true)} />
     </div>
   );
+  if (!present) return collapsed;
   const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key]);
   const expandedMonitors = selectedMonitors.filter((p) => !dock.minimized[p.key]);
   return (
-    <aside ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
+    <>
+    {collapsed}
+    <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
       {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={260} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
         onPointerDown={(e) => { drag.current = { x: e.clientX, width }; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={(e) => { if (drag.current) size(Math.min((e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240, drag.current.width + (e.clientX - drag.current.x) * (dock.side === 'left' ? 1 : -1))); }}
@@ -184,7 +215,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
         <span role="status" aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>{reorderAnnouncement}</span>
         <div className="monitors-dock__configure" ref={configureRef}>
           <button type="button" ref={configureButton} aria-expanded={configure} onClick={() => setConfigure((v) => !v)} title="Configure monitors" aria-label="Configure monitors"><SlidersIcon className="monitors-dock__icon" /> Configure</button>
-          {configure && <div className="monitors-dock__popover" role="group" aria-label="Monitors configuration">
+          {configure && <div ref={configurePopover} popover="manual" className="monitors-dock__popover" role="group" aria-label="Monitors configuration">
             <fieldset><legend>Position</legend><div className="monitors-dock__positions">
               {(['left', 'right', 'top', 'bottom'] as const).map((side) => <button type="button" key={side} aria-pressed={dock.side === side} onClick={() => patch({ side })}>{side[0].toUpperCase() + side.slice(1)}</button>)}
             </div></fieldset>
@@ -193,6 +224,8 @@ export function MonitorsDock(props: MonitorsDockProps) {
         </div>
         <MonitorsToggle show side={dock.side} onToggle={() => setShow(false)} />
       </header>
+      {/* Automations on a local model, and whether they are paused for you. */}
+      {background.running > 0 && <div className="monitors-dock__background"><BackgroundChip state={background} /></div>}
       {selectedMonitors.some((p) => dock.minimized[p.key]) && <div className="monitors-dock__minimized" role="group" aria-label="Minimized monitors">
         {selectedMonitors.filter((p) => dock.minimized[p.key]).map((p) => { const Icon = MONITOR_ICONS[p.key]; return <button key={p.key} type="button" title={`Restore ${p.label}`} aria-label={`Expand ${p.label} monitor`} aria-expanded={false} onClick={() => minimize(p.key, false)}><Icon className="monitors-dock__icon" /></button>; })}
       </div>}
@@ -274,6 +307,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
         {selectedMonitors.length === 0 && <p className="monitors-dock__empty">No monitors selected. Use Configure to restore them.</p>}
       </div>
     </aside>
+    </>
   );
 }
 

@@ -22,6 +22,8 @@ pub const CHANNELS: &[&str] = &[
     "pr:linkStack",
     "data:wipe",
     "app:info",
+    // SK-3: only through the phone gate, behind the desktop's `quitFromPhone` switch.
+    "app:quit",
     "updates:check",
     "workspace:add",
     "integrations:detect",
@@ -60,20 +62,27 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             Ok(stacks::link_stack(&host, &text(args, 0), &text(args, 1)).await)
         }
         "data:wipe" => wipe(ctx).await,
-        "app:info" => Ok(app_info(&ctx.app.facts)),
+        "app:info" => {
+            let mut info = app_info(&ctx.app.facts);
+            let on = crate::settings::current(ctx).await.get("quitFromPhone") == Some(&Value::Bool(true));
+            info["quitFromPhone"] = json!(on);
+            Ok(info)
+        }
+        "app:quit" => Ok(quit(ctx)),
         "updates:check" => {
             ctx.update_checks.run(ctx, true).await;
             Ok(Value::Null)
         }
         "workspace:add" => add_folder(ctx).await,
         "integrations:detect" => {
-            let home = home_dir();
+            let home = nekko_js::home_dir_string();
             blocking(move || Ok(integrations::detect(&home))).await
         }
         "integrations:install" | "integrations:snippet" | "integrations:refresh" => {
             // `integrations:refresh` takes only the target.
             let at = usize::from(channel != "integrations:refresh");
-            let (home, tool, target) = (home_dir(), arg(args, 0).clone(), subagent_target(ctx, arg(args, at)).await);
+            let (home, tool, target) =
+                (nekko_js::home_dir_string(), arg(args, 0).clone(), subagent_target(ctx, arg(args, at)).await);
             match channel {
                 "integrations:install" => blocking(move || integrations::install(&home, &tool, &target)).await,
                 "integrations:snippet" => Ok(integrations::snippet(&tool, &target)),
@@ -85,11 +94,6 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
 }
 
 // ---- integrations:* ----
-
-/// `os.homedir()`.
-pub(crate) fn home_dir() -> String {
-    std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default()
-}
 
 async fn blocking(f: impl FnOnce() -> Result<Value, String> + Send + 'static) -> Result<Value, String> {
     tokio::task::spawn_blocking(f).await.map_err(|e| format!("integrations call failed: {e}"))?
@@ -143,6 +147,28 @@ pub fn app_info(facts: &AppFacts) -> Value {
         facts.version.clone().or_else(|| std::env::var("NEKKO_VERSION").ok()).unwrap_or_else(|| "0.0.0".into());
     let edition = facts.edition.clone().unwrap_or_else(|| "web".into());
     json!({ "version": version, "platform": crate::admission::platform(), "edition": edition })
+}
+
+// ---- app:quit ----
+
+/// Asked to stop without a signal: `app:quit` from a phone (SK-3) when there
+/// is no desktop app to quit through. `main` selects on it beside the signals.
+pub static QUIT: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+/// `app:quit`: the app's normal quit, a moment after the reply has gone. The
+/// desktop app quits through its own path (stopping this daemon as on any
+/// quit); headless (the Local Web UI) the daemon shuts itself down. The phone
+/// gate checks `quitFromPhone` first; the desktop never calls this channel.
+fn quit(ctx: &Ctx) -> Value {
+    let ctx = ctx.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let via_app = ctx.app.bridge.is_some() && crate::native::bridge(&ctx, json!({ "tool": "quit" })).await.is_ok();
+        if !via_app {
+            QUIT.notify_one();
+        }
+    });
+    json!({ "quitting": true })
 }
 
 // ---- workspace:add ----
