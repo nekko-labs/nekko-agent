@@ -218,8 +218,12 @@ impl Store {
         if self.unreadable.load(Ordering::SeqCst) {
             return Err(io::Error::other("runners.json could not be read; not overwriting it"));
         }
-        let opts = nekko_js::fs::AtomicWrite { create_dir: true, ..Default::default() };
-        nekko_js::fs::atomic_write(&self.path, &serde_json::to_vec_pretty(records)?, opts)
+        if let Some(dir) = self.path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let tmp = self.path.with_file_name("runners.json.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(records)?)?;
+        std::fs::rename(&tmp, &self.path)
     }
 }
 
