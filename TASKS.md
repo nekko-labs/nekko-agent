@@ -11,6 +11,24 @@ owner:
 From [the PF14 review](reports/rust-migration-review-2026-10-22.md). Behavior-preserving refactors: no spec change.
 
 - [x] **T219, Shared helpers, one atomic write, nekko-chat folded in, leaner Cargo (#1333).** C2: `now_ms`, `uuid`, `num`, `js_round`, `to_fixed_unsigned_zero`, `home_dir` and friends live once in `nekko-js` (`host` module). C3: `nekko_js::fs::atomic_write` (random temp name, rename retry, optional 0600 and fsync) for every store that saved through its own temp file, including the ones added since (agent log trim, quota history, process-group record, runner update ledger, measured speeds, nudges); `runners.json` keeps its fixed temp name because its failed-save tests depend on it. C7: `crates/nekko-chat` is nekkod's `chat_client` module (with the yielding client and its tests). C10: one `tokio-tungstenite`, workspace `base64` and `chrono`, `yaml-rust2` without `encoding`. `cargo test --workspace` green. Done: 2026-10-28
+
+## Customizable UI (added 2026-10-28)
+
+[Specification](spec/desktop/customizable-ui.md), [design](docs/superpowers/specs/2026-10-28-customizable-ui-design.md), [plan](docs/superpowers/plans/2026-10-28-customizable-ui-foundations.md), decisions [0032](docs/decisions/0032-three-layers-and-the-nekko-package.md) and [0033](docs/decisions/0033-mods-may-run-agent-tools-behind-a-permission.md). Prefix **CUI**. CUI-6 onward waits for the composer and Simple/Expert rework (#1312, #1321) to land, since it moves those components onto the registry.
+
+- [x] **CUI-1, Spec, decisions, design and plan.** (2026-10-28)
+- [x] **CUI-2, `.nekko` manifest and entry checks.** `packages/shared/src/nekko-package.ts` and the published schema `packages/shared/schemas/nekko-package-1.json`; never throws; rejects path escapes, symlinks, over 20 MB, code in a customization, reserved `nekko.*` ids. (2026-10-28)
+- [x] **CUI-3, Package signatures.** `nekko-package-signature.ts`: sorted SHA-256 listing, ECDSA P-256 signatures by key id, verification that fails on any changed, extra or missing file. (2026-10-28)
+- [x] **CUI-4, Layout and customization documents.** `ui-layout.ts`: `parseLayoutDoc`, `parseCustomizations`, `resolveSlots` (official contents, then mod defaults, then the person's placements). (2026-10-28)
+- [x] **CUI-5, Mod sandbox policy and bridge.** `apps/desktop/src/modPolicy.ts` (content policy, `nekko-mod://` path resolution) and `renderer/mods/bridge.ts` (permission-checked `MessagePort` bridge). Not wired into the app. (2026-10-28)
+- [ ] **CUI-6, Surface registry.** Stable ids and allowed slots for every view, pane kind, monitor, control, command and overlay; `NAV`, the view chain, `PaneKind` switches, `MONITORS` and the command palette read from it; unknown ids draw a placeholder.
+- [ ] **CUI-7, Simple and Expert as layout documents** (`nekko.simple`, `nekko.expert`), reusing the Simple mode catalogue ids; the safe-mode launch and the fall-back to the last official layout.
+- [ ] **CUI-8, Settings > Look and layout** (Customize, Mods, Layouts), absorbing Style and Simple mode.
+- [ ] **CUI-9, Customizations migration and sync.** Fold AppSettings and Simple choices into one document; `prefs` collection in encrypted sync; "this device only" pins; first-join pinning; export and import as a `customization` package.
+- [ ] **CUI-10, Mod install.** `nekko-mod://` protocol, `ModFrame`, install sheet with permissions and Verified, on/off/remove, re-prompt on new permissions, the bridge handlers, and the engine's mod actor for `tools:run`.
+- [ ] **CUI-11, Marketplace.** `nekko-labs/nekko-mods` repo, generated index, Browse view, offline Verified signing.
+- [ ] **CUI-12, Custom layouts.** Edit layout mode (also writes `placements` on Simple and Expert), `layouts/<id>/` and `mods-dev/<id>/` with reload, grants tied to a code hash, and the authoring skill so people can ask Nekko to build one.
+
 ## Model Server inline download progress (#1221)
 
 - [x] **DLP-1, Show progress and block duplicate download clicks.** Model builds/recommendations, decisions and managed llama.cpp/image/MLX runtimes share immediate acquisition locks and existing grouped-job progress. Queued/downloading/verifying stay disabled, terminal states and rejected requests permit retry; runtime build and decision precision stay fixed in flight. Focused state tests and isolated 1100px/390px rapid-click/progress/retry assertions pass. Model/runtime before/after PNGs inspected. Spec: [Models and providers](spec/models/models-providers.md). Live downloads and packaged application not exercised; baseline macOS shortcut test failure tracked in #900.
