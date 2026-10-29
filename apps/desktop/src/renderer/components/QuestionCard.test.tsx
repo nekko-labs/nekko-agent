@@ -32,6 +32,23 @@ const html = (r: AskRequest = request) =>
   renderToStaticMarkup(<QuestionCard request={r} onAnswer={() => {}} onSkip={() => {}} />);
 
 describe('QuestionCard', () => {
+  it('defaults to orange attention styling with brighter panel and option surfaces', () => {
+    const out = html();
+    expect(out).toContain('data-question-tone="attention"');
+    expect(out).toContain('--accent:var(--warning)');
+    expect(out).toContain('--brand-grad:var(--warning)');
+    expect(out).toContain('--on-accent:#201609');
+    expect(out).toContain('var(--warning) 8%, var(--surface-2)');
+    expect(out).toContain('white 4%, var(--surface-2)');
+    expect(out).not.toContain('background:var(--surface)');
+  });
+
+  it('preserves an explicit accent opt-in without a self-referencing accent variable', () => {
+    const out = renderToStaticMarkup(<QuestionCard tone="accent" compact request={request} onAnswer={() => {}} onSkip={() => {}} />);
+    expect(out).toContain('data-question-tone="accent"');
+    expect(out).not.toContain('--accent:');
+  });
+
   it('asks one question at a time rather than laying the whole form out', () => {
     const out = html();
     expect(out).toContain('>How should people sign in?<');

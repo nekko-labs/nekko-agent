@@ -1038,32 +1038,3 @@ export interface Appearance {
   accent?: string;
   accent2?: string;
 }
-
-const HEX = /^#[0-9a-fA-F]{6}$/;
-const PRESET_ID = /^[a-z0-9-]{1,32}$/;
-
-/**
- * The public look of `settings`, built field by field so nothing else in the
- * settings can ride along to the relay: the mode (anything unknown reads as
- * `system`), the preset id when it looks like one (`[a-z0-9-]{1,32}`; the phone ignores ids it does not know), and the accents as
- * lowercase 6-digit hex (anything else is dropped). The daemon builds the same
- * object (`crates/nekkod/src/settings.rs`, `appearance_of`).
- */
-export function appearanceOf(settings: { theme?: unknown; themePreset?: unknown; accent?: unknown; accent2?: unknown } | null | undefined): Appearance {
-  const theme: ThemeMode = settings?.theme === 'light' || settings?.theme === 'dark' ? settings.theme : 'system';
-  const out: Appearance = { theme };
-  const preset = settings?.themePreset;
-  if (typeof preset === 'string' && PRESET_ID.test(preset)) out.themePreset = preset;
-  for (const k of ['accent', 'accent2'] as const) {
-    const v = settings?.[k];
-    if (typeof v === 'string' && HEX.test(v)) out[k] = v.toLowerCase();
-  }
-  return out;
-}
-
-/** Whether a settings patch can change `appearanceOf` (a reset is `null`). */
-export function touchesAppearance(patch: unknown): boolean {
-  if (patch === null || patch === undefined) return true;
-  if (typeof patch !== 'object') return false;
-  return ['theme', 'themePreset', 'accent', 'accent2'].some((k) => k in (patch as object));
-}

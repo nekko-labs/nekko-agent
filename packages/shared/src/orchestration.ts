@@ -66,13 +66,3 @@ export const DEFAULT_ORCHESTRATION: OrchestrationSettings = {
 export function getStrategy(id: OrchestrationStrategy | undefined): OrchestrationStrategyDef {
   return ORCHESTRATION_STRATEGIES.find((s) => s.id === id) ?? ORCHESTRATION_STRATEGIES[1];
 }
-
-/**
- * The full prompt guidance for an orchestration config, the strategy hint plus
- * the concrete depth/parallel bounds. Empty string when delegation is off.
- */
-export function orchestrationPromptHint(o: OrchestrationSettings): string {
-  const strat = getStrategy(o.strategy);
-  if (!strat.allowsSpawn || !strat.promptHint) return '';
-  return `${strat.promptHint} Keep concurrent sub-agents to about ${o.maxParallel} at a time, and don't nest deeper than ${o.maxDepth} level${o.maxDepth === 1 ? '' : 's'}.`;
-}

@@ -399,10 +399,12 @@
   document.querySelectorAll('.media').forEach((el) => {
     el.addEventListener('click', () => {
       opener = el;
-      const src = el.querySelector('img, video');
+      // the visible one: the hero holds a dark and a light shot, one hidden per look
+      const src = [...el.querySelectorAll('img, video')].find((m) => m.getClientRects().length);
       let big;
       if (src) {
         big = src.cloneNode(true);
+        if (big.tagName === 'IMG' && big.srcset) big.sizes = '100vw';
         if (big.tagName === 'VIDEO') { big.controls = true; big.autoplay = true; big.muted = true; big.loop = true; }
       } else {
         big = document.createElement('div');
