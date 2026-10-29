@@ -6,6 +6,13 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Native iOS survives a lost simulator (#1343)
+
+The hosted iOS 27 simulator sometimes shut down or lost its accessibility server partway through a run, and Native iOS failed 4 of 8 runs with no app regression.
+
+- [x] **T223, Recover the simulator between suites (2026-10-29).** `ios-native.yml`: `ready` (`simctl bootstatus -b` and the status bar override) before every suite, a fresh boot after the first-run suite, and one retry for a failed first-run test (`-retry-tests-on-failure -test-iterations 2`) for XCTest's hang at "Setting up automation session". Verified locally on an iOS 27.0 simulator: `simctl ui` on a shut-down device exits 149 as on CI, and exits 0 after `ready`.
+- [ ] **T224, Watch the next scheduled runs** on main for a simulator loss that `ready` did not recover.
+
 ## Rust migration review follow-ups (added 2026-10-28)
 
 From [the PF14 review](reports/rust-migration-review-2026-10-22.md). Behavior-preserving refactors: no spec change.
