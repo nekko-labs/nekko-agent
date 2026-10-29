@@ -64,11 +64,16 @@ app.whenReady().then(async () => {
     await run(`for (const id of ['a', 'k2']) layoutFixture.emitAgent({ type: 'text', sessionId: id, delta: 'Working on it.' })`);
     await sleep(1500);
     await shot('wall-grid');
+    // Close-ups of two window strips: the number and Nekko, and the terminal icon among the actions.
+    for (const id of ['a', 'b']) {
+      const r = await run(`(() => { const e = document.querySelector('[data-grid-cell="chat:${id}"] [data-pane-title-strip]')?.getBoundingClientRect(); return e && { x: Math.round(e.x), y: Math.round(e.y), width: Math.round(e.width), height: Math.round(e.height) }; })()`);
+      if (r) { const file = path.join(out, `strip-${id}.png`); fs.writeFileSync(file, (await win.capturePage(r, { stayHidden: true })).toPNG()); report.captures.push(file); }
+    }
     await check('no shared wall composer', `!document.querySelector('[data-wall-composer].wall-composer, .wall-composer-row')`);
     await check('every agent window has its own composer', `['a','b','c'].every(id => !!document.querySelector('[data-grid-cell="chat:' + id + '"] .composer'))`);
     await check('only the selected window composer is open', `!document.querySelector('[data-grid-cell="chat:a"] [data-resting]') && !!document.querySelector('[data-grid-cell="chat:b"] [data-resting]') && !!document.querySelector('[data-grid-cell="chat:c"] [data-resting]')`);
     await check('resting composer is one row', `(() => { const r = document.querySelector('[data-grid-cell="chat:b"] .composer')?.getBoundingClientRect(); return !!r && r.height < 64; })()`);
-    await check('header: numbered agent, then Nekko with its badge', `(() => { const icon = document.querySelector('[data-grid-cell="chat:a"] [data-pane-title-strip]'); const n = icon?.querySelector('.numbered-agent-icon'), m = icon?.querySelector('[data-wall-mascot="working"] .wall-mascot-badge'); return !!n && !!m && !!(n.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING); })()`);
+    await check('header: window number, then Nekko (the agent icon) with its badge, no robot', `(() => { const icon = document.querySelector('[data-grid-cell="chat:a"] [data-pane-title-strip]'); const n = icon?.querySelector('.wall-number'), m = icon?.querySelector('[data-wall-mascot="working"] .wall-mascot-badge'); return !!n && n.textContent === '1' && !!m && !!(n.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING) && !icon.querySelector('.numbered-agent-icon'); })()`);
     await check('plan folds to the working step with its kind and pass', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet][data-folded]'); return !!s && s.textContent.includes('Build') && s.textContent.includes('Pass 2') && s.textContent.includes('2 of 4'); })()`);
     await check('folded sub-agents read 1 running, 2 done', `document.querySelector('[data-grid-cell="chat:a"] [data-plan-chip="subagents"]')?.getAttribute('title') === 'Sub-agents: 1 running, 2 done'`);
     await check('the Linear task rides the folded sheet', `[...document.querySelectorAll('[data-grid-cell="chat:a"] [data-plan-chip="project"]')].some(e => e.textContent.includes('NEK-412'))`);
