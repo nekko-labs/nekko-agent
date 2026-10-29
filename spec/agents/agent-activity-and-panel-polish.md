@@ -158,3 +158,7 @@ A chat preparing a reply admits only one send at a time. Stop cancels its prepar
 Live subscription sign-in and native phone-device/managed-relay verification remain follow-up acceptance work. Synthetic providers, a real loopback relay, isolated browser fixtures and a pinned local Docker image cover the integration without accessing real account credentials or device data.
 
 Worktree routing compares canonical filesystem locations, including Windows short-name aliases and directory links. Existing chat mappings are repaired from the configured folder and saved source repository; a folder moved outside that repository is refused. Alias spelling must never route an isolated chat back into the shared source checkout.
+
+### Full tool-row hover details
+
+Implemented: hovering or keyboard-focusing an individual activity step reveals its full, untruncated tool arguments in a viewport-constrained portal tooltip. The tool name occupies a centered, larger heading row above a roomy, rounded details box; both the outer panel and details box have rounded corners. Long details wrap and scroll. Clicking still expands the existing inline details. Content remains local and uses plain text, never executable markup. Isolated renderer checks confirm hover opening and complete arguments; visual inspection remains pending.

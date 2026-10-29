@@ -138,6 +138,7 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
   return (
     <li className="list-none">
       <div className="flex min-w-0 items-center gap-1">
+        <HoverTip label={item.kind === 'tool' ? JSON.stringify(item.call.input, null, 2) : item.text} heading={item.kind === 'tool' ? item.call.name : label} multiline>
         <button
           className="flex min-w-0 flex-1 items-baseline gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft"
           onClick={() => setOpen((o) => !o)}
@@ -148,11 +149,12 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
           <span className="self-center">{icon}</span>
           {live && <LeadDots />}
           {label && <span className={`shrink-0 font-medium ${live ? 'text-accent' : 'text-ink-soft'}`}>{label}</span>}
-          {headline && <span className="min-w-0 truncate" title={headline}>{kind === 'agent' && item.kind === 'tool' ? <SubagentHeadline call={item.call} result={item.result} /> : kind === 'watch' ? headline : `· ${headline}`}</span>}
+          {headline && <span className="min-w-0 truncate">{kind === 'agent' && item.kind === 'tool' ? <SubagentHeadline call={item.call} result={item.result} /> : kind === 'watch' ? headline : `· ${headline}`}</span>}
           {kind === 'agent' && item.kind === 'tool' && <span className="self-center"><SubagentModelChip call={item.call} /></span>}
           {kind === 'watch' && item.kind === 'tool' && <span className="self-center"><WatchClockChip call={item.call} result={item.result} /></span>}
           {quietSince !== undefined && <ToolProgressChip since={quietSince} />}
         </button>
+        </HoverTip>
         {kind === 'agent' && item.kind === 'tool' && <SubagentOpenButton call={item.call} />}
       </div>
       {then && <WatchThen text={then} className="pl-[60px]" />}
