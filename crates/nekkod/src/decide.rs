@@ -140,6 +140,9 @@ impl Decisions for RouterDecisions {
     }
 }
 
+/// The `decide:*` channels [`route`] serves.
+pub const CHANNELS: &[&str] = &["decide:load", "decide:unload", "decide:status", "decide:run"];
+
 /// The `decide:*` channels.
 pub async fn route(service: &DecideService, channel: &str, args: &[Value]) -> Option<Result<Value, String>> {
     Some(match channel {

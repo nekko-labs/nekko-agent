@@ -226,6 +226,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         oauth::Endpoints::default(),
     );
     let _ = accounts.oauth.set(Arc::downgrade(&oauth));
+    // The desktop app's Electron-main channels, with its browser bridge.
+    let native = cfg
+        .native
+        .clone()
+        .filter(|_| cfg.browser_bridge.is_some())
+        .map(|n| native::Native::new(n, cfg.app_version.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         hub: hub.clone(),
@@ -280,12 +286,9 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             cfg.native.as_ref().is_some_and(|n| n.is_packaged),
         )),
         messaging: messaging.clone(),
-        native: cfg
-            .native
-            .clone()
-            .filter(|_| cfg.browser_bridge.is_some())
-            .map(|n| native::Native::new(n, cfg.app_version.clone())),
+        native: native.clone(),
         desktop: cfg.native.as_ref().map(|n| desktop::Desktop::new(n, &data_dir)),
+        routes: Arc::new(routes::Table::new(native.is_some(), cfg.native.is_some())),
     };
     let _ = running.set(ctx.turns.clone());
     cloud.start(std::time::Duration::from_secs(60));

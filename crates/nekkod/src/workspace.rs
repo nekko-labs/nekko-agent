@@ -139,11 +139,6 @@ impl Workspace {
     }
 }
 
-/// Is this channel answered here?
-pub fn serves(channel: &str) -> bool {
-    CHANNELS.contains(&channel) || DATA_CHANNELS.contains(&channel)
-}
-
 fn arg(args: &[Value], i: usize) -> Option<&Value> {
     args.get(i)
 }
