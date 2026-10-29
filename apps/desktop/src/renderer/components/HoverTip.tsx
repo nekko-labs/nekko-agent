@@ -19,7 +19,7 @@ type Side = 'bottom' | 'top' | 'left' | 'right';
  * short delay and at once on keyboard focus, hides on leave, blur, click and
  * Escape, and is linked to the control with `aria-describedby`.
  */
-export function HoverTip({ label, side = 'bottom', children, multiline = false }: { label: string; side?: Side; children: React.ReactElement; multiline?: boolean }) {
+export function HoverTip({ label, side = 'bottom', children, multiline = false, heading }: { label: string; side?: Side; children: React.ReactElement; multiline?: boolean; heading?: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -28,6 +28,7 @@ export function HoverTip({ label, side = 'bottom', children, multiline = false }
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const hide = useCallback(() => { clearTimeout(timer.current); setOpen(false); setPos(null); }, []);
+  const leave = useCallback(() => { clearTimeout(timer.current); timer.current = setTimeout(hide, heading ? 180 : 0); }, [hide, heading]);
   const show = useCallback((delay: number) => {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setOpen(true), delay);
@@ -37,8 +38,9 @@ export function HoverTip({ label, side = 'bottom', children, multiline = false }
     if (!open) return;
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') hide(); };
     window.addEventListener('keydown', key);
-    window.addEventListener('scroll', hide, true);
-    return () => { window.removeEventListener('keydown', key); window.removeEventListener('scroll', hide, true); };
+    const scroll = (e: Event) => { if (!(e.target instanceof Node) || !tip.current?.contains(e.target)) hide(); };
+    window.addEventListener('scroll', scroll, true);
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('scroll', scroll, true); };
   }, [open, hide]);
 
   // Measure after the tip mounts, then place it beside the control and keep it on screen.
@@ -53,7 +55,7 @@ export function HoverTip({ label, side = 'bottom', children, multiline = false }
     left = Math.max(MARGIN, Math.min(window.innerWidth - t.width - MARGIN, left));
     top = Math.max(MARGIN, Math.min(window.innerHeight - t.height - MARGIN, top));
     setPos({ left, top });
-  }, [open, side, label]);
+  }, [open, side, label, heading]);
 
   const child = React.Children.only(children) as React.ReactElement<Record<string, unknown>>;
   const props = child.props as Record<string, ((e: unknown) => void) | undefined>;
@@ -63,7 +65,7 @@ export function HoverTip({ label, side = 'bottom', children, multiline = false }
     'aria-describedby': open ? id : undefined,
     'data-hover-tip': label,
     onPointerEnter: chain('onPointerEnter', () => show(SHOW_DELAY)),
-    onPointerLeave: chain('onPointerLeave', hide),
+    onPointerLeave: chain('onPointerLeave', leave),
     onFocus: chain('onFocus', () => { if (anchor.current?.matches(':focus-visible')) show(0); }),
     onBlur: chain('onBlur', hide),
     onClick: chain('onClick', hide),
@@ -72,9 +74,10 @@ export function HoverTip({ label, side = 'bottom', children, multiline = false }
   return <>
     {trigger}
     {open && typeof document !== 'undefined' && createPortal(
-      <div ref={tip} id={id} role="tooltip" className={`hover-tip${multiline ? ' hover-tip-multiline' : ''}`} data-side={side}
+      <div ref={tip} id={id} role="tooltip" className={`hover-tip${multiline ? ' hover-tip-multiline' : ''}${heading ? ' hover-tip-details' : ''}`} data-side={side}
+        onPointerEnter={() => clearTimeout(timer.current)} onPointerLeave={leave}
         style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999, visibility: 'hidden' }}>
-        {label}
+        {heading ? <><div className="hover-tip-heading">{heading}</div><pre className="hover-tip-content">{label}</pre></> : label}
       </div>,
       document.body,
     )}

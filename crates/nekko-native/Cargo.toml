@@ -8,7 +8,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
-base64 = "0.22"
+base64.workspace = true
 futures-util.workspace = true
 nekko-net = { path = "../nekko-net" }
 raw-window-handle = "0.6"
@@ -21,7 +21,8 @@ serde_json.workspace = true
 sha2 = "0.10"
 tokio.workspace = true
 url = "2.5"
-yaml-rust2 = "0.13"
+# Only `YamlLoader::load_from_str`: no byte decoding, so no `encoding` feature (and its old encoding_rs).
+yaml-rust2 = { version = "0.13", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 # The microphone's privacy setting, read the way Electron reads it (Windows.Devices.Enumeration).

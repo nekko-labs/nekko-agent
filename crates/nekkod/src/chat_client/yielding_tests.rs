@@ -1,7 +1,7 @@
 //! A background call steps aside when its gate says so, holds the next call
 //! until the gate lets it run, and tells a yield from the turn's Stop.
 
-use nekko_chat::{GateFuture, YieldGate, YieldingClient};
+use super::{GateFuture, YieldGate, YieldingClient};
 use nekko_loop::{Cancel, ChatRequest, Chunk, ChunkStream, ModelClient, RunOptions, ToolRunner, YIELDED, run_agent};
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicUsize, Ordering};

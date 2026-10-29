@@ -37,10 +37,7 @@ pub fn os_major(product_version: &str) -> u32 {
 
 /// Writes through a temp file and renames, so a crash never leaves half a file.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path)
+    nekko_js::fs::atomic_write(path, bytes, Default::default())
 }
 
 pub struct UpdateLedger {

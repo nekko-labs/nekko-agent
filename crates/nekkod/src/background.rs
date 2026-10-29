@@ -2,7 +2,7 @@
 //! computer (B2). An automation's `chat:send` says how its turn runs
 //! (`background`: `idle` or `lowPriority`, nekko-automation's
 //! `run_policy::running_mode`); the turn's model client then asks a [`TurnGate`]
-//! before each call and while it streams (nekko-chat's `YieldingClient`):
+//! before each call and while it streams (nekkod's `chat_client::YieldingClient`):
 //!
 //! - `idle` steps aside while someone uses the computer (input within the
 //!   idle threshold, or a chat of theirs replying), and while it runs on
@@ -16,8 +16,8 @@
 //! `background:updated` event say how many such turns run and are paused, and
 //! why (the monitor's chip, B3).
 
+use crate::chat_client::{GateFuture, YieldGate};
 use crate::hub::Hub;
-use nekko_chat::{GateFuture, YieldGate};
 use nekko_machine::Machine;
 use serde_json::{Value, json};
 use std::collections::HashMap;

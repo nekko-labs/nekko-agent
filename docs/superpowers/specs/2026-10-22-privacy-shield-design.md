@@ -57,7 +57,7 @@ missing middle: use a cloud model, but on your terms.
 | C. Local HTTPS proxy | Point providers at a localhost proxy that rewrites JSON | Provider-agnostic, could cover Claude Code too | TLS interception or per-provider base-URL hacks; must parse every wire format; streaming restore across SSE frames; another process to supervise |
 | D. Renderer-side, before send | Redact the draft in the composer | Trivial | Misses everything the agent reads (files, tool output, context block, memory); cannot restore |
 
-A covers the whole agent loop through one seam (`nekko-chat`'s `ProviderClient` is the only
+A covers the whole agent loop through one seam (nekkod's `chat_client::ProviderClient` is the only
 `ModelClient` the daemon builds for a turn). C is the only way to reach Claude Agent chats and is
 noted as a later option.
 
@@ -120,7 +120,7 @@ sequenceDiagram
 | Piece | Where | What it does |
 |---|---|---|
 | `nekko-privacy` | `crates/nekko-privacy` (new, pure, no I/O) | `detect` (kinds, regexes, validators, terms, usernames), `policy` (resolve session + settings), `shield` (vault, redact/restore, streaming `Restorer`, `preview`) |
-| `ShieldedClient` | `crates/nekko-chat/src/shielded.rs` | `ModelClient` wrapper: redacts requests, restores streams. With no shield it is a passthrough |
+| `ShieldedClient` | `crates/nekkod/src/chat_client.rs` | `ModelClient` wrapper: redacts requests, restores streams. With no shield it is a passthrough |
 | Daemon wiring | `crates/nekkod/src/privacy.rs` | `shield_for` (only providers off this computer), `guard`/`unguard` for one-shot side calls, the `privacy:preview` channel |
 | Call sites | `turns.rs` (agent turns, titles), `side.rs` (suggested replies, prompt-part fill), `compaction.rs` (summaries), `spawn.rs` (sub-agents inherit `privacy`) | Every place the daemon sends chat content to the chat's model |
 | UI | `PrivacyShield.tsx` beside Incognito in the composer's privacy row | Switch, live findings, per-value "Send", per-kind switches, the user's terms, "your message as the model reads it" |

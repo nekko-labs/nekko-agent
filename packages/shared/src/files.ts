@@ -42,21 +42,9 @@ export interface RemoteImage {
  * `/`-separated. `..`, absolute paths and symlinks that resolve outside are
  * refused, and files that may hold secrets (`.env`, `.ssh/`, keys, git
  * credentials) are counted, never named, read or written. Refusals are
- * errors whose message starts with a {@link ScopedFileError} code.
+ * errors whose message starts with a refusal code.
  */
 export type ScopedRoot = { sessionId: string; workspaceId?: string } | { workspaceId: string; sessionId?: undefined };
-
-export type ScopedFileError =
-  | 'outside-root'
-  | 'secret-file'
-  | 'not-found'
-  | 'not-a-file'
-  | 'not-a-folder'
-  | 'no-folder'
-  | 'binary'
-  | 'too-large'
-  | 'bad-request'
-  | 'io';
 
 export interface ScopedEntry {
   name: string;

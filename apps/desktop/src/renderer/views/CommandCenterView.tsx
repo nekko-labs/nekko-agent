@@ -660,6 +660,27 @@ export function CommandCenterView() {
 
 /* ---------- toolbar ---------- */
 
+/** Focused / Dynamic. The selected pill slides under whichever one the pointer is over, uncommitted until a click. */
+function LayoutSegments({ mode, onPick }: { mode: 'focus' | 'grid'; onPick: (mode: 'focus' | 'grid') => void }) {
+  const [hover, setHover] = useState<'focus' | 'grid' | null>(null);
+  const buttons = useRef<Partial<Record<'focus' | 'grid', HTMLButtonElement | null>>>({});
+  const [pill, setPill] = useState<{ x: number; width: number } | null>(null);
+  const lit = hover ?? mode;
+  useLayoutEffect(() => {
+    const b = buttons.current[lit];
+    if (b) setPill({ x: b.offsetLeft, width: b.offsetWidth });
+  }, [lit, mode]);
+  return (
+    <div className="wall-layout-segments" role="group" aria-label="Wall layout" data-pill={pill ? '' : undefined} onMouseLeave={() => setHover(null)}>
+      {pill && <span className="wall-layout-pill" aria-hidden="true" style={{ width: pill.width, transform: `translateX(${pill.x}px)` }} />}
+      {(['focus', 'grid'] as const).map((m) => (
+        <button key={m} ref={(el) => { buttons.current[m] = el; }} type="button" title={`${LAYOUT_LABEL[m]} (${layoutShortcutLabel(m)})`} aria-pressed={mode === m} data-lit={lit === m ? '' : undefined}
+          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
+      ))}
+    </div>
+  );
+}
+
 export function WallToolbar({
   wall,
   setWall,
@@ -718,11 +739,7 @@ export function WallToolbar({
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
         <div className="wall-layout-control">
-          <div className="wall-layout-segments" role="group" aria-label="Wall layout">
-            {(['focus', 'grid'] as const).map((mode) => (
-              <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} onClick={() => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
-            ))}
-          </div>
+          <LayoutSegments mode={wall.layout.mode} onPick={(mode) => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))} />
           {/* Snap to grid, only in free-form Dynamic (a Fixed grid is already
               even). Its space stays reserved so revealing it never shifts the controls. */}
           <div className="wall-auto-arrange" data-visible={snapAvailable}>

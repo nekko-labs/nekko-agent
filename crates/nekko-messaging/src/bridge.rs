@@ -133,17 +133,6 @@ pub struct Bridge {
     fx: Vec<Effect>,
 }
 
-/// `Math.max`'s answer as JSON holds it (`NaN` prints as `null`).
-fn num(f: f64) -> Value {
-    if !f.is_finite() {
-        return Value::Null;
-    }
-    if f.fract() == 0.0 && f.abs() < 9_007_199_254_740_992.0 {
-        return json!(f as i64);
-    }
-    serde_json::Number::from_f64(f).map_or(Value::Null, Value::Number)
-}
-
 /// `v + 1` as a number, as `Math.max` then reads it.
 fn plus_one(v: Option<&Value>) -> f64 {
     match v {
@@ -213,7 +202,7 @@ impl Bridge {
 
     fn offset_value(&self) -> Value {
         match self.offset {
-            Some(f) => num(f),
+            Some(f) => nekko_js::num(f),
             None => self.state.get("offset").cloned().unwrap_or(Value::Null),
         }
     }

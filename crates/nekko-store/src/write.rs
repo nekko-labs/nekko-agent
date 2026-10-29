@@ -15,7 +15,6 @@ use serde::ser::{Serialize, SerializeMap, Serializer};
 use serde_json::{Map, Value, json};
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The fields `setSessionOptions` takes (its `Pick<Session, ...>`).
 const OPTION_KEYS: &[&str] = &[
@@ -271,10 +270,6 @@ fn is_archived(s: &Value) -> bool {
     s.get("archivedAt").and_then(Value::as_f64).is_some_and(|at| at > 0.0)
 }
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 fn base36(mut n: u64) -> String {
     const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut out = Vec::new();
@@ -302,26 +297,11 @@ fn base64url(bytes: &[u8]) -> String {
     out
 }
 
-/// Write whole or not at all, as `writeAtomic` in sessions.ts does.
+/// Write whole or not at all, as `writeAtomic` in sessions.ts does. Not
+/// flushed to disk: this is every save of a chat, and a crash costs at most
+/// the last one.
 fn write_atomic(file: &Path, text: &str) -> std::io::Result<()> {
-    let tmp = file.with_extension(format!("json.{}.tmp", std::process::id()));
-    std::fs::write(&tmp, text)?;
-    let mut attempt = 0;
-    loop {
-        match std::fs::rename(&tmp, file) {
-            Ok(()) => return Ok(()),
-            // Windows refuses a rename over a file another process holds open
-            // without delete sharing; that clears in moments.
-            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && attempt < 20 => {
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(5 * attempt));
-            }
-            Err(e) => {
-                let _ = std::fs::remove_file(&tmp);
-                return Err(e);
-            }
-        }
-    }
+    nekko_js::fs::atomic_write(file, text.as_bytes(), Default::default())
 }
 
 // Inject the timezone for deterministic parity tests without process-global TZ.
@@ -411,7 +391,7 @@ impl SessionStore {
 
     /// `saveSession`.
     fn save(&self, s: &mut Map<String, Value>) -> Result<(), String> {
-        s.insert("updatedAt".into(), json!(now_ms()));
+        s.insert("updatedAt".into(), json!(nekko_js::now_ms()));
         let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
         self.write_text(id, &serde_json::to_string_pretty(s).map_err(|e| e.to_string())?)
     }
@@ -470,7 +450,7 @@ impl SessionStore {
                 if let Some(disk) = &disk {
                     merge_disk(target, disk, None)?;
                 }
-                target.insert("updatedAt".into(), json!(now_ms()));
+                target.insert("updatedAt".into(), json!(nekko_js::now_ms()));
                 if !target.get("id").and_then(Value::as_str).is_some_and(valid_id) {
                     return Err("a session without a valid id".into());
                 }
@@ -523,7 +503,7 @@ impl SessionStore {
         settings: &Value,
         snapshot: bool,
     ) -> Result<Value, String> {
-        let now = now_ms();
+        let now = nekko_js::now_ms();
         let mut rand = [0u8; 6];
         getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
         let parent = parent_id.and_then(|p| self.get(p)).and_then(|p| p.as_object().cloned());
@@ -859,7 +839,7 @@ impl SessionStore {
 
     /// Compatibility no-op at the current time.
     pub fn purge_archived(&self, before_delete: impl Fn(&str) -> Result<(), String>) -> Result<usize, String> {
-        self.purge_archived_with(now_ms() as f64, before_delete)
+        self.purge_archived_with(nekko_js::now_ms() as f64, before_delete)
     }
 
     /// `forkSession(id, beforeMessageId)`: a new chat holding `id`'s
@@ -889,7 +869,7 @@ impl SessionStore {
             } else {
                 None
             };
-        let now = now_ms();
+        let now = nekko_js::now_ms();
         let mut rand = [0u8; 6];
         getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
         let mut s = Map::new();

@@ -118,3 +118,7 @@ impl<S: ChunkStream> ChunkStream for YieldingStream<S> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "yielding_tests.rs"]
+mod tests;

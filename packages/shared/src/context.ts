@@ -101,9 +101,6 @@ export function sinceCompaction<T extends { compaction?: unknown }>(messages: T[
   return i < 0 ? messages : messages.slice(i);
 }
 
-/** How a compaction summary opens when it is sent to a model. */
-export const COMPACTION_PREAMBLE = 'Summary of the earlier conversation, compacted to save context:';
-
 /**
  * Wordings providers use when a request does not fit the model's context
  * window: OpenAI's "maximum context length", Anthropic's "prompt is too long",

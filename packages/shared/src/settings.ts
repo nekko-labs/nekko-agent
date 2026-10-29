@@ -24,15 +24,6 @@ export interface PromptTemplate {
   body: string;
 }
 
-/** Built-in slash commands seeded for new installs. */
-export const DEFAULT_PROMPTS: PromptTemplate[] = [
-  { id: 'explain', name: 'explain', body: 'Explain how this code works, step by step.' },
-  { id: 'review', name: 'review', body: 'Review this code for bugs, edge cases, and possible improvements.' },
-  { id: 'test', name: 'test', body: 'Write tests for this code, covering the important edge cases.' },
-  { id: 'fix', name: 'fix', body: 'Find and fix the bug. Explain the root cause and the fix.' },
-  { id: 'refactor', name: 'refactor', body: 'Refactor this for clarity and simplicity without changing behavior.' },
-];
-
 /**
  * How hard the model should work on a turn. Providers translate this to their
  * own knob: a sampling temperature on models that still take one, and
@@ -44,15 +35,6 @@ export const DEFAULT_PROMPTS: PromptTemplate[] = [
  * is `modelEffortLevels` in model-capabilities.ts.
  */
 export type EffortLevel = 'low' | 'medium' | 'normal' | 'high' | 'xhigh' | 'max';
-
-export const EFFORT_TEMPERATURE: Record<EffortLevel, number> = {
-  low: 0.2,
-  medium: 0.5,
-  normal: 0.7,
-  high: 1.0,
-  xhigh: 1.0,
-  max: 1.0,
-};
 
 /**
  * Opt-in experimental surfaces. Each flag reveals a nav destination that stays
@@ -111,11 +93,6 @@ export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   minimized: { hardware: false, localModels: false, utilization: false, budget: false, automations: false, insights: false },
   monitors: { hardware: true, localModels: true, utilization: true, budget: true, automations: true, insights: false },
 };
-
-/** Advisory USD budget only, not an enforced spending limit. Invalid/unset means no budget. */
-export function sanitizeMonthlyBudgetUsd(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
-}
 
 /** The saved Agent board wall; `root` is the renderer's split tree (`layout.ts`), checked on load. */
 export interface CommandWallSetting {
@@ -285,7 +262,7 @@ export interface AppSettings {
   effort?: EffortLevel;
   /** Cloud comparison for unpriced local models; unset uses the default, empty opts out. */
   localCostBenchmark?: string;
-  /** Advisory monthly USD budget; read through sanitizeMonthlyBudgetUsd. */
+  /** Advisory monthly USD budget; invalid or negative means no budget. */
   monthlyBudgetUsd?: number;
   /** Check for app updates automatically (desktop). Superseded by `updates.app`. */
   autoUpdate?: boolean;
@@ -464,49 +441,6 @@ export function clampMaxOutputTokens(n: number | undefined): number {
 /** Older settings omit the switch and keep reuse enabled. */
 export function promptCachingEnabled(settings: Pick<AppSettings, 'promptCaching'>): boolean {
   return settings.promptCaching !== false;
-}
-
-/** One usage event appended to a JSONL log for analytics. */
-export interface UsageRecord {
-  ts: number;
-  providerId: string;
-  modelId: string;
-  /** Noncached tokens; cache counts are separate. */
-  inputTokens: number;
-  cacheReadTokens?: number;
-  cacheWriteTokens?: number;
-  outputTokens: number;
-  sessionId: string;
-  /** Persist provider locality so later configuration changes do not rewrite history. */
-  local?: boolean;
-  /** Subscription providers bill the user through their plan, not per token. */
-  auth?: 'apikey' | 'subscription';
-}
-
-/**
- * How one reply ended, appended to a JSONL log so the loop detector can be
- * tuned from real runs. Counts only: never message or tool text. Replies have
- * no tool-step limit; records written by older builds may still carry a
- * `maxSteps` field and a `step_limit` stop, which are read and ignored.
- */
-export interface ReplyRecord {
-  ts: number;
-  /** Start of model execution, absent in older records. */
-  startedAt?: number;
-  sessionId: string;
-  providerId: string;
-  modelId: string;
-  /** Tool round trips the reply took. */
-  steps: number;
-  stop: import('./chat.js').ReplyStop;
-  /** Effort and token totals for the reply; absent in records from older builds. */
-  effort?: EffortLevel;
-  inputTokens?: number;
-  outputTokens?: number;
-  cacheReadTokens?: number;
-  cacheWriteTokens?: number;
-  outputMs?: number;
-  wallMs?: number;
 }
 
 /** What the reply log says about how replies end. */

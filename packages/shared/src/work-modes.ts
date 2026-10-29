@@ -80,8 +80,6 @@ export const WORK_MODES: WorkModeDef[] = [
   },
 ];
 
-export const DEFAULT_WORK_MODE: WorkModeId = 'default';
-
 export function getWorkMode(id: string | undefined | null): WorkModeDef {
   return WORK_MODES.find((m) => m.id === id) ?? WORK_MODES[0];
 }

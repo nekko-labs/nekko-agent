@@ -13,15 +13,3 @@ type Scoped = Pick<Session, 'effort' | 'disabledMcpServers' | 'disabledConnector
 export function chatEffort(session: Scoped | null | undefined, appEffort: EffortLevel | undefined): EffortLevel | undefined {
   return session?.effort ?? appEffort;
 }
-
-/** MCP tool specs (`mcp__<server>__<tool>`) less those whose server the chat switched off. */
-export function chatMcpTools<T extends { name: string }>(tools: T[], session: Scoped | null | undefined): T[] {
-  const off = (session?.disabledMcpServers ?? []).map((id) => `mcp__${id}__`);
-  return off.length ? tools.filter((t) => !off.some((prefix) => t.name.startsWith(prefix))) : tools;
-}
-
-/** Connector configs less those the chat switched off. */
-export function chatConnectors<T extends { kind: string }>(connectors: T[], session: Scoped | null | undefined): T[] {
-  const off = new Set(session?.disabledConnectors ?? []);
-  return off.size ? connectors.filter((c) => !off.has(c.kind)) : connectors;
-}

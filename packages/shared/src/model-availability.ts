@@ -117,8 +117,3 @@ export function resolveModelAvailability(input: {
 
   return model.availability ?? READY;
 }
-
-/** Convenience: can this model be picked right now? */
-export function isModelRunnable(input: Parameters<typeof resolveModelAvailability>[0]): boolean {
-  return resolveModelAvailability(input).status === 'ready';
-}

@@ -56,10 +56,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_ms() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
-
 /// `(buffer + data).slice(-MAX_BUFFER)` in UTF-16 units.
 fn keep_tail(text: String) -> String {
     let units = js::len16(&text);
@@ -88,16 +84,8 @@ fn keep_file_tail(path: &Path, keep: u64) -> std::io::Result<()> {
     let mut tail = Vec::new();
     f.read_to_end(&mut tail)?;
     let start = tail.iter().position(|b| *b == b'\n').map_or(0, |i| i + 1);
-    let tmp = path.with_extension("log.tmp");
-    let mut opts = std::fs::OpenOptions::new();
-    opts.create(true).write(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
-    }
-    opts.open(&tmp)?.write_all(&tail[start..])?;
-    std::fs::rename(&tmp, path)
+    let private = js::fs::AtomicWrite { mode: js::fs::Mode::Private, ..Default::default() };
+    js::fs::atomic_write(path, &tail[start..], private)
 }
 
 fn writer_thread(rx: mpsc::Receiver<Op>) {
@@ -266,7 +254,7 @@ impl AgentLogs {
                 info.insert("cwd".into(), json!(self.cwd(session.as_ref(), workspace_id)));
                 info.insert("shell".into(), json!("agent"));
                 info.insert("agentSessionId".into(), json!(session_id));
-                info.insert("createdAt".into(), json!(now_ms()));
+                info.insert("createdAt".into(), json!(nekko_js::now_ms_f64()));
                 info.insert("running".into(), json!(running));
                 Term { info, buffer: String::new() }
             });

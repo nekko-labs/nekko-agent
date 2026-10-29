@@ -6,7 +6,6 @@ use crate::nodepath;
 use nekko_js as js;
 use serde_json::{Map, Value, json};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The names read from each workspace root, in this order.
 const GUIDELINE_NAMES: [&str; 5] = ["AGENTS.md", "CLAUDE.md", ".cursorrules", ".windsurfrules", "GEMINI.md"];
@@ -73,10 +72,6 @@ pub fn collect_attached(paths: &[String]) -> Vec<(String, String)> {
     paths.iter().filter(|p| Path::new(p).exists()).filter_map(|p| read_limited(p).map(|c| (p.clone(), c))).collect()
 }
 
-fn now_ms() -> f64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
-
 /// `unescapeYaml`.
 fn unescape(s: &str) -> String {
     let s = s.strip_prefix('"').unwrap_or(s);
@@ -118,7 +113,7 @@ pub fn parse_memory(markdown: &str, fallback_id: &str) -> Value {
     let nonempty = |k: &str| get(k).filter(|v| !v.is_empty());
     let stamp = |k: &str| {
         let n = get(k).map(js::string_to_number).unwrap_or(f64::NAN);
-        if js::truthy_number(n) { n } else { now_ms() }
+        if js::truthy_number(n) { n } else { nekko_js::now_ms_f64() }
     };
     let mut m = Map::new();
     m.insert("id".into(), json!(nonempty("id").unwrap_or(fallback_id)));

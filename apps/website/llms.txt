@@ -24,7 +24,7 @@ Search and download models from Hugging Face inside the app, see which fit the g
 
 ### 3. Every model side by side
 
-Sign in with a ChatGPT plan (Plus/Pro/Business), add Claude with an Anthropic API key, or use OpenRouter for hundreds of models including Gemini, alongside local models. Choose a model per chat or workflow and delegate smaller tasks to cheaper or local models. Nekko does not sign in with Claude Free, Pro, or Max plans: Anthropic does not allow third-party apps to. An upcoming Claude Agent provider runs the user's own installed Claude Code instead.
+Sign in with a ChatGPT plan (Plus/Pro/Business), add Claude with an Anthropic API key, or use OpenRouter for hundreds of models including Gemini, alongside local models. Choose a model per chat or workflow and delegate smaller tasks to cheaper or local models. To use a Claude plan (Pro, Max or Team), Nekko runs the user's own installed Claude Code, which they sign in to themselves; Nekko never signs in to Claude or reads Claude credentials. Scheduled tasks, Nekko's own tools inside that chat and plan usage limits stay off on a Claude plan for now; an API key or cloud account turns every feature on.
 
 ### 4. Spend, savings, and live monitoring
 

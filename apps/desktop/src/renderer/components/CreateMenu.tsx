@@ -12,7 +12,7 @@ export const CREATE_OPTIONS = [
   ['terminal', 'Terminal', <TerminalIcon className="h-4 w-4" />, SHORTCUTS.newTerminal],
 ] as const;
 export function CreateMenuRows({ onCreate }: { onCreate: (kind: CreateKind) => void }) {
-  return <>{CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" onClick={() => onCreate(kind)}>
+  return <>{CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" aria-label={label} title={`${label} (${shortcut.label})`} onClick={() => onCreate(kind)}>
     <span className="create-tile">{icon}</span>
     <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug">{label}</span>
     <kbd className="kbd shrink-0">{shortcut.label}</kbd>

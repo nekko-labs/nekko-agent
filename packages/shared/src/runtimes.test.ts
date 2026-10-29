@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RUNTIME_CAPABILITIES, isRuntimeKind, kvBytesPerElement, LOCAL_PROVIDER_KINDS } from './index.js';
+import { RUNTIME_CAPABILITIES, isRuntimeKind, LOCAL_PROVIDER_KINDS } from './index.js';
 
 describe('RUNTIME_CAPABILITIES', () => {
   it('never offers to start vLLM', () => {
@@ -33,14 +33,5 @@ describe('isRuntimeKind', () => {
     // something we would ever start or stop on the user's behalf.
     expect(isRuntimeKind('openai-compat')).toBe(false);
     expect(isRuntimeKind('anthropic')).toBe(false);
-  });
-});
-
-describe('kvBytesPerElement', () => {
-  it('halves for q8_0 and quarters for q4_0', () => {
-    expect(kvBytesPerElement('f16')).toBe(2);
-    expect(kvBytesPerElement('q8_0')).toBe(1);
-    expect(kvBytesPerElement('fp8')).toBe(1);
-    expect(kvBytesPerElement('q4_0')).toBe(0.5);
   });
 });
