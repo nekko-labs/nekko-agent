@@ -143,13 +143,13 @@ fn norm(v: &Value, root: &str) -> Value {
 
 #[test]
 fn to_fixed_rounds_half_up_like_javascript() {
-    assert_eq!(to_fixed(1.234, 1), "1.2");
-    assert_eq!(to_fixed(1.25, 1), "1.3");
-    assert_eq!(to_fixed(0.05, 1), "0.1");
-    assert_eq!(to_fixed(0.25, 1), "0.3");
-    assert_eq!(to_fixed(9.96, 1), "10.0");
-    assert_eq!(to_fixed(0.843685645, 2), "0.84");
-    assert_eq!(to_fixed(2.5, 0), "3");
+    assert_eq!(nekko_js::to_fixed_unsigned_zero(1.234, 1), "1.2");
+    assert_eq!(nekko_js::to_fixed_unsigned_zero(1.25, 1), "1.3");
+    assert_eq!(nekko_js::to_fixed_unsigned_zero(0.05, 1), "0.1");
+    assert_eq!(nekko_js::to_fixed_unsigned_zero(0.25, 1), "0.3");
+    assert_eq!(nekko_js::to_fixed_unsigned_zero(9.96, 1), "10.0");
+    assert_eq!(nekko_js::to_fixed_unsigned_zero(0.843685645, 2), "0.84");
+    assert_eq!(nekko_js::to_fixed_unsigned_zero(2.5, 0), "3");
 }
 
 #[tokio::test]

@@ -84,10 +84,6 @@ struct Surroundings {
     flags: Arc<Mutex<HashMap<String, Arc<HashSet<String>>>>>,
 }
 
-fn now() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
-}
-
 fn platform() -> &'static str {
     if cfg!(windows) {
         "win32"
@@ -174,10 +170,10 @@ impl Env for Surroundings {
         nekko_engine::install::ensure_vc_runtime(bin_dir, platform(), &vc)
     }
     fn now(&self) -> f64 {
-        now()
+        nekko_js::now_ms_f64()
     }
     fn clock(&self) -> String {
-        let secs = (now() / 1000.0) as u64 % 86_400;
+        let secs = (nekko_js::now_ms_f64() / 1000.0) as u64 % 86_400;
         format!("{:02}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
     }
     fn on_serving(&self, base_url: String) -> BoxFuture<()> {

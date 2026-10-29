@@ -138,7 +138,7 @@ impl Native {
             return PathBuf::from(d);
         }
         // electron-updater's getAppCacheDir()/<updaterCacheDirName>.
-        let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+        let home = nekko_js::home_dir();
         let base = if cfg!(windows) {
             std::env::var_os("LOCALAPPDATA")
                 .map(PathBuf::from)

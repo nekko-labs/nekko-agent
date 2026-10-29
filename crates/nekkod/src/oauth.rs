@@ -491,7 +491,7 @@ impl OAuth {
     /// credentials are never read: Anthropic does not let other apps collect
     /// or reuse them.
     fn import_cli_auth(&self) -> Value {
-        let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+        let home = nekko_js::home_dir();
         let mut result = json!({ "claude": false, "chatgpt": false, "openrouter": false });
         let Some(home) = home else { return result };
         let Ok(bytes) = std::fs::read(home.join(".codex").join("auth.json")) else { return result };

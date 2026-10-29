@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 getrandom.workspace = true
+nekko-js = { path = "../nekko-js" }
 nekko-loop = { path = "../nekko-loop" }
 serde_json.workspace = true
 tokio.workspace = true

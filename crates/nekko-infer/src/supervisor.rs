@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
@@ -70,10 +70,6 @@ pub struct ChildInfo {
     pub active_requests: usize,
 }
 
-pub(crate) fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 pub struct Child {
     pub model_id: String,
     pub kind: Kind,
@@ -91,7 +87,7 @@ pub struct Child {
 
 impl Child {
     pub fn touch(&self) {
-        self.last_used.store(now_ms(), Ordering::Relaxed);
+        self.last_used.store(nekko_js::now_ms(), Ordering::Relaxed);
     }
 
     /// Requests in flight right now.
@@ -244,8 +240,8 @@ impl Supervisor {
             kind: spec.kind,
             port,
             pid,
-            started_at: now_ms(),
-            last_used: AtomicU64::new(now_ms()),
+            started_at: nekko_js::now_ms(),
+            last_used: AtomicU64::new(nekko_js::now_ms()),
             active: AtomicUsize::new(0),
             proc: Mutex::new(Some(proc)),
             log: log.clone(),

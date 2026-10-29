@@ -141,10 +141,7 @@ impl MeasuredSpeeds {
         });
         if let (Some(p), Some(text)) = (&self.path, text) {
             // Best-effort: a sample that cannot be saved still counts until restart.
-            let tmp = p.with_extension(format!("json.{}.tmp", std::process::id()));
-            if std::fs::write(&tmp, text).is_ok() {
-                let _ = std::fs::rename(&tmp, p);
-            }
+            let _ = nekko_js::fs::atomic_write(p, text.as_bytes(), Default::default());
         }
         true
     }

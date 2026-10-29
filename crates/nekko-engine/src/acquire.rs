@@ -11,7 +11,7 @@ use crate::capacity::{self, AutoFitInput, Hardware, PlanOptions};
 use crate::catalog::hf_file_url;
 use crate::folders::companions_dir;
 use crate::library::{default_context_tokens, model_facts_for, model_modality};
-use crate::{js_round, num, to_fixed};
+use crate::{js_round, num};
 use nekko_tools::nodefs;
 use nekko_tools::path::native as path;
 use regress::Regex;
@@ -453,7 +453,7 @@ pub fn image_companions_plan(model: &Value, status: &Value, token: Option<&str>,
         "message": format!(
             "Fetching {queued} file{} ({} GB) for {label}.{stood_in}",
             if queued == 1 { "" } else { "s" },
-            to_fixed(bytes / 1e9, 1)
+            nekko_js::to_fixed_unsigned_zero(bytes / 1e9, 1)
         ),
         "requests": requests,
     })

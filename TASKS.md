@@ -6,6 +6,12 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Rust migration review follow-ups (added 2026-10-28)
+
+From [the PF14 review](reports/rust-migration-review-2026-10-22.md). Behavior-preserving refactors: no spec change.
+
+- [x] **T219, Shared helpers, one atomic write, nekko-chat folded in, leaner Cargo (#1333).** C2: `now_ms`, `uuid`, `num`, `js_round`, `to_fixed_unsigned_zero`, `home_dir` and friends live once in `nekko-js` (`host` module). C3: `nekko_js::fs::atomic_write` (random temp name, rename retry, optional 0600 and fsync) for every store that saved through its own temp file, including the ones added since (agent log trim, quota history, process-group record, runner update ledger, measured speeds, nudges); `runners.json` keeps its fixed temp name because its failed-save tests depend on it. C7: `crates/nekko-chat` is nekkod's `chat_client` module (with the yielding client and its tests). C10: one `tokio-tungstenite`, workspace `base64` and `chrono`, `yaml-rust2` without `encoding`. `cargo test --workspace` green. Done: 2026-10-28
+
 ## Customizable UI (added 2026-10-28)
 
 [Specification](spec/desktop/customizable-ui.md), [design](docs/superpowers/specs/2026-10-28-customizable-ui-design.md), [plan](docs/superpowers/plans/2026-10-28-customizable-ui-foundations.md), decisions [0032](docs/decisions/0032-three-layers-and-the-nekko-package.md) and [0033](docs/decisions/0033-mods-may-run-agent-tools-behind-a-permission.md). Prefix **CUI**. CUI-6 onward waits for the composer and Simple/Expert rework (#1312, #1321) to land, since it moves those components onto the registry.

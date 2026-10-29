@@ -242,7 +242,7 @@ impl Machine {
     /// tokens in `predicted_ms`. `alone` when no other request shared the model.
     pub async fn record_decode(&self, path: &str, predicted_n: f64, predicted_ms: f64, alone: bool) -> bool {
         let machine = crate::measured::machine_key(&self.profile(false).await);
-        self.speeds.record(path, &machine, predicted_n, predicted_ms, alone, crate::profile::now_ms())
+        self.speeds.record(path, &machine, predicted_n, predicted_ms, alone, nekko_js::now_ms())
     }
 
     /// Where the daemon keeps its data, when it knows.

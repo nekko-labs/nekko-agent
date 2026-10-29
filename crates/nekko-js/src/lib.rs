@@ -12,6 +12,10 @@
 
 use serde_json::Value;
 
+pub mod fs;
+pub mod host;
+pub use host::{home_dir, home_dir_string, now_ms, now_ms_f64, try_uuid, uuid};
+
 /// `s.length` in JavaScript: UTF-16 code units.
 pub fn len16(s: &str) -> usize {
     s.encode_utf16().count()
@@ -327,6 +331,25 @@ pub fn to_fixed(x: f64, digits: usize) -> String {
     if x.abs() >= 1e21 || x.is_infinite() {
         return number_to_string(x);
     }
+    let body = fixed_abs(x, digits);
+    // (-0.001).toFixed(2) is "-0.00": the sign survives rounding to zero.
+    if x < 0.0 { format!("-{body}") } else { body }
+}
+
+/// [`to_fixed`] as the engine's and the decision models' sizes and times
+/// print: a negative value that rounds to zero prints unsigned (`"0.00"`,
+/// where JavaScript keeps the sign), and from 1e21 up the digits stay
+/// positional.
+pub fn to_fixed_unsigned_zero(x: f64, digits: usize) -> String {
+    if !x.is_finite() {
+        return number_to_string(x);
+    }
+    let body = fixed_abs(x, digits);
+    if x < 0.0 && body.chars().any(|c| c != '0' && c != '.') { format!("-{body}") } else { body }
+}
+
+/// `|x|` to `digits` places, positional, the exact value rounded half up.
+fn fixed_abs(x: f64, digits: usize) -> String {
     // Every finite double has a terminating decimal expansion of at most 1074 places.
     let exact = format!("{:.1100}", x.abs());
     let (int_part, frac) = exact.split_once('.').unwrap_or((&exact, ""));
@@ -350,17 +373,43 @@ pub fn to_fixed(x: f64, digits: usize) -> String {
     }
     let text: String = digits_out.iter().map(|d| char::from(b'0' + d)).collect();
     let split = text.len() - kept.len();
-    let mut out = String::new();
-    // (-0.001).toFixed(2) is "-0.00": the sign survives rounding to zero.
-    if x < 0.0 {
-        out.push('-');
-    }
-    out.push_str(&text[..split]);
+    let mut out = text[..split].to_string();
     if digits > 0 {
         out.push('.');
         out.push_str(&text[split..]);
     }
     out
+}
+
+/// A number as a JSON value, as `JSON.stringify` prints it: whole numbers
+/// as integers (`5`, never `5.0`), `-0` as `0`, and `NaN` and the
+/// infinities as `null`.
+pub fn num(f: f64) -> Value {
+    if !f.is_finite() {
+        Value::Null
+    } else if f.fract() == 0.0 && f.abs() < 9_007_199_254_740_992.0 {
+        Value::from(f as i64)
+    } else {
+        serde_json::Number::from_f64(f).map_or(Value::Null, Value::Number)
+    }
+}
+
+/// [`num`], except that `-0` stays the float `-0.0` rather than becoming
+/// `0`, as the usage, engine and machine ports have always written it.
+pub fn num_signed_zero(f: f64) -> Value {
+    if f == 0.0 && f.is_sign_negative() {
+        return serde_json::Number::from_f64(f).map_or(Value::Null, Value::Number);
+    }
+    num(f)
+}
+
+/// `Math.round`: halves go up (toward +Infinity), unlike `f64::round`.
+pub fn js_round(x: f64) -> f64 {
+    if !x.is_finite() {
+        return x;
+    }
+    let f = x.floor();
+    if x - f >= 0.5 { f + 1.0 } else { f }
 }
 
 /// A value as a template literal prints it (`${v}`).
@@ -513,6 +562,31 @@ mod tests {
         }
         assert_eq!(to_fixed(f64::NAN, 2), "NaN");
         assert_eq!(to_fixed(2.5, 0), "3");
+    }
+
+    #[test]
+    fn to_fixed_unsigned_zero_drops_the_sign_of_a_zero_and_stays_positional() {
+        assert_eq!(to_fixed_unsigned_zero(-0.001, 2), "0.00");
+        assert_eq!(to_fixed_unsigned_zero(-0.005, 2), "-0.01");
+        assert_eq!(to_fixed_unsigned_zero(1.25, 1), "1.3");
+        assert_eq!(to_fixed_unsigned_zero(9.96, 1), "10.0");
+        assert_eq!(to_fixed_unsigned_zero(1e21, 0), "1000000000000000000000");
+        assert_eq!(to_fixed_unsigned_zero(f64::INFINITY, 1), "Infinity");
+    }
+
+    #[test]
+    fn numbers_become_json_as_stringify_prints_them() {
+        assert_eq!(num(5.0), json!(5));
+        assert_eq!(num(0.5), json!(0.5));
+        assert_eq!(num(-0.0), json!(0));
+        assert_eq!(num(f64::NAN), Value::Null);
+        assert_eq!(num(f64::INFINITY), Value::Null);
+        assert_eq!(num(9_007_199_254_740_992.0), json!(9_007_199_254_740_992.0));
+        assert_eq!(num_signed_zero(-0.0).to_string(), "-0.0");
+        assert_eq!(num_signed_zero(5.0), json!(5));
+        assert_eq!(num_signed_zero(f64::NAN), Value::Null);
+        assert_eq!(js_round(2.5), 3.0);
+        assert_eq!(js_round(-2.5), -2.0);
     }
     use serde_json::json;
 

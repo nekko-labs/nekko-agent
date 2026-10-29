@@ -80,16 +80,6 @@ pub fn list(data_dir: &Path, path: Option<&Value>) -> Value {
     list_in(&load(data_dir), &key_of(path))
 }
 
-/// `crypto.randomUUID()`.
-fn uuid_v4() -> Result<String, String> {
-    let mut b = [0u8; 16];
-    getrandom::fill(&mut b).map_err(|e| e.to_string())?;
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    Ok(format!("{}-{}-{}-{}-{}", &h[..8], &h[8..12], &h[12..16], &h[16..20], &h[20..]))
-}
-
 /// `addComment(path, line, lineText, comment)`: returns the file's comments
 /// as they now read from disk.
 pub fn add(
@@ -103,7 +93,7 @@ pub fn add(
     let key = key_of(path);
     let mut store = load(data_dir);
     let mut entry = Map::new();
-    entry.insert("id".into(), json!(uuid_v4()?));
+    entry.insert("id".into(), json!(nekko_js::try_uuid()?));
     // `undefined` fields vanish in JSON.stringify.
     for (k, v) in [("path", path), ("line", line), ("lineText", line_text), ("comment", comment)] {
         if let Some(v) = v {
