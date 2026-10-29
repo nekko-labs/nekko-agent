@@ -6,6 +6,8 @@ use nekko_js as js;
 use serde_json::{Map, Value, json};
 
 const VALID: &[&str] = &["pending", "active", "done", "skipped"];
+/// `PLAN_STEP_KINDS`: the step's place in the work loop.
+const KINDS: &[&str] = &["explore", "build", "verify", "ship"];
 
 pub enum PlanOutcome {
     /// `{ plan, replaced, finished, skippedNow }`.
@@ -102,6 +104,7 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             Some(n) if !n.is_empty() => Some(js::slice16(n, 240).to_string()),
             _ => None,
         };
+        let kind = r.get("kind").and_then(Value::as_str).filter(|k| KINDS.contains(k)).map(str::to_string);
         let verification = verification(r.get("verification"));
         let mut found = if id.is_empty() {
             None
@@ -124,6 +127,14 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
                 && !(replace && matches!(was.as_str(), "done" | "skipped"))
             {
                 step["status"] = json!(st);
+            }
+            if let Some(k) = &kind {
+                step["kind"] = json!(k);
+            }
+            // A finished step picked up again is another pass through the loop.
+            if was == "done" && status(step) == "active" {
+                let pass = step.get("pass").and_then(Value::as_u64).unwrap_or(1) + 1;
+                step["pass"] = json!(pass);
             }
             if let Some(n) = &note {
                 set_note(step, n, note_slots.contains(&i));
@@ -152,6 +163,9 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             step.insert("id".into(), json!(new_id));
             step.insert("title".into(), json!(t));
             step.insert("status".into(), json!(st.unwrap_or_else(|| "pending".into())));
+            if let Some(k) = kind {
+                step.insert("kind".into(), json!(k));
+            }
             match note {
                 Some(n) => {
                     step.insert("note".into(), json!(n));
@@ -239,11 +253,42 @@ mod tests {
     }
 
     #[test]
+    fn steps_carry_a_loop_kind_and_count_passes_when_reopened() {
+        let plan = apply(
+            None,
+            json!({"steps":[{"title":"Look","kind":"explore","status":"done"},{"title":"Make","kind":"build","status":"done"},{"title":"Check","kind":"verify","status":"active"},{"title":"Odd","kind":"deploy"}]}),
+            10,
+        );
+        assert_eq!(plan[0]["kind"], "explore");
+        assert_eq!(plan[2]["kind"], "verify");
+        assert!(plan[3].get("kind").is_none());
+        // Key order matches the TS object: id, title, status, kind, note slot, createdAt.
+        let keys: Vec<&String> = plan[1].as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["id", "title", "status", "kind", "createdAt", "updatedAt"]);
+        // Verify fails: Build is picked up again (pass 2), then again (pass 3).
+        let current = json!(plan);
+        let again = apply(Some(&current), json!({"steps":[{"id":"step_2","status":"active"},{"id":"step_3","status":"pending"}]}), 20);
+        assert_eq!(again[1]["pass"], 2);
+        assert!(again[2].get("pass").is_none());
+        let current = json!(again);
+        let done = apply(Some(&current), json!({"steps":[{"id":"step_2","status":"done"}]}), 30);
+        assert_eq!(done[1]["pass"], 2);
+        let current = json!(done);
+        let third = apply(Some(&current), json!({"steps":[{"id":"step_2","status":"active","kind":"build"}]}), 40);
+        assert_eq!(third[1]["pass"], 3);
+        // Re-planning keeps finished history as it was: no new pass.
+        let current = json!(done);
+        let replanned = apply(Some(&current), json!({"replace":true,"steps":[{"title":"Make","status":"active"}]}), 50);
+        assert!(replanned[1].get("pass").is_some_and(|p| p == 2));
+    }
+
+    #[test]
     fn catalog_exposes_independent_verification_contract() {
         let catalog: Value = serde_json::from_str(include_str!("catalog.json")).unwrap();
         let tool = &catalog["tools"]["updatePlan"];
         let properties = &tool["parameters"]["properties"]["steps"]["items"]["properties"];
         assert_eq!(properties["status"]["enum"], json!(["pending", "active", "done", "skipped"]));
+        assert_eq!(properties["kind"]["enum"], json!(["explore", "build", "verify", "ship"]));
         assert_eq!(
             properties["verification"]["properties"]["status"]["enum"],
             json!(["pending", "active", "passed", "failed", "blocked", "unknown"])
