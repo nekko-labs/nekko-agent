@@ -35,7 +35,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 - [Automatic title requests during queued turns (2026-10-13)](chat/automatic-title-requests-during-queued-turns.md) (1 KB)
 - [Background notification and panel batch (2026-10-13)](chat/background-notification-and-panel-batch.md) (8 KB)
-- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (74 KB)
+- [Chat & cowork (unified surface)](chat/chat-cowork-unified-surface.md) (75 KB)
 - [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (25 KB)
 - [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (8 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
@@ -66,6 +66,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 
 The desktop shell: wall, windows, navigation rail, layouts, settings.
 
+- [A composer in every wall window (implemented 2026-10-28; desktop build check pending)](desktop/a-composer-in-every-wall-window.md) (3 KB)
 - [Agent board header spacing](desktop/command-center-header-spacing.md) (13 KB)
 - [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)

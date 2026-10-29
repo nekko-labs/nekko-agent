@@ -101,12 +101,12 @@ describe('Agents panel header', () => {
     expect(head).toMatch(/aria-label="Search chats"[^>]*><svg[^>]*class="h-4 w-4"/);
   });
 
-  it('keeps the composer row to the composer alone in either docking position; adding lives in the toolbar', async () => {
+  it('has no shared composer row in either saved docking position; adding lives in the toolbar', async () => {
     const { loadCommandCenter } = await import('../tests/renderCommandCenter.js');
     const page = await loadCommandCenter();
     for (const side of ['top', 'bottom'] as const) {
       const html = page.render({ commandWall: { composer: { side, align: 'center' } } as never });
-      expect(html, side).toMatch(new RegExp(`<div class="wall-composer-row" data-dock="${side}-center"><div data-stub="composer"></div></div>`));
+      expect(html, side).not.toContain('wall-composer-row');
     }
     const html = page.render();
     expect(html).toMatch(/<div class="wall-add-bar" role="group" aria-label="Add to the wall">/);

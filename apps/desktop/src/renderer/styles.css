@@ -2081,6 +2081,10 @@
 /* Navigation is a still icon; only the corner mascot gets the quiet cycle. */
 .pixel-stationary, .pixel-stationary * { animation: none !important; }
 .pixel-quiet .pixel-mouth { display: none; }
+/* A wall window's status: Nekko with the iPhone Live Activity badge on its lower right. */
+.wall-mascot { position: relative; display: inline-block; width: 20px; height: 20px; flex-shrink: 0; line-height: 0; }
+.wall-mascot-badge { position: absolute; right: -4px; bottom: -3px; display: grid; place-items: center; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px var(--win, var(--surface)); }
+.wall-mascot-badge svg { width: 8px; height: 8px; }
 .pixel-mascot .pixel-quiet { animation: pixel-quiet-hop 30s steps(1, end) infinite; }
 .pixel-mascot .pixel-quiet .pixel-eyes-open { opacity: 0; animation: pixel-quiet-open 24s steps(1, end) infinite; }
 .pixel-mascot .pixel-quiet .pixel-eyes-closed { opacity: 0; animation: pixel-quiet-blink 24s steps(1, end) infinite; }
@@ -3161,6 +3165,23 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 
 /* Keep the send cat clear of the composer edge. */
 .send-avatar { margin-right: 4px; }
+/* Wall windows: Send is a plain arrow (Nekko is in the header). */
+.wall-send { margin-right: 4px; background: var(--accent); color: #fff; }
+.wall-send:disabled { background: transparent; color: var(--ink-faint); }
+/* The wall composer's bar stays one line: the model and Mode buttons keep their labels and truncate, never wrap. */
+.composer-section[data-wall-composer] .composer-bar { min-width: 0; }
+.composer-section[data-wall-composer] [data-composer-foot] { flex: 0 1 auto; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
+.composer-section[data-wall-composer] [data-composer-foot] > * { flex-shrink: 1; min-width: 0; }
+.composer-section[data-wall-composer] [data-composer-foot] button { white-space: nowrap; }
+/* A wall window that is not selected: its composer rests as one row of +, the draft and Send. */
+.composer-section[data-resting] > [role="separator"] { display: none; }
+.composer-section[data-resting] .composer-editing-body { display: flex; align-items: center; }
+.composer-section[data-resting] .composer-editor-wrap { order: 1; flex: 1; min-width: 0; }
+.composer-section[data-resting] .composer-bar { display: contents; }
+.composer-section[data-resting] .composer-bar > * { order: 2; }
+.composer-section[data-resting] .composer-bar > :first-child { order: 0; margin-left: 6px; }
+.composer-section[data-resting] .composer-bar > :not(:first-child):not(:last-child) { display: none; }
+.composer-section[data-resting] .composer-editor-wrap [contenteditable] { min-height: 0; max-height: 2.5rem; padding-block: 0.5rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* The wall composer's panel clips its overflow, so the composer's outer
    focus halo and drop shadow were cut into a band along the bottom edge and

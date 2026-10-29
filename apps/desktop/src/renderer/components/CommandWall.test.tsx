@@ -273,8 +273,8 @@ describe('workspace companions and stable bodies', () => {
       expect(stage).toContain('draft:chat-a');
       expect(stage).toContain('draft:chat-b');
       expect(stage).toContain('data-terminal="term"');
-      // Only the Focus hero is the full chat; every other chat window shows its transcript.
-      expect(stage.match(/data-surface="full"/g)?.length ?? 0, mode).toBe(mode === 'focus' ? 1 : 0);
+      // Tiled, every chat window is the full chat with its own composer; in Focus only the hero is.
+      expect(stage.match(/data-surface="full"/g)?.length ?? 0, mode).toBe(mode === 'focus' ? 1 : 2);
     }
   });
 
