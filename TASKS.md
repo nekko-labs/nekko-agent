@@ -6,6 +6,13 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Vercel builds only website changes (#1328)
+
+Vercel serves only the marketing site and docs but built a deployment for every push to every branch. Spec: [spec/platform/distribution-platforms.md](spec/platform/distribution-platforms.md).
+
+- [x] **T221, Ignored Build Step (2026-10-28).** `vercel.json` `ignoreCommand` runs `scripts/vercel-ignore.sh`, which diffs the site's inputs against `VERCEL_GIT_PREVIOUS_SHA` (falling back to `HEAD^` on previews, and building on production when that SHA is outside Vercel's 10-commit clone). `scripts/build-docs.test.mjs` checks its paths cover every path the Docs site workflow watches; that workflow was already path-filtered. Verified locally: a website commit builds, an iOS-only commit is skipped, production with an unknown previous SHA builds.
+- [ ] **T222, Live check** that a non-website PR shows Vercel's build as ignored and a website PR still gets its preview.
+
 ## Rust migration review follow-ups (added 2026-10-28)
 
 From [the PF14 review](reports/rust-migration-review-2026-10-22.md). Behavior-preserving refactors: no spec change.
