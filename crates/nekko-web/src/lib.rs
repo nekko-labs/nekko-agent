@@ -5,5 +5,6 @@
 pub mod browser;
 pub mod cdp;
 pub mod fetch;
+pub mod netguard;
 
-pub use fetch::{FetchedPage, describe_fetched, fetch_url, html_to_text};
+pub use fetch::{FetchError, FetchedPage, describe_fetched, fetch_url, html_to_text};

@@ -30,7 +30,7 @@ test('auto-merge queues only ready PRs into main, never a stacked layer', () => 
   const merge = read('../.github/workflows/auto-merge.yml');
   assert.ok(merge.includes("!github.event.pull_request.draft && github.event.pull_request.base.ref == 'main'"));
   // A merge method arms classic auto-merge, which never enters a required queue.
-  assert.ok(merge.includes('run: gh pr merge --auto "$PR_URL"'));
+  assert.ok(merge.includes('run: gh pr merge --auto "$PR_URL" ||'));
   assert.ok(!/gh pr merge --auto --(squash|merge|rebase)/.test(merge));
   // ...and an armed request alone did not reliably enter the queue, so it enqueues once gate passes.
   assert.ok(merge.includes('enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head})'));

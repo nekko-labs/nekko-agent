@@ -131,6 +131,11 @@ pub fn ready_line(out: &str) -> Option<(Option<u16>, Vec<String>)> {
 }
 
 /// The address phones dial: the MagicDNS name when known (Android needs one), else the tailnet IP.
+///
+/// Plain `ws://`: everything a phone and the agent say is sealed end to end
+/// (AES-256-GCM under the pairing secret), and since phone protocol 4 a
+/// recorded HELLO or request can't be replayed either: the agent challenges
+/// each connection and requests carry a rising `seq` (nekko-remote `agent.rs`).
 pub fn local_relay_url(name: Option<&str>, ip: &str, port: u16) -> String {
     format!("ws://{}:{port}", name.unwrap_or(ip))
 }
@@ -373,6 +378,13 @@ impl LocalRelay {
         self.status()
     }
 
+    /// Settings > Connections changed: stop, or start again if switched on.
+    pub async fn recheck(self: &Arc<Self>) {
+        if lock(&self.state).enabled {
+            self.ensure().await;
+        }
+    }
+
     /// App shutdown: stop the process, keep the switch as it is.
     pub async fn close(&self) {
         lock(&self.state).watching = false;
@@ -382,6 +394,11 @@ impl LocalRelay {
     /// Running on the current tailnet (and LAN) addresses, or a reason why not.
     async fn ensure(self: &Arc<Self>) {
         let _one = self.ensuring.lock().await;
+        if !nekko_net::allowed("local-relay") {
+            self.kill().await;
+            lock(&self.state).error = Some(nekko_net::blocked_message("local-relay"));
+            return;
+        }
         let nics = interfaces();
         let ip = tailnet_address(&nics);
         let lan = if lock(&self.state).lan { relay_lan_addresses(&nics) } else { Vec::new() };
@@ -528,10 +545,12 @@ impl LocalRelay {
 /// Own the relay process until it exits or is told to stop: close its stdin
 /// (its shutdown signal), then kill it if it lingers.
 async fn supervise(mut child: Child, stop: Arc<Notify>, exited: oneshot::Sender<()>) {
+    // Held here: `Child::wait` closes a stdin it still owns, which the relay reads as "stop".
+    let stdin = child.stdin.take();
     tokio::select! {
         _ = child.wait() => {}
         _ = stop.notified() => {
-            drop(child.stdin.take());
+            drop(stdin);
             if tokio::time::timeout(GRACE, child.wait()).await.is_err() {
                 let _ = child.kill().await;
             }
@@ -547,6 +566,21 @@ mod tests {
     fn golden() -> Value {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/desktop-features.json");
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    // The relay exits when its stdin closes; `Child::wait` used to close it at once,
+    // so the relay quit 1 ms after it was ready (phones: "doesn't answer").
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_supervised_child_keeps_its_stdin_until_stopped() {
+        let child = Command::new("cat").stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
+        let stop = Arc::new(Notify::new());
+        let (tx, mut rx) = oneshot::channel();
+        tokio::spawn(supervise(child, stop.clone(), tx));
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(rx.try_recv().is_err(), "the child exited before it was told to stop");
+        stop.notify_one();
+        tokio::time::timeout(GRACE, rx).await.expect("stops on request").unwrap();
     }
 
     #[test]

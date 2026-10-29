@@ -1,39 +1,39 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="colour">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nekko Agent: your personal, local agent you can trust</title>
+    <title>Nekko Agent: the personal, local agent you can trust</title>
     <meta
       name="description"
-      content="Your personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
+      content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <link rel="canonical" href="https://nekkoagent.com/" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
-    <meta name="theme-color" content="#f3effe" />
-    <!-- apply a saved white/colourful choice before first paint, so the page never flashes the wrong look -->
-    <script>try{if(localStorage.getItem('nekko-theme')==='colour')document.documentElement.dataset.theme='colour';}catch(e){}</script>
+    <meta name="theme-color" content="#9d8ce6" />
+    <!-- Dark is the default (the attribute on <html>). A saved White or Colourful choice replaces it before first paint, so the page never flashes the wrong look -->
+    <script>try{var t=localStorage.getItem('nekko-theme');if(t==='white'||t==='dark'){document.documentElement.dataset.theme=t;document.querySelector('meta[name=theme-color]').content=t==='white'?'#f3effe':'#0d0b18';}}catch(e){}</script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-6" />
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Nekko Agent" />
     <meta property="og:url" content="https://nekkoagent.com/" />
     <meta property="og:locale" content="en_US" />
-    <meta property="og:title" content="Nekko Agent: your personal, local agent you can trust" />
+    <meta property="og:title" content="Nekko Agent: the personal, local agent you can trust" />
     <meta
       property="og:description"
-      content="Your personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
+      content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:alt" content="Nekko Agent: your personal, local agent you can trust" />
+    <meta property="og:image:alt" content="Nekko Agent: the personal, local agent you can trust" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Nekko Agent: your personal, local agent you can trust" />
+    <meta name="twitter:title" content="Nekko Agent: the personal, local agent you can trust" />
     <meta
       name="twitter:description"
-      content="Your personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
+      content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
     <link rel="stylesheet" href="styles.css?v=8" />
@@ -107,6 +107,11 @@
     </script>
   </head>
   <body>
+    <!-- icons used more than once: GitHub's mark (Octicons, MIT) and a cat-ears download tray -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9.5M8 9l4 4 4-4"/><path d="M4 12.5v8h16v-8l-3.2 2.6H7.2Z"/></g></symbol>
+    </svg>
     <!-- drifting starfield, the whole page floats over it -->
     <canvas id="stars" aria-hidden="true" hidden></canvas>
     <div class="nebula" aria-hidden="true"></div>
@@ -124,13 +129,14 @@
         <a href="#roadmap">What's next</a>
         <a href="#download">Download</a>
         <a href="/docs">Docs</a>
-        <a href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener">GitHub</a>
+        <a class="with-gh" href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener"><svg class="gh-ico" width="16" height="16" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
       </nav>
-      <button class="theme-toggle" type="button" aria-pressed="false" aria-label="Colourful look" title="Switch between the White and Colourful looks">
-        <svg class="ic-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <button class="theme-toggle" type="button" aria-label="Colourful look. Switch to the Dark look" title="Switch to the Dark look">
         <svg class="ic-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg class="ic-drop" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3c3.6 4 6 7 6 10.2a6 6 0 0 1-12 0C6 10 8.4 7 12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <svg class="ic-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
       </button>
-      <a class="btn btn-primary btn-sm" href="#download">Download</a>
+      <a class="btn btn-primary btn-sm" href="#download"><svg class="btn-ico" width="20" height="20" aria-hidden="true"><use href="#i-download"/></svg>Download</a>
     </header>
 
     <main id="top">
@@ -140,7 +146,7 @@
         <p class="eyebrow reveal">FREE &amp; OPEN SOURCE · RUNS ON YOUR COMPUTER</p>
         <h1 class="display reveal">Nekko Agent</h1>
         <p class="tagline reveal">
-          Your personal, local agent<br />
+          The personal, local agent<br />
           <span class="grad">you can trust.</span>
         </p>
         <p class="lede reveal">
@@ -153,6 +159,7 @@
                takes the build for this machine, the caret opens every other one -->
           <div class="dl-pick" data-dl-pick>
             <a class="dl-main" data-dl-main href="https://github.com/nekko-labs/nekko-agent/releases/latest">
+              <svg class="btn-ico" width="20" height="20" aria-hidden="true"><use href="#i-download"/></svg>
               <span class="dl-main-t" data-dl-title>Download Nekko Agent</span>
               <small class="dl-main-v" data-dl-ver></small>
             </a>
@@ -168,10 +175,11 @@
             >
               <svg viewBox="0 0 12 8" width="12" aria-hidden="true"><path d="M1 1.5 L6 6.5 L11 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
+            <svg class="dl-sparkle" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 10.5V3"/><path d="M4.6 11.4 9.4 6.6"/><path d="M5.5 14H10.5"/></svg>
             <div class="dl-menu glass" id="heroDlMenu" data-dl-menu role="menu" aria-labelledby="heroDlCaret" hidden></div>
           </div>
           <a class="btn btn-ghost" href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener">
-            View GitHub repo <span class="arr" aria-hidden="true">↗</span>
+            <svg class="gh-ico" width="16" height="16" aria-hidden="true"><use href="#i-github"/></svg> View GitHub repo <span class="arr" aria-hidden="true">↗</span>
           </a>
         </div>
         <p class="micro reveal">No account needed to use AI on your computer · Works offline after setup · MIT licensed</p>
@@ -199,7 +207,7 @@
       <!-- ===== app window mock rises out of the hero band ===== -->
       <section class="showcase reveal" aria-label="Illustration of the workspace, not a live session">
                 <button class="media media-hero" type="button" aria-label="Product screenshot coming soon. Opens larger.">
-          <span>Product screenshot</span>
+          <span>Product screenshot</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span>
         </button>
       </section>
 
@@ -224,7 +232,7 @@
             </ul>
             <a class="card-link" href="#features">How the controls work <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video coming soon: choosing a model and inspecting context. Opens larger."><span>Demo · In control</span></button>
+          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video coming soon: choosing a model and inspecting context. Opens larger."><span>Demo · In control</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
         </article>
 
         <article class="panel glass reveal" id="experience">
@@ -239,7 +247,7 @@
             </ul>
             <a class="card-link" href="#editions">Desktop, browser, Docker or terminal <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="experience" aria-label="Demo video coming soon: the workspace, diff review and terminal. Opens larger."><span>Demo · The workspace</span></button>
+          <button class="media panel-media" type="button" data-demo="experience" aria-label="Demo video coming soon: the workspace, diff review and terminal. Opens larger."><span>Demo · The workspace</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
         </article>
 
         <article class="panel glass reveal panel-fast" id="fast">
@@ -249,7 +257,7 @@
             <p>Nekko runs models with llama.cpp under a Rust core tuned for the way agents actually work: repeated edits, many chats open, long contexts. Same model file, same machine, measured the same way as Ollama and LM Studio.</p>
             <a class="card-link" href="/docs/benchmarks">Every number, wins and losses <span aria-hidden="true">→</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="fast" aria-label="Demo video coming soon: a code edit streaming side by side. Opens larger."><span>Demo · Speed</span></button>
+          <button class="media panel-media" type="button" data-demo="fast" aria-label="Demo video coming soon: a code edit streaming side by side. Opens larger."><span>Demo · Speed</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
 
           <!-- benchmark: three measures, higher is better, from docs/benchmarks.md (2026-09-30) -->
           <figure class="bench" aria-describedby="bench-note">
@@ -294,7 +302,7 @@
             </ul>
             <a class="card-link" href="/docs/privacy-shield">How Privacy Shield works <span aria-hidden="true">→</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="secure" aria-label="Demo video coming soon: Privacy Shield replacing private values. Opens larger."><span>Demo · Secure</span></button>
+          <button class="media panel-media" type="button" data-demo="secure" aria-label="Demo video coming soon: Privacy Shield replacing private values. Opens larger."><span>Demo · Secure</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
         </article>
 
         <article class="panel glass reveal" id="convenient">
@@ -309,7 +317,7 @@
             </ul>
             <a class="card-link" href="#beta">Get early access <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video coming soon: the phone app approving a command. Opens larger."><span>Demo · On the go</span></button>
+          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video coming soon: the phone app approving a command. Opens larger."><span>Demo · On the go</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
         </article>
 
         <p class="micro center reveal panels-foot">Also in the box: scheduled agents and triggers, Whisper dictation on your computer, cost tracking for cloud models, skills and sub-agents, and connectors for GitHub, Linear, Slack, Discord, Gmail and Drive.</p>
@@ -551,6 +559,7 @@
         <div class="dl-cta reveal">
           <div class="dl-pick" data-dl-pick>
             <a class="dl-main" data-dl-main href="https://github.com/nekko-labs/nekko-agent/releases/latest">
+              <svg class="btn-ico" width="20" height="20" aria-hidden="true"><use href="#i-download"/></svg>
               <span class="dl-main-t" data-dl-title>Download Nekko Agent</span>
               <small class="dl-main-v" data-dl-ver></small>
             </a>
@@ -566,6 +575,7 @@
             >
               <svg viewBox="0 0 12 8" width="12" aria-hidden="true"><path d="M1 1.5 L6 6.5 L11 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
+            <svg class="dl-sparkle" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 10.5V3"/><path d="M4.6 11.4 9.4 6.6"/><path d="M5.5 14H10.5"/></svg>
             <div class="dl-menu glass" id="dlMenu" data-dl-menu role="menu" aria-labelledby="dlCaret" hidden></div>
           </div>
           <p class="micro dl-note" id="dlNote">All builds live on GitHub Releases.</p>
@@ -596,7 +606,7 @@
       <span class="footer-brand"><img class="brand-mark" src="/logo.svg?v=nekko-agent-6" alt="" width="26" height="20" /> NEKKO AGENT</span>
       <span class="micro">nekkoagent.com · Backup: nekkoagent.com · MIT · Nekko Labs</span>
       <a href="/docs">Docs</a>
-      <a href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener">github.com/nekko-labs/nekko-agent</a>
+      <a class="with-gh" href="https://github.com/nekko-labs/nekko-agent" target="_blank" rel="noopener"><svg class="gh-ico" width="16" height="16" aria-hidden="true"><use href="#i-github"/></svg>github.com/nekko-labs/nekko-agent</a>
     </footer>
 
     <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged view" hidden>

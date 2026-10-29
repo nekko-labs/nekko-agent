@@ -89,7 +89,7 @@ struct TerminalsView: View {
                 Text("Runs ssh on \(store.computerName) with its own keys and config; nothing about the keys reaches this phone.")
             }
         }
-        .refreshable { await model.load() }
+        .pawRefreshable { await model.load() }
         .overlay { if busy { ProgressView() } }
     }
 
@@ -231,7 +231,7 @@ struct TerminalScreenView: View {
                 }
                 .defaultScrollAnchor(.bottom)
                 .onChange(of: session.version) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
-                .refreshable { await session.refresh() }
+                .pawRefreshable { await session.refresh() }
             }
             .onAppear { size = geo.size }
             .onChange(of: geo.size) { _, s in size = s }

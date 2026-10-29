@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { PhoneAccessError, redactPhoneResult, screenPhoneCall } from './phone-access.js';
-import { PHONE_GIT_VIEW } from './phone-git.js';
+import { IpcChannels } from './ipc.js';
+import {
+  PHONE_CHANGE_CHANNELS,
+  PHONE_READ_CHANNELS,
+  PhoneAccessError,
+  callFromPhone,
+  phoneAlwaysDenied,
+  phoneChannelAllowed,
+  phoneChannelClass,
+  redactPhoneResult,
+  screenPhoneCall,
+} from './phone-access.js';
+import { PHONE_GIT_CHANNELS, PHONE_GIT_VIEW } from './phone-git.js';
 
 const code = (fn: () => unknown) => {
   try {
@@ -29,6 +40,23 @@ const REST: Record<string, unknown[]> = {
 };
 
 describe('git on a phone (IO-33 FA-2)', () => {
+  it('classes reads and changes as decided', () => {
+    expect(PHONE_READ_CHANNELS.filter((c) => PHONE_GIT_CHANNELS.includes(c)).sort()).toEqual(
+      ['git:branches', 'git:compare', 'git:diff', 'git:log', 'git:show', 'pr:checks', 'pr:diff', 'workspace:gitStatus'].sort(),
+    );
+    expect(PHONE_CHANGE_CHANNELS.filter((c) => PHONE_GIT_CHANNELS.includes(c)).sort()).toEqual(
+      ['git:commit', 'git:commitMessage', 'git:mergeAbort', 'git:push', 'git:stage', 'git:switch', 'git:unstage', 'pr:action', 'pr:create'].sort(),
+    );
+    // The model-written message spends tokens: a Change, so Face ID is asked.
+    expect(phoneChannelClass('git:commitMessage')).toBe('change');
+    for (const c of PHONE_GIT_CHANNELS) {
+      expect(phoneChannelAllowed(c), c).toBe(true);
+      expect(Object.values(IpcChannels), c).toContain(c);
+    }
+    // The stack calls restack several branches: still the desktop's.
+    for (const c of ['pr:continueStack', 'pr:linkStack']) expect(phoneAlwaysDenied(c), c).toBe(true);
+  });
+
   it('only reaches a chat folder, never a saved folder by id', () => {
     for (const c of WS_CHANNELS) {
       const rest = REST[c] ?? [];
@@ -37,6 +65,24 @@ describe('git on a phone (IO-33 FA-2)', () => {
         expect(code(() => screenPhoneCall(c, [ws, ...rest])), `${c} ${JSON.stringify(ws)}`).toBe('value-invalid');
       }
     }
+  });
+
+  it('passes only the checked fields to the computer', async () => {
+    const calls: unknown[][] = [];
+    const dispatch = (channel: string, args: unknown[]) => {
+      calls.push([channel, args]);
+      return { ok: true, message: 'done' };
+    };
+    await callFromPhone(dispatch, 'git:push', ['session:s1', { setUpstream: true }]);
+    await callFromPhone(dispatch, 'workspace:gitStatus', ['session:s1']);
+    await callFromPhone(dispatch, 'pr:action', ['https://github.com/o/r/pull/1', 'approve']);
+    expect(calls).toEqual([
+      ['git:push', ['session:s1', { setUpstream: true }]],
+      ['workspace:gitStatus', ['session:s1', false]],
+      ['pr:action', ['https://github.com/o/r/pull/1', 'approve']],
+    ]);
+    await expect(callFromPhone(dispatch, 'git:push', ['session:s1', { force: true }])).rejects.toThrow('(option-denied): force');
+    expect(calls).toHaveLength(3);
   });
 
   it('keeps a whole answer under the byte cap', () => {

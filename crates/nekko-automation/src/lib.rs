@@ -4,6 +4,7 @@
 //! (`tests/golden`, edited by hand per docs/runbooks/golden-fixtures.md).
 
 pub mod json;
+pub mod run_policy;
 pub mod skill_steps;
 pub mod tasks;
 pub mod templates;

@@ -281,3 +281,115 @@ async fn a_scheduler_fire_from_a_stale_read_does_not_run_again() {
     assert_eq!(svc.list()[0]["runCount"], json!(1));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A fake engine with a synthetic activity signal in place of the OS reading.
+struct Watched(Fake, Mutex<Value>);
+
+impl TaskHost for Watched {
+    fn settings(&self) -> BoxFut<'_, Value> {
+        self.0.settings()
+    }
+    fn create_session(
+        &self,
+        workspace_id: Option<Value>,
+        fields: Vec<(&'static str, Value)>,
+    ) -> BoxFut<'_, Result<String, String>> {
+        self.0.create_session(workspace_id, fields)
+    }
+    fn get_session(&self, id: &str) -> Option<Value> {
+        self.0.get_session(id)
+    }
+    fn delete_session(&self, id: &str) -> BoxFut<'_, ()> {
+        self.0.delete_session(id)
+    }
+    fn send_chat(&self, opts: Value) -> BoxFut<'_, Result<(), String>> {
+        self.0.send_chat(opts)
+    }
+    fn notify(&self, list: &Value) {
+        self.0.notify(list)
+    }
+    fn activity(&self, _idle_after_secs: f64) -> BoxFut<'_, Option<Value>> {
+        let a = self.1.lock().unwrap().clone();
+        Box::pin(async move { Some(a) })
+    }
+}
+
+const ACTIVE: &str = r#"{ "userActive": true, "strain": [] }"#;
+const AWAY: &str = r#"{ "userActive": false, "strain": [] }"#;
+
+fn watched(name: &str) -> (std::path::PathBuf, Arc<Watched>, Arc<Mutex<f64>>, Arc<Tasks>) {
+    let dir = std::env::temp_dir().join(format!("nekko-automation-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let host = Arc::new(Watched(Fake::default(), Mutex::new(serde_json::from_str(ACTIVE).unwrap())));
+    *host.0.settings.lock().unwrap() = json!({ "providers": [
+        { "id": "engine", "kind": "llamacpp", "baseUrl": "http://127.0.0.1:11500/v1", "enabled": true },
+        { "id": "cloud", "kind": "openai", "baseUrl": "https://api.openai.com/v1", "enabled": true },
+    ]});
+    let now = Arc::new(Mutex::new(1_000.0));
+    let clock = now.clone();
+    let svc = Tasks::new(&dir, host.clone(), Arc::new(move || *clock.lock().unwrap()), Arc::new(|| "t1".to_string()));
+    (dir, host, now, svc)
+}
+
+async fn nightly(svc: &Arc<Tasks>, provider: &str) {
+    let input = json!({ "title": "Nightly", "kind": "recurring", "prompt": "Summarize", "intervalMs": 3_600_000, "providerId": provider, "modelId": "m1" });
+    svc.create(&input).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_local_task_waits_while_the_user_is_active_and_runs_once_they_are_away() {
+    let (dir, host, now, svc) = watched("idle-gate");
+    nightly(&svc, "engine").await;
+    svc.fire_if_due("t1", 1_000.0).await;
+    assert!(host.0.turns.lock().unwrap().is_empty(), "held while the user is active");
+    assert_eq!(svc.list()[0]["waitingSince"], json!(1000));
+    // Held: the scheduler does not pick it again until the next tick.
+    assert!(svc.due(1_001.0).is_empty());
+    let next_look = 1_000.0 + tasks::TICK.as_millis() as f64;
+    assert_eq!(svc.due(next_look), vec!["t1".to_string()]);
+
+    *host.1.lock().unwrap() = serde_json::from_str(AWAY).unwrap();
+    *now.lock().unwrap() = next_look;
+    svc.fire_if_due("t1", next_look).await;
+    assert_eq!(host.0.turns.lock().unwrap().len(), 1, "runs once the user is away");
+    assert_eq!(host.0.turns.lock().unwrap()[0]["background"], json!("idle"), "and steps aside if they return");
+    let t = &svc.list()[0];
+    assert!(t.get("waitingSince").is_none() && t.get("lastRunLowPriority").is_none(), "{t}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn a_task_kept_waiting_past_the_cap_runs_in_low_priority() {
+    let (dir, host, now, svc) = watched("idle-cap");
+    nightly(&svc, "engine").await;
+    let late = 1_000.0 + nekko_automation::run_policy::WAIT_CAP_MS;
+    *now.lock().unwrap() = late;
+    svc.fire_if_due("t1", late).await;
+    assert_eq!(host.0.turns.lock().unwrap().len(), 1);
+    let t = &svc.list()[0];
+    assert_eq!(t["lastRunLowPriority"], json!(true));
+    assert_eq!(t["lastRunWaitedMs"], json!(7_200_000), "two hours");
+    assert_eq!(host.0.turns.lock().unwrap()[0]["background"], json!("lowPriority"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn cloud_tasks_and_run_now_do_not_wait() {
+    let (dir, host, _now, svc) = watched("idle-cloud");
+    nightly(&svc, "cloud").await;
+    svc.fire_if_due("t1", 1_000.0).await;
+    assert_eq!(host.0.turns.lock().unwrap().len(), 1, "a cloud model does not load this machine");
+    assert!(host.0.turns.lock().unwrap()[0].get("background").is_none(), "and never steps aside");
+    // A local task the person runs by hand goes at once.
+    svc.update("t1", &json!({ "providerId": "engine" })).unwrap();
+    svc.fire("t1").await;
+    assert_eq!(host.0.turns.lock().unwrap().len(), 2);
+    assert!(host.0.turns.lock().unwrap()[1].get("background").is_none(), "a person's run does not step aside");
+    // Its own policy wins over the default.
+    svc.update("t1", &json!({ "runPolicy": "lowPriority", "nextRunAt": 1_000 })).unwrap();
+    svc.fire_if_due("t1", 1_000.0).await;
+    assert_eq!(host.0.turns.lock().unwrap().len(), 3);
+    assert_eq!(svc.list()[0]["lastRunLowPriority"], json!(true));
+    let _ = std::fs::remove_dir_all(&dir);
+}

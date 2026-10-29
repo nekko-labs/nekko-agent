@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron';
+import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import { type EngineStatus, IpcChannels } from '@nekko-agent/shared';
 import type { EngineProcess } from './engine-process.js';
 import type { ShellBridge, ShellDialog } from './agentBrowser.js';
@@ -61,6 +61,7 @@ export function shellBridge(quit: () => void): ShellBridge {
     },
     dialog: drawDialog,
     quitForUpdate: () => setImmediate(quit),
+    quit: () => setImmediate(quit),
   };
 }
 
@@ -70,8 +71,19 @@ export function shellBridge(quit: () => void): ShellBridge {
  * (windows, menus, the tray, the in-app browser and capture bridge) stays in
  * main by nature and has no channel here; every other channel is nekkod's.
  */
-export function registerIpc(engine: EngineProcess): void {
+/**
+ * Whether an IPC call comes from one of the app's own windows, from its top
+ * frame: never an embedded frame or any other web contents (the in-app
+ * browser's pages), which must not learn the engine's token or stop it.
+ */
+export function fromAppMainFrame(event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>, isAppWindow: (sender: WebContents) => boolean): boolean {
+  const main = event.sender?.mainFrame;
+  return isAppWindow(event.sender) && main != null && event.senderFrame === main;
+}
+
+export function registerIpc(engine: EngineProcess, isAppWindow: (sender: WebContents) => boolean): void {
   ipcMain.handle(ENGINE_ENDPOINT_CHANNEL, async (event, operation = 'connection retry') => {
+    if (!fromAppMainFrame(event, isAppWindow)) throw new Error('The engine endpoint is only given to the application window.');
     const requester = `renderer ${event.sender.id} (${event.sender.getURL()})`;
     if (!engine.running) {
       console.info(`Nekko service is stopped; requested by ${requester}: ${operation}`);
@@ -85,7 +97,8 @@ export function registerIpc(engine: EngineProcess): void {
     }
   });
   let controlling = false;
-  ipcMain.handle(SERVICE_CONTROL_CHANNEL, async (_event, action: ServiceAction) => {
+  ipcMain.handle(SERVICE_CONTROL_CHANNEL, async (event, action: ServiceAction) => {
+    if (!fromAppMainFrame(event, isAppWindow)) throw new Error('Service controls are only available to the application window.');
     if (!['status', 'start', 'stop', 'restart', 'model-start', 'model-stop'].includes(action)) throw new Error('Unknown service action');
     if (action !== 'status') {
       if (controlling) throw new Error('A service action is already in progress');

@@ -41,6 +41,83 @@ export interface ModelFacts {
   loadedContext?: number;
 }
 
+/**
+ * What the weights are made of, as shares of every tensor byte in the GGUF.
+ * Experts are most of a mixture-of-experts model's bytes and few of its reads
+ * per token, which is why they are the part worth moving to RAM.
+ */
+export interface WeightLayout {
+  expertShare: number;
+  ffnShare: number;
+  /** Lookup tables llama.cpp can page from the file (`--lazy-mode`). */
+  tableShare: number;
+  experts?: number;
+  expertsUsed?: number;
+}
+
+/** The load drawer's Hybrid presets. */
+export type SplitPreset = 'custom' | 'fill' | 'experts' | 'coding' | 'context-ram';
+
+/** One load in the load drawer's terms, for the placement planner. */
+export interface PlacementRequest {
+  runOn: 'gpu' | 'hybrid' | 'cpu';
+  /** Context each session gets; the launch asks for this times `sessions`. */
+  contextTokens: number;
+  sessions: number;
+  kvCacheDtype: KvCacheDtype;
+  gpuLayers?: number;
+  cpuMoeLayers?: number;
+  cpuFfnLayers?: number;
+  kvOnGpu?: boolean;
+  mmap?: boolean;
+  pin?: boolean;
+  tablesOnDisk?: boolean;
+  moeCacheBytes?: number;
+}
+
+export interface PlacementShare {
+  weightsBytes: number;
+  kvCacheBytes: number;
+  overheadBytes: number;
+  /** RAM only: the GPU-resident part of a pinned file, held a second time. */
+  pinnedBytes: number;
+}
+
+export interface PlacementPool {
+  totalBytes: number;
+  /** In use by everything else right now. */
+  otherBytes: number;
+  /** What this model may use (RAM keeps 2 GB back for the system). */
+  availBytes: number;
+  model: PlacementShare;
+}
+
+/** Where every byte of a load lands: graphics memory, system memory or the SSD. */
+export interface PlacementPlan {
+  /** `disk`: it works, reading some weights from the SSD as needed. */
+  verdict: 'fits' | 'tight' | 'disk' | 'wont-load' | 'unknown';
+  reason?: 'vram' | 'ram' | 'context-over-max' | 'missing-metadata';
+  shortByBytes?: number;
+  /** One pool (Apple Silicon): `vram` is the whole of it and `ram` holds only paged tables. */
+  unified: boolean;
+  deviceName: string | null;
+  vram: PlacementPool;
+  ram: PlacementPool;
+  disk: { tableBytes: number; overflowBytes: number };
+  /** VRAM left after the load and its margin, for the expert cache. */
+  spareVramBytes: number;
+}
+
+export type RecommendGoal = 'speed' | 'context' | 'fill';
+
+/** The solver's pick, with one plain sentence per choice. */
+export interface Recommendation {
+  request: Required<PlacementRequest>;
+  plan: PlacementPlan;
+  why: Array<{ field: string; value: string; sentence: string }>;
+}
+
+
 export interface FitRequest {
   contextTokens: number;
   parallelSlots: number;

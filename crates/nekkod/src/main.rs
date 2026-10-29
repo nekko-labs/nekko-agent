@@ -1,15 +1,21 @@
 //! `nekkod`, the Nekko Agent engine daemon.
 //!
-//! Started by the desktop app with a JSON config in `NEKKOD_CONFIG` (see
-//! `config.rs`). Prints one line, `NEKKOD_READY {"port":N,"pid":P}`, once it
-//! is listening; everything else goes to stderr. Exits when its stdin closes.
+//! Started by the desktop app with `--config-stdin` and a JSON config as the
+//! first line of its stdin (see `config.rs`). Prints one line,
+//! `NEKKOD_READY {"port":N,"pid":P}`, once it is listening; everything else
+//! goes to stderr. Shuts down when its stdin closes or on SIGTERM, SIGHUP or
+//! Ctrl-C, ending everything it started (`procgroup.rs`). One daemon per data
+//! directory (`datalock.rs`): a second exits with code 3.
 
 mod accounts;
+mod activity;
 mod admission;
 mod agent_logs;
 mod api_server;
+mod artifacts;
 mod auto_continue;
 mod automation;
+mod background;
 
 mod boot;
 mod catalog;
@@ -18,13 +24,17 @@ mod claude_policy;
 mod cli_install;
 mod compaction;
 mod config;
+mod connections;
+mod connectivity;
 mod connectors;
 mod context;
+mod datalock;
 mod decide;
 mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod feedback;
 mod gcp;
 mod harness;
 mod hub;
@@ -50,14 +60,22 @@ mod remote_image;
 mod repository_review;
 mod resource_queue;
 mod routes;
+// The runner supervisor that calls into it lands with the VM pool (T211, T212).
+// Unix only: VMs run only on macOS, and the NAT is built on Unix sockets.
+#[cfg(unix)]
+#[allow(dead_code)]
+mod runner;
 mod runtimes;
 mod sandbox;
+mod security;
 mod settings;
 mod side;
 mod sideband;
 mod skill_sources;
 mod small_services;
 mod spawn;
+mod speeds;
+mod telemetry;
 mod tooling;
 mod turns;
 mod voice;
@@ -81,6 +99,7 @@ pub fn random_token() -> String {
 }
 
 fn main() -> std::process::ExitCode {
+    machine::mark_started();
     let cfg = match config::load() {
         Ok(c) => c,
         Err(e) => {
@@ -88,17 +107,36 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(2);
         }
     };
-    // The token must not leak into the environment of every shell we start.
-    // SAFETY: no other thread exists yet.
-    unsafe { std::env::remove_var("NEKKOD_CONFIG") };
+    // One daemon per data directory, held until the process ends.
+    let _lock = match cfg.data_dir.as_deref().map(|d| datalock::acquire(std::path::Path::new(d), LOCK_WAIT)) {
+        Some(Err(e)) => {
+            eprintln!("nekkod: {e}");
+            return std::process::ExitCode::from(datalock::LOCKED_EXIT);
+        }
+        Some(Ok(f)) => Some(f),
+        None => None,
+    };
     // `<dataDir>/logs/nekkod.log` (logs.rs): stderr teed to a rotating file,
     // held until main returns so the last lines are copied out.
     let _daemon_log = cfg.data_dir.as_ref().and_then(|d| logs::start_daemon_log(&std::path::Path::new(d).join("logs")));
     logs::note(&format!("nekkod {} starting, pid {}", env!("CARGO_PKG_VERSION"), std::process::id()));
     procgroup::init();
+    // Each job VM's NAT holds a socket per guest flow; 256 runs out.
+    #[cfg(unix)]
+    runner::raise_nofile();
+    // What a predecessor killed outright left running goes first; then keep
+    // our own record for the next one.
+    if let Some(d) = &cfg.data_dir {
+        let run = procgroup::run_dir(std::path::Path::new(d));
+        procgroup::reap_leftovers(&run);
+        procgroup::track(&run);
+    }
 
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
-    match rt.block_on(run(cfg)) {
+    let result = rt.block_on(run(cfg));
+    // Whatever the shutdown above did not stop (or a failed start left).
+    procgroup::sweep(SWEEP_GRACE);
+    match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("nekkod: {e}");
@@ -107,7 +145,20 @@ fn main() -> std::process::ExitCode {
     }
 }
 
+/// How long a second daemon waits for the data directory's lock: long
+/// enough for a predecessor that is shutting down to finish.
+const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+/// Open connections get this long to finish once shutdown starts.
+const DRAIN: std::time::Duration = std::time::Duration::from_secs(2);
+/// A shutdown that takes longer than this is cut short (children ended, exit 1).
+const SHUTDOWN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(8);
+/// Children still running at the end get this long after SIGTERM before SIGKILL.
+const SWEEP_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
+
 async fn run(cfg: config::Config) -> anyhow::Result<()> {
+    // Before anything starts children: SIGTERM and SIGHUP stop the daemon
+    // gracefully instead of killing it with them still running.
+    let signals = Signals::new()?;
     let listener = tokio::net::TcpListener::bind(&cfg.listen).await?;
     let port = listener.local_addr()?.port();
 
@@ -138,6 +189,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Err(e) => eprintln!("nekkod: Claude sign-in cleanup failed: {e}"),
         }
     }
+    // Settings > Connections: the switch, before anything below reaches the network.
+    connections::start(cfg.data_dir.as_deref().map(std::path::Path::new), settings.as_ref());
     // Voice reads its settings from the daemon's store.
     let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
         let store = s.store.clone();
@@ -164,10 +217,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             Some(nekko_cloud::Cloud::new(nekko_cloud::Options {
                 vault: nekko_cloud::vault::default_vault(&dir),
                 dir,
-                api_url: std::env::var("NEKKO_CLOUD_URL")
-                    .ok()
-                    .filter(|u| !u.is_empty())
-                    .unwrap_or_else(|| "https://nekko-agent-api.fly.dev".into()),
+                api_url: feedback::cloud_url(),
                 device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
                 sessions: store.clone(),
                 publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
@@ -204,6 +254,17 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let machine =
         Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
     let library = settings.clone().map(|s| library::Library::new(s, machine.clone(), engine.clone()));
+    if let Some(library) = &library {
+        let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+        // Abandoned downloads can be GBs each (#1035).
+        let dir = std::path::PathBuf::from(library.models_dir());
+        tokio::task::spawn_blocking(move || {
+            let freed = downloads::sweep_stale_parts(&dir, std::time::SystemTime::now());
+            if freed > 0 {
+                logs::note(&format!("nekkod: removed {freed} bytes of abandoned downloads"));
+            }
+        });
+    }
     let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
         let fetch =
             downloads::Rebased(nekko_engine::download::HttpFetch(reqwest::Client::new()), cfg.hugging_face_url.clone());
@@ -276,12 +337,22 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             }
             _ => None,
         },
-        machine,
+        machine: machine.clone(),
         runtimes: runtimes.clone(),
         library: library.clone(),
         downloads: model_downloads.clone(),
         installs: installs.clone(),
         server: server.clone(),
+        #[cfg(unix)]
+        runners: cfg.data_dir.clone().map(|d| {
+            runner::Runners::start(
+                d.into(),
+                machine.clone(),
+                Box::new(read_settings(&settings)),
+                hub.clone(),
+                cfg.github_api_url.clone(),
+            )
+        }),
         resource_queue: cfg.data_dir.clone().map(|d| {
             Arc::new(resource_queue::ResourceQueue::new(
                 std::path::PathBuf::from(d),
@@ -297,6 +368,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         )),
         automation: automation.clone(),
         remote: remote.clone(),
+        security: Arc::new(security::Security::new(remote.security_store(), nekko_remote::system_clock())),
         sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
@@ -326,6 +398,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         cloud.start(std::time::Duration::from_secs(60));
     }
     routes::forward_terminal_events(&ctx);
+    ctx.turns.set_background(background::Background::new(
+        ctx.machine.clone(),
+        ctx.admission.clone(),
+        ctx.settings.as_ref().map(|s| s.store.clone()),
+        ctx.hub.clone(),
+    ));
     if let Some(adm) = ctx.admission.clone() {
         let c = ctx.clone();
         ctx.turns.set_preparer(Arc::new(move |payload| {
@@ -398,6 +476,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let c = ctx.clone();
         tokio::spawn(async move { d.start(&c).await });
     }
+    connections::follow(ctx.clone());
+    telemetry::start(ctx.clone());
     // Claude Agent chats' idle Claude Code children are ended after 15 minutes.
     ctx.turns.harness.start_reaper();
     // Claude Agent's approval bridge: the app's own CLI, else `nekko-agent` on PATH.
@@ -424,10 +504,40 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         out.flush()?;
     }
 
-    axum::serve(listener, router).with_graceful_shutdown(shutdown_signal(cfg.exit_on_stdin_close)).await?;
+    // Serve until told to stop; open connections (the UI's sockets) then get
+    // a moment to finish, and cleanup goes ahead either way.
+    let (drain_tx, drain_rx) = tokio::sync::oneshot::channel::<()>();
+    let serve = axum::serve(listener, router).with_graceful_shutdown(async {
+        let _ = drain_rx.await;
+    });
+    let mut serve = std::pin::pin!(std::future::IntoFuture::into_future(serve));
+    let mut signals = signals;
+    tokio::select! {
+        r = &mut serve => r?,
+        why = shutdown_signal(cfg.exit_on_stdin_close, &mut signals) => {
+            logs::note(&format!("nekkod: shutting down ({why})"));
+            // A second signal, or a shutdown that hangs, ends it hard.
+            tokio::spawn(async move {
+                let why = signals.next().await;
+                procgroup::hard_exit(&format!("{why} during shutdown"));
+            });
+            std::thread::spawn(|| {
+                std::thread::sleep(SHUTDOWN_DEADLINE);
+                procgroup::hard_exit("shutdown took too long");
+            });
+            let _ = drain_tx.send(());
+            if tokio::time::timeout(DRAIN, &mut serve).await.is_err() {
+                eprintln!("nekkod: open connections did not close; shutting down anyway");
+            }
+        }
+    }
 
     if let Some(d) = &after.desktop {
         d.shutdown(&after).await;
+    }
+    #[cfg(unix)]
+    if let Some(r) = &after.runners {
+        r.shutdown().await;
     }
     remote.stop();
     if let Some(m) = &messaging {
@@ -447,8 +557,46 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Resolves when the app that started us is gone (stdin closed) or on Ctrl-C.
-async fn shutdown_signal(watch_stdin: bool) {
+/// The signals that stop the daemon: Ctrl-C everywhere, SIGTERM and SIGHUP on Unix.
+struct Signals {
+    #[cfg(unix)]
+    term: tokio::signal::unix::Signal,
+    #[cfg(unix)]
+    hup: tokio::signal::unix::Signal,
+}
+
+impl Signals {
+    fn new() -> std::io::Result<Self> {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            Ok(Self { term: signal(SignalKind::terminate())?, hup: signal(SignalKind::hangup())? })
+        }
+        #[cfg(not(unix))]
+        Ok(Self {})
+    }
+
+    /// The next one, by name.
+    async fn next(&mut self) -> &'static str {
+        #[cfg(unix)]
+        {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => "SIGINT",
+                _ = self.term.recv() => "SIGTERM",
+                _ = self.hup.recv() => "SIGHUP",
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+            "Ctrl-C"
+        }
+    }
+}
+
+/// Resolves when the app that started us is gone (stdin closed) or on a
+/// stop signal, with which.
+async fn shutdown_signal(watch_stdin: bool, signals: &mut Signals) -> &'static str {
     let stdin_closed = async {
         if !watch_stdin {
             return std::future::pending::<()>().await;
@@ -468,7 +616,8 @@ async fn shutdown_signal(watch_stdin: bool) {
         let _ = rx.await;
     };
     tokio::select! {
-        _ = stdin_closed => {}
-        _ = tokio::signal::ctrl_c() => {}
+        _ = stdin_closed => "stdin closed",
+        why = signals.next() => why,
+        _ = small_services::QUIT.notified() => "app:quit from a phone",
     }
 }

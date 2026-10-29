@@ -15,7 +15,8 @@
 //!    ranges are refused. The check runs inside the client's own DNS
 //!    resolver, so the address that is checked is the address that is dialed
 //!    (no DNS-rebinding gap), and no proxy is used (a proxy would resolve the
-//!    name itself);
+//!    name itself). The rules live in `nekko_web::netguard`, which
+//!    `fetch_url` shares;
 //!  - redirects are followed by hand, at most five, each hop checked again;
 //!  - no cookies, no auth, no referrer, no connection reuse, no transparent
 //!    decompression; a fixed user agent;
@@ -30,8 +31,8 @@ use futures_util::StreamExt;
 use futures_util::future::BoxFuture;
 use futures_util::stream::BoxStream;
 use nekko_tools::path::native as path;
+use nekko_web::netguard::{self, Blocked, NotFound, PublicOnly};
 use serde_json::{Value, json};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use url::Url;
@@ -137,124 +138,12 @@ pub fn check_image_url(raw: &str) -> Result<Url, ImageError> {
     if url.port().is_some_and(|p| p != 80 && p != 443) {
         return Err(err("blocked", "Images are only loaded from standard web ports."));
     }
-    let hostname = url.host_str().unwrap_or_default();
-    let hostname = hostname.strip_prefix('[').unwrap_or(hostname);
-    let host = hostname.strip_suffix(']').unwrap_or(hostname).to_lowercase();
-    if host.is_empty()
-        || host == "localhost"
-        || host.ends_with(".localhost")
-        || host.ends_with(".local")
-        || host.ends_with(".internal")
-        || host.ends_with(".home.arpa")
-    {
-        return Err(err("blocked", LOCAL));
-    }
-    if is_ip(&host) && !is_public_address(&host) {
+    // localhost, *.local, *.internal, *.home.arpa, and private or local
+    // address literals (however written: `0x7f.1` is 127.0.0.1).
+    if netguard::local_host(&url).is_some() {
         return Err(err("blocked", LOCAL));
     }
     Ok(url)
-}
-
-/// `net.isIP(s) !== 0`.
-fn is_ip(s: &str) -> bool {
-    s.parse::<IpAddr>().is_ok()
-}
-
-/// `publicIPv4`.
-fn public_ipv4(ip: Ipv4Addr) -> bool {
-    let [a, b, c, _] = ip.octets();
-    if a == 0 || a == 10 || a == 127 || a >= 224 {
-        return false; // this-net, private, loopback, multicast + reserved
-    }
-    if a == 100 && (64..=127).contains(&b) {
-        return false; // CGNAT
-    }
-    if a == 169 && b == 254 {
-        return false; // link-local, cloud metadata
-    }
-    if a == 172 && (16..=31).contains(&b) {
-        return false;
-    }
-    if a == 192 && b == 168 {
-        return false;
-    }
-    if a == 192 && b == 0 && (c == 0 || c == 2) {
-        return false; // IETF, TEST-NET-1
-    }
-    if a == 198 && (b == 18 || b == 19) {
-        return false; // benchmarking
-    }
-    if a == 198 && b == 51 && c == 100 {
-        return false; // TEST-NET-2
-    }
-    if a == 203 && b == 0 && c == 113 {
-        return false; // TEST-NET-3
-    }
-    true
-}
-
-/// The IPv4 address in an IPv6 address's last two groups.
-fn tail_ipv4(g: &[u16; 8]) -> Ipv4Addr {
-    Ipv4Addr::new((g[6] >> 8) as u8, g[6] as u8, (g[7] >> 8) as u8, g[7] as u8)
-}
-
-/// The IPv6 half of `isPublicAddress`, on its eight groups.
-fn public_ipv6(ip: Ipv6Addr) -> bool {
-    let g = ip.segments();
-    if g.iter().all(|&x| x == 0) {
-        return false; // ::
-    }
-    if g[..7].iter().all(|&x| x == 0) && g[7] == 1 {
-        return false; // ::1
-    }
-    // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible (::a.b.c.d): judge the IPv4 inside.
-    if g[..5].iter().all(|&x| x == 0) && (g[5] == 0xffff || g[5] == 0) {
-        return public_ipv4(tail_ipv4(&g));
-    }
-    if g[0] == 0x64 && g[1] == 0xff9b {
-        return public_ipv4(tail_ipv4(&g)); // NAT64
-    }
-    if (g[0] & 0xfe00) == 0xfc00 {
-        return false; // unique local
-    }
-    if (g[0] & 0xffc0) == 0xfe80 {
-        return false; // link-local
-    }
-    if (g[0] & 0xffc0) == 0xfec0 {
-        return false; // site-local (deprecated)
-    }
-    if (g[0] & 0xff00) == 0xff00 {
-        return false; // multicast
-    }
-    if g[0] == 0x2001 && g[1] == 0x0db8 {
-        return false; // documentation
-    }
-    if g[0] == 0x2002 {
-        return false; // 6to4 can tunnel to any IPv4, private ones included
-    }
-    if g[0] == 0x2001 && g[1] == 0 {
-        return false; // Teredo, same reason
-    }
-    true
-}
-
-/// A resolved address is public: the rules of `isPublicAddress` on a parsed address.
-fn public_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => public_ipv4(v4),
-        IpAddr::V6(v6) => public_ipv6(v6),
-    }
-}
-
-/// `isPublicAddress`: true only for an address on the public internet.
-/// Anything unparseable is not.
-pub fn is_public_address(ip: &str) -> bool {
-    let bare = ip.split('%').next().unwrap_or_default();
-    if bare.parse::<Ipv4Addr>().is_ok() {
-        // The TS reads the dotted quad from the whole string, zone included, so a zone fails it.
-        return ip.parse::<Ipv4Addr>().is_ok_and(public_ipv4);
-    }
-    bare.parse::<Ipv6Addr>().is_ok_and(public_ipv6)
 }
 
 /// `sniffImageType`: the raster type the bytes are, by magic number, or None.
@@ -297,70 +186,6 @@ pub struct ImageResponse {
 /// `ImageGet`: one GET as a seam for tests.
 pub trait ImageGet: Send + Sync {
     fn get<'a>(&'a self, url: &'a Url) -> BoxFuture<'a, Result<ImageResponse, GetError>>;
-}
-
-/// A name lookup: the addresses a host name resolves to.
-type Lookup = dyn Fn(String) -> BoxFuture<'static, std::io::Result<Vec<SocketAddr>>> + Send + Sync;
-
-/// A name that resolved to a private or local address (`EBLOCKED`).
-#[derive(Debug)]
-struct Blocked(String);
-
-impl std::fmt::Display for Blocked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} resolves to a private or local address.", self.0)
-    }
-}
-
-impl std::error::Error for Blocked {}
-
-/// A name that did not resolve (`ENOTFOUND`).
-#[derive(Debug)]
-struct NotFound(std::io::Error);
-
-impl std::fmt::Display for NotFound {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl std::error::Error for NotFound {}
-
-/// `publicOnlyLookup`: a resolver that resolves as usual and then refuses the
-/// connection unless every address is public. Checking *all* of them, not
-/// just the first, stops a name that answers with one public and one private
-/// address from being dialed on the private one by Happy Eyeballs.
-struct PublicOnly {
-    lookup: Arc<Lookup>,
-}
-
-impl PublicOnly {
-    fn system() -> Self {
-        Self {
-            lookup: Arc::new(|host: String| {
-                Box::pin(async move { Ok(tokio::net::lookup_host((host.as_str(), 0)).await?.collect()) })
-            }),
-        }
-    }
-
-    async fn resolve_public(&self, host: String) -> Result<Vec<SocketAddr>, Box<dyn std::error::Error + Send + Sync>> {
-        let list = (self.lookup)(host.clone()).await.map_err(NotFound)?;
-        if list.is_empty() || list.iter().any(|a| !public_ip(a.ip())) {
-            return Err(Box::new(Blocked(host)));
-        }
-        Ok(list)
-    }
-}
-
-impl reqwest::dns::Resolve for PublicOnly {
-    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
-        let me = Self { lookup: Arc::clone(&self.lookup) };
-        let host = name.as_str().to_string();
-        Box::pin(async move {
-            let list = me.resolve_public(host).await?;
-            Ok(Box::new(list.into_iter()) as reqwest::dns::Addrs)
-        })
-    }
 }
 
 /// The client every real GET goes out on: the public-only resolver, no
@@ -435,13 +260,14 @@ impl ImageGet for NetImageGet {
     fn get<'a>(&'a self, url: &'a Url) -> BoxFuture<'a, Result<ImageResponse, GetError>> {
         Box::pin(async move {
             let client = self.client.as_ref().map_err(|e| GetError::Failed(e.clone()))?;
-            let res = client
+            let req = client
                 .get(url.clone())
                 .header(reqwest::header::ACCEPT, ACCEPT)
-                .header(reqwest::header::USER_AGENT, USER_AGENT)
-                .send()
-                .await
-                .map_err(|e| get_error(&e))?;
+                .header(reqwest::header::USER_AGENT, USER_AGENT);
+            let res = nekko_net::send("web-tools", req).await.map_err(|e| match e {
+                nekko_net::Error::Http(e) => get_error(&e),
+                e => GetError::Failed(e.to_string()),
+            })?;
             let headers = res.headers();
             let location = headers.get(reqwest::header::LOCATION).map(latin1);
             // `Number(res.headers['content-length'])`, kept when finite.
@@ -621,7 +447,9 @@ fn import_attachment_capped(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nekko_web::netguard::is_public_address;
     use std::collections::HashMap;
+    use std::net::SocketAddr;
     use std::sync::Mutex;
 
     const PNG: &[u8] = &[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
@@ -753,11 +581,9 @@ mod tests {
     }
 
     fn fake_lookup(answers: &'static [&'static str]) -> PublicOnly {
-        PublicOnly {
-            lookup: Arc::new(move |_host: String| {
-                Box::pin(async move { Ok(answers.iter().map(|a| SocketAddr::new(a.parse().unwrap(), 0)).collect()) })
-            }),
-        }
+        PublicOnly::with_lookup(Arc::new(move |_host: String| {
+            Box::pin(async move { Ok(answers.iter().map(|a| SocketAddr::new(a.parse().unwrap(), 0)).collect()) })
+        }))
     }
 
     #[tokio::test]

@@ -49,6 +49,12 @@ export interface ProviderConfig {
   discovered?: boolean;
   /** Free-text model id override, currently used by the ChatGPT provider. */
   customModelId?: string;
+  /**
+   * Claude Agent only. `account` names a second Claude Code login: nekkod runs
+   * Claude Code with `CLAUDE_CONFIG_DIR=~/.claude-<account>` (see
+   * `isClaudeAccountName`). Absent: the user's default Claude Code login.
+   */
+  claudeCode?: { authSource?: string; account?: string };
   /** Host-only assertion for a trusted managed llama.cpp endpoint. Never trust persisted input. */
   managedCachePrompt?: boolean;
   enabled: boolean;
@@ -168,7 +174,7 @@ export interface GpuDevice {
 export type GpuSource = 'nvidia-smi' | 'ioreg' | 'llama-server' | 'none';
 
 /**
- * Aggregate GPU/VRAM stats, surfaced in the Chat metrics bar and Command Center.
+ * Aggregate GPU/VRAM stats, surfaced in the Chat metrics bar and Agent board.
  * `source` records where the numbers came from so the UI can label them honestly;
  * totals are summed across all devices.
  */
@@ -216,7 +222,7 @@ export const ENGINE_PORT_DEFAULT = 11500;
 
 /** Default base URLs per provider kind. */
 export const PROVIDER_DEFAULTS: Record<ProviderKind, { baseUrl: string; needsKey: boolean; label: string }> = {
-  anthropic: { baseUrl: 'https://api.anthropic.com', needsKey: true, label: 'Anthropic (Claude)' },
+  anthropic: { baseUrl: 'https://api.anthropic.com', needsKey: true, label: 'Claude API' },
   openai: { baseUrl: 'https://api.openai.com/v1', needsKey: true, label: 'OpenAI' },
   openrouter: { baseUrl: 'https://openrouter.ai/api/v1', needsKey: true, label: 'OpenRouter' },
   chatgpt: { baseUrl: 'https://chatgpt.com/backend-api', needsKey: false, label: 'ChatGPT (subscription)' },
@@ -232,5 +238,5 @@ export const PROVIDER_DEFAULTS: Record<ProviderKind, { baseUrl: string; needsKey
   vertex: { baseUrl: 'https://aiplatform.googleapis.com/v1/projects/YOUR_PROJECT/locations/global', needsKey: false, label: 'Claude on Vertex AI' },
   // Replace YOUR_RESOURCE with the Foundry resource name.
   foundry: { baseUrl: 'https://YOUR_RESOURCE.services.ai.azure.com/anthropic', needsKey: true, label: 'Claude in Microsoft Foundry' },
-  'claude-code': { baseUrl: '', needsKey: false, label: 'Claude Agent' },
+  'claude-code': { baseUrl: '', needsKey: false, label: 'Claude subscription' },
 };

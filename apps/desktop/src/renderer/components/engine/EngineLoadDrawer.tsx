@@ -1,41 +1,54 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  DEFAULT_FIT_REQUEST,
-  type AutoFitSummary,
-  type EngineLoadPreset,
-  type FitPlan,
-  type GpuFit,
-  type KvCacheDtype,
-  type LoadParams,
-  type LocalModel,
-} from '@nekko-agent/shared';
-import { FitBar } from '../runtimes/FitBar.js';
+import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, SplitPreset } from '@nekko-agent/shared';
 import { Toggle } from '../primitives/index.js';
-import { formatBytes, formatTokens, verdictColor, verdictLabel, verdictNotes, verdictSentence } from '../runtimes/verdict.js';
+import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
+import {
+  KEEP_LABELS,
+  PRECISIONS,
+  SESSION_STOPS,
+  contextPerSession,
+  contextStops,
+  differsFromLoaded,
+  differsFromSaved,
+  expertCacheMiB,
+  fromPreset,
+  fromRecommendation,
+  hasTables,
+  isMoe,
+  keepOf,
+  keepParams,
+  matchesRecommendation,
+  pagesOf,
+  precisionOf,
+  runOnOf,
+  sessionsOf,
+  toPlacementRequest,
+  type RunOn,
+} from './loadSettings.js';
 
 /**
- * One model's load settings, in the two shapes people ask for them.
+ * One model's load settings, laid out for someone who does not know how models
+ * work: what it will use (the meter), one button that picks the fastest setup
+ * that fits, then where it runs and how much it remembers, with everything else
+ * folded under More controls and Expert.
  *
- * **Simple** is a single question, "how much of this machine may it use", solved
- * into real settings by the fit planner. **Advanced** is every flag llama.cpp
- * takes. They are the same state, not two modes: solving the simple slider fills
- * the advanced fields, and editing an advanced field moves the simple readout,
- * so switching tabs never discards what you just did.
- *
- * The memory bar is the honest part. It is the same projection the other runtimes
- * get, with one difference: because the file is ours we read its GGUF header, so
- * the layer geometry is known and the answer is exact rather than partial.
+ * There is one state, the `LoadParams` the engine launches with. The meter is
+ * the placement planner's answer for exactly those parameters
+ * (`crates/nekko-engine/src/placement.rs`), and the launch passes the
+ * placement explicitly with `--fit off`, so what loads is what the meter showed.
+ * It deliberately predicts memory, never tokens per second: we can measure the
+ * one and would be inventing the other.
  */
 
-const CONTEXT_STOPS = [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144];
 const PLAN_DEBOUNCE_MS = 150;
-
-type Surface = 'simple' | 'advanced';
+/** The meter's "other apps" figures move; re-read them while the drawer is open. */
+const LIVE_REFRESH_MS = 5000;
 
 export function EngineLoadDrawer({
   providerId,
   model,
+  loadedParams,
   autoloaded = false,
   onToggleAutoload,
   onFetchCompanions,
@@ -44,7 +57,9 @@ export function EngineLoadDrawer({
   initialSurface = 'simple',
 }: {
   providerId: string;
-  model: LocalModel & { loaded: boolean };
+  model: LocalModel & { loaded: boolean; gpuFit?: GpuFit };
+  /** What the running copy was loaded with, when the engine says. */
+  loadedParams?: LoadParams;
   /** In the list loaded when the engine starts. */
   autoloaded?: boolean;
   onToggleAutoload?: (on: boolean) => void;
@@ -52,80 +67,112 @@ export function EngineLoadDrawer({
   onFetchCompanions?: () => void;
   onDone: () => void;
   onClose: () => void;
-  /** Which surface it opens on; a jump from "where does it run" lands on Advanced. */
-  initialSurface?: Surface;
+  /** A jump from "where does it run" opens with More controls unfolded. */
+  initialSurface?: 'simple' | 'advanced';
 }) {
   const pushToast = useStore((s) => s.pushToast);
-  const [surface, setSurface] = useState<Surface>(initialSurface);
-  const [budget, setBudget] = useState(model.preset?.budgetFraction ?? 0.75);
-  const [params, setParams] = useState<LoadParams>(() => fromPreset(model.preset));
-  const [plan, setPlan] = useState<FitPlan | null>(null);
-  const [auto, setAuto] = useState<AutoFitSummary | null>(null);
+  const saved = useMemo(() => fromPreset(model.preset), [model.preset]);
+  const [params, setParams] = useState<LoadParams>(saved.params);
+  const [split, setSplit] = useState<SplitPreset>(saved.split);
+  const [plan, setPlan] = useState<PlacementPlan | null>(null);
+  const [rec, setRec] = useState<Recommendation | null>(null);
+  const [applied, setApplied] = useState(false);
+  const [more, setMore] = useState(initialSurface === 'advanced');
+  const [expert, setExpert] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [solving, setSolving] = useState(false);
-  const latestPlan = useRef(0);
-  const latestAuto = useRef(0);
-
-  const stops = useMemo(() => {
-    const max = model.maxContext ?? 131072;
-    const usable = CONTEXT_STOPS.filter((s) => s <= max);
-    if (usable.at(-1) !== max) usable.push(max);
-    return usable;
-  }, [model.maxContext]);
-
-  /** Solve the budget into settings, and adopt them as the live parameters. */
-  const solve = useCallback(
-    async (fraction: number) => {
-      const seq = ++latestAuto.current;
-      setSolving(true);
-      const res = await window.nekko
-        .runtimeAutoFit(providerId, model.id, fraction, params.parallelSlots)
-        .catch(() => null);
-      if (seq !== latestAuto.current) return;
-      setSolving(false);
-      setAuto(res);
-      if (!res) return;
-      setParams((p) => ({
-        ...p,
-        contextTokens: res.request.contextTokens,
-        kvCacheDtype: res.request.kvCacheDtype,
-        gpuLayers:
-          res.plan.totalLayers && res.request.gpuLayerFraction < 1
-            ? Math.round(res.plan.totalLayers * res.request.gpuLayerFraction)
-            : undefined,
-      }));
-    },
-    [providerId, model.id, params.parallelSlots],
-  );
-
-  // Solve once on open, and whenever the slider settles.
-  useEffect(() => {
-    if (surface !== 'simple') return;
-    const t = setTimeout(() => void solve(budget), PLAN_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-    // `solve` changes with parallelSlots, which is exactly when it should re-run.
-  }, [budget, surface, solve]);
-
-  // The projection for whatever the parameters currently say, in either surface.
-  useEffect(() => {
-    const seq = ++latestPlan.current;
-    const t = setTimeout(async () => {
-      const next = await window.nekko
-        .runtimePlan(providerId, model.id, {
-          ...DEFAULT_FIT_REQUEST,
-          contextTokens: params.contextTokens ?? DEFAULT_FIT_REQUEST.contextTokens,
-          parallelSlots: params.parallelSlots ?? 1,
-          kvCacheDtype: params.kvCacheDtype ?? 'f16',
-          gpuLayerFraction:
-            params.gpuLayers !== undefined && model.layers ? Math.min(1, params.gpuLayers / model.layers) : 1,
-        })
-        .catch(() => null);
-      if (seq === latestPlan.current) setPlan(next);
-    }, PLAN_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [providerId, model.id, model.layers, params]);
+  const [tick, setTick] = useState(0);
+  const latest = useRef(0);
+  const layers = model.layers;
+  const moe = isMoe(model);
+  const mlx = model.format === 'mlx';
+  const stops = useMemo(() => contextStops(model.maxContext), [model.maxContext]);
 
   const patch = (p: Partial<LoadParams>) => setParams((prev) => ({ ...prev, ...p }));
+  /** A hand edit to placement is a custom split. */
+  const patchCustom = (p: Partial<LoadParams>) => {
+    setSplit('custom');
+    patch(p);
+  };
+
+  const applyRecommendation = useCallback(
+    (r: Recommendation) => {
+      setParams((prev) => fromRecommendation(r.request, model, prev));
+      setSplit(r.request.runOn === 'hybrid' ? 'fill' : 'custom');
+      setApplied(true);
+    },
+    [model],
+  );
+
+  // The recommendation, once per open. With no saved settings it is applied
+  // straight away, so a model opened for the first time shows a setup that fits.
+  useEffect(() => {
+    let live = true;
+    window.nekko
+      .runtimeRecommend(providerId, model.id, { goal: 'speed' })
+      .then((r) => {
+        if (!live || !r) return;
+        setRec(r);
+        if (!model.preset) applyRecommendation(r);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+    // Re-solving on every params change would chase the user's own edits.
+  }, [providerId, model.id]);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), LIVE_REFRESH_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  // The meter: where these exact parameters put every byte.
+  useEffect(() => {
+    const seq = ++latest.current;
+    const t = setTimeout(async () => {
+      const next = await window.nekko.runtimePlace(providerId, model.id, toPlacementRequest(params, model)).catch(() => null);
+      if (seq === latest.current) setPlan(next);
+    }, PLAN_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [providerId, model, params, tick]);
+
+  const runOn = runOnOf(params, layers);
+  const unified = plan?.unified ?? false;
+  const noGpu = model.gpuFit === 'cpu' || (plan !== null && plan.deviceName === null);
+  const matches = matchesRecommendation(params, rec?.request, layers);
+  // A load from chat or at engine start uses the saved settings, not these.
+  const unsaved = differsFromSaved(params, saved.params);
+  // Save as default does not touch the running copy; only a reload does.
+  const stale = !unsaved && model.loaded && !!loadedParams && differsFromLoaded(params, loadedParams);
+
+  const setRunOn = (r: RunOn) => {
+    setSplit('custom');
+    patch(
+      r === 'gpu'
+        ? { gpuLayers: layers ?? 999, cpuMoeLayers: undefined, cpuFfnLayers: undefined, kvOnGpu: undefined, moeCacheMiB: undefined }
+        : r === 'cpu'
+          ? { gpuLayers: 0, cpuMoeLayers: undefined, cpuFfnLayers: undefined, moeCacheMiB: undefined }
+          : { gpuLayers: Math.max(1, Math.floor((layers ?? 40) / 2)), cpuMoeLayers: undefined, cpuFfnLayers: undefined },
+    );
+  };
+
+  const pickPreset = async (p: SplitPreset) => {
+    const full = { gpuLayers: layers ?? 999, cpuMoeLayers: undefined, cpuFfnLayers: undefined, kvOnGpu: undefined, moeCacheMiB: undefined };
+    setSplit(p);
+    if (p === 'custom') return patch({ cpuMoeLayers: undefined, cpuFfnLayers: undefined, moeCacheMiB: undefined, kvOnGpu: undefined });
+    if (p === 'context-ram') return patch({ ...full, kvOnGpu: false });
+    if (p === 'experts') {
+      const next = { ...params, ...full, cpuMoeLayers: layers, lazyTables: hasTables(model) ? true : params.lazyTables };
+      const placed = await window.nekko.runtimePlace(providerId, model.id, toPlacementRequest(next, model)).catch(() => null);
+      return setParams({ ...next, moeCacheMiB: placed ? expertCacheMiB(placed, model) : undefined });
+    }
+    const goal = p === 'coding' ? 'context' : 'fill';
+    const r = await window.nekko
+      .runtimeRecommend(providerId, model.id, { goal, request: { ...toPlacementRequest({ ...params, ...full }, model), runOn: 'hybrid' } })
+      .catch(() => null);
+    if (!r) return pushToast('error', "Couldn't work out a split that fits.");
+    setParams((prev) => ({ ...fromRecommendation(r.request, model, prev), ...(p === 'coding' ? { speculative: undefined } : {}) }));
+  };
 
   const load = async () => {
     setLoading(true);
@@ -145,119 +192,285 @@ export function EngineLoadDrawer({
   };
 
   const saveDefault = async () => {
-    await window.nekko.engineSaveModelPreset(model.id, { ...params, budgetFraction: budget });
+    await window.nekko.engineSaveModelPreset(model.id, { ...params, splitPreset: split });
     pushToast('success', `Saved as the default settings for ${model.name}.`);
     onDone();
   };
 
-  const ctxIndex = Math.max(0, stops.indexOf(nearest(stops, params.contextTokens ?? 8192)));
+  const perSession = contextPerSession(params);
+  const sessions = sessionsOf(params);
+  const ctxIndex = Math.max(0, stops.indexOf(nearest(stops, perSession)));
+  const setContext = (perSessionTokens: number) => {
+    if (split === 'coding') setSplit('custom');
+    patch({ contextTokens: perSessionTokens * sessions });
+  };
+  const setSessions = (n: number) => patch({ contextTokens: perSession * n, parallelSlots: n > 1 ? n : undefined });
+  const keep = keepOf(params);
 
   return (
-    <div className="mt-2 rounded-xl border p-3" style={{ borderColor: 'var(--line)' }} data-engine-load-drawer={surface}>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-[13px]">{model.name}</p>
-          <p className="text-[11px] text-ink-faint">
-            {[model.parameterSize, model.quantization, model.maxContext && `${formatTokens(model.maxContext)} max`]
+    <div className="mt-2 rounded-xl border p-4" style={{ borderColor: 'var(--line)' }} data-engine-load-drawer>
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-medium">{model.name}</p>
+          <p className="text-[11.5px] text-ink-faint">
+            {[
+              model.parameterSize,
+              model.quantization,
+              moe && model.weightLayout?.experts && `${model.weightLayout.experts} experts`,
+              model.maxContext && `${formatTokens(model.maxContext)} max`,
+            ]
               .filter(Boolean)
               .join(' · ')}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          {plan && (
-            <span
-              className="rounded-full px-2 py-0.5 text-[11px]"
-              style={{
-                color: verdictColor(plan.verdict),
-                border: `1px solid color-mix(in srgb, ${verdictColor(plan.verdict)} 40%, transparent)`,
-              }}
-            >
-              {verdictLabel(plan.verdict)}
-            </span>
-          )}
-          <SurfaceToggle value={surface} onChange={setSurface} />
-        </div>
+        {plan && <VerdictChip plan={plan} />}
       </div>
 
-      {/* "Model settings" is its own named, foldable group: the ask is to
-          adjust here and reload, not to read past a wall of controls to find
-          out whether it fits. The performance readout sits below it. */}
-      <details open className="mt-3 rounded-lg border" style={{ borderColor: 'var(--line)' }}>
-        <summary className="cursor-pointer select-none px-3 py-2 text-[12px] font-medium">
-          Model settings
-        </summary>
-        <div className="border-t px-3 pb-3" style={{ borderColor: 'var(--line)' }}>
-          {surface === 'simple' ? (
-            <SimpleSurface budget={budget} onBudget={setBudget} auto={auto} solving={solving} />
-          ) : (
-            <AdvancedSurface
-              model={model}
-              params={params}
-              stops={stops}
-              ctxIndex={ctxIndex}
-              onChange={patch}
-            />
-          )}
+      <MemoryMeter plan={plan} />
 
-          {/* Residency and startup are one question — "how does this model
-              behave when I am not looking at it" — so they sit together rather
-              than being a load flag and a server setting. */}
-          <div className="mt-3 space-y-2 rounded-lg border px-3 py-2.5" style={{ borderColor: 'var(--line)' }}>
-            {onToggleAutoload && (
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[12px]">Load when the engine starts</p>
-                  <p className="text-[11px] text-ink-faint">Comes up with these saved settings every time the engine does.</p>
+      <div className="mt-3">
+        <button
+          className="btn btn-primary flex min-h-[52px] w-full items-center justify-center gap-2 text-[15px] font-semibold"
+          onClick={() => rec && applyRecommendation(rec)}
+          disabled={!rec}
+          data-recommend
+        >
+          <BoltIcon />
+          Use recommended settings
+        </button>
+        <p className="mt-1.5 text-center text-[11.5px] text-ink-faint">
+          Picks the fastest setup that fits this model on this machine. GPU first, always.
+        </p>
+        {applied && rec && (
+          <div className="mt-2 rounded-lg border px-3 py-2.5" style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)', background: 'var(--accent-soft)' }}>
+            <p className="text-[12px] font-medium">What this chose</p>
+            <div className="mt-1.5 space-y-1.5">
+              {rec.why.map((w) => (
+                <div key={w.field} className="flex gap-3 text-[12px]">
+                  <span className="w-32 shrink-0 text-ink-faint">{w.field}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="font-medium">{w.value}.</span> {w.sentence}
+                  </span>
                 </div>
-                <Toggle value={autoloaded} onChange={onToggleAutoload} label="Load when the engine starts" />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {mlx ? (
+        <Section title="Run on" hint="MLX models live on the GPU; a Mac shares one memory pool between it and the CPU." />
+      ) : unified ? (
+        <Section
+          title="Run on"
+          hint="Your Mac shares one pool of memory between the GPU and the CPU, so there is nothing to split. The model runs on the GPU."
+        />
+      ) : (
+        <Section
+          title="Run on"
+          recommended={matches.runOn}
+          hint={
+            runOn === 'gpu'
+              ? 'GPU only: the whole model lives in graphics memory. Fastest, when it fits.'
+              : runOn === 'hybrid'
+                ? 'Hybrid: the graphics card and system memory share the model, so bigger models fit. Choose how below.'
+                : 'CPU only is on (set under Expert). Pick GPU only or Hybrid to use the graphics card.'
+          }
+          control={
+            <SegTabs
+              label="Run on"
+              options={[
+                { id: 'gpu', label: 'GPU only', disabled: noGpu, title: noGpu ? 'No GPU on this machine' : undefined },
+                { id: 'hybrid', label: 'Hybrid', disabled: noGpu, title: noGpu ? 'No GPU on this machine' : undefined },
+              ]}
+              value={runOn === 'cpu' ? null : runOn}
+              onChange={(r) => setRunOn(r)}
+              data="run-on"
+            />
+          }
+        />
+      )}
+
+      {runOn === 'hybrid' && !unified && !mlx && (
+        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }} data-split>
+          <p className="text-[12.5px] font-medium">How to split it</p>
+          <p className="text-[11.5px] text-ink-faint">
+            Ready-made ways to share the work between the graphics card and system memory. Custom lets you set it by hand.
+          </p>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {splitPresets(moe, hasTables(model)).map((p) => (
+              <button
+                key={p.id}
+                className="flex min-h-[44px] flex-col gap-0.5 rounded-lg border px-3 py-2 text-left disabled:opacity-45"
+                style={
+                  split === p.id
+                    ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)' }
+                    : { borderColor: 'var(--line)' }
+                }
+                aria-pressed={split === p.id}
+                onClick={() => void pickPreset(p.id)}
+                data-preset={p.id === 'custom' ? undefined : p.id}
+                data-split-option={p.id}
+              >
+                <span className="text-[12.5px] font-medium">{p.label}</span>
+                <span className="text-[11.5px] text-ink-faint">{p.hint}</span>
+              </button>
+            ))}
+          </div>
+          {split === 'custom' && layers ? (
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-[12px]">
+                <label htmlFor="engine-gpu-layers">Layers on the graphics card</label>
+                <span className="font-mono text-[11px] text-ink-faint">
+                  {params.gpuLayers ?? layers} of {layers}
+                </span>
               </div>
-            )}
+              <input
+                id="engine-gpu-layers"
+                type="range"
+                className="mt-1 w-full"
+                min={1}
+                max={layers}
+                value={params.gpuLayers ?? layers}
+                onChange={(e) => patchCustom({ gpuLayers: Number(e.target.value) })}
+              />
+              <p className="text-[11.5px] text-ink-faint">
+                A model is a stack of layers. Each one on the graphics card makes it faster and uses more graphics memory.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <div className="mt-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <label htmlFor="engine-ctx" className="text-[13px] font-medium">
+            Context {matches.context && <RecommendedTag />}
+          </label>
+          <span className="font-mono text-[12px]" data-context-label>
+            {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
+          </span>
+        </div>
+        <input
+          id="engine-ctx"
+          type="range"
+          className="mt-1 w-full"
+          min={0}
+          max={stops.length - 1}
+          step={1}
+          value={ctxIndex}
+          onChange={(e) => setContext(stops[Number(e.target.value)])}
+        />
+        <div className="flex justify-between text-[10.5px] text-ink-faint">
+          <span>{formatTokens(stops[0])}</span>
+          <span>{formatTokens(stops[stops.length - 1])} (model max)</span>
+        </div>
+        <p className="mt-1 text-[11.5px] text-ink-faint">
+          How much the model can keep in mind at once: your messages, its replies and any files it reads.{' '}
+          {formatTokens(perSession)} is roughly {pagesOf(perSession)} pages of text. More context uses more memory, and the meter
+          above shows how much.
+        </p>
+      </div>
+
+      <div className="mt-4 rounded-lg border" style={{ borderColor: 'var(--line)' }}>
+        <Fold label="More controls" open={more} onToggle={() => setMore((v) => !v)} id="more" />
+        {more && (
+          <div className="space-y-4 border-t px-3 pb-3 pt-3" style={{ borderColor: 'var(--line)' }}>
+            <Slider
+              id="engine-sessions"
+              label="Sessions at once"
+              recommended={matches.sessions}
+              value={Math.max(0, SESSION_STOPS.indexOf(nearest(SESSION_STOPS, sessions)))}
+              max={SESSION_STOPS.length - 1}
+              readout={sessions === 1 ? '1 session' : `${sessions} sessions`}
+              ends={['1', rec ? `Recommended here: ${rec.request.sessions}` : '', '8']}
+              onChange={(i) => setSessions(SESSION_STOPS[i])}
+              hint={`How many chats or agents can get answers at the same time. Each one keeps its own context, so more sessions use more memory.${sessions > 1 ? ` Each of the ${sessions} gets ${formatTokens(perSession)}.` : ''}`}
+            />
+            <Slider
+              id="engine-precision"
+              label="Memory precision"
+              recommended={matches.precision}
+              value={precisionOf(params)}
+              max={PRECISIONS.length - 1}
+              readout={`${PRECISIONS[precisionOf(params)].label} (${params.kvCacheDtype ?? 'f16'})`}
+              ends={['Most reliable', '', 'Faster, smaller']}
+              onChange={(i) => patch({ kvCacheDtype: PRECISIONS[i].dtype })}
+              hint={`How exactly the model stores what it has read so far. Lower precision fits more context and runs a little faster, with a small risk of losing track of details in very long work.${precisionOf(params) === 2 ? ' Fastest is best kept for chat; for long coding work, Balanced is the safer pick.' : ''}`}
+            />
+            <Slider
+              id="engine-keep"
+              label="Keep in memory"
+              value={keep}
+              max={2}
+              readout={KEEP_LABELS[keep]}
+              ends={KEEP_LABELS}
+              onChange={(i) => patch(keepParams(i))}
+              hint={`${
+                keep === 0
+                  ? 'Loads the model when a chat needs it and lets it go after it sits idle, so memory comes back to your other apps.'
+                  : keep === 1
+                    ? 'Keeps the model ready after the first load, so the next reply starts instantly.'
+                    : 'Keeps it ready and stops the computer from ever swapping it out, so nothing stalls after a quiet spell. Holds a full copy in system memory.'
+              } This uses system memory, but it does not move the work off your graphics card: the GPU still does the thinking.`}
+            />
+
+            <div className="rounded-lg border" style={{ borderColor: 'var(--line)' }}>
+              <Fold label="Expert" open={expert} onToggle={() => setExpert((v) => !v)} id="expert" />
+              {expert && (
+                <ExpertControls
+                  model={model}
+                  params={params}
+                  runOn={runOn}
+                  unified={unified}
+                  onChange={patch}
+                  onChangePlacement={patchCustom}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {(onToggleAutoload || (model.modality === 'vision' && !model.hasProjector && onFetchCompanions)) && (
+        <div className="mt-3 space-y-2 rounded-lg border px-3 py-2.5" style={{ borderColor: 'var(--line)' }}>
+          {onToggleAutoload && (
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[12px]">Keep it loaded</p>
+                <p className="text-[12px]">Load when the engine starts</p>
+                <p className="text-[11px] text-ink-faint">Comes up with these saved settings every time the engine does.</p>
+              </div>
+              <Toggle value={autoloaded} onChange={onToggleAutoload} label="Load when the engine starts" />
+            </div>
+          )}
+          {model.modality === 'vision' && !model.hasProjector && onFetchCompanions && (
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[12px]">Projector file missing</p>
                 <p className="text-[11px] text-ink-faint">
-                  Never evict it for sitting idle. Off means the server's idle limit applies.
+                  This model can read images only with its mmproj-*.gguf beside it. Text works either way.
                 </p>
               </div>
-              <Toggle
-                value={params.ttlSeconds === 0}
-                onChange={(v) => patch({ ttlSeconds: v ? 0 : undefined })}
-                label="Keep it loaded"
-              />
+              <button className="btn btn-outline shrink-0 py-1 text-[11.5px]" onClick={onFetchCompanions}>
+                Fetch it
+              </button>
             </div>
-            {model.modality === 'vision' && !model.hasProjector && onFetchCompanions && (
-              <div className="flex items-center justify-between gap-3 border-t pt-2" style={{ borderColor: 'var(--line)' }}>
-                <div>
-                  <p className="text-[12px]">Projector file missing</p>
-                  <p className="text-[11px] text-ink-faint">
-                    This model can read images only with its mmproj-*.gguf beside it. Text works either way.
-                  </p>
-                </div>
-                <button className="btn btn-outline shrink-0 py-1 text-[11.5px]" onClick={onFetchCompanions}>
-                  Fetch it
-                </button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
-      </details>
-
-      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Performance</p>
-      {plan ? (
-        <FitBar plan={plan} />
-      ) : (
-        <div className="mt-2 h-6 animate-pulse rounded-md bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)]" />
       )}
-      {plan && <p className="mt-2 text-[12px]">{verdictSentence(plan)}</p>}
-      {plan &&
-        verdictNotes(plan).map((n) => (
-          <p key={n} className="mt-1 text-[11px] text-ink-faint">
-            {n}
-          </p>
-        ))}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button className="btn btn-primary py-1.5 text-[12px]" onClick={load} disabled={loading}>
+      {unsaved && (
+        <p className="mt-4 text-[11px] text-ink-faint" data-unsaved>
+          These settings apply to this load only. Save as default to keep them.
+        </p>
+      )}
+      {stale && (
+        <p className="mt-4 text-[11px] text-ink-faint" data-stale>
+          The loaded model still runs with its earlier settings. Reload to use these now.
+        </p>
+      )}
+      <div className={`${unsaved || stale ? 'mt-2' : 'mt-4'} flex flex-wrap items-center gap-2`}>
+        <button className="btn btn-primary py-1.5 text-[12px]" onClick={load} disabled={loading} data-load>
           {loading ? 'Loading…' : model.loaded ? 'Reload with these settings' : 'Load model'}
         </button>
         <button className="btn btn-outline py-1.5 text-[12px]" onClick={saveDefault} title="Use these settings every time this model loads">
@@ -271,30 +484,257 @@ export function EngineLoadDrawer({
   );
 }
 
+function splitPresets(moe: boolean, tables: boolean): Array<{ id: SplitPreset; label: string; hint: string }> {
+  const list: Array<{ id: SplitPreset; label: string; hint: string }> = [
+    { id: 'custom', label: 'Custom', hint: 'Choose how many layers go on the graphics card.' },
+    moe
+      ? { id: 'fill', label: 'Fill the GPU, rest in RAM', hint: 'As many experts on the graphics card as fit at this context; the rest wait in system memory. The fastest hybrid.' }
+      : { id: 'fill', label: 'Attention on GPU, the rest in RAM', hint: 'Keeps the attention math and the context on the graphics card and moves the bulky feed-forward part of some layers to system memory.' },
+  ];
+  if (moe) {
+    list.push(
+      { id: 'experts', label: 'All experts in RAM', hint: 'Only the core sits on the graphics card, leaving the most room for context. A small cache keeps the busiest experts on the GPU.' },
+      {
+        id: 'coding',
+        label: 'Long coding sessions',
+        hint: `Experts in RAM${tables ? ', the lookup table on your SSD' : ''}, the most context in compact memory, and repeated code guessed ahead.`,
+      },
+    );
+  }
+  list.push({ id: 'context-ram', label: 'Context in RAM', hint: 'The whole model on the graphics card, its memory of the conversation in system RAM. For long context on a model that only just fits.' });
+  return list;
+}
+
+const VERDICTS: Record<PlacementPlan['verdict'], { label: string; color: string }> = {
+  fits: { label: 'Fits', color: 'var(--success)' },
+  tight: { label: 'Fits, just', color: 'var(--warning)' },
+  disk: { label: 'Reads from SSD', color: 'var(--warning)' },
+  'wont-load': { label: 'Won’t fit', color: 'var(--danger)' },
+  unknown: { label: 'Unknown', color: 'var(--ink-faint)' },
+};
+
+function VerdictChip({ plan }: { plan: PlacementPlan }) {
+  const v = VERDICTS[plan.verdict];
+  return (
+    <span
+      className="whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11.5px]"
+      style={{ color: v.color, border: `1px solid color-mix(in srgb, ${v.color} 45%, transparent)` }}
+      data-verdict={plan.verdict}
+    >
+      {v.label}
+    </span>
+  );
+}
+
+const SEG = {
+  other: 'color-mix(in srgb, var(--ink-faint) 55%, transparent)',
+  weights: 'var(--accent)',
+  kv: 'var(--accent-2)',
+  overhead: 'color-mix(in srgb, var(--accent) 50%, var(--accent-2))',
+  pinned: 'color-mix(in srgb, var(--accent) 35%, transparent)',
+};
+
+/**
+ * Graphics memory and system memory as two bars: other apps, this model (its
+ * weights, its context, its working space), and what is left. A load that will
+ * not fit runs the bar past its end in red; the line under it says what is read
+ * from the SSD.
+ */
+function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
+  if (!plan) return <div className="mt-3 h-24 animate-pulse rounded-lg bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)]" />;
+  if (plan.verdict === 'unknown') {
+    return (
+      <p className="mt-3 rounded-lg border px-3 py-2.5 text-[12px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+        This file does not describe its layers, so we cannot say how much memory it needs. Load it and we will measure it.
+      </p>
+    );
+  }
+  const bars = plan.unified
+    ? [{ title: 'Memory (shared by GPU and CPU)', pool: plan.vram, extra: plan.ram.model }]
+    : [
+        ...(plan.deviceName ? [{ title: 'Graphics memory (VRAM)', pool: plan.vram, extra: null }] : []),
+        { title: 'System memory (RAM)', pool: plan.ram, extra: null },
+      ];
+  const disk: string[] = [];
+  if (plan.disk.tableBytes > 0) disk.push(`Its lookup table (${formatBytes(plan.disk.tableBytes)}) stays on your SSD and is read a few KB per word.`);
+  if (plan.disk.overflowBytes > 0) disk.push(`Reads about ${formatBytes(plan.disk.overflowBytes)} of the model from your SSD as it needs it. A fast NVMe drive matters here.`);
+  return (
+    <section aria-label="Memory" className="mt-3 space-y-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }} data-meter>
+      {bars.map(({ title, pool, extra }) => {
+        const m = pool.model;
+        const parts = [
+          { label: 'Model', bytes: m.weightsBytes + (extra?.weightsBytes ?? 0), color: SEG.weights },
+          { label: 'Context', bytes: m.kvCacheBytes + (extra?.kvCacheBytes ?? 0), color: SEG.kv },
+          { label: 'Working space', bytes: m.overheadBytes + (extra?.overheadBytes ?? 0), color: SEG.overhead },
+          { label: 'Pinned copy', bytes: m.pinnedBytes, color: SEG.pinned },
+        ].filter((p) => p.bytes > 0);
+        const mine = parts.reduce((a, p) => a + p.bytes, 0);
+        const room = Math.max(0, pool.totalBytes - pool.otherBytes);
+        const over = mine > pool.availBytes;
+        const scale = Math.max(pool.totalBytes, pool.otherBytes + mine, 1);
+        const pct = (b: number) => `${(b / scale) * 100}%`;
+        return (
+          <div key={title} data-meter-bar>
+            <div className="flex justify-between gap-3 text-[12px]">
+              <span className="font-medium">{title}</span>
+              <span className="font-mono text-[11px] text-ink-faint">
+                {formatBytes(pool.otherBytes + mine)} of {formatBytes(pool.totalBytes)}
+              </span>
+            </div>
+            <div
+              className="mt-1 flex h-4 overflow-hidden rounded"
+              style={{ background: 'color-mix(in srgb, var(--ink-faint) 14%, transparent)', outline: over ? '2px solid var(--danger)' : undefined }}
+            >
+              <div style={{ width: pct(pool.otherBytes), background: SEG.other }} title={`Other apps ${formatBytes(pool.otherBytes)}`} />
+              {parts.map((p) => (
+                <div key={p.label} style={{ width: pct(p.bytes), background: p.color }} title={`${p.label} ${formatBytes(p.bytes)}`} />
+              ))}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink-faint">
+              <Legend color={SEG.other} text={`Other apps ${formatBytes(pool.otherBytes)}`} />
+              {parts.map((p) => (
+                <Legend key={p.label} color={p.color} text={`${p.label} ${formatBytes(p.bytes)}`} />
+              ))}
+              <span style={over ? { color: 'var(--danger)' } : undefined}>
+                {over ? `Short by ${formatBytes(mine - pool.availBytes)}` : `Free ${formatBytes(room - mine)}`}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+      {disk.length > 0 && (
+        <p className="text-[11.5px]" style={{ color: 'var(--warning)' }} data-meter-disk>
+          {disk.join(' ')}
+        </p>
+      )}
+      <p className="text-[12px]">{expectation(plan)}</p>
+    </section>
+  );
+}
+
+function expectation(plan: PlacementPlan): string {
+  if (plan.verdict === 'wont-load') {
+    if (plan.reason === 'context-over-max') return 'That is more context than this model supports.';
+    const pool = plan.reason === 'ram' ? 'system memory' : plan.unified ? 'memory than the GPU may use' : 'graphics memory';
+    return `This won’t load as set: it needs ${formatBytes(plan.shortByBytes ?? 0)} more ${pool}. Try Use recommended settings, or lower the context.`;
+  }
+  if (plan.unified) return 'Runs entirely on the GPU. Macs share memory, so this is already the fastest setup.';
+  if (!plan.deviceName || plan.vram.model.weightsBytes === 0) return 'Everything runs on the processor. It always fits, and it is the slowest option.';
+  if (plan.ram.model.weightsBytes === 0 && plan.ram.model.kvCacheBytes === 0) return 'Everything runs on the graphics card. This is the fastest way to run a model.';
+  if (plan.ram.model.weightsBytes === 0) return 'The model sits on the graphics card and its context lives in system memory. Good for very long context; each word is a little slower.';
+  return `The graphics card does the core work; ${formatBytes(plan.ram.model.weightsBytes)} of the model waits in system memory${plan.disk.overflowBytes > 0 ? ' and on your SSD' : ''}. Slower than all-GPU, much faster than the processor alone.`;
+}
+
+function Legend({ color, text }: { color: string; text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="h-2 w-2 rounded-sm" style={{ background: color }} />
+      {text}
+    </span>
+  );
+}
+
+function RecommendedTag() {
+  return <span className="ml-1.5 text-[10.5px] font-normal" style={{ color: 'var(--accent)' }}>Recommended</span>;
+}
+
+function BoltIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
+    </svg>
+  );
+}
+
+function Section({ title, hint, control, recommended }: { title: string; hint: string; control?: React.ReactNode; recommended?: boolean }) {
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px] font-medium">
+          {title} {recommended && <RecommendedTag />}
+        </span>
+        {control}
+      </div>
+      <p className="mt-1 text-[11.5px] text-ink-faint">{hint}</p>
+    </div>
+  );
+}
+
+function Fold({ label, open, onToggle, id }: { label: string; open: boolean; onToggle: () => void; id: string }) {
+  return (
+    <button className="flex min-h-[40px] w-full items-center justify-between px-3 text-[12.5px] font-medium" onClick={onToggle} aria-expanded={open} data-fold={id}>
+      {label}
+      <span className="font-mono text-ink-faint">{open ? '−' : '+'}</span>
+    </button>
+  );
+}
+
+function Slider({
+  id,
+  label,
+  value,
+  max,
+  readout,
+  ends,
+  hint,
+  onChange,
+  recommended,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  max: number;
+  readout: string;
+  ends: string[];
+  hint: string;
+  onChange: (i: number) => void;
+  recommended?: boolean;
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <label htmlFor={id} className="text-[12.5px] font-medium">
+          {label} {recommended && <RecommendedTag />}
+        </label>
+        <span className="font-mono text-[11.5px]">{readout}</span>
+      </div>
+      <input id={id} type="range" className="mt-1 w-full" min={0} max={max} step={1} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <div className="flex justify-between text-[10.5px] text-ink-faint">
+        {ends.map((e, i) => (
+          <span key={i}>{e}</span>
+        ))}
+      </div>
+      <p className="mt-1 text-[11.5px] text-ink-faint">{hint}</p>
+    </div>
+  );
+}
+
 /** The small horizontal tab strip: one pick out of a few, accent on the live one. */
 function SegTabs<T extends string>({
   options,
   value,
   onChange,
+  label,
+  data,
 }: {
   options: Array<{ id: T; label: string; disabled?: boolean; title?: string }>;
-  value: T;
+  value: T | null;
   onChange: (v: T) => void;
+  label: string;
+  data?: string;
 }) {
   return (
-    <div className="flex rounded-full border p-0.5 text-[11px]" style={{ borderColor: 'var(--line)' }}>
+    <div className="flex rounded-full border p-0.5 text-[12px]" style={{ borderColor: 'var(--line)' }} role="group" aria-label={label}>
       {options.map((o) => (
         <button
           key={o.id}
-          className="rounded-full px-2.5 py-0.5 disabled:opacity-40"
+          className="min-h-[32px] rounded-full px-3.5 disabled:opacity-40"
           disabled={o.disabled}
           title={o.title}
-          style={
-            value === o.id
-              ? { background: 'var(--accent)', color: 'var(--on-accent, #fff)' }
-              : { color: 'var(--ink-faint)' }
-          }
+          aria-pressed={value === o.id}
+          style={value === o.id ? { background: 'var(--accent)', color: 'var(--on-accent, #fff)' } : { color: 'var(--ink-faint)' }}
           onClick={() => onChange(o.id)}
+          {...(data ? { [`data-${data}`]: o.id } : {})}
         >
           {o.label}
         </button>
@@ -303,297 +743,137 @@ function SegTabs<T extends string>({
   );
 }
 
-function SurfaceToggle({ value, onChange }: { value: Surface; onChange: (s: Surface) => void }) {
-  return (
-    <SegTabs
-      options={[
-        { id: 'simple', label: 'Simple' },
-        { id: 'advanced', label: 'Advanced' },
-      ]}
-      value={value}
-      onChange={onChange}
-    />
-  );
-}
-
-/**
- * Where the layers run, read off `gpuLayers`: 0 is all-CPU, everything (or an
- * unset "let the engine offload it all") is GPU-only, anything in between is
- * the hybrid split. GPU-only writes the layer count explicitly rather than
- * leaving it unset, so "all of it" survives engines whose default would
- * split to fit.
- */
-type Placement = 'gpu' | 'hybrid' | 'cpu';
-
-function placementOf(params: LoadParams, layers?: number): Placement {
-  if (params.gpuLayers === 0) return 'cpu';
-  if (params.gpuLayers === undefined || (layers !== undefined && params.gpuLayers >= layers)) return 'gpu';
-  return 'hybrid';
-}
-
-/**
- * One slider and two sentences.
- *
- * The sentences say what was chosen and what it costs in memory. They
- * deliberately do not predict tokens per second: we can measure memory and would
- * be inventing speed, and a number people can catch you being wrong about is
- * worse than no number.
- */
-function SimpleSurface({
-  budget,
-  onBudget,
-  auto,
-  solving,
-}: {
-  budget: number;
-  onBudget: (n: number) => void;
-  auto: AutoFitSummary | null;
-  solving: boolean;
-}) {
-  return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between text-[12px]">
-        <label htmlFor="engine-budget">How much of this machine may it use?</label>
-        <span className="font-mono text-[11px] text-ink-faint">{Math.round(budget * 100)}%</span>
-      </div>
-      <input
-        id="engine-budget"
-        type="range"
-        className="mt-1 w-full"
-        min={30}
-        max={95}
-        step={5}
-        value={Math.round(budget * 100)}
-        onChange={(e) => onBudget(Number(e.target.value) / 100)}
-      />
-      <div className="flex justify-between text-[10.5px] text-ink-faint">
-        <span>Leave my machine usable</span>
-        <span>Everything it has</span>
-      </div>
-
-      <div className="mt-2 min-h-[2.5rem]" style={{ opacity: solving ? 0.6 : 1 }}>
-        {auto ? (
-          <>
-            <p className="text-[12.5px]">{auto.headline}</p>
-            <p className="text-[11.5px] text-ink-faint">{auto.tradeoff}</p>
-            {auto.compromises.map((c) => (
-              <p key={c} className="mt-0.5 text-[11px] text-ink-faint">
-                {c}
-              </p>
-            ))}
-          </>
-        ) : (
-          <p className="text-[12px] text-ink-faint">Working out what fits…</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Every flag llama.cpp takes, grouped so the common ones come first. */
-function AdvancedSurface({
+/** Every remaining flag, grouped, each with a sentence and the flag it sets. */
+export function ExpertControls({
   model,
   params,
-  stops,
-  ctxIndex,
+  runOn,
+  unified,
   onChange,
+  onChangePlacement,
 }: {
-  model: LocalModel & { gpuFit?: GpuFit };
+  model: LocalModel;
   params: LoadParams;
-  stops: number[];
-  ctxIndex: number;
+  runOn: RunOn;
+  unified: boolean;
   onChange: (p: Partial<LoadParams>) => void;
+  onChangePlacement: (p: Partial<LoadParams>) => void;
 }) {
-  const placement = placementOf(params, model.layers);
-  // The planner's verdict doubles as hardware knowledge: 'cpu' means it looked
-  // and found no GPU, so GPU-only is a choice that could never do anything.
-  const noGpu = model.gpuFit === 'cpu';
-  const setPlacement = (p: Placement) =>
-    onChange({
-      gpuLayers:
-        p === 'gpu'
-          ? (model.layers ?? 999)
-          : p === 'cpu'
-            ? 0
-            : Math.max(1, Math.floor((model.layers ?? 40) / 2)),
-    });
+  const layers = model.layers;
+  const moe = isMoe(model);
   return (
-    <div className="mt-3 space-y-3">
-      <div>
-        <div className="flex items-center justify-between text-[12px]">
-          <label htmlFor="engine-ctx">Context length</label>
-          <span className="font-mono text-[11px] text-ink-faint">{formatTokens(params.contextTokens ?? 8192)}</span>
-        </div>
-        <input
-          id="engine-ctx"
-          type="range"
-          className="mt-1 w-full"
-          min={0}
-          max={stops.length - 1}
-          step={1}
-          value={ctxIndex}
-          onChange={(e) => onChange({ contextTokens: stops[Number(e.target.value)] })}
-        />
-      </div>
-
-      {model.format === 'mlx' ? (
-        <Row label="Runs on" hint="MLX models live on the GPU; a Mac shares one memory pool between it and the CPU.">
-          <span className="text-[11px] text-ink-faint">GPU only</span>
-        </Row>
-      ) : (
-        <Row
-          label="Runs on"
-          hint={
-            placement === 'gpu'
-              ? 'Every layer lives in VRAM. Fastest, when the model fits.'
-              : placement === 'cpu'
-                ? 'Everything runs in system memory. Slower, but it always fits.'
-                : 'Split it: the layers you choose run on the GPU, the rest on the CPU.'
-          }
-        >
-          <SegTabs
-            options={[
-              { id: 'gpu', label: 'GPU only', disabled: noGpu, title: noGpu ? 'No GPU on this machine' : undefined },
-              { id: 'hybrid', label: 'Hybrid', disabled: noGpu, title: noGpu ? 'No GPU on this machine' : undefined },
-              { id: 'cpu', label: 'CPU only' },
-            ]}
-            value={placement}
-            onChange={setPlacement}
-          />
-        </Row>
-      )}
-
-      {placement === 'hybrid' && model.format !== 'mlx' && (
-        <>
-          {model.layers ? (
-            <Row
-              label="GPU offload"
-              hint={`How many of the model's ${model.layers} layers run on the GPU. The rest run on the CPU.`}
-            >
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min={0}
-                  max={model.layers}
-                  value={params.gpuLayers ?? model.layers}
-                  onChange={(e) => onChange({ gpuLayers: Number(e.target.value) })}
-                  className="w-28"
-                />
-                <span className="w-14 text-right font-mono text-[11px] text-ink-faint">
-                  {params.gpuLayers ?? model.layers}/{model.layers}
-                </span>
-              </div>
-            </Row>
-          ) : (
-            <Row label="GPU offload" hint="This file does not say how many layers it has, so set the count directly.">
-              <NumberInput
-                value={params.gpuLayers}
-                min={1}
-                max={999}
-                placeholder="layers"
-                onChange={(n) => onChange({ gpuLayers: n })}
-              />
-            </Row>
-          )}
-          <Row label="CPU threads" hint="Threads for the layers that run on the CPU. Empty lets the engine choose.">
-            <NumberInput value={params.threads} min={1} max={256} placeholder="auto" onChange={(n) => onChange({ threads: n })} />
+    <div className="space-y-4 border-t px-3 pb-3 pt-3" style={{ borderColor: 'var(--line)' }}>
+      <Group title="Where it runs">
+        {!unified && model.format !== 'mlx' && (
+          <Row label="CPU only" flag="--n-gpu-layers 0" hint="Ignore the graphics card and run everything on the processor. Slow, but it always works.">
+            <Toggle value={runOn === 'cpu'} onChange={(v) => onChangePlacement({ gpuLayers: v ? 0 : layers, cpuMoeLayers: undefined, cpuFfnLayers: undefined })} label="CPU only" />
           </Row>
-        </>
+        )}
+        {runOn === 'hybrid' && (
+          <>
+            <Row label="Layers on the graphics card" flag="--n-gpu-layers" hint="The same setting as the Custom slider. llama.cpp puts the last layers on the GPU.">
+              <NumberInput value={params.gpuLayers} min={0} max={layers ?? 999} placeholder="all" onChange={(n) => onChangePlacement({ gpuLayers: n })} />
+            </Row>
+            {moe ? (
+              <>
+                <Row label="Expert layers in RAM" flag="--n-cpu-moe N  (all: --cpu-moe)" hint="How many layers keep their experts in system memory instead of on the graphics card. The model uses only a few experts per word, so this costs less speed than it sounds.">
+                  <NumberInput value={params.cpuMoeLayers} min={0} max={layers ?? 999} placeholder="0" onChange={(n) => onChangePlacement({ cpuMoeLayers: n })} />
+                </Row>
+                <Row label="Expert cache on the graphics card (MB)" flag="--moe-cache-mib" hint="Keeps the experts this model reaches for most often in spare graphics memory. Speeds up replies when experts live in RAM. Needs a recent engine build.">
+                  <NumberInput value={params.moeCacheMiB} min={0} max={65536} placeholder="off" onChange={(n) => onChange({ moeCacheMiB: n })} />
+                </Row>
+              </>
+            ) : (
+              <Row label="Feed-forward layers in RAM" flag="--n-cpu-ffn N" hint="How many layers run their feed-forward part (the bulkiest piece) from system memory, keeping attention on the graphics card.">
+                <NumberInput value={params.cpuFfnLayers} min={0} max={layers ?? 999} placeholder="0" onChange={(n) => onChangePlacement({ cpuFfnLayers: n })} />
+              </Row>
+            )}
+          </>
+        )}
+        {!unified && runOn !== 'cpu' && (
+          <Row label="Context on the graphics card" flag="--no-kv-offload when off" hint="Off moves the conversation memory into system RAM. Frees graphics memory for the model, at some speed cost.">
+            <Toggle value={params.kvOnGpu !== false} onChange={(v) => onChangePlacement({ kvOnGpu: v ? undefined : false, gpuLayers: params.gpuLayers ?? layers })} label="Context on the graphics card" />
+          </Row>
+        )}
+        {hasTables(model) && (
+          <Row label="Lookup table on disk" flag="--lazy-mode on" hint="This model ships a large table it reads only a few KB of per word. Leave it on your SSD instead of filling memory. Needs Read the file as needed.">
+            <Toggle value={params.lazyTables !== false} onChange={(v) => onChange({ lazyTables: v })} disabled={params.mmap === false} label="Lookup table on disk" />
+          </Row>
+        )}
+        <p className="text-[11px] text-ink-faint">
+          We work out where everything goes before loading and pass it to llama.cpp as is (<span className="font-mono">--fit off</span>), so the meter above is what you get.
+        </p>
+      </Group>
+
+      {model.format !== 'mlx' && (
+        <Group title="Reasoning">
+          <Row label="Thinking" flag="chat_template_kwargs.enable_thinking" hint="On by default. Lets reasoning-capable local models think before answering. Applies to this model, not individual chats; models without reasoning may ignore it.">
+            <Toggle value={params.thinking !== false} onChange={(v) => onChange({ thinking: v })} label="Thinking" />
+          </Row>
+        </Group>
       )}
-      {placement === 'cpu' && model.format !== 'mlx' && (
-        <Row label="CPU threads" hint="Threads for the layers that run on the CPU. Empty lets the engine choose.">
+
+      <Group title="Speed">
+        <Row label="Flash attention" flag="--flash-attn" hint="A faster, leaner way to do the attention math. The smaller memory precisions need it. Auto turns it on where this engine supports it.">
+          <select
+            className="input w-24 py-1 text-[12px]"
+            value={params.flashAttention === undefined ? 'auto' : params.flashAttention ? 'on' : 'off'}
+            onChange={(e) => onChange({ flashAttention: e.target.value === 'auto' ? undefined : e.target.value === 'on' })}
+          >
+            <option value="auto">Auto</option>
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </Row>
+        <Row label="Processor threads" flag="--threads" hint="How many processor cores work on the parts that run on the CPU. Empty lets the engine choose.">
           <NumberInput value={params.threads} min={1} max={256} placeholder="auto" onChange={(n) => onChange({ threads: n })} />
         </Row>
-      )}
+        <Row label="Threads for reading prompts" flag="--threads-batch" hint="Cores used while the model reads a long message or file, separate from writing the reply.">
+          <NumberInput value={params.threadsBatch} min={1} max={256} placeholder="auto" onChange={(n) => onChange({ threadsBatch: n })} />
+        </Row>
+        <Row label="Batch size" flag="--batch-size" hint="How much of your prompt it reads in one go. Bigger reads long files faster and uses more memory.">
+          <NumberInput value={params.batchSize} min={16} max={8192} placeholder="auto" onChange={(n) => onChange({ batchSize: n })} />
+        </Row>
+        <Row label="Micro-batch" flag="--ubatch-size" hint="The chunk the graphics card actually works on. Lower it if loading fails with an out-of-memory error.">
+          <NumberInput value={params.ubatchSize} min={16} max={4096} placeholder="auto" onChange={(n) => onChange({ ubatchSize: n })} />
+        </Row>
+      </Group>
 
-      <Row label="KV cache type" hint="A smaller element halves or quarters the cache, at a small quality cost.">
-        <select
-          className="input w-28 py-1 text-[12px]"
-          value={params.kvCacheDtype ?? 'f16'}
-          onChange={(e) => onChange({ kvCacheDtype: e.target.value as KvCacheDtype })}
-        >
-          <option value="f16">f16 (full)</option>
-          <option value="q8_0">q8_0 (half)</option>
-          <option value="q4_0">q4_0 (quarter)</option>
-        </select>
-      </Row>
+      <Group title="Guessing ahead">
+        <Row label="Speculative decoding" flag="--spec-default" hint="Guesses the next few words from text already in the chat and checks them in one step. Edits that repeat existing code come out several times faster.">
+          <Toggle value={params.speculative !== false} onChange={(on) => onChange({ speculative: on ? undefined : false })} label="Speculative decoding" />
+        </Row>
+        {params.speculative !== false && <DraftModelRow model={model} value={params.draftModelId} onChange={(id) => onChange({ draftModelId: id })} />}
+      </Group>
 
-      <Row label="Parallel slots" hint="Concurrent requests. Each slot gets its own full KV cache, so 4 slots means 4x the cache.">
-        <NumberInput
-          value={params.parallelSlots}
-          min={1}
-          max={32}
-          placeholder="1"
-          onChange={(n) => onChange({ parallelSlots: n })}
-        />
-      </Row>
+      <Group title="Memory and loading">
+        <Row label="Read the file as needed" flag="--load-mode mmap / none" hint="Maps the model file instead of copying it in. Starts faster and lets a model bigger than RAM run from your SSD. Off reads it all in first.">
+          <Toggle value={params.mmap !== false} onChange={(v) => onChange({ mmap: v })} label="Read the file as needed" />
+        </Row>
+        <Row label="Pin in memory" flag="--load-mode mmap+mlock" hint="Stops the computer swapping the model out. Uses a full copy's worth of system memory.">
+          <Toggle value={params.mlock ?? false} onChange={(v) => onChange({ mlock: v, ...(v ? { ttlSeconds: 0 } : {}) })} label="Pin in memory" />
+        </Row>
+        <Row label="Unload when idle (seconds)" flag="ttl" hint="Seconds without a request before the model is let go. 0 keeps it loaded; empty uses the server's limit.">
+          <NumberInput value={params.ttlSeconds} min={0} max={86_400} placeholder="server default" onChange={(n) => onChange({ ttlSeconds: n })} />
+        </Row>
+      </Group>
 
-      <Row label="Flash attention" hint="Cuts attention memory and usually speeds generation up, where the build supports it.">
-        <select
-          className="input w-24 py-1 text-[12px]"
-          value={params.flashAttention === undefined ? 'auto' : params.flashAttention ? 'on' : 'off'}
-          onChange={(e) =>
-            onChange({ flashAttention: e.target.value === 'auto' ? undefined : e.target.value === 'on' })
-          }
-        >
-          <option value="auto">Auto</option>
-          <option value="on">On</option>
-          <option value="off">Off</option>
-        </select>
-      </Row>
-
-      <Row
-        label="Speculative decoding"
-        hint="Guesses upcoming tokens from text already in the conversation and checks them in one pass. Edits that repeat their input come out several times faster."
-      >
-        <Toggle value={params.speculative !== false} onChange={(on) => onChange({ speculative: on ? undefined : false })} label="Speculative decoding" />
-      </Row>
-
-      {params.speculative !== false && <DraftModelRow model={model} value={params.draftModelId} onChange={(id) => onChange({ draftModelId: id })} />}
-
-      <details className="rounded-lg border" style={{ borderColor: 'var(--line)' }}>
-        <summary className="cursor-pointer select-none px-3 py-2 text-[12px] text-ink-faint">
-          Compute and memory
-        </summary>
-        <div className="space-y-3 border-t px-3 py-3" style={{ borderColor: 'var(--line)' }}>
-          <Row label="Batch size" hint="Tokens processed per prompt batch. Larger is faster and uses more memory.">
-            <NumberInput value={params.batchSize} min={16} max={8192} placeholder="auto" onChange={(n) => onChange({ batchSize: n })} />
-          </Row>
-          <Row label="Physical batch" hint="The micro-batch the GPU actually runs. Lower it when a large batch runs out of memory.">
-            <NumberInput value={params.ubatchSize} min={16} max={4096} placeholder="auto" onChange={(n) => onChange({ ubatchSize: n })} />
-          </Row>
-          <Row label="Keep weights in RAM" hint="Stops the OS paging the model out. Uses more RAM and avoids a stall after idle.">
-            <Toggle value={params.mlock ?? false} onChange={(v) => onChange({ mlock: v })} label="Keep weights in RAM" />
-          </Row>
-          <Row label="Memory-map the file" hint="On by default. Turning it off reads the whole model in, which is slower to start but avoids disk stalls.">
-            <Toggle value={params.mmap !== false} onChange={(v) => onChange({ mmap: v })} label="Memory-map the file" />
-          </Row>
-        </div>
-      </details>
-
-      <details className="rounded-lg border" style={{ borderColor: 'var(--line)' }}>
-        <summary className="cursor-pointer select-none px-3 py-2 text-[12px] text-ink-faint">
-          Sampling and context scaling
-        </summary>
-        <div className="space-y-3 border-t px-3 py-3" style={{ borderColor: 'var(--line)' }}>
-          <Row label="RoPE frequency base" hint="Overrides the model's rotary base, for running past its trained context. Leave empty unless you know you need it.">
-            <NumberInput value={params.ropeFreqBase} min={0} max={10_000_000} placeholder="model default" onChange={(n) => onChange({ ropeFreqBase: n })} />
-          </Row>
-          <Row label="RoPE frequency scale" hint="Linear context scaling. 0.5 doubles the usable window, at a quality cost.">
-            <NumberInput value={params.ropeFreqScale} min={0} max={8} step={0.05} placeholder="model default" onChange={(n) => onChange({ ropeFreqScale: n })} />
-          </Row>
-          <Row label="Seed" hint="Fixes sampling for a reproducible answer. Empty means random.">
-            <NumberInput value={params.seed} min={0} max={2 ** 31 - 1} placeholder="random" onChange={(n) => onChange({ seed: n })} />
-          </Row>
-          <Row label="Unload when idle" hint="Seconds of no requests before the model is evicted. 0 keeps it resident.">
-            <NumberInput value={params.ttlSeconds} min={0} max={86_400} placeholder="server default" onChange={(n) => onChange({ ttlSeconds: n })} />
-          </Row>
-        </div>
-      </details>
+      <Group title="Long context and repeatability">
+        <Row label="RoPE frequency base" flag="--rope-freq-base" hint="Stretches a model past the context it was trained for. Leave it empty unless the model card says to set it.">
+          <NumberInput value={params.ropeFreqBase} min={0} max={10_000_000} placeholder="model default" onChange={(n) => onChange({ ropeFreqBase: n })} />
+        </Row>
+        <Row label="RoPE frequency scale" flag="--rope-freq-scale" hint="The simpler stretch: 0.5 doubles usable context, at a quality cost.">
+          <NumberInput value={params.ropeFreqScale} min={0} max={8} step={0.05} placeholder="model default" onChange={(n) => onChange({ ropeFreqScale: n })} />
+        </Row>
+        <Row label="Seed" flag="--seed" hint="Fix it to get the same answer to the same question every time. Empty means random.">
+          <NumberInput value={params.seed} min={0} max={2 ** 31 - 1} placeholder="random" onChange={(n) => onChange({ seed: n })} />
+        </Row>
+      </Group>
 
       {model.architecture && (
         <p className="text-[11px] text-ink-faint">
-          {model.architecture} · {model.layers ?? '?'} layers · {model.kvHeads ?? '?'} KV heads
+          {model.architecture} · {layers ?? '?'} layers · {model.kvHeads ?? '?'} KV heads
+          {moe && model.weightLayout ? ` · experts ${Math.round(model.weightLayout.expertShare * 100)}% of the file` : ''}
           {model.sizeBytes ? ` · ${formatBytes(model.sizeBytes)} on disk` : ''}
         </p>
       )}
@@ -601,7 +881,18 @@ function AdvancedSurface({
   );
 }
 
-function Row({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <p className="border-t pt-2 text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, hint, flag, children }: { label: string; hint: string; flag?: string; children: React.ReactNode }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
@@ -609,6 +900,7 @@ function Row({ label, hint, children }: { label: string; hint: string; children:
         {children}
       </div>
       <p className="mt-0.5 text-[11px] text-ink-faint">{hint}</p>
+      {flag && <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint">{flag}</p>}
     </div>
   );
 }
@@ -649,22 +941,14 @@ function NumberInput({
  * draft that is too large slows ordinary replies down (measured: a 7.5B draft
  * on a 12B model halved prose speed while it sped edits up).
  */
-function DraftModelRow({
-  model,
-  value,
-  onChange,
-}: {
-  model: LocalModel;
-  value?: string;
-  onChange: (id: string | undefined) => void;
-}) {
+function DraftModelRow({ model, value, onChange }: { model: LocalModel; value?: string; onChange: (id: string | undefined) => void }) {
   const [candidates, setCandidates] = useState<LocalModel[]>([]);
   useEffect(() => {
     let live = true;
     window.nekko
       .engineModels()
       .then((all) => {
-        if (!live) return;
+        if (!live || !all) return;
         const family = model.architecture;
         setCandidates(
           all.filter(
@@ -684,27 +968,20 @@ function DraftModelRow({
   }, [model.id, model.architecture, model.sizeBytes]);
   if (candidates.length === 0 && !value) return null;
   return (
-    <Row label="Draft model" hint="A small model from the same family that guesses ahead. Optional; the lookup above needs none.">
-      <select
-        className="input w-40 py-1 text-[12px]"
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value || undefined)}
-      >
+    <Row label="Draft model" flag="--spec-draft-model" hint="A small model from the same family that guesses ahead. Optional; the guessing above needs none.">
+      <select className="input w-40 py-1 text-[12px]" value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
         <option value="">None</option>
         {candidates.map((m) => (
-          <option key={m.id} value={m.id}>{m.id}</option>
+          <option key={m.id} value={m.id}>
+            {m.id}
+          </option>
         ))}
       </select>
     </Row>
   );
 }
 
-function fromPreset(preset?: EngineLoadPreset): LoadParams {
-  if (!preset) return {};
-  const { budgetFraction: _b, ...params } = preset;
-  return params;
-}
-
 function nearest(stops: number[], value: number): number {
   return stops.reduce((best, s) => (Math.abs(s - value) < Math.abs(best - value) ? s : best), stops[0]);
 }
+

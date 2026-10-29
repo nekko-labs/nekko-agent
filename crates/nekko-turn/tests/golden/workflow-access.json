@@ -4275,7 +4275,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4318,7 +4319,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4349,7 +4351,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4378,7 +4381,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4401,7 +4405,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4438,7 +4443,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4463,7 +4469,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4486,7 +4493,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4513,7 +4521,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4545,7 +4554,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4570,7 +4580,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {
@@ -4597,7 +4608,8 @@
     "ask_user",
     "decide",
     "report_experiment",
-    "report_artifact"
+    "report_artifact",
+    "remember"
    ]
   },
   {

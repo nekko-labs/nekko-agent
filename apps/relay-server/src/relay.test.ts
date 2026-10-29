@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { buildRelay } from './server.js';
-import type { ActivityPush, PushSender } from './push.js';
+import type { ActivityPush, CardPush, PushSender } from './push.js';
 
 /** Live-socket protocol tests: real Fastify WS server + Node's global WebSocket. */
 
@@ -145,7 +145,7 @@ describe('relay v2 routing', () => {
     await agent.next();
     const dev = '00000000-0000-4000-8000-000000000003';
     const tag = 'a'.repeat(32);
-    c.send({ type: 'register-activity', deviceId: dev, tag, token: 'ab'.repeat(32), app: 'com.nekko.native.ios' });
+    c.send({ type: 'register-activity', deviceId: dev, tag, token: 'ab'.repeat(32), app: 'dev.nekkolabs.nekkoagent' });
     // Malformed registrations are ignored.
     c.send({ type: 'register-activity', deviceId: 'nope', tag, token: 'ab'.repeat(32) });
     c.send({ type: 'register-activity', deviceId: dev, tag: 'short', token: 'ab'.repeat(32) });
@@ -158,8 +158,8 @@ describe('relay v2 routing', () => {
     agent.send({ type: 'activity', tag, phase: 'done' });
     await new Promise((r) => setTimeout(r, 50));
     expect(pushes).toEqual([
-      { token: 'ab'.repeat(32), push: { event: 'update', phase: 'approval', callId: 'tc1', severity: 'high' }, app: 'com.nekko.native.ios' },
-      { token: 'ab'.repeat(32), push: { event: 'end', phase: 'done' }, app: 'com.nekko.native.ios' },
+      { token: 'ab'.repeat(32), push: { event: 'update', phase: 'approval', callId: 'tc1', severity: 'high' }, app: 'dev.nekkolabs.nekkoagent' },
+      { token: 'ab'.repeat(32), push: { event: 'end', phase: 'done' }, app: 'dev.nekkolabs.nekkoagent' },
     ]);
     // Ended: the tag is forgotten and a late update pushes nothing.
     expect(rooms.get('r7')!.activities.has(tag)).toBe(false);
@@ -168,6 +168,105 @@ describe('relay v2 routing', () => {
     expect(pushes.length).toBe(2);
     // A client never relays an `activity` frame of its own to anyone but the agent.
     c.send({ type: 'activity', tag, phase: 'done' });
+    expect((await agent.next()).type).toBe('c');
+  });
+
+  it('pushes the card to each phone at its level, and starts one only where none is up', async () => {
+    const pushes: { token: string; push: CardPush; app?: string }[] = [];
+    const pushSender: PushSender = { enabled: true, send: async () => {}, sendCard: async (token, push, app) => void pushes.push({ token, push, app }) };
+    const { url, rooms } = await startRelay({ pushSender });
+    const agent = await connect(url, { room: 'r8', role: 'agent', key: 'k' });
+    const c = await connect(url, { room: 'r8', role: 'client', key: 'k' });
+    await c.next();
+    await agent.next();
+    const [minimal, detailed, starter] = ['1', '2', '3'].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    const tok = (ch: string) => ch.repeat(64);
+    const names = { computerId: 'mac-1', computerName: 'Studio' };
+    c.send({ type: 'register-card', deviceId: minimal, token: tok('a'), level: 'minimal', ...names });
+    c.send({ type: 'register-card', deviceId: detailed, token: tok('b'), startToken: tok('c'), level: 'detailed', app: 'dev.nekkolabs.nekkoagent', ...names });
+    // The third phone registers on its own socket, which then goes quiet (suspended).
+    const s3 = await connect(url, { room: 'r8', role: 'client', key: 'k' });
+    await s3.next();
+    await agent.next();
+    s3.send({ type: 'register-card', deviceId: starter, startToken: tok('d'), level: 'standard', ...names });
+    // Names are kept to 64 bytes, cut on a character boundary.
+    const long = minimal.replace('1', '6');
+    c.send({ type: 'register-card', deviceId: long, startToken: tok('f'), level: 'standard', computerId: 'i'.repeat(300), computerName: 'é'.repeat(40) });
+    // Malformed registrations are ignored.
+    c.send({ type: 'register-card', deviceId: 'nope', token: tok('e'), level: 'standard' });
+    c.send({ type: 'register-card', deviceId: minimal.replace('1', '9'), token: tok('e'), level: 'loud' });
+    c.send({ type: 'register-card', deviceId: minimal.replace('1', '8'), token: 'not hex!', level: 'standard' });
+    c.send({ type: 'register-card', deviceId: minimal.replace('1', '7'), level: 'standard' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect([...rooms.get('r8')!.cards.keys()]).toEqual([minimal, detailed, starter, long]);
+    expect(rooms.get('r8')!.cards.get(long)).toMatchObject({ computerId: 'i'.repeat(64), computerName: 'é'.repeat(32) });
+    rooms.get('r8')!.cards.delete(long);
+
+    const chat = { id: 's1', short: 'Fix', state: 'working', step: 'Run npm test', reply: 'On it.', closeWord: 'Cool' };
+    agent.send({ type: 'card', state: { chats: [chat], focusId: 's1' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.map((p) => [p.token, p.push.event, p.push.state.chats[0].step, p.push.state.chats[0].reply])).toEqual([
+      [tok('a'), 'update', '', ''],
+      [tok('b'), 'update', 'Run npm test', 'On it.'],
+    ]);
+    expect(pushes[1].app).toBe('dev.nekkolabs.nekkoagent');
+    // Only a new step: priority 5. A new state: 10.
+    expect(pushes.map((p) => p.push.priority)).toEqual([10, 10]);
+    agent.send({ type: 'card', state: { chats: [{ ...chat, step: 'Run npm run lint' }], focusId: 's1' } });
+    agent.send({ type: 'card', state: { chats: [{ ...chat, state: 'needsYou', callId: 'tc1' }], focusId: 's1' } });
+    agent.send({ type: 'card', state: { chats: [chat], focusId: 's1' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.slice(2).map((p) => p.push.priority)).toEqual([5, 5, 10, 10, 10, 10]);
+
+    // A phone with a live socket starts its own card: no start pushed to it.
+    pushes.length = 0;
+    agent.send({ type: 'card-start', state: { chats: [chat], focusId: 's1' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.map((p) => p.token)).toEqual([tok('a'), tok('b')]);
+    s3.ws.close();
+    await s3.closed;
+    expect((await agent.next()).type).toBe('client-close');
+
+    // A run a phone asked for: an update where a card is up, a start where none is (once).
+    pushes.length = 0;
+    agent.send({ type: 'card-start', state: { chats: [chat], focusId: 's1' } });
+    agent.send({ type: 'card-start', state: { chats: [chat], focusId: 's1' } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.map((p) => [p.token, p.push.event])).toEqual([
+      [tok('a'), 'update'],
+      [tok('b'), 'update'],
+      [tok('d'), 'start'],
+      [tok('a'), 'update'],
+      [tok('b'), 'update'],
+    ]);
+    const start = pushes[2].push;
+    expect(start.attributes).toEqual({ ...names, level: 'standard' });
+    expect(start.priority).toBe(10);
+    expect(start.state.chats[0]).toMatchObject({ step: 'Run npm test', reply: '' });
+
+    // An empty card ends it and forgets the update token; the start token stays.
+    pushes.length = 0;
+    agent.send({ type: 'card', state: { chats: [] } });
+    agent.send({ type: 'card', state: 'junk' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pushes.map((p) => [p.token, p.push.event])).toEqual([
+      [tok('a'), 'end'],
+      [tok('b'), 'end'],
+    ]);
+    expect(pushes.map((p) => p.push.priority)).toEqual([10, 10]);
+    expect(rooms.get('r8')!.cards.get(detailed)).toMatchObject({ startToken: tok('c') });
+    expect(rooms.get('r8')!.cards.get(detailed)!.token).toBeUndefined();
+    expect(rooms.get('r8')!.cards.has(minimal)).toBe(false);
+
+    // Level none, and a revoked phone, drop the registration.
+    c.send({ type: 'register-card', deviceId: starter, level: 'none' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(rooms.get('r8')!.cards.has(starter)).toBe(false);
+    agent.send({ type: 'push-remove', deviceId: detailed });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(rooms.get('r8')!.cards.size).toBe(0);
+    // A client's own `card` frame only ever reaches the agent.
+    c.send({ type: 'card', state: { chats: [chat] } });
     expect((await agent.next()).type).toBe('c');
   });
 

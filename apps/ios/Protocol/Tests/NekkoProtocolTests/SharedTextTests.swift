@@ -103,13 +103,13 @@ final class CarriedIdsTests: XCTestCase {
         let shown: [Block] = [
             .user(id: "u1", text: "earlier", at: nil, images: 0),
             .user(id: "pending-7", text: "go", at: 7, images: 0),
-            .tool(id: "call-1", name: "bash", label: "ls", status: .ok, output: nil),
+            .tool(id: "call-1", name: "bash", label: "ls", status: .ok, output: nil, input: [:]),
             .assistant(id: "live-7-2", text: "Done. ", reasoning: "think", streaming: false, interrupted: false),
         ]
         let saved: [Block] = [
             .user(id: "u1", text: "earlier", at: nil, images: 0),
             .user(id: "m2", text: "go", at: 7, images: 0),
-            .tool(id: "call-1", name: "bash", label: "ls", status: .ok, output: nil),
+            .tool(id: "call-1", name: "bash", label: "ls", status: .ok, output: nil, input: [:]),
             .assistant(id: "m3", text: "Done.", reasoning: "think", streaming: false, interrupted: false),
         ]
         XCTAssertEqual(Transcript.carriedIds(shown: shown, next: saved), ["m2": "pending-7", "m3": "live-7-2"])

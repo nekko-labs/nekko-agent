@@ -18,6 +18,7 @@
 //! still mirrored to the command log.
 
 use crate::context::{BoxFuture, Cancel};
+use crate::gitguard::EnvChange;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
@@ -48,6 +49,27 @@ pub struct RunRequest<'a> {
     pub cancel: &'a Cancel,
     /// Every decoded chunk of stdout and stderr, as it arrives.
     pub on_output: &'a (dyn Fn(&str) + Send + Sync),
+    /// Environment changes on top of the daemon's own (and [`platform_env`]).
+    pub env: &'a [EnvChange],
+}
+
+/// What every command the agent runs gets in its environment on this
+/// platform. On Windows, `NoDefaultCurrentDirectoryInExePath` stops cmd.exe
+/// from looking in the current folder before PATH, so a workspace file named
+/// `git.bat` does not run in place of git. (PowerShell never runs a program
+/// from the current folder without `.\`.)
+pub fn platform_env(windows: bool) -> Vec<EnvChange> {
+    if windows { vec![("NoDefaultCurrentDirectoryInExePath".into(), Some("1".into()))] } else { Vec::new() }
+}
+
+/// Apply [`platform_env`] and then `env` to a command about to spawn.
+pub(crate) fn apply_env(cmd: &mut tokio::process::Command, env: &[EnvChange]) {
+    for (key, value) in platform_env(cfg!(windows)).iter().chain(env) {
+        match value {
+            Some(v) => cmd.env(key, v),
+            None => cmd.env_remove(key),
+        };
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -191,6 +213,7 @@ fn command(req: &RunRequest<'_>, shell: &str) -> tokio::process::Command {
         cmd.process_group(0);
     }
     cmd.current_dir(req.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+    apply_env(&mut cmd, req.env);
     cmd
 }
 
@@ -422,6 +445,29 @@ pub(crate) mod tree {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_commands_never_run_a_program_from_the_current_folder() {
+        assert_eq!(platform_env(true), vec![("NoDefaultCurrentDirectoryInExePath".to_string(), Some("1".to_string()))]);
+        assert!(platform_env(false).is_empty());
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn the_variable_reaches_the_command() {
+        let cancel = Cancel::new();
+        let cwd = std::env::temp_dir().to_string_lossy().into_owned();
+        let out = run_shell(RunRequest {
+            command: "echo %NoDefaultCurrentDirectoryInExePath%",
+            cwd: &cwd,
+            limits: BashLimits::default(),
+            cancel: &cancel,
+            on_output: &|_| {},
+            env: &[],
+        })
+        .await;
+        assert_eq!(out.stdout.trim(), "1");
+    }
 
     #[test]
     fn keeps_split_characters_whole() {

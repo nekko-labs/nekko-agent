@@ -392,6 +392,11 @@ export function matchSkills(query: string, extra: SkillDef[] = []): SkillDef[] {
   );
 }
 
+/** The text a skill turn sends: its template, then the user's input (as the desktop composer joins them). */
+export function skillTurnText(template: string, input: string): string {
+  return [template.trimEnd(), input.trim()].filter(Boolean).join('\n\n');
+}
+
 export const SKILL_CATEGORIES: SkillCategory[] = [
   'Research & planning',
   'Code quality',

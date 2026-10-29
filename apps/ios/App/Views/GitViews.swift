@@ -96,7 +96,7 @@ private struct GitStatusList: View {
                 Text("Changes from this phone ask for Face ID or your passcode, and show in this phone’s activity on the computer.")
             }
         }
-        .refreshable { await model.load(refresh: true) }
+        .pawRefreshable { await model.load(refresh: true) }
         .disabled(model.busy != nil)
         .overlay { if model.busy != nil { ProgressView().controlSize(.large).accessibilityLabel("Working") } }
         .sheet(isPresented: $creatingPr) { CreatePrView(model: model) }
@@ -323,7 +323,7 @@ struct GitHistoryView: View {
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.inline)
         .task { if commits.isEmpty { await load(skip: 0) } }
-        .refreshable { commits = []; await load(skip: 0) }
+        .pawRefreshable { commits = []; await load(skip: 0) }
     }
 
     private func load(skip: Int) async {
@@ -443,7 +443,7 @@ struct GitBranchesView: View {
         }
         .disabled(model.busy != nil)
         .task { await load() }
-        .refreshable { await load() }
+        .pawRefreshable { await load() }
         .confirmationDialog("Switch to \(switching?.localName ?? "")?", isPresented: Binding(get: { switching != nil }, set: { if !$0 { switching = nil } }),
                             titleVisibility: .visible) {
             Button("Switch") {
@@ -680,7 +680,7 @@ struct PrChecksView: View {
         .navigationTitle("Checks")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .refreshable { await load() }
+        .pawRefreshable { await load() }
     }
 
     private func load() async {

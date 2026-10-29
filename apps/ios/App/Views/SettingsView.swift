@@ -15,32 +15,30 @@ struct ComputersView: View {
         List {
             Section {
                 ForEach(store.computers) { c in
-                    // A button, so VoiceOver says what tapping does; the connected
-                    // computer isn't torn down and reconnected by a tap.
-                    Button { if c.id != store.activeId { store.connect(c.id) } } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
-                                if c.id == store.activeId { Text("Connected here").font(.caption2).foregroundStyle(palette.success) }
-                                if c.id == app.prefs.defaultComputer {
-                                    Image(systemName: "star.fill").font(.caption2).foregroundStyle(palette.warning)
-                                        .accessibilityLabel("Opens at launch")
+                    // A tap opens the computer's page (2026-10-24); the actions stay on swipe and touch-and-hold.
+                    NavigationLink(value: Route.computer(c.id)) {
+                        HStack(spacing: 10) {
+                            Circle().fill(c.id == store.activeId ? dot : palette.inkFaint.opacity(0.5)).frame(width: 8, height: 8)
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
+                                    if c.id == app.prefs.defaultComputer {
+                                        Image(systemName: "star.fill").font(.caption2).foregroundStyle(palette.warning)
+                                            .accessibilityLabel("Opens at launch")
+                                    }
                                 }
+                                Text(subtitle(c)).font(.caption).foregroundStyle(palette.inkFaint)
                             }
-                            Text("\(routeName(c.route)) · \(c.relayHost)").font(.caption).foregroundStyle(palette.inkFaint)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(c.id == store.activeId ? .isSelected : [])
-                    .accessibilityHint(c.id == store.activeId ? "" : "Connects to this computer")
+                    .accessibilityIdentifier("computers.row")
+                    .accessibilityHint("Opens this computer's page")
                     .swipeActions {
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                     }
                     .contextMenu {
-                        Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") }
+                        if c.id != store.activeId { Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") } }
                         Button { app.prefs.defaultComputer = c.id } label: { Label("Open at launch", systemImage: "star") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
@@ -52,15 +50,28 @@ struct ComputersView: View {
             }
             Section { NavigationLink(value: Route.pair) { Label("Pair another computer", systemImage: "plus") } }
         }
+        .appBackground()
         .navigationTitle("Computers")
         .alert("Rename computer", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $name)
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let c = renaming { store.rename(c.id, to: name) } }
         }
-        .confirmationDialog("Forget \(forgetting?.name ?? "this computer")?", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }),
-                            titleVisibility: .visible) {
-            Button("Forget", role: .destructive) { if let c = forgetting { app.forget(c.id) } }
+        .forgetDialog($forgetting)
+    }
+
+    private func subtitle(_ c: Computer) -> String {
+        let where_ = "\(routeName(c.route)) · \(c.relayHost)"
+        return c.id == store.activeId ? "\(stateName(store.conn)) · \(where_)" : where_
+    }
+
+    private var dot: Color {
+        switch store.conn {
+        case .online: return palette.success
+        case .connecting: return palette.running
+        case .offline: return palette.warning
+        case .denied: return palette.danger
+        case .idle: return palette.inkFaint
         }
     }
 }
@@ -73,23 +84,43 @@ struct SettingsView: View {
     @State private var error: String?
     @State private var testing = false
     @State private var testResult: (text: String, ok: Bool)?
+    @State private var sendingFeedback = false
+    @State private var voiceIntro = VoiceIntroGate()
 
     var body: some View {
         @Bindable var prefs = app.prefs
         Form {
             Section {
-                Picker("Theme", selection: $prefs.theme) {
-                    ForEach(Prefs.ThemeChoice.allCases) { Text($0.label).tag($0) }
+                ThemePicker(selection: $prefs.theme)
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                } label: {
+                    LabeledContent("Language") {
+                        Text(Locale.current.localizedString(forLanguageCode: Bundle.main.preferredLocalizations.first ?? "en") ?? "English")
+                    }
+                    .foregroundStyle(palette.ink, palette.inkSoft)
                 }
-            } header: { SectionHeader("Appearance") }
+                .accessibilityIdentifier("settings.language")
+            } header: { SectionHeader("Appearance") } footer: {
+                Text("The themes are the desktop’s. The language is chosen in this iPhone’s Settings for Nekko Agent: English, Español, Français, Deutsch, Português, 日本語 or 中文.")
+                    .foregroundStyle(palette.inkSoft)
+            }
             Section {
                 Toggle("App lock (Face ID / passcode)", isOn: Binding(get: { prefs.appLock }, set: { on in
                     if on { prefs.appLock = true } else {
                         Task { if await app.lock.confirmDisable() { prefs.appLock = false; app.lock.disable() } }
                     }
                 }))
+                if store.active != nil {
+                    // SK-6: the active computer's step-up (security keys, passkeys, codes).
+                    NavigationLink(value: Route.security) {
+                        Label("Security keys and codes", systemImage: "key.horizontal")
+                    }
+                    .accessibilityIdentifier("settings.security")
+                    UntestedHardwareNote()
+                }
             } header: { SectionHeader("Security") } footer: {
-                Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications and the Lock Screen free of chat details.")
+                Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications free of chat details. What the Lock Screen shows is set in Live Activities below.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
@@ -133,26 +164,34 @@ struct SettingsView: View {
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
-                Toggle("Live Activities", isOn: $prefs.liveActivities)
+                NavigationLink(value: Route.liveActivities) {
+                    LabeledContent("Live Activities", value: prefs.liveActivityLevel.label)
+                }
+                .accessibilityIdentifier("settings.liveActivities")
                 Toggle("Vibrate for approvals and questions", isOn: $prefs.hapticNeedsYou)
                 Toggle("Vibrate when a reply finishes", isOn: $prefs.hapticDone)
             } header: { SectionHeader("While a chat runs") } footer: {
-                Text("Running chats show on the Lock Screen and in the Dynamic Island, with Allow / Deny for approvals.")
+                Text("One card on the Lock Screen and in the Dynamic Island shows every running chat, with Allow / Deny for approvals.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
                 // Inline: both choices are short rows with a checkmark, never cut off.
                 Picker("Microphone", selection: $prefs.dictationHold) {
-                    Text("Tap to start and stop").tag(false)
+                    Text("Tap to keep listening").tag(false)
                     Text("Hold to talk").tag(true)
                 }
                 .pickerStyle(.inline)
                 Toggle("Use Whisper on the computer when available", isOn: $prefs.dictationOnComputer)
             } header: { SectionHeader("Dictation") } footer: {
-                Text(prefs.dictationHold
-                     ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
-                     : "Tap the microphone to start and tap stop when you’re done.")
-                    .foregroundStyle(palette.inkSoft)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(prefs.dictationHold
+                         ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
+                         : "Tap the microphone and talk: it keeps listening through pauses until you tap stop, lock the phone, or leave the chat, and the screen stays on while it listens. Start with “Nekko” for a command, like “Nekko, send it”. Without Whisper on the computer, speech is turned into text on this iPhone only, never on a server.")
+                        .foregroundStyle(palette.inkSoft)
+                    Button("Watch how voice works") { voiceIntro.replay() }
+                        .font(.footnote)
+                        .accessibilityIdentifier("settings.voiceIntro")
+                }
             }
             if store.active != nil {
                 Section {
@@ -200,14 +239,113 @@ struct SettingsView: View {
                 ProtocolBanner()
                 LabeledContent("Transport", value: store.active.map { "\(routeName($0.route)), end-to-end encrypted" } ?? "–")
                 Link("Remote access guide", destination: URL(string: "https://nekkoagent.com/docs/remote")!)
+                Button { sendingFeedback = true } label: { Label("Send feedback", systemImage: "envelope") }
+                    .accessibilityIdentifier("settings.feedback")
             } header: { SectionHeader("About") }
             Section {
                 Button("Forget everything on this iPhone", role: .destructive) { confirmWipe = true }
             }
         }
+        .appBackground()
         .navigationTitle("Settings")
+        .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
+        .sheet(isPresented: $voiceIntro.showing, onDismiss: { voiceIntro.closed(app.prefs) {} }) { VoiceIntroView() }
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {
             Button("Forget everything", role: .destructive) { app.forgetEverything() }
         }
+    }
+}
+
+extension View {
+    /// Confirm, then forget a computer on this iPhone (its pairing keys and saved chats).
+    func forgetDialog(_ computer: Binding<Computer?>) -> some View {
+        modifier(ForgetDialog(computer: computer))
+    }
+}
+
+private struct ForgetDialog: ViewModifier {
+    @Binding var computer: Computer?
+    @Environment(AppModel.self) private var app
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Forget \(computer?.name ?? "this computer")?",
+                                   isPresented: Binding(get: { computer != nil }, set: { if !$0 { computer = nil } }),
+                                   titleVisibility: .visible, presenting: computer) { c in
+            Button("Forget", role: .destructive) { app.forget(c.id) }
+        } message: { _ in
+            Text("This iPhone deletes its pairing keys and saved chats for it. To stop the computer accepting this phone, remove it in Settings → Remote access there too.")
+        }
+    }
+}
+
+/// The desktop's theme presets (ThemePresets.swift), plus following the computer.
+struct ThemePicker: View {
+    @Binding var selection: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        NavigationLink {
+            ThemeList(selection: $selection)
+        } label: {
+            LabeledContent { Text(Self.name(selection)) } label: { Text("Theme") }
+                .foregroundStyle(palette.ink, palette.inkSoft)
+        }
+        .accessibilityIdentifier("settings.theme")
+    }
+
+    static func name(_ id: String) -> String {
+        switch id {
+        case Prefs.matchComputer: return String(localized: "Match my computer")
+        case "system": return String(localized: "Match this iPhone")
+        case "light": return String(localized: "Light")
+        case "dark": return String(localized: "Dark")
+        default:
+            guard let p = ThemePreset.find(id) else { return id }
+            return p.family.map { "\($0) · \(p.label)" } ?? p.label
+        }
+    }
+}
+
+private struct ThemeList: View {
+    @Binding var selection: String
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+
+    private var named: [ThemePreset] { ThemePreset.all.filter { $0.family == nil && !$0.isBasic } }
+    private var families: [String] { ThemePreset.all.compactMap(\.family).reduce(into: []) { if !$0.contains($1) { $0.append($1) } } }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach([Prefs.matchComputer, "system", "light", "dark"], id: \.self, content: row)
+            }
+            Section {
+                ForEach(named.map(\.id), id: \.self, content: row)
+            } header: { SectionHeader("Desktop themes") } footer: {
+                Text("Spooky also brings a fall app icon through Halloween.").foregroundStyle(palette.inkSoft)
+            }
+            Section {
+                ForEach(families, id: \.self) { f in
+                    ForEach(ThemePreset.all.filter { $0.family == f }.map(\.id), id: \.self, content: row)
+                }
+            } header: { SectionHeader("Experimental") }
+        }
+        .appBackground()
+        .navigationTitle("Theme")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ id: String) -> some View {
+        Button {
+            selection = id
+            dismiss()
+        } label: {
+            HStack {
+                Text(ThemePicker.name(id)).foregroundStyle(palette.ink)
+                Spacer()
+                if selection == id { Image(systemName: "checkmark").foregroundStyle(palette.accent) }
+            }
+        }
+        .accessibilityAddTraits(selection == id ? .isSelected : [])
     }
 }

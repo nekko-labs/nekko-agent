@@ -127,6 +127,8 @@ export interface ResidentModel {
    * `gpu+cpu` split. Absent means the runtime cannot say.
    */
   loadedOn?: 'gpu' | 'gpu+cpu' | 'cpu';
+  /** The settings it was loaded with. Nekko's own Model Server only. */
+  params?: LoadParams;
   /** When it last served a request: the field LRU eviction reads. */
   lastUsedAt?: number;
   /** When it was loaded. */
@@ -169,6 +171,8 @@ export interface RuntimeMetrics {
  * serves every runtime, and `canSetCompute` says whose controls to draw.
  */
 export interface LoadParams {
+  /** Local model reasoning. Default on; configurable only under Expert. */
+  thinking?: boolean;
   contextTokens?: number;
   gpuLayers?: number;
   kvCacheDtype?: KvCacheDtype;
@@ -207,6 +211,18 @@ export interface LoadParams {
    * replies down even while it speeds edits up.
    */
   draftModelId?: string;
+  /** The first N layers keep their experts in RAM (`--n-cpu-moe`); all of them is `--cpu-moe`. */
+  cpuMoeLayers?: number;
+  /** The first N layers run their feed-forward from RAM (`--n-cpu-ffn`), for dense models. */
+  cpuFfnLayers?: number;
+  /** Spare VRAM for llama.cpp's cache of the busiest CPU-resident experts. */
+  moeCacheMiB?: number;
+  /** False keeps the KV cache in system RAM (`--no-kv-offload`). */
+  kvOnGpu?: boolean;
+  /** Page lookup tables (n-gram embeddings) from the file (`--lazy-mode`). */
+  lazyTables?: boolean;
+  /** Threads for reading prompts (`--threads-batch`). */
+  threadsBatch?: number;
 }
 
 export interface StartOptions {

@@ -90,3 +90,97 @@ describe('an engine that cannot run', () => {
     await expect(engine.endpoint()).rejects.toThrow('Visual C++');
   });
 });
+
+describe('a daemon that never comes up', () => {
+  it('passes the config on stdin, never in the environment', () => {
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    let written = '';
+    first.stdin.on('data', (d) => { written += d; });
+    const engine = new EngineProcess(options);
+    engine.start();
+    const [, args, opts] = mocked.spawn.mock.calls[0];
+    expect(args).toEqual(['--config-stdin']);
+    expect(opts.env.NEKKOD_CONFIG).toBeUndefined();
+    return new Promise<void>((done) => setImmediate(() => {
+      const line = written.split('\n')[0];
+      expect(JSON.parse(line)).toMatchObject({ dataDir: '/data', edition: 'desktop' });
+      expect(line).toContain('"token"');
+      done();
+    }));
+  });
+
+  it('fails waiters at once when the binary cannot be spawned, and Restart tries again', async () => {
+    const broken = child(); mocked.spawn.mockReturnValueOnce(broken);
+    const engine = new EngineProcess(options);
+    engine.start();
+    const waiting = expect(engine.endpoint()).rejects.toThrow('EACCES');
+    // Node 26: 'error' and 'close', never 'exit', and no pid.
+    broken.emit('error', Object.assign(new Error('spawn /bin/nekkod EACCES'), { code: 'EACCES' }));
+    broken.emit('close', -13, null);
+    await waiting;
+    await expect(engine.endpoint()).rejects.toThrow('could not be started');
+    // Nothing is left holding start() or stop().
+    const later = child(); mocked.spawn.mockReturnValueOnce(later);
+    engine.start();
+    expect(mocked.spawn).toHaveBeenCalledTimes(2);
+    later.stdout.write('NEKKOD_READY {"port":5151}\n');
+    expect((await engine.endpoint()).url).toBe('http://127.0.0.1:5151');
+    const final = engine.stop(); later.emit('exit', 0, null); await final;
+  });
+
+  it('kills a daemon that never prints its ready line and restarts it with backoff', async () => {
+    vi.useFakeTimers();
+    const wedged = child(); const next = child();
+    mocked.spawn.mockReturnValueOnce(wedged).mockReturnValueOnce(next);
+    const engine = new EngineProcess({ ...options, readyTimeoutMs: 1000 });
+    engine.start();
+    await vi.advanceTimersByTimeAsync(999);
+    expect(wedged.kill).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(wedged.kill).toHaveBeenCalledWith('SIGTERM');
+    // Still not gone: SIGKILL follows.
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(wedged.kill).toHaveBeenLastCalledWith('SIGKILL');
+    wedged.emit('exit', null, 'SIGKILL');
+    expect(mocked.spawn).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(mocked.spawn).toHaveBeenCalledTimes(2);
+    next.stdout.write('NEKKOD_READY {"port":6161}\n');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(next.kill).not.toHaveBeenCalled();
+    expect((await engine.endpoint()).url).toBe('http://127.0.0.1:6161');
+    const final = engine.stop(); next.emit('exit', 0, null); await final;
+  });
+
+  it('says another engine holds the data folder instead of restarting into it', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess(options);
+    engine.start();
+    const waiting = expect(engine.endpoint()).rejects.toThrow('already running on this data folder');
+    first.emit('exit', 3, null);
+    await waiting;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(mocked.spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops with stdin, then SIGTERM, then SIGKILL, and resolves only once it exited', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess(options);
+    engine.start();
+    first.stdout.write('NEKKOD_READY {"port":1}\n');
+    let stopped = false;
+    const stopping = engine.stop(1000).then(() => { stopped = true; });
+    expect(first.stdin.writableEnded).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(first.kill).toHaveBeenCalledWith('SIGTERM');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(first.kill).toHaveBeenLastCalledWith('SIGKILL');
+    expect(stopped).toBe(false);
+    first.emit('exit', null, 'SIGKILL');
+    await stopping;
+    expect(stopped).toBe(true);
+  });
+});
+

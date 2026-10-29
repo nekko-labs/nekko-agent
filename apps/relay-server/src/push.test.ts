@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateKeyPairSync, verify as cryptoVerify, createVerify } from 'node:crypto';
-import { activityPayload, alertPayload, dismissPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
+import { activityPayload, alertPayload, capBytes, cardForLevel, cardPayload, cardPriority, dismissPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
 
 describe('alert and dismissal payloads', () => {
   it('carry the kind and the opaque chat tag, never content', () => {
@@ -80,5 +80,100 @@ describe('activityPayload', () => {
     expect(activityPayload({ event: 'end', phase: 'done' }, 100)).toEqual({
       aps: { timestamp: 100, event: 'end', 'content-state': { phase: 'done', step: '', steps: 0 }, 'dismissal-date': 700 },
     });
+  });
+});
+
+describe('the Live Activity card', () => {
+  const chat = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    short: 'Fix',
+    state: 'working',
+    step: 'Run npm test',
+    reply: 'On it.',
+    closeWord: 'Cool',
+    startedAt: 799999000,
+    ...extra,
+  });
+  const state = { chats: [chat('a'), chat('b', { state: 'needsYou', callId: 'tc1', severity: 'high' })], focusId: 'b', more: 0, listening: false, heard: '' };
+
+  it('blanks text per level: Minimal none, Standard no reply, Detailed all', () => {
+    const minimal = cardForLevel(state, 'minimal')!;
+    expect(minimal.chats.map((c) => [c.short, c.step, c.reply])).toEqual([['', '', ''], ['', '', '']]);
+    expect(minimal.chats[1]).toMatchObject({ id: 'b', state: 'needsYou', callId: 'tc1', severity: 'high', closeWord: 'Cool' });
+    expect(cardForLevel(state, 'standard')!.chats[0]).toMatchObject({ short: 'Fix', step: 'Run npm test', reply: '' });
+    expect(cardForLevel(state, 'detailed')!.chats[0]).toEqual(chat('a'));
+    expect(cardForLevel(state, 'detailed')).toMatchObject({ focusId: 'b', more: 0, listening: false, heard: '' });
+  });
+
+  it('keeps dates as numbers (seconds since 2001) and drops what it does not know', () => {
+    const odd = { chats: [{ ...chat('a'), finishedAt: 800000000.5, extra: 'x' }, { state: 'done' }, 'nope'], focusId: 7, junk: true };
+    const card = cardForLevel(odd, 'detailed')!;
+    expect(card.chats).toEqual([{ ...chat('a'), finishedAt: 800000000.5 }]);
+    expect(card).toEqual({ chats: card.chats, more: 0, listening: false, heard: '' });
+    expect(cardForLevel(null, 'detailed')).toBeNull();
+    expect(cardForLevel({ chats: 'x' }, 'detailed')).toBeNull();
+  });
+
+  it('clips step and reply to 60 characters and stays under 4 KB', () => {
+    const long = cardForLevel({ chats: [chat('a', { step: 'x'.repeat(200), reply: 'y'.repeat(200) })] }, 'detailed')!;
+    expect([...long.chats[0].step as string].length).toBe(60);
+    expect(long.chats[0].step).toBe('x'.repeat(59) + '…');
+    expect([...long.chats[0].reply as string].length).toBe(60);
+    const huge = {
+      chats: Array.from({ length: 12 }, (_, i) => chat(`chat-${i}-${'i'.repeat(150)}`, { callId: 'c'.repeat(150), reply: 'r'.repeat(60) })),
+      focusId: `chat-7-${'i'.repeat(150)}`,
+    };
+    const card = cardForLevel(huge, 'detailed')!;
+    const attributes = { computerId: capBytes('m'.repeat(300), 64), computerName: capBytes('ñ'.repeat(300), 64), level: 'detailed' as const };
+    expect(Buffer.byteLength(JSON.stringify(cardPayload({ event: 'start', state: card, attributes }, 1e10)))).toBeLessThan(4096);
+    expect(card.chats.length + (card.more as number)).toBe(12);
+    expect(card.chats.some((c) => c.id === huge.focusId)).toBe(true);
+  });
+
+  it('builds start, update and end payloads', () => {
+    const card = cardForLevel(state, 'standard')!;
+    expect(cardPayload({ event: 'update', state: card }, 100)).toEqual({
+      aps: { timestamp: 100, event: 'update', 'content-state': card, 'stale-date': 1000 },
+    });
+    expect(cardPayload({ event: 'end', state: { chats: [] } }, 100)).toEqual({
+      aps: { timestamp: 100, event: 'end', 'content-state': { chats: [] }, 'dismissal-date': 100 },
+    });
+    const attributes = { computerId: 'mac-1', computerName: 'Studio', level: 'standard' as const };
+    expect(cardPayload({ event: 'start', state: card, attributes }, 100)).toEqual({
+      aps: {
+        timestamp: 100,
+        event: 'start',
+        'content-state': card,
+        'stale-date': 1000,
+        'attributes-type': 'NekkoCardAttributes',
+        attributes,
+        alert: { title: 'Nekko Agent', body: 'Your computer is working on a chat.' },
+      },
+    });
+  });
+});
+
+describe('card names and priority', () => {
+  it('caps a name at 64 UTF-8 bytes on a character boundary', () => {
+    expect(capBytes('a'.repeat(70), 64)).toBe('a'.repeat(64));
+    expect(capBytes('é'.repeat(40), 64)).toBe('é'.repeat(32));
+    expect(capBytes('x' + '😀'.repeat(20), 64)).toBe('x' + '😀'.repeat(15));
+    expect(capBytes('Studio', 64)).toBe('Studio');
+    expect(capBytes(7, 64)).toBe('');
+  });
+
+  it('sends a step-only update at priority 5 and anything else at 10', () => {
+    const chat = (state: string, step: string, extra: Record<string, unknown> = {}) => ({ id: 'a', state, step, ...extra });
+    const card = (chats: Record<string, unknown>[], focusId = 'a', more = 0) => ({ chats, focusId, more });
+    const was = card([chat('working', 'Run ls')]);
+    const update = (state: ReturnType<typeof card>) => ({ event: 'update' as const, state });
+    expect(cardPriority(was, update(card([chat('working', 'Run pwd', { reply: 'Hm.', startedAt: 9 })])))).toBe(5);
+    expect(cardPriority(was, update(card([chat('needsYou', 'Run ls', { callId: 'c' })])))).toBe(10);
+    expect(cardPriority(was, update(card([chat('working', 'Run ls'), { id: 'b', state: 'working' }])))).toBe(10);
+    expect(cardPriority(was, update(card([chat('working', 'Run ls')], 'b')))).toBe(10);
+    expect(cardPriority(was, update(card([chat('working', 'Run ls')], 'a', 1)))).toBe(10);
+    expect(cardPriority(undefined, update(was))).toBe(10);
+    expect(cardPriority(was, { event: 'start', state: was })).toBe(10);
+    expect(cardPriority(was, { event: 'end', state: card([]) })).toBe(10);
   });
 });

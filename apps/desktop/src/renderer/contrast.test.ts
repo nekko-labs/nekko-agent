@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 import { THEME_PRESETS } from '@nekko-agent/shared';
 import { composite, contrastRatio, parseColor } from './contrast.js';
@@ -33,6 +35,7 @@ const THEMES: Record<string, Record<string, string>> = {
   'dark/nebula': { ...dark, ...block("[data-theme='dark'][data-preset='nebula']") },
   'dark/terminal': { ...dark, ...block("[data-theme='dark'][data-preset='terminal']") },
   'dark/nord': { ...dark, ...block("[data-theme='dark'][data-preset='nord']") },
+  'dark/nekko-dark': { ...dark, ...block("[data-theme='dark'][data-preset='nekko-dark']") },
 };
 // Every Experimental preset, on top of its base mode.
 const EXPERIMENTAL = THEME_PRESETS.filter((p) => p.group === 'experimental');
@@ -46,7 +49,7 @@ describe('tinted dark presets', () => {
   // Chat windows, the wall composer and the dock paint --win. A tinted preset
   // that leaves it at the neutral dark value shows grey windows on a purple or
   // green field, which is the mismatch this guards against.
-  it.each(['nebula', 'terminal', 'nord'])('%s sets its own window surface', (preset) => {
+  it.each(['nebula', 'terminal', 'nord', 'nekko-dark'])('%s sets its own window surface', (preset) => {
     const vars = block(`[data-theme='dark'][data-preset='${preset}']`);
     expect(vars['--win']).toBeDefined();
     expect(vars['--win']).not.toBe(dark['--win']);
@@ -83,9 +86,32 @@ const toHex = (c: { r: number; g: number; b: number }) => '#' + [c.r, c.g, c.b].
 /** Each theme with the accent its preset applies (store.applyTheme). */
 const ACCENTS: Record<string, string> = {
   light: '#6d5efc', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#8b7dff',
-  'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0',
+  'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0', 'dark/nekko-dark': '#c4b9ff',
   ...Object.fromEntries(EXPERIMENTAL.map((p) => [`${p.mode}/${p.id}`, p.accent])),
 };
+
+describe('Nekko Dark', () => {
+  const vars = THEMES['dark/nekko-dark'];
+  it('primary-button text is readable on the accent', () => {
+    const ratio = contrastRatio(parseColor(vars['--on-accent']), parseColor('#c4b9ff'));
+    expect(ratio, `on-accent on accent = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+  });
+  it.each(['--ink', '--ink-soft'])('%s is readable on paper and surfaces', (token) => {
+    for (const bg of ['--paper', '--win', '--surface', '--surface-2']) {
+      const ratio = contrastRatio(parseColor(vars[token]), parseColor(vars[bg]));
+      expect(ratio, `${token} on ${bg} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+    }
+  });
+  it("paints the website's Dark glow on the field, and no other theme does", () => {
+    const site = postcss.parse(readFileSync(new URL('../../../website/styles.css', import.meta.url), 'utf8'));
+    const glow = rules(site, ":root[data-theme='dark'] body")[0].nodes.find((n) => n.type === 'decl' && n.prop === 'background') as { value: string };
+    const flat = (s: string) => s.replace(/\s+/g, ' ').trim();
+    expect(flat(vars['--field'])).toBe(flat(glow.value.replace('var(--bg)', 'var(--paper)')));
+    const fields: string[] = [];
+    css.walkDecls(/^--(field|titlebar-bg|titlebar-overlay)$/, (d) => { fields.push((d.parent as { selector: string }).selector); });
+    expect(new Set(fields)).toEqual(new Set(["[data-theme='dark'][data-preset='nekko-dark']"]));
+  });
+});
 
 describe.each(EXPERIMENTAL.map((p) => [p.id, p] as const))('experimental preset %s', (_id, p) => {
   const vars = THEMES[`${p.mode}/${p.id}`];

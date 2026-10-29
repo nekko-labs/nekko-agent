@@ -450,6 +450,10 @@ export interface WorkflowRun {
   steps: WorkflowStepRun[];
   /** Why the run ended, when it wasn't a clean pass. */
   message?: string;
+  /** Started beside the user (an event, a low-priority policy) or after the wait cap. */
+  lowPriority?: boolean;
+  /** How long the run waited for the run policy, when it did. */
+  waitedMs?: number;
 }
 
 /**
@@ -497,6 +501,8 @@ export interface Workflow {
    * untrusted PR (fork head, or an author who cannot push) gets read-only tools.
    */
   prCheckout?: boolean;
+  /** When a scheduled run may start; events never wait (see `AutomationRunPolicy`). `null`: the settings' default. */
+  runPolicy?: import('./tasks.js').AutomationRunPolicy | null;
   createdAt: number;
   updatedAt: number;
 
@@ -506,6 +512,8 @@ export interface Workflow {
   runCount?: number;
   /** When the schedule fires next (epoch ms), if it has one. */
   nextRunAt?: number;
+  /** A due scheduled run held back by the run policy since then (epoch ms). */
+  waitingSince?: number;
 }
 
 /**
@@ -517,22 +525,26 @@ export interface WorkflowsSnapshot {
   runs: WorkflowRun[];
 }
 
-/** Fields accepted when creating a workflow; the rest is filled in by the host. */
+/**
+ * Fields accepted when creating a workflow; the rest is filled in by the host.
+ * As an update, `null` clears a field (JSON drops an `undefined` key).
+ */
 export interface NewWorkflow {
   name: string;
-  description?: string;
+  description?: string | null;
   category?: string;
   enabled?: boolean;
   steps?: WorkflowStep[];
   triggers?: WorkflowTrigger[];
-  workspaceId?: string;
-  providerId?: string;
-  modelId?: string;
+  workspaceId?: string | null;
+  providerId?: string | null;
+  modelId?: string | null;
   notify?: WorkflowNotify;
   templateId?: string;
-  localModelOnly?: boolean;
-  toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
-  prCheckout?: boolean;
+  localModelOnly?: boolean | null;
+  toolAccess?: import('./workflow-access.js').WorkflowToolAccess | null;
+  prCheckout?: boolean | null;
+  runPolicy?: import('./tasks.js').AutomationRunPolicy | null;
 }
 
 /** Categories offered in the editor. Any string is valid; these are the nudge. */

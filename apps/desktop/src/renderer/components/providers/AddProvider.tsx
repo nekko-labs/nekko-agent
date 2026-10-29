@@ -5,7 +5,7 @@ import { useStore } from '../../store.js';
 import { SubscriptionSignIn } from '../SubscriptionSignIn.js';
 import { ProviderChoices } from './ProviderChoices.js';
 import { CheckIcon } from '../../icons.js';
-import { ClaudeAgentSetup } from '../claude/ClaudeAgent.js';
+import { CLAUDE_API_KINDS, ClaudeSetup, isClaudeKind, type ClaudeChoice, type ClaudeConnected } from '../claude/ClaudeSetup.js';
 
 /** Provider kinds offered by the generic add form, local servers first. */
 export const ADD_PROVIDER_KINDS: ProviderKind[] = [
@@ -28,6 +28,14 @@ export const ADD_PROVIDER_KINDS: ProviderKind[] = [
  *  it stays metered, unlike a real subscription. Anthropic is an API-key kind:
  *  Claude sign-in is only offered once its approved-client slot
  *  (`CLAUDE_APPROVED_CLIENT`) is filled, which it is not. */
+/** Where a Claude API account lives, as the API form's choices name it. */
+const API_SOURCE: Partial<Record<ProviderKind, string>> = {
+  anthropic: 'Anthropic API key',
+  bedrock: 'Amazon Bedrock',
+  vertex: 'Google Vertex AI',
+  foundry: 'Microsoft Foundry',
+};
+
 export const SUBSCRIPTION_KINDS: Partial<Record<ProviderKind, OAuthProvider>> = {
   ...(oauthProviderOffered('claude') ? { anthropic: 'claude' as const } : {}),
   chatgpt: 'chatgpt',
@@ -149,8 +157,34 @@ export function AddProvider({
   // Anthropic's key field waits behind the disclosure only while a Claude sign-in sits beside it.
   const keyBehindSignIn = kind === 'anthropic' && oauthProvider !== undefined;
 
+  // Claude is one choice: Subscription (Claude Code) or API, whose form opens
+  // from the API column's Connect button. The wizard's API-key-only Claude
+  // card keeps the plain form.
+  const claude = isClaudeKind(kind) && !apiKeyOnly;
+  const [claudeApiOpen, setClaudeApiOpen] = useState(false);
+  const [claudeConnected, setClaudeConnected] = useState<ClaudeConnected | null>(null);
+  const chooseClaude = (c: ClaudeChoice) => {
+    setResult(null);
+    if (c === 'subscription') {
+      setKind('claude-code');
+    } else if (!CLAUDE_API_KINDS.includes(kind)) {
+      pickFields('anthropic');
+    }
+  };
+  const showFields = !claude || (kind !== 'claude-code' && claudeApiOpen);
+
+  const pickFields = (k: ProviderKind) => {
+    setKind(k);
+    setBaseUrl(PROVIDER_DEFAULTS[k].baseUrl);
+    setLabel(PROVIDER_DEFAULTS[k].label);
+    setApiKey('');
+    setWorkspaceId('');
+  };
+
   const pick = (k: ProviderKind) => {
     setResult(null);
+    setClaudeApiOpen(false);
+    setClaudeConnected(null);
     setKind(k);
     setBaseUrl(PROVIDER_DEFAULTS[k].baseUrl);
     setLabel(PROVIDER_DEFAULTS[k].label);
@@ -204,19 +238,6 @@ export function AddProvider({
     } finally { setTesting(false); }
   };
 
-  // Claude Agent has nothing to test from here: its setup panel reads Claude
-  // Code's own status, and Nekko never holds a credential for it.
-  const saveClaudeAgent = async () => {
-    setTesting(true);
-    try {
-      await window.nekko.saveProvider({ id: `claude-code-${Date.now().toString(36)}`, kind: 'claude-code', label: label || PROVIDER_DEFAULTS['claude-code'].label, baseUrl: '', enabled: true });
-      pushToast('success', 'Claude Agent added.');
-      onDone();
-    } catch (error) {
-      setResult({ ok: false, message: `Could not save connection: ${String(error)}` });
-    } finally { setTesting(false); }
-  };
-
   const save = async () => {
     setTesting(true);
     try {
@@ -225,6 +246,14 @@ export function AddProvider({
       setResult(check);
       if (!check.ok) return;
       await window.nekko.saveProvider(config);
+      if (claude) {
+        // Stay on the Claude panel so the user sees it connected.
+        setClaudeConnected({ title: 'Claude is connected', detail: `Using ${config.label} (${API_SOURCE[config.kind] ?? 'API'}), billed to that account.` });
+        setClaudeApiOpen(false);
+        setResult(null);
+        await useStore.getState().refreshProviders();
+        return;
+      }
       onDone();
     } catch (error) {
       setResult({ ok: false, message: String(error) });
@@ -235,9 +264,29 @@ export function AddProvider({
     <div className={bare ? undefined : 'card mt-5 p-5'}>
       <div className="grid grid-cols-2 gap-3">
         {!fixedKind && (
-          <div className="col-span-2"><ProviderChoices value={kind} onPick={pick} /></div>
+          <div className="col-span-2"><ProviderChoices value={claude ? 'anthropic' : kind} onPick={pick} /></div>
         )}
-        {kind === 'claude-code' ? <ClaudeAgentSetup onSave={() => void saveClaudeAgent()} saving={testing} /> : <>
+        {claude && (
+          <ClaudeSetup
+            initialChoice={kind === 'claude-code' ? 'subscription' : CLAUDE_API_KINDS.includes(kind) && kind !== 'anthropic' ? 'api' : undefined}
+            apiOpen={claudeApiOpen}
+            connected={claudeConnected}
+            onChoice={chooseClaude}
+            onConnectApi={() => { setClaudeConnected(null); setClaudeApiOpen(true); }}
+            onConnected={setClaudeConnected}
+            onDone={onDone}
+          />
+        )}
+        {claude && showFields && (
+          <div className="col-span-2 claude-api-kinds" role="radiogroup" aria-label="Where your Claude API account is">
+            {CLAUDE_API_KINDS.map((k) => (
+              <button key={k} type="button" role="radio" aria-checked={kind === k} className={`btn ${kind === k ? 'btn-outline' : 'btn-ghost'}`} onClick={() => pickFields(k)}>
+                {API_SOURCE[k]}
+              </button>
+            ))}
+          </div>
+        )}
+        {showFields && <>
         <details className="col-span-2">
           <summary className="cursor-pointer text-[12px] text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : ' — server address and name'}</summary>
           <div className="mt-3 grid grid-cols-2 gap-3">
@@ -327,7 +376,7 @@ export function AddProvider({
               revealed. ChatGPT has no API-key path, so its sign-in always
               completes. OpenRouter keeps both paths: sign in, or paste a key
               and save. */}
-          {kind !== 'claude-code' && (oauthProvider === undefined || kind === 'openrouter' || (keyBehindSignIn && useApiKey)) && (
+          {showFields && (oauthProvider === undefined || kind === 'openrouter' || (keyBehindSignIn && useApiKey)) && (
             <>
               <button className="btn btn-outline" onClick={test} disabled={testing}>
                 {testing ? 'Testing…' : 'Test connection'}

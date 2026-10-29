@@ -37,6 +37,7 @@ export function BrandMark({ size = 24, className, title }: { size?: number; clas
       strokeLinejoin="miter"
       strokeMiterlimit={8}
       role={title ? 'img' : undefined}
+      aria-label={title}
       aria-hidden={title ? undefined : true}
     >
       {title && <title>{title}</title>}

@@ -2,12 +2,11 @@ import React from 'react';
 import type { ProviderKind } from '@nekko-agent/shared';
 import { PROVIDER_DEFAULTS } from '@nekko-agent/shared';
 
-// Claude Agent is a Nekko feature that runs the user's Claude Code, so it gets a
-// plain terminal glyph, not Anthropic's mark (their terms reserve it).
+// Claude is one choice: its setup offers the user's subscription (through their
+// own Claude Code) or an API account (Anthropic, Bedrock, Vertex, Foundry).
 const choices: { kind: ProviderKind; icon?: string; glyph?: string; description: string }[] = [
   { kind: 'chatgpt', icon: 'openai', description: 'Sign in with your ChatGPT plan' },
-  { kind: 'anthropic', icon: 'anthropic', description: 'API key or cloud account · every Nekko feature' },
-  { kind: 'claude-code', glyph: '>_', description: 'Runs your installed Claude Code · sign in there' },
+  { kind: 'anthropic', icon: 'anthropic', description: 'Your subscription or an API account' },
   { kind: 'openrouter', icon: 'openrouter', description: 'Many models · pay for what you use' },
   { kind: 'openai', icon: 'openai', description: 'Use an API key · billed separately' },
   { kind: 'ollama', icon: 'ollama', description: 'Connect Ollama on your computer' },

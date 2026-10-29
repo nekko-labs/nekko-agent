@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
-  CONNECTOR_CATALOG, WORK_MODES, chatEffort, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
+  CONNECTOR_CATALOG, WORK_MODES, chatEffort, modelDefaultEffort, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
   modePatchSkips, savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
@@ -61,7 +61,7 @@ const GUIDANCE_DESC: Record<GuidanceLevel, string> = {
 
 const APPROVAL_DESC: Record<ChatMode, string> = {
   ask: 'Asks before every file write and command.',
-  guardrails: 'Runs freely; asks or blocks per your guardrail rules.',
+  guardrails: 'Edits files and runs read-only commands freely; asks before any other command.',
   yolo: 'Never asks (deny rules still block). Pair it with a sandbox or worktree.',
 };
 
@@ -119,7 +119,10 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
     },
     /** This chat's effort; `null` goes back to the app-wide one. */
     async setEffort(effort: EffortLevel | null) {
-      try { await patchChat({ effort: effort as EffortLevel }); } catch (e) { toastError(e); }
+      try {
+        const next = await patchChat({ effort: effort as EffortLevel });
+        if (next && effort) await saveSettings({ effort });
+      } catch (e) { toastError(e); }
     },
     /** Which memory notes this chat takes. */
     async setMemory(memory: ChatMemory) {
@@ -419,8 +422,8 @@ export function ModePanel({
             {soon(<RouteIcon />, 'Model router', 'Picks the model for each turn from what the task needs.')}
             <div className="mode-row is-stacked">
               <span className="mode-ic"><GaugeIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Effort</span><span className="mode-s">How long the model thinks before acting, in this chat. {session.effort ? <button className="mode-link is-inline" onClick={() => void actions.setEffort(null)}>Use the app default</button> : 'Follows the app default until you pick one.'}</span></span>
-              {tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, o === 'normal' ? 'Default' : o === 'xhigh' ? 'X-high' : EFFORT_LABEL[o], <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
+              <span className="min-w-0 flex-1"><span className="mode-t">Effort</span><span className="mode-s">How long the model thinks before acting. Your choice is remembered for new chats on this computer. Recommended: {EFFORT_LABEL[modelDefaultEffort(modelId)]}.</span></span>
+              {tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, o === 'xhigh' ? 'X-high' : EFFORT_LABEL[o], <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
                 (v) => void actions.setEffort(v))}
             </div>
           </section>
@@ -454,7 +457,7 @@ export function ModePanel({
             </div>
             <div className="mode-row is-stacked">
               <span className="mode-ic"><ShieldIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Approvals</span><span className="mode-s">{sandbox ? 'Sandbox always asks first.' : APPROVAL_DESC[approvals]}</span></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Approvals</span><span className="mode-s">{sandbox ? 'Sandbox always asks first.' : `${APPROVAL_DESC[approvals]} Guardrails is recommended for general use.`}</span></span>
               {tiles<ChatMode>('Approvals', approvals, [['ask', 'Ask', <HandIcon />, { 'data-chat-mode': 'ask' }], ['guardrails', 'Guardrails', <ShieldCheckIcon />, { 'data-chat-mode': 'guardrails' }], ['yolo', 'YOLO', <YoloIcon />, { 'data-chat-mode': 'yolo' }]],
                 (v) => void (!sandbox && actions.setApprovals(v)))}
             </div>

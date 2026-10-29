@@ -7,7 +7,7 @@ describe('command wall settings schema', () => {
     expect(legacy.layout).toBeUndefined();
   });
   it('exports reusable layout and dock defaults', () => {
-    expect(DEFAULT_WALL_LAYOUT).toEqual({ mode: 'grid', cols: 3, rows: 2 });
+    expect(DEFAULT_WALL_LAYOUT).toEqual({ mode: 'grid', cols: 3, rows: 2, fixedGrid: false });
     expect(DEFAULT_MONITORS_DOCK.side).toBe('right');
     expect(DEFAULT_MONITORS_DOCK.show).toBe(true);
     expect(DEFAULT_MONITORS_DOCK.minimized).toEqual({

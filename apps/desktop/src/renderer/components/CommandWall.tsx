@@ -1,17 +1,16 @@
 import { terminalExcerpt } from './terminalExcerpt.js';
+import { HOME, applyWallDrop, heldSize, sameTarget, wallDropTargetAt, type Rect, type WallDropTarget } from '../wallDrag.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { PendingInput, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { BLOCKED_META, LANE_META, sessionLane } from '@nekko-agent/shared';
 import {
   allPanes,
   canSplit,
   isSplit,
-  movePane,
-  movePaneToEdge,
   removePane,
   resizeSplit,
   splitPane,
-  swapPanes,
   type Direction,
   type PaneKind,
   type WbNode,
@@ -23,16 +22,24 @@ import {
   NARROW_WIDTH,
   WALL_KINDS,
   addPane,
-  addPanes,
+  addZone,
+  clearZone,
   evenTree,
+  fillZone,
+  openWallPane,
   filterTree,
   leafRects,
   snapFraction,
   splitBoundary,
   wallAgents,
+  wallArrangement,
+  nextZoneName,
   wallPane,
   type CommandWallState,
+  type ZoneSpot,
 } from '../commandWall.js';
+import { AGENT_DRAG_TYPE, isAgentDrag, useAgentDrag, type AgentDrag } from '../agentDrag.js';
+import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { useStore, type Workspace } from '../store.js';
 import { foldWindow, growWindow, mostOverlapping, outerSide, type Box } from '../wallMotion.js';
 import { ChatPane } from './ChatPane.js';
@@ -129,10 +136,12 @@ import { COMPACT_HEIGHT, COMPACT_WIDTH, PaneDensityHint } from './agent-console/
 import { TerminalPane } from './TerminalPane.js';
 import { PANE_DRAG_TYPE, PaneActions, PaneFrame } from './PaneFrame.js';
 import { Divider } from './Divider.js';
-import { WallEmptyIllustration } from './WallEmptyIllustration.js';
+import { WallEmptyIllustration, ZoneEmptyIllustration } from './WallEmptyIllustration.js';
+import { CREATE_OPTIONS } from './CreateMenu.js';
+import type { AgentWindowSelection } from './AgentWindowPicker.js';
 import { AgentLogsDrawer } from './AgentLogsDrawer.js';
 import { layoutWithLogsDrawer, overlayLogsDrawer, useWallLogs } from '../wallLogs.js';
-import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, TerminalIcon } from '../icons.js';
+import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, PlusIcon, TerminalIcon } from '../icons.js';
 import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
@@ -193,7 +202,9 @@ export function resizeCompanionSplit(root: WbNode | null, expanded: Set<string>,
 
 /** Pixel geometry only; the saved split tree is never re-tiled by a mode switch. */
 export function commandWallGeometry(state: CommandWallState, width: number, height: number, expanded = new Set<string>(), preview = false): WallGeometry {
-  const tree = filterTree(state.root, state.filter);
+  const filtered = filterTree(state.root, state.filter);
+  // Focus shows agents, never an empty zone.
+  const tree = state.layout.mode === 'focus' ? allPanes(filtered).filter((p) => p.kind === 'zone').reduce<WbNode | null>((t, p) => removePane(t, p.id), filtered) : filtered;
   const visible = allPanes(tree);
   const hero = state.layout.mode === 'focus'
     ? (visible.find((p) => p.refId === state.hero) ?? visible[0])?.id ?? null : null;
@@ -213,13 +224,13 @@ export function commandWallGeometry(state: CommandWallState, width: number, heig
   // Idle geometry keeps saved ratios. Clicking uses display-only insertion;
   // never persist the preview tree or expose its synthetic dividers.
   const previewPane: WbPane = { id: '__wall_add__', kind: 'chat', refId: '__wall_add__' };
-  const addGrid = companionTree(preview && state.layout.mode === 'grid' ? addPane(grid, previewPane, width / Math.max(1, stageHeight)) : grid, expanded);
+  const addGrid = companionTree(preview && wallArrangement(state.layout) === 'grid' ? addPane(grid, previewPane, width / Math.max(1, stageHeight)) : grid, expanded);
   // Use the measured space remaining beside/above the composer, not a
   // width-derived aspect floor that makes wide windows overflow the viewport.
   let contentHeight = stageHeight;
   if (state.layout.mode === 'focus') {
     if (hero) panes.set(hero, { x: 0, y: 0, width, height: stageHeight });
-  } else if (state.layout.mode === 'fixed' || width < NARROW_WIDTH) {
+  } else if (wallArrangement(state.layout) === 'fixed' || width < NARROW_WIDTH) {
     const cols = width < NARROW_WIDTH ? 1 : state.layout.cols;
     const rowHeight = width < NARROW_WIDTH ? NARROW_ROW_H : Math.max(160, (stageHeight - gap * (state.layout.rows - 1)) / state.layout.rows);
     const cellWidth = Math.max(0, (width - gap * (cols - 1)) / cols);
@@ -253,23 +264,6 @@ export function commandWallGeometry(state: CommandWallState, width: number, heig
   }
   // Focus keeps other bodies warm but selects them through the row above the hero.
   return { panes, deck, hero, height: state.layout.mode === 'focus' ? contentHeight : contentHeight + gap + deckHeight, add: { x: 0, y: contentHeight + gap, width: Math.min(width, Math.max(280, width / 3)), height: 240 }, addGrid, grid, stageHeight, empty: [] };
-}
-
-const BOARD_EDGES: Direction[] = ['up', 'down', 'left', 'right'];
-
-/**
- * Where a window dragged to one side of the whole Dynamic board would end up,
- * in stage pixels: a full-height column on the left or right, a full-width
- * row on the top or bottom. Null when that drop would change nothing.
- */
-export function boardEdgePreview(state: CommandWallState, paneId: string, side: Direction, width: number, height: number, expanded = new Set<string>()): { x: number; y: number; width: number; height: number } | null {
-  const moved = movePaneToEdge(state.root, paneId, side);
-  if (!moved || moved === state.root) return null;
-  const r = leafRects(companionTree(filterTree(moved, state.filter), expanded)).get(paneId);
-  if (!r) return null;
-  const before = leafRects(companionTree(filterTree(state.root, state.filter), expanded)).get(paneId);
-  if (before && Math.abs(before.x - r.x) < 1e-6 && Math.abs(before.y - r.y) < 1e-6 && Math.abs(before.width - r.width) < 1e-6 && Math.abs(before.height - r.height) < 1e-6) return null;
-  return { x: r.x * width, y: r.y * height, width: r.width * width, height: r.height * height };
 }
 
 /** Stable keyed windows across layouts keep transcripts, terminals and drafts warm. */
@@ -310,8 +304,8 @@ export function CommandWall({
   onAspect: (aspect: number) => void;
   onOpenChat: (id: string) => void;
   onOpenTerminal: (id: string) => void;
-  /** Start a chat; resolves to its id once the session list knows it. */
-  onNewChat: () => Promise<string>;
+  /** Start a chat (an image chat when asked); resolves to its id once the session list knows it. */
+  onNewChat: (selection?: AgentWindowSelection) => Promise<string>;
   onNewTerminal: () => Promise<string>;
   onAddWindow: () => void;
   addContent?: React.ReactNode;
@@ -319,7 +313,8 @@ export function CommandWall({
   const workspaces = useStore((s) => s.workspaces);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [dragging, setDragging] = useState<string | null>(null);
+  // The window picked up off the board, and where it would land right now.
+  const [lift, setLift] = useState<{ paneId: string; target: WallDropTarget } | null>(null);
   const createRef = useRef<HTMLDivElement>(null);
   const [createHeight, setCreateHeight] = useState(0);
   useLayoutEffect(() => {
@@ -369,20 +364,6 @@ export function CommandWall({
     };
   }, [measure]);
 
-  // The side of the whole board a dragged window is over, in Dynamic.
-  const [edgeOver, setEdgeOver] = useState<Direction | null>(null);
-  useEffect(() => { if (!dragging) setEdgeOver(null); }, [dragging]);
-
-  useEffect(() => {
-    if (!dragging) return;
-    const clear = () => setDragging(null);
-    window.addEventListener('dragend', clear);
-    window.addEventListener('drop', clear);
-    return () => {
-      window.removeEventListener('dragend', clear);
-      window.removeEventListener('drop', clear);
-    };
-  }, [dragging]);
 
   // The ribbon's jump: scroll the window into view, ring it once, and put the
   // caret in its composer so the answer can be typed straight away.
@@ -401,12 +382,20 @@ export function CommandWall({
   const numberOf = useMemo(() => new Map(wallAgents(state.root).map((p, i) => [p.refId, i + 1])), [state.root]);
   const terminalById = useMemo(() => new Map(terminals.map((t) => [t.id, t])), [terminals]);
   const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : DEFAULT_ASPECT;
+  // While a window is held the wall lays out as if it had been dropped, so the
+  // others step aside and the held window's own box is the landing zone.
+  const view = useMemo(() => {
+    if (!lift) return state;
+    const root = applyWallDrop(state.root, lift.paneId, lift.target);
+    return root && root !== state.root ? { ...state, root } : state;
+  }, [state, lift]);
   const { geometry, expanded } = useMemo(() => {
+    const state = view;
     const base = commandWallGeometry(state, size.width, size.height, new Set(), !!addContent);
-    if (state.layout.mode !== 'grid') return { geometry: base, expanded: new Set<string>() };
+    if (wallArrangement(state.layout) !== 'grid') return { geometry: base, expanded: new Set<string>() };
     const expanded = new Set(wallAgents(state.root).filter(p => workspaceCompanions(workspaces, p.refId).length > 0 && !(state.folded[p.refId] ?? (numberOf.size > 4 || (base.panes.get(p.id)?.width ?? 0) < 700))).map(p => p.id));
     return { geometry: expanded.size ? commandWallGeometry(state, size.width, size.height, expanded, !!addContent) : base, expanded };
-  }, [state.root, state.filter, state.layout, state.hero, state.folded, workspaces, numberOf, size, !!addContent]);
+  }, [view, workspaces, numberOf, size, !!addContent]);
   // An agent's log drawer, out of its window's right edge: the wall moves the
   // windows beside it over. While it is being absorbed back the layout is
   // already the closed one, so the neighbours slide back in step.
@@ -430,10 +419,97 @@ export function CommandWall({
     for (const pane of wallAgents(state.root)) {
       const count = workspaceCompanions(workspaces, pane.refId).length;
       const previous = seenCompanions.current.get(pane.refId) ?? 0;
-      if (count > previous && state.layout.mode === 'grid' && (geometry.panes.get(pane.id)?.width ?? 0) < 700) setCompanionNotice(pane);
+      if (count > previous && wallArrangement(state.layout) === 'grid' && (geometry.panes.get(pane.id)?.width ?? 0) < 700) setCompanionNotice(pane);
       seenCompanions.current.set(pane.refId, count);
     }
-  }, [workspaces, state.root, state.layout.mode, geometry, size.width]);
+  }, [workspaces, state.root, wallArrangement(state.layout), geometry, size.width]);
+  /**
+   * Pick a window up by its title strip. Nothing moves yet: the window's own
+   * spot turns into the landing zone and a small card lifts into the hand.
+   * Targets are read against the layout as it is now (`rects`), never the
+   * previewed one, so a zone opening can't pull the target out from under
+   * the pointer.
+   */
+  const held = useRef<{ paneId: string; rects: Map<string, Rect>; grab: { x: number; y: number }; target: WallDropTarget; grid: boolean; stage: { width: number; height: number }; at?: { x: number; y: number } } | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [heldCard, setHeldCard] = useState<{ title: string; kind: PaneKind; from: DOMRect; card: { width: number; height: number }; at: { x: number; y: number } } | null>(null);
+  const pickUp = (e: React.PointerEvent, pane: WbPane, title: string) => {
+    const win = (e.currentTarget as HTMLElement).closest<HTMLElement>('[data-wall-pane]');
+    if (!win || held.current) return;
+    const from = win.getBoundingClientRect();
+    const card = heldSize(from.width, from.height);
+    const k = card.width / (from.width || 1);
+    held.current = {
+      paneId: pane.id, rects: new Map(shownPanes), grab: { x: (e.clientX - from.left) * k, y: (e.clientY - from.top) * k }, target: HOME,
+      // A one-column wall is a list, not a tree: it swaps like the fixed grid.
+      grid: wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH,
+      stage: { width: size.width, height: geometry.stageHeight },
+    };
+    setHeldCard({ title, kind: pane.kind, from, card, at: { x: e.clientX, y: e.clientY } });
+    setLift({ paneId: pane.id, target: HOME });
+  };
+  // The card leaves from the window's own rectangle and settles, smaller, under the pointer.
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    const h = held.current;
+    if (!el || !heldCard || !h) return;
+    const { from, card, at } = heldCard;
+    Object.assign(el.style, { left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px` });
+    el.getBoundingClientRect();
+    el.dataset.picking = '';
+    Object.assign(el.style, { left: `${at.x - h.grab.x}px`, top: `${at.y - h.grab.y}px`, width: `${card.width}px`, height: `${card.height}px` });
+    const settled = setTimeout(() => { delete el.dataset.picking; }, 220);
+    return () => clearTimeout(settled);
+  }, [heldCard]);
+  useEffect(() => {
+    if (!lift) return;
+    const aim = (x: number, y: number, span: boolean) => {
+      const h = held.current;
+      const stage = pushStageRef.current;
+      if (!h || !stage) return;
+      h.at = { x, y };
+      const o = stage.getBoundingClientRect();
+      // Shift at a board edge spans the whole side instead of fitting the row there.
+      const target = wallDropTargetAt(h.rects, h.paneId, x - o.left, y - o.top, h.stage, h.grid, 8, span);
+      if (sameTarget(target, h.target)) return;
+      h.target = target;
+      setLift({ paneId: h.paneId, target });
+    };
+    const move = (ev: PointerEvent) => {
+      const h = held.current;
+      if (!h) return;
+      // Straight to the element: a React render per pointer move would re-run the whole wall.
+      const card = cardRef.current;
+      if (card) { card.style.left = `${ev.clientX - h.grab.x}px`; card.style.top = `${ev.clientY - h.grab.y}px`; }
+      aim(ev.clientX, ev.clientY, ev.shiftKey);
+    };
+    const shift = (ev: KeyboardEvent) => { const at = held.current?.at; if (ev.key === 'Shift' && at) aim(at.x, at.y, ev.type === 'keydown'); };
+    const end = (commit: boolean) => {
+      const h = held.current;
+      held.current = null;
+      if (h && commit && h.target.kind !== 'home') live.current.update((root) => applyWallDrop(root, h.paneId, h.target));
+      setLift(null);
+      setHeldCard(null);
+    };
+    const drop = () => end(true);
+    const cancel = () => end(false);
+    const key = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cancel(); } else shift(ev); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', drop);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('blur', cancel);
+    window.addEventListener('keydown', key, true);
+    window.addEventListener('keyup', shift, true);
+    return () => {
+      window.removeEventListener('keyup', shift, true);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', drop);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('blur', cancel);
+      window.removeEventListener('keydown', key, true);
+    };
+  }, [!!lift]);
+
   const focusWindow = (pane: WbPane) => {
     setState((s) => ({ ...s, layout: { ...s.layout, mode: 'focus' }, hero: pane.refId }));
     if (pane.kind === 'chat') onSelect(pane.refId);
@@ -455,31 +531,81 @@ export function CommandWall({
    * comes back; the panels point at themselves and exist once at most, so
    * asking for one that is already up moves it rather than doubling it.
    */
-  const addWindow = async (kind: PaneKind, at?: { paneId: string; dir: Direction }) => {
+  const addWindow = async (kind: PaneKind, at?: { paneId: string; dir: Direction }, zoneId?: string, image = false) => {
     let refId: string = kind;
-    if (kind === 'chat') refId = await onNewChat();
+    if (kind === 'chat') refId = await onNewChat(image ? { kind: 'chat', chatType: 'image' } : undefined);
     else if (kind === 'terminal') refId = await onNewTerminal();
-    update((root) => {
-      let next = root;
-      const existing = allPanes(next).find((p) => p.kind === kind && p.refId === refId);
-      // Auto-add may already have placed a brand-new chat; the side the user
-      // pointed at wins, so lift it out and put it there.
-      if (existing) {
-        if (!at) return next;
-        next = removePane(next, existing.id);
-      }
-      const pane = existing ? { ...existing } : wallPane(kind, refId);
-      if (at && allPanes(next).some((p) => p.id === at.paneId) && canSplit(next, at.paneId, at.dir)) return splitPane(next, at.paneId, at.dir, pane);
-      return addPane(next, pane, aspect);
-    });
+    // A side pointed at makes a new zone there; otherwise the window fills a zone.
+    setState((s) => at && allPanes(s.root).some((p) => p.id === at.paneId) && canSplit(s.root, at.paneId, at.dir)
+      ? { ...s, root: splitPane(s.root, at.paneId, at.dir, { ...wallPane(kind, refId), zone: nextZoneName(s.root) }) }
+      : openWallPane(zoneId ? { ...s, activeZone: zoneId } : s, kind, refId));
     // A chat just made is the one you mean to talk to next.
     if (kind === 'chat') onSelect(refId);
   };
 
+  // Clicking a zone, or anything in it, makes it the active zone.
+  const activate = (paneId: string) => setState((s) => (s.activeZone === paneId ? s : { ...s, activeZone: paneId }));
+  const [zoneMenu, setZoneMenu] = useState<{ x: number; y: number; paneId: string } | null>(null);
+
+  /*
+   * An agent row dragged in from the panel. Its chip follows the pointer;
+   * dropped on a zone it flies there and grows to the window, and only then
+   * does the zone take the agent, so the window appears under the chip.
+   */
+  const agentDrag = useAgentDrag((s) => s.drag);
+  const [landing, setLanding] = useState<AgentDrag | null>(null);
+  const [dropZone, setDropZone] = useState<string | null>(null);
+  const chip = landing ?? agentDrag;
+  const chipRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = chipRef.current;
+    if (!el || !chip || landing) return;
+    el.replaceChildren(chip.ghost);
+    Object.assign(el.style, { left: `${chip.from.left}px`, top: `${chip.from.top}px`, width: `${chip.from.width}px`, height: `${chip.from.height}px` });
+  }, [chip?.ghost]);
+  useEffect(() => {
+    if (!agentDrag) { setDropZone(null); return; }
+    const over = (e: DragEvent) => {
+      const el = chipRef.current;
+      if (el && !el.dataset.landing && (e.clientX || e.clientY)) { el.style.left = `${e.clientX - agentDrag.grab.x}px`; el.style.top = `${e.clientY - agentDrag.grab.y}px`; }
+    };
+    document.addEventListener('dragover', over);
+    return () => document.removeEventListener('dragover', over);
+  }, [agentDrag]);
+  const dropAgent = (e: React.DragEvent<HTMLElement>, paneId: string) => {
+    const d = useAgentDrag.getState().drag;
+    if (!d || !isAgentDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDropZone(null);
+    const commit = () => {
+      setState((s) => ({ ...s, root: fillZone(s.root, paneId, d.kind, d.id), activeZone: paneId }));
+      if (d.kind === 'chat') onSelect(d.id);
+    };
+    const el = chipRef.current;
+    if (!el || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { commit(); return; }
+    const to = e.currentTarget.getBoundingClientRect();
+    setLanding(d);
+    el.dataset.landing = '';
+    Object.assign(el.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
+    setTimeout(() => {
+      commit();
+      el.dataset.landed = '';
+      setTimeout(() => { delete el.dataset.landing; delete el.dataset.landed; setLanding(null); }, 180);
+    }, 320);
+  };
+
+  // The thin plus buttons along the right and bottom edges, and the zone a hovered one would add.
+  const [railPreview, setRailPreview] = useState<ZoneSpot | null>(null);
+  const addZoneAt = (spot: ZoneSpot) => setState((s) => {
+    const { root, id } = addZone(s.root, spot);
+    return id ? { ...s, root, activeZone: id } : s;
+  });
+
   // What the windows' handlers need, read when they run: a window that skipped
   // a render (WallLeaf) still acts on the current wall.
-  const live = useRef({ state, dragging, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow });
-  live.current = { state, dragging, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow };
+  const live = useRef({ state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent });
+  live.current = { state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent };
   // The Focus heroes seen last keep their composer while parked, so going back
   // to one is a visibility flip; the rest park as transcripts.
   const warm = useRef<readonly string[]>([]);
@@ -488,33 +614,56 @@ export function CommandWall({
   // hero. Panes present at mount (a restored wall) never animate.
   const seenPanes = useRef<Set<string> | null>(null);
   const enteringPane = useRef<string | null>(null);
+  // The hero it replaces collapses onto the new composer and dissolves into it.
+  const leavingPane = useRef<string | null>(null);
+  const leavingFor = useRef<string | null>(null);
+  const lastFocusHero = useRef<string | null>(null);
   {
     const ids = allPanes(state.root).map((p) => p.id);
-    if (state.layout.mode !== 'focus') enteringPane.current = null;
-    else if (seenPanes.current) for (const id of ids) if (!seenPanes.current.has(id)) enteringPane.current = id;
+    if (state.layout.mode !== 'focus') enteringPane.current = leavingPane.current = null;
+    else if (seenPanes.current) for (const id of ids) if (!seenPanes.current.has(id)) {
+      enteringPane.current = id;
+      leavingFor.current = id;
+      leavingPane.current = lastFocusHero.current && lastFocusHero.current !== id && ids.includes(lastFocusHero.current) ? lastFocusHero.current : null;
+    }
     seenPanes.current = new Set(ids);
   }
+  // Aim the collapse at the new window's composer (both windows share the hero box).
+  const aimedLeaving = useRef<string | null>(null);
+  // Re-renders the parked window once its collapse ends, so it stops being drawn.
+  const [, setLeft] = useState(0);
+  useLayoutEffect(() => {
+    const leaving = leavingPane.current;
+    if (!leaving || aimedLeaving.current === leaving) return;
+    aimedLeaving.current = leaving;
+    const from = document.querySelector<HTMLElement>(`[data-wall-pane="${CSS.escape(leaving)}"]`);
+    const composer = document.querySelector<HTMLElement>(`[data-wall-pane="${CSS.escape(enteringPane.current ?? '')}"] .composer`);
+    if (!from || !composer) return; // the CSS fallback aims at a centred composer-sized box
+    const a = from.getBoundingClientRect(), b = composer.getBoundingClientRect();
+    from.style.setProperty('--collapse-inset', `${b.top - a.top}px ${a.right - b.right}px ${a.bottom - b.bottom}px ${b.left - a.left}px`);
+  });
   // Leaving Focus, the parked windows jump to their places instead of sliding
   // there from under the hero: a dozen full-size windows animating down at
   // once rastered every one of them whole (hundreds of MB of tiles, kept).
   // Only the hero slides, as it did before windows were parked.
-  const lastFocusHero = useRef<string | null>(null);
-  const prevMode = useRef(state.layout.mode);
+  const prevMode = useRef(wallArrangement(state.layout));
   const leavingFocus = prevMode.current === 'focus' && state.layout.mode !== 'focus';
   const [unparked, setUnparked] = useState<string | null | undefined>(undefined);
   const snapping = leavingFocus || unparked !== undefined;
   const snapHero = leavingFocus ? lastFocusHero.current : unparked;
   if (state.layout.mode === 'focus') lastFocusHero.current = geometry.hero;
+  // Switching hero again mid-collapse drops it, so it never replays when parked later.
+  if (leavingPane.current && geometry.hero !== leavingFor.current) leavingPane.current = aimedLeaving.current = null;
   useLayoutEffect(() => {
     const left = prevMode.current === 'focus' && state.layout.mode !== 'focus';
-    prevMode.current = state.layout.mode;
+    prevMode.current = wallArrangement(state.layout);
     if (!left) return;
     setUnparked(lastFocusHero.current);
     // Two frames: the jump has been styled by then, so turning transitions
     // back on starts none.
     let id = requestAnimationFrame(() => { id = requestAnimationFrame(() => setUnparked(undefined)); });
     return () => { cancelAnimationFrame(id); setUnparked(undefined); };
-  }, [state.layout.mode]);
+  }, [wallArrangement(state.layout)]);
 
   // Opening and closing a window is one push (wallMotion.ts): the windows
   // beside it slide on their transition while it opens out of, or folds into,
@@ -530,8 +679,8 @@ export function CommandWall({
     const els = new Map<string, HTMLElement>();
     stage.querySelectorAll<HTMLElement>(':scope > [data-wall-pane]').forEach((el) => els.set(el.dataset.wallPane!, el));
     const before = lastPush.current;
-    lastPush.current = size.width > 0 ? { ids, boxes: new Map(shownPanes), els, mode: state.layout.mode } : null;
-    if (!before || before.mode !== state.layout.mode || state.layout.mode === 'focus' || snapping) return;
+    lastPush.current = size.width > 0 ? { ids, boxes: new Map(shownPanes), els, mode: wallArrangement(state.layout) } : null;
+    if (!before || before.mode !== wallArrangement(state.layout) || state.layout.mode === 'focus' || snapping) return;
     for (const id of ids) {
       if (before.ids.has(id)) continue;
       const box = shownPanes.get(id);
@@ -557,6 +706,7 @@ export function CommandWall({
   const titleOf = (pane: WbPane): string => {
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
     if (pane.kind === 'terminal') return terminalById.get(pane.refId)?.title || 'Terminal';
+    if (pane.kind === 'zone') return pane.zone ?? 'Zone';
     return pane.kind === 'automations' ? 'Automations' : 'Insights';
   };
   const iconOf = (kind: PaneKind) => {
@@ -577,7 +727,7 @@ export function CommandWall({
     if (session) {
       const { lane, blocked } = sessionLane({ running: isRunning(session), pending: pending[session.id], stalled: session.stalled });
       needsYou = lane === 'needs-you';
-      agentStatus = agentStatusOfLane(lane, blocked);
+      agentStatus = agentStatusOfLane(lane, blocked, session.activeWatchCount);
       status = needsYou && blocked ? { label: BLOCKED_META[blocked].label, tone: LANE_META[lane].tone, live: true } : { label: LANE_META[lane].title, tone: LANE_META[lane].tone, live: lane === 'working' };
     } else if (terminal) {
       status = terminal.running ? { label: 'live', tone: 'var(--success)' } : { label: 'exited', tone: 'var(--ink-faint)' };
@@ -591,8 +741,8 @@ export function CommandWall({
     const rect = shownPanes.get(pane.id);
     const hero = geometry.hero === pane.id;
     const focusedChat = pane.kind === 'chat' && state.layout.mode === 'focus' && hero;
-    const folded = state.folded[pane.refId] ?? (!focusedChat && (numberOf.size > 4 || (state.layout.mode === 'grid' && (rect?.width ?? 0) < 700)));
-    const showCompanions = focusedChat ? !(state.folded[pane.refId] ?? false) : !folded && state.layout.mode === 'grid';
+    const folded = state.folded[pane.refId] ?? (!focusedChat && (numberOf.size > 4 || (wallArrangement(state.layout) === 'grid' && (rect?.width ?? 0) < 700)));
+    const showCompanions = focusedChat ? !(state.folded[pane.refId] ?? false) : !folded && wallArrangement(state.layout) === 'grid';
     const inDeck = geometry.deck.has(pane.id);
     // Focus shows one window. The others are parked under it at its size but
     // not rendered (content-visibility: hidden), so returning to one reuses
@@ -613,11 +763,18 @@ export function CommandWall({
     const subagents = session ? childrenOf.get(session.id) : undefined;
     const snap = snapping && pane.id !== snapHero;
     const entering = enteringPane.current === pane.id;
+    const lifted = lift?.paneId === pane.id;
+    const pickable = !!box && !parked && !inDeck && state.layout.mode !== 'focus';
+    const leaving = leavingPane.current === pane.id && parked;
+    const zoned = state.layout.mode !== 'focus';
+    const activeZone = zoned && state.activeZone === pane.id;
+    const dropping = dropZone === pane.id;
     const deps = [
-      entering,
+      zoned, activeZone, dropping, zoneMenu?.paneId === pane.id,
+      entering, leaving,
       pane, title, session, terminal, project?.name, projects.length > 1, status?.label, status?.live, needsYou, agentStatus,
       flashing, selected, n, box?.x, box?.y, box?.width, box?.height, parked, hero, focusedChat, folded, showCompanions,
-      inDeck, fullSurface, density, logsOpen, snap, workspaces, dragging, state.layout.mode, state.root, subagents, running, pending,
+      inDeck, fullSurface, density, logsOpen, snap, workspaces, lifted, pickable, wallArrangement(state.layout), state.root, subagents, running, pending,
     ];
     return <WallLeaf key={pane.id} deps={deps} render={() => {
       const companions = pane.kind === 'chat' ? workspaceCompanions(workspaces, pane.refId) : [];
@@ -630,16 +787,41 @@ export function CommandWall({
         data-wall-deck={inDeck || undefined}
         data-wall-hero={hero || undefined}
         data-wall-entering={(entering && state.layout.mode === 'focus' && hero) || undefined}
-        onAnimationEnd={entering ? (e) => { if (e.animationName === 'focus-new-agent-in' && enteringPane.current === pane.id) enteringPane.current = null; } : undefined}
+        data-wall-leaving={leaving || undefined}
+        onAnimationEnd={entering || leaving ? (e) => {
+          if (e.animationName === 'focus-new-agent-in' && enteringPane.current === pane.id) enteringPane.current = null;
+          if (e.animationName === 'focus-collapse-into-composer' && leavingPane.current === pane.id) { leavingPane.current = aimedLeaving.current = null; e.currentTarget.style.removeProperty('--collapse-inset'); setLeft((n) => n + 1); }
+        } : undefined}
         data-wall-pane={pane.id}
         data-grid-cell={`${pane.kind}:${pane.refId}`}
         data-wall-selected={selected || undefined}
+        data-wall-lifted={lifted || undefined}
         data-wall-working={agentStatus === 'working' || undefined}
         data-wall-needs-you={needsYou || undefined}
         data-wall-logs-open={logsOpen || undefined}
+        data-zone={zoned ? pane.zone ?? '' : undefined}
+        data-zone-active={activeZone || undefined}
+        data-zone-drop={dropping || undefined}
+        onPointerDownCapture={zoned ? () => live.current.activate(pane.id) : undefined}
+        // Capture: a composer inside would otherwise take the drop as a file.
+        onDragOverCapture={zoned ? (e) => { if (!isAgentDrag(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; setDropZone(pane.id); } : undefined}
+        onDropCapture={zoned ? (e) => live.current.dropAgent(e, pane.id) : undefined}
       >
+        {zoned && <div className="wall-zone-header" title="Drag to move this zone. Right-click to close it."
+          onPointerDown={pickable ? (e) => { if (e.button === 0) pickUp(e, pane, title); } : undefined}
+          onContextMenu={(e) => { e.preventDefault(); setZoneMenu({ x: e.clientX, y: e.clientY, paneId: pane.id }); }}>
+          <span>{pane.zone ?? 'Zone'}</span>
+        </div>}
+        {pane.kind === 'zone' ? <div className="wall-zone-empty" data-zone-empty>
+          <ZoneEmptyIllustration />
+          <p className="wall-zone-empty-title">Empty zone</p>
+          <p>Drag in an agent chat or start a new one below.</p>
+          <div className="wall-zone-create">
+            {CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind} aria-label={label} title={`${label} (${shortcut.label})`}
+              onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image'); }}><PlusIcon className="wall-zone-plus h-3.5 w-3.5" />{icon}<span className="wall-zone-label">{label}</span><kbd className="kbd wall-zone-kbd">{shortcut.label}</kbd></button>)}
+          </div>
+        </div> : <>
         {/* The composer's beam, quieter: a working agent window says so at a glance. */}
-        {agentStatus === 'working' && <span className="composer-beam-ring wall-window-beam" aria-hidden><span className="composer-beam-spin" /></span>}
         <PaneFrame
           pane={pane}
           title={title}
@@ -657,22 +839,15 @@ export function CommandWall({
           ringColor={flashing ? 'color-mix(in srgb, var(--accent) 60%, var(--line))' : undefined}
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}
           addable={WALL_ADDABLE}
-          closeTitle={openable ? 'Remove from the wall (the chat stays)' : 'Remove from the wall'}
-          dragging={dragging}
-          canSplit={(dir) => state.layout.mode === 'grid' && !inDeck && canSplit(state.root, pane.id, dir)}
+          closeTitle={pane.kind === 'chat' ? 'Stop agent and watchers, then remove from the wall (chat is kept)' : 'Remove from the wall'}
+          onPickUp={pickable ? (e) => pickUp(e, pane, title) : undefined}
+          canSplit={(dir) => wallArrangement(state.layout) === 'grid' && !inDeck && canSplit(state.root, pane.id, dir)}
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
-          onClose={() => live.current.update((root) => removePane(root, pane.id))}
+          onClose={() => { void closeWallAgent(pane, () => live.current.update((root) => clearZone(root, pane.id))); }}
           focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><TargetIcon className="h-5 w-5" /></button>}
-          onMinimize={() => live.current.update((root) => removePane(root, pane.id))}
+          onMinimize={() => live.current.update((root) => clearZone(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
-          onDragStart={() => setDragging(pane.id)}
-          onDragEnd={() => setDragging(null)}
-          onDrop={(target) => {
-            const { dragging, state, update } = live.current;
-            if (dragging) update((root) => (target === 'swap' || state.layout.mode !== 'grid' ? swapPanes(root, dragging, pane.id) : movePane(root, dragging, pane.id, target)));
-            setDragging(null);
-          }}
         >
           {/* What it is waiting on is said inside the window (ChatPane pins the
               question or approval at the top). A banner here sat under the
@@ -697,8 +872,8 @@ export function CommandWall({
               })}
             </div>
           </div>
-          {session && <WorkingSubagents children={subagents ?? []} running={running} pending={pending} onOpen={(id) => { const { update, aspect, onSelect } = live.current; update((root) => allPanes(root).some(p => p.kind === 'chat' && p.refId === id) ? root : addPane(root, wallPane('chat', id), aspect)); onSelect(id); }} />}
-        </PaneFrame>
+          {session && <WorkingSubagents children={subagents ?? []} running={running} pending={pending} onOpen={(id) => { const { setState, onSelect } = live.current; setState((s) => openWallPane(s, 'chat', id)); onSelect(id); }} />}
+        </PaneFrame></>}
       </div>
       );
     }} />;
@@ -735,58 +910,77 @@ export function CommandWall({
     });
   };
 
+  // The add-zone rails: one plus per zone along the right and bottom edges
+  // (fitting that zone's row or column), and one that spans the whole side
+  // when that would come out differently.
+  const zoneRails = state.layout.mode !== 'focus' && wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH && !addContent && !!state.root;
+  const railSegments = (side: 'right' | 'down') => allPanes(state.root).flatMap((p) => {
+    const r = shownPanes.get(p.id);
+    if (!r) return [];
+    if (side === 'right') return r.x + r.width >= size.width - 8 ? [{ paneId: p.id, from: r.y, len: r.height, full: r.height >= geometry.stageHeight - 8 }] : [];
+    return r.y + r.height >= geometry.stageHeight - 8 ? [{ paneId: p.id, from: r.x, len: r.width, full: r.width >= size.width - 8 }] : [];
+  });
+  const railGhost = useMemo(() => {
+    if (!railPreview) return null;
+    const { root, id } = addZone(state.root, railPreview);
+    return id ? commandWallGeometry({ ...state, root }, size.width, size.height).panes.get(id) ?? null : null;
+  }, [railPreview, state, size]);
+  const spanWord = (side: Direction) => (side === 'left' || side === 'right' ? { span: 'full height', fit: 'row' } : { span: 'full width', fit: 'column' });
+  const heldBox = lift ? shownPanes.get(lift.paneId) : undefined;
+  const spanHint = lift && heldBox && (lift.target.kind === 'edge' || (lift.target.kind === 'beside' && lift.target.atEdge))
+    ? lift.target.kind === 'edge' ? `Spans the ${spanWord(lift.target.side).span}. Let go of Shift to fit the ${spanWord(lift.target.side).fit}.` : `Hold Shift to span the ${spanWord(lift.target.side).span}`
+    : null;
+
   return (
-    <div ref={wrapRef} className="command-wall-layout" data-command-wall="windows" data-wall-layout={state.layout.mode}>
+    <div ref={wrapRef} className="command-wall-layout" data-command-wall="windows" data-wall-layout={wallArrangement(state.layout)} data-wall-lifting={lift ? '' : undefined} data-zone-rails={zoneRails || undefined}>
+      {chip && createPortal(<div ref={chipRef} className="wall-agent-chip" aria-hidden />, document.body)}
+      {zoneMenu && <ContextMenu x={zoneMenu.x} y={zoneMenu.y} onClose={() => setZoneMenu(null)}>
+        <ContextAction disabled={allPanes(state.root).length < 2} onClick={() => {
+          const id = zoneMenu.paneId;
+          setZoneMenu(null);
+          // The agent in it is minimized, not stopped or completed.
+          setState((s) => {
+            const root = removePane(s.root, id);
+            return { ...s, root, activeZone: s.activeZone === id ? allPanes(root)[0]?.id ?? null : s.activeZone };
+          });
+        }}>Close zone</ContextAction>
+      </ContextMenu>}
+      {/* The shield keeps a browser or terminal under the pointer from swallowing the drag. */}
+      {heldCard && createPortal(<>
+        <div className="wall-drag-shield" aria-hidden />
+        <div ref={cardRef} className="wall-held-card" aria-hidden><div className="wall-held-card-strip">{iconOf(heldCard.kind)}<span>{heldCard.title}</span></div></div>
+      </>, document.body)}
       {companionNotice && <div className="command-wall-notice" role="status">A companion opened in a narrow window. <button onClick={() => { focusWindow(companionNotice); setCompanionNotice(null); }}>Focus {titleOf(companionNotice)}</button><button aria-label="Dismiss companion notice" onClick={() => setCompanionNotice(null)}>×</button></div>}
       <div className="command-wall-stage" data-wall-vacant={!addContent && !state.root || undefined} style={{ height: Math.max(geometry.height, addContent ? geometry.add.y + createHeight + 64 : 0), width: size.width }}>
         <div ref={pushStageRef} className="command-wall-pane-stage" style={{ position: 'absolute', inset: 0, top: 0 }}>
         {/* Closing windows fold away here, under the live ones; React never renders into it. */}
         <div ref={leavingRef} className="command-wall-leaving" aria-hidden />
         {/* Grid's unfilled squares, drawn under the windows as quiet hatching. */}
-        {state.layout.mode === 'fixed' && geometry.panes.size > 0 && geometry.empty.map((r, i) => (
+        {wallArrangement(state.layout) === 'fixed' && geometry.panes.size > 0 && geometry.empty.map((r, i) => (
           <div key={`empty-${i}`} className="command-wall-empty-cell" aria-hidden data-wall-empty-cell style={{ left: r.x, top: r.y, width: r.width, height: r.height }} />
         ))}
         {allPanes(state.root).map(renderLeaf)}
         {logsPane && logsLayout?.drawer && <AgentLogsDrawer key={logsPane.refId} sessionId={logsPane.refId} title={titleOf(logsPane)} rect={logsLayout.drawer} overlay={logsOverlay} selected={logsPane.refId === selectedId} />}
-        {!addContent && state.layout.mode === 'grid' && size.width >= NARROW_WIDTH && geometry.addGrid && renderDividers(geometry.addGrid)}
-        {/* Dynamic: each side of the whole board is a landing zone too, so a
-            window can become a full-height column or a full-width row without
-            aiming at another window. The preview shows where it would land. */}
-        {dragging && !addContent && state.layout.mode === 'grid' && size.width >= NARROW_WIDTH && allPanes(state.root).length > 1 && <>
-          {edgeOver && (() => {
-            const r = boardEdgePreview(state, dragging, edgeOver, size.width, geometry.stageHeight, expanded);
-            return r && <div className="command-wall-edge-preview" aria-hidden data-edge={edgeOver} style={{ left: r.x, top: r.y, width: r.width, height: r.height }}>
-              <span>{edgeOver === 'left' || edgeOver === 'right' ? 'New column' : 'Full-width row'}</span>
-            </div>;
-          })()}
-          {BOARD_EDGES.map((side) => (
-            <div
-              key={side}
-              className="command-wall-edge"
-              data-edge={side}
-              data-over={edgeOver === side || undefined}
-              aria-hidden
-              onDragOver={(e) => {
-                if (!e.dataTransfer.types.includes(PANE_DRAG_TYPE)) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (edgeOver !== side) setEdgeOver(side);
-              }}
-              onDragLeave={(e) => {
-                const to = e.relatedTarget as Node | null;
-                if (!to || !e.currentTarget.contains(to)) setEdgeOver((s) => (s === side ? null : s));
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const { dragging, update } = live.current;
-                if (dragging) update((root) => movePaneToEdge(root, dragging, side));
-                setEdgeOver(null);
-                setDragging(null);
-              }}
-            />
-          ))}
-        </>}
+        {!addContent && wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH && geometry.addGrid && renderDividers(geometry.addGrid)}
+        {railGhost && <div className="wall-zone-ghost" aria-hidden style={{ left: railGhost.x, top: railGhost.y, width: railGhost.width, height: railGhost.height }}><span>New zone</span></div>}
+        {spanHint && heldBox && <div className="wall-span-hint" role="status" style={{ left: heldBox.x + heldBox.width / 2, top: heldBox.y + heldBox.height / 2 }}>{spanHint}</div>}
         </div>
+        {zoneRails && (['right', 'down'] as const).map((side) => {
+          const segments = railSegments(side);
+          const across = side === 'right';
+          const { span, fit } = spanWord(side);
+          const preview = (spot: ZoneSpot) => ({ onPointerEnter: () => setRailPreview(spot), onFocus: () => setRailPreview(spot), onPointerLeave: () => setRailPreview(null), onBlur: () => setRailPreview(null) });
+          return <div key={side} className="wall-zone-rail" data-side={side} style={across ? { left: size.width, top: 0, height: geometry.stageHeight } : { left: 0, top: geometry.stageHeight, width: size.width }}>
+            {segments.map((g) => <button key={g.paneId} type="button" className="wall-zone-add" style={across ? { top: g.from + g.len / 2 } : { left: g.from + g.len / 2 }}
+              aria-label={`Add a zone to this ${fit}`} title={`Add a zone to this ${fit} (Shift-click: span the ${span})`}
+              {...preview({ paneId: g.paneId, side })}
+              onClick={(e) => { addZoneAt(e.shiftKey ? { edge: side } : { paneId: g.paneId, side }); setRailPreview(null); }}><PlusIcon className="h-3.5 w-3.5" /></button>)}
+            {segments.some((g) => !g.full) && <button type="button" className="wall-zone-add wall-zone-span" style={across ? { top: geometry.stageHeight - 12 } : { left: size.width - 12 }}
+              aria-label={`Add a zone spanning the ${span}`} title={`Add a zone spanning the ${span}`}
+              {...preview({ edge: side })}
+              onClick={() => { addZoneAt({ edge: side }); setRailPreview(null); }}><SpanIcon className="h-3.5 w-3.5" /></button>}
+          </div>;
+        })}
         {/* Add window lives beside the composer; the wall only shows the slot it opens. */}
         {addContent && <div className="command-wall-add-zone">
           {<section className={`command-wall-add${addContent ? ' command-wall-add-tile' : ''}`} data-preview={!!addContent || undefined} data-solid={!!addContent || undefined} style={{ left: geometry.add.x, top: geometry.add.y, width: geometry.add.width, height: addContent ? Math.max(createHeight + 64, geometry.add.height) : geometry.add.height, position: 'absolute' }}>
@@ -797,4 +991,19 @@ export function CommandWall({
       </div>
     </div>
   );
+}
+
+/** A plus between two end bars: a new zone that runs the whole side. Drawn for the right rail; the bottom rail turns it. */
+function SpanIcon({ className }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className={className} aria-hidden><path d="M7 3h10M7 21h10M12 8v8M8 12h8" /></svg>;
+}
+
+/** Closing stops work before removing its view; minimizing only hides it. */
+export async function closeWallAgent(pane: WbPane, remove: () => void): Promise<void> {
+  try {
+    if (pane.kind === 'chat') await window.nekko.abortChat(pane.refId);
+    remove();
+  } catch (error) {
+    useStore.getState().pushToast('error', `Could not stop agent and watchers: ${String(error)}`);
+  }
 }

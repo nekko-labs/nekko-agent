@@ -21,6 +21,7 @@ const HELP: Record<ConnectorKind, { hint: string; url: string }> = {
   todoist: { hint: 'API token, Todoist → Settings → Integrations → Developer.', url: 'https://app.todoist.com/app/settings/integrations/developer' },
   clickup: { hint: 'Personal API token (pk_…), ClickUp → Settings → Apps → API Token.', url: 'https://app.clickup.com/settings/apps' },
   tasksfile: { hint: 'Absolute path to a Markdown file. Each "- [ ] …" line shows as a task; "- [x]" lines are treated as done.', url: 'https://docs.github.com/get-started/writing-on-github/working-with-advanced-formatting/about-task-lists' },
+  floop: { hint: 'API token (flp_…) from your Floop server, Settings → API tokens. Use an agent token so Nekko Agent shows as itself.', url: 'https://github.com/nekko-labs/floop' },
 };
 
 interface ConnectorField {
@@ -46,6 +47,7 @@ const EXTRA_FIELDS: Partial<Record<ConnectorKind, ConnectorField[]>> = {
   asana: [{ key: 'workspace', label: 'Workspace id (optional)', placeholder: 'first workspace' }],
   clickup: [{ key: 'team', label: 'Workspace id (optional)', placeholder: 'first workspace' }],
   tasksfile: [{ key: 'path', label: 'File path', placeholder: '/Users/you/project/TASKS.md' }],
+  floop: [{ key: 'url', label: 'Server URL', placeholder: 'https://your-team.fly.dev' }],
 };
 
 /** Connectors that need no secret at all: the token input is hidden. */
@@ -55,6 +57,7 @@ const TOKEN_LABEL: Partial<Record<ConnectorKind, string>> = {
   jira: 'Jira API token',
   teams: 'Microsoft Graph token (optional, enables reads)',
   trello: 'Trello token',
+  floop: 'Floop API token',
 };
 
 /** What a card needs before Connect lights up. */
@@ -64,6 +67,7 @@ function canConnect(kind: ConnectorKind, token: string, fields: Record<string, s
   if (kind === 'teams') return Boolean(token || fields.webhookUrl?.trim());
   if (kind === 'trello') return Boolean(token && fields.key?.trim());
   if (kind === 'tasksfile') return Boolean(fields.path?.trim());
+  if (kind === 'floop') return Boolean(token && fields.url?.trim());
   return Boolean(token);
 }
 

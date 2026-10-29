@@ -4,3 +4,5 @@
 # purpose. Store it exactly: eol=lf would keep "normalising" it and leave every
 # checkout reporting it as modified.
 /vendor/agent-browser/stdio.patch -text
+# The bundled Mermaid is pinned by sha256 (scripts/vendor-mermaid.mjs --check): store its bytes exactly.
+/vendor/mermaid/mermaid.min.js -text -diff linguist-vendored

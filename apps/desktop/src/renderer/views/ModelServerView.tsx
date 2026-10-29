@@ -6,26 +6,8 @@ import { EngineSection } from '../components/engine/EngineSection.js';
 import { ModelDetail } from '../components/engine/ModelDetail.js';
 import { hasAppChrome } from '../chrome.js';
 
-/**
- * This machine as a model server.
- *
- * Two halves of one answer, which used to sit at opposite ends of the Models
- * page under two other things. The first is what runs the models: the engine, the
- * models it can load, where those models come from on disk, and the address it
- * serves them on. The second is what runs *this app*: the local API, the command
- * line, and the MCP entry other agents use it through.
- *
- * They belong together because they are the same question asked twice — what on
- * this computer can other software talk to — and because the page that answers
- * it is not the page where you connect an Anthropic key. That one is Model
- * Providers now.
- *
- * Opening a model from the catalog takes the whole view rather than unfolding a
- * drawer: a model card, a download-count, a ladder of builds and a license is a
- * page's worth of reading, and it should not have to happen inside a list.
- */
-
-export function ModelServerView() {
+/** Built-in engine surface, embedded in Models or used by standalone fixtures. */
+export function ModelServerView({ embedded = false }: { embedded?: boolean }) {
   const queueEnabled = useStore((s) => s.settings?.experimental?.resourceQueue === true);
   const refreshProviders = useStore((s) => s.refreshProviders);
   // The catalog model being read, if any. Held here rather than in the engine
@@ -45,7 +27,7 @@ export function ModelServerView() {
 
   if (openModelId) {
     return (
-      <div className="h-full overflow-y-auto">
+      <div className={embedded ? "" : "h-full overflow-y-auto"}>
         <ModelDetail
           modelId={openModelId}
           memory={memory}
@@ -63,14 +45,12 @@ export function ModelServerView() {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
-        {!hasAppChrome && <h1 className="view-title">Model Server</h1>}
-        <p className="mt-1 text-[13px] text-ink-faint">
-          Run models on this machine, and let anything else on it drive Nekko Agent.
-        </p>
+    <div className={embedded ? "" : "h-full overflow-y-auto"}>
+      <div className={embedded ? "w-full" : "mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8"}>
+        {!embedded && !hasAppChrome && <h1 className="view-title">Model Server</h1>}
 
-        <div className="mt-7">
+
+        <div className={embedded ? "" : "mt-7"}>
           <EngineSection
             onProvidersChanged={refreshProviders}
             onOpenModel={(id) => {
@@ -82,9 +62,7 @@ export function ModelServerView() {
 
         {queueEnabled && <ResourceQueueSection />}
 
-        <p className="mt-8 text-center text-[12px] text-ink-faint">
-          Cloud keys and other machines' servers live in Model Providers.
-        </p>
+
       </div>
     </div>
   );

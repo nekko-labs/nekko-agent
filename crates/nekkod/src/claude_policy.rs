@@ -55,14 +55,20 @@ pub struct Refusal {
     pub message: &'static str,
 }
 
+/// `claude:planUsage` before the chat's Claude Code has printed any usage.
+const NOT_REPORTED_YET: &str = "Claude Code has not reported plan usage yet.";
+
 /// A plan usage read for the Claude Agent limits UI.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PlanUsage {
     /// Nothing to show; the row's reason says why.
     Unavailable(&'static str),
     /// The dev-only preview: the UI renders `claudePlanUsageExample()`,
     /// labelled "Example data". Never real data.
     Example,
+    /// What the user's own Claude Code last reported in its stream
+    /// (`SubscriptionLimits`), with the row allowing it to be shown.
+    Observed(Value),
 }
 
 #[derive(Clone, Debug)]
@@ -240,33 +246,49 @@ impl ClaudePolicyStore {
         self.gate(provider, Capability::UnattendedRuns)
     }
 
-    /// Plan usage for a Claude provider's limits UI. There is no sanctioned
-    /// source of Claude plan usage, so even with `usage_limits` enabled this
-    /// returns nothing until Anthropic names one; the preview shows example data.
-    pub fn plan_usage(&self, provider: &Value) -> PlanUsage {
+    /// Plan usage for a Claude provider's limits UI: `observed` is what its
+    /// Claude Code last printed in its own documented stream output
+    /// (`rate_limit_event`, `/usage`), never a plan endpoint or a credential.
+    /// Shown only when `usage_limits` allows it for the auth; the preview shows
+    /// example data.
+    pub fn plan_usage(&self, provider: &Value, observed: Option<Value>) -> PlanUsage {
         if let Err(r) = self.gate(provider, Capability::UsageLimits) {
             return PlanUsage::Unavailable(r.message);
         }
         if self.preview.is_some() && self.auth_for(provider) == self.preview {
             return PlanUsage::Example;
         }
-        PlanUsage::Unavailable("No plan usage source is available yet.")
+        match observed {
+            Some(limits) => PlanUsage::Observed(limits),
+            None => PlanUsage::Unavailable(NOT_REPORTED_YET),
+        }
     }
 }
 
 /// The settings provider `id`.
-/// `claude:codeStatus(providerId?)`: whether the user's own Claude Code is
-/// installed and how it is signed in, for the Claude Agent setup states. It
-/// runs `claude --version` and `claude auth status`, never reads Claude Code's
-/// credentials, and records the status for `providerId` so the policy rows its
-/// turns get match what the user sees.
+/// `claude:codeStatus(providerId?, account?)`: whether the user's own Claude
+/// Code is installed and how it is signed in, for the Claude Agent setup
+/// states. It runs `claude --version` and `claude auth status`, never reads
+/// Claude Code's credentials, and records the status for `providerId` so the
+/// policy rows its turns get match what the user sees. The Claude Code
+/// account is the saved provider's, or `account` before one is saved (the
+/// setup panel); neither means the default login.
 pub async fn code_status_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Result<Value, String> {
     let provider_id = args.first().and_then(Value::as_str).filter(|id| !id.is_empty());
+    let saved = match provider_id {
+        Some(id) => provider(ctx, id).await.ok(),
+        None => None,
+    };
+    let account = match &saved {
+        Some(p) => crate::harness::provider_account(p).map(str::to_string),
+        None => args.get(1).and_then(Value::as_str).filter(|a| !a.is_empty()).map(str::to_string),
+    };
+    let config_dir = nekko_harness::account_config_dir(account.as_deref())?;
     let bin = match nekko_harness::locate(None).await {
         Ok(bin) => bin,
         Err(message) => return Ok(json!({ "installed": false, "message": message })),
     };
-    match nekko_harness::auth_status(&bin).await {
+    match nekko_harness::auth_status(&bin, config_dir.as_deref()).await {
         Ok(s) => {
             let status = json!({ "loggedIn": s.logged_in, "authMethod": s.auth_method, "apiProvider": s.api_provider });
             if let Some(id) = provider_id {
@@ -280,6 +302,10 @@ pub async fn code_status_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Resu
                 "authMethod": s.auth_method,
                 "apiProvider": s.api_provider,
                 "auth": auth.as_str(),
+                "email": s.email,
+                "orgId": s.org_id,
+                "orgName": s.org_name,
+                "subscriptionType": s.subscription_type,
             }))
         }
         Err(message) => Ok(json!({ "installed": true, "version": bin.version, "loggedIn": false, "message": message })),
@@ -328,15 +354,17 @@ pub async fn capability_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Resul
     }))
 }
 
-/// `claude:planUsage(providerId)`: `{ source: "none", message }`, or in the
+/// `claude:planUsage(providerId)`: `{ source: "claude-code", limits }` where
+/// the policy allows it, `{ source: "none", message }` otherwise, or in the
 /// dev-only preview `{ source: "example", label: "Example data" }` (the UI
 /// renders `claudePlanUsageExample()`).
 pub async fn plan_usage_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Result<Value, String> {
     let id = args.first().and_then(Value::as_str).ok_or("claude:planUsage needs a provider id")?;
     let provider = provider(ctx, id).await?;
-    Ok(match ctx.claude_policy.plan_usage(&provider) {
+    Ok(match ctx.claude_policy.plan_usage(&provider, ctx.turns.harness.plan_usage(id)) {
         PlanUsage::Unavailable(message) => json!({ "source": "none", "message": message }),
         PlanUsage::Example => json!({ "source": "example", "label": "Example data" }),
+        PlanUsage::Observed(limits) => json!({ "source": "claude-code", "limits": limits }),
     })
 }
 
@@ -428,7 +456,14 @@ mod tests {
         }
         assert!(s.gate(&plan, Capability::NekkoTools).is_err());
         assert!(s.gate(&plan, Capability::ContextNote).is_err());
-        assert_eq!(s.plan_usage(&plan), PlanUsage::Unavailable("Check your plan's usage in Claude Code."));
+        assert_eq!(s.plan_usage(&plan, None), PlanUsage::Unavailable("Check your plan's usage in Claude Code."));
+        // What Claude Code printed stays hidden while the row awaits approval.
+        let seen = json!({ "windows": [] });
+        assert_eq!(
+            s.plan_usage(&plan, Some(seen.clone())),
+            PlanUsage::Unavailable("Check your plan's usage in Claude Code.")
+        );
+        assert_eq!(s.plan_usage(&harness(Some("vertex")), Some(seen.clone())), PlanUsage::Observed(seen));
         // Interactive chat and the phone stay on.
         assert!(s.gate(&plan, Capability::InteractiveChat).is_ok());
         assert!(s.gate(&plan, Capability::PhoneRemote).is_ok());
@@ -446,8 +481,10 @@ mod tests {
             assert!(s.gate(&plan, cap).is_ok(), "{cap:?}");
         }
         assert!(s.gate_turn(&plan, &json!({ "unattended": true })).is_ok());
-        // Usage is allowed, but there is still no sanctioned source.
-        assert_eq!(s.plan_usage(&plan), PlanUsage::Unavailable("No plan usage source is available yet."));
+        // Usage is allowed: Claude Code's own report shows once it has printed one.
+        assert_eq!(s.plan_usage(&plan, None), PlanUsage::Unavailable(NOT_REPORTED_YET));
+        let seen = json!({ "windows": [{ "id": "session", "usedPercent": 42 }] });
+        assert_eq!(s.plan_usage(&plan, Some(seen.clone())), PlanUsage::Observed(seen));
         assert_eq!(s.status()["override"], json!({ "serial": 1, "issuedAt": "2026-11-01T00:00:00Z" }));
         // And off again with a newer one.
         s.apply_signed(&signed(2, json!({ "subscription": { "nekko_tools": "awaiting_approval" } }))).unwrap();
@@ -531,7 +568,7 @@ mod tests {
         for cap in ALL_GATED {
             assert!(s.gate(&plan, cap).is_ok(), "{cap:?}");
         }
-        assert_eq!(s.plan_usage(&plan), PlanUsage::Example);
+        assert_eq!(s.plan_usage(&plan, Some(json!({ "windows": [] }))), PlanUsage::Example);
         assert_eq!(s.status()["preview"], json!("subscription"));
         // Structural limits stay.
         assert!(s.gate(&plan, Capability::ModelRouting).is_err());

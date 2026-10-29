@@ -10,6 +10,11 @@ on:
       - apps/desktop/electron-builder.yml
       - apps/desktop/build/**
       - apps/desktop/scripts/after-pack.cjs
+      - apps/desktop/scripts/sign-mac.cjs
+      - apps/desktop/scripts/sign-mac-dry-run.cjs
+      - apps/desktop/scripts/stage-daemon.mjs
+      - scripts/check-mac-entitlements.sh
+      - crates/nekkod/vm/**
       - apps/desktop/scripts/gen-dmg-art.mjs
       - .github/workflows/installers.yml
       - .github/workflows/release.yml
@@ -40,6 +45,24 @@ jobs:
       - name: Package (unsigned, not published)
         shell: bash
         run: npm run dist -w @nekko-agent/desktop -- --publish never
+
+      # The unsigned path (after-pack.cjs re-signs nekko-vm with its own
+      # entitlements): only nekko-vm may carry the virtualization entitlement.
+      - name: Check the virtualization entitlement (unsigned build)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: scripts/check-mac-entitlements.sh "$(find apps/desktop/release -maxdepth 2 -name '*.app' -print -quit)"
+
+      # The release path: the real mac.sign hook (scripts/sign-mac.cjs, osx-sign
+      # and codesign) with an ad-hoc identity in place of the Developer ID, on a
+      # copy so the disk image check below still sees the packaged app.
+      - name: Signed dry-run through the release hook
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ditto "$(find apps/desktop/release -maxdepth 2 -name '*.app' -print -quit)" "$RUNNER_TEMP/dry-run.app"
+          node apps/desktop/scripts/sign-mac-dry-run.cjs "$RUNNER_TEMP/dry-run.app"
 
       # One-click NSIS: a silent install must land per-user with no elevation,
       # create the shortcuts, and uninstall cleanly.

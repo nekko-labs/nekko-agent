@@ -163,11 +163,17 @@ public struct PhoneRefusal: Equatable, Sendable {
         case "change-off": return "Changes from this phone are turned off on \(computer). Turn them on in Remote access → What phones can do."
         case "key-mismatch": return "\(computer) knows a different key for this phone. Remove this phone on \(computer) and pair it again."
         case "key-missing", "key-invalid": return "\(computer) couldn’t set up Face ID for changes from this phone. Try again."
+        case "proof-required" where detail == Channels.sessionSetOptions || detail == Channels.settingsUpdate:
+            return "Confirm with Face ID or your passcode to let chats on \(computer) run with fewer approvals."
         case "proof-required", "proof-invalid", "proof-replayed": return "\(computer) couldn’t confirm it was you. Try again."
         case "proof-stale": return "\(computer) couldn’t confirm it was you: check that this phone’s clock is right, then try again."
         case "device-unknown": return "\(computer) doesn’t know this phone any more. Pair it again."
         case "channel-denied": return "\(computer) doesn’t allow this from a phone. Update Nekko on \(computer) if it’s new."
         case "value-invalid" where detail == "secret file": return "This file may hold secrets, so it never leaves \(computer)."
+        // SK-6: the step-up refusals and the safety exit the owner kept off.
+        case let c where StepUp.isStepUpCode(c): return StepUpCode(rawValue: c)?.message(computer: computer)
+        case "quit-disabled":
+            return "Quitting from a phone is turned off on \(computer). Turn it on there in Settings → Remote access."
         default: return nil
         }
     }

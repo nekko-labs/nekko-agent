@@ -1,3 +1,5 @@
+import { useDownloadAction } from './useDownloadAction.js';
+import { DownloadProgress } from './DownloadProgress.js';
 import { useEffect, useState } from 'react';
 import type {
   DecisionAnswer,
@@ -285,11 +287,12 @@ export function CatalogCard({ entry, have, status, busy, act, refresh }: {
 }) {
   const recommended = entry.variants.find((v) => v.recommended) ?? entry.variants[0];
   const [precision, setPrecision] = useState<DecisionPrecision>(recommended.precision);
-  const [downloading, setDownloading] = useState(false);
+  const download = useDownloadAction({ group: `decision:${entry.id}:${precision}` });
+  const downloading = download.active;
   useEffect(() => {
-    if (!downloading) return;
+    if (!downloading) { void refresh(); return; }
     const t = setInterval(() => {
-      void refresh().then((m) => { if (m.some((x) => x.id === entry.id && x.precisions.includes(precision))) setDownloading(false); });
+      void refresh();
     }, 3000);
     return () => clearInterval(t);
   }, [downloading, precision, entry.id]);
@@ -312,7 +315,7 @@ export function CatalogCard({ entry, have, status, busy, act, refresh }: {
         </p>
       )}
       {(!entry.unavailable || have) && <div className="mt-2 flex flex-wrap items-center gap-2">
-        <select className="input w-auto py-1 text-[12px]" aria-label={`${entry.name} precision`} value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)}>
+        <select className="input w-auto py-1 text-[12px]" disabled={downloading} aria-label={`${entry.name} precision`} value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)}>
           {entry.variants.map((v) => (
             <option key={v.precision} value={v.precision}>{v.precision}{v.recommended ? ' (recommended)' : ''} · {formatBytes(v.bytes)}</option>
           ))}
@@ -321,11 +324,12 @@ export function CatalogCard({ entry, have, status, busy, act, refresh }: {
           <button
             className="btn btn-outline py-1 text-[12px]"
             disabled={busy !== null || downloading}
-            onClick={() => void act(entry.id, () => window.nekko.decisionsDownload(entry.id, precision)).then((r) => { if (r.ok) setDownloading(true); })}
+            onClick={() => void download.run(() => act(entry.id, () => window.nekko.decisionsDownload(entry.id, precision)))}
           >
             {downloading ? 'Downloading…' : `Download ${formatBytes(bytes)}`}
           </button>
         )}
+        {downloading && <DownloadProgress group={download.group} />}
         {have?.precisions.includes(precision) && status?.local.available && !loaded && (
           <button className="btn btn-primary py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsLoad(entry.id, precision))}>
             {busy === entry.id ? 'Loading…' : 'Load'}

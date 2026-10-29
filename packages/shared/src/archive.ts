@@ -1,17 +1,11 @@
 /**
- * Archived chats: out of the workspace list, still on disk, gone for good
- * after a retention window.
- *
- * Closing a card used to be the only way to tidy the sidebar, and it read like
- * a delete while being nothing of the kind, so chats seemed to vanish. Archive
- * is the honest version: the chat leaves the list, it can be read (not
- * continued) from the Archived list, and it is restored or deleted on purpose.
- * Anything nobody restores is deleted once the window runs out, so the
- * archive never grows into a second, slower sidebar.
+ * Archived chats: out of the workspace list, still on disk until restored or
+ * explicitly deleted. Compatibility helpers remain for callers that used to
+ * show the retired expiry window, but completed history no longer expires.
  */
 
-/** How long an archived chat is kept before it is deleted. */
-export const ARCHIVE_RETENTION_DAYS = 60;
+/** Archived chats are retained indefinitely. */
+export const ARCHIVE_RETENTION_DAYS = Number.POSITIVE_INFINITY;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

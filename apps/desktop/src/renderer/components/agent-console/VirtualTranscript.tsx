@@ -1,4 +1,5 @@
-import React, { memo, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { attachTimestampSwipe } from './timestampSwipe.js';
+import React, { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { RowKeyContext, RowMemoryContext } from './rowState.js';
 import { bottomRange, isPinned, prefixOffsets, rangeFor, sameRange, shiftAbove, type RowRange } from './virtualGeometry.js';
@@ -82,11 +83,21 @@ export interface VirtualTranscriptProps<R extends VirtualRow> {
   onPinnedChange?: (pinned: boolean) => void;
   /** The conversation grew at the bottom while the reader was scrolled up. */
   onGrowWhileUnpinned?: () => void;
+  /** A row's time, shown when the reader swipes the transcript left. */
+  stampOf?: (row: R) => string | undefined;
   ref?: React.Ref<VirtualTranscriptHandle>;
 }
 
+/** Keep gesture listeners out of React's render path; see timestampSwipe.ts. */
+function useSwipeToRevealTimes(scrollRef: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) return attachTimestampSwipe(el);
+  }, [scrollRef]);
+}
+
 function VirtualTranscriptImpl<R extends VirtualRow>({
-  rows, renderRow, estimate, cacheKey, className, header, footer, onPinnedChange, onGrowWhileUnpinned, ref,
+  rows, renderRow, estimate, cacheKey, className, header, footer, onPinnedChange, onGrowWhileUnpinned, stampOf, ref,
 }: VirtualTranscriptProps<R>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -305,6 +316,8 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
     };
   }, []);
 
+  useSwipeToRevealTimes(scrollRef);
+
   const visible = rows.slice(range.start, range.end);
   const tailGap = rows[rows.length - 1]?.gapAfter;
   return (
@@ -321,6 +334,7 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
           <RowMemoryContext.Provider value={memory}>
             <div
               ref={listRef}
+              className="vt-list"
               style={{
                 paddingTop: offsets[range.start],
                 paddingBottom: Math.max(0, total - offsets[range.end]),
@@ -334,6 +348,7 @@ function VirtualTranscriptImpl<R extends VirtualRow>({
                   row={row}
                   renderRow={renderRow}
                   last={range.start + k === rows.length - 1}
+                  stamp={stampOf?.(row)}
                   observe={observe}
                 />
               ))}
@@ -350,14 +365,15 @@ interface RowProps<R extends VirtualRow> {
   row: R;
   renderRow: (row: R) => React.ReactNode;
   last: boolean;
+  stamp?: string;
   observe: (el: HTMLElement) => () => void;
 }
 
-function RowImpl<R extends VirtualRow>({ row, renderRow, last, observe }: RowProps<R>) {
+function RowImpl<R extends VirtualRow>({ row, renderRow, last, stamp, observe }: RowProps<R>) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => (ref.current ? observe(ref.current) : undefined), [observe]);
   return (
-    <div ref={ref} data-vt-key={row.key} className="vt-row space-y-5" style={last ? undefined : { paddingBottom: row.gapAfter ?? ROW_GAP }}>
+    <div ref={ref} data-vt-key={row.key} data-vt-stamp={stamp || undefined} className="vt-row space-y-5" style={last ? undefined : { paddingBottom: row.gapAfter ?? ROW_GAP }}>
       <RowKeyContext.Provider value={row.key}>{renderRow(row)}</RowKeyContext.Provider>
     </div>
   );

@@ -48,12 +48,13 @@ export type RecommendationPlacement = 'gpu' | 'unified' | 'cpu';
 export type RecommendationFit = 'fits' | 'tight' | 'tooBig';
 
 /**
+ * - `measuredHere`: the median of this machine's own recent replies with this file.
  * - `measured`: measured on this class of hardware with this exact file.
  * - `estimated`: from memory bandwidth, with this backend's measured efficiency.
  * - `estimatedBorrowed`: from memory bandwidth, with an efficiency measured on
  *   another backend; the roughest figure, and the UI should say so.
  */
-export type SpeedBasis = 'measured' | 'estimated' | 'estimatedBorrowed';
+export type SpeedBasis = 'measuredHere' | 'measured' | 'estimated' | 'estimatedBorrowed';
 
 export interface RecommendedOption {
   modelId: string;
@@ -62,6 +63,8 @@ export interface RecommendedOption {
   /** Hugging Face repo, `owner/name`. */
   repo: string;
   quant: string;
+  /** The label `engineDownloadModel(repo, label)` takes: the catalog's, without prefixes such as `UD-`. */
+  downloadLabel: string;
   /** Every file to download: the weights (all shards) and the image projector when the task needs one. */
   files: string[];
   downloadBytes: number;
@@ -73,7 +76,7 @@ export interface RecommendedOption {
   placement: RecommendationPlacement;
   fit: RecommendationFit;
   /** Decode tokens/s at the start of a conversation; absent where unknown or not what the task waits on. */
-  speed: { tokensPerSecond: number; basis: SpeedBasis } | null;
+  speed: { tokensPerSecond: number; basis: SpeedBasis; /** Replies a `measuredHere` figure is the median of. */ samples?: number } | null;
   /** Slower than the task's minimum. */
   tooSlow: boolean;
 }
@@ -98,8 +101,25 @@ export interface Recommendations {
     classId: string | null;
     bandwidthGBps: number | null;
     backend: string;
+    /** The device's memory: the GPU's (unified memory on Apple Silicon), or RAM without one. */
+    memoryBytes: number;
   };
   /** What a model may use: the roomiest GPU less the display's share, the GPU share of unified memory, or RAM less the OS's. */
   budget: { bytes: number; placement: RecommendationPlacement };
   tasks: TaskRecommendation[];
+  /**
+   * A task whose pick moved past the model the user has for it: the machine
+   * changed (`hardware`) or a newer list ranks a better one (`feed`). Only
+   * upgrades, only once: dismissing one keeps its pick as seen.
+   */
+  nudges: UpgradeNudge[];
+}
+
+export interface UpgradeNudge {
+  task: RecommendationTask;
+  label: string;
+  reason: 'hardware' | 'feed';
+  /** The model the user has for this task now. */
+  haveModelId: string;
+  haveName: string;
 }

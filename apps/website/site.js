@@ -407,7 +407,7 @@
       } else {
         big = document.createElement('div');
         big.className = 'media-placeholder';
-        big.textContent = (el.textContent || 'Coming soon').trim() + ' · coming soon';
+        big.textContent = el.querySelector('.media-joke')?.textContent || 'Coming soon';
       }
       stage.replaceChildren(big);
       box.hidden = false; document.body.style.overflow = 'hidden';
@@ -419,19 +419,30 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) shut(); });
 })();
 
-// ---- white / colourful toggle: white by default, remembered once chosen ----
+// ---- look switch: Colourful by default, then Dark, then White. The choice is
+//      remembered once made; the icon shows where the next click goes. ----
 (() => {
   const btn = document.querySelector('.theme-toggle');
   if (!btn) return;
   const root = document.documentElement;
-  // a toggle button: pressed means the Colourful look is on
-  const sync = () => btn.setAttribute('aria-pressed', String(root.dataset.theme === 'colour'));
+  const LOOKS = ['dark', 'white', 'colour'];
+  const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
+  const THEME_COLOR = { dark: '#0d0b18', white: '#f3effe', colour: '#9d8ce6' };
+  const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'colour');
+  const sync = () => {
+    const now = current();
+    const next = LOOKS[(LOOKS.indexOf(now) + 1) % LOOKS.length];
+    btn.setAttribute('aria-label', `${NAME[now]} look. Switch to the ${NAME[next]} look`);
+    btn.title = `Switch to the ${NAME[next]} look`;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = THEME_COLOR[now];
+  };
   sync();
   btn.addEventListener('click', () => {
-    const colour = root.dataset.theme !== 'colour';
-    if (colour) root.dataset.theme = 'colour'; else delete root.dataset.theme;
+    const next = LOOKS[(LOOKS.indexOf(current()) + 1) % LOOKS.length];
+    root.dataset.theme = next;
     sync();
-    try { localStorage.setItem('nekko-theme', colour ? 'colour' : 'white'); } catch (e) { /* private mode: the choice lasts this page only */ }
+    try { localStorage.setItem('nekko-theme', next); } catch (e) { /* private mode: the choice lasts this page only */ }
   });
 })();
 
@@ -527,11 +538,11 @@
 
 // ---- dot-matrix swell background: a fine grid of pixel dots that mostly
 //      sits invisible, with a soft wave of brightness drifting through it.
-//      The grid is pinned to the page, so it scrolls with the content, and
-//      scrolling also pushes the wave along. Brand gradient (indigo to
+//      The grid is fixed to the screen and ignores scrolling, so the wave
+//      keeps one steady pace however the page moves. Brand gradient (indigo to
 //      lavender, left to right) on the white version, white on the colourful
-//      one. ~20 fps, pauses when the tab is hidden, and holds still (but
-//      still follows the scroll) for reduced-motion visitors. ----
+//      one, and lavender to aqua on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
+//      reduced-motion visitors. ----
 (() => {
   const c = document.getElementById('pixelwave');
   if (!c || !c.getContext) return;
@@ -546,23 +557,22 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
   };
-  const colour = () => document.documentElement.dataset.theme === 'colour';
+  const look = () => document.documentElement.dataset.theme;
   const draw = () => {
-    const sy = window.scrollY;
-    const push = sy / 260; // scrolling moves the wave
-    const white = colour();
+    const theme = look();
     ctx.clearRect(0, 0, W, H);
-    const y0 = -(sy % CELL);
-    for (let y = y0; y < H; y += CELL) {
-      const py = y + sy; // position on the page, not the screen
+    for (let y = 0; y < H; y += CELL) {
       for (let x = 0; x < W; x += CELL) {
-        const w = Math.sin(x / 110 - t * 1.4 - push + Math.sin(py / 150 + t * 0.5 + push * 0.4) * 1.6);
+        const w = Math.sin(x / 110 - t * 1.4 + Math.sin(y / 150 + t * 0.5) * 1.6);
         const a = Math.max(0, w) ** 3 * 0.34;
         if (a < 0.025) continue;
         const s = a > 0.18 ? 3 : 2;
-        if (white) ctx.fillStyle = `rgba(255,255,255,${(a * 1.6).toFixed(3)})`;
-        else {
-          const k = x / W; // 0 = indigo #453A92, 1 = lavender #9D8CE6
+        const k = x / W;
+        if (theme === 'dark' || theme === 'colour') {
+          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing on the dark ground, tinted on the lilac one
+          ctx.fillStyle = `rgba(${Math.round(157 - 19 * k)},${Math.round(140 + 88 * k)},${Math.round(230 + 12 * k)},${(a * 1.1).toFixed(3)})`;
+        } else {
+          // 0 = indigo #453A92, 1 = lavender #9D8CE6
           ctx.fillStyle = `rgba(${Math.round(69 + 88 * k)},${Math.round(58 + 82 * k)},${Math.round(146 + 84 * k)},${a.toFixed(3)})`;
         }
         ctx.fillRect(Math.round(x + (CELL - s) / 2), Math.round(y + (CELL - s) / 2), s, s);
@@ -572,7 +582,7 @@
   const loop = (now) => {
     raf = requestAnimationFrame(loop);
     if (now - last < 50) return;
-    t += (now - last) / 1000 * 0.9;
+    t += (now - last) / 1000 * 0.72; // 20% slower than the original 0.9
     last = now;
     draw();
   };
@@ -580,12 +590,6 @@
   const stop = () => { cancelAnimationFrame(raf); raf = 0; };
   size(); draw();
   window.addEventListener('resize', () => { size(); draw(); });
-  // follow the scroll every frame, even between animation ticks
-  let pending = false;
-  window.addEventListener('scroll', () => {
-    if (pending) return; pending = true;
-    requestAnimationFrame(() => { pending = false; draw(); });
-  }, { passive: true });
   document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
   new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   start();

@@ -53,6 +53,62 @@ the short version:
 `NSCameraUsageDescription` is set via `mac.extendInfo`. Without it macOS kills
 the process instead of prompting when the QR scanner opens.
 
+### The VM helper's entitlement
+
+`Contents/Resources/bin/nekko-vm`, the CI runner VM helper, is the only binary
+that carries `com.apple.security.virtualization`. Virtualization.framework
+refuses to create a VM without it. It is never in `build/entitlements.mac.plist`:
+that file is both `entitlements` and `entitlementsInherit`, so the app, its
+helpers, nekkod and everything nekkod starts would hold it too, and any agent
+process could then boot a VM.
+
+- **Release signing:** `mac.sign` in `electron-builder.yml` points at
+  `apps/desktop/scripts/sign-mac.cjs`, the stock osx-sign run (through
+  `app-builder-lib`, pinned to the same version as `electron-builder`) except
+  that `nekko-vm` is signed with `crates/nekkod/vm/nekko-vm.entitlements`, which
+  grants that one entitlement and nothing else.
+- **Unsigned builds:** `after-pack.cjs` ad-hoc signs the app with `--deep`,
+  then signs `nekko-vm` again with its own file and reseals the app.
+- **Staging:** `stage-daemon.mjs` builds `nekko-vm` with `xcrun swiftc` and
+  stages it beside nekkod. On Apple silicon a packaged build fails if it cannot.
+
+`scripts/check-mac-entitlements.sh <app>` reads the entitlements of the app,
+every helper app under `Contents/Frameworks` and every file under
+`Contents/Resources/bin`, and fails if `nekko-vm` is missing, lacks the
+entitlement, anything else has it, or `codesign` cannot read a file. Where it
+runs:
+
+- `release.yml`, step `Check the virtualization entitlement`, right after the
+  build, on every macOS release, signed or not.
+- `installers.yml`, on PRs that touch packaging: the same check on the unsigned
+  build, then `Signed dry-run through the release hook`, which runs
+  `apps/desktop/scripts/sign-mac-dry-run.cjs` on a copy of the app. That is the
+  real `sign-mac.cjs` hook with the ad-hoc identity `-` in place of the
+  Developer ID, followed by `codesign --verify --deep --strict`, the check, and
+  `nekko-vm count-vms`.
+
+By hand, on an Apple silicon Mac, with no credentials (build first: the
+workspace `dist` packages what `npm run build` left, and the root `npm run dist`
+does both):
+
+```bash
+npm run build
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist -w @nekko-agent/desktop -- --publish never
+scripts/check-mac-entitlements.sh "apps/desktop/release/mac-arm64/Nekko Agent.app"
+ditto "apps/desktop/release/mac-arm64/Nekko Agent.app" /tmp/dry-run.app
+node apps/desktop/scripts/sign-mac-dry-run.cjs /tmp/dry-run.app
+```
+
+Still needs Philip (Developer ID certificate, a real release):
+
+- [ ] `npm run build`, then
+  `CSC_NAME="Nekko Labs LLC (3HM5598S99)" npm run dist -w @nekko-agent/desktop -- --publish never`,
+  then the check above exits 0 and `codesign --verify --deep --strict --verbose=2`
+  passes on the app; open it, connect a runner and see one VM boot from the
+  signed `nekko-vm`.
+- [ ] On the next tag, `Check the virtualization entitlement` is green on the
+  signed, notarized macOS build and `Verify the signed app` still passes.
+
 ## Secrets
 
 These are **`nekko-labs` organization secrets**, shared with `hypergate` and

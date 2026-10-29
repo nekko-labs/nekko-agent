@@ -1,0 +1,31 @@
+name: Pick a runner
+description: Outputs runs-on as JSON, the owner's idle Mac runner or a GitHub-hosted fallback. Never fails.
+inputs:
+  token:
+    description: Read-only token that may list the self-hosted runners (repo Administration read, or org Self-hosted runners read with org); empty means hosted.
+    default: ''
+  org:
+    description: Org whose runners to list, for an org runner; empty lists the repo's own runners.
+    default: ''
+  label:
+    description: Label of the owner's runner.
+    default: nekko-cloud-mac
+  fallback:
+    description: GitHub-hosted runner to use instead.
+    default: macos-latest
+outputs:
+  runs-on:
+    description: JSON for runs-on, via fromJSON().
+    value: ${{ steps.pick.outputs.runs-on }}
+runs:
+  using: composite
+  steps:
+    - id: pick
+      shell: bash
+      env:
+        PICK_TOKEN: ${{ inputs.token }}
+        PICK_REPO: ${{ github.repository }}
+        PICK_ORG: ${{ inputs.org }}
+        PICK_LABEL: ${{ inputs.label }}
+        PICK_FALLBACK: ${{ inputs.fallback }}
+      run: node "$GITHUB_ACTION_PATH/../../../scripts/pick-runner.mjs"

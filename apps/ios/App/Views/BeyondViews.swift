@@ -2,51 +2,6 @@ import NekkoKit
 import NekkoProtocol
 import SwiftUI
 
-/// The chat to pick up again, on top of the list: the most recently active one.
-struct ContinueCard: View {
-    let summary: SessionSummary
-    let activity: Activity?
-    var open: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: open) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "arrow.uturn.forward.circle.fill").font(.title2).foregroundStyle(palette.accent)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Continue").font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
-                    Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let preview {
-                        Text(preview).font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 4)
-                if activity == .running {
-                    ProgressView().controlSize(.small).accessibilityLabel("Working")
-                }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.inkFaint)
-                    .accessibilityHidden(true)
-            }
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Continue \(title)")
-        .accessibilityIdentifier("chats.continue")
-    }
-
-    private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
-
-    private var preview: String? {
-        let t = (summary.lastReplyText ?? summary.firstUserText ?? "").replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespaces)
-        return t.isEmpty ? nil : t
-    }
-}
-
 /// The computer's automations: its tasks and workflows, how each last went,
 /// and Run now. Setting them up and changing them happens on the computer.
 struct AutomationsView: View {
@@ -63,12 +18,11 @@ struct AutomationsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Automations")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = AutomationsModel(store: store) }
             await model?.load()
@@ -208,12 +162,11 @@ struct UsageView: View {
             if let model { content(model) }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(palette.paper)
+        .appBackground()
         .navigationTitle("Usage and limits")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = UsageModel(store: store) }
             await model?.load()
@@ -288,6 +241,24 @@ private struct LimitBar: View {
 }
 
 /// A list section's title in the palette's secondary ink: the system grey only nearly passed contrast on the paper background.
+/// A group heading as the desktop's Agents panel draws them since #940: larger,
+/// in the accent, with the active and done counts on the right.
+struct GroupHeading: View {
+    let text: String
+    let count: String
+    @Environment(\.palette) private var palette
+    init(_ text: String, count: String = "") { self.text = text; self.count = count }
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(text).font(.subheadline.weight(.bold)).foregroundStyle(palette.accent).textCase(nil)
+            Spacer(minLength: 8)
+            if !count.isEmpty { Text(count).font(.caption).foregroundStyle(palette.inkFaint).textCase(nil) }
+        }
+        .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct SectionTitle: View {
     let text: String
     @Environment(\.palette) private var palette

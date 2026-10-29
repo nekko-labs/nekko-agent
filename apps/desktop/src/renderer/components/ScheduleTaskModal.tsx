@@ -1,9 +1,11 @@
 import React, { useId, useState } from 'react';
-import type { NewTask, TaskKind, KeepAlive } from '@nekko-agent/shared';
+import type { AutomationRunPolicy, NewTask, TaskKind, KeepAlive } from '@nekko-agent/shared';
+import { offlineProviderAllowed } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { CloseIcon } from '../icons.js';
 import { Modal } from './primitives/index.js';
 import { ClaudeReasonLine, useClaudeCapability } from './claude/ClaudeAgent.js';
+import { RunPolicyField } from './RunPolicyField.js';
 
 /**
  * Create an automation task from a chat: a one-shot **scheduled** run, a
@@ -32,6 +34,10 @@ export function ScheduleTaskModal({
   // background
   const [keepAlive, setKeepAlive] = useState<KeepAlive>('forever');
   const [condition, setCondition] = useState('');
+  const [runPolicy, setRunPolicy] = useState<AutomationRunPolicy | undefined>(undefined);
+  const settings = useStore((s) => s.settings);
+  const provider = settings?.providers?.find((p) => p.id === (providerId ?? settings?.defaultProviderId));
+  const local = !!provider && offlineProviderAllowed(provider);
 
   const unitMs = { min: 60_000, hour: 3_600_000, day: 86_400_000 };
   const intervalMs = Math.max(1, every) * unitMs[unit];
@@ -50,6 +56,7 @@ export function ScheduleTaskModal({
       ...(kind === 'scheduled' ? { runAt: new Date(runAt).getTime() } : {}),
       ...(kind === 'recurring' ? { intervalMs } : {}),
       ...(kind === 'background' ? { keepAlive, intervalMs, ...(keepAlive === 'until' ? { condition: condition.trim() } : {}) } : {}),
+      ...(runPolicy ? { runPolicy } : {}),
     };
     await window.nekko.createTask(task);
     pushToast('success', `${kind === 'scheduled' ? 'Scheduled' : kind === 'recurring' ? 'Recurring' : 'Background'} task created.`);
@@ -137,6 +144,10 @@ export function ScheduleTaskModal({
           </div>
         </div>
       )}
+
+      <div className="mt-3">
+        <RunPolicyField value={runPolicy} local={local} note="Run now never waits." compact onChange={setRunPolicy} />
+      </div>
 
       {blocked && <div className="mt-3"><ClaudeReasonLine message={blocked} /></div>}
       <div className="mt-4 flex justify-end gap-2">

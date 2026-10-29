@@ -23,6 +23,9 @@ use std::sync::{Arc, Mutex, mpsc};
 
 /// Rolling output kept in memory per terminal (UTF-16 units, as the host's string was).
 const MAX_BUFFER: usize = 256_000;
+/// A chat's command log on disk is cut back to its last [`FILE_KEEP`] bytes past this (#1035).
+const FILE_MAX: u64 = 5 * 1024 * 1024;
+const FILE_KEEP: u64 = 4 * 1024 * 1024;
 /// The terminal ids these logs answer for.
 pub const PREFIX: &str = "agent_";
 
@@ -76,6 +79,27 @@ fn keep_tail(text: String) -> String {
     text[cut..].to_string()
 }
 
+/// Cut `path` to about its last `keep` bytes, starting at a line, through a
+/// temporary file so a crash midway leaves the old log rather than none.
+fn keep_file_tail(path: &Path, keep: u64) -> std::io::Result<()> {
+    let mut f = std::fs::File::open(path)?;
+    let len = f.metadata()?.len();
+    f.seek(SeekFrom::Start(len.saturating_sub(keep)))?;
+    let mut tail = Vec::new();
+    f.read_to_end(&mut tail)?;
+    let start = tail.iter().position(|b| *b == b'\n').map_or(0, |i| i + 1);
+    let tmp = path.with_extension("log.tmp");
+    let mut opts = std::fs::OpenOptions::new();
+    opts.create(true).write(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    opts.open(&tmp)?.write_all(&tail[start..])?;
+    std::fs::rename(&tmp, path)
+}
+
 fn writer_thread(rx: mpsc::Receiver<Op>) {
     // Paths whose last write failed: a read or delete reports it, as `failures` did.
     let mut failures: HashMap<PathBuf, String> = HashMap::new();
@@ -93,7 +117,13 @@ fn writer_thread(rx: mpsc::Receiver<Op>) {
                         use std::os::unix::fs::OpenOptionsExt;
                         opts.mode(0o600);
                     }
-                    opts.open(&path)?.write_all(data.as_bytes())
+                    let mut f = opts.open(&path)?;
+                    f.write_all(data.as_bytes())?;
+                    if f.metadata()?.len() > FILE_MAX {
+                        drop(f);
+                        keep_file_tail(&path, FILE_KEEP)?;
+                    }
+                    Ok(())
                 })();
                 if let Err(e) = r {
                     eprintln!("nekkod: could not persist session command log: {e}");
@@ -209,6 +239,15 @@ impl AgentLogs {
     /// `appendAgentTerminal` (with `loopLog`'s refusal for a sandbox chat):
     /// the output shown at once and written to the chat's log.
     pub fn append(&self, session_id: &str, workspace_id: Option<&str>, data: &str) {
+        self.append_status(session_id, workspace_id, data, true);
+    }
+
+    /// A status notice must not make an idle command terminal look running.
+    pub fn notice(&self, session_id: &str, data: &str) {
+        self.append_status(session_id, None, data, false);
+    }
+
+    fn append_status(&self, session_id: &str, workspace_id: Option<&str>, data: &str, running: bool) {
         let session = self.store.as_ref().and_then(|s| s.get(session_id));
         if session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
             return;
@@ -228,11 +267,13 @@ impl AgentLogs {
                 info.insert("shell".into(), json!("agent"));
                 info.insert("agentSessionId".into(), json!(session_id));
                 info.insert("createdAt".into(), json!(now_ms()));
-                info.insert("running".into(), json!(true));
+                info.insert("running".into(), json!(running));
                 Term { info, buffer: String::new() }
             });
-            term.info.insert("running".into(), json!(true));
-            term.info.shift_remove("exitCode");
+            if running {
+                term.info.insert("running".into(), json!(true));
+                term.info.shift_remove("exitCode");
+            }
             term.buffer = keep_tail(std::mem::take(&mut term.buffer) + data);
         }
         self.hub.publish("terminal:event", json!({ "type": "data", "terminalId": id, "data": data }), false);
@@ -361,6 +402,21 @@ impl CommandLog for AgentLogs {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_long_command_log_keeps_its_last_whole_lines() {
+        let d = std::env::temp_dir().join(format!("nekko-cmdlog-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let p = d.join("s.commands.log");
+        let text: String = (0..100).map(|i| format!("line {i:03}\n")).collect();
+        std::fs::write(&p, &text).unwrap();
+        super::keep_file_tail(&p, 95).unwrap();
+        let kept = std::fs::read_to_string(&p).unwrap();
+        assert!(kept.starts_with("line ") && kept.ends_with("line 099\n"), "{kept:?}");
+        assert!(kept.len() <= 95);
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
     use super::*;
 
     fn logs(dir: &Path) -> Arc<AgentLogs> {
@@ -372,6 +428,23 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[tokio::test]
+    async fn a_connectivity_notice_does_not_restart_an_idle_terminal() {
+        let dir = temp("notice");
+        let l = logs(&dir);
+        l.notice("s1", "[2026-06-17T10:00:00Z] Internet reachability lost\n");
+        assert_eq!(l.list()[0]["running"], false);
+        l.append("s1", None, "$ local work\n");
+        l.notice("s1", "Internet reachability restored\n");
+        assert_eq!(l.list()[0]["running"], true);
+        l.finish("s1");
+        l.notice("s1", "Manual Continue available\n");
+        assert_eq!(l.list()[0]["running"], false);
+        assert!(l.snapshot("agent_s1").await.unwrap()["buffer"].as_str().unwrap().contains("Manual Continue"));
+        l.delete_blocking("s1").unwrap();
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[tokio::test]

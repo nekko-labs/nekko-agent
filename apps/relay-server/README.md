@@ -47,7 +47,7 @@ the token the phone registered (`register-push` frame). Configure APNs:
 | `APNS_KEY_ID` | The key's 10-char Key ID |
 | `APNS_TEAM_ID` | Apple Team ID |
 | `APNS_BUNDLE_ID` | App bundle id (default `dev.nekkolabs.nekkoagent`) |
-| `APNS_EXTRA_BUNDLE_IDS` | Other iPhone apps the same key may push to, comma-separated, chosen by the phone's `app` field (default `com.nekko.native.ios`, the native SwiftUI app) |
+| `APNS_EXTRA_BUNDLE_IDS` | Other iPhone apps the same key may push to, comma-separated, chosen by the phone's `app` field (none by default; the native iPhone app uses `APNS_BUNDLE_ID`) |
 | `APNS_PRODUCTION` | `1` for the production APNs host (default: sandbox) |
 
 **Android (FCM)**: set `FCM_SERVICE_ACCOUNT` to the full service-account JSON

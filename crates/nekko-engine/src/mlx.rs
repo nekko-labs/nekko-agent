@@ -152,8 +152,10 @@ impl MlxRuntime {
             return json!({ "ok": true, "message": "MLX is already installed." });
         }
         let url = format!("https://api.github.com/repos/astral-sh/uv/releases/tags/{UV_VERSION}");
-        let release = match self.io.get(url, vec![("Accept".into(), "application/vnd.github+json".into())], None).await
-        {
+        // GitHub's API answers 403 to a request without a User-Agent.
+        let headers =
+            vec![("Accept".into(), "application/vnd.github+json".into()), ("User-Agent".into(), "nekko-agent".into())];
+        let release = match self.io.get(url, headers, None).await {
             Ok((status, body)) if (200..300).contains(&status) => serde_json::from_slice::<Value>(&body).ok(),
             _ => None,
         };
@@ -241,9 +243,15 @@ impl MlxRuntime {
         if signal.aborted() {
             return Err("This operation was aborted".into());
         }
-        self.io
+        // uv reaches PyPI (and its Python mirror) itself; the switch still applies.
+        nekko_net::check("models", "pypi.org")?;
+        let installed = self
+            .io
             .exec(uv, vec![s("tool"), s("install"), s("--python"), s("3.12"), format!("mlx-lm=={MLX_LM_VERSION}")], env)
-            .await?;
+            .await;
+        let ev = nekko_net::Event::new("connect").host("pypi.org");
+        nekko_net::record("models", if let Err(e) = &installed { ev.error(e) } else { ev });
+        installed?;
         if !is_file(&self.managed_bin()) {
             return Ok(Some(format!("mlx-lm installed but {SERVER} was not where uv puts tools.")));
         }

@@ -1,19 +1,40 @@
 @import 'tailwindcss';
 
-/* Lilac / Lavender: the website's drifting pixel-dot field. It sits BEHIND
-   the app (z-index -1, above only the page background), so it shows in the
-   field around the floating panels while chat windows and every other panel,
-   which paint their own solid surface, cover it and keep text clear. Never
-   intercepts input. */
+/* Bounded empty-agent texture: one image, no canvas loop or per-dot elements. */
 .pixel-wave-background {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  overflow: hidden;
   pointer-events: none;
   z-index: -1;
-  /* Drawn at one pixel per CSS pixel; keep the dots crisp on high-DPI screens. */
+  contain: paint;
+}
+.pixel-wave-texture {
+  position: absolute;
+  left: calc(50% - 360px);
+  top: calc(50% - 180px);
+  max-width: none;
   image-rendering: pixelated;
+  animation: empty-agent-wave 22.5s steps(36, end) infinite alternate paused;
+}
+@keyframes empty-agent-wave {
+  from { transform: translateX(-18px); }
+  to { transform: translateX(18px); }
+}
+.pixel-wave-background[data-wave-paused] .pixel-wave-texture { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .pixel-wave-texture { animation: none; }
+}
+
+/* Context menus remain neutral even when a preset gives the page a vivid tint. */
+.context-menu, .create-menu { background: #ffffff; color: #17191f; }
+[data-theme='dark'] :is(.context-menu, .create-menu) { background: #191c23; color: #f3f4f6; }
+.context-menu [role^="menuitem"]:not(:disabled):is(:hover, :focus-visible),
+.context-menu [role^="menuitem"][aria-checked="true"],
+.context-menu [role="menuitem"][aria-expanded="true"] {
+  background: var(--accent);
+  color: var(--on-accent, white);
+  outline: none;
 }
 
 /* Faint seasonal decoration; never intercepts app input. */
@@ -88,9 +109,14 @@
   --pane-radius: 14px;
   --pane-radius-inner: 10px;
   --pane-gap: 7px;
+  /* One gap between the Agents view's panels: the agent panel, the wall's
+     windows, the composer and the Monitors dock. CommandWall's geometry
+     uses the same 8px between windows. */
+  --wall-gap: 8px;
 
-  --font-sans: Inter, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* The website's two fonts, bundled (main.tsx). Settings > Style overrides them on :root. */
+  --font-sans: 'Inter Tight Variable', 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
 }
 
 /*
@@ -261,48 +287,30 @@
   }
 }
 
+/* Creation menus use the standard light/dark surface, never the canvas tint. */
+.create-menu {
+  max-width: calc(100vw - 16px);
+}
+
 @utility create-row {
-  /* A row of the sidebar's create menu. Each one carries its own hue in
-     --row-tone, which the tile wears at rest and the whole row picks up under
-     the cursor: the menu is a short list of *different* things, and four
-     identical grey lines said the opposite. */
-  --row-tone: var(--accent);
   border: 1px solid transparent;
-  transition:
-    background var(--dur-fast) ease,
-    border-color var(--dur-fast) ease,
-    transform var(--dur-fast) var(--ease-out);
-  &:hover {
-    background: color-mix(in srgb, var(--row-tone) 12%, transparent);
-    border-color: color-mix(in srgb, var(--row-tone) 30%, transparent);
-  }
-  &:active {
-    transform: scale(0.985);
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
+  &:hover, &:focus-visible {
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
+    outline: none;
   }
 }
 
-@utility create-row-hero {
-  /* Starting an agent is the reason this menu exists, so it reads as the
-     headline: a brand wash at rest, not only on hover. */
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
-  &:hover {
-    background: color-mix(in srgb, var(--accent) 16%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-  }
-}
+.create-row:is(:hover, :focus-visible) .create-tile { color: inherit; }
+.create-row .kbd { background: transparent; color: inherit; border-color: currentColor; opacity: .75; }
 
 @utility create-tile {
-  @apply grid h-8 w-8 shrink-0 place-items-center rounded-lg;
-  background: color-mix(in srgb, var(--row-tone, var(--accent)) 16%, transparent);
+  /* Bare glyph in the row's hue: tiles behind each icon made a three-row menu
+     read like a launcher grid. */
+  @apply grid h-4 w-4 shrink-0 place-items-center;
   color: var(--row-tone, var(--accent));
-}
-
-@utility create-tile-brand {
-  /* The one tile that is the brand itself rather than a tint of a status color. */
-  background: var(--brand-grad);
-  color: var(--on-accent);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 @utility plan-step {
@@ -348,86 +356,6 @@
   }
 }
 
-/* Border beam: while the agent works, a violet→cyan beam laps the composer's
-   border (the border-beam pattern, in brand colors). It's the border only, no
-   surface wash, so the composer reads as "busy" without the interior shifting
-   color as you type.
-
-   The ring is a masked wrapper filled by the gradient, and what turns is the
-   gradient's start angle (a registered property, so it interpolates). The
-   version before this rotated a square twice the ring's longest side: pure
-   compositing, but every working window carried a GPU layer of
-   (2 * max(w, h))^2 device pixels, ~70 MB for a wide wall window at 150%
-   scaling. A few busy windows blew Chromium's tile budget ("tile memory
-   limits exceeded") and starved the whole desktop of GPU memory. Now the
-   ring is the only layer, the size of its own box, and it is promoted so
-   each step repaints just the ring, never the composer around it (the
-   repaint that sank the original gradient-angle version). */
-@property --beam-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-.composer-beam-ring {
-  position: absolute;
-  will-change: transform;
-  inset: -1px;
-  border-radius: 1rem; /* track the composer's rounded-2xl corners */
-  padding: 1.5px;
-  overflow: hidden;
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-.composer-beam-spin {
-  position: absolute;
-  inset: 0;
-  background: conic-gradient(
-    from var(--beam-angle),
-    transparent 0% 58%,
-    var(--accent-2) 74%,
-    var(--accent) 88%,
-    color-mix(in srgb, var(--accent) 55%, #f0abfc) 95%,
-    transparent 100%
-  );
-  /* Stepped, not linear: a linear spin re-composites the masked ring at the
-     display's full refresh (120 Hz on ProMotion), which measured ~40% of a
-     core in the GPU process for one composer. 48 steps a lap is 15 fps,
-     still reads as a sweep, and costs a few percent. */
-  animation: composer-beam-spin 3.2s steps(48, end) infinite;
-}
-@keyframes composer-beam-spin {
-  from { --beam-angle: 0deg; }
-  to { --beam-angle: 360deg; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer-beam-spin { animation: none; }
-}
-/* The same beam on a working agent window, quieter than the composer's: a
-   thinner line, softer colours and a slower lap, so a wall of busy windows
-   reads as busy without strobing. It sits over the window's own outline. */
-.wall-window-beam {
-  inset: 0;
-  z-index: 11;
-  border-radius: var(--pane-radius);
-  padding: 1px;
-  opacity: 0.55;
-}
-.wall-window-beam .composer-beam-spin {
-  animation-duration: 5s;
-  animation-timing-function: steps(60, end); /* 12 fps over the slower lap */
-  background: conic-gradient(
-    from var(--beam-angle),
-    transparent 0% 62%,
-    color-mix(in srgb, var(--accent-2) 70%, var(--line)) 76%,
-    color-mix(in srgb, var(--accent) 75%, var(--line)) 90%,
-    transparent 100%
-  );
-}
-
 /* The queue grows as part of the composer rather than floating above it. */
 .composer .collapse-wrap:not(.collapsed) {
   animation: queue-rise 0.3s var(--ease-out);
@@ -437,60 +365,6 @@
   from { opacity: 0; transform: translateY(8px) scaleY(0.93); }
   to { opacity: 1; transform: none; }
 }
-
-.effort-slider .effort-track {
-  position: relative;
-  display: inline-flex;
-}
-.effort-slider input[type='range'] {
-  position: relative;
-  appearance: none;
-  width: 58px;
-  height: 6px;
-  border-radius: 999px;
-  cursor: pointer;
-  background: linear-gradient(90deg, var(--accent) var(--effort-fill), var(--surface-2) var(--effort-fill));
-}
-/* The glow hugs only the filled run left of the thumb and stays solid (no
-   pulsing); its reach and brightness climb with the rung. */
-.effort-slider .effort-track::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: var(--effort-fill, 0%);
-  height: 9px;
-  translate: 0 -50%;
-  border-radius: 999px;
-  background: var(--accent);
-  filter: blur(calc(3px + var(--effort-level, 0) * 4px));
-  opacity: calc(0.1 + var(--effort-level, 0) * 0.25);
-  pointer-events: none;
-}
-.effort-slider input[type='range']::-webkit-slider-thumb {
-  appearance: none;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 2px var(--surface);
-}
-/* The top rung draws a small set of speed lines trailing off the thumb: a
-   static wink that the meter is maxed, not an animation. */
-.effort-slider .effort-speed {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.effort-slider .effort-speed i {
-  position: absolute;
-  height: 1.5px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ink) 68%, transparent);
-}
-.effort-slider .effort-speed i:nth-child(1) { top: -2px; right: 12px; width: 10px; }
-.effort-slider .effort-speed i:nth-child(2) { top: 2px; right: 16px; width: 15px; }
-.effort-slider .effort-speed i:nth-child(3) { top: 6px; right: 10px; width: 9px; }
 
 /* The send control is Aphelion herself, not a filled button: no background,
    just the avatar that lifts and brightens a touch on hover / press. */
@@ -666,68 +540,46 @@
   color: var(--ink-faint);
 }
 
-/* Left rail: one SVG outline (components/RailBackdrop + railGeometry.ts). At
-   rest it is a hairline near the top of the window that swoops out to the icon
-   column and tapers back to a hairline below it. Opening moves every point to
-   the same x, so the whole rail becomes one even column. Both outlines share a
-   command list, so `d` interpolates between them. Plain (unlayered) rules, so
-   they win over the nav-item / active utilities inside the rail. */
+/* A winged surface: only viewport width and label opacity animate. */
 .rail {
   --rail-w-rest: 52px;
   --rail-w-open: 198px;
-  --rail-row: 40px;          /* one destination row (nav-item h-10) */
-  --rail-gap: 7px;           /* gap between rows */
-  --rail-ease: cubic-bezier(0.32, 0.72, 0, 1);   /* quick start, long soft settle */
-  --rail-slide: cubic-bezier(0.3, 1.25, 0.5, 1); /* the active tile: a hint of spring */
-  --rail-open-ms: 340ms;
-  --rail-close-ms: 260ms;
-  --rail-slide-ms: 340ms;
-  --rail-open-delay: 50ms;   /* hover intent: sweeping past never opens it */
-  --rail-close-delay: 120ms; /* and a brief slip out never snaps it shut */
-
+  --rail-row: 40px;
+  --rail-gap: 7px;
+  --rail-ease: cubic-bezier(.2, .8, .2, 1);
+  --rail-slide: ease-out;
+  --rail-open-ms: 180ms;
+  --rail-close-ms: 180ms;
+  --rail-slide-ms: 140ms;
+  --rail-open-delay: 50ms;
+  --rail-close-delay: 60ms;
   width: var(--rail-w-rest);
   padding-inline: 6px;
   justify-content: flex-start;
   isolation: isolate;
-  /* Only the button column and the painted outline receive input. */
   pointer-events: none;
+  z-index: 1;
+  top: 5%; bottom: 5%;
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
+.rail-feedback { pointer-events: auto; }
 .rail-space-before { flex: 1 1 0; }
-/* Spare space splits 1:4 above/below the destinations, so they sit high. On
-   short windows the spacers collapse and the destinations scroll instead. */
 .rail-space-after { flex: 4 1 0; }
-.rail-group {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: 0 1 auto;
-  min-height: 0;
-}
-
-/* Frosted glass: the svg box blurs what is behind it, clipped to the same
-   outline the path draws (both animate together), so the shape is unchanged.
-   The path paints a translucent tint and a hairline edge on top. */
+.rail-group { position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+/* The same static wings at rest and open. Stretch the SVG viewport, never d. */
 .rail-backdrop {
   position: absolute;
-  left: -6px;                 /* x = 0 is the window wall */
-  width: var(--rail-w-open);
+  left: -6px;
+  width: var(--rail-w-rest);
   z-index: -1;
   overflow: visible;
   pointer-events: none;
-  clip-path: var(--rail-rest);
-  backdrop-filter: blur(18px) saturate(1.6);
-  transition: clip-path var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
+  transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
   & path {
-    d: var(--rail-rest);
-    fill: color-mix(in srgb, color-mix(in srgb, var(--accent) 8%, var(--paper)) 62%, transparent);
-    /* Twice the hairline: the clip keeps only the inner half. */
-    stroke: color-mix(in srgb, var(--ink) 9%, transparent);
-    stroke-width: 2px;
-    pointer-events: visiblePainted;  /* pointing at the shape keeps it open */
-    transition:
-      d var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay),
-      fill var(--rail-close-ms) ease var(--rail-close-delay);
+    fill: var(--rail-fill, color-mix(in srgb, color-mix(in srgb, var(--paper) 92%, black) 97%, transparent));
+    stroke: var(--rail-stroke, none);
+    vector-effect: non-scaling-stroke;
+    pointer-events: visiblePainted;
   }
 }
 
@@ -788,12 +640,9 @@
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transform: translateX(-6px);
-  filter: blur(2px);
-  transition:
-    opacity 120ms ease var(--rail-close-delay),
-    transform 200ms var(--rail-ease) var(--rail-close-delay),
-    filter 120ms ease var(--rail-close-delay);
+  transform: none;
+  filter: none;
+  transition: opacity 100ms ease var(--rail-close-delay);
 }
 
 /* Open: hover, keyboard focus inside, or pinned with data-open. */
@@ -802,23 +651,16 @@
   padding-right: 16px;
   transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
   & .rail-backdrop {
-    clip-path: var(--rail-open);
-    transition: clip-path var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
-  }
-  & .rail-backdrop path {
-    d: var(--rail-open);
-    fill: color-mix(in srgb, color-mix(in srgb, var(--accent) 6%, var(--surface)) 55%, transparent);
-    transition:
-      d var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay),
-      fill var(--rail-open-ms) ease var(--rail-open-delay);
+    width: var(--rail-w-open);
+    transition: width var(--rail-open-ms) var(--rail-ease) var(--rail-open-delay);
   }
   & .rail-label {
     opacity: 1;
     transform: none;
     filter: none;
-    /* Labels arrive as the edge passes them, top row first, 14ms apart. */
-    transition-duration: 180ms, 270ms, 180ms;
-    transition-delay: calc(var(--rail-open-delay) + 85ms + var(--n, 0) * 14ms);
+    /* Reveal together only once the expansion is nearly complete. */
+    transition-duration: 100ms;
+    transition-delay: calc(var(--rail-open-delay) + var(--rail-open-ms) - 20ms);
   }
 }
 
@@ -848,7 +690,7 @@
   display: flex;
   align-items: center;
   padding-left: 14px;
-  background: var(--paper);
+  background: var(--titlebar-bg, var(--paper));
   /* Drag the strip to move the window, double-click it to maximise. Anything
      interactive placed here has to opt out again with `no-drag`, or it stops
      receiving clicks. */
@@ -891,8 +733,10 @@
 .developer-server-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-left: auto;
+  /* The same 8px step as the Agents controls it follows in the slot. */
+  padding-left: 8px;
   margin-right: 138px;
   padding-right: 10px;
   white-space: nowrap;
@@ -923,7 +767,7 @@
    weights. Layout offsets are pixel-snapped the same way for every group. */
 .titlebar:not(.titlebar-mac) #command-titlebar-slot > .wall-toolbar-titlebar { position: relative; top: -2.35px; }
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
-#command-titlebar-slot .wall-fixed-picker, #command-titlebar-slot .screens-picker { z-index: 60; }
+#command-titlebar-slot .screens-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
 #command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { padding-top: 2px; padding-bottom: 2px; }
 
@@ -1268,6 +1112,8 @@
     --success: #3aa870;
     --danger: #d24738;
     --warning: #c9871f;
+    /* An agent waiting on you: orange, louder than a warning chip. */
+    --attention: #e8701a;
     --info: #3f7fb8;
     --neutral: #8a8f98;
     --running: #3b82f6;
@@ -1323,6 +1169,7 @@
     --success: #4ec98a;
     --danger: #e0574a;
     --warning: #e0a44a;
+    --attention: #f58a3a;
     --info: #5b9dd9;
     --neutral: #8a8f98;
     --running: #60a5fa;
@@ -1432,6 +1279,40 @@
     --merged-chip: rgba(255, 255, 255, 0.55);
   }
 
+  /* Nekko Dark: the marketing site's Dark look (its default), an indigo-black
+     ground with lavender and aqua glows. System uses it in dark mode. The
+     lavender accent is too light for white button text, so buttons take the
+     ground's indigo-black instead. */
+  [data-theme='dark'][data-preset='nekko-dark'] {
+    --paper: #0d0b18;
+    --win: #141127;
+    --surface: #181430;
+    --surface-2: #1d1a36;
+    --ink: #ffffff;
+    --ink-soft: #c0bad9;
+    --ink-faint: #8f89ab;
+    --line: #2f2d38;
+    --on-accent: #0d0b18;
+    /* Darkening the near-black ground hides the sidebar rail in it, so the rail
+       takes the raised surface the text boxes use, with a faint lavender edge. */
+    --rail-fill: var(--surface-2);
+    --rail-stroke: color-mix(in srgb, var(--accent) 22%, transparent);
+    /* The website's Dark body background (apps/website/styles.css), static.
+       The shell paints it; panels stay solid --paper, so it shows only around
+       and between them and text contrast is unchanged. The title bar (and the
+       native window buttons over it) let it through too. */
+    --titlebar-bg: transparent;
+    --titlebar-overlay: #00000000;
+    --field:
+      radial-gradient(60% 900px at 12% 0%, rgba(157, 140, 230, 0.26), transparent 70%),
+      radial-gradient(50% 800px at 92% 6%, rgba(138, 228, 242, 0.12), transparent 70%),
+      radial-gradient(50% 900px at 88% 40%, rgba(138, 228, 242, 0.1), transparent 70%),
+      radial-gradient(55% 900px at 8% 58%, rgba(157, 140, 230, 0.16), transparent 70%),
+      radial-gradient(60% 900px at 90% 80%, rgba(165, 249, 223, 0.08), transparent 70%),
+      radial-gradient(60% 800px at 20% 100%, rgba(157, 140, 230, 0.22), transparent 70%),
+      var(--paper);
+  }
+
   /* Experimental: candidate brand colour pairings (Settings → Theme → Experimental).
      Each family is one pairing in the website's White look, its Colourful look
      (the soft colour as the ground) and, where the main colour is dark, a Dark
@@ -1470,15 +1351,15 @@
   }
 
   [data-theme='dark'][data-preset='x-blueberry-dark'] {
-    --paper: #253b8f;
-    --win: #344997;
-    --surface: #344997;
-    --surface-2: #42559e;
-    --ink: #fff9e9;
-    --ink-soft: #dedfe4;
-    --ink-faint: #929abc;
-    --line: #505f9a;
-    --on-accent: #253b8f;
+    --paper: #1b2c6a;
+    --win: #11141b;
+    --surface: #11141b;
+    --surface-2: #1a1e27;
+    --ink: #f2f3f6;
+    --ink-soft: #d5d7dd;
+    --ink-faint: #a7abb3;
+    --line: #2d333f;
+    --on-accent: #11141b;
     --merged-ink: #fef0c8;
     --merged-wash: rgba(254, 240, 200, 0.14);
     --merged-wash-soft: rgba(254, 240, 200, 0.06);
@@ -1518,15 +1399,15 @@
   }
 
   [data-theme='dark'][data-preset='x-raspberry-dark'] {
-    --paper: #ae1550;
-    --win: #b3255c;
-    --surface: #b3255c;
-    --surface-2: #b93467;
-    --ink: #f3f9fe;
-    --ink-soft: #faf5f8;
-    --ink-faint: #d087a7;
-    --line: #b84173;
-    --on-accent: #ae1550;
+    --paper: #5d102a;
+    --win: #1a1113;
+    --surface: #1a1113;
+    --surface-2: #261b1d;
+    --ink: #f6f2f3;
+    --ink-soft: #dcd5d6;
+    --ink-faint: #b2a8a9;
+    --line: #3e2e31;
+    --on-accent: #1a1113;
     --merged-ink: #f6fbfe;
     --merged-wash: rgba(224, 241, 253, 0.14);
     --merged-wash-soft: rgba(224, 241, 253, 0.06);
@@ -1567,14 +1448,14 @@
 
   [data-theme='dark'][data-preset='x-cyber-dark'] {
     --paper: #02313b;
-    --win: #19444d;
-    --surface: #19444d;
-    --surface-2: #2d545d;
-    --ink: #d2fff3;
-    --ink-soft: #b1d6d0;
-    --ink-faint: #6a9897;
-    --line: #1e5a5c;
-    --on-accent: #02313b;
+    --win: #0b1618;
+    --surface: #0b1618;
+    --surface-2: #142024;
+    --ink: #f1f4f5;
+    --ink-soft: #d2d9db;
+    --ink-faint: #a3adb0;
+    --line: #25363b;
+    --on-accent: #0b1618;
     --merged-ink: #8efee0;
     --merged-wash: rgba(142, 254, 224, 0.14);
     --merged-wash-soft: rgba(142, 254, 224, 0.06);
@@ -1614,15 +1495,15 @@
   }
 
   [data-theme='dark'][data-preset='x-quantum-dark'] {
-    --paper: #193cb2;
-    --win: #294ab7;
-    --surface: #294ab7;
-    --surface-2: #3756bc;
-    --ink: #f1fbff;
-    --ink-soft: #dee6f6;
-    --ink-faint: #859cd8;
-    --line: #4061c1;
-    --on-accent: #193cb2;
+    --paper: #172d6a;
+    --win: #10141b;
+    --surface: #10141b;
+    --surface-2: #1a1e27;
+    --ink: #f2f3f6;
+    --ink-soft: #d5d7dd;
+    --ink-faint: #a7abb3;
+    --line: #2d333f;
+    --on-accent: #10141b;
     --merged-ink: #ddf6fe;
     --merged-wash: rgba(221, 246, 254, 0.14);
     --merged-wash-soft: rgba(221, 246, 254, 0.06);
@@ -1662,15 +1543,15 @@
   }
 
   [data-theme='dark'][data-preset='x-clay-dark'] {
-    --paper: #6b352a;
-    --win: #754339;
-    --surface: #754339;
-    --surface-2: #7f5046;
-    --ink: #fff9db;
-    --ink-soft: #ebe1d4;
-    --ink-faint: #b59783;
-    --line: #895b43;
-    --on-accent: #6b352a;
+    --paper: #542116;
+    --win: #1a110f;
+    --surface: #1a110f;
+    --surface-2: #261b19;
+    --ink: #f6f2f2;
+    --ink-soft: #ddd6d4;
+    --ink-faint: #b2a8a6;
+    --line: #3e2f2b;
+    --on-accent: #1a110f;
     --merged-ink: #fff1a6;
     --merged-wash: rgba(255, 241, 166, 0.14);
     --merged-wash-soft: rgba(255, 241, 166, 0.06);
@@ -1711,14 +1592,14 @@
 
   [data-theme='dark'][data-preset='x-forest-dark'] {
     --paper: #18251d;
-    --win: #2d3931;
-    --surface: #2d3931;
-    --surface-2: #404a44;
-    --ink: #e2ffc7;
-    --ink-soft: #b3cba0;
-    --ink-faint: #7d9272;
-    --line: #38512e;
-    --on-accent: #18251d;
+    --win: #2a332d;
+    --surface: #2a332d;
+    --surface-2: #343f38;
+    --ink: #f1f4f2;
+    --ink-soft: #d3d9d5;
+    --ink-faint: #a5ada8;
+    --line: #48574d;
+    --on-accent: #0e1611;
     --merged-ink: #b7ff72;
     --merged-wash: rgba(183, 255, 114, 0.14);
     --merged-wash-soft: rgba(183, 255, 114, 0.06);
@@ -1759,14 +1640,14 @@
 
   [data-theme='dark'][data-preset='x-inkberry-dark'] {
     --paper: #1a0b2e;
-    --win: #2f2141;
-    --surface: #2f2141;
-    --surface-2: #413552;
-    --ink: #ffe2db;
-    --ink-soft: #c6acb0;
-    --ink-faint: #8d7785;
-    --line: #482d46;
-    --on-accent: #1a0b2e;
+    --win: #242129;
+    --surface: #242129;
+    --surface-2: #2f2c36;
+    --ink: #f4f3f6;
+    --ink-soft: #d8d6dc;
+    --ink-faint: #aca9b1;
+    --line: #45414f;
+    --on-accent: #15121a;
     --merged-ink: #ffb7a5;
     --merged-wash: rgba(255, 183, 165, 0.14);
     --merged-wash-soft: rgba(255, 183, 165, 0.06);
@@ -1806,6 +1687,294 @@
   }
 
 
+  [data-theme='light'][data-preset='x-arctic-white'] {
+    --paper: #f8fcfc;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #e5f8f8;
+    --ink: #17151f;
+    --ink-soft: #002e2e;
+    --ink-faint: #4f6969;
+    --line: #c8e5e4;
+    --on-accent: #ffffff;
+    --merged-ink: #357272;
+    --merged-wash: rgba(55, 118, 118, 0.08);
+    --merged-wash-soft: rgba(55, 118, 118, 0.04);
+    --merged-chip: rgba(55, 118, 118, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-arctic-colour'] {
+    --paper: #c1e5e5;
+    --win: #f3fafa;
+    --surface: #ecf7f7;
+    --surface-2: #ddf1f1;
+    --ink: #17151f;
+    --ink-soft: #002929;
+    --ink-faint: #466667;
+    --line: #a1c4c4;
+    --on-accent: #ffffff;
+    --merged-ink: #316969;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-arctic-dark'] {
+    --paper: #003d3e;
+    --win: #0b1616;
+    --surface: #0b1616;
+    --surface-2: #152120;
+    --ink: #eef5f5;
+    --ink-soft: #d0dad9;
+    --ink-faint: #a3adad;
+    --line: #2a3535;
+    --on-accent: #0b1616;
+    --merged-ink: #c1e5e5;
+    --merged-wash: rgba(193, 229, 229, 0.14);
+    --merged-wash-soft: rgba(193, 229, 229, 0.06);
+    --merged-chip: rgba(193, 229, 229, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-mulberry-white'] {
+    --paper: #fffafa;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #ffeef0;
+    --ink: #17151f;
+    --ink-soft: #3b1b21;
+    --ink-faint: #735c5f;
+    --line: #f1d6da;
+    --on-accent: #ffffff;
+    --merged-ink: #34151b;
+    --merged-wash: rgba(52, 21, 27, 0.08);
+    --merged-wash-soft: rgba(52, 21, 27, 0.04);
+    --merged-chip: rgba(52, 21, 27, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-mulberry-colour'] {
+    --paper: #f6d9d3;
+    --win: #fdf7f6;
+    --surface: #fcf4f2;
+    --surface-2: #faeae7;
+    --ink: #17151f;
+    --ink-soft: #35161c;
+    --ink-faint: #755c57;
+    --line: #d5b9b3;
+    --on-accent: #ffffff;
+    --merged-ink: #34151b;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-mulberry-dark'] {
+    --paper: #34151b;
+    --win: #362c2d;
+    --surface: #362c2d;
+    --surface-2: #423738;
+    --ink: #f9f1f2;
+    --ink-soft: #ded5d6;
+    --ink-faint: #b1a8a9;
+    --line: #594d4f;
+    --on-accent: #211b1c;
+    --merged-ink: #e59090;
+    --merged-wash: rgba(218, 94, 94, 0.14);
+    --merged-wash-soft: rgba(218, 94, 94, 0.06);
+    --merged-chip: rgba(218, 94, 94, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-obsidian-white'] {
+    --paper: #fcfdff;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f9f3e5;
+    --ink: #17151f;
+    --ink-soft: #302504;
+    --ink-faint: #6a6350;
+    --line: #e6dec8;
+    --on-accent: #ffffff;
+    --merged-ink: #303030;
+    --merged-wash: rgba(48, 48, 48, 0.08);
+    --merged-wash-soft: rgba(48, 48, 48, 0.04);
+    --merged-chip: rgba(48, 48, 48, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-obsidian-colour'] {
+    --paper: #87cefa;
+    --win: #e7f5fe;
+    --surface: #dbf0fd;
+    --surface-2: #bde4fc;
+    --ink: #17151f;
+    --ink-soft: #2b2001;
+    --ink-faint: #2d556c;
+    --line: #68aed9;
+    --on-accent: #ffffff;
+    --merged-ink: #303030;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-obsidian-dark'] {
+    --paper: #303030;
+    --win: #17140c;
+    --surface: #17140c;
+    --surface-2: #211e15;
+    --ink: #f5f3ed;
+    --ink-soft: #dad7d0;
+    --ink-faint: #adaba3;
+    --line: #36332a;
+    --on-accent: #17140c;
+    --merged-ink: #d18fe2;
+    --merged-wash: rgba(186, 85, 211, 0.14);
+    --merged-wash-soft: rgba(186, 85, 211, 0.06);
+    --merged-chip: rgba(186, 85, 211, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-orchid-white'] {
+    --paper: #fdfffa;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f9f0fd;
+    --ink: #17151f;
+    --ink-soft: #301e37;
+    --ink-faint: #6a5e6f;
+    --line: #e6d8ec;
+    --on-accent: #ffffff;
+    --merged-ink: #a929d3;
+    --merged-wash: rgba(169, 41, 211, 0.08);
+    --merged-wash-soft: rgba(169, 41, 211, 0.04);
+    --merged-chip: rgba(169, 41, 211, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-orchid-colour'] {
+    --paper: #ebf6c9;
+    --win: #fbfdf4;
+    --surface: #f9fcef;
+    --surface-2: #f4fae1;
+    --ink: #17151f;
+    --ink-soft: #2b1a32;
+    --ink-faint: #666f47;
+    --line: #cad5a9;
+    --on-accent: #ffffff;
+    --merged-ink: #a929d3;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-orchid-dark'] {
+    --paper: #481c58;
+    --win: #171219;
+    --surface: #171219;
+    --surface-2: #211c23;
+    --ink: #f6f2f7;
+    --ink-soft: #dad6dc;
+    --ink-faint: #ada9b0;
+    --line: #363038;
+    --on-accent: #171219;
+    --merged-ink: #ebf6c9;
+    --merged-wash: rgba(235, 246, 201, 0.14);
+    --merged-wash-soft: rgba(235, 246, 201, 0.06);
+    --merged-chip: rgba(235, 246, 201, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-parchment-white'] {
+    --paper: #fdfcf9;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f0f3ff;
+    --ink: #17151f;
+    --ink-soft: #21243f;
+    --ink-faint: #5f6275;
+    --line: #d9ddf2;
+    --on-accent: #ffffff;
+    --merged-ink: #42478b;
+    --merged-wash: rgba(66, 71, 139, 0.08);
+    --merged-wash-soft: rgba(66, 71, 139, 0.04);
+    --merged-chip: rgba(66, 71, 139, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-parchment-colour'] {
+    --paper: #e8e2d4;
+    --win: #faf9f6;
+    --surface: #f8f6f2;
+    --surface-2: #f2efe7;
+    --ink: #17151f;
+    --ink-soft: #1c1f39;
+    --ink-faint: #666155;
+    --line: #c7c2b4;
+    --on-accent: #ffffff;
+    --merged-ink: #42478b;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-parchment-dark'] {
+    --paper: #282969;
+    --win: #12131b;
+    --surface: #12131b;
+    --surface-2: #1c1d26;
+    --ink: #f2f3f9;
+    --ink-soft: #d6d7de;
+    --ink-faint: #a9aab2;
+    --line: #31323b;
+    --on-accent: #12131b;
+    --merged-ink: #e8e2d4;
+    --merged-wash: rgba(232, 226, 212, 0.14);
+    --merged-wash-soft: rgba(232, 226, 212, 0.06);
+    --merged-chip: rgba(232, 226, 212, 0.16);
+  }
+
+  [data-theme='light'][data-preset='x-tidepool-white'] {
+    --paper: #f8fcfc;
+    --win: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #e5f8f9;
+    --ink: #17151f;
+    --ink-soft: #002d31;
+    --ink-faint: #4f696b;
+    --line: #c8e4e7;
+    --on-accent: #ffffff;
+    --merged-ink: #0e4a4f;
+    --merged-wash: rgba(14, 74, 79, 0.08);
+    --merged-wash-soft: rgba(14, 74, 79, 0.04);
+    --merged-chip: rgba(14, 74, 79, 0.1);
+  }
+
+  [data-theme='light'][data-preset='x-tidepool-colour'] {
+    --paper: #c1e5e5;
+    --win: #f3fafa;
+    --surface: #ecf7f7;
+    --surface-2: #ddf1f1;
+    --ink: #17151f;
+    --ink-soft: #00282c;
+    --ink-faint: #466667;
+    --line: #a1c4c4;
+    --on-accent: #ffffff;
+    --merged-ink: #0e4a4f;
+    --merged-wash: rgba(255, 255, 255, 0.3);
+    --merged-wash-soft: rgba(255, 255, 255, 0.12);
+    --merged-chip: rgba(255, 255, 255, 0.55);
+  }
+
+  [data-theme='dark'][data-preset='x-tidepool-dark'] {
+    --paper: #003b40;
+    --win: #0b1617;
+    --surface: #0b1617;
+    --surface-2: #152021;
+    --ink: #eef5f6;
+    --ink-soft: #d0d9da;
+    --ink-faint: #a3adae;
+    --line: #293536;
+    --on-accent: #0b1617;
+    --merged-ink: #f19a7f;
+    --merged-wash: rgba(239, 138, 106, 0.14);
+    --merged-wash-soft: rgba(239, 138, 106, 0.06);
+    --merged-chip: rgba(239, 138, 106, 0.16);
+  }
+
   /* Belt-and-suspenders for the native <select> popup list. The OS draws that
      list, and it ignores the select's own color unless each option says its
      colors — so the rule covers every select, not only `.input` ones. */
@@ -1844,11 +2013,7 @@
   }
 
   body {
-    font-family:
-      Inter,
-      system-ui,
-      -apple-system,
-      sans-serif;
+    font-family: var(--font-sans);
     background: var(--paper);
     color: var(--ink);
     -webkit-font-smoothing: antialiased;
@@ -2077,6 +2242,16 @@
 .settings-search-btn:disabled { opacity: .4; cursor: default; }
 .settings-search-pop .settings-search-btn { height: 24px; width: 24px; }
 .settings-search-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Settings: left section nav (a wrapping row on narrow windows) and the groups it jumps to. */
+.settings-nav { display: flex; flex-wrap: wrap; gap: 2px; }
+@media (min-width: 768px) { .settings-nav { position: sticky; top: 0; align-self: flex-start; flex-direction: column; flex-wrap: nowrap; width: 168px; flex-shrink: 0; padding-top: 24px; } }
+.settings-nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 2px solid transparent; border-radius: 0; font-size: 13px; color: var(--ink-soft); text-align: left; width: fit-content; max-width: 100%; }
+.settings-nav-item:hover { color: var(--ink); }
+.settings-nav-item[aria-current] { border-bottom-color: var(--accent); color: var(--ink); font-weight: 500; }
+.settings-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-group { scroll-margin-top: 16px; padding-top: 24px; }
+.settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
+.settings-group-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
 .settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: 13px; color: var(--ink); }
 .settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
@@ -2098,6 +2273,47 @@
 }
 .vt-row > :last-child {
   margin-bottom: 0;
+}
+/* Swipe-left times (useSwipeToRevealTimes): a pseudo-element, so the margin
+   rules above still see the row's real first and last parts. */
+[data-vt-stamp] {
+  position: relative;
+}
+[data-vt-stamp]::after {
+  content: attr(data-vt-stamp);
+  position: absolute;
+  top: 2px;
+  left: 100%;
+  width: 96px;
+  box-sizing: border-box;
+  padding-left: 12px;
+  white-space: nowrap;
+  /* Tool rows sit in a monospace block; every time reads the same. */
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  opacity: var(--vt-reveal-o, 0);
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+[data-transcript-scroll] { touch-action: pan-y pinch-zoom; }
+.vt-swiping { user-select: none; }
+.vt-revealing .vt-list {
+  transform: translateX(calc(-1 * var(--vt-reveal, 0px)));
+}
+.vt-list {
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.vt-swiping .vt-list,
+.vt-swiping [data-vt-stamp]::after {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vt-list,
+  [data-vt-stamp]::after {
+    transition: none;
+  }
 }
 
 /* Skill pill — a highlighted slash-command token (Claude-Code style). Used both
@@ -2347,6 +2563,30 @@
 @keyframes composer-question-open { from { opacity: 0; transform: scale(.08, 0); } to { opacity: 1; transform: scale(1); } }
 @keyframes composer-question-close { to { opacity: 0; transform: scale(.08, 0); } }
 @media (max-width: 640px) { .composer-column { width: 100%; } .composer-question { width: 94%; } }
+/* The agent plan is a card tucked behind the composer: the dock clips at the
+   composer's top edge (plus the overlap) so the card rises out from under it.
+   No borders; spacing does the separating. Finished steps squeeze to their
+   title and every one opens while the pointer or focus is anywhere on the card,
+   via a 0fr -> 1fr row, kept fast. */
+.plan-sheet-dock { position: relative; width: 92%; margin: 0 auto -10px; overflow: hidden; border-radius: 14px 14px 0 0; }
+.plan-sheet { background: var(--surface-2); border-radius: 14px 14px 0 0; padding: 6px 10px 16px; font-size: 12.5px; line-height: 1.45; animation: plan-sheet-rise 160ms ease-out; }
+@keyframes plan-sheet-rise { from { transform: translateY(100%); } }
+.plan-sheet-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 2px; font-size: 11px; color: var(--ink-faint); }
+.plan-sheet-toggle { display: flex; min-width: 0; flex: 1; align-items: center; gap: 6px; text-align: left; border-radius: 6px; }
+.plan-sheet-action { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; border-radius: 6px; padding: 1px 6px; color: var(--ink-soft); }
+.plan-sheet-action:hover:not(:disabled), .plan-sheet-chip:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+.plan-sheet-steps { max-height: 40vh; overflow-y: auto; }
+.plan-sheet-step { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 8px; border-radius: 8px; padding: 2px 4px; outline: none; }
+.plan-sheet-step:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+.plan-sheet-more { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 120ms ease-out, opacity 120ms ease-out; }
+.plan-sheet-more > div { min-height: 0; overflow: hidden; }
+.plan-sheet-step[data-plan-step="done"] .plan-sheet-more { grid-template-rows: 0fr; opacity: 0; }
+.plan-sheet:is(:hover, :focus-within) .plan-sheet-step[data-plan-step="done"] .plan-sheet-more { grid-template-rows: 1fr; opacity: 1; }
+.plan-sheet-chips { display: flex; gap: 6px; overflow: hidden; padding: 3px 0 1px; }
+.plan-sheet-chip { display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 0 8px; font-size: 11px; line-height: 18px; color: var(--ink-soft); white-space: nowrap; }
+.plan-sheet-dot { width: 6px; height: 6px; border-radius: 50%; }
+@media (max-width: 640px) { .plan-sheet-dock { width: 96%; } }
+@media (prefers-reduced-motion: reduce) { .plan-sheet, .plan-sheet-more { animation: none; transition: none; } }
 @media (prefers-reduced-motion: reduce) { .composer-question.is-open, .composer-question.is-closing { animation: none; } .composer-question.is-closing { visibility: hidden; } }
 
 /* Preserve markdown text while painting a real bullet on the editable surface. */
@@ -2406,12 +2646,12 @@
 .composer-summary-meta { color: var(--ink-faint); font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .pane-flash { animation: none; } }
 
-/* The PR deck rises from the footer divider: a tab whose open bottom edge sits
-   on the strip's top border (the -1px margin covers that line), its toggle on
-   the divider and its cards growing upward. With no strip below (the wall
-   composer) it closes into a full rounded card. */
-.pr-action-deck { position: relative; z-index: 1; flex-shrink: 0; display: flex; flex-direction: column; width: 90%; margin: 6px auto -1px; padding: 0 8px; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--surface); box-shadow: 0 -3px 14px rgb(0 0 0 / 6%); }
-.pr-action-deck[data-floating=true] { margin-bottom: 6px; border-bottom: 1px solid var(--line); border-radius: 10px; }
+/* The PR deck sits between the composer and the footer controls on the agent
+   window's own surface: no border or shadow, its toggle a slim row and its
+   cards growing upward. With no strip below (the wall composer) it closes into
+   a full rounded card. */
+.pr-action-deck { position: relative; z-index: 1; flex-shrink: 0; display: flex; flex-direction: column; width: 90%; margin: 2px auto 0; padding: 0 8px; border-radius: 10px; }
+.pr-action-deck[data-floating=true] { margin-bottom: 6px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 -3px 14px rgb(0 0 0 / 6%); }
 .pr-deck-toggle { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 5px 3px; font-size: 11px; color: var(--ink-soft); border-radius: 8px; }
 .pr-deck-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pr-deck-chevron { transition: transform 220ms ease; }
@@ -2420,7 +2660,16 @@
 .pr-action-deck[data-expanded=false] .pr-deck-reveal { grid-template-rows: 0fr; opacity: 0; transform: translateY(10px) scale(.98); }
 .pr-deck-clip { min-height: 0; overflow: hidden; }
 .pr-deck-list { max-height: 180px; overflow-y: auto; padding: 6px 0 1px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
-.pr-deck-card { background: var(--paper); }
+.pr-deck-card { background: var(--paper); container-type: inline-size; }
+/* Query the card itself, so narrow desktop panes behave like narrow windows. */
+.pr-action-layout { display: flex; align-items: flex-start; gap: 8px; }
+@container (max-width: 480px) {
+  .pr-action-layout { position: relative; flex-direction: column; }
+  .pr-action-content { width: 100%; flex: none; }
+  .pr-action-heading { padding-right: 28px; }
+  .pr-action-layout [data-pr-action-controls] { max-width: 100%; justify-content: flex-start; }
+  .pr-action-dismiss { position: absolute; top: 0; right: 0; }
+}
 
 /* Response artifact cards (ChatArtifacts). A quieter cousin of the merged-PR
    banner: the same left-to-right wash, but tinted from --accent so it follows
@@ -2451,6 +2700,24 @@
 @media (prefers-reduced-motion: reduce) { .remote-image-skeleton { animation: none; } }
 .artifact-card-open { color: color-mix(in srgb, var(--accent) 40%, var(--ink-faint)); }
 .artifact-card:hover:not(:disabled) .artifact-card-open { color: var(--accent); }
+/* An HTML page drawn small above its card row, and a localhost preview server.
+   The thumbnail well is the card's tint until the page arrives; the page itself
+   sits on white, as a browser would draw it. */
+.artifact-render-thumb {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface-2));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+}
+.artifact-card-action {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+.artifact-card-action:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.artifact-card-action:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.artifact-live-label { color: color-mix(in srgb, var(--accent) 55%, var(--ink)); }
+a.artifact-card:hover .artifact-card-open { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .artifact-card, .artifact-card-action { transition: none; } }
 .pr-deck-slot { transform-origin: bottom center; animation: pr-deck-pop 240ms ease-out both; }
 .pr-deck-slot[data-closing=true] { pointer-events: none; animation: pr-deck-retract 220ms ease-in both; }
 @keyframes pr-deck-pop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -2464,7 +2731,10 @@
   font-variant-numeric: tabular-nums; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
-.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 6px; }
+/* The wall's 1px side inset makes up the rest of a gap beside it. */
+.wall-workspace { display: flex; flex: 1; min-width: 0; min-height: 0; row-gap: var(--wall-gap); column-gap: calc(var(--wall-gap) - 1px); }
+/* The right add-zone rail is the gap to a dock on the right; no second gap. */
+.wall-workspace[data-dock-side='right']:has(.command-wall-layout[data-zone-rails]) { column-gap: 0; }
 .wall-workspace[data-dock-side='top'], .wall-workspace[data-dock-side='bottom'] { flex-direction: column; }
 .wall-column { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
 /* The board viewport yields to the composer; its tall stage scrolls internally. */
@@ -2560,9 +2830,8 @@
 /* While the floating button shows, the transcript starts below it so the first
    message never sits under it (8px offset + 28px button + breathing room). */
 div:has(> .plan-rail-toggle) > [data-transcript-scroll] { padding-top: 44px; }
-/* A question the agent asked, pinned at the top of its window: a warning-toned
-   label you cannot miss, then the card. Capped so the transcript keeps a view;
-   a long card scrolls inside the pin rather than pushing the history away. */
+/* The plan-change prompt keeps its existing top pin. Pending agent questions
+   use the conversation footer instead, without a nested scroll area. */
 .agent-question-pin {
   max-height: min(62%, 460px); overflow-y: auto; padding: 8px 10px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--warning) 45%, var(--line));
@@ -2606,17 +2875,19 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    frame is fully clipped, and one paused while closing never unmounts. */
 html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !important; }
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
-.wall-layout-control { position: relative; display: inline-flex; align-items: center; }
+.wall-layout-control { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
    narrower than the button once the title bar's own button padding applied,
    so the wand spilled under the All/Agents/Terminals toggle beside it.
    Its slot is always reserved (hidden only by opacity/visibility), so picking
    Dynamic fades it in place without shifting the filter and Panels beside it. */
-.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; margin-left: 6px; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
+.wall-auto-arrange { position: relative; display: grid; grid-template-columns: 1fr; align-items: center; opacity: 0; visibility: hidden; transform: scale(.6); transition: opacity 180ms ease, transform 240ms ease, visibility 0s 240ms; }
 .wall-auto-arrange[data-visible='true'] { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
 .wall-auto-arrange > button { min-width: 0; overflow: hidden; }
-/* Snap to grid: an icon toggle with the outline button's frame; lit in the accent while on. */
+/* Snap to grid: an icon toggle with the outline button's frame. The magnet follows
+   the theme's ink; off it is faint (and its sparks hidden), on it lights in the accent. */
 .wall-snap-toggle { display: inline-grid; place-items: center; width: 32px; height: 28px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-faint); transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease; }
+.wall-snap-toggle:not([aria-pressed='true']) svg { --magnet-spark: transparent; }
 .wall-snap-toggle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
 .wall-snap-toggle[aria-pressed='true'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); }
 .wall-snap-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -2628,12 +2899,22 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focused: a new agent fades in as its prompt view. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-hero][data-wall-entering] > .panel { animation: focus-new-agent-in 320ms cubic-bezier(.22, 1, .36, 1) both; }
 @keyframes focus-new-agent-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+/* The hero it replaces stays drawn over it, collapses onto the new composer's box
+   (CommandWall measures --collapse-inset; the fallback is a centred composer) and dissolves. */
+.command-wall-window[data-wall-parked][data-wall-leaving] { content-visibility: visible; z-index: 3; }
+.command-wall-window[data-wall-leaving] > .panel { animation: focus-collapse-into-composer 380ms cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes focus-collapse-into-composer {
+  from { clip-path: inset(0 round var(--pane-radius)); opacity: 1; }
+  55% { opacity: .9; }
+  to { clip-path: inset(var(--collapse-inset, 40% max(24px, calc(50% - 360px)) 40%) round 18px); opacity: 0; }
+}
 /* Focused: after the first send, the centred composer expands into the full
    chat. The window's chat body grows out of the composer's place. */
 [data-chat-expanding] > section { animation: composer-expand-in 420ms cubic-bezier(.22, 1, .36, 1) both; transform-origin: 50% 70%; }
 @keyframes composer-expand-in { from { opacity: .35; transform: scale(.92, .55); border-radius: 18px; } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, [data-chat-expanding] > section { animation: none; }
+  .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, .command-wall-window[data-wall-leaving] > .panel, [data-chat-expanding] > section { animation: none; }
+  .command-wall-window[data-wall-parked][data-wall-leaving] { content-visibility: hidden; }
 }
 .command-wall-layout[data-wall-layout='focus'] .composer, .command-wall-layout[data-wall-layout='focus'] .composer:focus-within { box-shadow: none; }
 /* The All/Agents/Terminals filter shares this frame exactly. It used to be
@@ -2642,17 +2923,12 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .wall-layout-segments { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
 .wall-layout-segments button { padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--ink-faint); }
 .wall-layout-segments button[aria-pressed='true'] { background: var(--surface-2); color: var(--ink); font-weight: 500; }
-.wall-fixed-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
-.wall-fixed-picker p { margin: 0 0 8px; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
-.wall-fixed-cells { display: grid; grid-template-columns: repeat(6, 20px); gap: 4px; }
-.wall-fixed-cells button { height: 20px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); }
-.wall-fixed-cells button.is-preview { border-color: var(--accent); background: var(--accent-soft); }
-.wall-layout-segments button:focus-visible, .wall-fixed-cells button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Multi-monitor: the Screens dropdown, in the grid picker's frame. A gap
+.wall-layout-segments button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Multi-monitor: the Screens dropdown. A gap
    bridge under the button keeps hover alive on the way down to the panel. */
 .screens-control { position: relative; display: inline-flex; align-items: center; }
-.screens-control::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 8px; }
-.screens-picker { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; min-width: 260px; max-width: 360px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
+.screens-control::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 8px; -webkit-app-region: no-drag; }
+.screens-picker { -webkit-app-region: no-drag; position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; min-width: 260px; max-width: 360px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
 .screens-picker__title { margin: 0 0 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
 .screens-picker__note { margin: 6px 0 0; font-size: 11px; color: var(--ink-faint); }
 .screens-picker__divider { margin: 10px -10px; border: 0; border-top: 1px solid var(--line); }
@@ -2671,7 +2947,38 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .screens-option > span { display: grid; gap: 2px; }
 .screens-option strong { font-size: 12px; font-weight: 500; color: var(--ink); }
 .screens-option > span > span { font-size: 11px; line-height: 1.35; color: var(--ink-faint); }
-@media (prefers-reduced-motion: reduce) { .screens-tile { transition: none; } }
+.screens-picker__title--sub { margin-top: 12px; }
+.screens-tile[data-current]::before { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.screens-tile[data-waiting] { border-style: dashed; }
+/* Spaces: the Accessibility explainer, with an abstract monitor switching desktops. */
+.spaces-ask { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.spaces-ask__lead { margin: 6px 0 4px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.spaces-ask__body { margin: 0 0 8px; font-size: 11px; line-height: 1.4; color: var(--ink-soft); }
+.spaces-ask__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.spaces-demo { display: block; width: 100%; max-width: 200px; margin: 0 auto; }
+.spaces-demo__bezel { fill: var(--win); stroke: var(--line); stroke-width: 1.5; }
+.spaces-demo__desk { fill: color-mix(in srgb, var(--ink-faint) 14%, var(--win)); }
+.spaces-demo__desk--next { fill: color-mix(in srgb, var(--accent) 12%, var(--win)); }
+.spaces-demo__win { fill: color-mix(in srgb, var(--ink-faint) 30%, var(--win)); }
+.spaces-demo__nekko > rect:first-child { fill: var(--paper); stroke: var(--accent); stroke-width: 1.2; }
+.spaces-demo__nekko-bar { fill: color-mix(in srgb, var(--accent) 35%, var(--paper)); }
+.spaces-demo__nekko-pane { fill: color-mix(in srgb, var(--accent) 16%, var(--paper)); }
+.spaces-demo__dot { fill: var(--line); }
+/* 5s loop: hold on desktop 1, slide to 2, the Nekko window swipes open from the left edge, hold, fade and restart. */
+.spaces-demo__strip { animation: spaces-demo-slide 5s cubic-bezier(.65, 0, .35, 1) infinite; }
+.spaces-demo__nekko { transform-box: fill-box; transform-origin: left center; animation: spaces-demo-open 5s cubic-bezier(.22, 1, .36, 1) infinite; }
+.spaces-demo__dot--one { animation: spaces-demo-dot-one 5s steps(1, end) infinite; }
+.spaces-demo__dot--two { animation: spaces-demo-dot-two 5s steps(1, end) infinite; }
+@keyframes spaces-demo-slide { 0%, 18% { transform: translateX(0); opacity: 1; } 40%, 90% { transform: translateX(-136px); opacity: 1; } 97% { transform: translateX(-136px); opacity: 0; } 100% { transform: translateX(0); opacity: 0; } }
+@keyframes spaces-demo-open { 0%, 46% { transform: scaleX(.06); opacity: 0; } 48% { transform: scaleX(.06); opacity: 1; } 66%, 100% { transform: scaleX(1); opacity: 1; } }
+@keyframes spaces-demo-dot-one { 0% { fill: var(--accent); } 30% { fill: var(--line); } 100% { fill: var(--accent); } }
+@keyframes spaces-demo-dot-two { 0% { fill: var(--line); } 30% { fill: var(--accent); } 100% { fill: var(--line); } }
+@media (prefers-reduced-motion: reduce) {
+  .screens-tile { transition: none; }
+  .spaces-demo__strip, .spaces-demo__nekko, .spaces-demo__dot { animation: none; }
+  .spaces-demo__strip { transform: translateX(-136px); }
+  .spaces-demo__dot--two { fill: var(--accent); }
+}
 @media (max-width: 767px) {
   .wall-workspace { flex-direction: column; overflow: hidden; }
   .wall-workspace > .wall-agent-workspace { flex: 1 1 0; min-height: 0; }
@@ -2692,12 +2999,94 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .provider-choice-glyph { font: 600 15px/1 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: -0.5px; }
 .setup-illustration { color: var(--accent); margin-bottom: 16px; }
 /* Claude Agent setup, comparison and reasons (components/claude/ClaudeAgent.tsx). */
-.claude-setup { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--surface-2); }
+.claude-setup { --claude: #d97757; display: flex; flex-direction: column; gap: 12px; }
+.claude-setup code { font-size: 11.5px; padding: 1px 5px; border-radius: 5px; background: var(--surface-2); }
+.claude-spin { width: 13px; height: 13px; flex: none; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--ink-faint) 40%, transparent); border-top-color: var(--accent); animation: claude-spin 0.8s linear infinite; }
+@keyframes claude-spin { to { transform: rotate(360deg); } }
+.claude-detect { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; color: var(--ink-soft); background: color-mix(in srgb, var(--ink-faint) 10%, transparent); }
+.claude-detect[data-tone="ok"] { background: color-mix(in srgb, var(--success) 10%, transparent); }
+.claude-detect[data-tone="ok"] > svg { color: var(--success); }
+.claude-connected { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--success); background: color-mix(in srgb, var(--success) 9%, transparent); }
+.claude-connected > svg { color: var(--success); flex: none; }
+.claude-connected strong { display: block; font-size: 14px; }
+.claude-connected span { display: block; font-size: 12px; color: var(--ink-soft); }
+.claude-choice { overflow-x: auto; }
+.claude-choice table { width: 100%; border-collapse: separate; border-spacing: 10px 0; margin: 0 -10px; font-size: 12.5px; }
+.claude-choice th, .claude-choice td { padding: 8px 12px; text-align: left; vertical-align: middle; }
+.claude-choice tbody th { width: 36%; padding-left: 0; font-weight: 500; color: var(--ink-soft); border-bottom: 1px solid var(--line); }
+.claude-col { cursor: pointer; transition: opacity 0.15s, background 0.15s; }
+.claude-choice thead .claude-col { padding-bottom: 12px; }
+.claude-choice thead .claude-col small { display: block; font-size: 11px; font-weight: 400; color: var(--ink-faint); }
+.claude-choice tbody .claude-col { border-left: 2px dashed var(--line); border-right: 2px dashed var(--line); color: var(--ink-soft); }
+.claude-choice tbody tr:first-child .claude-col { border-top: 2px dashed var(--line); border-radius: 12px 12px 0 0; }
+.claude-choice tbody tr:last-child .claude-col { border-bottom: 2px dashed var(--line); border-radius: 0 0 12px 12px; }
+.claude-choice:has([data-on]) .claude-col:not([data-on]) { opacity: 0.55; }
+.claude-col:hover { opacity: 0.9 !important; }
+.claude-choice tbody .claude-col[data-on] { border-style: solid; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--ink); }
+.claude-col-head { display: inline-flex; align-items: center; gap: 7px; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.claude-col-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.claude-radio { width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; }
+.claude-col[data-on] .claude-radio { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 2px var(--surface); }
+.claude-col-note { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); }
+.claude-col-note[data-tone="ok"] { color: var(--success); }
+.claude-cell { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-faint); }
+.claude-choice td[data-yes] .claude-cell { color: var(--success); }
+.claude-choice tfoot td { padding-top: 12px; }
+.claude-choice tfoot .btn { width: 100%; justify-content: center; gap: 7px; }
+.claude-setup .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+.claude-setup .claude-connect-done:disabled { opacity: 1; cursor: default; color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
+.claude-terminal { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.claude-terminal-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; color: var(--ink-soft); background: var(--surface-2); }
+.claude-terminal-body { height: 240px; }
+.claude-link { align-self: flex-start; padding: 0; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.claude-another { padding-left: 14px; border-left: 3px solid var(--line); display: flex; flex-direction: column; }
+.claude-verdict { margin-top: 10px; font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); max-width: 640px; }
+.claude-verdict-head { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; }
+.claude-verdict[data-verdict="ok"] .claude-verdict-head { color: var(--success); }
+.claude-verdict[data-verdict="confirm"] .claude-verdict-head { color: var(--warning); }
+.claude-verdict[data-verdict="blocked"] .claude-verdict-head, p.claude-verdict[data-verdict="blocked"] { color: var(--danger); }
+.claude-attest { display: flex; align-items: flex-start; gap: 7px; margin-top: 8px; font-size: 12px; color: var(--ink); }
+.claude-api-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.claude-how h4 { margin: 4px 0 10px; font-size: 13px; font-weight: 600; }
+.claude-diagram { display: flex; align-items: stretch; }
+.claude-zone { position: relative; display: flex; align-items: center; gap: 8px; padding: 28px 12px 12px; border: 2px dashed var(--line); border-radius: 16px; }
+.claude-zone[data-zone="machine"] { flex: 1 1 auto; min-width: 0; }
+.claude-zone[data-zone="cloud"] { flex: none; border-color: color-mix(in srgb, var(--claude) 50%, transparent); background: color-mix(in srgb, var(--claude) 5%, transparent); }
+.claude-zone-label { position: absolute; top: 7px; left: 12px; display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+.claude-wire { align-self: center; display: flex; flex-direction: column; align-items: center; min-width: 52px; padding: 0 4px; font-size: 11px; color: var(--ink-faint); }
+.claude-wire > span { font-size: 17px; line-height: 1; }
+.claude-nekko { flex: 1 1 auto; min-width: 0; padding: 10px; border: 2px solid var(--accent); border-radius: 14px; }
+.claude-nekko > strong { display: block; margin-bottom: 8px; font-size: 13px; }
+.claude-feats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.claude-feat { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; font-size: 11.5px; color: var(--ink-faint); background: color-mix(in srgb, var(--ink-faint) 8%, transparent); }
+.claude-feat > svg, .claude-cell > svg, .claude-col-note > svg, .claude-detect > svg, .claude-verdict-head > svg { flex: none; width: 14px; height: 14px; }
+.claude-feat[data-on] { color: var(--ink); background: color-mix(in srgb, var(--success) 10%, transparent); }
+.claude-feat[data-on] > svg { color: var(--success); }
+.claude-engine { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px; }
+.claude-engine[data-engine="built-in"] { border: 1px solid var(--claude); background: color-mix(in srgb, var(--claude) 12%, transparent); }
+.claude-engine[data-engine="built-in"] > svg { color: var(--claude); }
+.claude-engine[data-engine="external"] { border: 1px dashed var(--line); }
+.claude-engine small, .claude-svc small { display: block; font-size: 11px; color: var(--ink-faint); }
+.claude-svc { display: flex; align-items: center; gap: 8px; min-width: 112px; max-width: 150px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; }
+.claude-svc[data-svc="claude-code"] { background: var(--claude); color: #fff; }
+.claude-svc[data-svc="claude-code"] small { color: rgb(255 255 255 / 0.85); }
+.claude-svc[data-svc="api"] { border: 1px solid var(--claude); background: color-mix(in srgb, var(--claude) 14%, transparent); }
+.claude-svc[data-svc="api"] > svg { color: var(--claude); }
+.claude-how-note { margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
+.claude-source { margin-top: 2px; font-size: 11.5px; color: var(--ink-faint); }
+@media (max-width: 720px) {
+  .claude-diagram, .claude-zone { flex-direction: column; align-items: stretch; }
+  .claude-wire { flex-direction: row; gap: 6px; justify-content: center; padding: 6px 0; }
+  .claude-wire > span { transform: rotate(90deg); }
+  .claude-svc { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) { .claude-spin { animation: none; } }
 .claude-setup-state { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-soft); }
 .claude-setup-state strong { font-size: 13px; color: var(--ink); }
 .claude-setup-state code { font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--surface); }
 .claude-setup-state[data-state="ready"] strong { color: var(--success); }
 .claude-setup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.claude-account { display: flex; flex-wrap: wrap; gap: 6px; }
 .claude-why { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .claude-why:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .claude-reason { font-size: 12px; color: var(--ink-soft); }
@@ -2733,9 +3122,9 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    them out (the card inside still clips its own content); each grip's hit area
    spans the gap and a sliver of the edge so it stays easy to catch. */
 .wall-composer.panel { overflow: visible; }
-.wall-composer-split { position: absolute; left: 0; right: 0; height: 14px; z-index: 2; cursor: row-resize; touch-action: none; display: grid; place-items: center; }
-.wall-composer[data-dock^="bottom"] > .wall-composer-split { top: -14px; }
-.wall-composer[data-dock^="top"] > .wall-composer-split { bottom: -14px; }
+.wall-composer-split { position: absolute; left: 0; right: 0; height: var(--wall-gap); z-index: 2; cursor: row-resize; touch-action: none; display: grid; place-items: center; }
+.wall-composer[data-dock^="bottom"] > .wall-composer-split { top: calc(-1 * var(--wall-gap)); }
+.wall-composer[data-dock^="top"] > .wall-composer-split { bottom: calc(-1 * var(--wall-gap)); }
 .wall-composer-side { position: absolute; top: 0; bottom: 0; width: 14px; z-index: 2; cursor: col-resize; touch-action: none; display: grid; place-items: center; }
 .wall-composer-side[data-edge="left"] { left: -14px; }
 .wall-composer-side[data-edge="right"] { right: -14px; }
@@ -2767,7 +3156,6 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    slivers at the top corners. Inside it, focus is the border alone: an inset
    ring on top of the accent border doubled it into a heavy 2px line. */
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
-.wall-composer .composer-beam-ring { inset: 0; }
 
 /* Prompt suggestions as one chip among the composer's actions. */
 .composer-suggestions-chip {
@@ -2899,21 +3287,35 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus mode, new chat: one centered composer on a quiet page. The first send
    drops data-clean-start and the window becomes the full chat. */
 [data-clean-start] .clean-start { position: relative; isolation: isolate; align-items: center; padding: 0 24px 12vh; }
-/* Prism light: soft washes anchored off the window's corners and edges, never a
-   centred disc (the old radial wash read as a halo behind the composer). It is
-   static, so the glass above it costs no per-frame repaint. */
+@property --new-chat-top { syntax: '<color>'; inherits: false; initial-value: rgb(7 59 64 / .12); }
+@property --new-chat-mid { syntax: '<color>'; inherits: false; initial-value: rgb(21 78 80 / .10); }
+@property --new-chat-bottom { syntax: '<color>'; inherits: false; initial-value: rgb(179 139 59 / .10); }
+@keyframes new-chat-colors {
+  0%, 100% { --new-chat-top: rgb(7 59 64 / .12); --new-chat-mid: rgb(21 78 80 / .10); --new-chat-bottom: rgb(179 139 59 / .10); }
+  25% { --new-chat-top: rgb(54 43 125 / .12); --new-chat-mid: rgb(98 57 130 / .10); --new-chat-bottom: rgb(173 79 119 / .10); }
+  50% { --new-chat-top: rgb(30 69 126 / .12); --new-chat-mid: rgb(35 105 123 / .10); --new-chat-bottom: rgb(75 145 118 / .10); }
+  75% { --new-chat-top: rgb(116 57 88 / .12); --new-chat-mid: rgb(151 88 68 / .10); --new-chat-bottom: rgb(164 137 76 / .10); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-clean-start] .clean-start::before { animation: none !important; }
+}
+/* Translucent prism frost, with a separate static grain layer to dither
+   colour steps. Both stay behind the content and never intercept input. */
 [data-clean-start] .clean-start::before {
+  content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
+  background: linear-gradient(to bottom,
+    var(--new-chat-top) 0%, var(--new-chat-mid) 45%, var(--new-chat-bottom) 100%);
+  animation: new-chat-colors 120s ease-in-out infinite;
+}
+[data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(55% 70% at 0% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
-    radial-gradient(50% 60% at 100% 0%, color-mix(in srgb, var(--accent-2) 11%, transparent), transparent 70%),
-    radial-gradient(40% 45% at 92% 96%, color-mix(in srgb, #ff7eb6 8%, transparent), transparent 70%),
-    linear-gradient(180deg, transparent 35%, color-mix(in srgb, var(--accent) 4%, transparent));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='grain' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cpath fill='white' filter='url(%23grain)' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  opacity: 0.055;
 }
 [data-clean-start] .clean-start .composer-section { width: min(720px, 100%); padding: 0; }
 [data-clean-start] .clean-start .composer-column { width: 100% !important; }
-/* The composer is frosted glass: a translucent tint over a blur of the light
-   behind it, a top highlight, and a prism hairline as its only edge. */
+/* A quiet translucent composer, with diffuse depth instead of a hard edge. */
 [data-clean-start][data-chat-surface] .clean-start .composer,
 [data-clean-start][data-chat-surface] .clean-start .composer:focus-within {
   position: relative;
@@ -2923,36 +3325,36 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   -webkit-backdrop-filter: blur(22px) saturate(160%);
   backdrop-filter: blur(22px) saturate(160%);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 9%, transparent),
     0 18px 50px -22px color-mix(in srgb, var(--accent) 45%, transparent),
     0 2px 10px -4px color-mix(in srgb, #000 30%, transparent);
 }
-[data-clean-start] .clean-start .composer::after {
-  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
-  background: linear-gradient(120deg, var(--accent), var(--accent-2) 40%, #46e0bd 58%, #ffbe5c 76%, #ff7eb6);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor; mask-composite: exclude;
-  opacity: 0.38; transition: opacity 0.25s var(--ease-out);
-}
-[data-clean-start] .clean-start .composer:focus-within::after { opacity: 0.9; }
-/* Light themes: a whiter glass and a brighter highlight. */
+/* Frost has no prism outline, including while typing. */
+[data-clean-start] .clean-start .composer::after { display: none; }
+/* Light themes use a whiter glass with the same soft, borderless depth. */
 [data-theme='light'] [data-clean-start][data-chat-surface] .clean-start .composer,
 [data-theme='light'] [data-clean-start][data-chat-surface] .clean-start .composer:focus-within {
   background: color-mix(in srgb, #fff 62%, transparent);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 85%, transparent),
     0 18px 50px -22px color-mix(in srgb, var(--accent) 38%, transparent),
     0 2px 8px -4px color-mix(in srgb, #1e1450 10%, transparent);
 }
 @media (prefers-reduced-transparency: reduce) {
   [data-clean-start][data-chat-surface] .clean-start .composer { background: var(--win, var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
-.clean-start-greeting { margin: 0 auto 18px; text-align: center; }
-.clean-start-greeting h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.clean-start-greeting { display: flex; align-items: flex-end; justify-content: center; gap: 14px; max-width: 100%; margin: 0 auto 18px; text-align: left; }
+.greeting-nekko-slot { position: relative; display: block; flex: 0 0 64px; width: 64px; height: 60px; pointer-events: none; }
+/* The paws straddle viewBox y=25 at the border, 18px below the greeting. */
+.greeting-nekko { position: absolute; z-index: 3; left: -18px; top: 14.5px; display: block; width: 80px; height: 75px; pointer-events: none; }
+.clean-start-greeting h2 { display: flex; align-items: center; width: 300px; min-height: 60px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+@media (max-width: 600px) { .clean-start-greeting { gap: 10px; } .clean-start-greeting h2 { width: 230px; max-width: calc(100vw - 130px); } }
 .clean-start-greeting p { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
-[data-clean-start] .clean-start-model { opacity: 0.8; transition: opacity 0.2s vas (--ease-out)}
-[data-clean-start] .clean-start-model:hover,
-[data-clean-start] .clean-start-model:focus-within { opacity: 1; }
+/* Solid, readable controls above the decorative field. Never dim their text. */
+[data-clean-start] .clean-start-model { max-width: 100%; color: var(--ink); }
+[data-clean-start] .clean-start-model > div { flex-wrap: wrap; justify-content: center; }
+[data-clean-start] .clean-start-model :is(button[aria-haspopup='listbox'], .effort-slider) { background: var(--surface); color: var(--ink); border-color: var(--ink-faint); }
+[data-clean-start] .clean-start-model :is(.text-ink-faint, .text-ink-soft),
+[data-clean-start] .clean-start-model .effort-slider :is(label, span.text-ink-soft) { color: var(--ink); }
+
 
 /*
   Mode panel: saved modes down a rail, then Environment + Model, Privacy and
@@ -3071,3 +3473,96 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   .mode-col:last-child { border-top: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .mode-switch, .mode-switch::after, .mode-chev { transition: none; } }
+
+/* Focus is a workspace, not a framed window inside another window. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel {
+  border: 0; border-radius: 24px; box-shadow: none !important;
+  background: var(--win);
+  corner-shape: squircle;
+  --panel-ring-width: 0px !important;
+}
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel::after { display: none; }
+/* Only untouched chats frost the agent window. Transcript windows keep --win. */
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel:has([data-clean-start]) {
+  background: color-mix(in srgb, var(--win) 38%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(120%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel:has([data-clean-start]) {
+    background: var(--win); -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+}
+
+.command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }
+
+/* The pending question shares the transcript scroll, with no outer panel. */
+.conversation-question { margin-top: 16px; animation: conversation-question-rise 220ms ease-out; }
+.conversation-question > [data-question-tone] { border-radius: 16px 16px 4px 4px; box-shadow: none !important; }
+@keyframes conversation-question-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .conversation-question { animation: none; } }
+
+/* One Models workspace, quiet navigation and compact provider actions. */
+.models-workspace { display: flex; height: 100%; min-height: 0; width: 80%; margin-inline: auto; padding-top: 32px; gap: 32px; background: var(--surface); }
+.models-subnav { width: 168px; flex-shrink: 0; padding-top: 24px; }
+.models-subnav .view-title { margin: 0 0 24px; }
+.models-subnav button { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; border-radius: 0; border-bottom: 2px solid transparent; padding: 8px 0; margin-bottom: 2px; text-align: left; font-size: 13px; color: var(--ink-faint); }
+.models-subnav button:hover { color: var(--ink); }
+.models-subnav button[aria-current] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 500; }
+.models-subnav button:focus-visible, .models-add-provider:focus-visible, .models-connected-provider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.models-content { flex: 1; min-width: 0; overflow-y: auto; padding: 24px 0 64px; }
+.models-section-title { font-size: 16px; font-weight: 600; margin-bottom: 22px; }
+.models-providers { overflow-anchor: none; }
+.models-provider-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-bottom: 24px; }
+.models-connected { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.models-connected-provider { display: flex; align-items: center; gap: 8px; border-radius: 10px; padding: 10px 12px; background: var(--surface-2); font-size: 13px; }
+.models-add-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-left: 1px solid var(--line); padding-left: 18px; }
+.models-add-provider { position: relative; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: white; }
+.models-connected-provider img, .models-add-provider img { width: 22px; height: 22px; filter: brightness(0) invert(1); }
+.models-add-provider:hover { opacity: .85; }
+.models-add-plus { position: absolute; bottom: 0; right: 3px; font-size: 12px; line-height: 14px; }
+.models-add-more { background: var(--surface-2); color: var(--ink-soft); font-size: 24px; letter-spacing: 1px; }
+.models-provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; max-width: 1800px; }
+.models-provider-grid > div { min-width: 0; scroll-margin-top: 20px; }
+.models-local-connections { margin-top: 36px; }
+@media (max-width: 767px) {
+  .models-workspace { flex-direction: column; width: 100%; padding-top: 16px; gap: 0; }
+  .models-subnav { width: auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 12px 16px; }
+  .models-subnav .view-title { width: 100%; margin: 0 0 10px; }
+  .models-subnav button { width: auto; font-size: 12px; padding: 9px 10px; margin: 0; }
+  .models-content { padding: 18px 16px 48px; }
+  .models-provider-bar { gap: 12px; }
+  .models-add-strip { gap: 6px; padding-left: 12px; }
+  .models-add-provider { width: 36px; height: 36px; border-radius: 10px; }
+}
+
+/* Transparent sandboxed SVG frames let the chat-matched dotted canvas show through. */
+.diagram-canvas {
+  background-color: var(--surface);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--ink-faint) 25%, transparent) 0.75px, transparent 0.85px);
+  background-size: 18px 18px;
+}
+.diagram-card { box-shadow: var(--shadow-sm); }
+
+/* Working is a steady accent fill, never a new animation or GPU layer. */
+.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
+.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-eyes"] { fill: var(--on-accent); }
+
+/* Settings and Models share the panel surface and navigation alignment. */
+.settings-panel, main:has(> .models-workspace) { background: var(--surface); }
+.settings-page { width: 80%; margin-inline: auto; padding-block: 32px; }
+.settings-destination { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--surface); }
+.settings-back-bar { padding: 16px 24px 0; }
+.settings-destination-content { flex: 1; min-height: 0; overflow-y: auto; }
+@media (max-width: 767px) {
+  .settings-page { width: 100%; padding: 24px 16px; }
+  .settings-nav { column-gap: 18px; }
+}
+
+/* The button covers only the cat, not the editor or greeting text. */
+.greeting-nekko-button { position: absolute; z-index: 4; left: -18px; top: 14.5px; width: 80px; height: 75px; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; }
+.greeting-nekko-button .greeting-nekko { left: 0; top: 0; }
+.greeting-nekko-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.greeting-nekko.is-laughing { animation: greeting-laugh 180ms ease-in-out 6; }
+@keyframes greeting-laugh { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .greeting-nekko.is-laughing { animation: none; } }

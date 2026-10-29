@@ -42,7 +42,26 @@ export interface EngineSocket {
   subscribe(sessionIds: string[] | null): void;
 }
 
-export function createEngineSocket(getEndpoint: (operation?: string) => Promise<EngineEndpoint | null>): EngineSocket {
+/**
+ * The heartbeat: a `daemon:ping` (answered by the socket itself, not the
+ * router, so a slow call never delays it) every `pingMs`; a socket that has
+ * sent nothing at all for `deadMs` is given up as a wedged engine, which
+ * fails every call in flight and reconnects. Calls themselves have no
+ * deadline, so a long one (a turn, a download) is never cut short while the
+ * engine is alive.
+ */
+export interface HeartbeatOptions {
+  pingMs?: number;
+  deadMs?: number;
+}
+
+export const PING_CHANNEL = 'daemon:ping';
+const PING_MS = 10_000;
+const DEAD_MS = 30_000;
+
+export function createEngineSocket(getEndpoint: (operation?: string) => Promise<EngineEndpoint | null>, heartbeat: HeartbeatOptions = {}): EngineSocket {
+  const pingMs = heartbeat.pingMs ?? PING_MS;
+  const deadMs = heartbeat.deadMs ?? DEAD_MS;
   const listeners = new Map<string, Set<Listener>>();
   const pending = new Map<number, Pending>();
   let nextId = 1;
@@ -110,16 +129,11 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
     socket = ws;
     // The URL already says which chats (none named: every chat).
     told = key(sessions);
-    ws.onopen = () => {
-      open = true;
-      retry = 100;
-      const out = queued;
-      queued = [];
-      out.forEach((f) => ws.send(f));
-      sendSubscription();
-    };
-    ws.onmessage = (ev) => onFrame(String(ev.data));
-    ws.onclose = () => {
+    let heard = Date.now();
+    let beat: ReturnType<typeof setInterval> | undefined;
+    /** This socket is done: fail what it carried and connect again. */
+    const lost = (why: string) => {
+      clearInterval(beat);
       if (socket !== ws) return;
       open = false;
       socket = null;
@@ -129,11 +143,35 @@ export function createEngineSocket(getEndpoint: (operation?: string) => Promise<
       // run or not; fail it plainly rather than replay it.
       for (const [id, p] of pending) {
         pending.delete(id);
-        p.reject(new Error(`${p.channel}: the engine restarted before it answered`));
+        p.reject(new Error(`${p.channel}: ${why}`));
       }
       setTimeout(connect, retry);
       retry = Math.min(retry * 2, 2000);
     };
+    ws.onopen = () => {
+      open = true;
+      retry = 100;
+      heard = Date.now();
+      const out = queued;
+      queued = [];
+      out.forEach((f) => ws.send(f));
+      sendSubscription();
+      beat = setInterval(() => {
+        if (socket !== ws) return clearInterval(beat);
+        if (Date.now() - heard >= deadMs) {
+          // Fail the calls now; a close handshake with a wedged engine may never finish.
+          lost('the engine stopped responding before it answered');
+          try { ws.close(); } catch { /* already closing */ }
+          return;
+        }
+        ws.send(JSON.stringify({ id: nextId++, channel: PING_CHANNEL, args: [] }));
+      }, pingMs);
+    };
+    ws.onmessage = (ev) => {
+      heard = Date.now();
+      onFrame(String(ev.data));
+    };
+    ws.onclose = () => lost('the engine restarted before it answered');
   };
   void connect();
 

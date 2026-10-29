@@ -2,8 +2,8 @@
 //! (`stream_with_retry`), as the TS loop does in `streamWithRetry`.
 
 use nekko_loop::{
-    Cancel, ChatRequest, Chunk, ChunkStream, MAX_NETWORK_STREAM_ATTEMPTS, ModelClient, RunOptions, ToolRunner,
-    is_network_error, is_transient_error, retry_delay, run_agent,
+    Cancel, ChatRequest, Chunk, ChunkStream, MAX_NETWORK_STREAM_ATTEMPTS, MAX_STREAM_ATTEMPTS, ModelClient, RunOptions,
+    ToolRunner, YIELDED, is_network_error, is_transient_error, retry_delay, run_agent,
 };
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -162,6 +162,8 @@ fn tells_a_dropped_network_from_a_provider_that_answered() {
         "error sending request for url (https://api.openai.com/v1/chat/completions)",
         "dns error: failed to lookup address information",
         "terminated",
+        "Can't reach ChatGPT at https://chatgpt.com/backend-api. Check the network connection.",
+        "Can't reach the model server at http://localhost:1234/v1. Is it running and reachable on the network?",
     ] {
         assert!(is_network_error(m), "{m}");
         assert!(is_transient_error(m), "{m}");
@@ -200,4 +202,93 @@ async fn gives_up_on_the_network_after_the_long_window() {
     assert_eq!(*client.calls.lock().unwrap(), MAX_NETWORK_STREAM_ATTEMPTS as usize);
     assert_eq!(events.last().unwrap()["type"], "error");
     assert_eq!(history.last().unwrap()["interrupted"], json!(true));
+}
+
+/// A background turn that steps aside for the user more often than any
+/// failure budget allows still finishes, from where it stood, with no wait.
+#[tokio::test(start_paused = true)]
+async fn a_yield_for_the_user_is_sent_again_without_spending_an_attempt() {
+    let yields = MAX_STREAM_ATTEMPTS as usize + 3;
+    let client = Flaky { failures: Mutex::new(vec![YIELDED.into(); yields]), calls: Mutex::new(0) };
+    let mut history = vec![json!({ "id": "u1", "role": "user", "content": "hi", "createdAt": 1 })];
+    let mut events = Vec::new();
+    let started = tokio::time::Instant::now();
+    run_agent(opts(&mut history, Cancel::default()), &client, &NoTools, &mut |e, _| events.push(e)).await;
+    assert_eq!(*client.calls.lock().unwrap(), yields + 1);
+    let retries: Vec<&Value> = events.iter().filter(|e| e["type"] == "retry").collect();
+    assert_eq!(retries.len(), yields);
+    assert!(retries.iter().all(|r| r["paused"] == json!(true) && r["delayMs"] == json!(0) && r["attempt"] == json!(1)));
+    assert_eq!(started.elapsed(), Duration::ZERO, "no backoff: the client holds the next call");
+    assert_eq!(events.last().unwrap()["type"], "done");
+    // The partial text of each yielded attempt is gone.
+    assert_eq!(history.last().unwrap()["content"], json!("Hello"));
+}
+
+/// A local server whose loaded window cannot hold the system prompt and the
+/// tool definitions (llama.cpp's and LM Studio's wording). `fits` says whether
+/// the prompt fits once the tools are left out.
+struct SmallWindow {
+    fits: bool,
+    tools_sent: Mutex<Vec<usize>>,
+}
+
+const SMALL_WINDOW: &str = r#"Model stream failed: Engine protocol predict request returned 400: {"error":{"code":400,"message":"request (10510 tokens) exceeds the available context size (8192 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":10510,"n_ctx":8192}}"#;
+
+impl ModelClient for SmallWindow {
+    type Stream = Script;
+    async fn chat(&self, req: ChatRequest, _cancel: Cancel) -> Result<Script, String> {
+        self.tools_sent.lock().unwrap().push(req.tools.len());
+        if !req.tools.is_empty() || !self.fits {
+            return Ok(Script(VecDeque::from([Err(SMALL_WINDOW.to_string())])));
+        }
+        Ok(Script(VecDeque::from([Ok(Chunk::Text("Hello".into())), Ok(Chunk::Done)])))
+    }
+}
+
+fn with_tools<'a>(history: &'a mut Vec<Value>) -> RunOptions<'a> {
+    // About 10k tokens of definitions: more than an 8k window holds.
+    let tool =
+        json!({ "name": "read_file", "description": "Read a file. ".repeat(160), "parameters": { "type": "object" } });
+    RunOptions { tools: vec![tool; 20], ..opts(history, Cancel::default()) }
+}
+
+#[tokio::test]
+async fn a_window_too_small_for_the_tools_answers_without_them() {
+    let client = SmallWindow { fits: true, tools_sent: Mutex::new(Vec::new()) };
+    let mut history = vec![json!({ "id": "u1", "role": "user", "content": "Hello", "createdAt": 1 })];
+    let mut events = Vec::new();
+    run_agent(with_tools(&mut history), &client, &NoTools, &mut |e, _| events.push(e)).await;
+    assert_eq!(*client.tools_sent.lock().unwrap(), vec![20, 0]);
+    assert_eq!(events.iter().filter(|e| e["type"] == "retry").count(), 1);
+    assert_eq!(events.last().unwrap()["type"], "done");
+    assert_eq!(history.last().unwrap()["content"], json!("Hello"));
+}
+
+#[tokio::test]
+async fn a_window_too_small_even_without_tools_says_how_to_fix_it() {
+    let client = SmallWindow { fits: false, tools_sent: Mutex::new(Vec::new()) };
+    let mut history = vec![json!({ "id": "u1", "role": "user", "content": "Hello", "createdAt": 1 })];
+    let mut events = Vec::new();
+    run_agent(with_tools(&mut history), &client, &NoTools, &mut |e, _| events.push(e)).await;
+    assert_eq!(*client.tools_sent.lock().unwrap(), vec![20, 0]);
+    let error = events.iter().find(|e| e["type"] == "error").expect("an error event");
+    let message = error["message"].as_str().unwrap();
+    assert!(message.starts_with("The model is loaded with a 8192-token context window"), "{message}");
+    assert!(!message.contains("{\"error\""), "{message}");
+}
+
+#[tokio::test]
+async fn a_window_that_is_not_small_keeps_its_tools_for_compaction() {
+    // Overflowing without saying the window, on a model guessed at 128k: left to compaction.
+    let client = Flaky {
+        failures: Mutex::new(vec!["This model's maximum context length is 8192 tokens".into()]),
+        calls: Mutex::new(0),
+    };
+    let mut history = vec![json!({ "id": "u1", "role": "user", "content": "Hello", "createdAt": 1 })];
+    let mut events = Vec::new();
+    let run = RunOptions { context_window: Some(128_000.0), ..with_tools(&mut history) };
+    run_agent(run, &client, &NoTools, &mut |e, _| events.push(e)).await;
+    assert_eq!(*client.calls.lock().unwrap(), 1);
+    assert_eq!(events.iter().filter(|e| e["type"] == "retry").count(), 0);
+    assert_eq!(events.last().unwrap()["type"], "error");
 }
