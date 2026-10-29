@@ -83,6 +83,7 @@ app.whenReady().then(async () => {
     check('settings list every desktop area', (await run(`document.querySelectorAll('[data-simple-area]').length`)) === 7);
     check('Simple preview dashes the Mode panel', await run(`document.querySelector('[data-simple-area="Chat · message box"] [data-mock-item="mode"]').dataset.shown === 'false'`));
     await capture('6-settings-simple-preview');
+    await run(`document.querySelector('[data-simple-item="mode"]').scrollIntoView({block:'center'})`); await sleep(300);
     await click('[data-simple-item="mode"] button[role="radio"]:first-child');
     check('choosing Show for the Mode panel draws it in the Simple preview', await run(`document.querySelector('[data-mock-item="mode"]').dataset.shown === 'true'`));
     await run(`document.querySelector('[data-simple-area="Chat · message box"]').scrollIntoView({block:'start'})`);
