@@ -192,6 +192,13 @@ export interface AppNotice {
 }
 
 export interface AppSettings {
+  /**
+   * Default off. The user has Anthropic's own permission to use the
+   * approval-gated features (scheduled runs, Nekko tools, the context note,
+   * plan usage) on a Claude plan through Claude Code; nekkod then enables those
+   * `subscription` rows (crates/nekkod/src/claude_policy.rs). Only `true` turns it on.
+   */
+  claudePlanFeaturesApproved?: boolean;
   /** Default off: continuing a model request after internet restoration can incur charges. */
   autoResumeOnInternetRestore?: boolean;
   /** Default on: request provider prompt/KV reuse, never store prompts on disk. */

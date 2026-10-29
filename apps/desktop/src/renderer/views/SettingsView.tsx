@@ -381,6 +381,7 @@ export function SettingsView() {
 
               <section className="card mt-6 p-5"><ErrorBoundary label="Delegation routes"><DelegationRouteSettings settings={settings} update={update} /></ErrorBoundary></section>
               <ErrorBoundary label="Automations"><AutomationsSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Claude plan features"><ClaudePlanFeaturesSection settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="safety">
               {/* Security: hardware keys and step-up (SK-4) */}
@@ -1462,6 +1463,44 @@ export function NotificationsSection({ settings, update }: { settings: AppSettin
           </p>
         </div>
         <Toggle aria-label="Desktop notifications" on={settings.desktopNotifications !== false} onChange={(v) => update({ desktopNotifications: v })} />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * For a user who has Anthropic's own permission: turns on the features that
+ * are off on a Claude plan until Anthropic approves them (claude-policy.ts).
+ * nekkod enforces it (crates/nekkod/src/claude_policy.rs); this only saves it.
+ */
+export function ClaudePlanFeaturesSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
+  const on = settings.claudePlanFeaturesApproved === true;
+  return (
+    <section id="claude-plan-features" className="card mt-5 p-5" aria-labelledby="claude-plan-features-heading" data-settings-claude-plan>
+      <h2 id="claude-plan-features-heading" className="font-semibold">Claude plan features</h2>
+      <p className="mt-1 text-[12px] text-ink-faint">
+        On a Claude plan (Pro, Max or Team) through Claude Code, Nekko keeps these off: scheduled tasks, workflows and auto-continue,
+        Nekko's own tools inside a Claude chat, the project note Nekko adds to a chat, and your plan's usage limits.
+        With an Anthropic API key or a cloud account they are always on.
+      </p>
+      <div role="note" id="claude-plan-features-warning" className="mt-3 rounded-lg border border-warning bg-warning-soft p-3 text-[12px]" data-settings-claude-plan-warning>
+        <p className="font-semibold">Only turn this on if Anthropic has approved it for you in writing.</p>
+        <p className="mt-1">
+          Anthropic's terms don't allow third-party apps to use these features on a Claude plan without their approval,
+          and Anthropic can limit or suspend an account that breaks them, without notice.
+          Nekko can't check whether you have approval: turning this on is your decision and your responsibility.
+          If you aren't sure, leave it off and use an API key for these features.
+        </p>
+      </div>
+      <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-[13px]">Anthropic has approved my use</span>
+          <p className="text-[11px] text-ink-faint" data-settings-claude-plan-state>
+            {on ? 'On: these features now run on your Claude plan.' : 'Off: these features need an API key or cloud account.'}
+          </p>
+        </div>
+        <Toggle on={on} onChange={(v) => update({ claudePlanFeaturesApproved: v })}
+          aria-label="Anthropic has approved my use of Claude plan features" aria-describedby="claude-plan-features-warning" />
       </div>
     </section>
   );

@@ -8,12 +8,20 @@ Nekko Agent does not sign in to Claude plans (Free, Pro or Max). Anthropic's ter
 
 To use Claude in Nekko Agent, choose **Add provider → Claude**. One table compares the two ways to connect, and you pick by clicking a column:
 
-- **Subscription** - Nekko Agent runs the Claude Code you already have installed, on your Pro, Max or Team plan. You sign in inside Claude Code itself; Nekko Agent never sees that sign-in and never reads Claude Code's credentials. Chat, code edits, approvals and the phone remote work. Scheduled tasks, Nekko's own tools inside the chat, and usage limits in Nekko are off for now, because Anthropic's terms don't clearly cover them for third-party apps.
+- **Subscription** - Nekko Agent runs the Claude Code you already have installed, on your Pro, Max or Team plan. You sign in inside Claude Code itself; Nekko Agent never sees that sign-in and never reads Claude Code's credentials. Chat, code edits, approvals and the phone remote work. Scheduled tasks, Nekko's own tools inside the chat, and usage limits in Nekko are off for now, because Anthropic's terms don't clearly cover them for third-party apps. If Anthropic has approved your own use of them in writing, you can turn them on (see below).
 - **API** - An Anthropic API key, or Claude through Amazon Bedrock, Google Vertex AI or Microsoft Foundry. Every Nekko Agent feature works, billed per token to that account.
 
 Below the table, **How Nekko works with Claude** draws the option you picked: with API, everything runs inside Nekko on your computer and only the API call goes out; with Subscription, Nekko hands each turn to Claude Code, which runs beside it and calls Claude on your plan.
 
 When you pick Claude, Nekko first checks whether Claude Code is installed (it runs `claude --version` and `claude auth status`). If it isn't, **Install Claude Code** opens a terminal inside Nekko and runs Anthropic's own installer (`curl -fsSL https://claude.ai/install.sh | bash`, or `irm https://claude.ai/install.ps1 | iex` on Windows). If it isn't signed in, **Connect** opens Claude Code in that terminal so you can type `/login`. Once it's connected, the panel says so in green, with the account and plan it uses.
+
+### If Anthropic has approved your use
+
+Some people have Anthropic's permission of their own, for example through an agreement with Anthropic. They can turn the plan's off-for-now features on in **Settings > Agents > Claude plan features** with **Anthropic has approved my use**. It is off by default and changes nothing for API keys or cloud accounts.
+
+Only turn it on if Anthropic has approved it for you in writing. Anthropic's terms don't allow third-party apps to use these features on a Claude plan without approval, and Anthropic can limit or suspend an account that breaks them, without notice. Nekko can't check whether you have approval, so it is your decision and your responsibility.
+
+What it turns on: scheduled tasks, workflows and auto-continue, Nekko's own tools inside a Claude chat, the project note Nekko adds to a chat, and your plan's usage limits as Claude Code reports them. What it never turns on: cost estimates and model routing, which a plan can't support, and anything while Nekko hasn't yet read how Claude Code is signed in.
 
 You can add more than one Claude account, subscription or API. See [Accounts and switching](accounts.md) for how, and for what Anthropic's terms allow with several Claude accounts.
 
