@@ -381,6 +381,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         claude_policy: Arc::new(claude_policy::ClaudePolicyStore::new(
             cfg.data_dir.clone().map(std::path::PathBuf::from),
             cfg.native.as_ref().is_some_and(|n| n.is_packaged),
+            settings.as_ref().map(|s| s.store.clone()),
         )),
         messaging: messaging.clone(),
         native: cfg

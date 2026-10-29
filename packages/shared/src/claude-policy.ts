@@ -377,6 +377,7 @@ export const CLAUDE_PLAN_SHEET = {
     "Anthropic's terms say apps like Nekko Agent can't sign you in to your Claude account or send requests on your plan for you. So we don't. Instead, the Subscription option runs the Claude Code you already have installed, and you sign in inside Claude Code itself. Nekko never sees your Claude login.",
     "With a Claude plan, you can chat, edit code, approve actions and use your phone, all on your plan. A few things are off for now because the terms don't clearly cover them for third-party apps: scheduled tasks, Nekko's own tools inside a Claude chat, and showing your plan's usage limits.",
     'Want everything? Choose API: an Anthropic API key, or Claude through AWS Bedrock, Google Vertex AI or Microsoft Foundry. You get every Nekko feature, billed to your own account.',
+    "Has Anthropic approved your own use of these features on your plan? Then you can turn them on yourself in Settings > Agents > Claude plan features. That's your call and your responsibility; Nekko can't check it for you.",
   ],
 } as const;
 
@@ -391,6 +392,12 @@ export interface ClaudePolicyStatus {
   override: { serial: number; issuedAt: string } | null;
   /** The dev-only preview (`NEKKO_CLAUDE_POLICY_PREVIEW`); always `null` in a release build. */
   preview: ClaudeAuth | null;
+  /**
+   * The user turned on `claudePlanFeaturesApproved` (Settings > Agents): they
+   * say Anthropic approved their use, so `policy` already has every
+   * approval-gated `subscription` row on. `unsupported` and `unknown` rows never change.
+   */
+  userApproved?: boolean;
 }
 
 /** `claude:capability(providerId, capability)`: the row one provider gets, for a greyed control. */
