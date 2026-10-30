@@ -56,9 +56,14 @@ class ComputersRepositoryTest {
         remotes: FakeRemotes = FakeRemotes(),
         signer: com.nekko.protocol.ChangeSigner? = null,
         offline: com.nekko.protocol.OfflineFiles? = null,
+        probe: com.nekko.protocol.ProbeNetwork = object : com.nekko.protocol.ProbeNetwork {
+            override suspend fun resolve(host: String, timeoutMs: Long) = listOf("100.101.102.103")
+            override suspend fun connect(address: String, port: Int, timeoutMs: Long) {}
+        },
     ): ComputersRepository {
         var n = 0
         return ComputersRepository(
+            probeNetwork = probe,
             offlineFiles = offline,
             draftDebounceMs = 0,
             changeSigner = signer,
@@ -845,6 +850,36 @@ class ComputersRepositoryTest {
         assertTrue(files.map.keys.none { it.startsWith("$first/") })
         assertEquals(second, repo.state.value.activeId)
         assertTrue(repo.drafts.drafts.value.isEmpty())
+    }
+
+    @Test
+    fun `check routes says hello on a socket of its own, never with the pairing code, and leaves the live one alone`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        val live = remotes.last
+        live.goOnline()
+        runCurrent()
+        val job = launch { repo.runChecks() }
+        runCurrent()
+        assertTrue(repo.checking.value)
+        val hello = remotes.created.last()
+        assertTrue("a socket of its own", hello !== live)
+        assertNull("never the pairing code", hello.config.pairCode)
+        assertEquals(link.relayUrl, hello.config.relayUrl)
+        hello.status.value = com.nekko.protocol.RelayStatus(RelayState.OFFLINE)
+        runCurrent()
+        job.join()
+        val report = repo.checks.value.single()
+        assertEquals(true, report.dns?.ok)
+        assertEquals(true, report.tcp?.ok)
+        assertEquals("The relay answered; $DEFAULT_COMPUTER_NAME isn’t connected to it", report.hello?.detail)
+        assertTrue("closed once answered", hello.closed)
+        assertFalse(live.closed)
+        assertFalse(repo.checking.value)
+        val text = repo.diagnosticsText("test")
+        assertFalse(text.contains(link.room))
+        assertFalse(text.contains(key))
     }
 
     @Test

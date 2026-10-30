@@ -29,6 +29,13 @@ import com.nekko.protocol.StepUpChallenge
 import com.nekko.protocol.StepUpProof
 import com.nekko.protocol.DraftStore
 import com.nekko.protocol.SavedTranscripts
+import kotlinx.coroutines.withTimeoutOrNull
+import com.nekko.protocol.RouteSupervisor
+import com.nekko.protocol.RouteReport
+import com.nekko.protocol.ProbeStep
+import com.nekko.protocol.ProbeNetwork
+import com.nekko.protocol.JvmProbeNetwork
+import com.nekko.protocol.Diagnostics
 import com.nekko.protocol.OfflineFiles
 import com.nekko.protocol.TerminalChannels
 import com.nekko.protocol.TerminalEvent
@@ -117,6 +124,10 @@ class ComputersRepository(
     /** Each computer's drafts and outbox on disk ([OfflineFileStore] in the app); memory only when null. */
     private val offlineFiles: OfflineFiles? = null,
     private val draftDebounceMs: Long = 500,
+    /** DNS and TCP for *Check routes* (IO-21); fakes in tests. */
+    private val probeNetwork: ProbeNetwork = JvmProbeNetwork(),
+    /** How long a route check's hello waits for the relay and the computer. */
+    private val helloTimeoutMs: Long = 8_000,
 ) {
     /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
     val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
@@ -170,6 +181,75 @@ class ComputersRepository(
     private val _dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
     /** The active computer's relay `dismiss` frames: chat tags whose needs-you notification can go. */
     val dismissals: SharedFlow<String> = _dismissals.asSharedFlow()
+
+    // ---- route checks and Share diagnostics (IO-21) ----
+
+    private val _checks = MutableStateFlow<List<RouteReport>>(emptyList())
+    /** The last *Check routes* of the active computer: one report per route, filled in as each finishes. */
+    val checks: StateFlow<List<RouteReport>> = _checks.asStateFlow()
+    private val _checking = MutableStateFlow(false)
+    val checking: StateFlow<Boolean> = _checking.asStateFlow()
+
+    /**
+     * Check every route of the active computer: name lookup, TCP connect and a
+     * hello the computer answers, each timed, stopping at the first step that
+     * fails. Never the live connection: the hello is a socket of its own, never
+     * with a pairing code, closed once the relay and the computer have answered.
+     */
+    suspend fun runChecks() {
+        val computer = _state.value.active ?: return
+        if (!_checking.compareAndSet(false, true)) return
+        try {
+            val secret = StoredJson.decodeSecret(store.get(secretKey(computer.id))) ?: return
+            val routes = RouteSupervisor.order(listOf(computer.relayUrl) + computer.alts)
+            _checks.value = routes.map { RouteReport(it) }
+            routes.forEachIndexed { i, url ->
+                val report = if (!routeAllowed(url)) {
+                    // Plain ws:// to the open internet, or loopback on a release build: never dialed (RoutePolicy).
+                    RouteReport(url, dns = ProbeStep(false, detail = "Not used: plain ws:// only goes to the tailnet or the local network"))
+                } else {
+                    Diagnostics.check(url, probeNetwork, clock = now) { route ->
+                        hello(
+                            RelayConfig(
+                                relayUrl = route,
+                                room = secret.room,
+                                key = secret.key,
+                                keyBytes = E2E.fromHex(secret.keyHex),
+                                deviceId = deviceId(),
+                                deviceName = deviceName(),
+                                pairCode = null,
+                                platform = "android",
+                                handshakeTimeoutMs = helloTimeoutMs,
+                                routeAllowed = routeAllowed,
+                            ),
+                            computer.name,
+                        )
+                    }
+                }
+                if (_state.value.activeId != computer.id) return
+                _checks.update { list -> list.toMutableList().also { if (i < it.size) it[i] = report } }
+            }
+        } finally {
+            _checking.value = false
+        }
+    }
+
+    /** One relay hello on its own socket: open, wait for the relay and the computer to answer (or the timeout), close. */
+    private suspend fun hello(config: RelayConfig, computer: String): ProbeStep {
+        val start = now()
+        val r = remotes.create(config, scope)
+        return try {
+            r.connect()
+            val settled = withTimeoutOrNull(helloTimeoutMs) { r.status.first { it.state != RelayState.IDLE && it.state != RelayState.CONNECTING } }
+            Diagnostics.helloStep(settled, computer, (now() - start).toInt(), helloTimeoutMs)
+        } finally {
+            r.close()
+        }
+    }
+
+    /** *Share diagnostics*: the checks and the connection log, as text with no secrets. */
+    fun diagnosticsText(app: String): String =
+        Diagnostics.text(app, networkPath, _state.value.route ?: _state.value.active?.relayUrl, _checks.value, connectionLogText())
 
     /** The connection log as plain text for a bug report: times, states and the relay's host only. */
     fun connectionLogText(): String {
@@ -355,6 +435,7 @@ class ComputersRepository(
         val computer = _state.value.computers.firstOrNull { it.id == id } ?: return@withLock
         val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return@withLock
         store.set(ACTIVE_KEY, id)
+        if (drafts.computerId != id) _checks.value = emptyList()
         if (drafts.computerId != id) {
             drafts.load(id)
             outbox.load(id)

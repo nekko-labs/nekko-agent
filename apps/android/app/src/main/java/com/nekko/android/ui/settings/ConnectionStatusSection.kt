@@ -1,5 +1,11 @@
 package com.nekko.android.ui.settings
 
+import androidx.compose.ui.platform.testTag
+
+import com.nekko.protocol.RouteReport
+
+import android.content.Intent
+
 import android.content.ClipData
 import android.os.Build
 import android.widget.Toast
@@ -100,6 +106,44 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
             }
             if (state.conn != RelayState.DENIED) TextButton(onClick = { deps.repo.reconnect() }) { Text("Try again now") }
         }
+        // IO-21: each route checked in turn on a socket of its own, never the live one.
+        val checks by deps.repo.checks.collectAsStateWithLifecycle()
+        val checking by deps.repo.checking.collectAsStateWithLifecycle()
+        Text(
+            "Routes", style = MaterialTheme.typography.titleSmall, color = p.ink,
+            modifier = Modifier.padding(top = 14.dp, start = 4.dp).semantics { heading() },
+        )
+        if (checks.isNotEmpty()) {
+            NCard(Modifier.padding(top = 6.dp).testTag("connection.checks")) {
+                checks.forEachIndexed { i, r ->
+                    if (i > 0) HorizontalDivider(color = p.line)
+                    RouteReportRow(r)
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(
+                enabled = !checking,
+                onClick = { scope.launch { deps.repo.runChecks() } },
+                modifier = Modifier.testTag("connection.checkRoutes"),
+            ) { Text(if (checking) "Checking…" else "Check routes") }
+            TextButton(
+                onClick = {
+                    val app = "Nekko Agent for Android ${BuildConfig.VERSION_NAME} (Android ${Build.VERSION.RELEASE}, ${Build.MODEL})"
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(Intent.EXTRA_SUBJECT, "Nekko Agent connection diagnostics")
+                        .putExtra(Intent.EXTRA_TEXT, deps.repo.diagnosticsText(app))
+                    context.startActivity(Intent.createChooser(send, "Share diagnostics"))
+                },
+                modifier = Modifier.testTag("connection.shareDiagnostics"),
+            ) { Text("Share diagnostics") }
+        }
+        Text(
+            "Check routes looks up each of ${c.name}'s addresses, opens a connection and says hello on a socket of its own. Share diagnostics sends the checks and the log: hosts and timings, never keys or messages.",
+            style = MaterialTheme.typography.bodySmall,
+            color = p.inkSoft,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
         Text(
             "Since the app started", style = MaterialTheme.typography.titleSmall, color = p.ink,
             modifier = Modifier.padding(top = 14.dp, start = 4.dp).semantics { heading() },
@@ -125,6 +169,22 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
             color = p.inkSoft,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
         )
+    }
+}
+
+/** One route's checks: its kind and host, then each step with its time and what it found. */
+@Composable
+private fun RouteReportRow(r: RouteReport) {
+    val p = Nekko.palette
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("${routeName(r.kind)} · ${r.host}", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        for ((name, step) in listOf("Name lookup" to r.dns, "Connection" to r.tcp, "Hello" to r.hello)) {
+            val text = when {
+                step == null -> if (r.dns == null) "$name: checking…" else "$name: skipped"
+                else -> "$name: ${if (step.ok) "ok" else "failed"}" + (step.ms?.let { " · $it ms" } ?: "") + (step.detail?.let { " · $it" } ?: "")
+            }
+            Text(text, style = MaterialTheme.typography.bodySmall, color = if (step != null && !step.ok) p.danger else p.inkSoft)
+        }
     }
 }
 
