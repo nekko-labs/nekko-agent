@@ -136,7 +136,7 @@ export function SettingsView() {
 
   return (
     <div ref={scrollRef} className="settings-panel h-full overflow-y-auto" onScroll={onScroll}>
-      <div ref={pageRef} className="settings-page">
+      <div ref={pageRef} className="settings-page" data-presenter-exempt>
         {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="mb-7 flex flex-wrap gap-3">

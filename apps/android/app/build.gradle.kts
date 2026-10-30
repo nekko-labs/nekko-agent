@@ -43,6 +43,10 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    // Mermaid for chat diagrams (MM-4): the desktop's and the iPhone's bundled copy, pinned by
+    // scripts/vendor-mermaid.mjs, packaged as is (mermaid.min.js, pin.json, its LICENSE).
+    sourceSets["main"].assets.directories += "../../../vendor/mermaid"
+
     // The computer's log redaction cases, checked on a device too: Android's
     // regex (ICU) is not the JVM's the unit tests run on (LogShareDeviceTest).
     sourceSets["androidTest"].assets.directories += "../../../crates/nekkod/tests/golden"

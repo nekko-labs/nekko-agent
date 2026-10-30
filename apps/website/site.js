@@ -385,6 +385,22 @@
   }
 })();
 
+// ---- panel videos: loop only while on screen, so five looping demos cost
+//      nothing until scrolled to. preload="none" keeps the page load light;
+//      with reduced motion they stay on their poster (the lightbox still plays). ----
+(() => {
+  const videos = document.querySelectorAll('video[data-autoplay]');
+  if (!videos.length || !('IntersectionObserver' in window)) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(({ target, isIntersecting }) => {
+      if (isIntersecting) target.play().catch(() => { /* autoplay blocked: the poster stays */ });
+      else target.pause();
+    });
+  }, { threshold: 0.4 });
+  videos.forEach((v) => io.observe(v));
+})();
+
 // ---- media slots: click a feature GIF or product image to see it large ----
 (() => {
   const box = document.getElementById('lightbox');
@@ -535,6 +551,63 @@
     setMood('celebrate');
     form.querySelector('.beta-ask').hidden = true;
     form.querySelector('.beta-done').hidden = false;
+  });
+
+  // ---- the tour video beside the form. Its file follows the look (dark files
+  //      for Dark, light for White and Colourful) and nothing, poster included,
+  //      loads until the section nears the screen. It plays while at least half
+  //      of it is in view, never on its own with reduced motion, and when it
+  //      ends it hands over to the form. ----
+  const tour = document.querySelector('[data-tour]');
+  if (!tour) return;
+  const video = tour.querySelector('video');
+  const end = tour.querySelector('[data-tour-end]');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tone = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+  let loaded = null; // the tone whose file is in the player
+  let inView = false;
+  const load = () => {
+    const t = tone();
+    if (t === loaded) return;
+    const at = video.currentTime;
+    const wasPlaying = !video.paused;
+    const key = t === 'dark' ? 'Dark' : 'Light';
+    video.poster = video.dataset[`poster${key}`];
+    video.src = video.dataset[`src${key}`];
+    loaded = t;
+    if (at > 0) {
+      video.addEventListener('loadedmetadata', () => {
+        video.currentTime = at;
+        if (wasPlaying) video.play().catch(() => {});
+      }, { once: true });
+      video.load();
+    }
+  };
+  new MutationObserver(() => { if (loaded !== null) load(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  new IntersectionObserver(([e], io) => {
+    if (e.isIntersecting) { load(); io.disconnect(); }
+  }, { rootMargin: '200px 0px' }).observe(tour);
+  if (!reduced) {
+    new IntersectionObserver(([e]) => {
+      inView = e.intersectionRatio >= 0.5;
+      if (inView && end.hidden) { load(); video.play().catch(() => {}); } else if (!inView) video.pause();
+    }, { threshold: [0, 0.5] }).observe(video);
+  }
+  video.addEventListener('ended', () => {
+    end.hidden = false;
+    setMood('eager');
+    if (mood === 'eager') bubble.textContent = 'Liked the tour? Pop your email in!';
+  });
+  video.addEventListener('play', () => { end.hidden = true; });
+  tour.querySelector('[data-tour-join]').addEventListener('click', () => {
+    stage.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
+    input.focus({ preventScroll: true });
+  });
+  tour.querySelector('[data-tour-again]').addEventListener('click', () => {
+    end.hidden = true;
+    video.currentTime = 0;
+    video.play().catch(() => {});
   });
 })();
 

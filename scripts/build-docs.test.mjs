@@ -15,6 +15,18 @@ test('the Docs site workflow runs for every page source', () => {
   assert.deepEqual(missing, [], 'add these to the paths in .github/workflows/docs-site.yml');
 });
 
+// Vercel skips a commit that touches none of these, so a missed path is a site change that never deploys.
+test('Vercel builds for every path the Docs site workflow watches', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/docs-site.yml', import.meta.url), 'utf8');
+  const block = workflow.split(/\n  push:/)[0].split(/\n    paths:\n/)[1];
+  const watched = [...block.matchAll(/^\s+- '([^']+)'$/gm)].map((m) => m[1].replace(/\/\*\*$/, ''));
+  const ignore = readFileSync(new URL('./vercel-ignore.sh', import.meta.url), 'utf8');
+  const paths = [...ignore.matchAll(/^ {2}([^\s\\]+)(?: \\)?$/gm)].map((m) => m[1]);
+  assert.ok(paths.includes('apps/website'));
+  const missing = watched.filter((w) => !paths.some((p) => w === p || w.startsWith(`${p}/`)));
+  assert.deepEqual(missing, [], 'add these to the paths in scripts/vercel-ignore.sh');
+});
+
 test('every nav page has a unique slug and its own output page', () => {
   const { pages } = loadNav();
   const slugs = pages.map((p) => p.slug);

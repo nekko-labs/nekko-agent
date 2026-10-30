@@ -84,6 +84,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
 - [Nekko Dark and the branded System theme (desktop)](desktop/nekko-dark-and-branded-system-theme.md) (3 KB)
 - [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
+- [Presenter mode for screen recordings](desktop/presenter-mode.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings in the command palette (desktop)](desktop/command-palette-settings-search.md) (3 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (5 KB)
@@ -187,7 +188,7 @@ Phone remote control and the native iOS and Android apps.
 - [iPhone: Simple and Expert modes, the model and effort control, the context gauge and the hardware monitor (2026-10-24)](phone/iphone-simple-and-expert-modes.md) (8 KB)
 - [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (7 KB)
 - [Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android planned)](phone/mermaid-diagrams-on-the-phone.md) (6 KB)
-- [Native Android app (2026-10-11)](phone/native-android-app.md) (59 KB)
+- [Native Android app (2026-10-11)](phone/native-android-app.md) (65 KB)
 - [Native iOS app (2026-10-16)](phone/native-ios-app.md) (122 KB)
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (7 KB)
@@ -218,7 +219,7 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (8 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (10 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (12 KB)

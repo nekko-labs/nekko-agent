@@ -48,6 +48,8 @@ class RelayClientTest {
         val requests = CopyOnWriteArrayList<JsonObject>()
         var current: Conn? = null
         var refuseNext: Pair<Int, String>? = null
+        /** `host:port` of routes that don't work: true hangs (never opens), false refuses at once. */
+        val unreachable = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
         /** The computer's phone protocol version in its welcome (IO-32); null sends none. */
         var welcomeProtocol: Int? = null
         /** Protocol 4: challenge each connection and hold HELLOs and requests to it. */
@@ -130,6 +132,11 @@ class RelayClientTest {
         override fun open(url: String, listener: WsListener): WsConnection {
             urls += url
             val c = Conn(listener)
+            when (unreachable[url.substringAfter("://").substringBefore('/')]) {
+                true -> return c
+                false -> { scope.launchSoon { c.drop(1006, "connection refused") }; return c }
+                null -> {}
+            }
             current = c
             refuseNext?.let { (code, reason) ->
                 refuseNext = null
@@ -602,5 +609,151 @@ class RelayClientTest {
         delay(150)
         assertEquals(1, relay.urls.size)
         try { c.call(Channels.APP_INFO); fail() } catch (e: RelayException) { assertEquals("Not connected.", e.message) }
+    }
+
+    // AN-28: the client against the fake relay, with two routes to it.
+
+    private val lanRoute = "ws://192.168.1.20:4400"
+    private val tailnetRoute = "ws://studio.tail1234.ts.net:4400"
+
+    class FakeProber : RouteProber {
+        @Volatile var up = true
+        val probes = CopyOnWriteArrayList<String>()
+        override suspend fun reachable(relayUrl: String, timeoutMs: Long): Boolean { probes += relayUrl; return up }
+    }
+
+    private fun twoRoutes(relay: FakeRelay, prober: RouteProber? = null, dwellMs: Long = 50, allowed: (String) -> Boolean = { true }) = RelayClient(
+        RelayConfig(
+            relayUrl = tailnetRoute, room = "abcd1234", key = "k", keyBytes = key, deviceId = "dev-1", deviceName = "Pixel",
+            handshakeTimeoutMs = 2_000, requestTimeoutMs = 5_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            alts = listOf(lanRoute),
+            routeRules = RouteRules(openTimeoutMs = 100, probeIntervalMs = 20, failureCooldownMs = 100, minDwellMs = dwellMs, successesToReturn = 3),
+            routeAllowed = allowed,
+        ),
+        relay, scope, prober,
+    )
+
+    private suspend fun RelayClient.awaitStatus(timeoutMs: Long = 5_000, cond: (RelayStatus) -> Boolean) =
+        withTimeout(timeoutMs) { status.first(cond) }
+
+    private suspend fun RelayClient.awaitOn(route: String, timeoutMs: Long = 5_000) =
+        awaitStatus(timeoutMs) { it.state == RelayState.ONLINE && it.route == route }
+
+    @Test fun `prefers the LAN when it answers`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val c = twoRoutes(relay)
+        c.connect()
+        val s = c.await(RelayState.ONLINE)
+        assertEquals(lanRoute, s.route)
+        assertEquals(lanRoute, c.route)
+        assertTrue(relay.urls.first().startsWith("$lanRoute/relay?"))
+        c.close()
+    }
+
+    @Test fun `a hanging LAN falls back to the tailnet within the open timeout`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.unreachable["192.168.1.20:4400"] = true
+        val c = twoRoutes(relay)
+        val start = System.currentTimeMillis()
+        c.connect()
+        val s = c.await(RelayState.ONLINE)
+        assertEquals(tailnetRoute, s.route)
+        assertTrue("not the transport's own timeout", System.currentTimeMillis() - start < 1_500)
+        assertEquals("ok:app:info", c.call("app:info").jsonPrimitive.content)
+        c.close()
+    }
+
+    @Test fun `a refusing LAN falls back at once`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.unreachable["192.168.1.20:4400"] = false
+        val c = twoRoutes(relay)
+        c.connect()
+        assertEquals(tailnetRoute, c.await(RelayState.ONLINE).route)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `leaving the LAN moves to the tailnet, then back when it answers again`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val prober = FakeProber().apply { up = false }
+        val c = twoRoutes(relay, prober)
+        c.connect()
+        c.awaitOn(lanRoute)
+        // The LAN goes away under an open socket.
+        relay.unreachable["192.168.1.20:4400"] = true
+        relay.current!!.drop(1006, "network down")
+        c.awaitOn(tailnetRoute)
+        // Probes keep failing: it stays put.
+        delay(300)
+        assertEquals(tailnetRoute, c.route)
+        assertTrue("the LAN is probed once its cooldown ends", prober.probes.isNotEmpty())
+        assertTrue(prober.probes.all { it == lanRoute })
+        // The LAN is back: three good probes and the dwell, then it moves.
+        relay.unreachable.clear()
+        prober.up = true
+        c.awaitOn(lanRoute)
+        c.close()
+    }
+
+    @Test fun `never changes route under a request in flight`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.unreachable["192.168.1.20:4400"] = false
+        // chat:send answers only when the turn is over: here, never.
+        relay.answer = { req ->
+            if (req["channel"]!!.jsonPrimitive.content == "chat:send") null
+            else buildJsonObject { put("type", "res"); put("id", req["id"]!!); put("result", "ok") }
+        }
+        val c = twoRoutes(relay, FakeProber())
+        c.connect()
+        c.awaitOn(tailnetRoute)
+        relay.unreachable.clear()
+        val turn = async { runCatching { c.callWithTimeout(1_000, "chat:send") } }
+        delay(600)
+        assertEquals("a running turn is never cut to change route", tailnetRoute, c.route)
+        turn.await()
+        c.awaitOn(lanRoute)
+        c.close()
+    }
+
+    @Test fun `on cellular it dials the tailnet, and back on Wi-Fi the LAN`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val c = twoRoutes(relay)
+        c.connect()
+        c.awaitOn(lanRoute)
+        c.networkChanged(NetworkPath.CELLULAR)
+        c.awaitOn(tailnetRoute)
+        c.networkChanged(NetworkPath.LOCAL)
+        c.awaitOn(lanRoute)
+        // The first report of where the phone already is changes nothing.
+        val dials = relay.urls.size
+        c.setNetworkPath(NetworkPath.LOCAL)
+        delay(100)
+        assertEquals(dials, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `an offline computer is not a route failure`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.refuseNext = 1008 to "room not paired (agent offline)"
+        val c = twoRoutes(relay)
+        c.connect()
+        assertEquals("the relay answered on the LAN; the computer is away, not the path", lanRoute, c.await(RelayState.OFFLINE).route)
+        c.awaitOn(lanRoute)
+        c.close()
+    }
+
+    @Test fun `a route this phone may not dial is never dialed`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val prober = FakeProber()
+        val c = twoRoutes(relay, prober, allowed = { !it.startsWith("ws://192.168.") })
+        c.connect()
+        assertEquals(tailnetRoute, c.await(RelayState.ONLINE).route)
+        assertEquals(listOf(lanRoute to false, tailnetRoute to true), c.allRoutes)
+        relay.current!!.drop(1006, "network down")
+        c.awaitOn(tailnetRoute)
+        delay(200)
+        assertTrue(relay.urls.all { it.startsWith("$tailnetRoute/relay?") })
+        assertTrue("nothing better to probe", prober.probes.isEmpty())
+        c.close()
     }
 }

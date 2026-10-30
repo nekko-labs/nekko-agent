@@ -106,10 +106,11 @@ private fun UserBubble(b: Block.User, fork: ForkAction?) {
             }
             if (b.text.isNotEmpty()) {
                 LongPressMenu(b.text, fork) { press ->
-                    Text(
+                    // The user's own Markdown renders too, in the bubble's ink (as the desktop does, T101).
+                    MarkdownText(
                         b.text,
-                        style = MaterialTheme.typography.bodyLarge,
                         color = p.userInk,
+                        bubble = true,
                         modifier = Modifier.padding(top = if (b.thumbs.isNotEmpty()) 8.dp else 0.dp).then(press),
                     )
                 }
