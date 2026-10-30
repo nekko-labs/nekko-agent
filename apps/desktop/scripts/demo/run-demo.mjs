@@ -73,6 +73,11 @@ async function connect() {
 
 const { browser, page, app } = await connect();
 ctx.page = page;
+// For `run` steps: the same cursor moves the scene's own steps make.
+ctx.click = (target) => point(target, true);
+ctx.hover = async (target, ms = 0) => { await point(target, false); await sleep(ms); };
+ctx.visible = (target) => page.locator(target).first().isVisible().catch(() => false);
+ctx.sleep = sleep;
 const input = dry ? null : osInput();
 if (!dry && !input) console.warn('No real-cursor driver on this platform yet: clicks go straight to the page.');
 const shots = join(here, 'out', scene);

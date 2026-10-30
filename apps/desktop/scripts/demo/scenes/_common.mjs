@@ -37,8 +37,37 @@ export function newChat(folder) {
 export function pickModel(name, { hoverList = false } = {}) {
   return [
     { click: MODEL_CHIP, note: 'open the model picker' },
-    ...(hoverList ? [{ hover: '[data-model-name] >> nth=3', after: 1200, note: 'look down the list' }] : []),
+    ...(hoverList ? [{ hover: `[data-model-name]:has-text("${name}") >> nth=0`, after: 1200, note: `point at ${name}` }] : []),
     { click: `[data-model-name]:has-text("${name}") >> nth=0`, note: `pick ${name}` },
     ...dismissNotices,
   ];
 }
+
+export const QUESTION = 'role=group[name="The agent is asking a question"]';
+
+/**
+ * Wait for the reply to finish, approving every action it asks for (pausing
+ * on each so the viewer sees it) and taking the first option of any question
+ * it asks. The cursor stays still in between.
+ */
+export const untilDone = {
+  note: 'wait for the reply, approving as it goes',
+  run: async ({ visible, hover, click, sleep }) => {
+    const start = Date.now();
+    while (!(await visible(DONE))) {
+      if (Date.now() - start > 600000) throw new Error('The reply took over 10 minutes.');
+      if (await visible(APPROVE)) {
+        await hover(APPROVAL, 1500);
+        await click(APPROVE);
+        await sleep(800);
+      } else if (await visible(`${QUESTION} >> role=radio`)) {
+        await hover(QUESTION, 1200);
+        await click(`${QUESTION} >> role=radio >> nth=0`);
+        await sleep(500);
+        await click(`${QUESTION} >> role=button[name=/^Send answer/]`);
+        await sleep(800);
+      }
+      await sleep(400);
+    }
+  },
+};

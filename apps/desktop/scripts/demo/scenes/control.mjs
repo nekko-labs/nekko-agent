@@ -1,6 +1,6 @@
 // Panel 01 "Your models. Your data. Nothing hidden."
 import { resetBakery } from '../bakery.mjs';
-import { APPROVAL, APPROVE, COMPOSER, CONTEXT_METER, DONE, LAST_REPLY, MODEL_CHIP, PACE, newChat, pickModel } from './_common.mjs';
+import { COMPOSER, CONTEXT_METER, LAST_REPLY, MODEL_CHIP, PACE, newChat, pickModel, untilDone } from './_common.mjs';
 
 // The local model it starts on; NEKKO_DEMO_LOCAL_MODEL picks another (part of its name).
 const LOCAL = process.env.NEKKO_DEMO_LOCAL_MODEL || 'Qwen3-4B';
@@ -19,10 +19,7 @@ export default {
     // A new chat shows no context meter until its first message; its breakdown
     // opens on hover: what this chat sends, by source.
     { hover: CONTEXT_METER, optional: true, after: 2500, note: 'what was sent' },
-    { waitFor: APPROVAL, note: 'wait for the edit approval' },
-    { hover: APPROVAL, after: 1500 },
-    { click: APPROVE },
-    { waitFor: DONE, note: 'wait for the reply to finish' },
+    untilDone,
     { hover: LAST_REPLY, after: 2000, note: 'the reply and its model' },
   ],
 };
