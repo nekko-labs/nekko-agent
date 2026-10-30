@@ -1,6 +1,7 @@
 package com.nekko.android.data
 
 import com.nekko.protocol.ConnectionLog
+import com.nekko.protocol.NetworkPath
 import com.nekko.protocol.Tailnet
 import com.nekko.protocol.RelayHint
 import com.nekko.protocol.DenyReason
@@ -108,6 +109,8 @@ class ComputersRepository(
     private val outboxConnectMs: Long = 20_000,
     /** Signs Change actions (AN-32): the Keystore key in the app, a software key in tests, none where unset. */
     private val changeSigner: ChangeSigner? = null,
+    /** Which relay routes this phone may dial ([com.nekko.android.connection.RoutePolicy] in the app). */
+    private val routeAllowed: (String) -> Boolean = { true },
 ) {
     /** *Sign out this phone* not yet heard by the computer (SK-8). */
     private val signOuts = SignOutOutbox(store)
@@ -249,7 +252,9 @@ class ComputersRepository(
             }
             val id = existing?.id ?: newId()
             store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair)))
-            val next = if (existing != null) list else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now())
+            // The computer's routes may have changed since (another Wi-Fi, LAN addresses on or off).
+            val next = if (existing != null) list.map { if (it.id == id) it.copy(alts = link.alts) else it }
+            else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now(), alts = link.alts)
             saveIndex(next)
             _state.update { it.copy(computers = next) }
             id
@@ -328,6 +333,8 @@ class ComputersRepository(
             deviceName = deviceName(),
             pairCode = secret.pair,
             platform = "android",
+            alts = computer.alts,
+            routeAllowed = routeAllowed,
         )
         // Refusals read with the computer's current name (it can be renamed while connected).
         val c = PlainRefusals(remotes.create(config, scope)) {
@@ -338,7 +345,7 @@ class ComputersRepository(
             launch {
                 c.status.collect { s ->
                     if (client !== c) return@collect
-                    _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied) }
+                    _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied, route = s.route) }
                     logStatus(s.state, s.detail, s.denied)
                     if (s.state == RelayState.ONLINE) scope.launch { refresh() }
                 }
@@ -373,6 +380,7 @@ class ComputersRepository(
                 }
             }
         }
+        c.setNetworkPath(networkPath)
         c.connect()
     }
 
@@ -384,7 +392,7 @@ class ComputersRepository(
         client?.close()
         client = null
         changeCalls = null
-        _state.update { it.copy(conn = RelayState.IDLE) }
+        _state.update { it.copy(conn = RelayState.IDLE, route = null) }
     }
 
     /** App came to the foreground: reconnect now rather than after the backoff. */
@@ -555,6 +563,21 @@ class ComputersRepository(
     /** The phone changed network, or the socket may have died while frozen: dial a fresh one now. */
     fun reconnect() {
         client?.reconnect()
+    }
+
+    /** The phone's network, for the route choice; the next connection starts from it too. */
+    @Volatile private var networkPath = NetworkPath.UNKNOWN
+
+    /** The phone moved to another network of kind [path]: the best route for it, on a fresh socket now. */
+    fun networkChanged(path: NetworkPath) {
+        networkPath = path
+        client?.networkChanged(path)
+    }
+
+    /** Where the phone is, without having moved: dial again only if that changes the route. */
+    fun setNetworkPath(path: NetworkPath) {
+        networkPath = path
+        client?.setNetworkPath(path)
     }
 
     suspend fun refresh() {

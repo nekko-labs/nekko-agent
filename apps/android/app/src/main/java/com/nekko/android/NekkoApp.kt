@@ -7,6 +7,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.nekko.android.connection.ConnectionKeeper
+import com.nekko.android.connection.RoutePolicy
 import com.nekko.android.data.AndroidSecureStore
 import com.nekko.android.data.ChatListFiles
 import com.nekko.android.data.NewChatDefaults
@@ -76,6 +77,7 @@ class NekkoApp : Application() {
             scope = appScope,
             deviceName = ::deviceName,
             changeSigner = KeystoreChangeSigner(ownerCheck),
+            routeAllowed = RoutePolicy::allowed,
             onForget = { id ->
                 newChatDefaults.forget(id)
                 paneLayouts.forget(id)

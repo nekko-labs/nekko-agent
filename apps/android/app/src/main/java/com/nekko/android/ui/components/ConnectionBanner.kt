@@ -85,11 +85,13 @@ fun ConnectionBanner(
     val denied = !stopped && (s.denied != null || s.conn == RelayState.DENIED)
     // Pairing again can't help an app that is too old for the computer.
     val repair = denied && s.denied != DenyReason.UPDATE_REQUIRED
+    // The route in use or being dialed (AN-28): one of the computer's addresses.
+    val route = s.route ?: active.relayUrl
     // An address the phone can never reach: say why instead of "Connecting…" forever.
-    val hint = RelayHint.problem(active.relayUrl, BuildConfig.DEBUG)
+    val hint = RelayHint.problem(route, BuildConfig.DEBUG)
     // A tailnet relay with Tailscale off on this phone: say so (re-read on each state change).
-    val tailnetHint = remember(s.conn, active.relayUrl) {
-        if (s.conn == RelayState.ONLINE) null else Tailnet.hint(active.relayUrl, TailnetStatus.phoneOnTailnet(), active.name)
+    val tailnetHint = remember(s.conn, route) {
+        if (s.conn == RelayState.ONLINE) null else Tailnet.hint(route, TailnetStatus.phoneOnTailnet(), active.name)
     }
     val (tone, line) = when {
         stopped && s.conn != RelayState.ONLINE ->
@@ -134,7 +136,7 @@ fun ConnectionBanner(
                 Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied) 5 else 2, overflow = TextOverflow.Ellipsis)
                 if (s.conn == RelayState.ONLINE && !denied) {
                     Text(
-                        "End-to-end encrypted via ${Pairing.relayHost(active.relayUrl)}",
+                        "End-to-end encrypted via ${Pairing.relayHost(route)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkFaint,
                     )

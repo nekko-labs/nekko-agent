@@ -5,6 +5,7 @@ import com.nekko.android.connection.EventNotice
 import com.nekko.android.connection.KeepAlive
 import com.nekko.android.connection.NetworkChanges
 import com.nekko.android.connection.Notices
+import com.nekko.protocol.NetworkPath
 import com.nekko.protocol.RelayState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -42,6 +43,19 @@ class ConnectionTest {
         assertEquals(0, n)
         c.onAvailable("wifi") // off again: same network, but the socket died meanwhile
         assertEquals(1, n)
+    }
+
+    @Test
+    fun `each network says its kind, for the route choice`() {
+        val same = mutableListOf<NetworkPath>()
+        val changed = mutableListOf<NetworkPath>()
+        val c = NetworkChanges(same = { same += it }, changed = { changed += it })
+        c.onAvailable("wifi", NetworkPath.LOCAL)
+        c.onPath("wifi", NetworkPath.LOCAL)
+        c.onPath("old", NetworkPath.CELLULAR) // a network that is not the default
+        assertEquals(listOf(NetworkPath.LOCAL, NetworkPath.LOCAL), same)
+        c.onAvailable("cell", NetworkPath.CELLULAR)
+        assertEquals(listOf(NetworkPath.CELLULAR), changed)
     }
 
     @Test

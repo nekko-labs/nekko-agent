@@ -37,9 +37,11 @@ import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.ConnectionAdvice
 import com.nekko.protocol.ConnectionLog
-import com.nekko.protocol.RelayHint
+import com.nekko.android.connection.RoutePolicy
+import com.nekko.protocol.Pairing
+import com.nekko.protocol.RelayRoute
 import com.nekko.protocol.RelayState
-import com.nekko.protocol.Tailnet
+import com.nekko.protocol.RouteSupervisor
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -58,9 +60,10 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
     val c = state.active ?: return
     var tailnet by remember { mutableStateOf(TailnetStatus.phoneOnTailnet()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { tailnet = TailnetStatus.phoneOnTailnet() }
-    val host = RelayHint.host(c.relayUrl)
-    val viaTailnet = Tailnet.isTailnetRelay(c.relayUrl)
-    val advice = ConnectionAdvice.advise(c.relayUrl, c.name, state.conn, state.denied, state.connDetail, tailnet, BuildConfig.DEBUG)
+    // The route in use or being dialed (AN-28); the pairing's relay before the first dial.
+    val inUse = state.route ?: c.relayUrl
+    val others = remember(c.relayUrl, c.alts, inUse) { RouteSupervisor.order(listOf(c.relayUrl) + c.alts).filter { it != inUse } }
+    val advice = ConnectionAdvice.advise(inUse, c.name, state.conn, state.denied, state.connDetail, tailnet, BuildConfig.DEBUG)
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -70,10 +73,16 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
         NCard {
             Fact("Computer", c.name)
             HorizontalDivider(color = p.line)
-            Fact("Route", if (viaTailnet) "Tailscale" else "Internet relay")
+            Fact("Route", routeName(RelayRoute.of(inUse)))
             HorizontalDivider(color = p.line)
-            Fact("Relay", host)
+            Fact("Relay", Pairing.relayHost(inUse))
             HorizontalDivider(color = p.line)
+            if (others.isNotEmpty()) {
+                Fact("Other routes", others.joinToString(", ") { r ->
+                    "${routeName(RelayRoute.of(r))} (${Pairing.relayHost(r)}${if (RoutePolicy.allowed(r)) "" else ", not used on Android"})"
+                })
+                HorizontalDivider(color = p.line)
+            }
             Fact("Status", stateName(state.conn))
             HorizontalDivider(color = p.line)
             Fact("Tailscale on this phone", if (tailnet) "Connected" else "Off")
@@ -148,6 +157,14 @@ private fun LogRow(e: ConnectionLog.Entry) {
         }
         Text(TIME.format(e.at), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
     }
+}
+
+/** Same names as the iPhone's `routeName`. */
+fun routeName(r: RelayRoute) = when (r) {
+    RelayRoute.TAILSCALE -> "Tailscale"
+    RelayRoute.LAN -> "Local network"
+    RelayRoute.LOOPBACK -> "This device"
+    RelayRoute.INTERNET -> "Internet relay"
 }
 
 private fun stateName(s: RelayState) = when (s) {
