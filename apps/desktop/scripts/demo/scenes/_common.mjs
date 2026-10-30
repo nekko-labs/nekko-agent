@@ -25,6 +25,15 @@ export function newChat(folder) {
   return [
     { waitFor: 'role=button[name="Create new"]', after: 2500, note: 'app ready' },
     ...dismissNotices,
+    // Edits go straight into the demo project (which is reset before each
+    // take), not a separate worktree, and the worktree notice never opens.
+    {
+      run: ({ page }) => page.evaluate(async () => {
+        const settings = await window.nekko.getSettings();
+        await window.nekko.updateSettings({ defaultExecutionMode: 'unified', gitManagement: { ...settings?.gitManagement, mode: 'shared' } });
+      }),
+      note: 'use the current Git branch',
+    },
     { click: 'role=button[name="Create new"]', after: 500 },
     { click: 'role=button[name="Agent"] >> nth=0', after: 1200 },
     ...(folder ? [{ click: `role=group[name="Folders this chat can use"] >> role=checkbox[name=/${folder}/]`, optional: true, after: 400, note: `use ${folder}` }] : []),
@@ -43,6 +52,7 @@ export function pickModel(name, { hoverList = false } = {}) {
   ];
 }
 
+export const CHECKOUT_NOTICE = 'role=button[name="Close checkout notice"]';
 export const QUESTION = 'role=group[name="The agent is asking a question"]';
 
 /**
@@ -56,7 +66,9 @@ export const untilDone = {
     const start = Date.now();
     while (!(await visible(DONE))) {
       if (Date.now() - start > 600000) throw new Error('The reply took over 10 minutes.');
-      if (await visible(APPROVE)) {
+      if (await visible(CHECKOUT_NOTICE)) {
+        await click(CHECKOUT_NOTICE);
+      } else if (await visible(APPROVE)) {
         await hover(APPROVAL, 1500);
         await click(APPROVE);
         await sleep(800);
