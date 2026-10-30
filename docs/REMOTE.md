@@ -180,7 +180,7 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > is confirmed with your fingerprint, face or screen lock, and YOLO asks once first), **Rename**,
 > **Pin** / **Unpin** and **Complete**, each saved on the computer.
 >
-> **Write offline** (iPhone): with no connection to your computer you can still write. What you
+> **Write offline** (iPhone; Android keeps the drafts so far): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
 > the phone closing the app loses nothing. **Send when online** puts a prompt in a queue on the
 > phone, shown in the chat as **Waiting to send** (Edit, Delete, Send now); a new chat started

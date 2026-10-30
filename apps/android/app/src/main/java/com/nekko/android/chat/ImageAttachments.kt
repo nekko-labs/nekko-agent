@@ -2,6 +2,7 @@ package com.nekko.android.chat
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +58,16 @@ object ImageAttachments {
         if (preview !== bitmap) bitmap.recycle()
         dataUrl(out.toByteArray()) to preview.asImageBitmap()
     }
+
+    /** A saved draft's photo (a data URL this app made) back to a thumbnail; null when it can't be read. */
+    fun preview(dataUrl: String): ImageBitmap? = runCatching {
+        val bytes = Base64.getDecoder().decode(dataUrl.substringAfter(','))
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= PREVIEW_SIDE) sample *= 2
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+    }.getOrNull()
 
     private const val PREVIEW_SIDE = 192
 }

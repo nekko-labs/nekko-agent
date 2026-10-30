@@ -533,7 +533,10 @@ fun ChatScreen(
                 modifier = Modifier.navigationBarsPadding(),
             ) else Column(Modifier.navigationBarsPadding()) {
                 Composer(
-                    initialText = initialDraft,
+                    // A fork's prompt, else what was typed here last time (the saved draft).
+                    initialText = initialDraft ?: vm.savedDraft.text.ifEmpty { null },
+                    initialSkillName = vm.savedDraft.skill?.name.takeIf { initialDraft == null },
+                    onDraftChange = vm::draftChanged,
                     running = chat.running,
                     blocked = chat.blocked,
                     queued = chat.queued,

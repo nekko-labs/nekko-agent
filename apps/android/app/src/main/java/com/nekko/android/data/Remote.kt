@@ -118,7 +118,7 @@ class PlainRefusals(private val inner: Remote, private val computer: () -> Strin
         fun reword(e: RelayException, computer: String): RelayException {
             val refusal = e.refusal ?: PhoneRefusal.parse(e.message) ?: return e
             val text = refusal.message(computer) ?: return e
-            return RelayException(text, refusal)
+            return RelayException(text, refusal, fromComputer = true)
         }
     }
 }

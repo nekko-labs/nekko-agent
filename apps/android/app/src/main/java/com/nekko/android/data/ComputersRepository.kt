@@ -27,6 +27,8 @@ import com.nekko.protocol.SavedChatList
 import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.StepUpChallenge
 import com.nekko.protocol.StepUpProof
+import com.nekko.protocol.DraftStore
+import com.nekko.protocol.OfflineFiles
 import com.nekko.protocol.TerminalChannels
 import com.nekko.protocol.TerminalEvent
 import com.nekko.protocol.WorkspaceFolder
@@ -111,7 +113,13 @@ class ComputersRepository(
     private val changeSigner: ChangeSigner? = null,
     /** Which relay routes this phone may dial ([com.nekko.android.connection.RoutePolicy] in the app). */
     private val routeAllowed: (String) -> Boolean = { true },
+    /** Each computer's drafts and outbox on disk ([OfflineFileStore] in the app); memory only when null. */
+    private val offlineFiles: OfflineFiles? = null,
+    private val draftDebounceMs: Long = 500,
 ) {
+    /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
+    val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
+
     /** *Sign out this phone* not yet heard by the computer (SK-8). */
     private val signOuts = SignOutOutbox(store)
 
@@ -277,6 +285,8 @@ class ComputersRepository(
             if (wasActive) disconnect()
             store.set(secretKey(id), null)
             chatListCache?.remove(id)
+            if (_state.value.activeId == id) drafts.load(null)
+            offlineFiles?.remove(id)
             onForget(id)
             val next = _state.value.computers.filter { it.id != id }
             saveIndex(next)
@@ -302,6 +312,7 @@ class ComputersRepository(
         val computer = _state.value.computers.firstOrNull { it.id == id } ?: return@withLock
         val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return@withLock
         store.set(ACTIVE_KEY, id)
+        if (drafts.computerId != id) drafts.load(id)
         if (loggedComputer != id) {
             log.clear()
             loggedComputer = id

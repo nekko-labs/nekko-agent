@@ -33,6 +33,7 @@ import com.nekko.protocol.PullRequest
 import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
+import com.nekko.protocol.Draft
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.StepUpProof
 import android.content.ContentResolver
@@ -263,6 +264,37 @@ class ChatViewModel(
 
     /** Photos waiting in the message box; kept here so a rotation doesn't drop them. */
     val photos = PhotoTray<ImageBitmap>()
+
+    // ---- the draft (offline mode): what the message box holds survives leaving the chat and the app ending ----
+
+    /** The draft as the chat opened: the message box starts from it. */
+    val savedDraft: Draft = repo.drafts.draft(sessionId)
+    private var draftText = savedDraft.text
+    private var draftSkill = savedDraft.skill
+
+    init {
+        photos.seed(savedDraft.images.mapNotNull { url -> ImageAttachments.preview(url)?.let { url to it } })
+        // A photo added or removed is saved like a typed word.
+        viewModelScope.launch {
+            photos.state.map { s -> s.photos.map { it.dataUrl } }.distinctUntilChanged().collect { saveDraft() }
+        }
+    }
+
+    /** The message box changed: its text and armed skill (by name, resolved against the computer's skills). */
+    fun draftChanged(text: String, skillName: String?) {
+        draftText = text
+        draftSkill = when {
+            skillName == null -> null
+            draftSkill?.name == skillName -> draftSkill
+            else -> ui.value.skills.firstOrNull { it.name == skillName } ?: SkillSummary(skillName, "", "", "")
+        }
+        saveDraft()
+    }
+
+    private fun saveDraft() {
+        val photosNow = photos.state.value.photos.map { it.dataUrl }
+        repo.drafts.set(sessionId, repo.drafts.draft(sessionId).copy(text = draftText, skill = draftSkill, images = photosNow))
+    }
 
     /** Picked files or a camera shot → the tray, scaled and encoded off the main thread. */
     fun addPhotos(resolver: ContentResolver, uris: List<Uri>, afterEach: (Uri) -> Unit = {}) {

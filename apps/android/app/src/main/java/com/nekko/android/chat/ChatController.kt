@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.contentOrNull
@@ -110,6 +111,8 @@ class ChatController(
     private val scope: CoroutineScope,
     private val env: () -> ChatEnv,
     private val now: () -> Long = System::currentTimeMillis,
+    /** Each prompt's `clientMessageId`: a repeat of it is taken once only. */
+    private val newId: () -> String = { java.util.UUID.randomUUID().toString() },
 ) {
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -216,9 +219,10 @@ class ChatController(
 
     /** Throws when the prompt couldn't be sent, so the composer can keep the text. */
     suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) {
+        val id = newId()
         if (_state.value.turn.running) {
             // Same as the desktop: a prompt sent mid-run waits its turn.
-            val s = Session.from(caller.call(Channels.CHAT_QUEUE, JsonPrimitive(sessionId), queuePrompt(text, skill, images)))
+            val s = Session.from(callWithId(Channels.CHAT_QUEUE, id) { cid -> listOf(JsonPrimitive(sessionId), queuePrompt(text, skill, images, cid)) })
             if (s != null) _state.update { it.copy(session = s) }
             return
         }
@@ -232,12 +236,29 @@ class ChatController(
         // Resolves only when the whole turn ends; the events carry the progress.
         scope.launch {
             try {
-                caller.callWithTimeout(TURN_TIMEOUT_MS, Channels.CHAT_SEND, sendOptions(sessionId, providerId, modelId, text, skill, images))
+                callWithId(Channels.CHAT_SEND, id, TURN_TIMEOUT_MS) { cid -> listOf(sendOptions(sessionId, providerId, modelId, text, skill, images, cid)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(turn = it.turn.copy(running = false, error = e.message ?: "Couldn’t send that.")) }
             }
+        }
+    }
+
+    /**
+     * [channel] with the prompt's `clientMessageId`. A computer from before
+     * exactly-once delivery refuses the unknown key: then the prompt goes as
+     * before, without it.
+     */
+    private suspend fun callWithId(channel: String, id: String, timeoutMs: Long? = null, args: (String?) -> List<JsonElement>): JsonElement {
+        suspend fun call(cid: String?) = args(cid).toTypedArray().let { a ->
+            if (timeoutMs == null) caller.call(channel, *a) else caller.callWithTimeout(timeoutMs, channel, *a)
+        }
+        return try {
+            call(id)
+        } catch (e: RelayException) {
+            if (!e.refusedClientMessageId) throw e
+            call(null)
         }
     }
 
