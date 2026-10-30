@@ -38,7 +38,8 @@ recorded, because only the real app looks like the real app.
 
 - `npm run demo -w apps/desktop -- <scene>` starts the app in presenter mode on
   the demo profile with `NEKKO_DEMO_DEBUG_PORT` set (a remote-debugging port on
-  127.0.0.1, opened only when that variable is set), counts down five seconds
+  127.0.0.1, opened only when that variable is set and only in a dev build; an
+  installed app never opens it), counts down five seconds
   so recording can start, then plays `scripts/demo/scenes/<scene>.mjs`.
 - Each click or hover finds the element in the live page, glides the real
   Windows cursor there (eased) and clicks with the real mouse, so recorders that
@@ -47,7 +48,10 @@ recorded, because only the real app looks like the real app.
   movement.
 - `--attach` plays in an app already running with the port; `--dry --url`
   rehearses headless against the Local Web UI and saves a screenshot per step.
-- One scene ships: `tour` (zones, Artifacts, Workflows, Models, chat search).
+- The runner waits for Enter (press it once recording has started), then counts down 3 seconds; `--no-wait` skips the wait.
+- Scenes ship for the five website panels (`control`, `experience`, `fast`, `secure`, `convenient`) plus `tour`. Setup steps run before recording; the demo project is reset to its first commit before each take.
+- `fast` keeps tok/s readouts hidden unless run with `--benchmark` on the machine its numbers were measured on.
+- Presenter mode leaves reserved `example.com`/`.org`/`.net` addresses unmasked (demo scripts type them on purpose) and never rewrites text inside an editable field (it moved the caret mid-typing).
 
 
 

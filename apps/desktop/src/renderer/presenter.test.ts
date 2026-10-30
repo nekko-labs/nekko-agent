@@ -10,6 +10,7 @@ describe('presenter mode', () => {
     expect(mask('/Users/someone/code and someone again')).toBe('~/code and demo again');
     expect(mask('Model Server on TRAVIS-PC')).toBe('Model Server on workstation');
     expect(mask('key sk-ant-api03-abcdef123')).toBe('key sk-••••');
+    expect(mask('Write to maria.lopez@example.com')).toBe('Write to maria.lopez@example.com');
     expect(mask('Plain text stays... as it is')).toBe('Plain text stays... as it is');
   });
 
