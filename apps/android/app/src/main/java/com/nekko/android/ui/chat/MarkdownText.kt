@@ -103,6 +103,7 @@ import com.nekko.protocol.MarkdownList
 import com.nekko.protocol.MarkdownListItem
 import com.nekko.protocol.MarkdownParser
 import com.nekko.protocol.MarkdownTable
+import com.nekko.protocol.MermaidRules
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -159,7 +160,9 @@ private fun Blocks(blocks: List<MarkdownBlock>, style: MarkdownStyle, previews: 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (block in blocks) {
             when (block) {
-                is MarkdownBlock.Code -> CodeBlock(block.language, block.body, style)
+                is MarkdownBlock.Code ->
+                    if (MermaidRules.isMermaid(block.language)) MermaidBlock(block.body, block.closed, style)
+                    else CodeBlock(block.language, block.body, style)
                 is MarkdownBlock.Heading -> Text(
                     inline(block.text, style, previews, cards),
                     style = when {
@@ -482,7 +485,7 @@ internal fun safeLink(url: String): Boolean {
 }
 
 @Composable
-private fun CodeBlock(language: String, code: String, style: MarkdownStyle) {
+internal fun CodeBlock(language: String, code: String, style: MarkdownStyle) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf(false) }
