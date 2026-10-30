@@ -9,7 +9,7 @@ use crate::common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_channels_are_unknown_on_windows() {
     let data = tempfile::tempdir().unwrap();
-    let d = start_with(Some(data.path()));
+    let d = start_with(data.path());
     let (status, body) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
     assert!(status >= 400, "{status}");
     assert_eq!(body["error"], "unknown channel runner:list");
@@ -29,7 +29,7 @@ async fn runner_channels_round_trip() {
         "github": { "appId": 424242, "installationId": 9, "repos": ["o/r"] },
     }]);
     std::fs::write(runners.join("runners.json"), record.to_string()).unwrap();
-    let d = start_with(Some(data.path()));
+    let d = start_with(data.path());
     let events = record_channel(d.port, "runner:changed");
 
     let (status, list) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
@@ -76,7 +76,7 @@ async fn runner_channels_round_trip() {
 #[tokio::test(flavor = "multi_thread")]
 async fn gitlab_connect_rejects_unknown_provider() {
     let data = tempfile::tempdir().unwrap();
-    let d = start_with(Some(data.path()));
+    let d = start_with(data.path());
     let (status, err) = post(d.port, "runner:connect", json!([{ "provider": "buildkite" }]), Some(TOKEN)).await;
     assert_ne!(status, 200);
     assert!(err.to_string().contains("Unknown CI provider."), "{err}");
@@ -111,7 +111,7 @@ async fn gitlab_record_lists_and_removes() {
     if file_vault {
         vault.set("gitlab-token-gl-42", "glpat-x").unwrap();
     }
-    let d = start_with(Some(data.path()));
+    let d = start_with(data.path());
     let (status, list) = post(d.port, "runner:list", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{list}");
     assert_eq!((list[0]["config"]["id"].as_str(), list[0]["state"].as_str()), (Some("gl-42"), Some("error")), "{list}");

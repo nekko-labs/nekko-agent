@@ -23,9 +23,9 @@ pub struct Config {
     /// handshake as `file://`.
     #[serde(default = "default_origins")]
     pub allowed_origins: Vec<String>,
-    /// The user data directory, whose `sessions/` the daemon reads. Absent,
-    /// the channels that need it are not served.
-    pub data_dir: Option<String>,
+    /// The user data directory: sessions, settings, tokens and every other
+    /// file the daemon owns. Required; every launcher passes it.
+    pub data_dir: String,
     /// Exit when stdin closes, so the daemon never outlives the app that
     /// started it (the parent holds our stdin open for its whole life).
     #[serde(default = "yes")]
@@ -147,6 +147,9 @@ pub fn load() -> anyhow::Result<Config> {
     if cfg.token.len() < 16 {
         anyhow::bail!("token must be at least 16 characters");
     }
+    if cfg.data_dir.trim().is_empty() {
+        anyhow::bail!("dataDir is required");
+    }
     let host = cfg.listen.rsplit_once(':').map(|(h, _)| h).unwrap_or("");
     if !matches!(host, "127.0.0.1" | "localhost" | "[::1]") {
         anyhow::bail!("nekkod binds loopback only, not {}", cfg.listen);
@@ -160,10 +163,15 @@ mod tests {
 
     #[test]
     fn defaults_fill_in() {
-        let cfg: Config = serde_json::from_str(r#"{"token":"0123456789abcdef"}"#).unwrap();
+        let cfg: Config = serde_json::from_str(r#"{"token":"0123456789abcdef","dataDir":"/d"}"#).unwrap();
         assert_eq!(cfg.listen, "127.0.0.1:0");
         assert_eq!(cfg.allowed_origins, vec!["null".to_string(), "file://".to_string()]);
         assert!(cfg.exit_on_stdin_close);
-        assert!(cfg.data_dir.is_none());
+        assert_eq!(cfg.data_dir, "/d");
+    }
+
+    #[test]
+    fn the_data_directory_is_required() {
+        assert!(serde_json::from_str::<Config>(r#"{"token":"0123456789abcdef"}"#).is_err());
     }
 }

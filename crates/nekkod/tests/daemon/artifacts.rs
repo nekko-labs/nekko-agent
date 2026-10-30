@@ -22,7 +22,7 @@ async fn artifact_channels_check_the_persisted_chats_assistant_links() {
         { "role": "assistant", "content": format!("[report]({root}/site/index.html) http://localhost:{port}/") }
     ] });
     std::fs::write(data.path().join("sessions/s_links.json"), serde_json::to_vec(&chat).unwrap()).unwrap();
-    let d = start_with(Some(data.path()));
+    let d = start_with(data.path());
     for (name, content) in [("index.html", "<h1>report</h1>"), ("app.css", "body{}")] {
         let (status, got) =
             post(d.port, "artifact:read", json!(["s_links", format!("{root}/site/{name}")]), Some(TOKEN)).await;

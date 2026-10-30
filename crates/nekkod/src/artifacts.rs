@@ -130,7 +130,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
 
 /// The chat's links: its assistant messages, relative links against its folder.
 async fn chat_links_of(ctx: &Ctx, sid: &str) -> Result<ChatLinks, String> {
-    let Some(store) = ctx.sessions.clone() else { return Err("not-found: no such chat".into()) };
+    let store = ctx.sessions.clone();
     let id = sid.to_string();
     let session = tokio::task::spawn_blocking(move || store.get(&id).unwrap_or(Value::Null))
         .await

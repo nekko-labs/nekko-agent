@@ -19,28 +19,46 @@ pub const TOKEN: &str = "test-token-0123456789abcdef";
 pub struct Daemon {
     pub child: Child,
     pub port: u16,
+    /// The data directory [`start`] made for it, removed with it.
+    pub scratch: Option<std::path::PathBuf>,
 }
 
 impl Drop for Daemon {
     fn drop(&mut self) {
         let _ = self.child.kill();
+        if let Some(dir) = self.scratch.take() {
+            let _ = self.child.wait();
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 }
 
+/// A daemon on an empty data directory of its own.
 pub fn start() -> Daemon {
-    start_with(None)
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "nekkod-empty-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut d = start_with(&dir);
+    d.scratch = Some(dir);
+    d
 }
 
-pub fn start_with(data_dir: Option<&std::path::Path>) -> Daemon {
+pub fn start_with(data_dir: &std::path::Path) -> Daemon {
     start_with_config(data_dir, json!({}))
 }
 
-pub fn start_with_config(data_dir: Option<&std::path::Path>, extra: Value) -> Daemon {
+pub fn start_with_config(data_dir: &std::path::Path, extra: Value) -> Daemon {
     start_with_env(data_dir, extra, &[])
 }
 
 /// With the daemon's own environment changed: `(name, None)` removes a variable.
-pub fn start_with_env(data_dir: Option<&std::path::Path>, extra: Value, env: &[(&str, Option<&str>)]) -> Daemon {
+pub fn start_with_env(data_dir: &std::path::Path, extra: Value, env: &[(&str, Option<&str>)]) -> Daemon {
     let mut config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data_dir });
     for (k, v) in extra.as_object().cloned().unwrap_or_default() {
         config[k] = v;
@@ -70,7 +88,7 @@ pub fn start_with_env(data_dir: Option<&std::path::Path>, extra: Value, env: &[(
     let line = lines.next().expect("a ready line").unwrap();
     let ready: Value = serde_json::from_str(line.strip_prefix("NEKKOD_READY ").expect("ready prefix")).unwrap();
     std::thread::spawn(move || for _ in lines {});
-    Daemon { child, port: ready["port"].as_u64().unwrap() as u16 }
+    Daemon { child, port: ready["port"].as_u64().unwrap() as u16, scratch: None }
 }
 
 pub async fn post(port: u16, channel: &str, args: Value, token: Option<&str>) -> (u16, Value) {
@@ -247,7 +265,7 @@ pub fn turn_rig_with(name: &str, session: Value, extra: Value) -> TurnRig {
     let id = session["id"].as_str().unwrap().to_string();
     std::fs::write(data.join("sessions").join(format!("{id}.json")), serde_json::to_string_pretty(&session).unwrap())
         .unwrap();
-    let d = start_with_config(Some(&data), extra);
+    let d = start_with_config(&data, extra);
     let events = record_events(d.port);
     boot_settled(&data);
     TurnRig { data, workspace, d, events }

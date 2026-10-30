@@ -109,17 +109,16 @@ fn main() -> std::process::ExitCode {
         }
     };
     // One daemon per data directory, held until the process ends.
-    let _lock = match cfg.data_dir.as_deref().map(|d| datalock::acquire(std::path::Path::new(d), LOCK_WAIT)) {
-        Some(Err(e)) => {
+    let _lock = match datalock::acquire(std::path::Path::new(&cfg.data_dir), LOCK_WAIT) {
+        Err(e) => {
             eprintln!("nekkod: {e}");
             return std::process::ExitCode::from(datalock::LOCKED_EXIT);
         }
-        Some(Ok(f)) => Some(f),
-        None => None,
+        Ok(f) => f,
     };
     // `<dataDir>/logs/nekkod.log` (logs.rs): stderr teed to a rotating file,
     // held until main returns so the last lines are copied out.
-    let _daemon_log = cfg.data_dir.as_ref().and_then(|d| logs::start_daemon_log(&std::path::Path::new(d).join("logs")));
+    let _daemon_log = logs::start_daemon_log(&std::path::Path::new(&cfg.data_dir).join("logs"));
     logs::note(&format!("nekkod {} starting, pid {}", env!("CARGO_PKG_VERSION"), std::process::id()));
     procgroup::init();
     // Each job VM's NAT holds a socket per guest flow; 256 runs out.
@@ -127,8 +126,8 @@ fn main() -> std::process::ExitCode {
     runner::raise_nofile();
     // What a predecessor killed outright left running goes first; then keep
     // our own record for the next one.
-    if let Some(d) = &cfg.data_dir {
-        let run = procgroup::run_dir(std::path::Path::new(d));
+    {
+        let run = procgroup::run_dir(std::path::Path::new(&cfg.data_dir));
         procgroup::reap_leftovers(&run);
         procgroup::track(&run);
     }
@@ -166,7 +165,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let hub = Hub::new();
     let terminals = Arc::new(Registry::new());
     let engine = Arc::new(engine::Engine::new());
-    let sessions = cfg.data_dir.clone().map(|d| Arc::new(nekko_store::SessionStore::new(d)));
+    let data_dir = std::path::PathBuf::from(&cfg.data_dir);
+    let sessions = Arc::new(nekko_store::SessionStore::new(&cfg.data_dir));
     let mcp: Arc<mcp::Mcp> = Arc::default();
     let changes = Arc::new(nekko_tools::ChangeTracker::new());
     {
@@ -176,87 +176,73 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             hub.publish("changes:updated", serde_json::json!({ "sessionId": session_id }), false);
         });
     }
-    let accounts = Arc::new(accounts::Accounts::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
-    let settings = cfg.data_dir.clone().map(|d| settings::Settings::new(d.into(), hub.clone()));
+    let settings = settings::Settings::new(data_dir.clone(), hub.clone());
+    let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone()));
     // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
-    if let (Some(d), Some(s)) = (&cfg.data_dir, &settings) {
-        match claude_plan::migrate(std::path::Path::new(d), &s.store, nekko_oauth::now_ms()) {
-            Ok(done) if !done.is_empty() => eprintln!(
-                "nekkod: removed {} Claude sign-in token(s) and turned off {} Claude plan provider(s)",
-                done.tokens.len(),
-                done.providers.len()
-            ),
-            Ok(_) => {}
-            Err(e) => eprintln!("nekkod: Claude sign-in cleanup failed: {e}"),
-        }
+    match claude_plan::migrate(&data_dir, &settings.store, nekko_oauth::now_ms()) {
+        Ok(done) if !done.is_empty() => eprintln!(
+            "nekkod: removed {} Claude sign-in token(s) and turned off {} Claude plan provider(s)",
+            done.tokens.len(),
+            done.providers.len()
+        ),
+        Ok(_) => {}
+        Err(e) => eprintln!("nekkod: Claude sign-in cleanup failed: {e}"),
     }
     // Settings > Connections: the switch, before anything below reaches the network.
-    connections::start(cfg.data_dir.as_deref().map(std::path::Path::new), settings.as_ref());
+    connections::start(&data_dir, &settings);
     // Voice reads its settings from the daemon's store.
-    let voice = cfg.data_dir.clone().zip(settings.clone()).map(|(d, s)| {
-        let store = s.store.clone();
+    let voice = {
+        let store = settings.store.clone();
         let read: Arc<dyn Fn() -> serde_json::Value + Send + Sync> = Arc::new(move || store.get());
-        voice::Voice::new(std::path::PathBuf::from(d).join("voice"), read, voice::Sources::default())
-    });
-    let compactions = compaction::Compactions::new();
-    let sandboxes = cfg.data_dir.clone().filter(|_| sessions.is_some()).map(|d| sandbox::Sandboxes::new(d.into()));
-    // Turns are admitted here wherever this daemon owns the data.
-    let admission =
-        cfg.data_dir.is_some().then(|| admission::Admission::new(compactions.clone(), cfg.allow_browser_control));
-    let catalog = settings.as_deref().map(|s| catalog::new(s, cfg.hugging_face_url.clone()));
-    let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
-    let remote = Arc::new(remote::Remote::new(cfg.data_dir.clone().map(std::path::PathBuf::from), hub.clone()));
-    // Nekko Cloud sign-in and end-to-end encrypted sync, with the data directory.
-    // A chat a turn is running in is never overwritten from the cloud; the turns
-    // are known once the context below is built.
-    let running: Arc<std::sync::OnceLock<Arc<turns::Turns>>> = Arc::default();
-    let cloud = match (&cfg.data_dir, &sessions) {
-        (Some(d), Some(store)) => {
-            let dir = std::path::PathBuf::from(d).join("cloud");
-            let publish_hub = hub.clone();
-            let busy = running.clone();
-            Some(nekko_cloud::Cloud::new(nekko_cloud::Options {
-                vault: nekko_cloud::vault::default_vault(&dir),
-                dir,
-                api_url: feedback::cloud_url(),
-                device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
-                sessions: store.clone(),
-                publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
-                busy: Arc::new(move |id| busy.get().is_some_and(|t| t.running_sessions().iter().any(|s| s == id))),
-            }))
-        }
-        _ => None,
+        voice::Voice::new(data_dir.join("voice"), read, voice::Sources::default())
     };
-    // The messaging bridges, with the data directory (and so the settings and sessions).
-    let messaging = match (&cfg.data_dir, &settings, &sessions) {
-        (Some(d), Some(s), Some(store)) => {
-            let api = cfg
-                .telegram_api_url
-                .clone()
-                .or_else(|| std::env::var("NEKKO_TELEGRAM_API_URL").ok().filter(|u| !u.is_empty()));
-            Some(messaging::Messaging::new(d.into(), s.store.clone(), store.clone(), api))
-        }
-        _ => None,
+    let compactions = compaction::Compactions::new();
+    let sandboxes = sandbox::Sandboxes::new(data_dir.clone());
+    let admission = admission::Admission::new(compactions.clone(), cfg.allow_browser_control);
+    let catalog = catalog::new(&settings, cfg.hugging_face_url.clone());
+    let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
+    let remote = Arc::new(remote::Remote::new(data_dir.clone(), hub.clone()));
+    // Nekko Cloud sign-in and end-to-end encrypted sync. A chat a turn is
+    // running in is never overwritten from the cloud; the turns are known
+    // once the context below is built.
+    let running: Arc<std::sync::OnceLock<Arc<turns::Turns>>> = Arc::default();
+    let cloud = {
+        let dir = data_dir.join("cloud");
+        let publish_hub = hub.clone();
+        let busy = running.clone();
+        nekko_cloud::Cloud::new(nekko_cloud::Options {
+            vault: nekko_cloud::vault::default_vault(&dir),
+            dir,
+            api_url: feedback::cloud_url(),
+            device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
+            sessions: sessions.clone(),
+            publish: Arc::new(move |status| publish_hub.publish(nekko_cloud::EVENT, status, false)),
+            busy: Arc::new(move |id| busy.get().is_some_and(|t| t.running_sessions().iter().any(|s| s == id))),
+        })
+    };
+    // The messaging bridges.
+    let messaging = {
+        let api = cfg
+            .telegram_api_url
+            .clone()
+            .or_else(|| std::env::var("NEKKO_TELEGRAM_API_URL").ok().filter(|u| !u.is_empty()));
+        messaging::Messaging::new(data_dir.clone(), settings.store.clone(), sessions.clone(), api)
     };
     // The machine probes and the resource queue read the daemon's settings store.
-    let read_settings = |s: &Option<Arc<settings::Settings>>| {
-        let store = s.as_ref().map(|s| s.store.clone());
-        move || store.as_ref().map_or(serde_json::Value::Null, |s| s.get())
+    let read_settings = || {
+        let store = settings.store.clone();
+        move || store.get()
     };
     let engine_bin = {
-        let read = read_settings(&settings);
+        let read = read_settings();
         move || nekko_js::truthy_str(read().get("engineBinPath")).map(str::to_string)
     };
-    // Agent watches, when the daemon knows the data directory (watches.rs).
-    let agent_watches = match (&cfg.data_dir, &sessions) {
-        (Some(d), Some(store)) => Some(watches::Watches::new(d.into(), store.clone(), hub.clone())),
-        _ => None,
-    };
-    let machine =
-        Arc::new(nekko_machine::Machine::new(cfg.data_dir.clone().map(std::path::PathBuf::from), Box::new(engine_bin)));
-    let library = settings.clone().map(|s| library::Library::new(s, machine.clone(), engine.clone()));
-    if let Some(library) = &library {
-        let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+    // Agent watches (watches.rs).
+    let agent_watches = watches::Watches::new(data_dir.clone(), sessions.clone(), hub.clone());
+    let machine = Arc::new(nekko_machine::Machine::new(Some(data_dir.clone()), Box::new(engine_bin)));
+    let library = library::Library::new(settings.clone(), machine.clone(), engine.clone());
+    let _ = engine.speeds.sink.set(speeds::Speeds::new(machine.clone(), library.clone()));
+    {
         // Abandoned downloads can be GBs each (#1035).
         let dir = std::path::PathBuf::from(library.models_dir());
         tokio::task::spawn_blocking(move || {
@@ -266,34 +252,47 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             }
         });
     }
-    let model_downloads = library.clone().zip(catalog.clone()).map(|(library, catalog)| {
+    let model_downloads = {
         let fetch =
             downloads::Rebased(nekko_engine::download::HttpFetch(reqwest::Client::new()), cfg.hugging_face_url.clone());
-        downloads::ModelDownloads::new(Arc::new(fetch), library, catalog, hub.clone())
-    });
+        downloads::ModelDownloads::new(Arc::new(fetch), library.clone(), catalog.clone(), hub.clone())
+    };
     // The runtimes install through the same queue as the models.
-    let installs = cfg.data_dir.clone().zip(model_downloads.clone()).zip(settings.clone()).map(|((dir, d), s)| {
-        installs::Installs::new(
-            &dir,
-            d.queue(),
-            s.store.clone(),
-            machine.clone(),
-            engine.clone(),
-            cfg.github_api_url.clone(),
-        )
-    });
-    // The model server's policy, over the daemon's own processes and router.
-    let server = cfg.data_dir.clone().zip(settings.clone()).zip(library.clone()).zip(installs.clone()).map(
-        |(((dir, s), library), installs)| {
-            library.set_installs(installs.clone());
-            let server = model_server::Server::new(s, dir, library, installs, machine.clone(), engine.clone());
-            let _ = engine.server.set(server.model.clone());
-            server
-        },
+    let installs = installs::Installs::new(
+        &cfg.data_dir,
+        model_downloads.queue(),
+        settings.store.clone(),
+        machine.clone(),
+        engine.clone(),
+        cfg.github_api_url.clone(),
     );
-    let runtimes = settings
-        .as_deref()
-        .map(|s| runtimes::new(s, machine.clone(), library.clone(), installs.clone(), server.clone()));
+    // The model server's policy, over the daemon's own processes and router.
+    library.set_installs(installs.clone());
+    let server = model_server::Server::new(
+        settings.clone(),
+        cfg.data_dir.clone(),
+        library.clone(),
+        installs.clone(),
+        machine.clone(),
+        engine.clone(),
+    );
+    let _ = engine.server.set(server.model.clone());
+    let runtimes = runtimes::new(&settings, machine.clone(), library.clone(), installs.clone(), server.clone());
+    let oauth = oauth::OAuth::new(
+        data_dir.clone(),
+        settings.store.clone(),
+        accounts.clone(),
+        hub.clone(),
+        cfg.sign_in,
+        oauth::Endpoints::default(),
+    );
+    let _ = accounts.oauth.set(Arc::downgrade(&oauth));
+    // The desktop app's Electron-main channels, with its browser bridge.
+    let native = cfg
+        .native
+        .clone()
+        .filter(|_| cfg.browser_bridge.is_some())
+        .map(|n| native::Native::new(n, cfg.app_version.clone()));
     let ctx = Ctx {
         terminals: terminals.clone(),
         hub: hub.clone(),
@@ -303,41 +302,24 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         turns: Arc::new(
             turns::Turns::new(
                 sessions.clone(),
-                cfg.data_dir.clone().map(std::path::PathBuf::from),
+                data_dir.clone(),
                 changes,
                 accounts.clone(),
                 mcp.clone(),
                 engine.decide.clone(),
+                settings.store.clone(),
+                agent_logs::AgentLogs::new(&data_dir, sessions.clone(), Arc::new(read_settings()), hub.clone()),
+                agent_watches.clone(),
+                sandboxes.clone(),
+                automation.training.clone(),
             )
-            .with_settings(settings.as_ref().map(|s| s.store.clone()))
-            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token)))
-            .with_watches(agent_watches.clone())
-            .with_training(automation.training.clone())
-            .with_sandboxes(sandboxes.clone())
-            .with_agent_logs(cfg.data_dir.as_ref().map(|d| {
-                let read = read_settings(&settings);
-                agent_logs::AgentLogs::new(std::path::Path::new(d), sessions.clone(), Arc::new(read), hub.clone())
-            })),
+            .with_bridge(cfg.browser_bridge.clone().map(|b| (b.url, b.token))),
         ),
         mcp: mcp.clone(),
         accounts: accounts.clone(),
         settings: settings.clone(),
         admission,
-        oauth: match (&cfg.data_dir, &settings) {
-            (Some(d), Some(s)) => {
-                let o = oauth::OAuth::new(
-                    d.into(),
-                    s.store.clone(),
-                    accounts.clone(),
-                    hub.clone(),
-                    cfg.sign_in,
-                    oauth::Endpoints::default(),
-                );
-                let _ = accounts.oauth.set(Arc::downgrade(&o));
-                Some(o)
-            }
-            _ => None,
-        },
+        oauth,
         machine: machine.clone(),
         runtimes: runtimes.clone(),
         library: library.clone(),
@@ -345,31 +327,21 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         installs: installs.clone(),
         server: server.clone(),
         #[cfg(unix)]
-        runners: cfg.data_dir.clone().map(|d| {
-            runner::Runners::start(
-                d.into(),
-                machine.clone(),
-                Box::new(read_settings(&settings)),
-                hub.clone(),
-                cfg.github_api_url.clone(),
-            )
-        }),
-        resource_queue: cfg.data_dir.clone().map(|d| {
-            Arc::new(resource_queue::ResourceQueue::new(
-                std::path::PathBuf::from(d),
-                Box::new(read_settings(&settings)),
-            ))
-        }),
+        runners: runner::Runners::start(
+            data_dir.clone(),
+            machine.clone(),
+            Box::new(read_settings()),
+            hub.clone(),
+            cfg.github_api_url.clone(),
+        ),
+        resource_queue: Arc::new(resource_queue::ResourceQueue::new(data_dir.clone(), Box::new(read_settings()))),
         voice: voice.clone(),
         cloud: cloud.clone(),
         catalog,
-        workspace: Arc::new(workspace::Workspace::new(
-            cfg.data_dir.clone().map(std::path::PathBuf::from),
-            cfg.github_api_url.as_deref(),
-        )),
+        workspace: Arc::new(workspace::Workspace::new(data_dir.clone(), cfg.github_api_url.as_deref())),
         automation: automation.clone(),
         remote: remote.clone(),
-        security: Arc::new(security::Security::new(remote.security_store(), nekko_remote::system_clock())),
+        security: Arc::new(security::Security::new(Some(remote.security_store()), nekko_remote::system_clock())),
         sandboxes,
         compactions,
         image_turns: image_turns::ImageTurns::new(),
@@ -380,34 +352,26 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }),
         update_checks: small_services::UpdateChecks::new(),
         claude_policy: Arc::new(claude_policy::ClaudePolicyStore::new(
-            cfg.data_dir.clone().map(std::path::PathBuf::from),
+            Some(data_dir.clone()),
             cfg.native.as_ref().is_some_and(|n| n.is_packaged),
-            settings.as_ref().map(|s| s.store.clone()),
+            Some(settings.store.clone()),
         )),
         messaging: messaging.clone(),
-        native: cfg
-            .native
-            .clone()
-            .filter(|_| cfg.browser_bridge.is_some())
-            .map(|n| native::Native::new(n, cfg.app_version.clone())),
-        desktop: match (&cfg.native, &cfg.data_dir, &settings) {
-            (Some(n), Some(d), Some(_)) => Some(desktop::Desktop::new(n, std::path::Path::new(d))),
-            _ => None,
-        },
+        native: native.clone(),
+        desktop: cfg.native.as_ref().map(|n| desktop::Desktop::new(n, &data_dir)),
+        routes: Arc::new(routes::Table::new(native.is_some(), cfg.native.is_some())),
     };
     let _ = running.set(ctx.turns.clone());
-    if let Some(cloud) = &cloud {
-        cloud.start(std::time::Duration::from_secs(60));
-    }
+    cloud.start(std::time::Duration::from_secs(60));
     routes::forward_terminal_events(&ctx);
     ctx.turns.set_background(background::Background::new(
         ctx.machine.clone(),
-        ctx.admission.clone(),
-        ctx.settings.as_ref().map(|s| s.store.clone()),
+        Some(ctx.admission.clone()),
+        Some(ctx.settings.store.clone()),
         ctx.hub.clone(),
     ));
-    if let Some(adm) = ctx.admission.clone() {
-        let c = ctx.clone();
+    {
+        let (c, adm) = (ctx.clone(), ctx.admission.clone());
         ctx.turns.set_preparer(Arc::new(move |payload| {
             let (c, adm) = (c.clone(), adm.clone());
             Box::pin(async move { admission::admit_queued(&c, &adm, &payload).await })
@@ -436,18 +400,16 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     if let Some(n) = &ctx.native {
         n.start(ctx.clone());
     }
-    if let Some(w) = &agent_watches {
+    {
         let c = ctx.clone();
-        w.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+        agent_watches.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
             let c = c.clone();
             Box::pin(async move { routes::route(&c, &channel, args).await })
         }));
-        w.start(ctx.turns.clone());
+        agent_watches.start(ctx.turns.clone());
     }
-    // The catalog refresh checks, where the daemon serves `updates:check`.
-    if ctx.sessions.is_some() && ctx.settings.is_some() {
-        ctx.update_checks.start(ctx.clone());
-    }
+    // The catalog refresh checks (`updates:check`).
+    ctx.update_checks.start(ctx.clone());
     let processes = ctx.turns.processes.clone();
     {
         // A paired phone reaches what the UI reaches: the router.
@@ -464,14 +426,14 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     remote.start();
-    if let Some(m) = &messaging {
+    {
         // A chat's turn, approvals and answers go through the router, as the UI's do.
         let ctx = ctx.clone();
-        m.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
+        messaging.set_dispatcher(Arc::new(move |channel: String, args: Vec<serde_json::Value>| {
             let ctx = ctx.clone();
             Box::pin(async move { routes::route(&ctx, &channel, args).await })
         }));
-        m.start(&hub);
+        messaging.start(&hub);
     }
 
     if let Some(d) = ctx.desktop.clone() {
@@ -491,10 +453,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
             .and_then(cli_install::bundled_cli)
             .map(|(exe, cli)| harness::BridgeCommand::electron(&exe, &cli))
             .or_else(|| harness::cli_on_path().map(|p| harness::BridgeCommand::launcher(&p.to_string_lossy()))),
-        dir: cfg
-            .data_dir
-            .as_ref()
-            .map_or_else(|| std::env::temp_dir().join("nekko-harness"), |d| std::path::Path::new(d).join("harness")),
+        dir: data_dir.join("harness"),
     });
     let after = ctx.clone();
     let app = wire::App { ctx, token: cfg.token.clone().into(), origins: Arc::new(cfg.allowed_origins.clone()) };
@@ -538,21 +497,13 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         d.shutdown(&after).await;
     }
     #[cfg(unix)]
-    if let Some(r) = &after.runners {
-        r.shutdown().await;
-    }
+    after.runners.shutdown().await;
     remote.stop();
-    if let Some(m) = &messaging {
-        m.stop();
-    }
+    messaging.stop();
     engine.shutdown();
     // The servers this daemon started (Ollama) go down with it.
-    if let Some(rt) = &runtimes {
-        rt.kill_all().await;
-    }
-    if let Some(voice) = &voice {
-        voice.stop().await;
-    }
+    runtimes.kill_all().await;
+    voice.stop().await;
     terminals.close_all();
     mcp.stop_all();
     processes.kill_all();

@@ -22,11 +22,6 @@ fn connectors_of(settings: &Value) -> Vec<Value> {
     settings.get("connectors").and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
-/// Whether this daemon serves the connector channels: it owns the settings.
-pub fn owned(ctx: &Ctx) -> bool {
-    ctx.settings.is_some()
-}
-
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let kind = arg(0).clone();

@@ -105,12 +105,10 @@ impl Compactions {
             }
             return Ok(Started::Running(running));
         }
-        if crate::routes::running_chats(ctx).iter().any(|s| s == session_id)
-            || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(session_id))
-        {
+        if crate::routes::running_chats(ctx).iter().any(|s| s == session_id) || ctx.admission.is_admitting(session_id) {
             return Err("Wait for the current reply to finish before compacting.".into());
         }
-        let store = ctx.sessions.clone().ok_or("Session not found.")?;
+        let store = ctx.sessions.clone();
         let (st, id) = (store.clone(), session_id.to_string());
         let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
         let settings = crate::settings::current(ctx).await;
@@ -360,15 +358,10 @@ impl SummaryCalls {
                             &item,
                             nekko_js::now_ms() as f64,
                         );
-                        if self.ctx.accounts.enabled() {
-                            self.ctx.accounts.usage_line(&record);
-                        }
+                        self.ctx.accounts.usage_line(&record);
                     }
                     Ok(ProviderChunk::Done) => {
-                        if subscription
-                            && let Some(key) = token_key.clone()
-                            && self.ctx.accounts.enabled()
-                        {
+                        if subscription && let Some(key) = token_key.clone() {
                             let accounts = self.ctx.accounts.clone();
                             tokio::spawn(async move {
                                 accounts.poll(&key).await;

@@ -11,8 +11,7 @@
 //! `tool:approve` / `chat:answer`. It hears every agent event the UI hears
 //! from the hub, and reconfigures on every settings save.
 //!
-//! Owned only when the daemon knows the data directory. Telegram allows one
-//! long poll per bot token (a second gets 409 Conflict).
+//! Telegram allows one long poll per bot token (a second gets 409 Conflict).
 
 use crate::hub::Hub;
 use nekko_messaging::bridge::{Bridge, Effect, Host};

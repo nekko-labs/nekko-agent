@@ -39,8 +39,8 @@ impl Engine {
     }
 }
 
-/// The model server's answers, from the daemon's own policy once it runs it
-/// (no data directory, no model server).
+/// The model server's answers, from the daemon's own policy once it is set
+/// at startup.
 struct ServerPolicy {
     server: Arc<std::sync::OnceLock<Arc<nekko_engine::server::ModelServer>>>,
 }
@@ -79,6 +79,10 @@ impl Policy for ServerPolicy {
 fn arg(args: &[Value], i: usize) -> &Value {
     args.get(i).unwrap_or(&Value::Null)
 }
+
+/// The `infer:*` channels [`route`] serves (and `crate::decide::CHANNELS`).
+pub const CHANNELS: &[&str] =
+    &["infer:serve", "infer:stopServing", "infer:serving", "infer:spawn", "infer:kill", "infer:list", "infer:log"];
 
 /// The `infer:*` and `decide:*` channels.
 pub async fn route(engine: &Engine, channel: &str, args: &[Value]) -> Option<Result<Value, String>> {

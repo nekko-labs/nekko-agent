@@ -115,10 +115,7 @@ pub async fn summary(ctx: &crate::routes::Ctx) -> Value {
     let profile = serde_json::to_value(ctx.machine.profile(false).await).unwrap_or(Value::Null);
     let live = ctx.machine.system_stats().await.unwrap_or(Value::Null);
     let gpu = ctx.machine.gpu_stats().await.map_or(Value::Null, |s| s.to_value());
-    let engine = match &ctx.server {
-        Some(server) => server.status().await,
-        None => Value::Null,
-    };
+    let engine = ctx.server.status().await;
     summary_value(&crate::small_services::app_info(&ctx.app.facts), &profile, &live, &gpu, &engine, uptime_ms())
 }
 

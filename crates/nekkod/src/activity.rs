@@ -12,7 +12,7 @@ pub const CHANNELS: &[&str] = &["activity:state", "activity:fullscreen"];
 /// The signals now, judged against `idle_after` seconds.
 pub async fn state(ctx: &Ctx, idle_after: f64) -> Activity {
     let readings = ctx.machine.activity().await;
-    let chat = ctx.admission.as_ref().is_some_and(|a| a.attended_running());
+    let chat = ctx.admission.attended_running();
     activity::assess(&readings, chat, idle_after)
 }
 

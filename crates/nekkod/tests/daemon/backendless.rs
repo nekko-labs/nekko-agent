@@ -27,7 +27,7 @@ async fn runs_chats_and_answers_the_busy_checks_with_no_backend() {
         "hooks": [{ "id": "h1", "event": "TurnEnd", "command": "echo turn-ended> turnend.txt" }],
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
 
     let (_, info) = post(d.port, "daemon:info", json!([]), Some(TOKEN)).await;
@@ -170,7 +170,7 @@ async fn delegation_targets_lists_exact_chat_models_without_the_host() {
         "defaultChatMode": "yolo",
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let opts =
         json!({ "sessionId": "s_del", "providerId": "p1", "modelId": "synthetic", "text": "who can I delegate to" });
     let (status, body) = post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
@@ -222,7 +222,7 @@ async fn spawn_agent_refuses_what_prepare_sub_agent_refuses() {
         "orchestration": { "strategy": "swarm" },
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let opts = json!({ "sessionId": "s_sp", "providerId": "p1", "modelId": "synthetic", "text": "delegate" });
     let (status, body) = post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
@@ -282,7 +282,7 @@ async fn a_chat_that_runs_out_of_context_is_compacted_and_carried_on() {
         "defaultChatMode": "yolo", "defaultProviderId": "p1", "defaultModelId": "synthetic",
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let opts = json!({ "sessionId": "s_full", "providerId": "p1", "modelId": "synthetic", "text": "keep going" });
     post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
@@ -316,7 +316,7 @@ async fn reviews_a_repository_change_on_the_default_model_without_tools() {
         "defaultProviderId": "p1", "defaultModelId": "synthetic",
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let input = json!({ "head": "abc123", "prompt": "focus on safety", "title": "t", "description": "d", "files": [{ "filename": "a.rs", "status": "modified", "patch": "+x" }] });
     let (status, body) = post(d.port, "repository:review", json!([input.clone()]), Some(TOKEN)).await;
     assert_eq!((status, body), (200, verdict));
@@ -350,7 +350,7 @@ async fn a_cloud_only_chat_never_calls_a_model_on_this_machine() {
         "defaultChatMode": "yolo",
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
     let opts = json!({ "sessionId": "s_cloud", "providerId": "p1", "modelId": "synthetic", "text": "hello" });
     let (status, body) = post(d.port, "chat:send", json!([opts]), Some(TOKEN)).await;

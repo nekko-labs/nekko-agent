@@ -24,17 +24,15 @@ const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
 
 /// `auto_start_engine` off (a one-shot CLI command): the model server is left as it is.
 pub fn start(ctx: &Ctx, auto_start_engine: bool) {
-    if let Some(store) = ctx.sessions.clone() {
-        let marked = reconcile_interrupted(&store);
-        if marked > 0 {
-            eprintln!("nekkod: {marked} chat(s) were mid-reply when the app last closed");
-        }
+    let marked = reconcile_interrupted(&ctx.sessions);
+    if marked > 0 {
+        eprintln!("nekkod: {marked} chat(s) were mid-reply when the app last closed");
     }
-    if ctx.server.is_some() && ctx.settings.is_some() {
+    {
         let ctx = ctx.clone();
         tokio::spawn(async move { start_engine(&ctx, auto_start_engine).await });
     }
-    if ctx.sessions.is_some() && ctx.settings.is_some() {
+    {
         crate::auto_continue::start(ctx);
         let ctx = ctx.clone();
         tokio::spawn(async move {
@@ -104,9 +102,7 @@ async fn start_engine(ctx: &Ctx, auto_start: bool) {
     let settings = crate::settings::current(ctx).await;
     let engine = crate::library::engine_settings(&settings);
     let base_url = format!("http://127.0.0.1:{}/v1", nekko_js::display(engine.get("port").unwrap_or(&json!(11500))));
-    if let Some(s) = &ctx.settings {
-        crate::model_server::ensure_engine_provider(s, &base_url).await;
-    }
+    crate::model_server::ensure_engine_provider(&ctx.settings, &base_url).await;
     // Opt-in only, and never fatal: a port taken by something else leaves a
     // line in the engine's log for the Models tab, not a failed launch.
     if auto_start && nekko_js::truthy(engine.get("autoStart")) {
