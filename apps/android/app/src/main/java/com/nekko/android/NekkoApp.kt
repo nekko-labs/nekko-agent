@@ -7,8 +7,10 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.nekko.android.connection.ConnectionKeeper
+import com.nekko.android.connection.RoutePolicy
 import com.nekko.android.data.AndroidSecureStore
 import com.nekko.android.data.ChatListFiles
+import com.nekko.android.data.OfflineFileStore
 import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.PaneLayouts
 import com.nekko.android.data.ComputersRepository
@@ -58,6 +60,12 @@ class NekkoApp : Application() {
     val ownerCheck = ActivityOwnerCheck()
 
     /** Settings → Connection → Keep the chat list when offline. Off deletes every saved list. */
+    /** Settings → Connection → Keep recent chats to read offline. */
+    fun setKeepTranscripts(on: Boolean) {
+        phonePrefs.set(OfflineFileStore.KEEP_TRANSCRIPTS, on)
+        computers.setKeepTranscripts(on)
+    }
+
     fun setKeepChatList(on: Boolean) {
         phonePrefs.set(ChatListFiles.ENABLED, on)
         computers.chatListCache = if (on) chatLists else null
@@ -68,6 +76,8 @@ class NekkoApp : Application() {
         super.onCreate()
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
+        // Notify me about: each kind starts as the old single switch was.
+        com.nekko.android.connection.Notices.migrate(phonePrefs)
         newChatDefaults = NewChatDefaults(phonePrefs)
         paneLayouts = PaneLayouts(phonePrefs)
         computers = ComputersRepository(
@@ -76,6 +86,8 @@ class NekkoApp : Application() {
             scope = appScope,
             deviceName = ::deviceName,
             changeSigner = KeystoreChangeSigner(ownerCheck),
+            routeAllowed = RoutePolicy::allowed,
+            offlineFiles = OfflineFileStore(this),
             onForget = { id ->
                 newChatDefaults.forget(id)
                 paneLayouts.forget(id)
@@ -83,6 +95,7 @@ class NekkoApp : Application() {
         )
         chatLists = ChatListFiles(this)
         if (phonePrefs.get(ChatListFiles.ENABLED)) computers.chatListCache = chatLists
+        if (phonePrefs.get(OfflineFileStore.KEEP_TRANSCRIPTS)) computers.setKeepTranscripts(true)
         appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
         connection = ConnectionKeeper(this, computers, phonePrefs, appLock, appScope)
         connection.start()
@@ -120,6 +133,8 @@ class NekkoApp : Application() {
 
             // Fires ~700 ms after the last activity stops, so rotations do not lock.
             override fun onStop(owner: LifecycleOwner) {
+                // What is typed is on disk before Android may end the app.
+                computers.drafts.flush()
                 appLock.onBackground()
                 connection.onForeground(false)
             }

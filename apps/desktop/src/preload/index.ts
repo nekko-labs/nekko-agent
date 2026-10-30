@@ -1,6 +1,7 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { homedir, hostname, userInfo } from 'node:os';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
 if (process.isMainFrame) contextBridge.exposeInMainWorld('nekkoPreview', { open: (source: string) => ipcRenderer.invoke(PREVIEW_CHANNEL, source) });
 import type {
@@ -543,6 +544,12 @@ const api: NekkoApi = {
 };
 
 contextBridge.exposeInMainWorld('nekko', api);
+
+// Presenter mode (NEKKO_PRESENTER=1): the renderer masks these names, emails
+// and key-shaped text outside Settings, for screen recordings.
+if (process.env.NEKKO_PRESENTER === '1') {
+  contextBridge.exposeInMainWorld('nekkoPresenter', { user: userInfo().username, home: homedir(), host: hostname() });
+}
 
 /**
  * The window-chrome bridge, separate from the app API on purpose: `NekkoApi`

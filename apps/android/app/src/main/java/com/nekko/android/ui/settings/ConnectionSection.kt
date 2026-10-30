@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import androidx.compose.ui.platform.testTag
+
 import android.Manifest
 import android.app.ActivityManager
 import android.content.ActivityNotFoundException
@@ -36,6 +38,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ChatListFiles
+import com.nekko.android.data.OfflineFileStore
 import com.nekko.android.NekkoApp
 import com.nekko.android.connection.KeepAlive
 import com.nekko.android.connection.Notices
@@ -57,8 +60,13 @@ fun ConnectionSection(deps: SettingsDeps) {
     val context = LocalContext.current
     val lock = LocalAppLock.current
     val keep by deps.phonePrefs.flow(KeepAlive.ENABLED).collectAsStateWithLifecycle()
-    val notify by deps.phonePrefs.flow(Notices.ENABLED).collectAsStateWithLifecycle()
+    val needsYou by deps.phonePrefs.flow(Notices.NEEDS_YOU).collectAsStateWithLifecycle()
+    val finished by deps.phonePrefs.flow(Notices.FINISHED).collectAsStateWithLifecycle()
+    val failed by deps.phonePrefs.flow(Notices.FAILED).collectAsStateWithLifecycle()
+    val notify = needsYou || finished || failed
+    var testNote by remember { mutableStateOf<String?>(null) }
     val keepList by deps.phonePrefs.flow(ChatListFiles.ENABLED).collectAsStateWithLifecycle()
+    val keepChats by deps.phonePrefs.flow(OfflineFileStore.KEEP_TRANSCRIPTS).collectAsStateWithLifecycle()
     val notices = (context.applicationContext as? NekkoApp)?.connection?.notices
     var allowed by remember { mutableStateOf(notices?.allowed() ?: true) }
     var restricted by remember { mutableStateOf(backgroundRestricted(context)) }
@@ -91,15 +99,40 @@ fun ConnectionSection(deps: SettingsDeps) {
                 onChange = { deps.phonePrefs.set(KeepAlive.ENABLED, it) },
             )
             HorizontalDivider(color = p.line)
-            SwitchRow(
-                title = "Notify me",
-                detail = "When a reply finishes or a chat needs your answer",
-                checked = notify,
-                onChange = { want ->
-                    deps.phonePrefs.set(Notices.ENABLED, want)
-                    if (want && !allowed && Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            // Notify me about (the iPhone's IO-30): one switch per kind, while the app is out of sight.
+            Text("Notify me about", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
+            for ((key, title, detail) in listOf(
+                Triple(Notices.NEEDS_YOU, "Approvals and questions", "A tool waits for your Allow, or the agent asks you something"),
+                Triple(Notices.FINISHED, "Finished replies", "A reply on your computer is ready"),
+                Triple(Notices.FAILED, "Failed replies", "A reply ended with an error"),
+            )) {
+                val on = when (key) {
+                    Notices.NEEDS_YOU -> needsYou
+                    Notices.FINISHED -> finished
+                    else -> failed
+                }
+                SwitchRow(
+                    title = title,
+                    detail = detail,
+                    checked = on,
+                    onChange = { want ->
+                        deps.phonePrefs.set(key, want)
+                        if (want && !allowed && Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    },
+                )
+            }
+            TextButton(
+                onClick = {
+                    val name = deps.repo.state.value.active?.name ?: "your computer"
+                    testNote = if (notices?.postTest(name) == true) {
+                        "Shown by the app. Until Nekko Agent can push to Android, notifications arrive while the app is open or running in the background."
+                    } else {
+                        "Notifications are off for Nekko on this phone. Allow them below."
+                    }
                 },
-            )
+                modifier = Modifier.padding(start = 4.dp).testTag("settings.testNotification"),
+            ) { Text("Send a test notification") }
+            testNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) }
             HorizontalDivider(color = p.line)
             SwitchRow(
                 title = "Keep the chat list when offline",
@@ -107,6 +140,15 @@ fun ConnectionSection(deps: SettingsDeps) {
                 checked = keepList,
                 onChange = { on ->
                     (context.applicationContext as? NekkoApp)?.setKeepChatList(on) ?: deps.phonePrefs.set(ChatListFiles.ENABLED, on)
+                },
+            )
+            HorizontalDivider(color = p.line)
+            SwitchRow(
+                title = "Keep recent chats to read offline",
+                detail = "The last 20 chats you opened, without their photos. Not backed up; off deletes them",
+                checked = keepChats,
+                onChange = { on ->
+                    (context.applicationContext as? NekkoApp)?.setKeepTranscripts(on) ?: deps.phonePrefs.set(OfflineFileStore.KEEP_TRANSCRIPTS, on)
                 },
             )
         }

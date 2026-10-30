@@ -142,7 +142,18 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
-> version and the open-source licenses of the app and the libraries it ships.
+> version, the phone protocol on each side and the open-source licenses of the app and the
+> libraries it ships.
+>
+> **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
+> different phone protocol versions, the chat list and **Settings → About** show a banner naming
+> the side to update: Nekko Agent on the computer, or the app.
+>
+> **First run** (iPhone and Android): the first time the app opens it shows three steps: what it
+> does, pairing, and, right after the first pairing, what notifications look like with **Allow
+> notifications** or **Not now**. Permission to notify is never asked before a computer is paired.
+> **Skip** on the first two steps ends it. On Android, **Not now** turns the kinds under **Settings →
+> Connection → Notify me about** off; turn them on there later.
 >
 > **New chat defaults** (Android): **Settings → New chats** picks the computer the app connects to
 > when it starts (default: the one used last) and, for each computer, the model New chat opens with
@@ -161,9 +172,15 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; YOLO asks once
 > before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
-> its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
+> its Settings. A long-press on a chat in the list offers that action, plus **Pin** (or **Unpin**)
+> and **Rename**; a pinned chat shows a pin beside its time.
 >
-> **Write offline** (iPhone): with no connection to your computer you can still write. What you
+> **A chat's own actions** (Android): **⋮** in a chat has **Chat mode** (this chat's Ask, Guardrails
+> or YOLO; a chat without its own follows the computer's default; switching to a mode that asks less
+> is confirmed with your fingerprint, face or screen lock, and YOLO asks once first), **Rename**,
+> **Pin** / **Unpin** and **Complete**, each saved on the computer.
+>
+> **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
 > the phone closing the app loses nothing. **Send when online** puts a prompt in a queue on the
 > phone, shown in the chat as **Waiting to send** (Edit, Delete, Send now); a new chat started
@@ -176,8 +193,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > and are deleted when you forget the computer. Sending prompts written offline needs this version
 > of Nekko Agent on the computer.
 >
-> **Read offline** (iPhone; the chat list on Android too): the phone keeps each computer's chat list
-> and, on iPhone, the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
+> On Android, a new chat started offline uses your default model for that computer from **Settings
+> → New chats** (the computer's models can't be listed offline), and prompts go while the app is
+> open; the widget doesn't count them yet.
+>
+> **Read offline** (iPhone and Android): the phone keeps each computer's chat list
+> and the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
 > newest messages). Opening the app or a chat shows them at once, and while the computer can't be
 > reached they stay readable under **Saved list from 10:42** and **Saved copy from 10:42**. When the
 > computer answers, the live list and chat replace them in place. A saved chat can't be changed
@@ -306,9 +327,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
 > **Settings → Connection → Stay connected while a chat runs** (on by default) keeps the app connected
 > after you leave it, with a silent "Staying connected · 1 chat running on Mac" notification that goes
-> away as soon as the reply is done. **Notify me** (on by default; Android 13+ asks for permission)
-> sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
-> while you're out of the app. Notifications say what happened and in which chat, never the reply, the
+> away as soon as the reply is done. **Notify me about** (each on by default; Android 13+ asks for
+> permission) has a switch for **Approvals and questions**, **Finished replies** and **Failed
+> replies**, and sends that notification while you're out of the app. **Send a test notification**
+> shows one at once. When an approval or a question is answered elsewhere (the desktop, another phone)
+> or its run ends, its notification goes away by itself. Notifications say what happened and in which chat, never the reply, the
 > command or the question; with the app lock on they don't name the chat either, and tapping one opens
 > the chat through the lock. Without push (not built yet), these only arrive while the phone is still
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's
@@ -551,10 +574,13 @@ on. Without Tailscale on this computer the option links to Tailscale and stays o
   virtual adapters of WSL, Hyper-V, Docker or VMs). Pairing
   codes then carry both routes, and the iPhone app uses the LAN when it is on the same Wi-Fi and
   moves to Tailscale by itself when it leaves, coming back once the LAN answers steadily again.
+  The Android app keeps the LAN route but doesn't use it yet (Android allows unencrypted `ws://`
+  only to Tailscale names); it moves between the other routes the same way.
   Switch **Also on this Wi-Fi** off to keep the relay on the tailnet only; pair the phone again
   after changing it. Phones paired before this keep the one route until they scan a new code.
 
-On the iPhone, **Settings → Connection** shows the route in use. **Check routes** looks up,
+On the iPhone, **Settings → Connection** shows the route in use (on Android, **Settings →
+Connection status**, with the other routes). **Check routes** looks up,
 connects to and says hello on each route with timings, and **Share diagnostics** shares those
 results and the connection log as text, without rooms, keys, codes or messages.
 

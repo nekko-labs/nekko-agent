@@ -36,7 +36,7 @@
       content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
-    <link rel="stylesheet" href="styles.css?v=8" />
+    <link rel="stylesheet" href="styles.css?v=9" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Non-blocking webfont load: the system stack renders immediately; Inter
@@ -213,9 +213,10 @@
       </section>
 
       <!-- ===== why Nekko: five promises, one demo panel each. Travis is
-           producing the videos; drop each one into its slot as
-           <video src="…" autoplay muted loop playsinline></video> and the
-           placeholder label hides itself. ===== -->
+           producing the videos; drop each one into its slot like the control
+           panel's (<video class="panel-video" … data-autoplay> with a poster):
+           site.js plays it only while it is on screen, and the placeholder
+           label hides itself. ===== -->
       <section id="why-nekko" class="chapter panels">
         <p class="eyebrow reveal">WHY NEKKO · FIVE PROMISES</p>
         <h2 class="reveal">An agent you can trust with your own data</h2>
@@ -233,7 +234,11 @@
             </ul>
             <a class="card-link" href="#features">How the controls work <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video coming soon: choosing a model and inspecting context. Opens larger."><span>Demo · In control</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
+          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video: switching a chat from a local model to Claude Opus, checking its context, and approving each file edit. Opens larger.">
+            <video class="panel-video" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-control-poster.webp" data-autoplay>
+              <source src="media/demo-control.mp4" type="video/mp4">
+            </video>
+          </button>
         </article>
 
         <article class="panel glass reveal" id="experience">
@@ -327,16 +332,32 @@
       <!-- ===== beta sign-up: after the "what it does" tour, before the technical detail ===== -->
       <section id="beta" class="chapter band band-lavender" aria-labelledby="beta-title">
         <div class="beta">
-          <div class="reveal">
-            <p class="eyebrow">NEKKO BETA · FREE TO JOIN</p>
-            <h2 id="beta-title">Help shape what Nekko becomes</h2>
-            <p class="chapter-lede">Join the beta list and get a front-row seat as Nekko grows. You try new things first, and your feedback decides what we build next.</p>
-            <ul class="beta-perks">
-              <li>A chance to try the iOS and Android apps before anyone else</li>
-              <li>First to test new features as they land</li>
-              <li>More beta-only extras to come</li>
-            </ul>
+          <div class="beta-intro reveal">
+            <p class="eyebrow">MEET NEKKO · FREE BETA</p>
+            <h2 id="beta-title">See it in a minute. Try it first.</h2>
+            <p class="chapter-lede">Nekko the cat walks you through the ideas behind the app in about a minute. Like what you see? Join the beta and try new things before anyone else.</p>
           </div>
+          <!-- The tour: one video, its file picked by look (dark files for Dark,
+               light for White and Colourful). Nothing loads until it is near the screen. -->
+          <figure class="tour reveal" data-tour>
+            <div class="tour-frame">
+              <video class="tour-video" muted playsinline preload="none" controls width="1080" height="1080"
+                     aria-label="Illustrated tour of Nekko, about a minute, no sound"
+                     data-src-dark="media/nekko-tour-dark.mp4" data-poster-dark="media/nekko-tour-dark-poster.webp"
+                     data-src-light="media/nekko-tour-light.mp4" data-poster-light="media/nekko-tour-light-poster.webp"></video>
+              <div class="tour-end" data-tour-end hidden>
+                <p>Want to try it first?</p>
+                <button class="btn btn-primary" type="button" data-tour-join>Join the beta</button>
+                <button class="tour-again" type="button" data-tour-again>Watch again</button>
+              </div>
+            </div>
+            <figcaption class="micro">Illustrated tour. The screenshots elsewhere on this page show the real app.</figcaption>
+          </figure>
+          <ul class="beta-perks reveal">
+            <li>A chance to try the iOS and Android apps before anyone else</li>
+            <li>First to test new features as they land</li>
+            <li>More beta-only extras to come</li>
+          </ul>
           <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
                Until then the form only shows its thank-you message and sends nothing. -->
           <div class="beta-stage reveal" data-beta>
@@ -614,7 +635,7 @@
       <button class="lightbox-close btn btn-ghost btn-sm" type="button" aria-label="Close">Close ✕</button>
       <div class="lightbox-stage"></div>
     </div>
-    <script src="site.js?v=10"></script>
+    <script src="site.js?v=11"></script>
     <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

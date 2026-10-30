@@ -1,6 +1,7 @@
 package com.nekko.android.data
 
 import com.nekko.protocol.ConnectionLog
+import com.nekko.protocol.NetworkPath
 import com.nekko.protocol.Tailnet
 import com.nekko.protocol.RelayHint
 import com.nekko.protocol.DenyReason
@@ -26,6 +27,9 @@ import com.nekko.protocol.SavedChatList
 import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.StepUpChallenge
 import com.nekko.protocol.StepUpProof
+import com.nekko.protocol.DraftStore
+import com.nekko.protocol.SavedTranscripts
+import com.nekko.protocol.OfflineFiles
 import com.nekko.protocol.TerminalChannels
 import com.nekko.protocol.TerminalEvent
 import com.nekko.protocol.WorkspaceFolder
@@ -108,7 +112,49 @@ class ComputersRepository(
     private val outboxConnectMs: Long = 20_000,
     /** Signs Change actions (AN-32): the Keystore key in the app, a software key in tests, none where unset. */
     private val changeSigner: ChangeSigner? = null,
+    /** Which relay routes this phone may dial ([com.nekko.android.connection.RoutePolicy] in the app). */
+    private val routeAllowed: (String) -> Boolean = { true },
+    /** Each computer's drafts and outbox on disk ([OfflineFileStore] in the app); memory only when null. */
+    private val offlineFiles: OfflineFiles? = null,
+    private val draftDebounceMs: Long = 500,
 ) {
+    /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
+    val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
+
+    /** The last chats opened, to read while the computer is out of reach (OF-5); kept only while the setting is on. */
+    val transcripts = SavedTranscripts(now = now)
+
+    /** *Keep recent chats to read offline*: on keeps them from now; off deletes every computer's copies. */
+    fun setKeepTranscripts(on: Boolean) {
+        val f = offlineFiles ?: return
+        if (on) {
+            transcripts.use(f, _state.value.activeId)
+            return
+        }
+        // Each computer's copies, then none kept from now on.
+        _state.value.computers.forEach { c ->
+            transcripts.use(f, c.id)
+            transcripts.keepOnly(emptySet())
+        }
+        transcripts.use(null, _state.value.activeId)
+    }
+
+    /** Prompts written offline, or whose send dropped, delivered once the computer is reachable. */
+    val outbox = Outbox(
+        files = offlineFiles,
+        drafts = drafts,
+        caller = { client.takeIf { _state.value.conn == RelayState.ONLINE } },
+        defaults = { _state.value.defaults },
+        scope = scope,
+        newId = newId,
+        now = now,
+    )
+
+    init {
+        // A chat started offline now exists, and a delivered prompt changed its chat: read the list again.
+        outbox.onDelivered = { _, _ -> scheduleSummaries() }
+    }
+
     /** *Sign out this phone* not yet heard by the computer (SK-8). */
     private val signOuts = SignOutOutbox(store)
 
@@ -120,6 +166,10 @@ class ComputersRepository(
     private val _connectionLog = MutableStateFlow<List<ConnectionLog.Entry>>(emptyList())
     /** The active computer's connection history (memory only, content-free), for Settings → Connection. */
     val connectionLog: StateFlow<List<ConnectionLog.Entry>> = _connectionLog.asStateFlow()
+
+    private val _dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    /** The active computer's relay `dismiss` frames: chat tags whose needs-you notification can go. */
+    val dismissals: SharedFlow<String> = _dismissals.asSharedFlow()
 
     /** The connection log as plain text for a bug report: times, states and the relay's host only. */
     fun connectionLogText(): String {
@@ -249,7 +299,9 @@ class ComputersRepository(
             }
             val id = existing?.id ?: newId()
             store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair)))
-            val next = if (existing != null) list else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now())
+            // The computer's routes may have changed since (another Wi-Fi, LAN addresses on or off).
+            val next = if (existing != null) list.map { if (it.id == id) it.copy(alts = link.alts) else it }
+            else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now(), alts = link.alts)
             saveIndex(next)
             _state.update { it.copy(computers = next) }
             id
@@ -272,6 +324,12 @@ class ComputersRepository(
             if (wasActive) disconnect()
             store.set(secretKey(id), null)
             chatListCache?.remove(id)
+            if (_state.value.activeId == id) {
+                drafts.load(null)
+                outbox.load(null)
+                transcripts.load(null)
+            }
+            offlineFiles?.remove(id)
             onForget(id)
             val next = _state.value.computers.filter { it.id != id }
             saveIndex(next)
@@ -297,6 +355,11 @@ class ComputersRepository(
         val computer = _state.value.computers.firstOrNull { it.id == id } ?: return@withLock
         val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return@withLock
         store.set(ACTIVE_KEY, id)
+        if (drafts.computerId != id) {
+            drafts.load(id)
+            outbox.load(id)
+        }
+        if (transcripts.computerId != id) transcripts.load(id)
         if (loggedComputer != id) {
             log.clear()
             loggedComputer = id
@@ -312,6 +375,7 @@ class ComputersRepository(
                 remoteStoppedAt = null,
                 lastError = null,
                 savedListAt = null,
+                hostProtocol = null,
             )
         }
         liveList = false
@@ -328,6 +392,8 @@ class ComputersRepository(
             deviceName = deviceName(),
             pairCode = secret.pair,
             platform = "android",
+            alts = computer.alts,
+            routeAllowed = routeAllowed,
         )
         // Refusals read with the computer's current name (it can be renamed while connected).
         val c = PlainRefusals(remotes.create(config, scope)) {
@@ -338,13 +404,19 @@ class ComputersRepository(
             launch {
                 c.status.collect { s ->
                     if (client !== c) return@collect
-                    _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied) }
+                    _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied, route = s.route) }
                     logStatus(s.state, s.detail, s.denied)
-                    if (s.state == RelayState.ONLINE) scope.launch { refresh() }
+                    if (s.state == RelayState.ONLINE) scope.launch {
+                        refresh()
+                        // Back in reach: what was written offline goes now, in order.
+                        outbox.flush()
+                    }
                 }
             }
+            launch { c.dismissals.collect { _dismissals.emit(it) } }
             launch {
-                c.welcome.collect {
+                c.welcome.collect { w ->
+                    if (client === c) _state.update { it.copy(hostProtocol = w.protocol) }
                     // Enrollment done: the one-time code must never be sent again.
                     if (secret.pair != null) dropPairCode(id)
                 }
@@ -363,6 +435,7 @@ class ComputersRepository(
                     }
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
+                    outbox.onEvent(e)
                     _events.emit(e)
                     _state.update { s ->
                         val activity = ActivityTracker.next(s.activity, e)
@@ -373,6 +446,7 @@ class ComputersRepository(
                 }
             }
         }
+        c.setNetworkPath(networkPath)
         c.connect()
     }
 
@@ -384,14 +458,17 @@ class ComputersRepository(
         client?.close()
         client = null
         changeCalls = null
-        _state.update { it.copy(conn = RelayState.IDLE) }
+        _state.update { it.copy(conn = RelayState.IDLE, route = null) }
     }
 
     /** App came to the foreground: reconnect now rather than after the backoff. */
     fun nudge() {
         client?.nudge()
         // Chats completed, restored or started on the computer meanwhile send no event: re-read the list.
-        if (_state.value.conn == RelayState.ONLINE) scheduleSummaries()
+        if (_state.value.conn == RelayState.ONLINE) {
+            scheduleSummaries()
+            outbox.flushSoon()
+        }
     }
 
     /**
@@ -536,6 +613,30 @@ class ComputersRepository(
         setArchived(sessionId, null)
     }
 
+    /** Rename a chat on the computer; a blank title changes nothing. */
+    suspend fun renameChat(sessionId: String, title: String) {
+        val t = title.trim()
+        if (t.isEmpty()) return
+        remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("title", t) })
+        _state.update { s -> s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(title = t) else it }) }
+    }
+
+    /** Pin or unpin a chat, the desktop's pin: the same flag on the computer. */
+    suspend fun setPinned(sessionId: String, pinned: Boolean) {
+        remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("pinned", pinned) })
+        _state.update { s -> s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(pinned = pinned) else it }) }
+    }
+
+    /**
+     * Change one chat's tool policy. A raise is signed ([callRaising]); a
+     * `step-up-required` refusal is thrown for the step-up sheet, which calls
+     * this again with its [stepUp].
+     */
+    suspend fun setChatMode(sessionId: String, mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
+        val args = listOf(JsonPrimitive(sessionId), buildJsonObject { put("mode", mode.wire) })
+        if (stepUp == null) callRaising(Channels.SESSION_SET_OPTIONS, args) else callChange(Channels.SESSION_SET_OPTIONS, args, stepUp)
+    }
+
     private fun setArchived(sessionId: String, at: Long?) {
         _state.update { s ->
             s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(archived = at != null, archivedAt = at) else it })
@@ -546,6 +647,7 @@ class ComputersRepository(
     suspend fun deleteChat(sessionId: String) {
         remote().call(Channels.SESSION_DELETE, JsonPrimitive(sessionId))
         dropFromList(sessionId)
+        transcripts.remove(sessionId)
     }
 
     private fun dropFromList(sessionId: String) {
@@ -555,6 +657,21 @@ class ComputersRepository(
     /** The phone changed network, or the socket may have died while frozen: dial a fresh one now. */
     fun reconnect() {
         client?.reconnect()
+    }
+
+    /** The phone's network, for the route choice; the next connection starts from it too. */
+    @Volatile private var networkPath = NetworkPath.UNKNOWN
+
+    /** The phone moved to another network of kind [path]: the best route for it, on a fresh socket now. */
+    fun networkChanged(path: NetworkPath) {
+        networkPath = path
+        client?.networkChanged(path)
+    }
+
+    /** Where the phone is, without having moved: dial again only if that changes the route. */
+    fun setNetworkPath(path: NetworkPath) {
+        networkPath = path
+        client?.setNetworkPath(path)
     }
 
     suspend fun refresh() {
@@ -584,6 +701,8 @@ class ComputersRepository(
                 )
             }
             _state.update { it.copy(quitFromPhone = r.info?.quitFromPhone == true) }
+            // The computer's whole list: a saved chat it no longer has goes too.
+            transcripts.keepOnly(r.summaries.map { it.id }.toSet())
             liveList = true
             saveList()
             learnPlatform(r.info?.platform)

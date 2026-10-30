@@ -11,7 +11,7 @@ class SavedChatListTest {
     @Test fun `keeps only what the list shows`() {
         val s = SessionSummary.from(
             Json.parseToJsonElement(
-                """{"id":"s1","title":"Fix the build","updatedAt":5,"workspaceId":"w","archivedAt":7,"order":1.5,
+                """{"id":"s1","title":"Fix the build","updatedAt":5,"workspaceId":"w","archivedAt":7,"order":1.5,"pinned":true,
                    "lastReplyText":"secret reply","firstUserText":"secret prompt","modelId":"m","providerId":"p"}""",
             ),
         )!!
@@ -28,13 +28,16 @@ class SavedChatListTest {
         assertEquals(7L, b.archivedAt)
         assertTrue(b.archived)
         assertEquals(1.5, b.order!!, 0.0)
+        assertTrue(b.pinned)
         assertNull(b.lastReplyText)
     }
 
     /** The same file shape as the iPhone app's `SavedChatList` (version 1). */
     @Test fun `reads the iPhone app's shape and ignores other versions`() {
         val ios = """{"v":1,"savedAt":3,"chats":[{"id":"a","title":"T","updatedAt":2,"pinned":true}],"folders":[]}"""
-        assertEquals(listOf("a"), SavedChatList.from(Json.parseToJsonElement(ios))!!.summaries.map { it.id })
+        val chats = SavedChatList.from(Json.parseToJsonElement(ios))!!.summaries
+        assertEquals(listOf("a"), chats.map { it.id })
+        assertTrue(chats.single().pinned)
         assertNull(SavedChatList.from(Json.parseToJsonElement("""{"v":2,"savedAt":1,"chats":[]}""")))
         assertNull(SavedChatList.from(Json.parseToJsonElement("""{"savedAt":1}""")))
         assertNull(SavedChatList.from(null))

@@ -70,7 +70,12 @@ class LiveRelayTest {
         }
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            // First run, step 1: what the app does; step 2 is pairing.
+            waitFor(hasText("Step 1 of 3"))
+            shot("0-first-run")
+            tap(hasText("Continue"))
             waitFor(hasText("Pair a computer"))
+            waitFor(hasText("Step 2 of 3"))
             shot("0-welcome")
             tap(hasText("Pair a computer"))
 
@@ -82,6 +87,11 @@ class LiveRelayTest {
             // The button moves while the keyboard slides away (imePadding), so a
             // touch at its old centre can miss; click it through its semantics.
             click(hasText("Pair"))
+
+            // Step 3, right after the first pairing: notifications (granted above, so nothing is asked).
+            waitFor(hasText("Step 3 of 3"), 30_000)
+            shot("1a-first-run-notifications")
+            tap(hasText("Allow notifications"))
 
             waitFor(hasText("New chat"), 30_000)
             shot("2-chats")

@@ -1,5 +1,6 @@
 package com.nekko.android.data
 
+import com.nekko.protocol.ProtocolCheck
 import com.nekko.protocol.Activity
 import com.nekko.protocol.DenyReason
 import com.nekko.protocol.Appearance
@@ -29,6 +30,8 @@ data class Computer(
     val pairedAt: Long,
     /** OS of the computer, learned from app:info once connected. */
     val platform: String? = null,
+    /** Other addresses of the same relay, from the pairing link (AN-28). */
+    val alts: List<String> = emptyList(),
 )
 
 /** Secret half of a pairing, kept in [SecureStore] only. */
@@ -50,6 +53,8 @@ data class ComputersState(
     val activeId: String? = null,
     val conn: RelayState = RelayState.IDLE,
     val connDetail: String? = null,
+    /** The relay address in use or being dialed, one of the active computer's routes. */
+    val route: String? = null,
     val denied: DenyReason? = null,
     val summaries: List<SessionSummary> = emptyList(),
     val summariesLoading: Boolean = false,
@@ -72,8 +77,13 @@ data class ComputersState(
     val quitFromPhone: Boolean = false,
     /** When this phone stopped remote access on the active computer (SK-8); null otherwise. */
     val remoteStoppedAt: Long? = null,
+    /** The active computer's phone protocol from its welcome (IO-32); null until it has welcomed this phone. */
+    val hostProtocol: Int? = null,
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
+
+    /** Which side to update when the phone and the computer speak different versions. */
+    val protocolCheck: ProtocolCheck get() = ProtocolCheck.compare(hostProtocol)
 }
 
 /** Hand-written JSON for what we persist; the app has no serialization plugin. */
@@ -88,6 +98,7 @@ internal object StoredJson {
                 put("relayUrl", c.relayUrl)
                 put("pairedAt", c.pairedAt)
                 c.platform?.let { put("platform", it) }
+                if (c.alts.isNotEmpty()) put("alts", buildJsonArray { c.alts.forEach { add(JsonPrimitive(it)) } })
             })
         }
     }.toString()
@@ -102,6 +113,7 @@ internal object StoredJson {
                 relayUrl = o.str("relayUrl") ?: return@mapNotNull null,
                 pairedAt = (o["pairedAt"] as? JsonPrimitive)?.longOrNull ?: 0,
                 platform = o.str("platform"),
+                alts = (o["alts"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
             )
         }
     }

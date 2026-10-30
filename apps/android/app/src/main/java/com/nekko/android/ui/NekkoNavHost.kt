@@ -1,5 +1,14 @@
 package com.nekko.android.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.nekko.android.data.FirstRun
+import com.nekko.android.ui.screens.FirstRunIntro
+import com.nekko.android.ui.screens.FirstRunNotifications
+import kotlinx.coroutines.flow.first
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -7,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -139,8 +150,13 @@ fun NekkoNavHost(
         onLinkHandled()
     }
 
+    // A phone paired before the first run existed never sees it.
+    LaunchedEffect(repo) { FirstRun.atLaunch(phonePrefs, repo.state.first { it.ready }.computers.isNotEmpty()) }
+
     NavHost(navController = nav, startDestination = Routes.CHATS) {
         composable(Routes.CHATS) {
+            // First run (IO-31): step 1 before pairing, step 3 right after the first pairing.
+            if (firstRunStep(repo, phonePrefs)) return@composable
             if (mode != PaneMode.ONE) {
                 Panes(window, panes, repo, phonePrefs, shareInbox, nav)
                 return@composable
@@ -153,6 +169,7 @@ fun NekkoNavHost(
                 onComputers = { nav.navigate(Routes.COMPUTERS) },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
                 onMonitors = { nav.navigate(Routes.MONITORS) },
+                onSkipFirstRun = firstRunSkip(phonePrefs),
             )
         }
         composable(Routes.MONITORS) {
@@ -213,6 +230,10 @@ fun NekkoNavHost(
                     nav.popBackStack()
                 },
                 onPair = { nav.navigate(Routes.pair()) },
+                onQueued = {
+                    shareInbox.clear()
+                    nav.popBackStack()
+                },
                 onCreated = { id ->
                     shareInbox.handOff(id)
                     nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }
@@ -227,7 +248,10 @@ fun NekkoNavHost(
                 repo = repo,
                 initialLink = entry.arguments?.getString("link"),
                 onBack = { nav.popBackStack() },
-                onPaired = { nav.onMain { backToChats() } },
+                onPaired = {
+                    FirstRun.paired(phonePrefs)
+                    nav.onMain { backToChats() }
+                },
             )
         }
         composable(Routes.SETTINGS) {
@@ -391,6 +415,50 @@ private fun EmptyChatPane(slot: PaneSlot, onNewChat: () -> Unit) {
  * threw "Method setCurrentState must be called on the main thread"
  * (the emulator journey, apps/android/scripts/emulator-journey.sh).
  */
+/**
+ * Draws the first run's step 1 (no computer paired yet) or step 3 (just paired)
+ * in place of the chat list; false when neither is due.
+ */
+@Composable
+private fun firstRunStep(repo: ComputersRepository, prefs: PhonePrefs): Boolean {
+    val c by repo.state.collectAsStateWithLifecycle()
+    val done by prefs.flow(FirstRun.DONE).collectAsStateWithLifecycle()
+    val notifyStep by prefs.flow(FirstRun.NOTIFY_STEP).collectAsStateWithLifecycle()
+    var introSeen by rememberSaveable { mutableStateOf(false) }
+    var asking by remember { mutableStateOf(false) }
+    // Whatever Android answers, the step is done; a refusal shows in Settings → Connection.
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { FirstRun.finish(prefs, allowNotifications = true) }
+    if (!c.ready) return false
+    if (notifyStep && c.computers.isNotEmpty()) {
+        FirstRunNotifications(
+            computer = c.active?.name ?: "Your computer",
+            asking = asking,
+            onAllow = {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    asking = true
+                    permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    FirstRun.finish(prefs, allowNotifications = true)
+                }
+            },
+            onNotNow = { FirstRun.finish(prefs, allowNotifications = false) },
+        )
+        return true
+    }
+    if (!done && !introSeen && c.computers.isEmpty()) {
+        FirstRunIntro(onContinue = { introSeen = true }, onSkip = { FirstRun.skip(prefs) })
+        return true
+    }
+    return false
+}
+
+/** Step 2's Skip on the welcome, only while the first run is on. */
+@Composable
+private fun firstRunSkip(prefs: PhonePrefs): (() -> Unit)? {
+    val done by prefs.flow(FirstRun.DONE).collectAsStateWithLifecycle()
+    return if (done) null else { { FirstRun.skip(prefs) } }
+}
+
 private fun NavHostController.onMain(block: NavHostController.() -> Unit) {
     if (Looper.myLooper() == Looper.getMainLooper()) block() else Handler(Looper.getMainLooper()).post { block() }
 }

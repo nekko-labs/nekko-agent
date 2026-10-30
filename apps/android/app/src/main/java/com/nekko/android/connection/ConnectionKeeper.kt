@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.nekko.android.chat.PhoneEvent
@@ -48,6 +49,8 @@ class ConnectionKeeper(
 
     fun start() {
         watchNetwork()
+        // Answered elsewhere, or its run ended: the needs-you notification goes.
+        scope.launch { repo.dismissals.collect { notices.dismissNeedsYou(it) } }
         scope.launch {
             repo.events.collect { e ->
                 lastEventAt.value = now()
@@ -80,7 +83,7 @@ class ConnectionKeeper(
 
     private fun onEvent(sessionId: String, event: PhoneEvent, callId: String?) {
         // In the app the chat itself shows it (and A6's haptics react).
-        if (foreground.value || !prefs.get(Notices.ENABLED)) return
+        if (foreground.value || !Notices.wants(prefs, event)) return
         val s = repo.state.value
         // Only the chats the phone lists: not subagents, tasks or training runs.
         val chat = s.summaries.firstOrNull { it.id == sessionId } ?: return
@@ -108,10 +111,13 @@ class ConnectionKeeper(
 
     private fun watchNetwork() {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
-        val changes = NetworkChanges(repo::reconnect)
+        val changes = NetworkChanges(same = repo::setNetworkPath, changed = repo::networkChanged)
         try {
             cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = changes.onAvailable(network)
+                override fun onAvailable(network: Network) =
+                    changes.onAvailable(network, RoutePolicy.path(cm.getNetworkCapabilities(network)))
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) =
+                    changes.onPath(network, RoutePolicy.path(caps))
                 override fun onLost(network: Network) = changes.onLost(network)
             })
         } catch (e: RuntimeException) {

@@ -1,5 +1,7 @@
 package com.nekko.android.chat
 
+import com.nekko.android.data.Outbox
+
 import com.nekko.android.data.Caller
 import com.nekko.android.util.plainText
 import com.nekko.protocol.AUTO_MODEL_ID
@@ -33,6 +35,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.contentOrNull
@@ -40,6 +43,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.NonCancellable
 import com.nekko.protocol.RelayException
 import com.nekko.protocol.QueuedPrompt
+import com.nekko.protocol.PcSettings
+import com.nekko.protocol.SavedTranscripts
 
 /** A turn can run for hours (long agent runs); don't time the request out. */
 const val TURN_TIMEOUT_MS: Long = 12L * 60 * 60 * 1000
@@ -53,6 +58,8 @@ data class ChatState(
     val skills: List<SkillSummary> = emptyList(),
     /** The computer's count of the chat's context window (`context:preview`); null until it answers or on an older computer. */
     val context: ContextUsage? = null,
+    /** When the transcript on screen is the phone's saved copy (the computer hasn't answered yet), when it was saved. */
+    val savedAt: Long? = null,
 )
 
 /** Connection facts the chat screen reads from the computers store. */
@@ -63,6 +70,8 @@ data class ChatEnv(
     val computerName: String = "your computer",
     /** The computer's model lists by provider, for the model's name. */
     val models: Map<String, List<ModelInfo>> = emptyMap(),
+    /** Prompts sent while the computer is out of reach wait in the outbox instead of being refused. */
+    val canQueue: Boolean = false,
 )
 
 /** Everything the chat screen renders. Pure projection of [ChatState] + [ChatEnv]. */
@@ -89,6 +98,12 @@ data class ChatUi(
     val modelName: String? = null,
     /** The chat's own effort; null follows the computer's setting. */
     val effort: Effort? = null,
+    /** The chat's own tool policy; null follows the computer's default. */
+    val mode: PcSettings.ChatMode? = null,
+    /** The transcript is the phone's saved copy, saved then: read-only until the computer answers (OF-5). */
+    val savedAt: Long? = null,
+    /** The computer is out of reach and what is sent waits on the phone: says so under the box, without blocking it. */
+    val sendsLater: String? = null,
     val context: ContextUsage? = null,
     /** [context]'s count plus about one token per four characters streamed this turn; null until the computer answers. */
     val contextTokens: Long? = null,
@@ -107,6 +122,12 @@ class ChatController(
     private val scope: CoroutineScope,
     private val env: () -> ChatEnv,
     private val now: () -> Long = System::currentTimeMillis,
+    /** Each prompt's `clientMessageId`: a repeat of it is taken once only. */
+    private val newId: () -> String = { java.util.UUID.randomUUID().toString() },
+    /** Offline mode: every prompt is on disk until the computer lists it; null sends without one (tests, previews). */
+    private val outbox: Outbox? = null,
+    /** The last chats opened, kept to read offline (OF-5); null keeps none. */
+    private val saved: SavedTranscripts? = null,
 ) {
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -130,14 +151,22 @@ class ChatController(
             scope.launch { loadContext() }
             val session = Session.from(raw)
             if (session == null) {
-                _state.update { it.copy(loadError = "This chat was deleted on your computer.") }
+                saved?.remove(sessionId)
+                _state.update { st ->
+                    // A saved copy of a chat the computer no longer has is not shown.
+                    st.copy(loadError = "This chat was deleted on your computer.", session = if (st.savedAt != null) null else st.session, savedAt = null)
+                }
                 return
             }
+            saved?.save(session)
             val mine = pending[sessionId]
+            // The computer lists these prompts: whatever the outbox still held of them was delivered.
+            if (session.clientMessageIds.isNotEmpty()) outbox?.confirm(sessionId, session.clientMessageIds)
             _state.update { st ->
                 val t = st.turn
                 st.copy(
                     session = session,
+                    savedAt = null,
                     loadError = null,
                     // Mid-turn the overlay keeps streaming; mergeLive hides what the re-read
                     // session already holds. After the turn the session has it all.
@@ -152,8 +181,19 @@ class ChatController(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
+            showSavedCopy()
+            if (_state.value.savedAt != null && !(e is RelayException && e.fromComputer)) return
             _state.update { it.copy(loadError = e.message ?: "Could not load this chat.") }
         }
+    }
+
+    /** Paint the saved copy while nothing better is on screen: at once when the chat opens, and when the computer can't be reached. */
+    fun showSavedCopy() {
+        if (_state.value.session != null) return
+        val copy = saved?.saved(sessionId) ?: return
+        _state.update { if (it.session != null) it else it.copy(session = copy.session, savedAt = copy.savedAt, loadError = null) }
+        saved.touch(sessionId)
     }
 
     /**
@@ -211,16 +251,52 @@ class ChatController(
         return e is AgentEvent.Done || e is AgentEvent.Error || e is AgentEvent.SessionMeta
     }
 
-    /** Throws when the prompt couldn't be sent, so the composer can keep the text. */
+    /**
+     * Send a prompt. Throws when the computer turned it down, so the composer
+     * can keep the text. With the outbox, the prompt is on disk until the
+     * computer lists it: offline, or behind prompts already waiting for this
+     * chat, it waits there; a send that gets no answer is handed to it and
+     * sent again with the same id, which the computer runs once.
+     */
     suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) {
+        val ob = outbox
+        val id = ob?.newId() ?: newId()
+        if (ob != null) {
+            if (env().conn != RelayState.ONLINE) {
+                ob.add(sessionId, text, skill, images, id = id)
+                return
+            }
+            // Anything already waiting for this chat goes first, in order.
+            if (ob.state.value.waitingFor(sessionId).isNotEmpty()) {
+                ob.add(sessionId, text, skill, images, id = id)
+                ob.flushSoon()
+                return
+            }
+            ob.add(sessionId, text, skill, images, id = id, direct = true)
+        }
         if (_state.value.turn.running) {
             // Same as the desktop: a prompt sent mid-run waits its turn.
-            val s = Session.from(caller.call(Channels.CHAT_QUEUE, JsonPrimitive(sessionId), queuePrompt(text, skill, images)))
-            if (s != null) _state.update { it.copy(session = s) }
+            try {
+                val s = Session.from(callWithId(Channels.CHAT_QUEUE, id) { cid -> listOf(JsonPrimitive(sessionId), queuePrompt(text, skill, images, cid)) })
+                if (s != null) _state.update { it.copy(session = s) }
+                ob?.drop(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RelayException) {
+                if (e.fromComputer || ob == null) {
+                    ob?.drop(id)
+                    throw e
+                }
+                // No answer: the outbox finds out, with the same id, when the computer is back.
+                ob.endDirect(id)
+            }
             return
         }
         val (providerId, modelId) = model()
-        if (providerId == null || modelId == null) throw IllegalStateException("Choose a default model on your computer first.")
+        if (providerId == null || modelId == null) {
+            ob?.drop(id)
+            throw IllegalStateException("Choose a default model on your computer first.")
+        }
         val at = now()
         _state.update {
             val shown = if (skill == null) text else "/${skill.name} $text".trim()
@@ -229,12 +305,49 @@ class ChatController(
         // Resolves only when the whole turn ends; the events carry the progress.
         scope.launch {
             try {
-                caller.callWithTimeout(TURN_TIMEOUT_MS, Channels.CHAT_SEND, sendOptions(sessionId, providerId, modelId, text, skill, images))
+                callWithId(Channels.CHAT_SEND, id, TURN_TIMEOUT_MS) { cid -> listOf(sendOptions(sessionId, providerId, modelId, text, skill, images, cid)) }
+                // The turn ended. The re-read confirms the prompt; if the chat doesn't list it, the outbox settles it.
+                if (ob != null) {
+                    reload()
+                    if (id in ob.state.value.direct) {
+                        ob.endDirect(id)
+                        ob.flushSoon()
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (ob != null && !(e is RelayException && e.fromComputer)) {
+                    // No answer (the connection dropped): it may or may not have arrived. The outbox
+                    // sends it again with the same id once the computer is back, and it runs once.
+                    ob.endDirect(id)
+                    _state.update { st ->
+                        st.copy(turn = st.turn.copy(running = false, blocks = st.turn.blocks.filterNot { it.id == "pending-$at" }))
+                    }
+                    return@launch
+                }
+                ob?.drop(id)
                 _state.update { it.copy(turn = it.turn.copy(running = false, error = e.message ?: "Couldn’t send that.")) }
             }
+        }
+    }
+
+    /**
+     * [channel] with the prompt's `clientMessageId`. A computer from before
+     * exactly-once delivery refuses the unknown key: then the prompt goes as
+     * before, without it.
+     */
+    private suspend fun callWithId(channel: String, id: String, timeoutMs: Long? = null, args: (String?) -> List<JsonElement>): JsonElement {
+        suspend fun call(cid: String?) = args(cid).toTypedArray().let { a ->
+            if (timeoutMs == null) caller.call(channel, *a) else caller.callWithTimeout(timeoutMs, channel, *a)
+        }
+        return try {
+            call(id)
+        } catch (e: RelayException) {
+            if (!e.refusedClientMessageId) throw e
+            // An older computer can't tell a repeat: the outbox lets go of this one.
+            outbox?.drop(id)
+            call(null)
         }
     }
 
@@ -348,25 +461,41 @@ class ChatController(
 
         fun project(state: ChatState, env: ChatEnv): ChatUi {
             val (providerId, modelId) = resolveModel(state.session, env.defaults)
+            val unpaired = env.conn == RelayState.DENIED || env.denied != null
+            val away = !unpaired && env.conn != RelayState.ONLINE
             val blocked = when {
-                env.conn == RelayState.DENIED || env.denied != null -> "This phone is no longer paired."
-                env.conn != RelayState.ONLINE ->
-                    "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}."
+                unpaired -> "This phone is no longer paired."
+                // Offline mode: the prompt waits in the outbox; the model is settled when it is delivered.
+                away && env.canQueue -> null
+                away -> "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}."
                 providerId == null || modelId == null -> "No model chosen for this chat. Set a default model on your computer."
                 else -> null
             }
+            val sendsLater = if (away && env.canQueue) {
+                "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}. What you send waits on this phone and goes when it’s back."
+            } else {
+                null
+            }
             val saved = state.session?.let { Transcript.fromMessages(it.messages) } ?: emptyList()
             val turn = state.turn
+            // Out of reach with no saved copy: say so rather than load forever.
+            val notSaved = if (state.session == null && state.loadError == null && away) {
+                "This chat isn’t saved on this phone yet. It shows when ${env.computerName} answers."
+            } else {
+                null
+            }
             return ChatUi(
-                ready = state.session != null || state.loadError != null,
+                ready = state.session != null || state.loadError != null || notSaved != null,
                 title = plainText(state.session?.title ?: "").ifEmpty { "Chat" },
                 subtitle = listOfNotNull(modelId, env.computerName).joinToString(" · "),
                 blocks = Transcript.mergeLive(saved, turn.blocks),
                 running = turn.running,
                 approval = turn.approval,
                 question = turn.question,
-                error = state.loadError ?: turn.error,
+                error = state.loadError ?: turn.error ?: notSaved,
                 blocked = blocked,
+                sendsLater = sendsLater,
+                savedAt = state.savedAt,
                 queued = state.session?.queue ?: emptyList(),
                 queuedPrompts = state.session?.queued ?: emptyList(),
                 rate = turn.rate,
@@ -376,6 +505,7 @@ class ChatController(
                 modelId = modelId,
                 modelName = modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
                 effort = Effort.parse(state.session?.effort),
+                mode = state.session?.mode,
                 context = state.context,
                 contextTokens = liveTokens(state.context, turn),
             )

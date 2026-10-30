@@ -17,7 +17,7 @@ data class PairingLink(
     val key: String,
     /** One-time enrollment code; absent when re-using an existing pairing. */
     val pair: String? = null,
-    /** Other addresses of the same relay, in the link's order. Not dialed yet on Android (IO-20 follow-up). */
+    /** Other addresses of the same relay, in the link's order; [RouteSupervisor] picks among them and [relayUrl]. */
     val alts: List<String> = emptyList(),
 ) {
     /** Never print the secret. */
@@ -67,37 +67,7 @@ object Pairing {
     /** `relayUrlProblem` (packages/shared/src/relay-route.ts): bad shape, or plain ws:// to the open internet. */
     private fun urlProblem(url: String): Boolean {
         if (!Regex("^wss?://[^/?#]", RegexOption.IGNORE_CASE).containsMatchIn(url)) return true
-        return url.startsWith("ws://", ignoreCase = true) && isInternet(sharedHost(url))
-    }
-
-    /** `relayHost` in relay-route.ts: lowercased, IPv6 without brackets, past userinfo. */
-    private fun sharedHost(url: String): String {
-        var s = url.trim().substringAfter("://")
-        val authority = Regex("^[^/?#]*").find(s)?.value.orEmpty()
-        val at = authority.lastIndexOf('@')
-        if (at >= 0) s = s.substring(at + 1)
-        if (s.startsWith("[")) {
-            val end = s.indexOf(']')
-            return if (end < 0) "" else s.substring(1, end).lowercase()
-        }
-        return (Regex("^[^/:?#]*").find(s)?.value.orEmpty()).lowercase()
-    }
-
-    /** `relayRoute(url) === 'internet'`. */
-    private fun isInternet(h: String): Boolean {
-        if (h == "localhost" || h == "::1" || h.startsWith("127.")) return false
-        if (h == "ts.net" || h.endsWith(".ts.net") || RelayHint.isTailscaleIp(h) || h.startsWith("fd7a:115c:a1e0:")) return false
-        if (h.endsWith(".local") || isPrivateIPv4(h)) return false
-        if (':' in h && (h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:"))) return false
-        return true
-    }
-
-    private fun isPrivateIPv4(h: String): Boolean {
-        val parts = h.split('.')
-        if (parts.size != 4 || !parts.all { Regex("^\\d{1,3}$").matches(it) }) return false
-        val n = parts.map { it.toInt() }
-        if (n.any { it > 255 }) return false
-        return n[0] == 10 || (n[0] == 172 && n[1] in 16..31) || (n[0] == 192 && n[1] == 168) || (n[0] == 169 && n[1] == 254)
+        return url.startsWith("ws://", ignoreCase = true) && RelayRoute.of(url) == RelayRoute.INTERNET
     }
 
     /** URLSearchParams semantics: every pair in order (first wins for get()), `+` is a space. */
