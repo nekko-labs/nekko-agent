@@ -802,12 +802,12 @@ h3 { font-size: 21px; }
    technical sections, so it reads as the next step for the curious without
    competing with the download buttons ---- */
 .beta {
-  display: grid; grid-template-columns: 1fr 1fr; column-gap: 56px; align-items: start;
+  display: grid; grid-template-columns: 1.15fr 1fr; column-gap: 56px; align-items: start;
   grid-template-areas: 'tour intro' 'tour perks' 'tour stage';
 }
 .beta-intro { grid-area: intro; }
 .tour { grid-area: tour; align-self: center; margin: 0; }
-.beta-perks { grid-area: perks; }
+.beta-perks { grid-area: perks; margin-bottom: 30px; }
 .beta-stage { grid-area: stage; }
 .beta h2 { margin-bottom: 12px; }
 .beta-perks { list-style: none; display: grid; gap: 12px; margin-top: 22px; }
@@ -858,7 +858,7 @@ h3 { font-size: 21px; }
 :root[data-theme='colour'] .beta-card { background: #ffffff; }
 @media (max-width: 900px) {
   .beta { grid-template-columns: 1fr; row-gap: 28px; grid-template-areas: 'intro' 'tour' 'perks' 'stage'; }
-  .beta-perks { margin-top: 0; }
+  .beta-perks { margin: 0; }
   .tour { max-width: 520px; width: 100%; justify-self: center; }
 }
 @media (max-width: 560px) { .beta-card { padding: 22px; box-shadow: 4px 4px 0 var(--sticker); } }
