@@ -49,7 +49,8 @@ export function createMasker(info: PresenterInfo = {}) {
 
   return function maskPersonal(text: string): string {
     if (!text) return text;
-    let out = text.replace(EMAIL, PLACEHOLDER.email);
+    // Reserved example domains are already safe, and demo scripts type them on purpose.
+    let out = text.replace(EMAIL, (m) => (/@example\.(com|org|net)$/i.test(m) ? m : PLACEHOLDER.email));
     if (info.home) out = out.split(info.home).join('~');
     out = out.replace(HOME_PATH, (_m, name: string) => { add(names, name); return '~'; });
     out = out.replace(KEY, PLACEHOLDER.key);
@@ -81,7 +82,8 @@ export function startPresenterMode(info: PresenterInfo, root: Node = document.bo
 
   const fixText = (node: Text) => {
     const parent = node.parentElement;
-    if (!parent || exempt(parent) || parent.closest('script, style, textarea, [contenteditable="true"]')) return;
+    // Never rewrite what is being typed: it would move the caret mid-word.
+    if (!parent || exempt(parent) || parent.isContentEditable || parent.closest('script, style, textarea')) return;
     const next = mask(node.data);
     if (next !== node.data) node.data = next;
   };
