@@ -25,6 +25,19 @@ test('writes the index between its markers and reports a stale one', () => {
   fs.rmSync(root, { recursive: true });
 });
 
+test('reads a CRLF checkout the same as LF', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-index-'));
+  fs.mkdirSync(path.join(root, 'spec', 'chat'), { recursive: true });
+  const body = `---\ntitle: "Find in this chat"\narea: chat\n---\n\n${'x'.repeat(1700)}\n`;
+  fs.writeFileSync(path.join(root, 'spec', 'chat', 'find.md'), body.replace(/\n/g, '\r\n'));
+  fs.writeFileSync(path.join(root, 'spec', 'README.md'), '# Spec\r\n\r\n<!-- index:start -->\r\n<!-- index:end -->\r\n');
+  writeIndex(root);
+  const out = fs.readFileSync(path.join(root, 'spec', 'README.md'), 'utf8');
+  assert.match(out, /- \[Find in this chat\]\(chat\/find\.md\) \(2 KB\)/);
+  assert.equal(writeIndex(root, { check: true }), true);
+  fs.rmSync(root, { recursive: true });
+});
+
 test('refuses a spec file without its area', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-index-'));
   fs.mkdirSync(path.join(root, 'spec', 'chat'), { recursive: true });
