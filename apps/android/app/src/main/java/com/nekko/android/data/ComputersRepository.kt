@@ -131,6 +131,11 @@ class ComputersRepository(
         now = now,
     )
 
+    init {
+        // A chat started offline now exists, and a delivered prompt changed its chat: read the list again.
+        outbox.onDelivered = { _, _ -> scheduleSummaries() }
+    }
+
     /** *Sign out this phone* not yet heard by the computer (SK-8). */
     private val signOuts = SignOutOutbox(store)
 

@@ -86,6 +86,9 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
 import kotlinx.coroutines.launch
+import androidx.compose.material3.CircularProgressIndicator
+import com.nekko.android.data.OutboxItem
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import com.nekko.android.ui.chat.RenameChatDialog
@@ -107,6 +110,7 @@ fun ChatsScreen(
     onSkipFirstRun: (() -> Unit)? = null,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
+    val outbox by repo.outbox.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
@@ -267,6 +271,24 @@ fun ChatsScreen(
             ) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                     item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
+                    // Offline mode: what waits on the phone, and chats started offline not created yet.
+                    if (outbox.waiting.isNotEmpty() && s.conn != RelayState.ONLINE) {
+                        item(key = "outbox-note") {
+                            val n = outbox.waiting.size
+                            Notice(
+                                "${if (n == 1) "1 prompt waits" else "$n prompts wait"} on this phone. ${if (n == 1) "It goes" else "They go"} when ${active.name} is back.",
+                                Tone.FAINT,
+                                Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.outboxNote"),
+                            )
+                        }
+                    }
+                    val pendingNew = outbox.pendingNewChats.filter { it.id !in outbox.direct }
+                    if (pendingNew.isNotEmpty()) {
+                        item(key = "pending-header") { SectionHeader("Waiting to send") }
+                        items(pendingNew, key = { "pending:${it.chatKey}" }) { item ->
+                            PendingNewChatRow(item, sending = item.id == outbox.sendingId, onDelete = { repo.outbox.remove(item.id) })
+                        }
+                    }
                     // The phone and the computer speak different protocol versions (IO-32): which side to update.
                     s.protocolCheck.message(active.name)?.let { text ->
                         item(key = "protocol") { Notice(text, Tone.WARNING, Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("protocol-banner")) }
@@ -308,7 +330,7 @@ fun ChatsScreen(
                         }
                         items(found, key = { "found:${it.id}" }) { summary ->
                             if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
-                            else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                            else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) }, waiting = outbox.waitingFor(summary.id).size)
                         }
                     } else if (s.summaries.isEmpty()) {
                         item(key = "empty") {
@@ -346,7 +368,7 @@ fun ChatsScreen(
                             }
                         }
                         items(g.active, key = { it.id }) { summary ->
-                            ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                            ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) }, waiting = outbox.waitingFor(summary.id).size)
                         }
                         if (g.completed.isNotEmpty()) {
                             item(key = "done-toggle:${g.key}") {
@@ -414,7 +436,7 @@ private fun ChatActionDialog(
 }
 
 @Composable
-internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
+internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
@@ -445,6 +467,13 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
             }
             if (preview.isNotEmpty()) {
                 Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            // Prompts written offline for this chat, still in the outbox.
+            if (waiting > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(14.dp))
+                    Text("$waiting waiting", style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
+                }
             }
             when (activity) {
                 Activity.NEEDS_YOU -> Box(Modifier.padding(top = 4.dp)) { Pill("Needs you", Tone.WARNING, Icons.Filled.Warning) }
@@ -641,4 +670,28 @@ internal fun savedListNote(savedAt: Long, computer: String, now: Long = System.c
     val whenText = if (at.toLocalDate() == today) time
     else at.toLocalDate().format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)) + ", " + time
     return "Saved list from $whenText. It updates when $computer answers."
+}
+
+/** A chat started offline (offline mode): its first message, until the computer creates it. */
+@Composable
+private fun PendingNewChatRow(item: OutboxItem, sending: Boolean, onDelete: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp).testTag("chats.pendingNew"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(p.surface2), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(item.preview, style = MaterialTheme.typography.titleMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.lastError ?: "New chat, starts when your computer is back", style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2)
+        }
+        if (sending) {
+            CircularProgressIndicator(Modifier.padding(12.dp).size(18.dp), strokeWidth = 2.dp, color = p.accent)
+        } else {
+            IconButton(onClick = onDelete) { Icon(Icons.Filled.Close, contentDescription = "Delete waiting chat", tint = p.inkSoft) }
+        }
+    }
 }

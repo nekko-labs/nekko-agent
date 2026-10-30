@@ -60,6 +60,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ComputersRepository
+import com.nekko.protocol.WorkspaceFolder
+import com.nekko.android.data.NewChatSpec
+import com.nekko.protocol.DraftStore
 import com.nekko.android.data.ModelChoice
 import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
@@ -98,6 +101,8 @@ fun NewChatScreen(
     onEditShared: (String) -> Unit = {},
     onPair: () -> Unit,
     onCreated: (String) -> Unit,
+    /** Offline: the chat and its first message went to the outbox (*Start when online*). */
+    onQueued: () -> Unit = onBack,
 ) {
     val c by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
@@ -228,13 +233,7 @@ fun NewChatScreen(
                             Text("Pair a computer")
                         }
                     }
-                    !online -> NCard {
-                        Text(
-                            "${active.name} is ${if (c.conn == RelayState.CONNECTING) "connecting…" else "offline"}. Open Nekko Agent on your computer and try again.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = p.inkSoft,
-                        )
-                    }
+                    !online -> OfflineNewChat(repo, active.name, c.conn == RelayState.CONNECTING, phonePick, c.workspaces, shared, onQueued)
                     else -> NCard {
                         Label(Icons.Filled.Memory, "Model · from ${active.name}")
                         if (phonePickMissing && !touched) {
@@ -487,5 +486,75 @@ private fun ModelRow(m: ModelInfo, detail: String?, selected: Boolean, onClick: 
         }
         if (m.loaded) Pill("loaded", Tone.SUCCESS)
         if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = p.accent, modifier = Modifier.size(18.dp))
+    }
+}
+
+/**
+ * New chat while the computer is out of reach (offline mode): the first message,
+ * the folder and the phone's default model for this computer go to the outbox,
+ * and the chat is created there and the message sent when the computer is back
+ * (*Start when online*). What is typed is kept as New chat's draft; a chat the
+ * computer turned down comes back here with the reason.
+ */
+@Composable
+private fun OfflineNewChat(
+    repo: ComputersRepository,
+    computer: String,
+    connecting: Boolean,
+    phonePick: ModelPick?,
+    workspaces: List<WorkspaceFolder>,
+    shared: String?,
+    onQueued: () -> Unit,
+) {
+    val p = Nekko.palette
+    val saved = remember { repo.drafts.draft(DraftStore.NEW_CHAT) }
+    var text by rememberSaveable { mutableStateOf(saved.text.ifEmpty { shared.orEmpty() }) }
+    var workspaceId by rememberSaveable { mutableStateOf(saved.workspaceId) }
+    // The model can't be listed offline: the one this chat came back with, else the phone's default for this computer.
+    val pick = saved.providerId?.let { pid -> saved.modelId?.let { ModelPick(pid, it) } } ?: phonePick
+    LaunchedEffect(text, workspaceId) {
+        repo.drafts.set(DraftStore.NEW_CHAT, repo.drafts.draft(DraftStore.NEW_CHAT).copy(text = text, workspaceId = workspaceId))
+    }
+    NCard {
+        Text(
+            "$computer is ${if (connecting) "connecting…" else "offline"}. Start now and the chat begins when it’s back; it waits on this phone until then.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = p.inkSoft,
+            modifier = Modifier.testTag("newChat.offlineNote"),
+        )
+        saved.refusal?.let { Text("Not started: $it", style = MaterialTheme.typography.bodySmall, color = p.danger) }
+        if (pick == null) {
+            Text(
+                "To start a chat while $computer is offline, choose a default model for it in Settings → New chats.",
+                style = MaterialTheme.typography.bodySmall,
+                color = p.warning,
+            )
+        } else {
+            Label(Icons.Filled.Memory, "Model · ${pick.modelId}")
+        }
+        if (workspaces.isNotEmpty()) {
+            Label(Icons.Filled.Folder, "Folder")
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip("None", workspaceId == null) { workspaceId = null }
+                workspaces.forEach { w -> Chip(w.name, w.id == workspaceId) { workspaceId = w.id } }
+            }
+        }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            label = { Text("First message") },
+            minLines = 3,
+            modifier = Modifier.fillMaxWidth().testTag("newChat.firstMessage"),
+        )
+        Button(
+            onClick = {
+                val chosen = pick ?: return@Button
+                repo.outbox.add(null, text.trim(), newChat = NewChatSpec(chosen.providerId, chosen.modelId, workspaceId))
+                repo.drafts.clear(DraftStore.NEW_CHAT)
+                onQueued()
+            },
+            enabled = pick != null && text.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("newChat.startWhenOnline"),
+        ) { Text("Start when online") }
     }
 }

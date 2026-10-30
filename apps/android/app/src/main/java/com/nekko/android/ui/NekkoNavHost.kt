@@ -230,6 +230,10 @@ fun NekkoNavHost(
                     nav.popBackStack()
                 },
                 onPair = { nav.navigate(Routes.pair()) },
+                onQueued = {
+                    shareInbox.clear()
+                    nav.popBackStack()
+                },
                 onCreated = { id ->
                     shareInbox.handOff(id)
                     nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }

@@ -180,7 +180,7 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > is confirmed with your fingerprint, face or screen lock, and YOLO asks once first), **Rename**,
 > **Pin** / **Unpin** and **Complete**, each saved on the computer.
 >
-> **Write offline** (iPhone; Android keeps the drafts so far): with no connection to your computer you can still write. What you
+> **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
 > the phone closing the app loses nothing. **Send when online** puts a prompt in a queue on the
 > phone, shown in the chat as **Waiting to send** (Edit, Delete, Send now); a new chat started
@@ -192,6 +192,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > The drafts and the queue are encrypted on the phone until it is first unlocked, aren't backed up,
 > and are deleted when you forget the computer. Sending prompts written offline needs this version
 > of Nekko Agent on the computer.
+>
+> On Android, a new chat started offline uses your default model for that computer from **Settings
+> → New chats** (the computer's models can't be listed offline), and prompts go while the app is
+> open; the widget doesn't count them yet.
 >
 > **Read offline** (iPhone; the chat list on Android too): the phone keeps each computer's chat list
 > and, on iPhone, the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
