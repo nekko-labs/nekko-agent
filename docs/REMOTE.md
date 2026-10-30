@@ -149,6 +149,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > different phone protocol versions, the chat list and **Settings → About** show a banner naming
 > the side to update: Nekko Agent on the computer, or the app.
 >
+> **First run** (iPhone and Android): the first time the app opens it shows three steps: what it
+> does, pairing, and, right after the first pairing, what notifications look like with **Allow
+> notifications** or **Not now**. Permission to notify is never asked before a computer is paired.
+> **Skip** on the first two steps ends it. On Android, **Not now** turns **Settings → Connection →
+> Notify me** off; turn it on there later.
+>
 > **New chat defaults** (Android): **Settings → New chats** picks the computer the app connects to
 > when it starts (default: the one used last) and, for each computer, the model New chat opens with
 > (default: the computer's own default model). They are saved on the phone; the computer's settings
