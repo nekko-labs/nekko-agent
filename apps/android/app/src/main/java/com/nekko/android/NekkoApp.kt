@@ -60,6 +60,12 @@ class NekkoApp : Application() {
     val ownerCheck = ActivityOwnerCheck()
 
     /** Settings → Connection → Keep the chat list when offline. Off deletes every saved list. */
+    /** Settings → Connection → Keep recent chats to read offline. */
+    fun setKeepTranscripts(on: Boolean) {
+        phonePrefs.set(OfflineFileStore.KEEP_TRANSCRIPTS, on)
+        computers.setKeepTranscripts(on)
+    }
+
     fun setKeepChatList(on: Boolean) {
         phonePrefs.set(ChatListFiles.ENABLED, on)
         computers.chatListCache = if (on) chatLists else null
@@ -87,6 +93,7 @@ class NekkoApp : Application() {
         )
         chatLists = ChatListFiles(this)
         if (phonePrefs.get(ChatListFiles.ENABLED)) computers.chatListCache = chatLists
+        if (phonePrefs.get(OfflineFileStore.KEEP_TRANSCRIPTS)) computers.setKeepTranscripts(true)
         appLock = AppLock(enabled = phonePrefs.get(AppLock.ENABLED), persist = { phonePrefs.set(AppLock.ENABLED, it) })
         connection = ConnectionKeeper(this, computers, phonePrefs, appLock, appScope)
         connection.start()

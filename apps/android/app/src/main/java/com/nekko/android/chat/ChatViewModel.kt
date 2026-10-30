@@ -61,7 +61,7 @@ class ChatViewModel(
     mic: MicHardware? = null,
     private val phonePrefs: PhonePrefs? = null,
 ) : ViewModel() {
-    private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox)
+    private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox, saved = repo.transcripts)
 
     /** Dictation into this chat's message box (Settings → Dictation). */
     val dictation: DictationController? = if (mic == null || phonePrefs == null) null else DictationController(
@@ -190,6 +190,8 @@ class ChatViewModel(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatController.project(controller.state.value, env(repo.state.value)))
 
     init {
+        // Instant paint (OF-6): the saved copy at once, replaced in place when the computer answers.
+        controller.showSavedCopy()
         // Load when the computer is reachable, and again after every reconnect.
         viewModelScope.launch {
             repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload() }

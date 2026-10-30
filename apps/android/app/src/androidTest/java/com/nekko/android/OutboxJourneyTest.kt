@@ -130,6 +130,27 @@ class OutboxJourneyTest {
         compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("chats.pendingNew")).fetchSemanticsNodes().isEmpty() }
     }
 
+    @Test fun readOfflineFromTheSavedCopy() {
+        val repo = repo()
+        var open by mutableStateOf(1)
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                key(open) { if (open > 0) ChatScreen(remember { ChatViewModel("s1", repo, null, null) }, onBack = {}) }
+            }
+        }
+        compose.waitUntil(10_000) { "s1" in repo.transcripts.chatIds }
+        open = 0
+        settle()
+        // The computer goes away; the chat opens again from the phone's copy, at once.
+        computer.online = false
+        computer.goOffline()
+        open = 2
+        compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("chat.savedCopy")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Done: 14 notes in 4 areas. I removed 3 duplicates.")).fetchSemanticsNodes().isNotEmpty() }
+        settle()
+        shot("offline-read-saved-copy")
+    }
+
     private fun repo(): ComputersRepository {
         val repo = ComputersRepository(
             store = MemoryStore(),
@@ -137,7 +158,16 @@ class OutboxJourneyTest {
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
             deviceName = { "Pixel" },
             deriveKey = { _, _ -> ByteArray(32) },
+            offlineFiles = object : com.nekko.protocol.OfflineFiles {
+                val map = java.util.concurrent.ConcurrentHashMap<String, kotlinx.serialization.json.JsonElement>()
+                override fun load(computerId: String, name: String) = map["$computerId/$name"]
+                override fun save(computerId: String, name: String, value: kotlinx.serialization.json.JsonElement) { map["$computerId/$name"] = value }
+                override fun remove(computerId: String) { map.keys.removeAll { it.startsWith("$computerId/") } }
+                override fun removeFile(computerId: String, name: String) { map.remove("$computerId/$name") }
+            },
         )
+        // Keep recent chats to read offline (on by default in the app).
+        repo.setKeepTranscripts(true)
         runBlocking {
             val id = repo.pair(PairingLink("wss://relay.example.dev", "a1b2c3d4e5f60718", "00112233445566778899aabbccddeeff"))
             repo.rename(id, "Studio Mac")
@@ -183,6 +213,7 @@ class OutboxJourneyTest {
         val ids = java.util.concurrent.CopyOnWriteArrayList<String>()
         private var live: MutableStateFlow<RelayStatus>? = null
         fun goOnline() { live?.value = RelayStatus(RelayState.ONLINE) }
+        fun goOffline() { live?.value = RelayStatus(RelayState.OFFLINE) }
 
         private fun json(s: String): JsonElement = com.nekko.protocol.WireJson.parseToJsonElement(s)
 

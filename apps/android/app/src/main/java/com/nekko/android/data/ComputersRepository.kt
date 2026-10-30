@@ -28,6 +28,7 @@ import com.nekko.protocol.SessionSummary
 import com.nekko.protocol.StepUpChallenge
 import com.nekko.protocol.StepUpProof
 import com.nekko.protocol.DraftStore
+import com.nekko.protocol.SavedTranscripts
 import com.nekko.protocol.OfflineFiles
 import com.nekko.protocol.TerminalChannels
 import com.nekko.protocol.TerminalEvent
@@ -119,6 +120,24 @@ class ComputersRepository(
 ) {
     /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
     val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
+
+    /** The last chats opened, to read while the computer is out of reach (OF-5); kept only while the setting is on. */
+    val transcripts = SavedTranscripts(now = now)
+
+    /** *Keep recent chats to read offline*: on keeps them from now; off deletes every computer's copies. */
+    fun setKeepTranscripts(on: Boolean) {
+        val f = offlineFiles ?: return
+        if (on) {
+            transcripts.use(f, _state.value.activeId)
+            return
+        }
+        // Each computer's copies, then none kept from now on.
+        _state.value.computers.forEach { c ->
+            transcripts.use(f, c.id)
+            transcripts.keepOnly(emptySet())
+        }
+        transcripts.use(null, _state.value.activeId)
+    }
 
     /** Prompts written offline, or whose send dropped, delivered once the computer is reachable. */
     val outbox = Outbox(
@@ -304,6 +323,7 @@ class ComputersRepository(
             if (_state.value.activeId == id) {
                 drafts.load(null)
                 outbox.load(null)
+                transcripts.load(null)
             }
             offlineFiles?.remove(id)
             onForget(id)
@@ -335,6 +355,7 @@ class ComputersRepository(
             drafts.load(id)
             outbox.load(id)
         }
+        if (transcripts.computerId != id) transcripts.load(id)
         if (loggedComputer != id) {
             log.clear()
             loggedComputer = id
@@ -621,6 +642,7 @@ class ComputersRepository(
     suspend fun deleteChat(sessionId: String) {
         remote().call(Channels.SESSION_DELETE, JsonPrimitive(sessionId))
         dropFromList(sessionId)
+        transcripts.remove(sessionId)
     }
 
     private fun dropFromList(sessionId: String) {
@@ -674,6 +696,8 @@ class ComputersRepository(
                 )
             }
             _state.update { it.copy(quitFromPhone = r.info?.quitFromPhone == true) }
+            // The computer's whole list: a saved chat it no longer has goes too.
+            transcripts.keepOnly(r.summaries.map { it.id }.toSet())
             liveList = true
             saveList()
             learnPlatform(r.info?.platform)

@@ -32,6 +32,15 @@ class OfflineFileStore(context: Context) : OfflineFiles {
         folder(computerId).deleteRecursively()
     }
 
+    override fun removeFile(computerId: String, name: String) {
+        file(computerId, name).delete()
+    }
+
+    companion object {
+        /** *Keep recent chats to read offline*: on unless the user turned it off (OF-9); only the switch writes it. */
+        val KEEP_TRANSCRIPTS = PhonePrefs.boolean("keep_transcripts", default = true)
+    }
+
     /** The last computer was forgotten: nothing stays behind. */
     fun removeAll() {
         dir.deleteRecursively()

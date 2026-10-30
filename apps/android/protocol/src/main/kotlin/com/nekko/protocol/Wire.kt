@@ -236,7 +236,9 @@ data class ChatMessage(
                 content = o.str("content") ?: "",
                 reasoning = o.str("reasoning"),
                 createdAt = o.long("createdAt"),
-                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" } ?: emptyList(),
+                // A saved copy keeps only how many photos a message had (`imageCount`): drawn as tiles.
+                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" }
+                    ?: List(o.long("imageCount")?.toInt()?.coerceIn(0, 64) ?: 0) { "" },
                 skill = skill,
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),

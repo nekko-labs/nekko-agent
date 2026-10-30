@@ -365,18 +365,21 @@ fun ChatScreen(
                                     text = { Text("Git") },
                                     leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openGit() },
+                                    enabled = chat.savedAt == null,
                                     modifier = Modifier.testTag("chat.git"),
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Files") },
                                     leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openFiles() },
+                                    enabled = chat.savedAt == null,
                                     modifier = Modifier.testTag("chat.files"),
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Terminals") },
                                     leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openTerminals() },
+                                    enabled = chat.savedAt == null,
                                     modifier = Modifier.testTag("chat.terminals"),
                                 )
                                 HorizontalDivider()
@@ -539,6 +542,15 @@ fun ChatScreen(
                 val refusal by vm.refusal.collectAsStateWithLifecycle()
                 val restore by vm.restore.collectAsStateWithLifecycle()
                 Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // The phone's saved copy (OF-5): read-only until the computer answers.
+                    chat.savedAt?.let { at ->
+                        Text(
+                            savedCopyNote(at, computerName),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = p.inkSoft,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp).testTag("chat.savedCopy"),
+                        )
+                    }
                     WaitingList(waiting, sendingId, online, onEdit = vm::editWaiting, onDelete = vm::deleteWaiting, onSendNow = vm::sendWaitingNow)
                     refusal?.let { RefusalNote(it, onDismiss = vm::dismissRefusal) }
                 }

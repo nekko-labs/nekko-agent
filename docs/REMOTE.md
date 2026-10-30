@@ -197,8 +197,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > → New chats** (the computer's models can't be listed offline), and prompts go while the app is
 > open; the widget doesn't count them yet.
 >
-> **Read offline** (iPhone; the chat list on Android too): the phone keeps each computer's chat list
-> and, on iPhone, the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
+> **Read offline** (iPhone and Android): the phone keeps each computer's chat list
+> and the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
 > newest messages). Opening the app or a chat shows them at once, and while the computer can't be
 > reached they stay readable under **Saved list from 10:42** and **Saved copy from 10:42**. When the
 > computer answers, the live list and chat replace them in place. A saved chat can't be changed
