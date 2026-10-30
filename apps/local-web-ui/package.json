@@ -1,6 +1,6 @@
 {
   "name": "@nekko-agent/local-web-ui",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "type": "module",
   "description": "Nekko Agent Local Web UI: the same engine and UI as the desktop app, served to a browser from your own machine.",
