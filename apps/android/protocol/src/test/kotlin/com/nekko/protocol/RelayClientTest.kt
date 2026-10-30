@@ -227,10 +227,26 @@ class RelayClientTest {
         )
     }
 
-    private fun Recorder.Sock.welcome() = push(buildJsonObject {
+    private fun Recorder.Sock.welcome(protocol: Int? = null) = push(buildJsonObject {
         put("type", "welcome")
         put("device", buildJsonObject { put("id", "x"); put("name", "Test phone"); put("platform", "android") })
+        protocol?.let { put("protocol", it) }
     })
+
+    @Test fun `the welcome carries the computer's protocol version, 1 when it says none`() = runBlocking {
+        for ((sent, read) in listOf(5 to 5, null to 1)) {
+            val t = Recorder(E2E.fromHex(fx("key")))
+            val c = fixtureClient(t)
+            c.connect()
+            until("the socket") { t.sockets.isNotEmpty() }
+            t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+            until("the HELLO") { t.last.of("hello").isNotEmpty() }
+            t.last.welcome(sent)
+            c.await(RelayState.ONLINE)
+            assertEquals(read, c.welcome.first().protocol)
+            c.close()
+        }
+    }
 
     @Test fun `answers the shared challenge with the shared HELLO, then sends the shared requests`() = runBlocking {
         assertEquals(fx("key"), E2E.toHex(E2E.deriveKey(fx("secret"), fx("room"))))

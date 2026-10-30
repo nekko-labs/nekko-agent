@@ -142,7 +142,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
-> version and the open-source licenses of the app and the libraries it ships.
+> version, the phone protocol on each side and the open-source licenses of the app and the
+> libraries it ships.
+>
+> **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
+> different phone protocol versions, the chat list and **Settings → About** show a banner naming
+> the side to update: Nekko Agent on the computer, or the app.
 >
 > **New chat defaults** (Android): **Settings → New chats** picks the computer the app connects to
 > when it starts (default: the one used last) and, for each computer, the model New chat opens with

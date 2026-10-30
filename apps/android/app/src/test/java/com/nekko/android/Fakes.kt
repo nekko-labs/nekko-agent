@@ -103,8 +103,8 @@ class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement
         status.value = RelayStatus(RelayState.ONLINE)
     }
 
-    fun sayWelcome() {
-        welcome.tryEmit(WelcomedDevice(config.deviceId, config.deviceName, "android"))
+    fun sayWelcome(protocol: Int = com.nekko.protocol.PhoneProtocol.VERSION) {
+        welcome.tryEmit(WelcomedDevice(config.deviceId, config.deviceName, "android", protocol))
         goOnline()
     }
 }

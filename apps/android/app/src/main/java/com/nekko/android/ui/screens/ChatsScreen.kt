@@ -236,6 +236,10 @@ fun ChatsScreen(
             ) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                     item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
+                    // The phone and the computer speak different protocol versions (IO-32): which side to update.
+                    s.protocolCheck.message(active.name)?.let { text ->
+                        item(key = "protocol") { Notice(text, Tone.WARNING, Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("protocol-banner")) }
+                    }
                     s.savedListAt?.let { at ->
                         item(key = "saved-list") {
                             Text(
