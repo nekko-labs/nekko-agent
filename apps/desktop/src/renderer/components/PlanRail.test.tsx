@@ -1,26 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { Session } from '@nekko-agent/shared';
-vi.mock('../store.js', () => ({ useStore: (selector: (state: unknown) => unknown) => selector({ sessions: [], openChatPane: () => {}, settings: {} }) }));
-import { PlanRail, PLAN_CHANGE_REQUEST } from './PlanRail.js';
+const store = vi.hoisted(() => ({ sessions: [] as unknown[] }));
+vi.mock('../store.js', () => ({ useStore: Object.assign((selector: (state: unknown) => unknown) => selector({ sessions: store.sessions, openChatPane: () => {}, settings: {} }), { getState: () => ({ openChatPane: () => {} }) }) }));
+import { PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
-import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 
 const session = { agentPlan: [{ id: 'one', title: 'Inspect code', status: 'active' }] } as Session;
-describe('change plan action', () => {
-  it('offers the action while a plan is shown', () => {
-    const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={session} streaming prs={[]} onChangePlan={() => {}} />);
-    expect(markup).toContain('Change plan</button>');
-    expect(markup).not.toContain('Want to change the approach?');
-  });
-  it('disables the action when editing is unavailable and hides it without a plan', () => {
-    expect(renderToStaticMarkup(<PlanSheet sessionId="s" session={session} streaming={false} prs={[]} />)).toContain('disabled=""');
-    expect(renderToStaticMarkup(<PlanSheet sessionId="s" session={null} streaming={false} prs={[]} />)).not.toContain('Change plan');
-  });
-});
-
 describe('minimize button', () => {
   it('sits at the far right of the header, only when minimizing is wired', () => {
     const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={null} onMinimize={() => {}} />);
@@ -31,71 +18,49 @@ describe('minimize button', () => {
   });
 });
 
-describe('plan change prompt', () => {
-  it('asks what to change, with a text box, Send change and Cancel', () => {
-    const markup = renderToStaticMarkup(<PlanChangePrompt running onSend={() => {}} onCancel={() => {}} />);
-    expect(markup).toContain('What should the agent do differently?');
-    expect(markup).toContain('<textarea');
-    expect(markup).toContain('Send change</button>');
-    expect(markup).toContain('Cancel</button>');
-    expect(markup).toContain('applies at its next step');
-    // Nothing to send until something is typed.
-    expect(markup).toMatch(/disabled=""[^>]*>Send change/);
-  });
-  it('says an idle agent gets the change as a new turn', () => {
-    expect(renderToStaticMarkup(<PlanChangePrompt running={false} onSend={() => {}} onCancel={() => {}} />)).toContain('starts a new turn');
-  });
-  it('sends the standing request followed by what was typed', () => {
-    expect(planChangeMessage('  skip the migration  ')).toBe(`${PLAN_CHANGE_REQUEST}skip the migration`);
-  });
-  it('is offered on the plan sheet, and not in an archived (read-only) chat', async () => {
-    const { renderChatPane, chatSession, withProvider } = await chatHarness();
-    withProvider();
-    const plan = chatSession({ agentPlan: session.agentPlan });
-    /** The opening tag of the plan sheet's Change plan button. */
-    const button = (html: string) => {
-      const rail = html.slice(html.indexOf('data-plan-sheet'));
-      const end = rail.indexOf('Change plan</button>');
-      return end < 0 ? null : rail.slice(rail.lastIndexOf('<button', end), rail.indexOf('>', rail.lastIndexOf('<button', end)) + 1);
-    };
-    expect(button(renderChatPane(plan))).not.toBeNull();
-    expect(button(renderChatPane(plan))).not.toContain('disabled=""');
-    // An archived chat has no composer, so no plan sheet to change it from.
-    expect(button(renderChatPane(plan, { readOnly: true }))).toBeNull();
-  });
-
-  // Source pin, pending the plan-and-mode e2e journey: the prompt opens from a
-  // click (pane state) and sending steers or sends through host calls; a server
-  // render reaches none of it.
-  it('pops up where questions do, in both the full chat and a wall window, and steers a running agent (source pin)', () => {
-    const pane = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
-    expect(pane).toMatch(/surface === 'transcript' && planChangeOpen && !question/);
-    expect(pane).toMatch(/\{planChangeOpen && !question && \(\s*<div className="composer-question is-open" data-plan-change-pop>/);
-    expect(pane).toMatch(/\{!cleanStart && !planChangeOpen && !question && \(\s*<PlanSheet/);
-    expect(pane).toMatch(/if \(streamingRef\.current\) \{\s*const updated = await window\.nekko\.steerChat\(sessionId, text\)/);
-    expect(pane).toMatch(/await send\(text\);/);
-  });
-});
-
-/** The real ChatPane at a pane wide enough for the Agent Monitor, in a fresh module graph. */
-async function chatHarness() {
-  vi.resetModules();
-  vi.doUnmock('../store.js');
-  await import('../tests/browserGlobals.js');
-  const { liveStore } = await import('../tests/liveStore.js');
-  const { elementWidthMock, paneWidth } = await import('../tests/paneWidth.js');
-  vi.doMock('../store.js', (o) => liveStore(o as never));
-  vi.doMock('../liveRuns.js', async (o) => ({ ...(await o<object>()), useLiveRun: () => undefined }));
-  vi.doMock('./agent-console/useElementWidth.js', (o) => elementWidthMock(o));
-  paneWidth.value = 1200;
-  return import('../tests/renderChatPane.js');
-}
-
 it('keeps sub-agents in the Agent Monitor and leaves the plan to the composer sheet', () => {
   const markup = renderToStaticMarkup(<PlanRail sessionId="s" session={session} />);
   expect(markup).toContain('>Sub-agents<');
   expect(markup).not.toContain('Inspect code');
-  expect(markup).not.toContain('Change plan');
+});
+
+describe('plan sheet, folded and open (#1317)', () => {
+  const loop = { ...session, messages: [], agentPlan: [
+    { id: 'a', createdAt: 1, updatedAt: 1, title: 'Find every inline check', status: 'done', kind: 'explore' },
+    { id: 'b', createdAt: 1, updatedAt: 1, title: 'Move checks into one middleware', status: 'active', kind: 'build', pass: 2 },
+    { id: 'c', createdAt: 1, updatedAt: 1, title: 'Auth tests pass', status: 'pending', kind: 'verify' },
+    { id: 'd', createdAt: 1, updatedAt: 1, title: 'Open the PR', status: 'pending', kind: 'ship' },
+  ] } as unknown as Session;
+  it('folds by default to the step being worked: kind, title, pass and its place, with no Change plan', () => {
+    const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
+    expect(markup).toContain('data-folded');
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toMatch(/data-plan-kind="build" data-current="true">Build<\/span>/);
+    expect(markup).toContain('Move checks into one middleware');
+    expect(markup).toContain('Pass 2');
+    expect(markup).toContain('2 of 4');
+    expect(markup).not.toContain('Find every inline check');
+    expect(markup).not.toContain('Change plan');
+  });
+  it('sums the sub-agents into one chip when folded, and puts each under its step when open', () => {
+    store.sessions = [
+      { id: 'k1', parentSessionId: 's', title: 'Map checks', createdAt: 0 },
+      { id: 'k2', parentSessionId: 's', title: 'Update routes', createdAt: 0, activeRun: { startedAt: 1 } },
+      { id: 'other', parentSessionId: 'x', title: 'Not mine', createdAt: 0 },
+    ];
+    try {
+      const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
+      expect(folded).toMatch(/data-plan-chip="subagents" title="Sub-agents: 1 running, 1 done">Sub-agents<b>1<\/b>[^]*?aria-label="running"[^]*?<b>1<\/b>[^]*?aria-label="done"/);
+      const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
+      expect(open).toContain('1 of 4 done');
+      for (const kind of ['Explore', 'Build', 'Verify', 'Ship']) expect(open).toContain(`>${kind}</span>`);
+      // No plan update in the transcript yet: sub-agents land on the first step.
+      const first = open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('data-plan-step-id="b"'));
+      expect(first.match(/data-plan-chip="subagent"/g)).toHaveLength(2);
+      expect(first).toContain('Update routes');
+      expect(open).not.toContain('Not mine');
+    } finally { store.sessions = []; }
+  });
 });
 
 describe('per-step plan status icons', () => {
@@ -107,7 +72,7 @@ describe('per-step plan status icons', () => {
     { id: 'e', createdAt: 1, updatedAt: 1, title: 'Animate', status: 'skipped' },
   ] } as Session;
   it.each([true, false])('shows every active step as Working, streaming=%s', (streaming) => {
-    const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={parallel} streaming={streaming} prs={[]} />);
+    const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={parallel} streaming={streaming} prs={[]} initiallyOpen />);
     expect(markup.match(/aria-label="Working"/g)).toHaveLength(2);
     for (const status of ['Working', 'Done', 'Pending', 'Skipped']) expect(markup).toContain('title="' + status + '"');
     expect(markup).toContain('line-through');
@@ -118,12 +83,12 @@ describe('per-step plan status icons', () => {
   });
   it('pauses all active entries only for an explicitly interrupted, non-running chat', () => {
     const interrupted = { ...parallel, messages: [{ role: 'assistant', content: 'Stopped', interrupted: true }] } as Session;
-    const paused = renderToStaticMarkup(<PlanSheet sessionId="s" session={interrupted} streaming={false} prs={[]} />);
+    const paused = renderToStaticMarkup(<PlanSheet sessionId="s" session={interrupted} streaming={false} prs={[]} initiallyOpen />);
     expect(paused.match(/aria-label="Paused"/g)).toHaveLength(2);
     expect(paused).not.toContain('aria-label="Working"');
     expect(paused).toContain('M8 5v14M16 5v14');
     for (const running of [interrupted, { ...interrupted, activeRun: { startedAt: 1 } }]) {
-      const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={running} streaming={running === interrupted} prs={[]} />);
+      const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={running} streaming={running === interrupted} prs={[]} initiallyOpen />);
       expect(markup.match(/aria-label="Working"/g)).toHaveLength(2);
     }
   });

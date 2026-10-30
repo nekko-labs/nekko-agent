@@ -68,7 +68,6 @@ import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { ExpertMonitor, ModeToggle, useExpertMode } from './ModeViews.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
-import { PlanChangePrompt, planChangeMessage } from './PlanChangePrompt.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
 import { useWallLogs } from '../wallLogs.js';
@@ -635,8 +634,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * closed is still there when it opens.
    */
   const [question, setQuestion] = useState<AskRequest | null>(null);
-  /** "Change plan" pops this up where the agent's questions appear. */
-  const [planChangeOpen, setPlanChangeOpen] = useState(false);
   const [ctx, setCtx] = useState<ContextBundle | null>(null);
   // Tokens this turn has produced that the last context bundle doesn't include
   // yet. Everything the agent writes (its reply, its tool calls, their results)
@@ -675,9 +672,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const planRailWanted = useStore((s) => s.planRailOpenBySession[sessionId] ?? s.planRailOpen);
   const paneRef = useRef<HTMLDivElement>(null);
   const paneWidth = useElementWidth(paneRef, sessionId);
-  const planRailOpen = planRailWanted && paneWidth >= PLAN_RAIL_MIN_PANE;
+  // On the wall the plan sheet carries the Agent Monitor's sub-agents and task links, so the rail stays closed there.
+  const wideEnoughForRail = paneWidth >= PLAN_RAIL_MIN_PANE && !(commandCenter && surface === 'full');
+  const planRailOpen = planRailWanted && wideEnoughForRail;
   const planSteps = useMemo(() => { const p = planProgress(session?.agentPlan); return { done: p.done + p.skipped, total: p.total }; }, [session?.agentPlan]);
-  const wideEnoughForRail = paneWidth >= PLAN_RAIL_MIN_PANE;
   // A small window (a cell on the Agent board wall, a sliver of a split)
   // folds the two control rows into one summary chip, so the transcript keeps
   // the room; the chip opens them again on demand.
@@ -1854,27 +1852,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     await window.nekko.answerQuestion(sessionId, pending.callId, answers);
   };
 
-  /**
-   * The plan change the user typed. A running agent takes it at its next step
-   * (the same steer as Ctrl+Enter), so it changes course instead of finishing
-   * the old plan first; an idle one gets it as a new turn. The draft is left
-   * alone either way.
-   */
-  const sendPlanChange = async (change: string) => {
-    setPlanChangeOpen(false);
-    const text = planChangeMessage(change);
-    try {
-      if (streamingRef.current) {
-        const updated = await window.nekko.steerChat(sessionId, text);
-        if (updated) setSession(updated);
-        refreshSessions();
-      } else {
-        await send(text);
-      }
-    } catch (e) {
-      useStore.getState().pushToast('error', `Could not send the plan change: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
 
   const hasProvider = !needsProviderSetup(providers, modelId ?? models[0]?.id);
   // An image chat runs on the engine's image model, not a chat provider, so it
@@ -2536,12 +2513,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         )}
         {surface !== 'composer' && !cleanStart && expertMode && <ExpertMonitor />}
 
-        {/* Preserve the wall plan-change pin. An open question takes precedence. */}
-        {surface === 'transcript' && planChangeOpen && !question && (
-          <div className="agent-question-pin shrink-0" role="region" aria-label="Change the agent's plan">
-            <div className="agent-question-pin-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => setPlanChangeOpen(false)} /></div>
-          </div>
-        )}
         {surface !== 'composer' && !cleanStart && (
         <div className="relative flex min-h-0 w-full flex-1">
           <FoldThoughtsContext.Provider value={!isCloudModel}><SubagentParentContext.Provider value={subagentChildren}><SubagentInheritedModelContext.Provider value={delegationDefaultModel ?? (modelId && modelId !== AUTO_MODEL_ID ? modelId : undefined)}><WatchSessionContext.Provider value={sessionId}><VirtualTranscript
@@ -2736,12 +2707,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
-            {/* In the wall the shared composer carries the selected agent's plan. */}
-            {!cleanStart && !planChangeOpen && !question && (
-              <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onChangePlan={() => setPlanChangeOpen(true)} />
-            )}
-            {planChangeOpen && !question && (
-              <div className="composer-question is-open" data-plan-change-pop><div className="composer-question-body"><PlanChangePrompt running={streaming} onSend={(change) => { void sendPlanChange(change); }} onCancel={() => { setPlanChangeOpen(false); composerRef.current?.focus(); }} /></div></div>
+            {!cleanStart && !question && (
+              <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
             )}
 
             <div className="composer relative">
