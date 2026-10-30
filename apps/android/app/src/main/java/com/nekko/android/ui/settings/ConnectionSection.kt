@@ -36,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ChatListFiles
+import com.nekko.android.data.OfflineFileStore
 import com.nekko.android.NekkoApp
 import com.nekko.android.connection.KeepAlive
 import com.nekko.android.connection.Notices
@@ -59,6 +60,7 @@ fun ConnectionSection(deps: SettingsDeps) {
     val keep by deps.phonePrefs.flow(KeepAlive.ENABLED).collectAsStateWithLifecycle()
     val notify by deps.phonePrefs.flow(Notices.ENABLED).collectAsStateWithLifecycle()
     val keepList by deps.phonePrefs.flow(ChatListFiles.ENABLED).collectAsStateWithLifecycle()
+    val keepChats by deps.phonePrefs.flow(OfflineFileStore.KEEP_TRANSCRIPTS).collectAsStateWithLifecycle()
     val notices = (context.applicationContext as? NekkoApp)?.connection?.notices
     var allowed by remember { mutableStateOf(notices?.allowed() ?: true) }
     var restricted by remember { mutableStateOf(backgroundRestricted(context)) }
@@ -107,6 +109,15 @@ fun ConnectionSection(deps: SettingsDeps) {
                 checked = keepList,
                 onChange = { on ->
                     (context.applicationContext as? NekkoApp)?.setKeepChatList(on) ?: deps.phonePrefs.set(ChatListFiles.ENABLED, on)
+                },
+            )
+            HorizontalDivider(color = p.line)
+            SwitchRow(
+                title = "Keep recent chats to read offline",
+                detail = "The last 20 chats you opened, without their photos. Not backed up; off deletes them",
+                checked = keepChats,
+                onChange = { on ->
+                    (context.applicationContext as? NekkoApp)?.setKeepTranscripts(on) ?: deps.phonePrefs.set(OfflineFileStore.KEEP_TRANSCRIPTS, on)
                 },
             )
         }

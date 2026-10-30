@@ -22,6 +22,8 @@ interface OfflineFiles {
     fun save(computerId: String, name: String, value: JsonElement)
     /** Forget: every file of this computer. */
     fun remove(computerId: String)
+    /** One file of this computer (a saved chat that left the phone). */
+    fun removeFile(computerId: String, name: String) {}
 }
 
 /**

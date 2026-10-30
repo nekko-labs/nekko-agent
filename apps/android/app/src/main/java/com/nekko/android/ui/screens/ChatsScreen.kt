@@ -663,13 +663,20 @@ private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier, onSkipFir
 }
 
 /** The line above a saved chat list: when it was saved, and that it isn't live. */
-internal fun savedListNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+internal fun savedListNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    savedNote("Saved list", savedAt, computer, now, zone)
+
+/** "Saved copy from 10:42. It updates when Mac answers.": a chat read from the phone's copy (OF-5). */
+internal fun savedCopyNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    savedNote("Saved copy", savedAt, computer, now, zone)
+
+private fun savedNote(what: String, savedAt: Long, computer: String, now: Long, zone: java.time.ZoneId): String {
     val at = java.time.Instant.ofEpochMilli(savedAt).atZone(zone)
     val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
     val time = at.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
     val whenText = if (at.toLocalDate() == today) time
     else at.toLocalDate().format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)) + ", " + time
-    return "Saved list from $whenText. It updates when $computer answers."
+    return "$what from $whenText. It updates when $computer answers."
 }
 
 /** A chat started offline (offline mode): its first message, until the computer creates it. */

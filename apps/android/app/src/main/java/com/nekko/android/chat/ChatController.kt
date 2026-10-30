@@ -44,6 +44,7 @@ import kotlinx.coroutines.NonCancellable
 import com.nekko.protocol.RelayException
 import com.nekko.protocol.QueuedPrompt
 import com.nekko.protocol.PcSettings
+import com.nekko.protocol.SavedTranscripts
 
 /** A turn can run for hours (long agent runs); don't time the request out. */
 const val TURN_TIMEOUT_MS: Long = 12L * 60 * 60 * 1000
@@ -57,6 +58,8 @@ data class ChatState(
     val skills: List<SkillSummary> = emptyList(),
     /** The computer's count of the chat's context window (`context:preview`); null until it answers or on an older computer. */
     val context: ContextUsage? = null,
+    /** When the transcript on screen is the phone's saved copy (the computer hasn't answered yet), when it was saved. */
+    val savedAt: Long? = null,
 )
 
 /** Connection facts the chat screen reads from the computers store. */
@@ -97,6 +100,8 @@ data class ChatUi(
     val effort: Effort? = null,
     /** The chat's own tool policy; null follows the computer's default. */
     val mode: PcSettings.ChatMode? = null,
+    /** The transcript is the phone's saved copy, saved then: read-only until the computer answers (OF-5). */
+    val savedAt: Long? = null,
     /** The computer is out of reach and what is sent waits on the phone: says so under the box, without blocking it. */
     val sendsLater: String? = null,
     val context: ContextUsage? = null,
@@ -121,6 +126,8 @@ class ChatController(
     private val newId: () -> String = { java.util.UUID.randomUUID().toString() },
     /** Offline mode: every prompt is on disk until the computer lists it; null sends without one (tests, previews). */
     private val outbox: Outbox? = null,
+    /** The last chats opened, kept to read offline (OF-5); null keeps none. */
+    private val saved: SavedTranscripts? = null,
 ) {
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -144,9 +151,14 @@ class ChatController(
             scope.launch { loadContext() }
             val session = Session.from(raw)
             if (session == null) {
-                _state.update { it.copy(loadError = "This chat was deleted on your computer.") }
+                saved?.remove(sessionId)
+                _state.update { st ->
+                    // A saved copy of a chat the computer no longer has is not shown.
+                    st.copy(loadError = "This chat was deleted on your computer.", session = if (st.savedAt != null) null else st.session, savedAt = null)
+                }
                 return
             }
+            saved?.save(session)
             val mine = pending[sessionId]
             // The computer lists these prompts: whatever the outbox still held of them was delivered.
             if (session.clientMessageIds.isNotEmpty()) outbox?.confirm(sessionId, session.clientMessageIds)
@@ -154,6 +166,7 @@ class ChatController(
                 val t = st.turn
                 st.copy(
                     session = session,
+                    savedAt = null,
                     loadError = null,
                     // Mid-turn the overlay keeps streaming; mergeLive hides what the re-read
                     // session already holds. After the turn the session has it all.
@@ -168,8 +181,19 @@ class ChatController(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
+            showSavedCopy()
+            if (_state.value.savedAt != null && !(e is RelayException && e.fromComputer)) return
             _state.update { it.copy(loadError = e.message ?: "Could not load this chat.") }
         }
+    }
+
+    /** Paint the saved copy while nothing better is on screen: at once when the chat opens, and when the computer can't be reached. */
+    fun showSavedCopy() {
+        if (_state.value.session != null) return
+        val copy = saved?.saved(sessionId) ?: return
+        _state.update { if (it.session != null) it else it.copy(session = copy.session, savedAt = copy.savedAt, loadError = null) }
+        saved.touch(sessionId)
     }
 
     /**
@@ -454,17 +478,24 @@ class ChatController(
             }
             val saved = state.session?.let { Transcript.fromMessages(it.messages) } ?: emptyList()
             val turn = state.turn
+            // Out of reach with no saved copy: say so rather than load forever.
+            val notSaved = if (state.session == null && state.loadError == null && away) {
+                "This chat isn’t saved on this phone yet. It shows when ${env.computerName} answers."
+            } else {
+                null
+            }
             return ChatUi(
-                ready = state.session != null || state.loadError != null,
+                ready = state.session != null || state.loadError != null || notSaved != null,
                 title = plainText(state.session?.title ?: "").ifEmpty { "Chat" },
                 subtitle = listOfNotNull(modelId, env.computerName).joinToString(" · "),
                 blocks = Transcript.mergeLive(saved, turn.blocks),
                 running = turn.running,
                 approval = turn.approval,
                 question = turn.question,
-                error = state.loadError ?: turn.error,
+                error = state.loadError ?: turn.error ?: notSaved,
                 blocked = blocked,
                 sendsLater = sendsLater,
+                savedAt = state.savedAt,
                 queued = state.session?.queue ?: emptyList(),
                 queuedPrompts = state.session?.queued ?: emptyList(),
                 rate = turn.rate,
