@@ -62,6 +62,24 @@ folder or project names that are not under a home path, nor names the masker
 cannot know (a colleague's name in a chat). Use the demo profile for footage
 that must be clean.
 
+## Unattended takes with Recordly
+
+- `--record` starts Recordly (`RECORDLY_EXE`, default its Windows install path)
+  with a local debugging port, restarting it for every take, picks the app's
+  window as the source, presses Record once setup is done and Stop after the
+  last step, and prints the saved file. It refuses to record if Recordly would
+  capture the whole screen instead of the window.
+- Scenes start a brand-new chat (Ctrl+T), attach the demo project, set low
+  effort and (for `control`) ask before every edit, and finish when a new reply
+  completes, approving each action on camera.
+- Scenes change settings in setup (no worktrees, no "Reply finished"
+  notifications, Agent Monitor closed), so they run only on the demo profile:
+  `--dry` and `--attach` refuse without `--demo-profile`.
+- The cursor's screen mapping is measured against the real window before each
+  take; a failed take saves a screenshot of the app under `scripts/demo/out/`.
+- Verified: the `control` scene recorded unattended end to end in dark mode,
+  window only (1282x720). Not yet run unattended: the other four scenes.
+
 ## Status
 
 - Implemented: masker, Settings exemption, Local Web UI flag, fixed window size,
