@@ -327,16 +327,32 @@
       <!-- ===== beta sign-up: after the "what it does" tour, before the technical detail ===== -->
       <section id="beta" class="chapter band band-lavender" aria-labelledby="beta-title">
         <div class="beta">
-          <div class="reveal">
-            <p class="eyebrow">NEKKO BETA · FREE TO JOIN</p>
-            <h2 id="beta-title">Help shape what Nekko becomes</h2>
-            <p class="chapter-lede">Join the beta list and get a front-row seat as Nekko grows. You try new things first, and your feedback decides what we build next.</p>
-            <ul class="beta-perks">
-              <li>A chance to try the iOS and Android apps before anyone else</li>
-              <li>First to test new features as they land</li>
-              <li>More beta-only extras to come</li>
-            </ul>
+          <div class="beta-intro reveal">
+            <p class="eyebrow">MEET NEKKO · FREE BETA</p>
+            <h2 id="beta-title">See it in a minute. Try it first.</h2>
+            <p class="chapter-lede">Nekko the cat walks you through the ideas behind the app in about a minute. Like what you see? Join the beta and try new things before anyone else.</p>
           </div>
+          <!-- The tour: one video, its file picked by look (dark files for Dark,
+               light for White and Colourful). Nothing loads until it is near the screen. -->
+          <figure class="tour reveal" data-tour>
+            <div class="tour-frame">
+              <video class="tour-video" muted playsinline preload="none" controls width="1080" height="1080"
+                     aria-label="Illustrated tour of Nekko, about a minute, no sound"
+                     data-src-dark="media/nekko-tour-dark.mp4" data-poster-dark="media/nekko-tour-dark-poster.webp"
+                     data-src-light="media/nekko-tour-light.mp4" data-poster-light="media/nekko-tour-light-poster.webp"></video>
+              <div class="tour-end" data-tour-end hidden>
+                <p>Want to try it first?</p>
+                <button class="btn btn-primary" type="button" data-tour-join>Join the beta</button>
+                <button class="tour-again" type="button" data-tour-again>Watch again</button>
+              </div>
+            </div>
+            <figcaption class="micro">Illustrated tour. The screenshots elsewhere on this page show the real app.</figcaption>
+          </figure>
+          <ul class="beta-perks reveal">
+            <li>A chance to try the iOS and Android apps before anyone else</li>
+            <li>First to test new features as they land</li>
+            <li>More beta-only extras to come</li>
+          </ul>
           <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
                Until then the form only shows its thank-you message and sends nothing. -->
           <div class="beta-stage reveal" data-beta>
