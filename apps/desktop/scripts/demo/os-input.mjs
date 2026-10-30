@@ -70,6 +70,8 @@ export function osInput() {
         await sleep(ms / steps);
       }
     },
+    /** Put the pointer at (x, y) at once. */
+    async jump(x, y) { await send(`move ${x} ${y}`); },
     /** Where the pointer is now, in physical pixels. */
     async where() { await send('pos'); return last; },
     async click() { await send('down'); await sleep(70); await send('up'); },

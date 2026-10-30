@@ -25,20 +25,40 @@ export function newChat(folder) {
   return [
     { waitFor: 'role=button[name="Create new"]', after: 2500, note: 'app ready' },
     ...dismissNotices,
-    // Edits go straight into the demo project (which is reset before each
-    // take), not a separate worktree, and the worktree notice never opens.
+    // Demo-profile settings every take relies on, then a reload so the app reads them:
+    // edits go straight into the demo project (reset before each take) rather
+    // than a worktree, no "Reply finished" notifications, Agent Monitor closed.
     {
-      run: ({ page }) => page.evaluate(async () => {
-        const settings = await window.nekko.getSettings();
-        await window.nekko.updateSettings({ defaultExecutionMode: 'unified', gitManagement: { ...settings?.gitManagement, mode: 'shared' } });
-      }),
-      note: 'use the current Git branch',
+      run: async ({ page }) => {
+        await page.evaluate(async () => {
+          const settings = await window.nekko.getSettings();
+          await window.nekko.updateSettings({
+            defaultExecutionMode: 'unified',
+            gitManagement: { ...settings?.gitManagement, mode: 'shared' },
+            desktopNotifications: false,
+          });
+          localStorage.setItem('nekko.planRail', '0');
+          localStorage.removeItem('nekko.planRail.sessions');
+        });
+        await page.reload();
+      },
+      note: 'demo settings',
     },
-    { click: 'role=button[name="Create new"]', after: 500 },
-    { click: 'role=button[name="Agent"] >> nth=0', after: 1200 },
-    ...(folder ? [{ click: `role=group[name="Folders this chat can use"] >> role=checkbox[name=/${folder}/]`, optional: true, after: 400, note: `use ${folder}` }] : []),
-    { click: 'button:has-text("Start")', optional: true, after: 1500, note: 'start the chat' },
+    { waitFor: 'role=button[name="Create new"]', after: 2500, note: 'app ready again' },
+    // Ctrl+T always makes a new chat; the Create menu's "Agent" reuses the open one.
+    { press: 'Control+t', after: 1500, note: 'new chat' },
+    { waitFor: '[data-clean-start]', note: 'an empty chat' },
     { waitFor: COMPOSER, note: 'composer ready' },
+    // Attach the project folder explicitly: a cloud agent will not run without one.
+    ...(folder ? [{
+      run: ({ page }) => page.evaluate(async (name) => {
+        const id = document.querySelector('[data-session-id]')?.getAttribute('data-session-id');
+        const ws = (await window.nekko.getSettings()).workspaces?.find((w) => w.name === name || w.path?.endsWith(name));
+        if (!id || !ws) throw new Error(`Add ${name} as a project in the demo profile first.`);
+        await window.nekko.setSessionWorkspace(id, ws.id);
+      }, folder),
+      note: `use ${folder}`,
+    }] : []),
   ];
 }
 
@@ -62,10 +82,14 @@ export const QUESTION = 'role=group[name="The agent is asking a question"]';
  */
 export const untilDone = {
   note: 'wait for the reply, approving as it goes',
-  run: async ({ visible, hover, click, sleep }) => {
+  run: async ({ page, visible, hover, click, sleep }) => {
     const start = Date.now();
-    while (!(await visible(DONE))) {
+    // Done when a finished reply appears that was not on screen before.
+    const finished = () => page.locator('[data-turn-stats]').count();
+    const before = await finished();
+    while ((await finished()) <= before) {
       if (Date.now() - start > 600000) throw new Error('The reply took over 10 minutes.');
+      if (await visible('text=Reply failed')) throw new Error('The reply failed: see the error in the chat.');
       if (await visible(CHECKOUT_NOTICE)) {
         await click(CHECKOUT_NOTICE);
       } else if (await visible(APPROVE)) {
@@ -98,3 +122,13 @@ export function effort(level) {
     note: `effort ${level}`,
   };
 }
+
+/** Ask before every file write and command in this chat, so the approval shows. */
+export const askFirst = {
+  run: ({ page }) => page.evaluate(async () => {
+    const id = document.querySelector('[data-session-id]')?.getAttribute('data-session-id');
+    if (!id) throw new Error('No open chat to set the approval mode on.');
+    await window.nekko.setSessionOptions(id, { mode: 'ask' });
+  }),
+  note: 'ask before edits and commands',
+};
