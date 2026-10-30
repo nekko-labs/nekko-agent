@@ -38,7 +38,8 @@ recorded, because only the real app looks like the real app.
 
 - `npm run demo -w apps/desktop -- <scene>` starts the app in presenter mode on
   the demo profile with `NEKKO_DEMO_DEBUG_PORT` set (a remote-debugging port on
-  127.0.0.1, opened only when that variable is set), counts down five seconds
+  127.0.0.1, opened only when that variable is set and only in a dev build; an
+  installed app never opens it), counts down five seconds
   so recording can start, then plays `scripts/demo/scenes/<scene>.mjs`.
 - Each click or hover finds the element in the live page, glides the real
   Windows cursor there (eased) and clicks with the real mouse, so recorders that
