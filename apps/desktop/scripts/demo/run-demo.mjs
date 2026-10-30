@@ -36,7 +36,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ctx = { benchmark: args.includes('--benchmark'), project: opt('--project', process.env.NEKKO_DEMO_PROJECT || defaultProject()) };
 
 function defaultProject() {
-  const candidates = [process.platform === 'win32' ? 'E:\dev\demo-bakery' : '', join(homedir(), 'demo-bakery')].filter(Boolean);
+  const candidates = [process.platform === 'win32' ? 'E:\\dev\\demo-bakery' : '', join(homedir(), 'demo-bakery')].filter(Boolean);
   return candidates.find((d) => existsSync(d)) ?? candidates.at(-1);
 }
 
