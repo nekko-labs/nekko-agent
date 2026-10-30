@@ -14,10 +14,11 @@ export default {
     { hover: MODEL_CHIP, after: 1500, note: 'the local model, free' },
     ...pickModel('Opus', { hoverList: true }),
     { hover: MODEL_CHIP, after: 1000 },
-    // The context meter's breakdown opens on hover: what this chat sends, by source.
-    { hover: CONTEXT_METER, after: 2500, note: 'what will be sent' },
     { type: 'Add a "Seasonal specials" section to index.html with three autumn bakes.', into: COMPOSER },
-    { press: 'Enter' },
+    { press: 'Enter', after: 1200 },
+    // A new chat shows no context meter until its first message; its breakdown
+    // opens on hover: what this chat sends, by source.
+    { hover: CONTEXT_METER, optional: true, after: 2500, note: 'what was sent' },
     { waitFor: APPROVAL, note: 'wait for the edit approval' },
     { hover: APPROVAL, after: 1500 },
     { click: APPROVE },
