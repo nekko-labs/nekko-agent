@@ -13,6 +13,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.semantics.selected
+import androidx.compose.material.icons.filled.TextFormat
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Schedule
@@ -138,6 +142,15 @@ fun Composer(
     val canSend = hasContent && blocked == null && !sending && !addingPhotos
     val showStop = running && !hasContent && !addingPhotos
     var plusOpen by remember { mutableStateOf(false) }
+    // The Markdown editing (MD-6): the selection the toolbar acts on, and the formatting toolbar's switch (*Aa*).
+    val context = LocalContext.current
+    val draft = remember { MarkdownDraft() }
+    val setText: (String) -> Unit = {
+        text = it
+        error = null
+    }
+    var focused by remember { mutableStateOf(false) }
+    var toolbarOn by remember { mutableStateOf(ToolbarPref.get(context)) }
     LaunchedEffect(insert) {
         if (insert != null) {
             text += (if (text.isEmpty() || text.endsWith("\n")) "" else "\n\n") + insert
@@ -235,19 +248,26 @@ fun Composer(
                     .border(1.dp, p.line, RoundedCornerShape(16.dp))
                     .padding(6.dp),
             ) {
+                // The toolbar sits inside the card, above the text, while the box is in use.
+                if (focused && toolbarOn) MarkdownToolbar(draft, text, setText)
+                PastedChip(draft, text, setText)
+                val fieldValue = draft.valueFor(text)
                 BasicTextField(
-                    value = text,
-                    onValueChange = {
-                        text = it
-                        error = null
-                    },
+                    value = fieldValue,
+                    // Against the current value, not this composition's: a paste or a toolbar edit may have just replaced it.
+                    onValueChange = { draft.changed(draft.valueFor(text), it, setText) },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = p.ink),
                     cursorBrush = SolidColor(p.accent),
                     maxLines = 6,
+                    // The source with light styling; what is sent is exactly what was typed.
+                    visualTransformation = remember(p) { MarkdownStyling(p.inkFaint, p.accent, p.code) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .padding(horizontal = 8.dp, vertical = 12.dp)
+                        .onFocusChanged { focused = it.hasFocus }
+                        .markdownKeys(draft, { text }, setText)
+                        .markdownPaste(context, draft, { text }, setText)
                         .semantics { contentDescription = "Message" },
                     decorationBox = { inner ->
                         if (text.isEmpty()) {
@@ -295,6 +315,20 @@ fun Composer(
                                 },
                             )
                         }
+                    }
+                    // *Aa*: show or hide the formatting toolbar, remembered.
+                    IconButton(
+                        onClick = {
+                            toolbarOn = !toolbarOn
+                            ToolbarPref.set(context, toolbarOn)
+                        },
+                        modifier = Modifier.semantics { selected = toolbarOn }.testTag("composer.formatting"),
+                    ) {
+                        Icon(
+                            Icons.Filled.TextFormat,
+                            contentDescription = if (toolbarOn) "Hide formatting" else "Show formatting",
+                            tint = if (toolbarOn) p.accent else p.inkSoft,
+                        )
                     }
                     Spacer(Modifier.weight(1f))
                     FilledIconButton(
