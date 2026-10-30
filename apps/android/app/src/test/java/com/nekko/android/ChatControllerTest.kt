@@ -14,6 +14,7 @@ import com.nekko.protocol.Block
 import com.nekko.protocol.Channels
 import com.nekko.protocol.DenyReason
 import com.nekko.protocol.RelayException
+import com.nekko.protocol.PhoneRefusal
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.Severity
@@ -67,7 +68,7 @@ class ChatControllerTest {
     }
 
     private fun TestScope.controller(caller: FakeCaller, env: ChatEnv = online) =
-        ChatController(sid, caller, backgroundScope, { env }, now = { 42L })
+        ChatController(sid, caller, backgroundScope, { env }, now = { 42L }, newId = { "m1" })
 
     private val approval = Approval(ToolCall("call-1", "bash", buildJsonObject { put("command", "rm -rf build") }), "deletes files", Severity.HIGH)
     private val question = AskRequest(
@@ -133,7 +134,7 @@ class ChatControllerTest {
         assertEquals(listOf(img, img), opts["images"]!!.jsonArray.map { it.jsonPrimitive.content })
 
         chat.send("", images = listOf(img))
-        assertEquals("""{"text":"","images":["$img"]}""", caller.calls.last().args[1].toString())
+        assertEquals("""{"text":"","images":["$img"],"clientMessageId":"m1"}""", caller.calls.last().args[1].toString())
     }
 
     @Test
@@ -146,7 +147,7 @@ class ChatControllerTest {
 
         val q = caller.calls.last()
         assertEquals(Channels.CHAT_QUEUE, q.channel)
-        assertEquals("""{"text":"","skill":{"name":"plan","input":""}}""", q.args[1].toString())
+        assertEquals("""{"text":"","skill":{"name":"plan","input":""},"clientMessageId":"m1"}""", q.args[1].toString())
     }
 
     @Test
@@ -196,7 +197,7 @@ class ChatControllerTest {
 
         val q = caller.calls.last()
         assertEquals(Channels.CHAT_QUEUE, q.channel)
-        assertEquals(listOf(JsonPrimitive(sid), JsonPrimitive("next one")), q.args)
+        assertEquals(listOf(JsonPrimitive(sid), buildJsonObject { put("text", "next one"); put("clientMessageId", "m1") }), q.args)
         assertEquals(listOf("next one"), ChatController.project(chat.state.value, online).queued)
         assertEquals(1, caller.channels().count { it == Channels.CHAT_SEND })
     }
@@ -347,5 +348,37 @@ class ChatControllerTest {
         val chat = controller(FakeCaller())
         chat.onEvent(AgentEvent.Usage(sid, 200, 4000))
         assertEquals(50.0, ChatController.project(chat.state.value, online).rate!!, 0.001)
+    }
+
+    @Test
+    fun `every prompt carries its clientMessageId, and an older computer gets it without`() = runTest {
+        var old = true
+        val caller = FakeCaller { c ->
+            val opts = c.args.single().jsonObject
+            if (c.channel == Channels.CHAT_SEND && old && opts["clientMessageId"] != null) {
+                throw RelayException("Not allowed from a paired phone (option-denied): clientMessageId", PhoneRefusal("option-denied", "clientMessageId"))
+            }
+            CompletableDeferred<JsonElement>().await()
+        }
+        val chat = controller(caller)
+        chat.send("hello")
+        runCurrent()
+        val (first, second) = caller.calls.filter { it.channel == Channels.CHAT_SEND }
+        assertEquals("m1", first.args.single().jsonObject["clientMessageId"]!!.jsonPrimitive.content)
+        assertNull("sent again without it", second.args.single().jsonObject["clientMessageId"])
+        assertTrue(chat.state.value.turn.running)
+    }
+
+    @Test
+    fun `a refusal that isn't about the id is not sent twice`() = runTest {
+        val caller = FakeCaller { c ->
+            if (c.channel == Channels.CHAT_SEND) throw RelayException("No such chat", fromComputer = true)
+            JsonNull
+        }
+        val chat = controller(caller)
+        chat.send("hello")
+        runCurrent()
+        assertEquals(1, caller.calls.count { it.channel == Channels.CHAT_SEND })
+        assertEquals("No such chat", chat.state.value.turn.error)
     }
 }

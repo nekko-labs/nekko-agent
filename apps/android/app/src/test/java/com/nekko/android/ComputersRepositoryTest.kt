@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -54,9 +55,12 @@ class ComputersRepositoryTest {
         store: FakeStore = FakeStore(),
         remotes: FakeRemotes = FakeRemotes(),
         signer: com.nekko.protocol.ChangeSigner? = null,
+        offline: com.nekko.protocol.OfflineFiles? = null,
     ): ComputersRepository {
         var n = 0
         return ComputersRepository(
+            offlineFiles = offline,
+            draftDebounceMs = 0,
             changeSigner = signer,
             onForget = { forgotten += it },
             store = store,
@@ -818,6 +822,29 @@ class ComputersRepositoryTest {
         assertNull(raise[0].proof)
         assertNotNull(raise[1].proof)
         assertEquals("\"s1\"", raise[1].args[0].toString())
+    }
+
+    @Test
+    fun `each computer keeps its own drafts on disk, and forgetting it deletes them`() = runTest {
+        val files = object : com.nekko.protocol.OfflineFiles {
+            val map = HashMap<String, JsonElement>()
+            override fun load(computerId: String, name: String) = map["$computerId/$name"]
+            override fun save(computerId: String, name: String, value: JsonElement) { map["$computerId/$name"] = value }
+            override fun remove(computerId: String) { map.keys.removeAll { it.startsWith("$computerId/") } }
+        }
+        val repo = repo(offline = files)
+        val first = repo.pair(link)
+        repo.drafts.set("s1", com.nekko.protocol.Draft("half a thought"))
+        runCurrent()
+        val second = repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        assertTrue("the other computer starts with none", repo.drafts.drafts.value.isEmpty())
+        repo.connect(first)
+        assertEquals("half a thought", repo.drafts.draft("s1").text)
+
+        repo.forget(first)
+        assertTrue(files.map.keys.none { it.startsWith("$first/") })
+        assertEquals(second, repo.state.value.activeId)
+        assertTrue(repo.drafts.drafts.value.isEmpty())
     }
 
     @Test

@@ -120,6 +120,10 @@ fun Composer(
     onNewAgent: (() -> Unit)? = null,
     /** **+** → Terminal: the chat's terminals; null leaves it out. */
     onTerminal: (() -> Unit)? = null,
+    /** The skill armed in the saved draft, by name. */
+    initialSkillName: String? = null,
+    /** What the box holds changed (text, armed skill's name): the chat keeps it as its draft. */
+    onDraftChange: ((text: String, skillName: String?) -> Unit)? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -127,7 +131,7 @@ fun Composer(
     var sending by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     // The armed skill, by name: it survives rotation and is dropped if the computer no longer has it.
-    var skillName by rememberSaveable { mutableStateOf<String?>(null) }
+    var skillName by rememberSaveable { mutableStateOf(initialSkillName) }
     val skill = skillName?.let { n -> skills.firstOrNull { it.name == n } }
     // The armed saved prompt, by id: it sends its text, then what was typed.
     var promptId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -151,6 +155,7 @@ fun Composer(
     }
     var focused by remember { mutableStateOf(false) }
     var toolbarOn by remember { mutableStateOf(ToolbarPref.get(context)) }
+    LaunchedEffect(text, skillName) { onDraftChange?.invoke(text, skillName) }
     LaunchedEffect(insert) {
         if (insert != null) {
             text += (if (text.isEmpty() || text.endsWith("\n")) "" else "\n\n") + insert

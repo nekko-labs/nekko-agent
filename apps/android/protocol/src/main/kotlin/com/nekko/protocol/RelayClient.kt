@@ -66,7 +66,28 @@ data class RelayStatus(val state: RelayState, val detail: String? = null, val de
  * the reply never came: the computer may have acted on it (a safety exit that kicks
  * every phone ends exactly that way).
  */
-class RelayException(message: String, val refusal: PhoneRefusal? = null, val afterSend: Boolean = false) : Exception(message)
+/**
+ * [fromComputer] is set when the computer answered with this error, so the
+ * request was taken and turned down (not lost on the way).
+ */
+class RelayException(
+    message: String,
+    val refusal: PhoneRefusal? = null,
+    val afterSend: Boolean = false,
+    val fromComputer: Boolean = refusal != null,
+) : Exception(message) {
+    /**
+     * A computer from before exactly-once delivery refuses `clientMessageId`.
+     * The prompt then goes without it (the outbox never resends one without it,
+     * since a resend could run twice).
+     */
+    val refusedClientMessageId: Boolean
+        get() = fromComputer && (refusal?.detail == CLIENT_MESSAGE_ID || message.orEmpty().contains(CLIENT_MESSAGE_ID))
+
+    private companion object {
+        const val CLIENT_MESSAGE_ID = "clientMessageId"
+    }
+}
 
 /** A minimal WebSocket the client drives; [OkHttpTransport] in production, fakes in tests. */
 interface WsTransport {
@@ -626,7 +647,7 @@ class RelayClient(
                 val err = frame["error"]
                 if (err != null && err !is JsonNull) {
                     val text = (err as? JsonPrimitive)?.content ?: err.toString()
-                    p.completeExceptionally(RelayException(text, PhoneRefusal.parse(text)))
+                    p.completeExceptionally(RelayException(text, PhoneRefusal.parse(text), fromComputer = true))
                 } else {
                     p.complete(frame["result"] ?: JsonNull)
                 }

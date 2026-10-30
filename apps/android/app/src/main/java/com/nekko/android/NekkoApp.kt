@@ -10,6 +10,7 @@ import com.nekko.android.connection.ConnectionKeeper
 import com.nekko.android.connection.RoutePolicy
 import com.nekko.android.data.AndroidSecureStore
 import com.nekko.android.data.ChatListFiles
+import com.nekko.android.data.OfflineFileStore
 import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.PaneLayouts
 import com.nekko.android.data.ComputersRepository
@@ -78,6 +79,7 @@ class NekkoApp : Application() {
             deviceName = ::deviceName,
             changeSigner = KeystoreChangeSigner(ownerCheck),
             routeAllowed = RoutePolicy::allowed,
+            offlineFiles = OfflineFileStore(this),
             onForget = { id ->
                 newChatDefaults.forget(id)
                 paneLayouts.forget(id)
@@ -122,6 +124,8 @@ class NekkoApp : Application() {
 
             // Fires ~700 ms after the last activity stops, so rotations do not lock.
             override fun onStop(owner: LifecycleOwner) {
+                // What is typed is on disk before Android may end the app.
+                computers.drafts.flush()
                 appLock.onBackground()
                 connection.onForeground(false)
             }
