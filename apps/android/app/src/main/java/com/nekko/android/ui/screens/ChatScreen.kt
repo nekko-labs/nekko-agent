@@ -129,6 +129,8 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.ENGINE_PROVIDER_ID
 import com.nekko.protocol.RelayException
 import com.nekko.android.ui.chat.ChatModeDialog
+import com.nekko.android.ui.chat.WaitingList
+import com.nekko.android.ui.chat.RefusalNote
 import com.nekko.android.ui.chat.RenameChatDialog
 import com.nekko.android.ui.security.PendingStepUp
 import com.nekko.android.ui.security.StepUpSheet
@@ -532,7 +534,18 @@ fun ChatScreen(
                 },
                 modifier = Modifier.navigationBarsPadding(),
             ) else Column(Modifier.navigationBarsPadding()) {
+                val waiting by vm.waiting.collectAsStateWithLifecycle()
+                val sendingId by vm.sendingId.collectAsStateWithLifecycle()
+                val refusal by vm.refusal.collectAsStateWithLifecycle()
+                val restore by vm.restore.collectAsStateWithLifecycle()
+                Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    WaitingList(waiting, sendingId, online, onEdit = vm::editWaiting, onDelete = vm::deleteWaiting, onSendNow = vm::sendWaitingNow)
+                    refusal?.let { RefusalNote(it, onDismiss = vm::dismissRefusal) }
+                }
                 Composer(
+                    restore = restore,
+                    onRestored = vm::restored,
+                    sendsLater = chat.sendsLater,
                     // A fork's prompt, else what was typed here last time (the saved draft).
                     initialText = initialDraft ?: vm.savedDraft.text.ifEmpty { null },
                     initialSkillName = vm.savedDraft.skill?.name.takeIf { initialDraft == null },

@@ -1,5 +1,7 @@
 package com.nekko.android.ui.chat
 
+import com.nekko.protocol.Draft
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -124,6 +126,11 @@ fun Composer(
     initialSkillName: String? = null,
     /** What the box holds changed (text, armed skill's name): the chat keeps it as its draft. */
     onDraftChange: ((text: String, skillName: String?) -> Unit)? = null,
+    /** A prompt back from the outbox (Edit or refused), already merged with what was typed: replaces the box once. */
+    restore: Draft? = null,
+    onRestored: () -> Unit = {},
+    /** The computer is out of reach: what is sent waits on the phone (offline mode); said under the box. */
+    sendsLater: String? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -155,6 +162,14 @@ fun Composer(
     }
     var focused by remember { mutableStateOf(false) }
     var toolbarOn by remember { mutableStateOf(ToolbarPref.get(context)) }
+    LaunchedEffect(restore) {
+        if (restore != null) {
+            text = restore.text
+            skillName = restore.skill?.name
+            error = null
+            onRestored()
+        }
+    }
     LaunchedEffect(text, skillName) { onDraftChange?.invoke(text, skillName) }
     LaunchedEffect(insert) {
         if (insert != null) {
@@ -243,6 +258,8 @@ fun Composer(
                     color = if (blocked != null) p.warning else p.danger,
                     modifier = Modifier.padding(horizontal = 4.dp),
                 )
+            } else if (sendsLater != null) {
+                Text(sendsLater, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(horizontal = 4.dp).testTag("composer.sendsLater"))
             }
             // One box the width of the screen: the message on top, + and Send inside it below.
             Column(
@@ -351,7 +368,11 @@ fun Composer(
                         if (showStop) {
                             Icon(Icons.Filled.Stop, contentDescription = "Stop")
                         } else {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = if (running) "Queue" else "Send")
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = when {
+                                sendsLater != null -> "Send when online"
+                                running -> "Queue"
+                                else -> "Send"
+                            })
                         }
                     }
                 }

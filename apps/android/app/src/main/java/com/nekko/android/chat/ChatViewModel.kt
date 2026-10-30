@@ -34,6 +34,7 @@ import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
 import com.nekko.protocol.Draft
+import com.nekko.android.data.OutboxItem
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.StepUpProof
 import android.content.ContentResolver
@@ -60,7 +61,7 @@ class ChatViewModel(
     mic: MicHardware? = null,
     private val phonePrefs: PhonePrefs? = null,
 ) : ViewModel() {
-    private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) })
+    private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox)
 
     /** Dictation into this chat's message box (Settings → Dictation). */
     val dictation: DictationController? = if (mic == null || phonePrefs == null) null else DictationController(
@@ -280,6 +281,57 @@ class ChatViewModel(
         }
     }
 
+    /** This chat's prompts waiting in the outbox, oldest first, shown as *Waiting to send*. */
+    val waiting: StateFlow<List<OutboxItem>> = repo.outbox.state.map { it.waitingFor(sessionId) }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.outbox.state.value.waitingFor(sessionId))
+
+    /** The prompt being delivered now (its Edit and Delete wait). */
+    val sendingId: StateFlow<String?> = repo.outbox.state.map { it.sendingId }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val _restore = MutableStateFlow<Draft?>(null)
+    /**
+     * A prompt back from the outbox (Edit, or refused by the computer), merged in
+     * front of what was typed: the message box takes it once ([restored]).
+     */
+    val restore: StateFlow<Draft?> = _restore.asStateFlow()
+
+    /** Why the computer turned the last prompt down; shown above the box until the next send. */
+    val refusal: StateFlow<String?> = repo.drafts.drafts.map { it[sessionId]?.refusal }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, savedDraft.refusal)
+
+    init {
+        // The outbox put a prompt back in this chat's draft: show it in the box.
+        viewModelScope.launch {
+            repo.drafts.drafts.map { it[sessionId] }.distinctUntilChanged().collect { d ->
+                if (d != null && (d.text != draftText || d.skill?.name != draftSkill?.name || d.images != photos.state.value.photos.map { it.dataUrl })) {
+                    draftText = d.text
+                    draftSkill = d.skill
+                    val have = photos.state.value.photos.map { it.dataUrl }.toSet()
+                    photos.seed(d.images.filter { it !in have }.mapNotNull { url -> ImageAttachments.preview(url)?.let { url to it } })
+                    _restore.value = d
+                }
+            }
+        }
+    }
+
+    fun restored() { _restore.value = null }
+
+    /** *Waiting to send* → Edit: back into the box. */
+    fun editWaiting(id: String) { repo.outbox.takeBack(id) }
+
+    /** *Waiting to send* → Delete. */
+    fun deleteWaiting(id: String) { repo.outbox.remove(id) }
+
+    /** *Waiting to send* → Send now: try again at once. */
+    fun sendWaitingNow() = repo.outbox.flushSoon()
+
+    /** The refusal note was read: drop it from the draft. */
+    fun dismissRefusal() {
+        val d = repo.drafts.draft(sessionId)
+        if (d.refusal != null) repo.drafts.set(sessionId, d.copy(refusal = null))
+    }
+
     /** The message box changed: its text and armed skill (by name, resolved against the computer's skills). */
     fun draftChanged(text: String, skillName: String?) {
         draftText = text
@@ -293,7 +345,10 @@ class ChatViewModel(
 
     private fun saveDraft() {
         val photosNow = photos.state.value.photos.map { it.dataUrl }
-        repo.drafts.set(sessionId, repo.drafts.draft(sessionId).copy(text = draftText, skill = draftSkill, images = photosNow))
+        val d = repo.drafts.draft(sessionId)
+        // Emptied by a send: the refusal note has been answered too.
+        val refusal = d.refusal.takeUnless { draftText.isBlank() && draftSkill == null && photosNow.isEmpty() }
+        repo.drafts.set(sessionId, d.copy(text = draftText, skill = draftSkill, images = photosNow, refusal = refusal))
     }
 
     /** Picked files or a camera shot → the tray, scaled and encoded off the main thread. */
@@ -326,5 +381,6 @@ class ChatViewModel(
         defaults = s.defaults,
         computerName = s.active?.name ?: "your computer",
         models = s.models,
+        canQueue = true,
     )
 }

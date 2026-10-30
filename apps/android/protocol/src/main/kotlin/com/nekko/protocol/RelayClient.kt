@@ -1,5 +1,8 @@
 package com.nekko.protocol
 
+import kotlinx.coroutines.CopyableThrowable
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -66,6 +69,7 @@ data class RelayStatus(val state: RelayState, val detail: String? = null, val de
  * the reply never came: the computer may have acted on it (a safety exit that kicks
  * every phone ends exactly that way).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 /**
  * [fromComputer] is set when the computer answered with this error, so the
  * request was taken and turned down (not lost on the way).
@@ -75,7 +79,13 @@ class RelayException(
     val refusal: PhoneRefusal? = null,
     val afterSend: Boolean = false,
     val fromComputer: Boolean = refusal != null,
-) : Exception(message) {
+) : Exception(message), CopyableThrowable<RelayException> {
+    /**
+     * Never copied for stack-trace recovery: a copy made from the message alone
+     * would lose [fromComputer], [refusal] and [afterSend].
+     */
+    override fun createCopy(): RelayException? = null
+
     /**
      * A computer from before exactly-once delivery refuses `clientMessageId`.
      * The prompt then goes without it (the outbox never resends one without it,

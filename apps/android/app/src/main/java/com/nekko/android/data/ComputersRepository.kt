@@ -120,6 +120,17 @@ class ComputersRepository(
     /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
     val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
 
+    /** Prompts written offline, or whose send dropped, delivered once the computer is reachable. */
+    val outbox = Outbox(
+        files = offlineFiles,
+        drafts = drafts,
+        caller = { client.takeIf { _state.value.conn == RelayState.ONLINE } },
+        defaults = { _state.value.defaults },
+        scope = scope,
+        newId = newId,
+        now = now,
+    )
+
     /** *Sign out this phone* not yet heard by the computer (SK-8). */
     private val signOuts = SignOutOutbox(store)
 
@@ -285,7 +296,10 @@ class ComputersRepository(
             if (wasActive) disconnect()
             store.set(secretKey(id), null)
             chatListCache?.remove(id)
-            if (_state.value.activeId == id) drafts.load(null)
+            if (_state.value.activeId == id) {
+                drafts.load(null)
+                outbox.load(null)
+            }
             offlineFiles?.remove(id)
             onForget(id)
             val next = _state.value.computers.filter { it.id != id }
@@ -312,7 +326,10 @@ class ComputersRepository(
         val computer = _state.value.computers.firstOrNull { it.id == id } ?: return@withLock
         val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return@withLock
         store.set(ACTIVE_KEY, id)
-        if (drafts.computerId != id) drafts.load(id)
+        if (drafts.computerId != id) {
+            drafts.load(id)
+            outbox.load(id)
+        }
         if (loggedComputer != id) {
             log.clear()
             loggedComputer = id
@@ -359,7 +376,11 @@ class ComputersRepository(
                     if (client !== c) return@collect
                     _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied, route = s.route) }
                     logStatus(s.state, s.detail, s.denied)
-                    if (s.state == RelayState.ONLINE) scope.launch { refresh() }
+                    if (s.state == RelayState.ONLINE) scope.launch {
+                        refresh()
+                        // Back in reach: what was written offline goes now, in order.
+                        outbox.flush()
+                    }
                 }
             }
             launch {
@@ -383,6 +404,7 @@ class ComputersRepository(
                     }
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
+                    outbox.onEvent(e)
                     _events.emit(e)
                     _state.update { s ->
                         val activity = ActivityTracker.next(s.activity, e)
@@ -412,7 +434,10 @@ class ComputersRepository(
     fun nudge() {
         client?.nudge()
         // Chats completed, restored or started on the computer meanwhile send no event: re-read the list.
-        if (_state.value.conn == RelayState.ONLINE) scheduleSummaries()
+        if (_state.value.conn == RelayState.ONLINE) {
+            scheduleSummaries()
+            outbox.flushSoon()
+        }
     }
 
     /**
