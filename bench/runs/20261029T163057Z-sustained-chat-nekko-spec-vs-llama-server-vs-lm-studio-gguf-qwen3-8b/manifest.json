@@ -1,0 +1,526 @@
+{
+  "name": "sustained-chat-nekko-spec-vs-llama-server-vs-lm-studio-gguf-qwen3-8b",
+  "valid": true,
+  "problems": [],
+  "notes": "Chat. Nekko: router on 11500, speculative decoding ON (--spec-default), its default; its speed varies with each reply. llama-server b11224: only -m and --port. LM Studio 0.4.16, llama.cpp runtime 2.66.0, lms load defaults (context 8192, parallel 4, its default repeat penalty), same GGUF by sha256. 3 warmup requests per server.",
+  "settings": {
+    "targets": {
+      "nekko-spec": "http://127.0.0.1:11500/v1",
+      "llama-server-default": "http://127.0.0.1:8090/v1",
+      "lm-studio": "http://127.0.0.1:1234/v1"
+    },
+    "model": "qwen3-8b-gguf",
+    "target_models": {
+      "nekko-spec": "chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M",
+      "llama-server-default": "qwen3-8b-gguf",
+      "lm-studio": "qwen3-8b-gguf"
+    },
+    "target_weights_sha256": {
+      "nekko-spec": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+      "llama-server-default": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+      "lm-studio": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "runs": 16,
+    "warmup": 3,
+    "max_tokens": 512,
+    "temperature": 0,
+    "seed": 42,
+    "stream": true,
+    "speculative_expected": true,
+    "scenario": "sustained",
+    "pause_s": 0,
+    "preheat_s": 420.0,
+    "max_drift_pct": 3.0,
+    "workload": "chat",
+    "prompt_sha256": "6e41cfca89c4d2b3d5904ad0cf7f7edb0f86dc007a230720614e89d874ed292c",
+    "script_sha256": "42528370792b0151a3958611bb3514f27b0b9231914ab1721621d8fcf20f0836"
+  },
+  "summary": {
+    "nekko-spec": {
+      "ttft_ms": {
+        "median": 421.9258750017616,
+        "min": 411.6947910079034,
+        "max": 433.46604199905414,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 651.8845319812492,
+        "min": 172.67404022981316,
+        "max": 661.6398439244593,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 1078.8582752744837,
+        "min": 1051.9855209349826,
+        "max": 1100.329685714444,
+        "n": 16
+      },
+      "server_decode_tok_s_median": 563.4057501628349,
+      "server_prefill_tok_s_median": 1641.6275162171344,
+      "decode_drift_pct": -13.9,
+      "drafts": {
+        "accepted_per_request": {
+          "median": 500.0,
+          "min": 310,
+          "max": 500
+        },
+        "acceptance_rate": 0.898
+      }
+    },
+    "llama-server-default": {
+      "ttft_ms": {
+        "median": 290.09789600240765,
+        "min": 255.44908401207067,
+        "max": 339.19733299990185,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 82.3893723022237,
+        "min": 80.87071062629637,
+        "max": 82.99693260784322,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 1568.6503270971862,
+        "min": 1344.350192753821,
+        "max": 1781.1768703719447,
+        "n": 16
+      },
+      "server_decode_tok_s_median": 82.07050752699924,
+      "server_prefill_tok_s_median": 1868.1552910966743,
+      "decode_drift_pct": -1.3,
+      "drafts": null
+    },
+    "lm-studio": {
+      "ttft_ms": {
+        "median": 455.6914790009614,
+        "min": 432.837832995574,
+        "max": 477.35000000102445,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 76.0927046172001,
+        "min": 75.06492344670455,
+        "max": 77.16809938096752,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 999.5818961717964,
+        "min": 955.2739080318872,
+        "max": 1048.8916757991494,
+        "n": 16
+      },
+      "server_decode_tok_s_median": null,
+      "server_prefill_tok_s_median": null,
+      "decode_drift_pct": -2.1,
+      "drafts": null
+    }
+  },
+  "replies": {
+    "nekko-spec": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 11,
+      "of": 16
+    },
+    "llama-server-default": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 11,
+      "of": 16
+    },
+    "lm-studio": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 0,
+      "of": 16
+    }
+  },
+  "conditions_before": {
+    "taken_at": "2026-10-29T16:30:53.889692+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 1234,
+        "pid": 18417,
+        "processes": [
+          {
+            "pid": 4075,
+            "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js",
+            "version": null
+          },
+          {
+            "pid": 18417,
+            "command": "/Applications/LM Studio.app/Contents/MacOS/LM Studio --run-as-service",
+            "version": null
+          },
+          {
+            "pid": 18445,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper (GPU).app/Contents/MacOS/LM Studio Helper (GPU) --type=gpu-process --user-data-dir=~/Library/Application Support/LM Studio --gpu-preferences=SAAAAAAAAAAgAAAIAAAAAAAAAAAAAGAAAwAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=1718379636,r,14564997247548921919,5808143420293055966,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 18446,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper.app/Contents/MacOS/LM Studio Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --user-data-dir=~/Library/Application Support/LM Studio --shared-files --field-trial-handle=1718379636,r,14564997247548921919,5808143420293055966,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 18447,
+            "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js /Applications/LM Studio.app/Contents/Resources/app/.webpack/bin/liblmstudio/metal/liblmstudio_bindings.node",
+            "version": null
+          }
+        ]
+      },
+      {
+        "port": 8090,
+        "pid": 68120,
+        "processes": [
+          {
+            "pid": 68120,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 11500,
+        "pid": 57118,
+        "processes": [
+          {
+            "pid": 13110,
+            "command": "~/.local/bin/claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --replay-user-messages --resume 1eeb7894-817e-4016-aa40-41203245cda5 --model opus --permission-mode acceptEdits --mcp-config ~/.nekko-agent/harness/s_mvo2k3t4_k9MUJRrX.mcp.json --permission-prompt-tool mcp__nekko_bridge__approve",
+            "version": null
+          },
+          {
+            "pid": 13125,
+            "command": "~/code/agent-nekko/apps/desktop/.dev-runtime/45.0.0/Nekko Agent.app/Contents/MacOS/Electron ~/code/agent-nekko/apps/cli/app-dist/nekko-agent-cli.cjs mcp --bridge --url http://127.0.0.1:63693",
+            "version": null
+          },
+          {
+            "pid": 57118,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekkod --config-stdin",
+            "version": null
+          },
+          {
+            "pid": 57222,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekko-vm host",
+            "version": null
+          },
+          {
+            "pid": 57223,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekko-vm egress",
+            "version": null
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "LM Studio engine",
+        "pid": 4075,
+        "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 68120,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 3.6,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 430,
+        "cpu": 1.7,
+        "command": "airportd"
+      },
+      {
+        "pid": 373,
+        "cpu": 0.4,
+        "command": "opendirectoryd"
+      },
+      {
+        "pid": 790,
+        "cpu": 0.4,
+        "command": "WiFiAgent.app"
+      },
+      {
+        "pid": 57115,
+        "cpu": 0.3,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 380,
+        "cpu": 0.2,
+        "command": "locationd"
+      },
+      {
+        "pid": 398,
+        "cpu": 0.1,
+        "command": "notifyd"
+      },
+      {
+        "pid": 400,
+        "cpu": 0.1,
+        "command": "corebrightnessd"
+      }
+    ],
+    "scripts": {
+      "commit": "4d6b8c2a9396f532e19a114d5234c1b619d46e31",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+      "bytes": 5027783488,
+      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "target_model_files": {
+      "nekko-spec": {
+        "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+        "bytes": 5027783488,
+        "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+      },
+      "llama-server-default": {
+        "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+        "bytes": 5027783488,
+        "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+      },
+      "lm-studio": {
+        "path": "~/.lmstudio/models/Qwen/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+        "bytes": 5027783488,
+        "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+      }
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-10-29T16:42:59.863013+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 1234,
+        "pid": 18417,
+        "processes": [
+          {
+            "pid": 4075,
+            "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js",
+            "version": null
+          },
+          {
+            "pid": 18417,
+            "command": "/Applications/LM Studio.app/Contents/MacOS/LM Studio --run-as-service",
+            "version": null
+          },
+          {
+            "pid": 18445,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper (GPU).app/Contents/MacOS/LM Studio Helper (GPU) --type=gpu-process --user-data-dir=~/Library/Application Support/LM Studio --gpu-preferences=SAAAAAAAAAAgAAAIAAAAAAAAAAAAAGAAAwAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=1718379636,r,14564997247548921919,5808143420293055966,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 18446,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper.app/Contents/MacOS/LM Studio Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --user-data-dir=~/Library/Application Support/LM Studio --shared-files --field-trial-handle=1718379636,r,14564997247548921919,5808143420293055966,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 18447,
+            "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js /Applications/LM Studio.app/Contents/Resources/app/.webpack/bin/liblmstudio/metal/liblmstudio_bindings.node",
+            "version": null
+          }
+        ]
+      },
+      {
+        "port": 8090,
+        "pid": 68120,
+        "processes": [
+          {
+            "pid": 68120,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 11500,
+        "pid": 57118,
+        "processes": [
+          {
+            "pid": 13110,
+            "command": "~/.local/bin/claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --replay-user-messages --resume 1eeb7894-817e-4016-aa40-41203245cda5 --model opus --permission-mode acceptEdits --mcp-config ~/.nekko-agent/harness/s_mvo2k3t4_k9MUJRrX.mcp.json --permission-prompt-tool mcp__nekko_bridge__approve",
+            "version": null
+          },
+          {
+            "pid": 13125,
+            "command": "~/code/agent-nekko/apps/desktop/.dev-runtime/45.0.0/Nekko Agent.app/Contents/MacOS/Electron ~/code/agent-nekko/apps/cli/app-dist/nekko-agent-cli.cjs mcp --bridge --url http://127.0.0.1:63693",
+            "version": null
+          },
+          {
+            "pid": 17251,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server --model ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --alias chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M --host 127.0.0.1 --port 64169 --ctx-size 32768 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          },
+          {
+            "pid": 57118,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekkod --config-stdin",
+            "version": null
+          },
+          {
+            "pid": 57222,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekko-vm host",
+            "version": null
+          },
+          {
+            "pid": 57223,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekko-vm egress",
+            "version": null
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "LM Studio engine",
+        "pid": 4075,
+        "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 17251,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server --model ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --alias chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M --host 127.0.0.1 --port 64169 --ctx-size 32768 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 68120,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 12.2,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 430,
+        "cpu": 0.4,
+        "command": "airportd"
+      },
+      {
+        "pid": 81946,
+        "cpu": 0.3,
+        "command": "PerfPowerServices"
+      },
+      {
+        "pid": 494,
+        "cpu": 0.2,
+        "command": "syspolicyd"
+      },
+      {
+        "pid": 598,
+        "cpu": 0.2,
+        "command": "AppleCentauriAlpha"
+      },
+      {
+        "pid": 57115,
+        "cpu": 0.2,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.0,
+        "command": "logd"
+      },
+      {
+        "pid": 333,
+        "cpu": 0.0,
+        "command": "smd"
+      }
+    ],
+    "scripts": {
+      "commit": "4d6b8c2a9396f532e19a114d5234c1b619d46e31",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 722.5,
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 14.8,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 35800,
+        "cpu": 0.4,
+        "command": "tsc"
+      },
+      {
+        "pid": 431,
+        "cpu": 0.3,
+        "command": "mobileassetd"
+      },
+      {
+        "pid": 598,
+        "cpu": 0.3,
+        "command": "AppleCentauriAlpha"
+      },
+      {
+        "pid": 380,
+        "cpu": 0.2,
+        "command": "locationd"
+      },
+      {
+        "pid": 400,
+        "cpu": 0.2,
+        "command": "corebrightnessd"
+      },
+      {
+        "pid": 781,
+        "cpu": 0.2,
+        "command": "duetexpertd"
+      },
+      {
+        "pid": 35796,
+        "cpu": 0.2,
+        "command": "Visual Studio Code.app"
+      }
+    ]
+  }
+}
