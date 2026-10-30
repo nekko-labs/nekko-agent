@@ -14,8 +14,5 @@ export default {
     { click: 'role=button[name="Workflows"]', after: 1800 },
     { click: 'role=button[name="Models"]', after: 2200 },
     { click: 'role=button[name="Agents"]', after: 1200 },
-    { click: 'role=button[name=/search chats/i]' },
-    { type: 'release notes', delay: 70, after: 1400 },
-    { press: 'Escape' },
   ],
 };

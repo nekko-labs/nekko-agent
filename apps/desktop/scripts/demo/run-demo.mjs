@@ -1,6 +1,7 @@
 // Plays a scripted demo in the real app while you screen-record it.
 //
-//   npm run demo -w apps/desktop -- <scene>             launch the app (presenter mode, demo profile) and play
+//   npm run demo -w apps/desktop -- <scene>             launch the app (presenter mode, demo profile), wait for
+//                                                       Enter (start recording first), count down 3 s and play
 //   npm run demo -w apps/desktop -- <scene> --attach    play in an app already started with NEKKO_DEMO_DEBUG_PORT=9333
 //   npm run demo -w apps/desktop -- <scene> --dry --url http://localhost:1440/?presenter=1
 //                                                       rehearse headless against the Local Web UI, saving a
@@ -26,7 +27,7 @@ if (!scene) { console.error('Usage: npm run demo -w apps/desktop -- <scene> [--a
 const { default: demo } = await import(pathToFileURL(join(here, 'scenes', `${scene}.mjs`)).href);
 const dry = args.includes('--dry');
 const port = Number(opt('--port', 9333));
-const countdown = Number(opt('--countdown', dry ? 0 : 5));
+const countdown = Number(opt('--countdown', dry ? 0 : 3));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function connect() {
@@ -95,6 +96,13 @@ const run = {
 
 try {
   await page.bringToFront();
+  // Wait for the presenter, however long the recorder takes to set up.
+  if (!dry && !args.includes('--no-wait')) {
+    console.log('\nThe app is ready. Start recording, then press Enter here to play.');
+    await new Promise((r) => process.stdin.once('data', r));
+    process.stdin.pause();
+    await page.bringToFront();
+  }
   for (let n = countdown; n > 0; n--) { console.log(`Starting "${demo.title}" in ${n}… start recording now.`); await sleep(1000); }
   for (const [i, step] of demo.steps.entries()) {
     const kind = Object.keys(run).find((k) => k in step);

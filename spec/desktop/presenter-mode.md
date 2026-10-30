@@ -47,7 +47,8 @@ recorded, because only the real app looks like the real app.
   movement.
 - `--attach` plays in an app already running with the port; `--dry --url`
   rehearses headless against the Local Web UI and saves a screenshot per step.
-- One scene ships: `tour` (zones, Artifacts, Workflows, Models, chat search).
+- The runner waits for Enter (press it once recording has started), then counts down 3 seconds; `--no-wait` skips the wait.
+- One scene ships: `tour` (zones, Artifacts, Workflows, Models).
 
 
 
