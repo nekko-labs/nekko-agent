@@ -764,6 +764,63 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `rename and pin change the chat on the computer and in the list`() = runTest {
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.SESSIONS_SUMMARIES) buildJsonArray {
+                add(buildJsonObject { put("id", "s1"); put("title", "One"); put("updatedAt", 5); put("pinned", true) })
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertTrue(repo.state.value.summaries.single().pinned)
+
+        repo.renameChat("s1", "  Release notes \n")
+        assertEquals("""{"title":"Release notes"}""", remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }.args[1].toString())
+        assertEquals("Release notes", repo.state.value.summaries.single().title)
+        // A blank title changes nothing.
+        val sets = remotes.last.calls.count { it.channel == Channels.SESSION_SET_OPTIONS }
+        repo.renameChat("s1", "   ")
+        assertEquals(sets, remotes.last.calls.count { it.channel == Channels.SESSION_SET_OPTIONS })
+
+        repo.setPinned("s1", false)
+        assertEquals("""{"pinned":false}""", remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }.args[1].toString())
+        assertFalse(repo.state.value.summaries.single().pinned)
+    }
+
+    @Test
+    fun `a chat's mode is sent plain to lower it and signed when the computer asks`() = runTest {
+        val signer = com.nekko.protocol.SoftwareChangeSigner.generate()
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                com.nekko.protocol.ChangeProof.KEY_CHANNEL -> buildJsonObject { put("registered", true) }
+                Channels.SESSION_SET_OPTIONS ->
+                    if (c.proof == null && c.args[1].toString().contains("yolo")) throw com.nekko.protocol.RelayException("Not allowed from a paired phone (proof-required): session:setOptions")
+                    else buildJsonObject {}
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes, signer = signer)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+
+        repo.setChatMode("s1", com.nekko.protocol.PcSettings.ChatMode.ASK)
+        val lower = remotes.last.calls.filter { it.channel == Channels.SESSION_SET_OPTIONS }
+        assertEquals(1, lower.size)
+        assertNull(lower.single().proof)
+        assertEquals("""{"mode":"ask"}""", lower.single().args[1].toString())
+
+        repo.setChatMode("s1", com.nekko.protocol.PcSettings.ChatMode.YOLO)
+        val raise = remotes.last.calls.filter { it.channel == Channels.SESSION_SET_OPTIONS }.drop(1)
+        assertEquals("plain, then signed", 2, raise.size)
+        assertNull(raise[0].proof)
+        assertNotNull(raise[1].proof)
+        assertEquals("\"s1\"", raise[1].args[0].toString())
+    }
+
+    @Test
     fun `coming back to the app re-reads the chat list`() = runTest {
         val remotes = FakeRemotes()
         val repo = repo(remotes = remotes)

@@ -33,6 +33,8 @@ import com.nekko.protocol.PullRequest
 import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
+import com.nekko.protocol.PcSettings
+import com.nekko.protocol.StepUpProof
 import android.content.ContentResolver
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -202,6 +204,30 @@ class ChatViewModel(
 
     /** Bring this completed chat back to the active list. */
     suspend fun restore() = repo.restoreChat(sessionId)
+
+    /** Whether this chat is pinned on the computer. */
+    val pinned: StateFlow<Boolean> = repo.state.map { s -> s.summaries.firstOrNull { it.id == sessionId }?.pinned == true }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.summaries.firstOrNull { it.id == sessionId }?.pinned == true)
+
+    /** The chat's ⋮ → Rename, Pin, Complete and Chat mode: each changes the chat on the computer, then re-reads it. */
+    suspend fun rename(title: String) {
+        repo.renameChat(sessionId, title)
+        controller.reload()
+    }
+
+    suspend fun setPinned(pinned: Boolean) = repo.setPinned(sessionId, pinned)
+
+    suspend fun complete() = repo.completeChat(sessionId)
+
+    /** Raising the mode is signed; a step-up refusal is thrown for the sheet, which passes its [stepUp]. */
+    suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
+        repo.setChatMode(sessionId, mode, stepUp)
+        controller.reload()
+    }
+
+    /** What the chat runs with when it has no mode of its own: the computer's default. */
+    val defaultMode: PcSettings.ChatMode get() = repo.state.value.pcSettings.effectiveMode
 
     /** Whether the computer lets phones see a chat's changes (`phoneChanges`, set on the computer). */
     val changesAllowed: StateFlow<Boolean> = repo.state.map { it.pcSettings.phoneChanges }.distinctUntilChanged()

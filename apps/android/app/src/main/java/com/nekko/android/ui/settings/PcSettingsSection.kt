@@ -195,14 +195,14 @@ internal fun stepUpAction(patch: JsonObject, computer: String): String {
     return if (mode != null) "Switch new chats on $computer to ${modeTitle(mode)}" else "Change $computer’s settings"
 }
 
-private fun modeTitle(m: ChatMode) = when (m) {
+internal fun modeTitle(m: ChatMode) = when (m) {
     ChatMode.ASK -> "Ask"
     ChatMode.GUARDRAILS -> "Guardrails"
     ChatMode.YOLO -> "YOLO"
 }
 
 /** The desktop's own descriptions (SettingsView CHAT_MODES). */
-private fun modeDetail(m: ChatMode) = when (m) {
+internal fun modeDetail(m: ChatMode) = when (m) {
     ChatMode.ASK -> "Confirm every file write and command before it runs"
     ChatMode.GUARDRAILS -> "Run freely, but ask or deny per your guardrail rules"
     ChatMode.YOLO -> "Run everything without confirming; deny rules still block"

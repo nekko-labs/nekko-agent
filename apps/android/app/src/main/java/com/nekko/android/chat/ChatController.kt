@@ -40,6 +40,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.NonCancellable
 import com.nekko.protocol.RelayException
 import com.nekko.protocol.QueuedPrompt
+import com.nekko.protocol.PcSettings
 
 /** A turn can run for hours (long agent runs); don't time the request out. */
 const val TURN_TIMEOUT_MS: Long = 12L * 60 * 60 * 1000
@@ -89,6 +90,8 @@ data class ChatUi(
     val modelName: String? = null,
     /** The chat's own effort; null follows the computer's setting. */
     val effort: Effort? = null,
+    /** The chat's own tool policy; null follows the computer's default. */
+    val mode: PcSettings.ChatMode? = null,
     val context: ContextUsage? = null,
     /** [context]'s count plus about one token per four characters streamed this turn; null until the computer answers. */
     val contextTokens: Long? = null,
@@ -376,6 +379,7 @@ class ChatController(
                 modelId = modelId,
                 modelName = modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
                 effort = Effort.parse(state.session?.effort),
+                mode = state.session?.mode,
                 context = state.context,
                 contextTokens = liveTokens(state.context, turn),
             )
