@@ -103,6 +103,8 @@ fun ChatsScreen(
     onMonitors: (() -> Unit)? = null,
     /** Set when the list is one of an open folding phone's two panes: its header actions. */
     pane: PaneSlot? = null,
+    /** During the first run, pairing is its step 2: the welcome says so and offers Skip. */
+    onSkipFirstRun: (() -> Unit)? = null,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
@@ -250,7 +252,7 @@ fun ChatsScreen(
         if (!s.ready) {
             Box(Modifier.fillMaxSize().padding(padding))
         } else if (active == null) {
-            Welcome(onPair, Modifier.padding(padding))
+            Welcome(onPair, Modifier.padding(padding), onSkipFirstRun)
         } else {
             PullToRefreshBox(
                 isRefreshing = pulling,
@@ -584,13 +586,17 @@ private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: ()
 
 /** No computer yet: say what the app does and how to start. */
 @Composable
-private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier) {
+private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier, onSkipFirstRun: (() -> Unit)? = null) {
     val p = Nekko.palette
     Column(
         modifier.fillMaxSize().padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (onSkipFirstRun != null) {
+            StepLabel(2)
+            Spacer(Modifier.height(16.dp))
+        }
         Box(
             Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)).background(p.accentSoft),
             contentAlignment = Alignment.Center,
@@ -619,6 +625,10 @@ private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier) {
             color = p.inkFaint,
             textAlign = TextAlign.Center,
         )
+        if (onSkipFirstRun != null) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onSkipFirstRun, modifier = Modifier.testTag("firstRun.skip")) { Text("Skip") }
+        }
         Spacer(Modifier.height(80.dp))
     }
 }
