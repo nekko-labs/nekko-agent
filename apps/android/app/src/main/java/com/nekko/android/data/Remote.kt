@@ -1,5 +1,7 @@
 package com.nekko.android.data
 
+import com.nekko.protocol.HealthProber
+import com.nekko.protocol.NetworkPath
 import com.nekko.protocol.OkHttpTransport
 import com.nekko.protocol.PhoneRefusal
 import com.nekko.protocol.RelayException
@@ -33,6 +35,12 @@ interface Remote : Caller {
     /** The phone changed network: drop the socket and dial again now. */
     fun reconnect()
 
+    /** The phone moved to another network of kind [path]: pick the best route for it and dial again now. */
+    fun networkChanged(path: NetworkPath) = reconnect()
+
+    /** Where the phone is, without having moved: dial again only if that changes the route. */
+    fun setNetworkPath(path: NetworkPath) {}
+
     /**
      * A guarded call again with a step-up beside it in the sealed request
      * (SK-7). Connections that can't carry one refuse plainly.
@@ -60,6 +68,8 @@ class RelayRemote(private val client: RelayClient) : Remote {
     override fun close() = client.close()
     override fun nudge() = client.nudge()
     override fun reconnect() = client.reconnect()
+    override fun networkChanged(path: NetworkPath) = client.networkChanged(path)
+    override fun setNetworkPath(path: NetworkPath) = client.setNetworkPath(path)
     override suspend fun call(channel: String, vararg args: JsonElement) = client.call(channel, *args)
     override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) =
         client.callWithTimeout(timeoutMs, channel, *args)
@@ -69,10 +79,13 @@ class RelayRemote(private val client: RelayClient) : Remote {
         if (timeoutMs == null) client.callSigned(channel, args, proof, stepUp) else client.callSigned(channel, args, proof, stepUp, timeoutMs)
 }
 
-/** Production factory: one OkHttp transport shared by every connection. */
-class RelayRemoteFactory(private val transport: WsTransport = OkHttpTransport()) : RemoteFactory {
+/** Production factory: one OkHttp transport shared by every connection; the better route is probed at its `/healthz`. */
+class RelayRemoteFactory(
+    private val transport: WsTransport = OkHttpTransport(),
+    private val prober: HealthProber = HealthProber(),
+) : RemoteFactory {
     override fun create(config: RelayConfig, scope: CoroutineScope): Remote =
-        RelayRemote(RelayClient(config, transport, scope))
+        RelayRemote(RelayClient(config, transport, scope, prober))
 }
 
 /**

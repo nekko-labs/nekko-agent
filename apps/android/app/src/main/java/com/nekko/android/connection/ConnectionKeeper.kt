@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.nekko.android.chat.PhoneEvent
@@ -108,10 +109,13 @@ class ConnectionKeeper(
 
     private fun watchNetwork() {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
-        val changes = NetworkChanges(repo::reconnect)
+        val changes = NetworkChanges(same = repo::setNetworkPath, changed = repo::networkChanged)
         try {
             cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = changes.onAvailable(network)
+                override fun onAvailable(network: Network) =
+                    changes.onAvailable(network, RoutePolicy.path(cm.getNetworkCapabilities(network)))
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) =
+                    changes.onPath(network, RoutePolicy.path(caps))
                 override fun onLost(network: Network) = changes.onLost(network)
             })
         } catch (e: RuntimeException) {
