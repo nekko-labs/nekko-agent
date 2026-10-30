@@ -1,6 +1,6 @@
 // Panel 01 "Your models. Your data. Nothing hidden."
 import { resetBakery } from '../bakery.mjs';
-import { COMPOSER, CONTEXT_METER, LAST_REPLY, MODEL_CHIP, PACE, newChat, pickModel, untilDone } from './_common.mjs';
+import { COMPOSER, CONTEXT_METER, LAST_REPLY, MODEL_CHIP, PACE, effort, newChat, pickModel, untilDone } from './_common.mjs';
 
 // The local model it starts on; NEKKO_DEMO_LOCAL_MODEL picks another (part of its name).
 const LOCAL = process.env.NEKKO_DEMO_LOCAL_MODEL || 'Qwen3-4B';
@@ -9,7 +9,7 @@ export default {
   title: 'In control: pick the model, see the context, approve the action',
   ...PACE,
   prepare: (ctx) => resetBakery(ctx.project),
-  setup: [...newChat('demo-bakery'), ...pickModel(LOCAL)],
+  setup: [...newChat('demo-bakery'), ...pickModel(LOCAL), effort('low')],
   steps: [
     { hover: MODEL_CHIP, after: 1500, note: 'the local model, free' },
     ...pickModel('Opus', { hoverList: true }),

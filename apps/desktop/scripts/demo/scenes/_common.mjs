@@ -83,3 +83,18 @@ export const untilDone = {
     }
   },
 };
+
+/**
+ * Set this chat's reasoning effort before recording (it keeps its level when
+ * the model changes), so a cloud model answers sooner.
+ */
+export function effort(level) {
+  return {
+    run: ({ page }) => page.evaluate(async (lvl) => {
+      const id = document.querySelector('[data-session-id]')?.getAttribute('data-session-id');
+      if (!id) throw new Error('No open chat to set the effort on.');
+      await window.nekko.setSessionOptions(id, { effort: lvl });
+    }, level),
+    note: `effort ${level}`,
+  };
+}

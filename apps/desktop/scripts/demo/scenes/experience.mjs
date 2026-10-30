@@ -1,6 +1,6 @@
 // Panel 02 "The power of a terminal. The polish of a great app."
 import { resetBakery } from '../bakery.mjs';
-import { COMPOSER, PACE, newChat, pickModel, untilDone } from './_common.mjs';
+import { COMPOSER, PACE, effort, newChat, pickModel, untilDone } from './_common.mjs';
 
 const LINE = '[title="Click to revert this line"] >> nth=0';
 
@@ -8,7 +8,7 @@ export default {
   title: 'No compromise: agent, changes and terminal in one app',
   ...PACE,
   prepare: (ctx) => resetBakery(ctx.project),
-  setup: [...newChat('demo-bakery'), ...pickModel('Opus')],
+  setup: [...newChat('demo-bakery'), ...pickModel('Opus'), effort('low')],
   steps: [
     { type: 'Make the menu prices bold and add a "Gluten free" tag to the almond croissant.', into: COMPOSER },
     { press: 'Enter', after: 4000 },
