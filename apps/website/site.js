@@ -385,6 +385,22 @@
   }
 })();
 
+// ---- panel videos: loop only while on screen, so five looping demos cost
+//      nothing until scrolled to. preload="none" keeps the page load light;
+//      with reduced motion they stay on their poster (the lightbox still plays). ----
+(() => {
+  const videos = document.querySelectorAll('video[data-autoplay]');
+  if (!videos.length || !('IntersectionObserver' in window)) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(({ target, isIntersecting }) => {
+      if (isIntersecting) target.play().catch(() => { /* autoplay blocked: the poster stays */ });
+      else target.pause();
+    });
+  }, { threshold: 0.4 });
+  videos.forEach((v) => io.observe(v));
+})();
+
 // ---- media slots: click a feature GIF or product image to see it large ----
 (() => {
   const box = document.getElementById('lightbox');

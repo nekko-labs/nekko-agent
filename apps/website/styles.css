@@ -1005,6 +1005,8 @@ h3 { font-size: 21px; }
 .panel .card-link { margin-top: 20px; }
 .panel .chip { margin-left: 8px; }
 .panel-media { width: 100%; margin: 0; aspect-ratio: 16 / 10; border-radius: 16px; }
+/* A recorded demo is 16:9: show all of it rather than crop its edges. */
+.panel-media:has(video) { aspect-ratio: 16 / 9; }
 .panel-fast { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
 .panels-foot { margin-top: 30px; max-width: 760px; margin-left: auto; margin-right: auto; }
 
