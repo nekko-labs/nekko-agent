@@ -40,7 +40,7 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto('file://' + path.join(out, `index-${theme}.html`).replaceAll('\\', '/'));
-    for (const scene of ['choices', 'checking', 'missing', 'signedOut', 'plan', 'apiKey', 'api', 'connected', 'another', 'confirm', 'blocked', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect']) {
+    for (const scene of ['choices', 'checking', 'missing', 'signedOut', 'plan', 'apiKey', 'api', 'connected', 'another', 'confirm', 'blocked', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect', 'planOff', 'planOn']) {
       await page.evaluate((s) => window.integration.show(s), scene);
       await page.waitForTimeout(250);
       if (scene === 'missing') await page.getByRole('button', { name: 'Install Claude Code' }).click();

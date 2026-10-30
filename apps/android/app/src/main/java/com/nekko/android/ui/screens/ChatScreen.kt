@@ -127,6 +127,19 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.ENGINE_PROVIDER_ID
+import com.nekko.protocol.RelayException
+import com.nekko.android.ui.chat.ChatModeDialog
+import com.nekko.android.ui.chat.WaitingList
+import com.nekko.android.ui.chat.RefusalNote
+import com.nekko.android.ui.chat.RenameChatDialog
+import com.nekko.android.ui.security.PendingStepUp
+import com.nekko.android.ui.security.StepUpSheet
+import com.nekko.android.ui.settings.modeTitle
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Shield
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -164,6 +177,11 @@ fun ChatScreen(
         LaunchedEffect(vm, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.hardware.poll() } }
     }
     var showMenu by remember { mutableStateOf(false) }
+    val pinned by vm.pinned.collectAsStateWithLifecycle()
+    var showRename by remember { mutableStateOf(false) }
+    var showMode by remember { mutableStateOf(false) }
+    // A mode raise the computer wants a second factor for (SK-7): the sheet asks, then sends it again.
+    var modeStepUp by remember { mutableStateOf<PendingStepUp?>(null) }
     var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
     var showPrs by remember { mutableStateOf(false) }
     // The chat's pull request chip: read when the chat opens, after each turn, and when Git or the
@@ -261,6 +279,46 @@ fun ChatScreen(
         )
     }
 
+    // ⋮ → Rename, Pin, Complete, Chat mode: changes on the computer; a refusal is said in a toast.
+    val chatAction: (String, suspend () -> Unit) -> Unit = { failed, action ->
+        scope.launch {
+            try {
+                action()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, e.message?.takeIf { it.isNotBlank() } ?: failed, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    if (showRename) {
+        RenameChatDialog(chat.title, onDismiss = { showRename = false }) { title ->
+            showRename = false
+            chatAction("Couldn’t rename this chat.") { vm.rename(title) }
+        }
+    }
+    if (showMode) {
+        ChatModeDialog(chat.mode, vm.defaultMode, computerName, onDismiss = { showMode = false }) { mode ->
+            showMode = false
+            scope.launch {
+                try {
+                    vm.setMode(mode)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if ((e as? RelayException)?.refusal?.asksForStepUp == true) {
+                        modeStepUp = PendingStepUp("Switch this chat on $computerName to ${modeTitle(mode)}") { proof -> vm.setMode(mode, proof) }
+                    } else {
+                        android.widget.Toast.makeText(context, e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t change this chat’s mode.", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+    modeStepUp?.let { pending ->
+        StepUpSheet(vm.repo, pending, onDone = { modeStepUp = null }, onDismiss = { modeStepUp = null })
+    }
+
     if (showModelEffort) {
         ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onDismiss = { showModelEffort = false })
     }
@@ -307,20 +365,54 @@ fun ChatScreen(
                                     text = { Text("Git") },
                                     leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openGit() },
+                                    enabled = chat.savedAt == null,
                                     modifier = Modifier.testTag("chat.git"),
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Files") },
                                     leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openFiles() },
+                                    enabled = chat.savedAt == null,
                                     modifier = Modifier.testTag("chat.files"),
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Terminals") },
                                     leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openTerminals() },
+                                    enabled = chat.savedAt == null,
                                     modifier = Modifier.testTag("chat.terminals"),
                                 )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Chat mode") },
+                                    leadingIcon = { Icon(Icons.Filled.Shield, contentDescription = null) },
+                                    onClick = { showMenu = false; showMode = true },
+                                    enabled = online,
+                                    modifier = Modifier.testTag("chat.toolMode"),
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Rename") },
+                                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                    onClick = { showMenu = false; showRename = true },
+                                    enabled = online,
+                                    modifier = Modifier.testTag("chat.rename"),
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (pinned) "Unpin" else "Pin") },
+                                    leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+                                    onClick = { showMenu = false; chatAction("Couldn’t change this chat.") { vm.setPinned(!pinned) } },
+                                    enabled = online,
+                                    modifier = Modifier.testTag("chat.pin"),
+                                )
+                                if (completedAt == null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Complete") },
+                                        leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
+                                        onClick = { showMenu = false; chatAction("Couldn’t complete this chat.") { vm.complete() } },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.complete"),
+                                    )
+                                }
                             }
                         }
                         pane?.actions?.invoke(this)
@@ -445,8 +537,31 @@ fun ChatScreen(
                 },
                 modifier = Modifier.navigationBarsPadding(),
             ) else Column(Modifier.navigationBarsPadding()) {
+                val waiting by vm.waiting.collectAsStateWithLifecycle()
+                val sendingId by vm.sendingId.collectAsStateWithLifecycle()
+                val refusal by vm.refusal.collectAsStateWithLifecycle()
+                val restore by vm.restore.collectAsStateWithLifecycle()
+                Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // The phone's saved copy (OF-5): read-only until the computer answers.
+                    chat.savedAt?.let { at ->
+                        Text(
+                            savedCopyNote(at, computerName),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = p.inkSoft,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp).testTag("chat.savedCopy"),
+                        )
+                    }
+                    WaitingList(waiting, sendingId, online, onEdit = vm::editWaiting, onDelete = vm::deleteWaiting, onSendNow = vm::sendWaitingNow)
+                    refusal?.let { RefusalNote(it, onDismiss = vm::dismissRefusal) }
+                }
                 Composer(
-                    initialText = initialDraft,
+                    restore = restore,
+                    onRestored = vm::restored,
+                    sendsLater = chat.sendsLater,
+                    // A fork's prompt, else what was typed here last time (the saved draft).
+                    initialText = initialDraft ?: vm.savedDraft.text.ifEmpty { null },
+                    initialSkillName = vm.savedDraft.skill?.name.takeIf { initialDraft == null },
+                    onDraftChange = vm::draftChanged,
                     running = chat.running,
                     blocked = chat.blocked,
                     queued = chat.queued,

@@ -1,5 +1,7 @@
 package com.nekko.android.connection
 
+import com.nekko.protocol.E2E
+
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -21,6 +23,9 @@ import com.nekko.android.data.PhonePrefs
 /** The app's notification channels and the local notifications about computer chats. */
 class Notices(private val context: Context) {
     private val manager = NotificationManagerCompat.from(context)
+
+    /** The chats with a needs-you notification up, by their tag: what a relay `dismiss` can take down. */
+    private val needsYou = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     init {
         createChannels()
@@ -52,6 +57,7 @@ class Notices(private val context: Context) {
                 if (n.canDeny) addAction(0, "Deny", deny(n.sessionId, n.callId!!))
             }
             .build()
+        if (n.needsYou) needsYou[E2E.activityTag(n.sessionId)] = n.sessionId else needsYou.values.remove(n.sessionId)
         try {
             manager.notify(EventNotice.tag(n.sessionId), ID_EVENT, notification)
         } catch (_: SecurityException) {
@@ -60,7 +66,45 @@ class Notices(private val context: Context) {
     }
 
     /** The chat was opened: its notification is no longer news. */
-    fun clear(sessionId: String) = manager.cancel(EventNotice.tag(sessionId), ID_EVENT)
+    fun clear(sessionId: String) {
+        needsYou.values.remove(sessionId)
+        manager.cancel(EventNotice.tag(sessionId), ID_EVENT)
+    }
+
+    /**
+     * An approval or a question was answered somewhere (the desktop, another
+     * phone, this one) or its run ended: the relay's `dismiss` names the chat by
+     * its tag, and its needs-you notification goes. A finished or failed one stays.
+     */
+    fun dismissNeedsYou(tag: String) {
+        val sessionId = needsYou.remove(tag) ?: return
+        manager.cancel(EventNotice.tag(sessionId), ID_EVENT)
+    }
+
+    /**
+     * *Send a test notification*: one shown by the app now, on the approvals
+     * channel. Android has no push from the relay yet (AN-6), so this is what
+     * a notification from a chat looks like while the app runs in the background.
+     */
+    fun postTest(computer: String): Boolean {
+        if (!allowed()) return false
+        val notification = NotificationCompat.Builder(context, CHANNEL_NEEDS_YOU)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Test from Nekko Agent")
+            .setContentText("Notifications from $computer will look like this.")
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setAutoCancel(true)
+            .setContentIntent(openApp())
+            .build()
+        return try {
+            manager.notify(TAG_TEST, ID_EVENT, notification)
+            true
+        } catch (_: SecurityException) {
+            false
+        }
+    }
 
     /**
      * The ongoing notification of [KeepAliveService]; tapping it opens the app.
@@ -122,8 +166,47 @@ class Notices(private val context: Context) {
     }
 
     companion object {
-        /** Settings → Connection → Notify me. Only applies while the app is out of sight. */
+        /**
+         * The single *Notify me* switch from before the per-kind ones: read once
+         * to start them as it was ([migrate]), and kept in step for older code paths.
+         */
         val ENABLED = PhonePrefs.boolean("notify_events", default = true)
+
+        /** *Notify me about* (the iPhone's IO-30): one switch per kind, only while the app is out of sight. */
+        val NEEDS_YOU = PhonePrefs.boolean("notify.needs_you", default = true)
+        val FINISHED = PhonePrefs.boolean("notify.finished", default = true)
+        val FAILED = PhonePrefs.boolean("notify.failed", default = true)
+        private val MIGRATED = PhonePrefs.boolean("notify.kinds_migrated", default = false)
+
+        /** Each kind starts as the old single switch was, once. */
+        fun migrate(prefs: PhonePrefs) {
+            if (prefs.get(MIGRATED)) return
+            val was = prefs.get(ENABLED)
+            listOf(NEEDS_YOU, FINISHED, FAILED).forEach { prefs.set(it, was) }
+            prefs.set(MIGRATED, true)
+        }
+
+        /** The switch for [e]'s kind. */
+        fun keyOf(e: PhoneEvent) = when (e) {
+            PhoneEvent.APPROVAL, PhoneEvent.NEEDS_INPUT -> NEEDS_YOU
+            PhoneEvent.FINISHED -> FINISHED
+            PhoneEvent.FAILED -> FAILED
+        }
+
+        /** Whether the user wants a notification for [e]. */
+        fun wants(prefs: PhonePrefs, e: PhoneEvent): Boolean {
+            migrate(prefs)
+            return prefs.get(keyOf(e))
+        }
+
+        /** All kinds on or off at once (the first run's answer). */
+        fun setAll(prefs: PhonePrefs, on: Boolean) {
+            migrate(prefs)
+            listOf(NEEDS_YOU, FINISHED, FAILED).forEach { prefs.set(it, on) }
+            prefs.set(ENABLED, on)
+        }
+
+        const val TAG_TEST = "test"
 
         const val CHANNEL_NEEDS_YOU = "needs_you"
         const val CHANNEL_REPLIES = "replies"

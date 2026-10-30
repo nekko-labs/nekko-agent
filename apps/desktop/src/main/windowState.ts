@@ -56,6 +56,19 @@ export function initialWindowBounds(area: WorkArea): WindowBounds {
   };
 }
 
+/**
+ * A fixed size from `NEKKO_WINDOW_SIZE` ("1600x900"), centred on the screen,
+ * so every screen recording frames the window the same way. Null when unset
+ * or malformed.
+ */
+export function fixedWindowBounds(spec: string | undefined, area: WorkArea): WindowBounds | null {
+  const m = spec?.trim().match(/^(\d+)x(\d+)$/i);
+  if (!m) return null;
+  const width = Math.max(MIN_WINDOW.width, Number(m[1]));
+  const height = Math.max(MIN_WINDOW.height, Number(m[2]));
+  return { width, height, x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2) };
+}
+
 /** The bounds saved by the last run, or null on a first launch (or an unreadable file). */
 export function loadWindowBounds(): WindowBounds | null {
   try {

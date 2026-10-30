@@ -1,5 +1,7 @@
 package com.nekko.android.ui.chat
 
+import com.nekko.protocol.Draft
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +15,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.semantics.selected
+import androidx.compose.material.icons.filled.TextFormat
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Schedule
@@ -116,6 +122,15 @@ fun Composer(
     onNewAgent: (() -> Unit)? = null,
     /** **+** → Terminal: the chat's terminals; null leaves it out. */
     onTerminal: (() -> Unit)? = null,
+    /** The skill armed in the saved draft, by name. */
+    initialSkillName: String? = null,
+    /** What the box holds changed (text, armed skill's name): the chat keeps it as its draft. */
+    onDraftChange: ((text: String, skillName: String?) -> Unit)? = null,
+    /** A prompt back from the outbox (Edit or refused), already merged with what was typed: replaces the box once. */
+    restore: Draft? = null,
+    onRestored: () -> Unit = {},
+    /** The computer is out of reach: what is sent waits on the phone (offline mode); said under the box. */
+    sendsLater: String? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -123,7 +138,7 @@ fun Composer(
     var sending by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     // The armed skill, by name: it survives rotation and is dropped if the computer no longer has it.
-    var skillName by rememberSaveable { mutableStateOf<String?>(null) }
+    var skillName by rememberSaveable { mutableStateOf(initialSkillName) }
     val skill = skillName?.let { n -> skills.firstOrNull { it.name == n } }
     // The armed saved prompt, by id: it sends its text, then what was typed.
     var promptId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -138,6 +153,24 @@ fun Composer(
     val canSend = hasContent && blocked == null && !sending && !addingPhotos
     val showStop = running && !hasContent && !addingPhotos
     var plusOpen by remember { mutableStateOf(false) }
+    // The Markdown editing (MD-6): the selection the toolbar acts on, and the formatting toolbar's switch (*Aa*).
+    val context = LocalContext.current
+    val draft = remember { MarkdownDraft() }
+    val setText: (String) -> Unit = {
+        text = it
+        error = null
+    }
+    var focused by remember { mutableStateOf(false) }
+    var toolbarOn by remember { mutableStateOf(ToolbarPref.get(context)) }
+    LaunchedEffect(restore) {
+        if (restore != null) {
+            text = restore.text
+            skillName = restore.skill?.name
+            error = null
+            onRestored()
+        }
+    }
+    LaunchedEffect(text, skillName) { onDraftChange?.invoke(text, skillName) }
     LaunchedEffect(insert) {
         if (insert != null) {
             text += (if (text.isEmpty() || text.endsWith("\n")) "" else "\n\n") + insert
@@ -225,6 +258,8 @@ fun Composer(
                     color = if (blocked != null) p.warning else p.danger,
                     modifier = Modifier.padding(horizontal = 4.dp),
                 )
+            } else if (sendsLater != null) {
+                Text(sendsLater, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(horizontal = 4.dp).testTag("composer.sendsLater"))
             }
             // One box the width of the screen: the message on top, + and Send inside it below.
             Column(
@@ -235,19 +270,26 @@ fun Composer(
                     .border(1.dp, p.line, RoundedCornerShape(16.dp))
                     .padding(6.dp),
             ) {
+                // The toolbar sits inside the card, above the text, while the box is in use.
+                if (focused && toolbarOn) MarkdownToolbar(draft, text, setText)
+                PastedChip(draft, text, setText)
+                val fieldValue = draft.valueFor(text)
                 BasicTextField(
-                    value = text,
-                    onValueChange = {
-                        text = it
-                        error = null
-                    },
+                    value = fieldValue,
+                    // Against the current value, not this composition's: a paste or a toolbar edit may have just replaced it.
+                    onValueChange = { draft.changed(draft.valueFor(text), it, setText) },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = p.ink),
                     cursorBrush = SolidColor(p.accent),
                     maxLines = 6,
+                    // The source with light styling; what is sent is exactly what was typed.
+                    visualTransformation = remember(p) { MarkdownStyling(p.inkFaint, p.accent, p.code) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .padding(horizontal = 8.dp, vertical = 12.dp)
+                        .onFocusChanged { focused = it.hasFocus }
+                        .markdownKeys(draft, { text }, setText)
+                        .markdownPaste(context, draft, { text }, setText)
                         .semantics { contentDescription = "Message" },
                     decorationBox = { inner ->
                         if (text.isEmpty()) {
@@ -296,6 +338,20 @@ fun Composer(
                             )
                         }
                     }
+                    // *Aa*: show or hide the formatting toolbar, remembered.
+                    IconButton(
+                        onClick = {
+                            toolbarOn = !toolbarOn
+                            ToolbarPref.set(context, toolbarOn)
+                        },
+                        modifier = Modifier.semantics { selected = toolbarOn }.testTag("composer.formatting"),
+                    ) {
+                        Icon(
+                            Icons.Filled.TextFormat,
+                            contentDescription = if (toolbarOn) "Hide formatting" else "Show formatting",
+                            tint = if (toolbarOn) p.accent else p.inkSoft,
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     FilledIconButton(
                         onClick = { if (showStop) onStop() else send() },
@@ -312,7 +368,11 @@ fun Composer(
                         if (showStop) {
                             Icon(Icons.Filled.Stop, contentDescription = "Stop")
                         } else {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = if (running) "Queue" else "Send")
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = when {
+                                sendsLater != null -> "Send when online"
+                                running -> "Queue"
+                                else -> "Send"
+                            })
                         }
                     }
                 }

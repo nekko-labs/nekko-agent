@@ -169,7 +169,7 @@
           "slug": "benchmarks",
           "title": "Local inference benchmarks",
           "source": "docs/benchmarks.md",
-          "description": "How fast the engine runs a model compared with Ollama and LM Studio."
+          "description": "How fast Nekko Agent runs a model compared with llama.cpp, Ollama, LM Studio and MLX, and the runner to check it yourself."
         },
         {
           "slug": "floop",

@@ -1,7 +1,11 @@
 package com.nekko.protocol
 
+import kotlinx.coroutines.CopyableThrowable
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
@@ -25,6 +29,7 @@ import java.net.URLEncoder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /** Connection state, same meanings as `apps/mobile/src/lib/relayClient.ts`. */
@@ -52,9 +57,11 @@ enum class DenyReason(val wire: String) {
     }
 }
 
-data class WelcomedDevice(val id: String, val name: String, val platform: String)
+/** [protocol] is the computer's phone protocol version from the welcome (1 when it sends none, IO-32). */
+data class WelcomedDevice(val id: String, val name: String, val platform: String, val protocol: Int = 1)
 
-data class RelayStatus(val state: RelayState, val detail: String? = null, val denied: DenyReason? = null)
+/** [route] is the relay address in use or being dialed (one of the computer's routes); set on every status but idle. */
+data class RelayStatus(val state: RelayState, val detail: String? = null, val denied: DenyReason? = null, val route: String? = null)
 
 /**
  * A call failed. [refusal] is set when the computer refused the channel from a phone.
@@ -62,7 +69,38 @@ data class RelayStatus(val state: RelayState, val detail: String? = null, val de
  * the reply never came: the computer may have acted on it (a safety exit that kicks
  * every phone ends exactly that way).
  */
-class RelayException(message: String, val refusal: PhoneRefusal? = null, val afterSend: Boolean = false) : Exception(message)
+@OptIn(ExperimentalCoroutinesApi::class)
+/**
+ * [fromComputer] is set when the computer answered with this error, so the
+ * request was taken and turned down (not lost on the way).
+ */
+class RelayException(
+    message: String,
+    val refusal: PhoneRefusal? = null,
+    val afterSend: Boolean = false,
+    val fromComputer: Boolean = refusal != null,
+) : Exception(message), CopyableThrowable<RelayException> {
+    /**
+     * Never copied for stack-trace recovery: a copy made from the message alone
+     * would lose [fromComputer], [refusal] and [afterSend].
+     */
+    override fun createCopy(): RelayException? = null
+
+    /**
+     * A computer from before exactly-once delivery refuses `clientMessageId`.
+     * The prompt then goes without it (the outbox never resends one without it,
+     * since a resend could run twice).
+     */
+    val refusedClientMessageId: Boolean
+        get() = fromComputer && (refusal?.detail == CLIENT_MESSAGE_ID || message.orEmpty().contains(CLIENT_MESSAGE_ID))
+
+    private companion object {
+        const val CLIENT_MESSAGE_ID = "clientMessageId"
+    }
+}
+
+/** A chat tag in a relay `dismiss` frame: 16 bytes as hex. */
+private val DISMISS_TAG = Regex("^[0-9a-f]{32}$")
 
 /** A minimal WebSocket the client drives; [OkHttpTransport] in production, fakes in tests. */
 interface WsTransport {
@@ -105,7 +143,15 @@ class RelayConfig(
     val retryBaseMs: Long = 1_000,
     val retryMaxMs: Long = 30_000,
     val offlinePollMs: Long = 15_000,
-)
+    /** Other addresses of the same relay (the pairing link's `alt` routes). */
+    val alts: List<String> = emptyList(),
+    val routeRules: RouteRules = RouteRules(),
+    /** Whether this phone may dial a route at all (see [RouteSupervisor]). */
+    val routeAllowed: (String) -> Boolean = { true },
+) {
+    /** The relay address first, then the alternates. */
+    val routes: List<String> get() = listOf(relayUrl) + alts
+}
 
 /**
  * Relay v2 client: the phone side of the computer's relay agent (`crates/nekko-remote/src/agent.rs`).
@@ -132,11 +178,21 @@ class RelayConfig(
  * Replies come back as `{type:'res'}` and `{type:'event', channel, payload}`,
  * all E2E-sealed. Reconnects with backoff until closed. A port of the Expo
  * client with the same state machine.
+ *
+ * Routes (AN-28): a computer can be reached at several addresses of its relay
+ * ([RelayConfig.routes]). A [RouteSupervisor] picks the one to dial, moves to
+ * the next at once when one doesn't open (within [RouteRules.openTimeoutMs]
+ * while there is a fallback) or drops, and while on a worse route probes the
+ * better one ([prober]), moving back only once it answered enough times and
+ * no request is in flight. "Agent offline" is the relay answering on that
+ * route, so it is not a route failure.
  */
 class RelayClient(
     private val config: RelayConfig,
     private val transport: WsTransport,
     private val scope: CoroutineScope,
+    private val prober: RouteProber? = null,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val lock = Any()
     private var conn: WsConnection? = null
@@ -162,9 +218,22 @@ class RelayClient(
     @Volatile private var pairCode: String? = config.pairCode
     private val nextId = AtomicLong(1)
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<JsonElement>>()
+    private val routes = RouteSupervisor(config.routes, config.routeRules, now = now(), allowed = config.routeAllowed)
+    /** One probe loop at a time; [probeGen] is bumped to stop the running one. */
+    private var probing = false
+    private var probeGen = 0L
+    private var probeJob: Job? = null
 
     private val _status = MutableStateFlow(RelayStatus(RelayState.IDLE))
     val status: StateFlow<RelayStatus> = _status.asStateFlow()
+
+    private val _dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    /**
+     * The relay's `dismiss` frames: an approval or a question was answered
+     * somewhere (or its run ended), so that chat's needs-you notification can
+     * go. Each is the chat's [E2E.activityTag]; nothing else is in the frame.
+     */
+    val dismissals: SharedFlow<String> = _dismissals.asSharedFlow()
 
     private val _events = MutableSharedFlow<Pair<String, JsonElement>>(extraBufferCapacity = 512)
     /** Every sealed `event` frame as (channel, payload). */
@@ -174,6 +243,30 @@ class RelayClient(
     val welcome: SharedFlow<WelcomedDevice> = _welcome.asSharedFlow()
 
     val state: RelayState get() = _status.value.state
+
+    /** The address in use (or being dialed). */
+    val route: String get() = synchronized(lock) { routes.url }
+
+    /** Every address of the computer's relay, best first, and which of them this phone may dial. */
+    val allRoutes: List<Pair<String, Boolean>> get() = synchronized(lock) { routes.routes.map { it to config.routeAllowed(it) } }
+
+    /**
+     * The phone moved to another network: start again from the best route for
+     * it (the LAN only on Wi-Fi), and dial a fresh socket now ([reconnect]).
+     */
+    fun networkChanged(path: NetworkPath) {
+        synchronized(lock) { routes.pathChanged(path, now()) }
+        reconnect()
+    }
+
+    /** Where the phone is, without having moved (the first network report, or before connecting): dial again only if that changes the route. */
+    fun setNetworkPath(path: NetworkPath) {
+        val moved = synchronized(lock) {
+            if (path == routes.path) return
+            routes.pathChanged(path, now()) && !stopped
+        }
+        if (moved) reconnect()
+    }
 
     fun connect() {
         synchronized(lock) {
@@ -192,6 +285,7 @@ class RelayClient(
             c = conn; conn = null
             welcomed = false
             cancelWaitLocked()
+            stopProbesLocked()
         }
         runCatching { c?.close(1000, "closed by app") }
         failPending("disconnected")
@@ -337,16 +431,22 @@ class RelayClient(
         if (c.send(env.toString())) SendResult.SENT else SendResult.FAILED
     }
 
-    private fun dial() {
-        val url = "${config.relayUrl.trimEnd('/')}/relay?role=client" +
-            "&room=${enc(config.room)}&key=${enc(config.key)}"
+    private fun dial(detail: String? = null) {
+        val route: String
+        val early: Boolean
         synchronized(lock) {
             if (stopped) return
             welcomed = false
             cancelWaitLocked()
+            stopProbesLocked()
+            route = routes.routeToDial(now())
+            early = routes.fallbackExists
         }
-        setStatus(RelayStatus(RelayState.CONNECTING))
+        val url = "${route.trimEnd('/')}/relay?role=client" +
+            "&room=${enc(config.room)}&key=${enc(config.key)}"
+        setStatus(RelayStatus(RelayState.CONNECTING, detail, route = route))
         lateinit var self: WsConnection
+        val didOpen = AtomicBoolean(false)
         // The transport may call back (onOpen on its own thread) before open() has
         // returned. Without this wait the socket wasn't current yet, the challenge
         // wait (or the HELLO) was skipped, and the call failed after the handshake timeout.
@@ -354,14 +454,14 @@ class RelayClient(
         val opened = CountDownLatch(1)
         fun ready() = opened.await(OPEN_WAIT_MS, TimeUnit.MILLISECONDS)
         val listener = object : WsListener {
-            override fun onOpen() { if (ready() && isCurrent(self)) awaitChallenge(self, afterOpen = true) }
+            override fun onOpen() { didOpen.set(true); if (ready() && isCurrent(self)) awaitChallenge(self, afterOpen = true) }
             override fun onMessage(text: String) { if (ready() && isCurrent(self)) onRaw(self, text) }
             override fun onClosed(code: Int, reason: String) { if (ready()) onSocketClosed(self, code, reason) }
         }
         val c = try {
             transport.open(url, listener)
         } catch (e: Exception) {
-            scheduleRetry(e.message ?: "could not connect")
+            routeFailed(e.message ?: "could not connect")
             return
         }
         self = c
@@ -372,6 +472,36 @@ class RelayClient(
             }
         } finally {
             opened.countDown()
+        }
+        // A LAN address on another Wi-Fi doesn't refuse, it hangs: with a
+        // fallback behind it, give it a few seconds, not the transport's own timeout.
+        if (early) scope.launch {
+            delay(config.routeRules.openTimeoutMs)
+            if (didOpen.get()) return@launch
+            synchronized(lock) {
+                if (conn !== c) return@launch
+                conn = null
+            }
+            // conn is already null, so this socket's late onClosed is ignored.
+            runCatching { c.close(1000, "route timed out") }
+            routeFailed("${Pairing.relayHost(route)} didn't answer")
+        }
+    }
+
+    /**
+     * The route in use didn't open or dropped: with another, move to it (at
+     * once when it isn't cooling down); else back off as before.
+     */
+    private fun routeFailed(detail: String?) {
+        val next = synchronized(lock) {
+            if (stopped) return
+            routes.failed(now())
+        }
+        if (next.changed && next.ready) {
+            synchronized(lock) { retryJob?.cancel(); retryJob = null }
+            dial(detail)
+        } else {
+            scheduleRetry(detail)
         }
     }
 
@@ -390,10 +520,11 @@ class RelayClient(
             code == 4001 -> deny(DenyReason.KICKED)
             code == 1008 && reason.contains("bad pairing key", ignoreCase = true) -> deny(DenyReason.BAD_KEY)
             code == 1008 && reason.contains("agent offline", ignoreCase = true) -> {
+                // The relay answered on this route: the computer is away, not the path.
                 setStatus(RelayStatus(RelayState.OFFLINE))
                 scheduleRetry(null, offline = true)
             }
-            else -> scheduleRetry(reason.ifBlank { "closed ($code)" })
+            else -> routeFailed(reason.ifBlank { "closed ($code)" })
         }
     }
 
@@ -435,7 +566,7 @@ class RelayClient(
         }
         runCatching { c.close(1000, "no challenge") }
         failPending("connection lost")
-        scheduleRetry("no challenge from the computer")
+        routeFailed("no challenge from the computer")
     }
 
     /** Stop waiting for a challenge. Call with [lock] held. */
@@ -484,6 +615,7 @@ class RelayClient(
                 }
                 setStatus(RelayStatus(RelayState.OFFLINE))
             }
+            "dismiss" -> env.str("tag")?.takeIf { DISMISS_TAG.matches(it) }?.let { _dismissals.tryEmit(it) }
             "agent-online" -> if (!synchronized(lock) { welcomed }) {
                 // The computer (re)joined after us: it challenges this socket again.
                 setStatus(RelayStatus(RelayState.CONNECTING))
@@ -522,7 +654,13 @@ class RelayClient(
                 pairCode = null // enrollment done; never resend the code
                 val d = frame["device"].obj()
                 setStatus(RelayStatus(RelayState.ONLINE))
-                _welcome.tryEmit(WelcomedDevice(d?.str("id") ?: config.deviceId, d?.str("name") ?: config.deviceName, d?.str("platform") ?: config.platform))
+                startProbes()
+                _welcome.tryEmit(
+                    WelcomedDevice(
+                        d?.str("id") ?: config.deviceId, d?.str("name") ?: config.deviceName, d?.str("platform") ?: config.platform,
+                        PhoneProtocol.of(frame),
+                    ),
+                )
             }
             "denied" -> deny(DenyReason.parse(frame.str("reason")))
             "res" -> {
@@ -531,7 +669,7 @@ class RelayClient(
                 val err = frame["error"]
                 if (err != null && err !is JsonNull) {
                     val text = (err as? JsonPrimitive)?.content ?: err.toString()
-                    p.completeExceptionally(RelayException(text, PhoneRefusal.parse(text)))
+                    p.completeExceptionally(RelayException(text, PhoneRefusal.parse(text), fromComputer = true))
                 } else {
                     p.complete(frame["result"] ?: JsonNull)
                 }
@@ -550,6 +688,7 @@ class RelayClient(
             stopped = true
             retryJob?.cancel(); retryJob = null
             cancelWaitLocked()
+            stopProbesLocked()
             c = conn; conn = null
         }
         failPending(if (reason == DenyReason.UPDATE_REQUIRED) UPDATE_MESSAGE else "This phone is no longer paired.")
@@ -581,7 +720,75 @@ class RelayClient(
     }
 
     private fun setStatus(s: RelayStatus) {
-        _status.value = s
+        // Every status but idle names the route it is about.
+        _status.value = if (s.route == null && s.state != RelayState.IDLE) s.copy(route = route) else s
+    }
+
+    /**
+     * While online on a worse route, probe the better one every
+     * [RouteRules.probeIntervalMs]; move back once the supervisor's hysteresis
+     * allows and no request is in flight (a running turn is never cut to change route).
+     */
+    private fun startProbes() {
+        val p = prober ?: return
+        val job = synchronized(lock) {
+            if (probing || stopped || routes.onBest) return
+            probing = true
+            val gen = ++probeGen
+            scope.launch(start = CoroutineStart.LAZY) { probeLoop(p, gen) }.also { probeJob = it }
+        }
+        job.start()
+    }
+
+    private suspend fun probeLoop(p: RouteProber, gen: Long) {
+        val timeout = config.routeRules.probeIntervalMs.coerceIn(500, 3_000)
+        while (true) {
+            delay(config.routeRules.probeIntervalMs)
+            val target = synchronized(lock) {
+                if (probeGen != gen || stopped || !welcomed || routes.onBest) {
+                    if (probeGen == gen) { probing = false; probeJob = null }
+                    return
+                }
+                // The better route may still be cooling down: wait it out.
+                routes.probeTarget(now())?.let { it to routes.routes[it] }
+            } ?: continue
+            val ok = p.reachable(target.second, timeout)
+            val move = synchronized(lock) {
+                if (probeGen != gen || stopped) return
+                routes.probed(target.first, ok, now())
+                if (!welcomed || pending.isNotEmpty() || !routes.shouldMoveBack(now())) return@synchronized false
+                routes.moveBack(now())
+                probing = false; probeJob = null
+                true
+            }
+            if (move) {
+                moveRoute("Moving to ${Pairing.relayHost(target.second)}")
+                return
+            }
+        }
+    }
+
+    /** Stop the probe loop. Call with [lock] held. */
+    private fun stopProbesLocked() {
+        probeGen++
+        probing = false
+        probeJob?.cancel(); probeJob = null
+    }
+
+    /** The supervisor chose another route: drop this socket and dial it. */
+    private fun moveRoute(detail: String) {
+        val old: WsConnection?
+        synchronized(lock) {
+            retryJob?.cancel(); retryJob = null
+            retry = 0
+            old = conn; conn = null
+            welcomed = false
+            cancelWaitLocked()
+        }
+        // conn is already null, so this socket's late onClosed is ignored.
+        runCatching { old?.close(1000, "route changed") }
+        failPending("connection lost")
+        dial(detail)
     }
 
     private fun enc(s: String) = URLEncoder.encode(s, Charsets.UTF_8)

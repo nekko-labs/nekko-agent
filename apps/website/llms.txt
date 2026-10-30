@@ -24,7 +24,7 @@ Search and download models from Hugging Face inside the app, see which fit the g
 
 ### 3. Every model side by side
 
-Sign in with a ChatGPT plan (Plus/Pro/Business), add Claude with an Anthropic API key, or use OpenRouter for hundreds of models including Gemini, alongside local models. Choose a model per chat or workflow and delegate smaller tasks to cheaper or local models. Nekko does not sign in with Claude Free, Pro, or Max plans: Anthropic does not allow third-party apps to. An upcoming Claude Agent provider runs the user's own installed Claude Code instead.
+Sign in with a ChatGPT plan (Plus/Pro/Business), add Claude with an Anthropic API key, or use OpenRouter for hundreds of models including Gemini, alongside local models. Choose a model per chat or workflow and delegate smaller tasks to cheaper or local models. To use a Claude plan (Pro, Max or Team), Nekko runs the user's own installed Claude Code, which they sign in to themselves; Nekko never signs in to Claude or reads Claude credentials. Scheduled tasks, Nekko's own tools inside that chat and plan usage limits stay off on a Claude plan for now; an API key or cloud account turns every feature on.
 
 ### 4. Spend, savings, and live monitoring
 
@@ -118,7 +118,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [CI runners on your Mac](https://nekkoagent.com/docs/ci-runners.md): Run your GitHub Actions jobs on this Mac, each in a throwaway VM, without getting in your way.
 - [Build the CI runner image](https://nekkoagent.com/docs/ci-runners-image.md): Build the macOS image your CI runner jobs boot from, and check it in a VM.
 - [Decision models](https://nekkoagent.com/docs/decision-models.md): Typed questions answered with calibrated probabilities, in one forward pass.
-- [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast the engine runs a model compared with Ollama and LM Studio.
+- [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast Nekko Agent runs a model compared with llama.cpp, Ollama, LM Studio and MLX, and the runner to check it yourself.
 - [Floop tasks](https://nekkoagent.com/docs/floop.md): Show your team's Floop tasks in Nekko Agent and let the agent pick up, update and finish them.
 - [Send feedback](https://nekkoagent.com/docs/send-feedback.md): Tell Nekko Labs what's broken or missing: a prompt for your own agent, a quick anonymous note, or a GitHub issue.
 

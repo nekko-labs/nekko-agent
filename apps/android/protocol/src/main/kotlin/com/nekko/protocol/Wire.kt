@@ -236,7 +236,9 @@ data class ChatMessage(
                 content = o.str("content") ?: "",
                 reasoning = o.str("reasoning"),
                 createdAt = o.long("createdAt"),
-                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" } ?: emptyList(),
+                // A saved copy keeps only how many photos a message had (`imageCount`): drawn as tiles.
+                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" }
+                    ?: List(o.long("imageCount")?.toInt()?.coerceIn(0, 64) ?: 0) { "" },
                 skill = skill,
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),
@@ -261,6 +263,12 @@ data class Session(
     val effort: String? = null,
     /** The queue as the computer holds it: what `chat:editQueued` checks against. */
     val queued: List<QueuedPrompt> = emptyList(),
+    /** The chat's own tool policy (`ChatMode`); null follows the computer's default. */
+    val mode: PcSettings.ChatMode? = null,
+    /** The newest prompt ids the computer has taken for this chat: a prompt listed here was delivered. */
+    val clientMessageIds: List<String> = emptyList(),
+    /** A turn is running on the computer (`activeRun`): a prompt sent now waits in its queue. */
+    val running: Boolean = false,
 ) {
     companion object {
         fun from(e: JsonElement?): Session? {
@@ -278,6 +286,9 @@ data class Session(
                 updatedAt = o.long("updatedAt") ?: 0,
                 effort = o.str("effort"),
                 queued = QueuedPrompt.list(o["queue"]),
+                mode = PcSettings.ChatMode.of(o.str("mode")),
+                clientMessageIds = o["clientMessageIds"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                running = o["activeRun"].let { it != null && it !is JsonNull },
             )
         }
     }
@@ -302,6 +313,8 @@ data class SessionSummary(
     /** Manual position from the desktop sidebar's drag order; null when never dragged. */
     val order: Double? = null,
     val activeWatchCount: Long = 0,
+    /** Pinned on the computer (the desktop's pin), from here or there. */
+    val pinned: Boolean = false,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -326,6 +339,7 @@ data class SessionSummary(
                 archivedAt = archivedAt,
                 order = o.dbl("order"),
                 activeWatchCount = o.long("activeWatchCount") ?: 0,
+                pinned = o.bool("pinned"),
             )
         }
 
@@ -800,6 +814,8 @@ fun sendOptions(
     text: String,
     skill: SkillSummary? = null,
     images: List<String> = emptyList(),
+    /** The prompt's id: the computer runs a repeat of it once only (`Session.clientMessageIds`). */
+    clientMessageId: String? = null,
 ): JsonObject = buildJsonObject {
     put("sessionId", sessionId)
     put("providerId", providerId)
@@ -807,12 +823,14 @@ fun sendOptions(
     put("text", text)
     if (skill != null) put("skill", skillCall(skill.name, text))
     if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
+    if (clientMessageId != null) put("clientMessageId", clientMessageId)
 }
 
-/** `chat:queue` prompt: plain text, or `{ text, skill, images }` (the computer expands a skill). */
-fun queuePrompt(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()): JsonElement =
-    if (skill == null && images.isEmpty()) JsonPrimitive(text) else buildJsonObject {
+/** `chat:queue` prompt: plain text, or `{ text, skill, images, clientMessageId }` (the computer expands a skill). */
+fun queuePrompt(text: String, skill: SkillSummary? = null, images: List<String> = emptyList(), clientMessageId: String? = null): JsonElement =
+    if (skill == null && images.isEmpty() && clientMessageId == null) JsonPrimitive(text) else buildJsonObject {
         put("text", text)
         if (skill != null) put("skill", skillCall(skill.name, text))
         if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
+        if (clientMessageId != null) put("clientMessageId", clientMessageId)
     }

@@ -1,0 +1,376 @@
+{
+  "name": "burst-chat-mlx-lm-vs-llama-server-default-qwen3-8b",
+  "valid": true,
+  "problems": [],
+  "notes": "mlx-lm 0.32.2 (MLX 0.32.4), mlx_lm.server with only --model and --port, Qwen/Qwen3-8B-MLX-4bit (4-bit, group size 128, 4.35 GB). Reference: llama-server b11224 with only -m and --port, GGUF Q4_K_M (5.03 GB). Different weights: the MLX file is 13% smaller.",
+  "settings": {
+    "targets": {
+      "mlx-lm": "http://127.0.0.1:8091/v1",
+      "llama-server-default": "http://127.0.0.1:8090/v1"
+    },
+    "model": "qwen3-8b",
+    "target_models": {
+      "mlx-lm": "~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit",
+      "llama-server-default": "qwen3-8b"
+    },
+    "target_weights_sha256": {
+      "mlx-lm": "a4ff938f55ffbba1c35f8ff5d905a2e4cbd0941bdb3474f83507df2035b7a719",
+      "llama-server-default": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "runs": 8,
+    "warmup": 1,
+    "max_tokens": 512,
+    "temperature": 0,
+    "seed": 42,
+    "stream": true,
+    "speculative_expected": false,
+    "scenario": "burst",
+    "pause_s": 20.0,
+    "preheat_s": 0,
+    "max_drift_pct": 3.0,
+    "workload": "chat",
+    "prompt_sha256": "6e41cfca89c4d2b3d5904ad0cf7f7edb0f86dc007a230720614e89d874ed292c",
+    "script_sha256": "ff566f7926afa9decebce7af1d323ece412667c216fac7949739c00a4aeac22f"
+  },
+  "summary": {
+    "mlx-lm": {
+      "ttft_ms": {
+        "median": 240.8284375014773,
+        "min": 229.97208400192903,
+        "max": 300.05595800321316,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 108.49929644420934,
+        "min": 108.35036682910493,
+        "max": 108.88682909152284,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 1891.3888109923976,
+        "min": 1516.3838206309758,
+        "max": 1978.50100795792,
+        "n": 8
+      },
+      "server_decode_tok_s_median": null,
+      "server_prefill_tok_s_median": null,
+      "decode_drift_pct": -0.3
+    },
+    "llama-server-default": {
+      "ttft_ms": {
+        "median": 249.16899999880116,
+        "min": 242.0368330058409,
+        "max": 255.2092910045758,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 96.3784984403618,
+        "min": 96.09578512528553,
+        "max": 96.5630529135176,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 1824.0583205581813,
+        "min": 1775.0137474104652,
+        "max": 1879.87916694076,
+        "n": 8
+      },
+      "server_decode_tok_s_median": 95.98844475676302,
+      "server_prefill_tok_s_median": 2264.9118372106027,
+      "decode_drift_pct": -0.3
+    }
+  },
+  "replies": {
+    "mlx-lm": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 0,
+      "of": 8
+    },
+    "llama-server-default": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 6,
+      "of": 8
+    }
+  },
+  "conditions_before": {
+    "taken_at": "2026-10-29T06:24:15.574175+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 68120,
+        "processes": [
+          {
+            "pid": 68120,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 8091,
+        "pid": 57459,
+        "processes": [
+          {
+            "pid": 57459,
+            "command": "~/.local/share/uv/tools/mlx-lm/bin/python ~/.local/bin/mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit --port 8091",
+            "version": "mlx-lm 0.32.2 mlx 0.32.4"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "mlx_lm.server",
+        "pid": 57459,
+        "command": "~/.local/share/uv/tools/mlx-lm/bin/python ~/.local/bin/mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit --port 8091",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 68120,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 0.9,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 57118,
+        "cpu": 0.6,
+        "command": "nekkod"
+      },
+      {
+        "pid": 519,
+        "cpu": 0.1,
+        "command": "mDNSResponder"
+      },
+      {
+        "pid": 647,
+        "cpu": 0.1,
+        "command": "Finder.app"
+      },
+      {
+        "pid": 57120,
+        "cpu": 0.1,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.0,
+        "command": "logd"
+      },
+      {
+        "pid": 333,
+        "cpu": 0.0,
+        "command": "smd"
+      },
+      {
+        "pid": 334,
+        "cpu": 0.0,
+        "command": "UserEventAgent"
+      }
+    ],
+    "scripts": {
+      "commit": "dc7793a0a694fd400c7db968ed40d599c917c6b3",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+      "bytes": 5027783488,
+      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "target_model_files": {
+      "mlx-lm": {
+        "path": "~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit",
+        "bytes": 4367856304,
+        "sha256": "a4ff938f55ffbba1c35f8ff5d905a2e4cbd0941bdb3474f83507df2035b7a719",
+        "files": {
+          "LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+          "README.md": "3b04e47152072c7419f2c24c955bed26e7921f998d722c88cc2142f201ea84a5",
+          "config.json": "eb21fe151c8d2b761794129a0f92a8b719a76d97705dda758ed6746c829a7720",
+          "merges.txt": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+          "model.safetensors": "fcc83d7537bee76cc143be3e25f8954b816798f93528103db1cddb02977c5617",
+          "model.safetensors.index.json": "5d1f86d9f3e5edc70a4a99e8d4223f061b138c85066819fc6a128579c7ddb5e8",
+          "tokenizer.json": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "tokenizer_config.json": "f45a828b27bfe1ae2080246d6de51c29370a0978f15b3299123830d5ba9e08a1",
+          "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+        }
+      },
+      "llama-server-default": {
+        "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+        "bytes": 5027783488,
+        "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+      }
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-10-29T06:31:13.829157+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 68120,
+        "processes": [
+          {
+            "pid": 68120,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 8091,
+        "pid": 57459,
+        "processes": [
+          {
+            "pid": 57459,
+            "command": "~/.local/share/uv/tools/mlx-lm/bin/python ~/.local/bin/mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit --port 8091",
+            "version": "mlx-lm 0.32.2 mlx 0.32.4"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "mlx_lm.server",
+        "pid": 57459,
+        "command": "~/.local/share/uv/tools/mlx-lm/bin/python ~/.local/bin/mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit --port 8091",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 68120,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 8.2,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 57115,
+        "cpu": 0.2,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 400,
+        "cpu": 0.1,
+        "command": "corebrightnessd"
+      },
+      {
+        "pid": 5297,
+        "cpu": 0.1,
+        "command": "claude"
+      },
+      {
+        "pid": 35796,
+        "cpu": 0.1,
+        "command": "Visual Studio Code.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.0,
+        "command": "logd"
+      },
+      {
+        "pid": 333,
+        "cpu": 0.0,
+        "command": "smd"
+      },
+      {
+        "pid": 334,
+        "cpu": 0.0,
+        "command": "UserEventAgent"
+      }
+    ],
+    "scripts": {
+      "commit": "dc7793a0a694fd400c7db968ed40d599c917c6b3",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 414.6,
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 7.1,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 57118,
+        "cpu": 1.2,
+        "command": "nekkod"
+      },
+      {
+        "pid": 35800,
+        "cpu": 0.4,
+        "command": "tsc"
+      },
+      {
+        "pid": 380,
+        "cpu": 0.3,
+        "command": "locationd"
+      },
+      {
+        "pid": 5297,
+        "cpu": 0.3,
+        "command": "claude"
+      },
+      {
+        "pid": 384,
+        "cpu": 0.2,
+        "command": "dasd"
+      },
+      {
+        "pid": 430,
+        "cpu": 0.2,
+        "command": "airportd"
+      },
+      {
+        "pid": 586,
+        "cpu": 0.2,
+        "command": "searchpartyd"
+      }
+    ]
+  }
+}

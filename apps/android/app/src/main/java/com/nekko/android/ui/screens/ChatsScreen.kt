@@ -86,6 +86,12 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
 import kotlinx.coroutines.launch
+import androidx.compose.material3.CircularProgressIndicator
+import com.nekko.android.data.OutboxItem
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PushPin
+import com.nekko.android.ui.chat.RenameChatDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,8 +106,11 @@ fun ChatsScreen(
     onMonitors: (() -> Unit)? = null,
     /** Set when the list is one of an open folding phone's two panes: its header actions. */
     pane: PaneSlot? = null,
+    /** During the first run, pairing is its step 2: the welcome says so and offers Skip. */
+    onSkipFirstRun: (() -> Unit)? = null,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
+    val outbox by repo.outbox.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
@@ -145,18 +154,44 @@ fun ChatsScreen(
             }
         }
     }
+    // Long-press → Rename: the title on the computer.
+    var renaming by remember { mutableStateOf<SessionSummary?>(null) }
+    val change: (String, suspend () -> Unit) -> Unit = { failed, action ->
+        actionError = null
+        scope.launch {
+            try {
+                action()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = e.message?.takeIf { it.isNotBlank() } ?: failed
+            }
+        }
+    }
     pressed?.let { chat ->
         val delete = s.pcSettings.effectiveAction == PcSettings.ChatAction.DELETE
         ChatActionDialog(
             title = plainText(chat.title).ifEmpty { "New chat" },
             delete = delete,
+            pinned = chat.pinned,
             computer = active?.name ?: "your computer",
             onDismiss = { pressed = null },
             onConfirm = {
                 pressed = null
                 if (delete && s.pcSettings.confirmDelete) confirmDelete = chat else run(chat, delete)
             },
+            onPin = {
+                pressed = null
+                change("Couldn’t change that chat.") { repo.setPinned(chat.id, !chat.pinned) }
+            },
+            onRename = { pressed = null; renaming = chat },
         )
+    }
+    renaming?.let { chat ->
+        RenameChatDialog(plainText(chat.title), onDismiss = { renaming = null }) { title ->
+            renaming = null
+            change("Couldn’t rename that chat.") { repo.renameChat(chat.id, title) }
+        }
     }
     pressedDone?.let { chat ->
         AlertDialog(
@@ -221,7 +256,7 @@ fun ChatsScreen(
         if (!s.ready) {
             Box(Modifier.fillMaxSize().padding(padding))
         } else if (active == null) {
-            Welcome(onPair, Modifier.padding(padding))
+            Welcome(onPair, Modifier.padding(padding), onSkipFirstRun)
         } else {
             PullToRefreshBox(
                 isRefreshing = pulling,
@@ -236,6 +271,28 @@ fun ChatsScreen(
             ) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                     item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
+                    // Offline mode: what waits on the phone, and chats started offline not created yet.
+                    if (outbox.waiting.isNotEmpty() && s.conn != RelayState.ONLINE) {
+                        item(key = "outbox-note") {
+                            val n = outbox.waiting.size
+                            Notice(
+                                "${if (n == 1) "1 prompt waits" else "$n prompts wait"} on this phone. ${if (n == 1) "It goes" else "They go"} when ${active.name} is back.",
+                                Tone.FAINT,
+                                Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.outboxNote"),
+                            )
+                        }
+                    }
+                    val pendingNew = outbox.pendingNewChats.filter { it.id !in outbox.direct }
+                    if (pendingNew.isNotEmpty()) {
+                        item(key = "pending-header") { SectionHeader("Waiting to send") }
+                        items(pendingNew, key = { "pending:${it.chatKey}" }) { item ->
+                            PendingNewChatRow(item, sending = item.id == outbox.sendingId, onDelete = { repo.outbox.remove(item.id) })
+                        }
+                    }
+                    // The phone and the computer speak different protocol versions (IO-32): which side to update.
+                    s.protocolCheck.message(active.name)?.let { text ->
+                        item(key = "protocol") { Notice(text, Tone.WARNING, Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("protocol-banner")) }
+                    }
                     s.savedListAt?.let { at ->
                         item(key = "saved-list") {
                             Text(
@@ -273,7 +330,7 @@ fun ChatsScreen(
                         }
                         items(found, key = { "found:${it.id}" }) { summary ->
                             if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
-                            else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                            else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) }, waiting = outbox.waitingFor(summary.id).size)
                         }
                     } else if (s.summaries.isEmpty()) {
                         item(key = "empty") {
@@ -311,7 +368,7 @@ fun ChatsScreen(
                             }
                         }
                         items(g.active, key = { it.id }) { summary ->
-                            ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }) { onOpenChat(summary.id) }
+                            ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) }, waiting = outbox.waitingFor(summary.id).size)
                         }
                         if (g.completed.isNotEmpty()) {
                             item(key = "done-toggle:${g.key}") {
@@ -334,18 +391,40 @@ fun ChatsScreen(
     }
 }
 
-/** What a long-press offers: the one action the computer is set to (Settings → On <computer>). */
+/**
+ * What a long-press offers: the one action the computer is set to (Settings →
+ * On <computer>), plus Pin or Unpin and Rename, as on the desktop.
+ */
 @Composable
-private fun ChatActionDialog(title: String, delete: Boolean, computer: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+private fun ChatActionDialog(
+    title: String,
+    delete: Boolean,
+    pinned: Boolean,
+    computer: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    onPin: () -> Unit,
+    onRename: () -> Unit,
+) {
     val p = Nekko.palette
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
-            Text(
-                if (delete) "Delete it from $computer. You can change this action in Settings."
-                else "Move it to Completed on $computer. Nothing is deleted; you can change this action in Settings.",
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    if (delete) "Delete it from $computer. You can change this action in Settings."
+                    else "Move it to Completed on $computer. Nothing is deleted; you can change this action in Settings.",
+                )
+                TextButton(onClick = onPin, modifier = Modifier.testTag("chats.pin")) {
+                    Icon(Icons.Filled.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text(if (pinned) "Unpin" else "Pin", modifier = Modifier.padding(start = 8.dp))
+                }
+                TextButton(onClick = onRename, modifier = Modifier.testTag("chats.rename")) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Rename", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
@@ -357,7 +436,7 @@ private fun ChatActionDialog(title: String, delete: Boolean, computer: String, o
 }
 
 @Composable
-internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit) {
+internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
@@ -383,10 +462,18 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = p.warning, modifier = Modifier.size(14.dp))
                 Text(ago(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
             }
             if (preview.isNotEmpty()) {
                 Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            // Prompts written offline for this chat, still in the outbox.
+            if (waiting > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(14.dp))
+                    Text("$waiting waiting", style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
+                }
             }
             when (activity) {
                 Activity.NEEDS_YOU -> Box(Modifier.padding(top = 4.dp)) { Pill("Needs you", Tone.WARNING, Icons.Filled.Warning) }
@@ -528,13 +615,17 @@ private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: ()
 
 /** No computer yet: say what the app does and how to start. */
 @Composable
-private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier) {
+private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier, onSkipFirstRun: (() -> Unit)? = null) {
     val p = Nekko.palette
     Column(
         modifier.fillMaxSize().padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (onSkipFirstRun != null) {
+            StepLabel(2)
+            Spacer(Modifier.height(16.dp))
+        }
         Box(
             Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)).background(p.accentSoft),
             contentAlignment = Alignment.Center,
@@ -563,16 +654,51 @@ private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier) {
             color = p.inkFaint,
             textAlign = TextAlign.Center,
         )
+        if (onSkipFirstRun != null) {
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onSkipFirstRun, modifier = Modifier.testTag("firstRun.skip")) { Text("Skip") }
+        }
         Spacer(Modifier.height(80.dp))
     }
 }
 
 /** The line above a saved chat list: when it was saved, and that it isn't live. */
-internal fun savedListNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+internal fun savedListNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    savedNote("Saved list", savedAt, computer, now, zone)
+
+/** "Saved copy from 10:42. It updates when Mac answers.": a chat read from the phone's copy (OF-5). */
+internal fun savedCopyNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    savedNote("Saved copy", savedAt, computer, now, zone)
+
+private fun savedNote(what: String, savedAt: Long, computer: String, now: Long, zone: java.time.ZoneId): String {
     val at = java.time.Instant.ofEpochMilli(savedAt).atZone(zone)
     val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
     val time = at.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
     val whenText = if (at.toLocalDate() == today) time
     else at.toLocalDate().format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)) + ", " + time
-    return "Saved list from $whenText. It updates when $computer answers."
+    return "$what from $whenText. It updates when $computer answers."
+}
+
+/** A chat started offline (offline mode): its first message, until the computer creates it. */
+@Composable
+private fun PendingNewChatRow(item: OutboxItem, sending: Boolean, onDelete: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp).testTag("chats.pendingNew"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(p.surface2), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(item.preview, style = MaterialTheme.typography.titleMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.lastError ?: "New chat, starts when your computer is back", style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2)
+        }
+        if (sending) {
+            CircularProgressIndicator(Modifier.padding(12.dp).size(18.dp), strokeWidth = 2.dp, color = p.accent)
+        } else {
+            IconButton(onClick = onDelete) { Icon(Icons.Filled.Close, contentDescription = "Delete waiting chat", tint = p.inkSoft) }
+        }
+    }
 }
