@@ -340,14 +340,18 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not contain a valid npm version." >&2
             exit 1
           fi
-          npm pkg set "version=$version" --workspace=apps/cli
-          npm install --package-lock-only --ignore-scripts
           published_version=$(npm view "nekko-agent@$version" version 2>/dev/null || true)
           if [ "$published_version" = "$version" ]; then
             echo "nekko-agent@$version is already published; skipping."
             exit 0
           fi
+          # Install from the committed lockfile before touching any version.
+          # Re-resolving it here (npm install --package-lock-only) let npm 11
+          # rearrange nested platform packages, and v0.8.1's esbuild postinstall
+          # then found another esbuild's binary. The lockfile does not need the
+          # tag's version; only the published package.json does.
           npm ci
+          npm pkg set "version=$version" --workspace=apps/cli
           npm run build:core
           # The CLI's local mode runs nekkod: npm installs the one for this machine
           # (apps/cli/src/engine.ts finds it), at the same version.
@@ -425,7 +429,11 @@ jobs:
               return 0
             fi
             (cd "$1" && npm publish --access public "${provenance[@]}") || {
-              echo "npm publish of $2 failed. Configure the npm Trusted Publisher for nekko-labs/nekko-agent/release.yml, or provide NPM_TOKEN." >&2
+              if [[ "$2" == @nekko-agent/* ]]; then
+                echo "npm publish of $2 failed. A 404 here means the @nekko-agent npm organization does not exist or NPM_TOKEN cannot write to it; see docs/signing.md, 'The @nekko-agent scope'." >&2
+              else
+                echo "npm publish of $2 failed. Configure the npm Trusted Publisher for nekko-labs/nekko-agent/release.yml, or provide NPM_TOKEN." >&2
+              fi
               return 1
             }
           }
@@ -434,9 +442,9 @@ jobs:
           for dir in npm-nekkod/*/; do
             publish "$dir" "$(node -p "require('./${dir}package.json').name")"
           done
-          npm pkg set "version=$version" --workspace=apps/local-web-ui
-          npm install --package-lock-only --ignore-scripts
+          # As in publish-cli: install from the committed lockfile, then set the version.
           npm ci
+          npm pkg set "version=$version" --workspace=apps/local-web-ui
           npm run build:web
           npm run bundle -w @nekko-agent/local-web-ui
           publish apps/local-web-ui/cli-dist nekko-agent-local-web-ui
