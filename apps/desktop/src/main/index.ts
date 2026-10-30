@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'fs';
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
-import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
+import { fixedWindowBounds, initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { EngineProcess } from './engine-process.js';
@@ -322,7 +322,8 @@ function createWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
   // A first launch is sized to the screen before the window exists, so it
   // appears at that size rather than visibly growing into it.
-  const { maximized, ...bounds } = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
+  const area = screen.getPrimaryDisplay().workArea;
+  const { maximized, ...bounds } = fixedWindowBounds(process.env.NEKKO_WINDOW_SIZE, area) ?? loadWindowBounds() ?? initialWindowBounds(area);
   const win = newAppWindow(bounds);
 
   mainWindow = win;

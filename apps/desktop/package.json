@@ -25,6 +25,7 @@
     "test:command-center": "node scripts/command-center-integration.cjs",
     "prestart": "node scripts/ensure-electron.mjs && npm run build:native-browser -- --dev",
     "start": "node scripts/dev-launch.mjs preview",
+    "presenter": "node scripts/presenter-launch.mjs",
     "dist": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder",
     "release": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder --publish always",
     "build:native-browser": "node ../../scripts/build-agent-browser.mjs",
