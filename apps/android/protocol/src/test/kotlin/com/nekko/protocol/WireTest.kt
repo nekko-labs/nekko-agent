@@ -125,6 +125,12 @@ class WireTest {
         assertNull(Session.from(json("null")))
     }
 
+    @Test fun `a chat's own mode decodes, and no mode follows the computer`() {
+        assertEquals(PcSettings.ChatMode.YOLO, Session.from(json("""{"id":"s","mode":"yolo","messages":[]}"""))!!.mode)
+        assertNull(Session.from(json("""{"id":"s","messages":[]}"""))!!.mode)
+        assertNull("an unknown mode isn't guessed", Session.from(json("""{"id":"s","mode":"turbo","messages":[]}"""))!!.mode)
+    }
+
     @Test fun `defaults read only the model fields`() {
         assertEquals(RemoteDefaults("p", "m"), RemoteDefaults.from(json("""{"defaultProviderId":"p","defaultModelId":"m","providers":[{"apiKey":"sk"}]}""")))
     }

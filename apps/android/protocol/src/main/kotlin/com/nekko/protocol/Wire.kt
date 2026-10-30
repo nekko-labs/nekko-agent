@@ -261,6 +261,8 @@ data class Session(
     val effort: String? = null,
     /** The queue as the computer holds it: what `chat:editQueued` checks against. */
     val queued: List<QueuedPrompt> = emptyList(),
+    /** The chat's own tool policy (`ChatMode`); null follows the computer's default. */
+    val mode: PcSettings.ChatMode? = null,
 ) {
     companion object {
         fun from(e: JsonElement?): Session? {
@@ -278,6 +280,7 @@ data class Session(
                 updatedAt = o.long("updatedAt") ?: 0,
                 effort = o.str("effort"),
                 queued = QueuedPrompt.list(o["queue"]),
+                mode = PcSettings.ChatMode.of(o.str("mode")),
             )
         }
     }
@@ -302,6 +305,8 @@ data class SessionSummary(
     /** Manual position from the desktop sidebar's drag order; null when never dragged. */
     val order: Double? = null,
     val activeWatchCount: Long = 0,
+    /** Pinned on the computer (the desktop's pin), from here or there. */
+    val pinned: Boolean = false,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -326,6 +331,7 @@ data class SessionSummary(
                 archivedAt = archivedAt,
                 order = o.dbl("order"),
                 activeWatchCount = o.long("activeWatchCount") ?: 0,
+                pinned = o.bool("pinned"),
             )
         }
 

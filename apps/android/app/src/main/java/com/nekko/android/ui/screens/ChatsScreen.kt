@@ -86,6 +86,9 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PushPin
+import com.nekko.android.ui.chat.RenameChatDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,18 +148,44 @@ fun ChatsScreen(
             }
         }
     }
+    // Long-press → Rename: the title on the computer.
+    var renaming by remember { mutableStateOf<SessionSummary?>(null) }
+    val change: (String, suspend () -> Unit) -> Unit = { failed, action ->
+        actionError = null
+        scope.launch {
+            try {
+                action()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = e.message?.takeIf { it.isNotBlank() } ?: failed
+            }
+        }
+    }
     pressed?.let { chat ->
         val delete = s.pcSettings.effectiveAction == PcSettings.ChatAction.DELETE
         ChatActionDialog(
             title = plainText(chat.title).ifEmpty { "New chat" },
             delete = delete,
+            pinned = chat.pinned,
             computer = active?.name ?: "your computer",
             onDismiss = { pressed = null },
             onConfirm = {
                 pressed = null
                 if (delete && s.pcSettings.confirmDelete) confirmDelete = chat else run(chat, delete)
             },
+            onPin = {
+                pressed = null
+                change("Couldn’t change that chat.") { repo.setPinned(chat.id, !chat.pinned) }
+            },
+            onRename = { pressed = null; renaming = chat },
         )
+    }
+    renaming?.let { chat ->
+        RenameChatDialog(plainText(chat.title), onDismiss = { renaming = null }) { title ->
+            renaming = null
+            change("Couldn’t rename that chat.") { repo.renameChat(chat.id, title) }
+        }
     }
     pressedDone?.let { chat ->
         AlertDialog(
@@ -338,18 +367,40 @@ fun ChatsScreen(
     }
 }
 
-/** What a long-press offers: the one action the computer is set to (Settings → On <computer>). */
+/**
+ * What a long-press offers: the one action the computer is set to (Settings →
+ * On <computer>), plus Pin or Unpin and Rename, as on the desktop.
+ */
 @Composable
-private fun ChatActionDialog(title: String, delete: Boolean, computer: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+private fun ChatActionDialog(
+    title: String,
+    delete: Boolean,
+    pinned: Boolean,
+    computer: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    onPin: () -> Unit,
+    onRename: () -> Unit,
+) {
     val p = Nekko.palette
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
-            Text(
-                if (delete) "Delete it from $computer. You can change this action in Settings."
-                else "Move it to Completed on $computer. Nothing is deleted; you can change this action in Settings.",
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    if (delete) "Delete it from $computer. You can change this action in Settings."
+                    else "Move it to Completed on $computer. Nothing is deleted; you can change this action in Settings.",
+                )
+                TextButton(onClick = onPin, modifier = Modifier.testTag("chats.pin")) {
+                    Icon(Icons.Filled.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text(if (pinned) "Unpin" else "Pin", modifier = Modifier.padding(start = 8.dp))
+                }
+                TextButton(onClick = onRename, modifier = Modifier.testTag("chats.rename")) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("Rename", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
@@ -387,6 +438,7 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = p.warning, modifier = Modifier.size(14.dp))
                 Text(ago(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
             }
             if (preview.isNotEmpty()) {

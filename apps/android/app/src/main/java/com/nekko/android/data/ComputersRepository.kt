@@ -546,6 +546,30 @@ class ComputersRepository(
         setArchived(sessionId, null)
     }
 
+    /** Rename a chat on the computer; a blank title changes nothing. */
+    suspend fun renameChat(sessionId: String, title: String) {
+        val t = title.trim()
+        if (t.isEmpty()) return
+        remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("title", t) })
+        _state.update { s -> s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(title = t) else it }) }
+    }
+
+    /** Pin or unpin a chat, the desktop's pin: the same flag on the computer. */
+    suspend fun setPinned(sessionId: String, pinned: Boolean) {
+        remote().call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), buildJsonObject { put("pinned", pinned) })
+        _state.update { s -> s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(pinned = pinned) else it }) }
+    }
+
+    /**
+     * Change one chat's tool policy. A raise is signed ([callRaising]); a
+     * `step-up-required` refusal is thrown for the step-up sheet, which calls
+     * this again with its [stepUp].
+     */
+    suspend fun setChatMode(sessionId: String, mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
+        val args = listOf(JsonPrimitive(sessionId), buildJsonObject { put("mode", mode.wire) })
+        if (stepUp == null) callRaising(Channels.SESSION_SET_OPTIONS, args) else callChange(Channels.SESSION_SET_OPTIONS, args, stepUp)
+    }
+
     private fun setArchived(sessionId: String, at: Long?) {
         _state.update { s ->
             s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(archived = at != null, archivedAt = at) else it })

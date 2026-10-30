@@ -166,7 +166,13 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; YOLO asks once
 > before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
-> its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
+> its Settings. A long-press on a chat in the list offers that action, plus **Pin** (or **Unpin**)
+> and **Rename**; a pinned chat shows a pin beside its time.
+>
+> **A chat's own actions** (Android): **⋮** in a chat has **Chat mode** (this chat's Ask, Guardrails
+> or YOLO; a chat without its own follows the computer's default; switching to a mode that asks less
+> is confirmed with your fingerprint, face or screen lock, and YOLO asks once first), **Rename**,
+> **Pin** / **Unpin** and **Complete**, each saved on the computer.
 >
 > **Write offline** (iPhone): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
