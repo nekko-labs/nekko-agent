@@ -210,6 +210,29 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `the link's routes are kept, given to the connection, and the one in use is shown`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        repo.setNetworkPath(com.nekko.protocol.NetworkPath.LOCAL)
+        val lan = "ws://192.168.1.20:4400"
+        val id = repo.pair(link.copy(alts = listOf(lan)))
+        runCurrent()
+        assertEquals(listOf(lan), remotes.last.config.alts)
+        assertEquals(listOf("wss://relay.example.dev", lan), remotes.last.config.routes)
+        assertEquals("the connection starts from the phone's network", listOf("same" to com.nekko.protocol.NetworkPath.LOCAL), remotes.last.paths)
+        remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.ONLINE, route = lan)
+        runCurrent()
+        assertEquals(lan, repo.state.value.route)
+        repo.networkChanged(com.nekko.protocol.NetworkPath.CELLULAR)
+        assertEquals("changed" to com.nekko.protocol.NetworkPath.CELLULAR, remotes.last.paths.last())
+        // Saved with the computer; a later link with other routes replaces them.
+        assertEquals(listOf(lan), repo(store).also { it.load() }.state.value.computers.single { it.id == id }.alts)
+        repo.pair(link.copy(alts = emptyList()))
+        assertEquals(emptyList<String>(), repo.state.value.computers.single().alts)
+    }
+
+    @Test
     fun `re-pairing the same computer keeps its id and name`() = runTest {
         val store = FakeStore()
         val repo = repo(store)

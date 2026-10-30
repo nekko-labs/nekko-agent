@@ -551,10 +551,13 @@ on. Without Tailscale on this computer the option links to Tailscale and stays o
   virtual adapters of WSL, Hyper-V, Docker or VMs). Pairing
   codes then carry both routes, and the iPhone app uses the LAN when it is on the same Wi-Fi and
   moves to Tailscale by itself when it leaves, coming back once the LAN answers steadily again.
+  The Android app keeps the LAN route but doesn't use it yet (Android allows unencrypted `ws://`
+  only to Tailscale names); it moves between the other routes the same way.
   Switch **Also on this Wi-Fi** off to keep the relay on the tailnet only; pair the phone again
   after changing it. Phones paired before this keep the one route until they scan a new code.
 
-On the iPhone, **Settings → Connection** shows the route in use. **Check routes** looks up,
+On the iPhone, **Settings → Connection** shows the route in use (on Android, **Settings →
+Connection status**, with the other routes). **Check routes** looks up,
 connects to and says hello on each route with timings, and **Share diagnostics** shares those
 results and the connection log as text, without rooms, keys, codes or messages.
 
