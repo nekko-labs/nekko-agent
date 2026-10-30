@@ -70,6 +70,14 @@ object E2E {
 
     fun randomBytes(n: Int): ByteArray = ByteArray(n).also { secureRandom.nextBytes(it) }
 
+    /**
+     * A chat's opaque tag, as the computer computes it (`activity_tag` in
+     * crates/nekko-remote/src/agent.rs, `E2E.activityTag` on the iPhone): the
+     * relay's `dismiss` frames name a chat by it, never by its id.
+     */
+    fun activityTag(sessionId: String): String =
+        toHex(java.security.MessageDigest.getInstance("SHA-256").digest("nekko-activity:$sessionId".toByteArray()).copyOf(16))
+
     fun toHex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
     fun fromHex(hex: String): ByteArray {

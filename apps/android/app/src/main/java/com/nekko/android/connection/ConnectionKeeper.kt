@@ -49,6 +49,8 @@ class ConnectionKeeper(
 
     fun start() {
         watchNetwork()
+        // Answered elsewhere, or its run ended: the needs-you notification goes.
+        scope.launch { repo.dismissals.collect { notices.dismissNeedsYou(it) } }
         scope.launch {
             repo.events.collect { e ->
                 lastEventAt.value = now()
@@ -81,7 +83,7 @@ class ConnectionKeeper(
 
     private fun onEvent(sessionId: String, event: PhoneEvent, callId: String?) {
         // In the app the chat itself shows it (and A6's haptics react).
-        if (foreground.value || !prefs.get(Notices.ENABLED)) return
+        if (foreground.value || !Notices.wants(prefs, event)) return
         val s = repo.state.value
         // Only the chats the phone lists: not subagents, tasks or training runs.
         val chat = s.summaries.firstOrNull { it.id == sessionId } ?: return

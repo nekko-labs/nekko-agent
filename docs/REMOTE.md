@@ -152,8 +152,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > **First run** (iPhone and Android): the first time the app opens it shows three steps: what it
 > does, pairing, and, right after the first pairing, what notifications look like with **Allow
 > notifications** or **Not now**. Permission to notify is never asked before a computer is paired.
-> **Skip** on the first two steps ends it. On Android, **Not now** turns **Settings → Connection →
-> Notify me** off; turn it on there later.
+> **Skip** on the first two steps ends it. On Android, **Not now** turns the kinds under **Settings →
+> Connection → Notify me about** off; turn them on there later.
 >
 > **New chat defaults** (Android): **Settings → New chats** picks the computer the app connects to
 > when it starts (default: the one used last) and, for each computer, the model New chat opens with
@@ -327,9 +327,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
 > **Settings → Connection → Stay connected while a chat runs** (on by default) keeps the app connected
 > after you leave it, with a silent "Staying connected · 1 chat running on Mac" notification that goes
-> away as soon as the reply is done. **Notify me** (on by default; Android 13+ asks for permission)
-> sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
-> while you're out of the app. Notifications say what happened and in which chat, never the reply, the
+> away as soon as the reply is done. **Notify me about** (each on by default; Android 13+ asks for
+> permission) has a switch for **Approvals and questions**, **Finished replies** and **Failed
+> replies**, and sends that notification while you're out of the app. **Send a test notification**
+> shows one at once. When an approval or a question is answered elsewhere (the desktop, another phone)
+> or its run ends, its notification goes away by itself. Notifications say what happened and in which chat, never the reply, the
 > command or the question; with the app lock on they don't name the chat either, and tapping one opens
 > the chat through the lock. Without push (not built yet), these only arrive while the phone is still
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's

@@ -6,6 +6,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -541,6 +542,28 @@ class RelayClientTest {
         c.await(RelayState.ONLINE)
         assertEquals(2, relay.urls.size)
         c.close()
+    }
+
+    @Test fun `the relay's dismiss frames reach the phone as chat tags, malformed ones don't`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val c = client(relay)
+        c.connect()
+        c.await(RelayState.ONLINE)
+        val got = mutableListOf<String>()
+        val job = launch(kotlinx.coroutines.Dispatchers.Default) { c.dismissals.collect { got += it } }
+        delay(100)
+        val tag = E2E.activityTag("s1")
+        relay.current!!.plain(buildJsonObject { put("type", "dismiss"); put("tag", "not a tag") })
+        relay.current!!.plain(buildJsonObject { put("type", "dismiss"); put("tag", tag) })
+        until("the dismissal") { got.isNotEmpty() }
+        assertEquals(listOf(tag), got)
+        job.cancel()
+        c.close()
+    }
+
+    @Test fun `a chat's tag is the computer's activity_tag`() {
+        // crates/nekko-remote/src/agent.rs activity_tag("s1"): SHA-256("nekko-activity:s1"), first 16 bytes.
+        assertEquals("7536af24f84b356f893a72f0def58cce", E2E.activityTag("s1"))
     }
 
     @Test fun `agent-offline then agent-online repeats the handshake on the same socket`() = runBlocking {

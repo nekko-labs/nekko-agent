@@ -167,6 +167,10 @@ class ComputersRepository(
     /** The active computer's connection history (memory only, content-free), for Settings → Connection. */
     val connectionLog: StateFlow<List<ConnectionLog.Entry>> = _connectionLog.asStateFlow()
 
+    private val _dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    /** The active computer's relay `dismiss` frames: chat tags whose needs-you notification can go. */
+    val dismissals: SharedFlow<String> = _dismissals.asSharedFlow()
+
     /** The connection log as plain text for a bug report: times, states and the relay's host only. */
     fun connectionLogText(): String {
         val url = _state.value.active?.relayUrl.orEmpty()
@@ -409,6 +413,7 @@ class ComputersRepository(
                     }
                 }
             }
+            launch { c.dismissals.collect { _dismissals.emit(it) } }
             launch {
                 c.welcome.collect { w ->
                     if (client === c) _state.update { it.copy(hostProtocol = w.protocol) }
