@@ -54,7 +54,8 @@ enum class DenyReason(val wire: String) {
     }
 }
 
-data class WelcomedDevice(val id: String, val name: String, val platform: String)
+/** [protocol] is the computer's phone protocol version from the welcome (1 when it sends none, IO-32). */
+data class WelcomedDevice(val id: String, val name: String, val platform: String, val protocol: Int = 1)
 
 /** [route] is the relay address in use or being dialed (one of the computer's routes); set on every status but idle. */
 data class RelayStatus(val state: RelayState, val detail: String? = null, val denied: DenyReason? = null, val route: String? = null)
@@ -611,7 +612,12 @@ class RelayClient(
                 val d = frame["device"].obj()
                 setStatus(RelayStatus(RelayState.ONLINE))
                 startProbes()
-                _welcome.tryEmit(WelcomedDevice(d?.str("id") ?: config.deviceId, d?.str("name") ?: config.deviceName, d?.str("platform") ?: config.platform))
+                _welcome.tryEmit(
+                    WelcomedDevice(
+                        d?.str("id") ?: config.deviceId, d?.str("name") ?: config.deviceName, d?.str("platform") ?: config.platform,
+                        PhoneProtocol.of(frame),
+                    ),
+                )
             }
             "denied" -> deny(DenyReason.parse(frame.str("reason")))
             "res" -> {

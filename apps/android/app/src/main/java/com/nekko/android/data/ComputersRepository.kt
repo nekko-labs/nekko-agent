@@ -317,6 +317,7 @@ class ComputersRepository(
                 remoteStoppedAt = null,
                 lastError = null,
                 savedListAt = null,
+                hostProtocol = null,
             )
         }
         liveList = false
@@ -351,7 +352,8 @@ class ComputersRepository(
                 }
             }
             launch {
-                c.welcome.collect {
+                c.welcome.collect { w ->
+                    if (client === c) _state.update { it.copy(hostProtocol = w.protocol) }
                     // Enrollment done: the one-time code must never be sent again.
                     if (secret.pair != null) dropPairCode(id)
                 }

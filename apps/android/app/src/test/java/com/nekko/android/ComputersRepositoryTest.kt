@@ -210,6 +210,24 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `the computer's protocol from its welcome names the side to update, and is forgotten on switching`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        assertEquals(com.nekko.protocol.ProtocolCheck.SAME, repo.state.value.protocolCheck)
+        remotes.last.sayWelcome(protocol = com.nekko.protocol.PhoneProtocol.VERSION - 1)
+        runCurrent()
+        assertEquals(com.nekko.protocol.PhoneProtocol.VERSION - 1, repo.state.value.hostProtocol)
+        assertEquals(com.nekko.protocol.ProtocolCheck.UPDATE_COMPUTER, repo.state.value.protocolCheck)
+
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        assertNull("another computer hasn't said yet", repo.state.value.hostProtocol)
+        remotes.last.sayWelcome()
+        runCurrent()
+        assertEquals(com.nekko.protocol.ProtocolCheck.SAME, repo.state.value.protocolCheck)
+    }
+
+    @Test
     fun `the link's routes are kept, given to the connection, and the one in use is shown`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()

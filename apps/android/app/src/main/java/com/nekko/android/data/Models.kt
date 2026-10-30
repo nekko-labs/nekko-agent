@@ -1,5 +1,6 @@
 package com.nekko.android.data
 
+import com.nekko.protocol.ProtocolCheck
 import com.nekko.protocol.Activity
 import com.nekko.protocol.DenyReason
 import com.nekko.protocol.Appearance
@@ -76,8 +77,13 @@ data class ComputersState(
     val quitFromPhone: Boolean = false,
     /** When this phone stopped remote access on the active computer (SK-8); null otherwise. */
     val remoteStoppedAt: Long? = null,
+    /** The active computer's phone protocol from its welcome (IO-32); null until it has welcomed this phone. */
+    val hostProtocol: Int? = null,
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
+
+    /** Which side to update when the phone and the computer speak different versions. */
+    val protocolCheck: ProtocolCheck get() = ProtocolCheck.compare(hostProtocol)
 }
 
 /** Hand-written JSON for what we persist; the app has no serialization plugin. */
