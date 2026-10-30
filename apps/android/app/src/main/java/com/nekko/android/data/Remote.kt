@@ -18,6 +18,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
+/** The dismissals of a connection that has none. */
+private val NO_DISMISSALS: SharedFlow<String> = kotlinx.coroutines.flow.MutableSharedFlow()
+
 /** Request side of a computer connection: what chat screens need. */
 interface Caller {
     suspend fun call(channel: String, vararg args: JsonElement): JsonElement
@@ -29,6 +32,8 @@ interface Remote : Caller {
     val status: StateFlow<RelayStatus>
     val events: SharedFlow<Pair<String, JsonElement>>
     val welcome: SharedFlow<WelcomedDevice>
+    /** The relay's dismissals (chat tags whose needs-you notification can go); none for connections that don't have them. */
+    val dismissals: SharedFlow<String> get() = NO_DISMISSALS
     fun connect()
     fun close()
     fun nudge()
@@ -64,6 +69,7 @@ class RelayRemote(private val client: RelayClient) : Remote {
     override val status get() = client.status
     override val events get() = client.events
     override val welcome get() = client.welcome
+    override val dismissals get() = client.dismissals
     override fun connect() = client.connect()
     override fun close() = client.close()
     override fun nudge() = client.nudge()

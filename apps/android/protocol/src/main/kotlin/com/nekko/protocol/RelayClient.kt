@@ -99,6 +99,9 @@ class RelayException(
     }
 }
 
+/** A chat tag in a relay `dismiss` frame: 16 bytes as hex. */
+private val DISMISS_TAG = Regex("^[0-9a-f]{32}$")
+
 /** A minimal WebSocket the client drives; [OkHttpTransport] in production, fakes in tests. */
 interface WsTransport {
     fun open(url: String, listener: WsListener): WsConnection
@@ -223,6 +226,14 @@ class RelayClient(
 
     private val _status = MutableStateFlow(RelayStatus(RelayState.IDLE))
     val status: StateFlow<RelayStatus> = _status.asStateFlow()
+
+    private val _dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    /**
+     * The relay's `dismiss` frames: an approval or a question was answered
+     * somewhere (or its run ended), so that chat's needs-you notification can
+     * go. Each is the chat's [E2E.activityTag]; nothing else is in the frame.
+     */
+    val dismissals: SharedFlow<String> = _dismissals.asSharedFlow()
 
     private val _events = MutableSharedFlow<Pair<String, JsonElement>>(extraBufferCapacity = 512)
     /** Every sealed `event` frame as (channel, payload). */
@@ -604,6 +615,7 @@ class RelayClient(
                 }
                 setStatus(RelayStatus(RelayState.OFFLINE))
             }
+            "dismiss" -> env.str("tag")?.takeIf { DISMISS_TAG.matches(it) }?.let { _dismissals.tryEmit(it) }
             "agent-online" -> if (!synchronized(lock) { welcomed }) {
                 // The computer (re)joined after us: it challenges this socket again.
                 setStatus(RelayStatus(RelayState.CONNECTING))

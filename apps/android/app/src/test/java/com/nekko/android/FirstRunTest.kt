@@ -20,7 +20,7 @@ class FirstRunTest {
         FirstRun.finish(p, allowNotifications = true)
         assertTrue(p.get(FirstRun.DONE))
         assertFalse(p.get(FirstRun.NOTIFY_STEP))
-        assertTrue("Notify me stays on", p.get(Notices.ENABLED))
+        assertTrue("Notify me stays on", p.get(Notices.NEEDS_YOU) && p.get(Notices.FINISHED) && p.get(Notices.FAILED))
     }
 
     @Test
@@ -29,7 +29,7 @@ class FirstRunTest {
         FirstRun.paired(p)
         FirstRun.finish(p, allowNotifications = false)
         assertTrue(p.get(FirstRun.DONE))
-        assertFalse(p.get(Notices.ENABLED))
+        assertFalse(p.get(Notices.NEEDS_YOU) || p.get(Notices.FINISHED) || p.get(Notices.FAILED))
     }
 
     @Test
@@ -56,5 +56,22 @@ class FirstRunTest {
         FirstRun.paired(p)
         assertTrue(p.get(FirstRun.DONE))
         assertFalse(p.get(FirstRun.NOTIFY_STEP))
+    }
+
+    @Test
+    fun `each kind starts as the old single switch was, once`() {
+        val off = prefs().also { it.set(Notices.ENABLED, false) }
+        assertFalse(Notices.wants(off, com.nekko.android.chat.PhoneEvent.APPROVAL))
+        assertFalse(Notices.wants(off, com.nekko.android.chat.PhoneEvent.FINISHED))
+        // Migrated once: turning one kind on later sticks.
+        off.set(Notices.FINISHED, true)
+        assertTrue(Notices.wants(off, com.nekko.android.chat.PhoneEvent.FINISHED))
+        assertFalse(Notices.wants(off, com.nekko.android.chat.PhoneEvent.NEEDS_INPUT))
+
+        val on = prefs()
+        assertTrue(Notices.wants(on, com.nekko.android.chat.PhoneEvent.FAILED))
+        on.set(Notices.FAILED, false)
+        assertFalse(Notices.wants(on, com.nekko.android.chat.PhoneEvent.FAILED))
+        assertTrue("approvals and questions are one switch", Notices.wants(on, com.nekko.android.chat.PhoneEvent.NEEDS_INPUT))
     }
 }

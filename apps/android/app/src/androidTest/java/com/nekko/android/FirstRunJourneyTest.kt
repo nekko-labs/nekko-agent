@@ -70,14 +70,14 @@ class FirstRunJourneyTest {
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Tidy the release notes")).fetchSemanticsNodes().isNotEmpty() }
         settle()
         shot("5-chats")
-        assertTrue(prefs.get(Notices.ENABLED))
+        assertTrue(prefs.get(Notices.NEEDS_YOU))
     }
 
     @Test fun notNow() {
         val prefs = journey(shots = false)
         compose.onNodeWithTag("firstRun.notNow").performClick()
         compose.waitUntil(5_000) { prefs.get(FirstRun.DONE) }
-        assertFalse("Not now turns Notify me off", prefs.get(Notices.ENABLED))
+        assertFalse("Not now turns Notify me off", prefs.get(Notices.NEEDS_YOU) || prefs.get(Notices.FINISHED))
     }
 
     /** Steps 1 to 3, leaving step 3 on screen. */

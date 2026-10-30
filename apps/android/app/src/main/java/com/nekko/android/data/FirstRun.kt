@@ -34,7 +34,7 @@ object FirstRun {
      * Settings → Connection turns it back on.
      */
     fun finish(prefs: PhonePrefs, allowNotifications: Boolean) {
-        if (!allowNotifications) prefs.set(Notices.ENABLED, false)
+        if (!allowNotifications) Notices.setAll(prefs, false)
         prefs.set(NOTIFY_STEP, false)
         prefs.set(DONE, true)
     }

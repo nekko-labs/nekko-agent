@@ -76,6 +76,8 @@ class NekkoApp : Application() {
         super.onCreate()
         themePrefs = ThemePrefs(this)
         phonePrefs = PhonePrefs(this)
+        // Notify me about: each kind starts as the old single switch was.
+        com.nekko.android.connection.Notices.migrate(phonePrefs)
         newChatDefaults = NewChatDefaults(phonePrefs)
         paneLayouts = PaneLayouts(phonePrefs)
         computers = ComputersRepository(
