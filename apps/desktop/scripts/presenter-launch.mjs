@@ -23,12 +23,13 @@ if (flag('--demo')) {
   env.NEKKO_DATA_DIR = process.env.NEKKO_DATA_DIR || join(homedir(), '.nekko-agent-demo');
   if (flag('--reset')) {
     rmSync(env.NEKKO_DATA_DIR, { recursive: true, force: true });
-    console.log(`Reset the demo profile at ${env.NEKKO_DATA_DIR}`);
+    console.log('Reset the demo profile.');
   }
 }
 
 const desktop = join(dirname(fileURLToPath(import.meta.url)), '..');
 const script = flag('--preview') ? 'start' : 'dev';
-console.log(`Presenter mode, window ${env.NEKKO_WINDOW_SIZE}${env.NEKKO_DATA_DIR ? `, profile ${env.NEKKO_DATA_DIR}` : ''}`);
+// No paths in the log: the terminal may be on screen while recording.
+console.log(`Presenter mode, window ${env.NEKKO_WINDOW_SIZE}${flag('--demo') ? ', demo profile' : ''}`);
 const child = spawn('npm', ['run', script], { cwd: desktop, env, stdio: 'inherit', shell: process.platform === 'win32' });
 child.on('exit', (code) => process.exit(code ?? 0));
