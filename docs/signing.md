@@ -382,6 +382,30 @@ OIDC, harden the package's Publishing access settings by requiring 2FA and
 disallowing token-based publishing, then revoke the temporary `NPM_TOKEN`
 secret. The release job will continue using OIDC after the token is removed.
 
+### The @nekko-agent scope
+
+`publish-web` publishes the engine as one package per platform
+(`@nekko-agent/nekkod-win32-x64`, `-linux-x64`, `-linux-arm64`,
+`-darwin-arm64`) before `nekko-agent-local-web-ui`, and `publish-cli` pins the
+same packages, so both jobs need the scope. v0.8.1 failed here with
+`404 Not Found - PUT .../@nekko-agent%2fnekkod-darwin-arm64`: npm answers 404,
+not 403, when the scope's organization does not exist or the token cannot
+write to it.
+
+One-time setup, on npmjs.com, signed in as the account that owns
+`nekko-agent`:
+
+1. Create the free organization `nekko-agent` (this is the `@nekko-agent` scope).
+2. Create a granular access token with **Read and write** on packages and on
+   the `@nekko-agent` scope (a token limited to selected packages cannot
+   create new ones), and store it as the repository secret `NPM_TOKEN`.
+3. After the first tagged release publishes them, add the same trusted
+   publisher as above to each `@nekko-agent/nekkod-*` package and to
+   `nekko-agent-local-web-ui`, then harden and revoke the token as above.
+
+Re-running a failed release is safe: each publish skips a version that is
+already on npm.
+
 ## Verifying a release
 
 ## Installer and updater targets

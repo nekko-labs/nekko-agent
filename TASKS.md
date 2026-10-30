@@ -2444,6 +2444,8 @@ Ported from the stale `fix/chat-switch-perf` worktree (7c61f382) onto main after
 - [x] **T192d** `installers.yml`: builds both installers unsigned on PRs touching packaging, silently installs/uninstalls the Windows one and checks the dmg layout. Done: 2026-10-17
 - [ ] Azure Artifact Signing account, identity validation for Nekko Labs LLC, certificate profile, service principal and the org secrets/variables (Philip; steps in `docs/signing.md`, "One-time setup"). Then re-run the release and confirm the Windows verify step.
 - [ ] macOS bundle is `NekkoAgent.app` (no space), which is what the drag window labels it; renaming it needs an updater migration check first.
+- [x] npm publish jobs install from the committed lockfile before setting the tag's version. v0.8.1's re-lock with npm 11 ran esbuild 0.28.1's postinstall against the hoisted 0.25.12 binary; reproduced in `node:24` with npm 11.5.1 on the v0.8.1 tree, fixed order passes there and on main (CLI `build:publish`, Local Web UI `build:web` + bundle). Done: 2026-10-31
+- [ ] Create the `@nekko-agent` npm organization and give `NPM_TOKEN` write on the scope (Philip; `docs/signing.md`, "The @nekko-agent scope"), then tag v0.8.2.
 
 ### Approval/subagent navigation regression
 - [x] Reproduce unrelated-result approval disappearance in isolated real ChatPane; scope clearing to matching call ID.
