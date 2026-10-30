@@ -46,9 +46,9 @@ import { ChatPane } from './ChatPane.js';
 import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
 import { WorkingSubagents } from './WorkingSubagents.js';
-import { NumberedAgentIcon } from './NumberedChatIcon.js';
 import { TargetIcon } from '../icons.js';
-import { StatusIcon, agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
+import { agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
+import { WallMascot, WallNumber } from './WallMascot.js';
 import { BrowserPane } from './BrowserPane.js';
 import { DiffPane } from './DiffPane.js';
 
@@ -267,6 +267,12 @@ export function commandWallGeometry(state: CommandWallState, width: number, heig
 }
 
 /** Stable keyed windows across layouts keep transcripts, terminals and drafts warm. */
+/** A terminal's state as the wall mascot shows it: an open shell sleeps, an exit is done or failed. */
+export function terminalStatus(terminal: Pick<TerminalInfo, 'running' | 'exitCode'>): AgentStatus {
+  if (terminal.running) return 'idle';
+  return terminal.exitCode ? 'error' : 'done';
+}
+
 export function CommandWall({
   state,
   setState,
@@ -730,7 +736,7 @@ export function CommandWall({
       agentStatus = agentStatusOfLane(lane, blocked, session.activeWatchCount);
       status = needsYou && blocked ? { label: BLOCKED_META[blocked].label, tone: LANE_META[lane].tone, live: true } : { label: LANE_META[lane].title, tone: LANE_META[lane].tone, live: lane === 'working' };
     } else if (terminal) {
-      status = terminal.running ? { label: 'live', tone: 'var(--success)' } : { label: 'exited', tone: 'var(--ink-faint)' };
+      status = terminal.running ? { label: 'Shell open', tone: 'var(--success)' } : { label: terminal.exitCode ? `Exited with code ${terminal.exitCode}` : 'Exited', tone: 'var(--ink-faint)' };
     }
     const title = titleOf(pane);
     const flashing = flash?.paneId === pane.id;
@@ -755,8 +761,10 @@ export function CommandWall({
     // transcript, and content-visibility: hidden already keeps it out of
     // sight, focus and the accessibility tree.
     const deckCard = inDeck && !parked;
-    // A recent hero keeps its composer while parked; the others park as transcripts.
-    const fullSurface = focusedChat || (parked && warm.current.includes(pane.refId));
+    // Every window outside Focus has its own composer. In Focus a recent hero
+    // keeps its composer while parked; the others park as transcripts.
+    const tiled = state.layout.mode !== 'focus';
+    const fullSurface = tiled || focusedChat || (parked && warm.current.includes(pane.refId));
     // Parked at the hero's size, so at its density too: nothing in the window changes when it comes back.
     const density = densityOf(parked && geometry.hero ? geometry.hero : pane.id);
     const logsOpen = logsPane?.id === pane.id && !logsClosing && !logsOverlay;
@@ -825,9 +833,9 @@ export function CommandWall({
         <PaneFrame
           pane={pane}
           title={title}
-          icon={pane.kind === 'chat' ? <><span data-agent-status><StatusIcon status={agentStatus} /></span><NumberedAgentIcon number={n} /></> : iconOf(pane.kind)}
-          // Activity precedes the numbered agent icon; terminals keep their strip dot.
-          statusIndicator={session ? undefined : status && <span role="img" aria-label={status.label} title={status.label} className="h-2 w-2 shrink-0 rounded-full" style={{ background: status.live ? 'var(--success)' : 'var(--ink-faint)' }} />}
+          // The window's number, then Nekko (the agent's own icon) wearing its status badge; a terminal shows its prompt icon first.
+          icon={pane.kind === 'chat' ? <><WallNumber n={n} /><span data-agent-status><WallMascot status={agentStatus} /></span></>
+            : terminal ? <>{iconOf(pane.kind)}<span data-agent-status><WallMascot status={terminalStatus(terminal)} label={status?.label} /></span></> : iconOf(pane.kind)}
           badge={
             <>
               {/* The project only when there is more than one to tell apart:
@@ -856,7 +864,7 @@ export function CommandWall({
           <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 
             <div className="command-wall-primary">
-           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
+           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} resting={tiled && !selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : null}
            </div>

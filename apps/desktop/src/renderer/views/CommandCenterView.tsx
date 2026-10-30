@@ -16,9 +16,6 @@ import { FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
 import { HoverTip } from '../components/HoverTip.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
-import { WallComposer, type WallAgent } from '../components/WallComposer.js';
-import { agentStatusOfLane } from '../components/WorkspaceCard.js';
-import { BLOCKED_META, LANE_META, sessionLane } from '@nekko-agent/shared';
 import { type Vitals } from '../components/InsightsBox.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { MonitorsDock } from '../components/MonitorsDock.js';
@@ -386,9 +383,9 @@ export function CommandCenterView() {
   /** A one-click add that failed says so, instead of silently opening nothing. */
   const reportAddFailure = (e: unknown) => useStore.getState().pushToast('error', `Could not add the window: ${e instanceof Error ? e.message : String(e)}`);
 
-  // The agent the composer speaks for: the window clicked last, or the first
-  // on the wall. Ctrl+Tab / Ctrl+Shift+Tab walk the windows in reading order;
-  // Ctrl+1…9 (or Alt+1…9) pick one by its number.
+  // The selected window, whose composer is open: the window clicked last, or
+  // the first on the wall. Ctrl+Tab / Ctrl+Shift+Tab walk the windows in
+  // reading order; Ctrl+1…9 (or Alt+1…9) pick one by its number.
   const [addOpen, setAddOpen] = useState(false);
   const [completedId, setCompletedId] = useState<string | null>(null);
   // The reader shows a completed chat only while it stays completed: restoring
@@ -463,6 +460,11 @@ export function CommandCenterView() {
     })().catch((e) => { emptyStartFailed.current = true; reportAddFailure(e); }).finally(() => { startingEmpty.current = false; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listsReady, paneCount, completedId, providers, sessions]);
+  // A window picked from the keyboard is ready to type into: its composer opens and takes the caret.
+  const typeInto = useCallback((id: string | null) => {
+    selectAgent(id);
+    if (id) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-grid-cell="chat:${CSS.escape(id)}"] .composer [contenteditable]`)?.focus({ preventScroll: true }));
+  }, [selectAgent]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (useStore.getState().view !== 'command' || document.visibilityState === 'hidden' || !viewRef.current?.getClientRects().length || e.defaultPrevented || e.repeat || e.isComposing) return;
@@ -474,7 +476,7 @@ export function CommandCenterView() {
       }
       if (e.key === 'Tab' && e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
-        selectAgent(nextAgent(wall.root, selected, e.shiftKey ? -1 : 1));
+        typeInto(nextAgent(wall.root, selected, e.shiftKey ? -1 : 1));
         return;
       }
       if ((e.ctrlKey || e.altKey) && !e.shiftKey && !e.metaKey && !(e.ctrlKey && e.altKey) && /^[1-9]$/.test(e.key)) {
@@ -482,85 +484,18 @@ export function CommandCenterView() {
         const pick = agents[Number(e.key) - 1];
         if (!pick) return;
         e.preventDefault();
-        selectAgent(pick.refId);
+        typeInto(pick.refId);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [wall.root, selected, selectAgent, setWall]);
+  }, [wall.root, selected, typeInto, setWall]);
   const chatFinderOpen = useStore((s) => s.chatFinderOpen);
   const onAgentsView = useStore((s) => s.view) === 'command';
   const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro;
   useEffect(() => {
     if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
   }, [chatFinderOpen, setWall]);
-  const composerRef = useRef<HTMLDivElement>(null);
-  const agentList = useMemo<WallAgent[]>(() => agentsOnWall.flatMap((p, i) => {
-    const session = sessions.find((x) => x.id === p.refId);
-    if (!session) return [];
-    const { lane, blocked } = sessionLane({ running: isRunningSession(session), pending: pending[session.id], stalled: session.stalled });
-    const status = lane === 'needs-you' && blocked ? { label: BLOCKED_META[blocked].label, tone: LANE_META[lane].tone, live: true } : { label: LANE_META[lane].title, tone: LANE_META[lane].tone, live: lane === 'working' };
-    return [{ session, n: i + 1, status, glyph: agentStatusOfLane(lane, blocked, session.activeWatchCount) }];
-  }), [agentsOnWall, sessions, pending, isRunningSession]);
-  const selectedAgent = agentList.find((a) => a.session.id === selected) ?? null;
-  // The dragged height is saved with the wall (like the dock and width), so
-  // it is still there after visiting another page or restarting the app.
-  const composerHeight = wall.composer.height ?? null;
-  const setComposerHeight = useCallback((height: number | null) => setWall((w) => {
-    const next = height === null ? undefined : Math.round(height);
-    if (w.composer.height === next) return w;
-    const { height: _old, ...rest } = w.composer;
-    return { ...w, composer: next === undefined ? rest : { ...rest, height: next } };
-  }), [setWall]);
-  const setComposerWidth = useCallback((width: number | null) => setWall((w) => {
-    const next = width === null ? undefined : Math.round(width);
-    if (w.composer.width === next) return w;
-    const { width: _old, ...rest } = w.composer;
-    return { ...w, composer: next === undefined ? rest : { ...rest, width: next } };
-  }), [setWall]);
-  const composerDrag = useRef<{ y: number; height: number } | null>(null);
-  // The composer's natural (unsized) height, remembered whenever it is at its
-  // default so a drag can snap back to it.
-  const composerDefaultH = useRef<number | null>(null);
-  useLayoutEffect(() => { if (composerHeight === null && composerRef.current) composerDefaultH.current = composerRef.current.offsetHeight; });
-  // Two snap points while dragging: the default size and full size (the 70% cap).
-  const snapComposerHeight = (raw: number) => {
-    const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700;
-    const max = available * .7;
-    const h = Math.max(120, Math.min(max, raw));
-    const def = composerDefaultH.current;
-    if (def !== null && Math.abs(h - def) <= 24) return null;
-    if (max - h <= 24) return max;
-    return h;
-  };
-  const composerSplit = <div className="wall-composer-split" role="separator" tabIndex={0} aria-label="Resize composer versus wall" aria-orientation="horizontal" title="Drag to resize composer versus wall; double-click to reset"
-    onPointerDown={(e) => { composerDrag.current = { y: e.clientY, height: composerRef.current?.offsetHeight ?? 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
-    onPointerMove={(e) => { const drag = composerDrag.current; if (!drag) return; setComposerHeight(snapComposerHeight(drag.height + (e.clientY - drag.y) * (wall.composer.side === 'top' ? 1 : -1))); }}
-    onPointerUp={() => { composerDrag.current = null; }} onPointerCancel={() => { composerDrag.current = null; }}
-    onDoubleClick={() => setComposerHeight(null)}
-    onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setComposerHeight(null); } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700; setComposerHeight(Math.max(120, Math.min(available * .7, (composerHeight ?? composerRef.current?.offsetHeight ?? 240) + (e.key === 'ArrowUp' ? 20 : -20) * (wall.composer.side === 'top' ? -1 : 1)))); } }} />;
-  const composer = (
-    <WallComposer
-      height={composerHeight}
-      resizeHandle={composerSplit}
-      agent={selectedAgent}
-      agents={agentList}
-      dock={wall.composer}
-      onDock={(dock) => setWall((w) => ({ ...w, composer: { ...w.composer, side: dock.side, align: dock.align } }))}
-      onWidth={setComposerWidth}
-      onSelect={selectAgent}
-      onOpen={openChat}
-      onFocus={(id) => {
-        selectAgent(id);
-        setWall((w) => ({ ...w, hero: id, layout: { ...w.layout, mode: 'focus' } }));
-      }}
-      onNewAgent={() => { void addFromToolbar('chat').catch(reportAddFailure); }}
-      panelRef={composerRef}
-    />
-  );
-  // Adding windows lives in the toolbar's icon bar, so the composer row is the composer alone.
-  const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
-
   // The vertical agent panel spans exactly the wall's windows: from the top of
   // their panels (below the wall's inset and a zone's name bar) to their
   // bottom (above a composer docked below and the add-zone rail).
@@ -585,7 +520,7 @@ export function CommandCenterView() {
     observer.observe(column);
     for (const child of column.children) observer.observe(child);
     return () => observer.disconnect();
-  }, [wall.layout.mode, wall.composer.side, completedId, agentsPresent]);
+  }, [wall.layout.mode, completedId, agentsPresent]);
 
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-[3px] pr-px pt-0">
@@ -630,7 +565,6 @@ export function CommandCenterView() {
         onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))}
         onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">
-      {!completedId && wall.layout.mode !== 'focus' && wall.composer.side === 'top' && composerRow}
       {completedId ? <div className="panel panel-ring flex min-h-0 flex-1 flex-col overflow-hidden"><button className="btn btn-ghost self-start" onClick={() => setCompletedId(null)}>Back to active agents</button><ChatPane key={completedId} sessionId={completedId} readOnly /></div> : <CommandWall
         state={wall}
         setState={setWall}
@@ -650,7 +584,6 @@ export function CommandCenterView() {
         onNewTerminal={newTerminal}
         onAddWindow={() => setAddOpen((open) => !open)}
       />}
-      {!completedId && wall.layout.mode !== 'focus' && wall.composer.side === 'bottom' && composerRow}
         </div>
       </div>
       </div>

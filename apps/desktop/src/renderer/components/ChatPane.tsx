@@ -537,7 +537,7 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
   return <ReplyStatus {...status} tps={liveRate?.rate ?? status.tps} estimatedRate={!!liveRate} status={label} iconState={status.streaming ? replyIconState(run?.activity) : 'idle'} elapsed={status.streaming ? elapsed : 0} nextWakeAt={nextWakeAt} now={now} />;
 });
 
-function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCenter = false, surface = 'full', status, selected, header, cleanStart: cleanStartWanted = false }: {
+function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCenter = false, surface = 'full', status, selected, resting = false, header, cleanStart: cleanStartWanted = false }: {
   sessionId: string;
   /** What the agent is doing (rocket, Zz, ?), drawn in the far bottom-right corner of the window's footer. */
   // A value, not an element: ChatPane is memoized, and a fresh <StatusIcon/>
@@ -546,6 +546,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   commandCenter?: boolean;
   /** On the Agents wall: whether this window is the selected one. Undefined off the wall. */
   selected?: boolean;
+  /**
+   * A tiled wall window that is not the selected one: its composer rests as a
+   * single row (+, the draft or placeholder, send) until the window is picked.
+   */
+  resting?: boolean;
   /**
    * The wall composer's own top row (which agent it speaks for, its status and
    * dock controls). Given, it replaces the controls strip: mode and incognito
@@ -2421,6 +2426,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   // The model and its effort sit in the bottom bar, between the attach button
   // and the context gauge, where the eye already is when sending.
+  // A window on the wall with its own composer: model and Mode ride the composer's bar, no footer row.
+  const wallWindow = commandCenter && surface === 'full';
   const modelControls = (
     <div className="flex min-w-0 shrink items-center gap-2 rounded-lg">
     <ModelPicker
@@ -2457,7 +2464,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />
-    <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />
+    {/* On the wall effort is in the Mode panel; the bar keeps just the model. */}
+    {!wallWindow && <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />}
     </div>
   );
 
@@ -2711,7 +2719,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
-        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-4 pt-1.5`}>
+        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-4 pt-1.5`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
           {/* The resize grip rides the composer's top border: a wide invisible
               hit area over a hairline that lights up on hover. */}
           {surface !== 'composer' && !cleanStart && <div
@@ -2737,7 +2745,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
 
             <div className="composer relative">
-            {compact && (
+            {compact && !wallWindow && (
               <div className="composer-summary">
                 <button
                   className="composer-summary-chip"
@@ -2780,7 +2788,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 )}
               </div>
             )}
-            {showControls && !header && (<>
+            {showControls && !header && !wallWindow && (<>
             {/* Chat-wide switches live at the top of the input surface; the
                 model and its effort sit in the bottom bar beside Send. */}
             <div className="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1.5">
@@ -3087,7 +3095,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   />
                   <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
-                <div className="flex items-center gap-2 px-2 pb-2 pt-1">
+                <div className="composer-bar flex items-center gap-2 px-2 pb-2 pt-1">
                   {!imageMode && (<>
                   <div
                     ref={attachMenuRef}
@@ -3234,10 +3242,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     />
                   </div>
                   </>)}
-                  {header && (
+                  {(header || wallWindow) && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
+                      {wallWindow && !imageMode && modelControls}
                       <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
-                      <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" />
+                      {!wallWindow && <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" />}
+                      {wallWindow && !imageMode && <button type="button" className="ctl-toggle shrink-0" data-composer-automate onClick={() => setScheduleOpen(true)} aria-label="Automate: schedule, repeat, or run in the background" title="Automate: schedule, repeat, or run in the background"><BoltIcon className="h-3.5 w-3.5" /></button>}
                     </div>
                   )}
                   <div className="flex-1" />
@@ -3264,13 +3274,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
-                      className="send-avatar grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-all duration-150 disabled:opacity-40"
+                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-all duration-150 disabled:opacity-40`}
                       onClick={() => void send()}
                       disabled={imageMode ? streaming || !draft.trim() : (!draft.trim() && pendingImages.length === 0 && pendingVideos.length === 0 && !activeSkill) || !hasProvider}
                       title={streaming ? 'Add to queue after this reply' : 'Send'}
                       aria-label={streaming ? 'Add to queue' : 'Send'}
                     >
-                      <NekkoAvatar size={24} />
+                      {/* On the wall Nekko wears the window's status in its header, so Send is a plain arrow. */}
+                      {wallWindow ? <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg> : <NekkoAvatar size={24} />}
                     </button>
                 </div>
               </div>
@@ -3292,7 +3303,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1.5'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
-          {!imageMode && surface !== 'composer' && <div className="flex flex-wrap items-center gap-2">
+          {!imageMode && surface !== 'composer' && !wallWindow && <div className="flex flex-wrap items-center gap-2">
                   <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />
                   {modelControls}
                   <>

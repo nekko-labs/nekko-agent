@@ -5,7 +5,6 @@ import '../tests/browserGlobals.js';
 import { cssRule, cssValue, hasSelector, stylesheet } from '../tests/css.js';
 import { loadWall, summary, windowBody } from '../tests/renderWall.js';
 import { AgentPanelControls } from './AgentPanelControls.js';
-import { NumberedAgentIcon } from './NumberedChatIcon.js';
 
 const noop = () => {};
 const styles = stylesheet('styles.css');
@@ -42,14 +41,12 @@ describe('agent panel controls', () => {
 });
 
 describe('agent window identity and activity', () => {
-  it('draws an agent with the window number as its face, in every wall window strip', async () => {
-    const html = renderToStaticMarkup(<NumberedAgentIcon number={4} />);
-    expect(html).toContain('numbered-agent-icon');
-    expect(html).toContain('aria-label="Window 4"');
-    expect(html).toContain('Ctrl+4 selects it');
+  it('numbers every wall window strip beside Nekko, the agent icon (no robot head)', async () => {
     const wall = (await loadWall()).render(two, { sessions: [summary('a'), summary('b')] });
-    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon[^]*numbered-agent-icon[^]*aria-label="Window 1"/);
-    expect(windowBody(wall, 'b')).toMatch(/data-frame-icon[^]*numbered-agent-icon[^]*aria-label="Window 2"/);
+    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon[^]*class="wall-number"[^]*aria-label="Window 1"[^]*class="wall-mascot/);
+    expect(windowBody(wall, 'b')).toMatch(/data-frame-icon[^]*class="wall-number"[^]*aria-label="Window 2"[^]*class="wall-mascot/);
+    expect(windowBody(wall, 'a')).toContain('Ctrl+1 selects it');
+    expect(wall).not.toContain('numbered-agent-icon');
     expect(wall).not.toContain('numbered-chat-icon');
   });
   it('keeps working status without an animated colored border', async () => {

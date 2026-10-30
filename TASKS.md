@@ -1,10 +1,20 @@
 ---
 status: active
-last-updated: 2026-10-26
+last-updated: 2026-10-28
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## A composer in every wall window (#1317)
+
+[Specification](spec/desktop/a-composer-in-every-wall-window.md), decision [0030](docs/decisions/0030-a-composer-in-every-wall-window.md). Prefix **WCW**.
+
+- [x] **WCW-1, Plan step loop kind and passes.** `update_plan` steps take `kind` (explore, build, verify, ship); a finished step set active again counts `pass` from 2. Shared TS and `nekko-turn` Rust agree, key order included; the tool schema documents it. (2026-10-28)
+- [x] **WCW-2, Composer in every wall window.** Tiled chats render the full pane; the shared `WallComposer` row, dock and tether are gone from the view. Selected window's composer open, others rest as one row; Ctrl+Tab and Ctrl+1-9 put the caret in the picked window. Bar: +, model, Mode, Automate; Stop, mic, arrow Send. Header: numbered icon, then `WallMascot` (Nekko with the iPhone Live Activity badge), terminals too. (2026-10-28)
+- [ ] **WCW-4, Remove the shared composer's code.** `WallComposer.tsx`, `observeWallComposer`/`wallEditorHeight`, the `surface: 'composer'` path in ChatPane, the saved `commandWall.composer` dock, and the capture scripts and fixtures written for them.
+- [ ] **WCW-5, Terminal activity.** Tell a running command from an idle prompt so a busy shell shows Nekko working.
+- [ ] Check the wall in a packaged build, and frame time on a wall of eight windows now that each mounts a full chat.
 
 ## Native iOS survives a lost simulator (#1343)
 
