@@ -30,6 +30,8 @@ import com.nekko.android.data.Remote
 import com.nekko.android.data.SecureStore
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.ChatsScreen
+import com.nekko.android.ui.screens.NewChatScreen
+import com.nekko.android.data.ModelPick
 import com.nekko.android.ui.theme.NekkoTheme
 import com.nekko.protocol.Channels
 import com.nekko.protocol.PairingLink
@@ -97,6 +99,37 @@ class OutboxJourneyTest {
         assertEquals(1, computer.sends)
     }
 
+    @Test fun newChatStartedOffline() {
+        computer.online = false
+        val repo = repo()
+        var screen by mutableStateOf("new")
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                if (screen == "new") {
+                    NewChatScreen(repo, onBack = {}, phonePick = ModelPick("anthropic", "claude-opus-4-7"), onPair = {}, onCreated = {}, onQueued = { screen = "chats" })
+                } else {
+                    ChatsScreen(repo, onOpenChat = {}, onNewChat = {}, onPair = {}, onComputers = {}, onSettings = {})
+                }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("newChat.offlineNote")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasTestTag("newChat.firstMessage")).performTextInput("Draft the release notes for 0.9")
+        settle()
+        shot("outbox-4-new-chat-offline")
+        compose.onNode(hasTestTag("newChat.startWhenOnline")).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("chats.pendingNew")).fetchSemanticsNodes().isNotEmpty() }
+        settle()
+        shot("outbox-5-list-waiting")
+        assertEquals(1, repo.outbox.state.value.pendingNewChats.size)
+
+        computer.online = true
+        computer.goOnline()
+        compose.waitUntil(15_000) { repo.outbox.state.value.items.isEmpty() }
+        assertEquals(1, computer.creates)
+        assertEquals(1, computer.sends)
+        compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("chats.pendingNew")).fetchSemanticsNodes().isEmpty() }
+    }
+
     private fun repo(): ComputersRepository {
         val repo = ComputersRepository(
             store = MemoryStore(),
@@ -146,6 +179,7 @@ class OutboxJourneyTest {
         @Volatile var mode: String? = null
         @Volatile var online = true
         @Volatile var sends = 0
+        @Volatile var creates = 0
         val ids = java.util.concurrent.CopyOnWriteArrayList<String>()
         private var live: MutableStateFlow<RelayStatus>? = null
         fun goOnline() { live?.value = RelayStatus(RelayState.ONLINE) }
@@ -184,6 +218,10 @@ class OutboxJourneyTest {
                     patch["pinned"]?.let { pinned = it.jsonPrimitive.content == "true" }
                     patch["mode"]?.let { mode = it.jsonPrimitive.content }
                     session()
+                }
+                Channels.SESSION_CREATE -> {
+                    creates++
+                    buildJsonObject { put("id", "s1"); put("messages", JsonArray(emptyList())) }
                 }
                 Channels.CHAT_SEND -> {
                     sends++
