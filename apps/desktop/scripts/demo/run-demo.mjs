@@ -150,8 +150,22 @@ try {
   await play(demo.steps, 'step');
   await sleep(demo.holdEnd ?? 2000);
   console.log('Done. Stop recording.');
+} catch (e) {
+  process.exitCode = 1;
+  console.error(`\nThe scene stopped: ${e.message.split('\n')[0]}`);
 } finally {
   input?.close();
   if (dry) await browser.close(); else await browser.close().catch(() => {});
-  if (app && args.includes('--quit')) app.kill();
+  // Close the app this run opened (add --keep-open to leave it), so the
+  // terminal is free for the next take.
+  if (app && !args.includes('--keep-open')) await stopApp(app);
+}
+
+async function stopApp(child) {
+  console.log('Closing the app…');
+  if (process.platform !== 'win32') { child.kill('SIGTERM'); return; }
+  const kill = (force) => spawn('taskkill', ['/PID', String(child.pid), '/T', ...(force ? ['/F'] : [])], { stdio: 'ignore' });
+  kill(false);
+  const exited = await Promise.race([new Promise((r) => child.once('exit', () => r(true))), sleep(10000).then(() => false)]);
+  if (!exited) kill(true);
 }
