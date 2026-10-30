@@ -11,7 +11,8 @@
  *
  * Turned on by `NEKKO_PRESENTER=1` in the desktop app (the preload passes it
  * on with the user, home and host names to mask) or `?presenter=1` in the
- * Local Web UI, which remembers it for the tab until `?presenter=0`.
+ * Local Web UI. Neither is remembered: the next launch, or the same page
+ * without the flag, is the normal app.
  */
 
 /** What the preload exposes as `window.nekkoPresenter` when the env var is set. */
@@ -23,7 +24,6 @@ export interface PresenterInfo {
 
 const EXEMPT = '[data-presenter-exempt]';
 const ATTRS = ['title', 'aria-label', 'placeholder', 'alt'] as const;
-const STORAGE_KEY = 'nekko.presenter';
 
 export const PLACEHOLDER = { email: 'you@example.com', user: 'demo', host: 'workstation', key: 'sk-••••' } as const;
 
@@ -65,14 +65,7 @@ export function createMasker(info: PresenterInfo = {}) {
 export function presenterRequest(): PresenterInfo | null {
   const fromPreload = (window as { nekkoPresenter?: PresenterInfo }).nekkoPresenter;
   if (fromPreload) return fromPreload;
-  const param = new URLSearchParams(location.search).get('presenter');
-  try {
-    if (param === '1') sessionStorage.setItem(STORAGE_KEY, '1');
-    if (param === '0') sessionStorage.removeItem(STORAGE_KEY);
-    return sessionStorage.getItem(STORAGE_KEY) === '1' ? {} : null;
-  } catch {
-    return param === '1' ? {} : null;
-  }
+  return new URLSearchParams(location.search).get('presenter') === '1' ? {} : null;
 }
 
 /** Mask everything under `root` now and on every later change, skipping Settings. Returns a stop function. */

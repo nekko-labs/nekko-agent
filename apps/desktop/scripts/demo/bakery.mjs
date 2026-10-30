@@ -17,6 +17,12 @@ export function resetBakery(dir) {
     git(dir, 'commit', '-q', '-m', 'Bakery website');
     return;
   }
+  // Worktrees an earlier take's chat made: drop them with their edits.
+  for (const line of git(dir, 'worktree', 'list', '--porcelain').split('\n')) {
+    const path = line.startsWith('worktree ') ? line.slice(9).trim() : '';
+    if (path.includes('nekko-worktrees')) git(dir, 'worktree', 'remove', '--force', path);
+  }
+  git(dir, 'worktree', 'prune');
   git(dir, 'reset', '-q', '--hard', 'HEAD');
   git(dir, 'clean', '-q', '-fd');
 }

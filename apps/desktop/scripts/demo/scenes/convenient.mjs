@@ -1,14 +1,14 @@
 // Panel 05 "Bring local with you." The desktop half: the approval waits
 // while you approve it on the paired phone (recorded separately).
 import { resetBakery } from '../bakery.mjs';
-import { APPROVAL, COMPOSER, DONE, LAST_REPLY, PACE, newChat, pickModel } from './_common.mjs';
+import { APPROVAL, COMPOSER, DONE, LAST_REPLY, PACE, effort, newChat, pickModel } from './_common.mjs';
 
 export default {
   title: 'Bring local with you: approve from the phone',
   ...PACE,
   // Puts old-menu/ back for every take.
   prepare: (ctx) => resetBakery(ctx.project),
-  setup: [...newChat('demo-bakery'), ...pickModel('Opus')],
+  setup: [...newChat('demo-bakery'), ...pickModel('Opus'), effort('low')],
   steps: [
     { type: 'Delete the old-menu folder.', into: COMPOSER },
     { press: 'Enter' },

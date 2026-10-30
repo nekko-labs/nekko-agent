@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 import { osInput } from './os-input.mjs';
+import { recordly } from './recordly.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -33,10 +34,15 @@ const countdown = Number(opt('--countdown', dry ? 0 : 3));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // `--benchmark` marks a run on the machine a scene's numbers were measured on;
 // scenes keep speed readouts hidden without it. `--hide-speed` hides them in any scene.
+// Scenes change app settings during setup, so they only run on the demo profile:
+// the one this runner opens itself, or one you vouch for with --demo-profile
+// (a --dry or --attach run whose app is already using ~/.nekko-agent-demo).
+const demoProfile = args.includes('--demo-profile') || (!dry && !args.includes('--attach'));
+if (!demoProfile) { console.error('Refusing to run: --dry and --attach need --demo-profile, so a scene never changes the settings of your own profile.'); process.exit(1); }
 const ctx = { benchmark: args.includes('--benchmark'), project: opt('--project', process.env.NEKKO_DEMO_PROJECT || defaultProject()) };
 
 function defaultProject() {
-  const candidates = [process.platform === 'win32' ? 'E:\dev\demo-bakery' : '', join(homedir(), 'demo-bakery')].filter(Boolean);
+  const candidates = [process.platform === 'win32' ? 'E:\\dev\\demo-bakery' : '', join(homedir(), 'demo-bakery')].filter(Boolean);
   return candidates.find((d) => existsSync(d)) ?? candidates.at(-1);
 }
 
@@ -45,15 +51,18 @@ if (demo.prepare) { console.log('Preparing the demo project…'); await demo.pre
 
 async function connect() {
   if (dry) {
-    const browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+    // No GPU: the headless browser crashed on the app's animated surfaces with it.
+    const browser = await chromium.launch({ args: ['--disable-gpu', '--disable-dev-shm-usage'] });
+    const [w, h] = (demo.windowSize ?? '1600x900').split('x').map(Number);
+    const page = await browser.newPage({ viewport: { width: w, height: h } });
+    page.on('crash', () => console.error('   (the practice browser crashed)'));
     await page.goto(opt('--url', 'http://localhost:1440/?presenter=1'));
     return { browser, page, app: null };
   }
   let app = null;
   if (!args.includes('--attach')) {
     app = spawn('npm', ['run', 'presenter', '--', '--demo', ...(args.includes('--reset') ? ['--reset'] : [])],
-      { cwd: join(here, '..', '..'), env: { ...process.env, NEKKO_DEMO_DEBUG_PORT: String(port) }, stdio: 'inherit', shell: process.platform === 'win32' });
+      { cwd: join(here, '..', '..'), env: { ...process.env, NEKKO_DEMO_DEBUG_PORT: String(port), ...(demo.windowSize && !process.env.NEKKO_WINDOW_SIZE ? { NEKKO_WINDOW_SIZE: demo.windowSize } : {}) }, stdio: 'inherit', shell: process.platform === 'win32' });
   }
   for (let i = 0; ; i++) {
     try {
@@ -71,8 +80,15 @@ async function connect() {
   }
 }
 
+// Recordly is opened before the app so its window list is ready to pick from.
+let recorder = args.includes('--record') && !dry ? await recordly() : null;
 const { browser, page, app } = await connect();
 ctx.page = page;
+// For `run` steps: the same cursor moves the scene's own steps make.
+ctx.click = (target) => point(target, true);
+ctx.hover = async (target, ms = 0) => { await point(target, false); await sleep(ms); };
+ctx.visible = (target) => page.locator(target).first().isVisible().catch(() => false);
+ctx.sleep = sleep;
 const input = dry ? null : osInput();
 if (!dry && !input) console.warn('No real-cursor driver on this platform yet: clicks go straight to the page.');
 const shots = join(here, 'out', scene);
@@ -89,13 +105,39 @@ async function screenPoint(target) {
     y: window.screenY + (window.outerHeight - window.innerHeight) - (window.outerWidth - window.innerWidth) / 2,
     dpr: window.devicePixelRatio,
   }));
-  return { el, x: Math.round((win.x + box.x + box.width / 2) * win.dpr), y: Math.round((win.y + box.y + box.height / 2) * win.dpr) };
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  if (calib) return { el, x: Math.round(calib.ax * cx + calib.bx), y: Math.round(calib.ay * cy + calib.by) };
+  return { el, x: Math.round((win.x + cx) * win.dpr), y: Math.round((win.y + cy) * win.dpr) };
+}
+
+/**
+ * Screen position = a * page position + b, per axis, measured rather than
+ * guessed: display scaling and a second monitor throw the arithmetic off.
+ * Puts the pointer at two points by the guess and asks the page where it landed.
+ */
+let calib = null;
+async function calibrate() {
+  if (!input) return;
+  await page.evaluate(() => { window.__demoMouse = null; addEventListener('mousemove', (e) => { window.__demoMouse = { x: e.clientX, y: e.clientY }; }, true); });
+  const win = await page.evaluate(() => ({ x: window.screenX, y: window.screenY, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, chrome: (outerHeight - innerHeight) }));
+  const seen = [];
+  for (const [fx, fy] of [[0.3, 0.3], [0.7, 0.7]]) {
+    const px = Math.round((win.x + win.w * fx) * win.dpr), py = Math.round((win.y + win.chrome + win.h * fy) * win.dpr);
+    await input.jump(px, py); await sleep(120); await input.jump(px + 1, py + 1); await sleep(250);
+    const at = await page.evaluate(() => window.__demoMouse);
+    if (!at) { console.warn('   calibration: the pointer did not land in the app window; using the estimate'); return; }
+    seen.push({ px: px + 1, py: py + 1, cx: at.x, cy: at.y });
+  }
+  const [a, b] = seen;
+  const ax = (b.px - a.px) / (b.cx - a.cx), ay = (b.py - a.py) / (b.cy - a.cy);
+  calib = { ax, ay, bx: a.px - ax * a.cx, by: a.py - ay * a.cy };
+  console.log(`   calibrated: scale ${ax.toFixed(2)} × ${ay.toFixed(2)}`);
 }
 
 async function point(target, click) {
   const { el, x, y } = await screenPoint(target);
   if (input) { await input.glide(x, y, demo.glideMs ?? 700); await sleep(120); if (click) await input.click(); }
-  else if (click) await el.click(); else await el.hover();
+  else if (click) await el.click(); else await el.hover({ force: true });
 }
 
 const run = {
@@ -129,17 +171,23 @@ async function play(steps, label) {
     if (step.optional && target && !(await page.locator(target).first().isVisible().catch(() => false))) { console.log('   skipped: not on screen'); continue; }
     await run[kind](step);
     await sleep(step.after ?? demo.between ?? 600);
-    if (dry) await page.screenshot({ path: join(shots, `${label}-${String(i + 1).padStart(2, '0')}-${kind}.png`) });
+    if (dry) await page.screenshot({ path: join(shots, `${label}-${String(i + 1).padStart(2, '0')}-${kind}.png`), timeout: 8000 }).catch(() => console.log('   (no screenshot)'));
   }
 }
 
 try {
   await page.bringToFront();
   await hideSpeed();
+  await calibrate();
   // Setup runs before recording starts: open the right chat, pick the model.
   if (demo.setup?.length) await play(demo.setup, 'setup');
-  // Wait for the presenter, however long the recorder takes to set up.
-  if (!dry && !args.includes('--no-wait')) {
+  // --record: Recordly starts and stops the take itself, no one at the keyboard.
+  if (recorder) {
+    console.log('Recording the Nekko Agent window in Recordly…');
+    await recorder.start('Nekko Agent');
+    await page.bringToFront();
+  } else if (!dry && !args.includes('--no-wait')) {
+    // Wait for the presenter, however long the recorder takes to set up.
     console.log('\nThe app is ready. Start recording, then press Enter here to play.');
     await new Promise((r) => process.stdin.once('data', r));
     process.stdin.pause();
@@ -149,9 +197,31 @@ try {
   await sleep(demo.holdStart ?? 1500);
   await play(demo.steps, 'step');
   await sleep(demo.holdEnd ?? 2000);
-  console.log('Done. Stop recording.');
+  if (recorder) {
+    const take = await recorder.stop();
+    recorder = null;
+    console.log(take ? `Saved take: ${take}` : 'Stopped recording (Recordly did not report where it saved the take).');
+  } else console.log('Done. Stop recording.');
+} catch (e) {
+  process.exitCode = 1;
+  // Stop a take that is still running so Recordly is ready for the next one.
+  if (recorder) await recorder.stop().catch(() => {});
+  mkdirSync(join(here, 'out'), { recursive: true });
+  await page.screenshot({ path: join(here, 'out', `${scene}-failed.png`), timeout: 8000 }).catch(() => {});
+  console.error(`\nThe scene stopped: ${e.message.split('\n')[0]}`);
 } finally {
   input?.close();
   if (dry) await browser.close(); else await browser.close().catch(() => {});
-  if (app && args.includes('--quit')) app.kill();
+  // Close the app this run opened (add --keep-open to leave it), so the
+  // terminal is free for the next take.
+  if (app && !args.includes('--keep-open')) await stopApp(app);
+}
+
+async function stopApp(child) {
+  console.log('Closing the app…');
+  if (process.platform !== 'win32') { child.kill('SIGTERM'); return; }
+  const kill = (force) => spawn('taskkill', ['/PID', String(child.pid), '/T', ...(force ? ['/F'] : [])], { stdio: 'ignore' });
+  kill(false);
+  const exited = await Promise.race([new Promise((r) => child.once('exit', () => r(true))), sleep(10000).then(() => false)]);
+  if (!exited) kill(true);
 }
