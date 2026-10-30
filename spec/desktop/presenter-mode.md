@@ -31,7 +31,25 @@ tooltips.
   default); `-- --demo` uses a separate profile at `~/.nekko-agent-demo`, and
   `-- --demo --reset` wipes it first.
 
-## Privacy boundary
+## Scripted demos
+
+Intent: a pre-built demo that plays itself in the real app while it is
+recorded, because only the real app looks like the real app.
+
+- `npm run demo -w apps/desktop -- <scene>` starts the app in presenter mode on
+  the demo profile with `NEKKO_DEMO_DEBUG_PORT` set (a remote-debugging port on
+  127.0.0.1, opened only when that variable is set), counts down five seconds
+  so recording can start, then plays `scripts/demo/scenes/<scene>.mjs`.
+- Each click or hover finds the element in the live page, glides the real
+  Windows cursor there (eased) and clicks with the real mouse, so recorders that
+  follow the cursor see genuine movement. Typing is sent to the focused field at
+  a steady pace. macOS and Linux fall back to page-level clicks with no cursor
+  movement.
+- `--attach` plays in an app already running with the port; `--dry --url`
+  rehearses headless against the Local Web UI and saves a screenshot per step.
+- One scene ships: `tour` (zones, Artifacts, Workflows, Models, chat search).
+
+
 
 Display-only. Engine data, settings, and what models receive are unchanged.
 Text inside inputs, textareas and editors is not masked; neither are images,
@@ -44,5 +62,6 @@ that must be clean.
 - Implemented: masker, Settings exemption, Local Web UI flag, fixed window size,
   launcher, demo profile and reset. Unit tests cover the masker.
 - Verified in the Local Web UI (live masking, attributes, Settings exemption).
-- Not yet verified: the desktop preload path (`NEKKO_PRESENTER=1` exposing the
+- Verified: the `tour` scene rehearsed headless against the Local Web UI; the Windows cursor driver starts and answers.
+- Not yet verified: a live run moving the real cursor over the Electron window, and the desktop preload path (`NEKKO_PRESENTER=1` exposing the
   user, home and host names) in a running Electron window.

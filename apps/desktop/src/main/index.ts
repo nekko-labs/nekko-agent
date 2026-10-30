@@ -99,6 +99,13 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 
 app.setName('Nekko Agent');
 registerDevLaunch(app);
+// Scripted demos (scripts/demo): the runner finds elements over this local
+// debugging port and moves the real cursor to them. Only when asked for.
+const demoPort = process.env.NEKKO_DEMO_DEBUG_PORT;
+if (demoPort && /^\d+$/.test(demoPort)) {
+  app.commandLine.appendSwitch('remote-debugging-port', demoPort);
+  app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+}
 const previousProfile = app.getPath('userData');
 preservePackagedProfile(app);
 
