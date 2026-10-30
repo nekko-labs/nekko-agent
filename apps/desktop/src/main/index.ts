@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'fs';
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
-import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
+import { fixedWindowBounds, initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { EngineProcess } from './engine-process.js';
@@ -99,6 +99,13 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 
 app.setName('Nekko Agent');
 registerDevLaunch(app);
+// Scripted demos (scripts/demo): the runner finds elements over this local
+// debugging port and moves the real cursor to them. Only when asked for.
+const demoPort = process.env.NEKKO_DEMO_DEBUG_PORT;
+if (demoPort && /^\d+$/.test(demoPort)) {
+  app.commandLine.appendSwitch('remote-debugging-port', demoPort);
+  app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+}
 const previousProfile = app.getPath('userData');
 preservePackagedProfile(app);
 
@@ -322,7 +329,8 @@ function createWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
   // A first launch is sized to the screen before the window exists, so it
   // appears at that size rather than visibly growing into it.
-  const { maximized, ...bounds } = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
+  const area = screen.getPrimaryDisplay().workArea;
+  const { maximized, ...bounds } = fixedWindowBounds(process.env.NEKKO_WINDOW_SIZE, area) ?? loadWindowBounds() ?? initialWindowBounds(area);
   const win = newAppWindow(bounds);
 
   mainWindow = win;
