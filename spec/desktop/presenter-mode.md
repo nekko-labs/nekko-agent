@@ -16,7 +16,8 @@ tooltips.
 ## Behavior
 
 - Turned on by `NEKKO_PRESENTER=1` in the desktop app, or `?presenter=1` in the
-  Local Web UI (remembered for that tab until `?presenter=0`).
+  Local Web UI. Neither is remembered: the next launch, or the page without the
+  flag, is the normal app, so no one is left in presenter mode by accident.
 - Outside Settings, every visible text node and the `title`, `aria-label`,
   `placeholder` and `alt` attributes are masked as they render:
   emails become `you@example.com`; home-directory paths become `~`; the OS user

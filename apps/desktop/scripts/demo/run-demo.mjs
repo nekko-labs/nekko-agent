@@ -34,6 +34,11 @@ const countdown = Number(opt('--countdown', dry ? 0 : 3));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // `--benchmark` marks a run on the machine a scene's numbers were measured on;
 // scenes keep speed readouts hidden without it. `--hide-speed` hides them in any scene.
+// Scenes change app settings during setup, so they only run on the demo profile:
+// the one this runner opens itself, or one you vouch for with --demo-profile
+// (a --dry or --attach run whose app is already using ~/.nekko-agent-demo).
+const demoProfile = args.includes('--demo-profile') || (!dry && !args.includes('--attach'));
+if (!demoProfile) { console.error('Refusing to run: --dry and --attach need --demo-profile, so a scene never changes the settings of your own profile.'); process.exit(1); }
 const ctx = { benchmark: args.includes('--benchmark'), project: opt('--project', process.env.NEKKO_DEMO_PROJECT || defaultProject()) };
 
 function defaultProject() {
