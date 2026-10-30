@@ -181,8 +181,10 @@ jobs:
           mkdir -p evidence
           trap 'xcrun simctl shutdown "$DEVICE" || true; xcrun simctl delete "$DEVICE" || true; kill ${NEKKO_ITEST_PIDS:-} 2>/dev/null || true' EXIT
           xcrun simctl boot "$DEVICE"
-          xcrun simctl bootstatus "$DEVICE" -b
-          xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+          # The hosted iOS 27 simulator sometimes shuts down, or loses its accessibility server, partway
+          # through a long run (#1343). `ready` boots it again if it is down, so one bad suite can't skip the rest.
+          ready() { xcrun simctl bootstatus "$DEVICE" -b; xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100 || true; }
+          ready
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="")
           # Unit tests and first-run UI tests.
           # Every suite runs even when one fails, so one run shows every failure and keeps its evidence.
@@ -191,11 +193,16 @@ jobs:
           # screenshots alone can't say why the computer stopped answering.
           stack_logs() { for f in "$NEKKO_ITEST_LOGDIR"/*.log; do echo "::group::$1 $(basename "$f")"; tail -n 120 "$f"; echo "::endgroup::"; done; }
           TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
-            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests || failed=1
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests \
+            -retry-tests-on-failure -test-iterations 2 || failed=1
+          # A failing test gets one retry above: XCTest can hang minutes at "Setting up automation session"
+          # before the app launches. Then a fresh boot, since every simulator loss so far followed this long suite.
+          xcrun simctl shutdown "$DEVICE" || true
           # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
           # The first-run suite already asked for notifications; a fresh install gets the prompt again.
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           for THEME in $THEMES; do
+            ready
             xcrun simctl ui "$DEVICE" appearance "$THEME"
             ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
             . "/tmp/stack-$THEME.env"
@@ -207,6 +214,7 @@ jobs:
             xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           done
           # Offline mode: a prompt sent with the relay down waits, then goes exactly once when it is back.
+          ready
           xcrun simctl ui "$DEVICE" appearance light
           ../../apps/ios/scripts/itest-stack.sh /tmp/stack-offline.env
           . /tmp/stack-offline.env
@@ -216,6 +224,7 @@ jobs:
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           # Beyond the chat (IO-22 to IO-29): queue edit, fork, Continue, an automation run, usage.
+          ready
           ../../apps/ios/scripts/itest-stack.sh /tmp/stack-beyond.env
           . /tmp/stack-beyond.env
           TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
@@ -224,6 +233,7 @@ jobs:
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           # Simple and Expert: the model and effort control, the context gauge, the monitor panel and the whole monitor.
+          ready
           ../../apps/ios/scripts/itest-stack.sh /tmp/stack-modes.env
           . /tmp/stack-modes.env
           TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
@@ -232,6 +242,7 @@ jobs:
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.
+          ready
           xcrun simctl ui "$DEVICE" appearance light
           ../../apps/ios/scripts/itest-stack.sh /tmp/stack-link.env
           . /tmp/stack-link.env
