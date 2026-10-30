@@ -84,7 +84,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
 - [Nekko Dark and the branded System theme (desktop)](desktop/nekko-dark-and-branded-system-theme.md) (3 KB)
 - [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
-- [Presenter mode for screen recordings](desktop/presenter-mode.md) (2 KB)
+- [Presenter mode for screen recordings](desktop/presenter-mode.md) (3 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings in the command palette (desktop)](desktop/command-palette-settings-search.md) (3 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (5 KB)
