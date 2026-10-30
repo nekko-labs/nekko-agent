@@ -801,9 +801,41 @@ h3 { font-size: 21px; }
 /* ---- beta sign-up: one friendly band between "what you can do" and the
    technical sections, so it reads as the next step for the curious without
    competing with the download buttons ---- */
-.beta { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; }
+.beta {
+  display: grid; grid-template-columns: 1.15fr 1fr; column-gap: 56px; align-items: start;
+  grid-template-areas: 'tour intro' 'tour perks' 'tour stage';
+}
+.beta-intro { grid-area: intro; }
+.tour { grid-area: tour; align-self: center; margin: 0; }
+.beta-perks { grid-area: perks; margin-bottom: 30px; }
+.beta-stage { grid-area: stage; }
 .beta h2 { margin-bottom: 12px; }
 .beta-perks { list-style: none; display: grid; gap: 12px; margin-top: 22px; }
+
+/* the tour video: square, framed like the site's other media */
+.tour-frame {
+  position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden;
+  border: 2px solid var(--sticker); box-shadow: 4px 4px 0 var(--sticker); background: #f3effe;
+}
+:root[data-theme='dark'] .tour-frame { background: #0d0b18; }
+.tour-video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tour figcaption { margin-top: 12px; }
+/* the handoff when the tour ends: over the last frame, pointing at the form */
+.tour-end {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px;
+  background: rgba(23, 21, 31, 0.82); color: #ffffff; text-align: center;
+  animation: tour-fade 0.4s ease both;
+}
+.tour-end[hidden] { display: none; }
+.tour-end p { font-family: var(--retro-mono); font-size: 22px; margin: 0; color: #ffffff; }
+.tour-end .btn { cursor: pointer; font: inherit; font-weight: 700; border: 0; }
+.tour-again {
+  font: inherit; font-size: 14px; color: #ffffff; background: none; cursor: pointer;
+  border: 0; text-decoration: underline; text-underline-offset: 3px; padding: 4px 8px;
+}
+.tour-end button:focus-visible { outline: 3px solid #9d8ce6; outline-offset: 3px; }
+@keyframes tour-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tour-end { animation: none; } }
 .beta-perks li { display: flex; gap: 12px; align-items: baseline; font-size: 15.5px; color: var(--ink); }
 .beta-perks li::before {
   content: ''; flex: none; width: 10px; height: 10px; transform: translateY(-1px);
@@ -824,7 +856,11 @@ h3 { font-size: 21px; }
 .beta-field .btn { flex: 0 0 auto; cursor: pointer; font: inherit; font-weight: 700; font-size: 16px; }
 .beta-note { font-size: 13px; color: #5d5970; }
 :root[data-theme='colour'] .beta-card { background: #ffffff; }
-@media (max-width: 900px) { .beta { grid-template-columns: 1fr; gap: 28px; } }
+@media (max-width: 900px) {
+  .beta { grid-template-columns: 1fr; row-gap: 28px; grid-template-areas: 'intro' 'tour' 'perks' 'stage'; }
+  .beta-perks { margin: 0; }
+  .tour { max-width: 520px; width: 100%; justify-self: center; }
+}
 @media (max-width: 560px) { .beta-card { padding: 22px; box-shadow: 4px 4px 0 var(--sticker); } }
 
 /* ---- Nekko hosts the beta sign-up ---- */
