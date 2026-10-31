@@ -49,7 +49,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Composer containment and compact subagent activity (2026-10-13)](chat/composer-containment-and-compact-subagent-activity.md) (2 KB)
 - [Composer Markdown editing tools (implemented; isolated interaction checks verified, visual inspection pending)](chat/composer-markdown-editing-tools.md) (2 KB)
 - [Default modes: where the models run (2026-10-22)](chat/default-modes-where-the-models-run.md) (4 KB)
-- [End-to-end encrypted sync for Pro and Team (2026-10-22)](chat/end-to-end-encrypted-sync-for-pro-and-team.md) (9 KB)
+- [End-to-end encrypted sync for Pro and Team (2026-10-22)](chat/end-to-end-encrypted-sync-for-pro-and-team.md) (10 KB)
 - [Find in this chat (2026-10-16)](chat/find-in-this-chat.md) (3 KB)
 - [Internet reachability and restoration recovery](chat/internet-recovery.md) (6 KB)
 - [Live streaming token rate](chat/live-streaming-token-rate.md) (1 KB)

@@ -394,3 +394,57 @@ async fn restore_needs_the_accounts_own_record() {
     assert_eq!(b.epoch(), 0);
     p.clear();
 }
+
+/// A sign-in holding no keys (an emailed code is enough) can't remove devices or start an epoch, even
+/// after registering a synced device's public key; the devices themselves keep syncing, also after
+/// signing in again.
+#[tokio::test]
+async fn a_sign_in_without_the_keys_changes_nothing() {
+    let Some(url) = itest_url() else { return };
+    let p = proxy(url.clone()).await;
+    let (a, b, email, _) = account(&url, &p).await;
+    let other = device(&url, "Other");
+    sign_in(&other, &email).await;
+    let token = other.secret("token").unwrap();
+    let http = reqwest::Client::new();
+    let state: Value =
+        http.get(format!("{url}/v1/sync/state")).bearer_auth(&token).send().await.unwrap().json().await.unwrap();
+    let devices = state["devices"].as_array().unwrap();
+    let id_of = |label: &str| devices.iter().find(|d| d["label"] == label).unwrap()["id"].as_str().unwrap().to_string();
+    let (a_id, b_id) = (id_of("Desk"), id_of("Laptop"));
+    let a_public = devices.iter().find(|d| d["id"] == a_id.as_str()).unwrap()["publicKey"].clone();
+    let res = http
+        .post(format!("{url}/v1/sync/devices"))
+        .bearer_auth(&token)
+        .json(&json!({ "publicKey": a_public, "label": "Desk" }))
+        .send()
+        .await
+        .unwrap();
+    assert!(res.status().is_success(), "the key registers and binds this token to the device");
+    let res = http.delete(format!("{url}/v1/sync/devices/{b_id}")).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(res.status().as_u16(), 403);
+    let res = http.delete(format!("{url}/v1/sync/devices/{a_id}")).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(res.status().as_u16(), 403);
+    let res = http
+        .post(format!("{url}/v1/sync/keyrings/1/proof"))
+        .bearer_auth(&token)
+        .json(&json!({ "proof": b64_encode(&[7u8; 32]) }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status().as_u16(), 403);
+
+    // Both devices still sync, and A keeps syncing after signing in again (a new token proves the epoch).
+    a.store.put_synced(&chat("s_9_kept", "still here", 10.0)).unwrap();
+    call(&a, "sync:now", json!([])).await.unwrap();
+    call(&b, "sync:now", json!([])).await.unwrap();
+    assert_eq!(content(&b, "s_9_kept"), "still here");
+    call(&a, "cloud:signOut", json!([])).await.unwrap();
+    sign_in(&a, &email).await;
+    call(&a, "sync:setEnabled", json!([true])).await.unwrap();
+    a.store.put_synced(&chat("s_9_kept", "edited after signing in again", 20.0)).unwrap();
+    call(&a, "sync:now", json!([])).await.unwrap();
+    call(&b, "sync:now", json!([])).await.unwrap();
+    assert_eq!(content(&b, "s_9_kept"), "edited after signing in again");
+    assert_eq!(a.epoch(), 1);
+}
