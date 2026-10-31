@@ -36,7 +36,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 **Updating from a version before November 2026:** the first time your computer starts with the
 update, it replaces its pairing secret (the phones it knew stay listed). Each phone then says the
-pairing key changed: pair it again with a fresh QR from **Pair a device**. Phones and the computer
+pairing key changed: pair it again with a fresh QR from **Pair a device**. Pairing also enrolls the
+phone's own device key, which signs every connection from then on. Phones and the computer
 both need the update; an older app cannot connect to an updated computer.
 
 ## The phone app
@@ -535,7 +536,8 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 | Threat | Defense |
 |---|---|
 | Relay operator reads your traffic | E2E encryption: the relay sees ciphertext and a room credential derived from the pairing secret, never the secret the key is derived from (decision 0036) |
-| Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, the secret itself to seal a HELLO, then a registered device or a live pairing code |
+| Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, the secret itself to seal a HELLO, then a live pairing code, or the private key of a device that enrolled (every HELLO is signed with it) |
+| Someone copies the pairing secret off a phone | Not enough to connect as that phone: each phone signs every HELLO with its own device key (Secure Enclave on iPhone, Android Keystore), which never leaves it |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |

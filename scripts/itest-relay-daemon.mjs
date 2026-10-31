@@ -1,7 +1,8 @@
 // The phone path with the relay agent in the engine daemon (crates/nekko-remote):
 // a device on a local apps/relay-server reaches the Local Web UI, which runs behind
 // nekkod, whose agent dials the relay. Checks transport auth, the sealed HELLO
-// answering the agent's challenge (phone protocol 4, with a legacy phone too),
+// answering the agent's challenge and signed with the device key (phone
+// protocol 5; older phones are told to update),
 // replayed HELLOs and requests, one-time pairing, requests to the daemon and
 // through it to the TS host, host events fanned out to the phone, the phone
 // channel allowlist, and live revocation.
@@ -16,7 +17,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:f
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { deriveKey, relayAuth, seal, open } from '@nekko-agent/shared';
+import { REMOTE_PROTOCOL_VERSION, deriveKey, helloProof, relayAuth, seal, open } from '@nekko-agent/shared';
 import { killTree, treeOptions } from './itest-procs.mjs';
 
 const exe = process.platform === 'win32' ? 'nekkod.exe' : 'nekkod';
@@ -108,6 +109,13 @@ try {
   }
   check('the daemon agent is online at the relay', online);
 
+  // Each test device's key, kept across its connections as a phone keeps it.
+  const deviceKeys = new Map();
+  const deviceKey = async (id) => {
+    if (!deviceKeys.has(id)) deviceKeys.set(id, await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']));
+    return deviceKeys.get(id);
+  };
+
   async function device({ deviceId, name, pair, legacy = false }) {
     const ws = new WebSocket(`${RELAY_URL}/relay?role=client&room=${room}&key=${auth}`);
     const pending = new Map();
@@ -173,9 +181,10 @@ try {
         hello = null;
         onHello = res;
         const challenge = legacy ? undefined : (answer ?? (await nextChallenge(0)));
+        const proof = legacy ? {} : await helloProof(await deviceKey(deviceId), deviceId, room, challenge);
         await sendSealed({
           type: 'hello', deviceId, name, platform: 'android',
-          ...(legacy ? {} : { protocol: 4, challenge }), ...(pair ? { pair } : {}),
+          ...(legacy ? {} : { protocol: REMOTE_PROTOCOL_VERSION, challenge, ...proof }), ...(pair ? { pair } : {}),
         });
         if (hello === null) seq = 0;
         setTimeout(() => res(hello ?? { type: 'timeout' }), 8000);
@@ -231,10 +240,13 @@ try {
   await sleep(1500);
   check('a recorded HELLO is not welcomed on another connection', eve.challenges.length === 2);
   const old = await device({ deviceId: 'phone-1', name: 'Pixel', legacy: true });
-  check('a legacy phone is still welcomed by default', (await old.doHello()).type === 'welcome');
-  const marked = JSON.parse(readFileSync(join(dataDir, 'remote.json'), 'utf8'));
-  check('and marked as legacy', marked.devices?.[0]?.legacyProtocol === true);
-  check('its requests need no counter', Array.isArray(await old.call('sessions:summaries')));
+  const oldReply = await old.doHello();
+  check('a phone app from before device keys is told to update', oldReply.type === 'denied' && oldReply.reason === 'update-required');
+  // The pairing secret alone is not enough: a HELLO signed with another key is refused.
+  deviceKeys.set('phone-1', await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']));
+  const imposter = await device({ deviceId: 'phone-1', name: 'Pixel' });
+  const ir = await imposter.doHello();
+  check('a HELLO not signed with the enrolled device key is refused', ir.type === 'denied' && ir.reason === 'bad-key');
 
   const replay = await device({ deviceId: 'replay-1', name: 'Replayer', pair: grant.code });
   const r = await replay.doHello();

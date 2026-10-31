@@ -122,6 +122,9 @@ public struct RelayConfig: Sendable {
     public var retryBase: TimeInterval = 1
     public var retryMax: TimeInterval = 30
     public var offlinePoll: TimeInterval = 15
+    /// The device key every HELLO is signed with (protocol 5). Without one the
+    /// HELLO goes unsigned and the computer asks this phone to pair again.
+    public var helloSigner: HelloSigner?
 
     public init(relayUrl: String, room: String, key: String, keyBytes: Data, deviceId: String, deviceName: String,
                 pairCode: String? = nil, platform: String = "ios") {
@@ -641,6 +644,12 @@ public final class RelayClient: @unchecked Sendable {
         if let nonce {
             o["protocol"] = .int(Int64(PhoneProtocol.version))
             o["challenge"] = .string(nonce)
+            // Signed with the device key, for this room and this challenge only (decision 0036).
+            if let signer = config.helloSigner,
+               let proof = try? HelloKey.proof(signer, deviceId: config.deviceId, room: config.room, challenge: nonce) {
+                o["helloKey"] = .string(proof.key)
+                o["sig"] = .string(proof.sig)
+            }
         } else {
             o["protocol"] = .int(Int64(PhoneProtocol.legacyVersion))
         }

@@ -86,6 +86,7 @@ class NekkoApp : Application() {
             scope = appScope,
             deviceName = ::deviceName,
             changeSigner = KeystoreChangeSigner(ownerCheck),
+            helloSigner = com.nekko.android.security.KeystoreHelloSigner(),
             routeAllowed = RoutePolicy::allowed,
             offlineFiles = OfflineFileStore(this),
             onForget = { id ->

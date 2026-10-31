@@ -120,7 +120,7 @@ pub fn payload(device_id: &str, channel: &str, args: &Value, ts: i64) -> Option<
     Some(format!("{VERSION}\n{device_id}\n{channel}\n{hex}\n{ts}"))
 }
 
-fn b64(s: &str) -> Option<Vec<u8>> {
+pub(crate) fn b64(s: &str) -> Option<Vec<u8>> {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.decode(s.trim()).ok()
 }

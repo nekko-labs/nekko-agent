@@ -245,6 +245,8 @@ public final class ComputersStore {
     private let probeNetwork: ProbeNetwork
     /// Signs Change actions (IO-33): the Secure Enclave in the app; nil where there is none.
     @ObservationIgnored public var changeSigner: ChangeSigner?
+    /// Signs every relay HELLO (decision 0036): the Secure Enclave device key in the app, a software key in tests.
+    @ObservationIgnored public var helloSigner: HelloSigner?
     /// Asks the owner for a step-up (SK-6): the app's sheet; nil where there is none.
     @ObservationIgnored public var stepUpPrompt: StepUpPrompt?
     @ObservationIgnored private var flushingSignOuts = false
@@ -518,6 +520,7 @@ public final class ComputersStore {
             var config = RelayConfig(relayUrl: p.relayUrl, room: p.room, key: p.key, keyBytes: keyBytes,
                                      deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
             config.alternates = p.alts
+            config.helloSigner = helloSigner
             config.app = app
             if await Self.deliverSignOut(makeConnection(config), timeout: timeout) { done.insert(p.computerId) }
         }
@@ -712,6 +715,7 @@ public final class ComputersStore {
         var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
         config.alternates = computer.alts
+        config.helloSigner = helloSigner
         config.requestTimeout = 120
         config.app = app
         let c = makeConnection(config)
@@ -896,8 +900,9 @@ public final class ComputersStore {
         defer { checking = false }
         let routes = computer.routes
         checks = routes.map { RouteReport(url: $0) }
-        let base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
+        var base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
+        base.helloSigner = helloSigner
         let make = makeConnection
         let name = computer.name
         for (i, url) in routes.enumerated() {
