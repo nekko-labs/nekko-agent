@@ -400,11 +400,11 @@ enum InlineMarkdown {
         interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
 
     static func attributed(_ s: String) -> AttributedString? {
-        let key = s as NSString
-        if let hit = cache.object(forKey: key) { return hit.value }
+        let key = s
+        if let hit = cache[key] { return hit.value }
         // Paths Markdown can't read as URLs (`C:\x\y.html`, spaces) become `file:` links first.
         let value = try? AttributedString(markdown: ChatLinks.linkable(s), options: options)
-        cache.setObject(Box(value), forKey: key)
+        cache[key] = Box(value)
         return value
     }
 
