@@ -34,7 +34,8 @@ final class AppModel {
     /// The card's mic: its own microphone use, apart from any composer's (they share one microphone).
     private let cardDictation = Dictation()
     private let talker = TalkRunner()
-    private let network = NetworkWatcher()
+    /// Made in `start()`, with its handlers.
+    private var network: NetworkWatcher?
     private var started = false
     private var foreground = true
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -160,9 +161,11 @@ final class AppModel {
         store.onDismiss = { tag in Task { await Notifier.dismissNeedsYou(tag: tag) } }
         WatchBridge.shared.start()
         watchWidget()
-        network.onFirst = { [weak self] path in Task { @MainActor in self?.store.networkKnown(path) } }
-        network.onChange = { [weak self] path in Task { @MainActor in self?.store.networkChanged(path) } }
+        let network = NetworkWatcher(
+            onFirst: { [weak self] path in Task { @MainActor in self?.store.networkKnown(path) } },
+            onChange: { [weak self] path in Task { @MainActor in self?.store.networkChanged(path) } })
         network.start()
+        self.network = network
         if prefs.keepChatList { store.chatListCache = chatLists }
         if prefs.keepTranscripts { store.transcriptCache = transcriptFiles }
         store.load(preferredId: prefs.defaultComputer)

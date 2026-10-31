@@ -50,7 +50,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func registerPush(token: String) async throws { try await registerPush(token: token, kinds: nil) }
     var pushKinds: [[String]?] = []
     func registerPush(token: String, kinds: [String]?) async throws {
-        lock.lock(); pushTokens.append(token); pushKinds.append(kinds); lock.unlock()
+        lock.withLock { pushTokens.append(token); pushKinds.append(kinds) }
     }
     private var onControl: (@Sendable (RelayControl) -> Void)?
     func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) { onControl = f }
@@ -59,17 +59,17 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     var welcomeProtocol = 1
     var cards: [JSONValue] = []
     func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {
-        lock.lock()
-        cards.append(["token": token.map(JSONValue.string) ?? .null, "startToken": startToken.map(JSONValue.string) ?? .null,
-                      "level": .string(level.rawValue), "computerId": .string(computerId), "computerName": .string(computerName)])
-        lock.unlock()
+        lock.withLock {
+            cards.append(["token": token.map(JSONValue.string) ?? .null, "startToken": startToken.map(JSONValue.string) ?? .null,
+                          "level": .string(level.rawValue), "computerId": .string(computerId), "computerName": .string(computerName)])
+        }
     }
 
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
-        lock.lock()
-        calls.append((channel, args))
-        let r = replies[channel]
-        lock.unlock()
+        let r = lock.withLock {
+            calls.append((channel, args))
+            return replies[channel]
+        }
         if channel == Channels.sessionsSummaries, let summariesReply { return try await summariesReply() }
         guard let r else { return .null }
         return try r(args)
