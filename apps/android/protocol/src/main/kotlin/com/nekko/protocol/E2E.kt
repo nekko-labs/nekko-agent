@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher
+import javax.crypto.Mac
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
@@ -27,7 +28,24 @@ object E2E {
     const val IV_BYTES = 12
     private const val TAG_BITS = 128
 
+    /** PROTOCOL CONSTANT: the label of the room credential the relay checks (decision 0035). */
+    const val RELAY_AUTH_LABEL = "nekko-relay-auth:"
+
+    /** How a stored pairing reaches the relay: 2 is [relayAuth]. Older stored pairings must pair again. */
+    const val PAIRING_VERSION = 2
+
     private val secureRandom = SecureRandom()
+
+    /**
+     * The `key=` presented to the relay: hex of HMAC-SHA256 keyed with the
+     * pairing secret over `"nekko-relay-auth:" + room`. One-way, so the relay
+     * never sees the secret [deriveKey] starts from.
+     */
+    fun relayAuth(secret: String, room: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        return toHex(mac.doFinal((RELAY_AUTH_LABEL + room).toByteArray(Charsets.UTF_8)))
+    }
 
     /**
      * Derive the 32-byte room key. Slow on purpose (about a second on a phone):

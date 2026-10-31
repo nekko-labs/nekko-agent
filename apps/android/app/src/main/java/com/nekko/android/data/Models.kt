@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -42,6 +43,8 @@ data class ComputerSecret(
     val keyHex: String,
     /** Present until the computer welcomes us once. */
     val pair: String? = null,
+    /** [com.nekko.protocol.E2E.PAIRING_VERSION] when saved; older pairings must pair again (decision 0035). */
+    val version: Int = com.nekko.protocol.E2E.PAIRING_VERSION,
 ) {
     /** Never print the secret. */
     override fun toString(): String = "ComputerSecret(room=$room, pair=${pair != null})"
@@ -123,6 +126,7 @@ internal object StoredJson {
         put("key", s.key)
         put("keyHex", s.keyHex)
         s.pair?.let { put("pair", it) }
+        put("v", s.version)
     }.toString()
 
     fun decodeSecret(raw: String?): ComputerSecret? {
@@ -132,6 +136,8 @@ internal object StoredJson {
             key = o.str("key") ?: return null,
             keyHex = o.str("keyHex") ?: return null,
             pair = o.str("pair"),
+            // Saved before the relay credential was derived: 1.
+            version = (o["v"] as? JsonPrimitive)?.intOrNull ?: 1,
         )
     }
 

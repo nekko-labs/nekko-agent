@@ -11,6 +11,10 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
 
+/// How the stored pairing reaches the relay: 2 is a room credential derived
+/// from the secret (decision 0035). Anything else is replaced at start.
+const PAIRING_VERSION: u64 = 2;
+
 /// Validates a device's HELLO, answering with the sealed reply.
 pub type Verifier = Arc<dyn Fn(&Value) -> Value + Send + Sync>;
 
@@ -99,6 +103,7 @@ impl RemoteService {
                     .with("relayUrl", get("relayUrl"))
                     .with("room", get("room"))
                     .with("secret", get("secret"))
+                    .with("pairing", get("pairing"))
                     .with("devices", or(get("devices"), json!([])))
                     // Relay replay protection: phones from before protocol 4
                     // are welcomed unless this is `false` (one release).
@@ -107,6 +112,23 @@ impl RemoteService {
                     .with("stoppedBy", get("stoppedBy"))
             }
         }
+    }
+
+    /// A room and secret from before relay credentials were derived
+    /// (decision 0035) were sent to the relay as they are: replace them, keeping
+    /// the paired devices, so phones pair again with a secret the relay never
+    /// saw. `None` when the pairing is already current or there is none.
+    fn upgraded_pairing(&self, cfg: &JsObj) -> Option<JsObj> {
+        let current = cfg.get("pairing").and_then(Value::as_u64) == Some(PAIRING_VERSION);
+        if current || !nekko_js::truthy(cfg.get("secret")) {
+            return None;
+        }
+        Some(
+            cfg.clone()
+                .with("room", Some(json!(hello::new_room_code(&self.random))))
+                .with("secret", Some(json!(hello::new_room_secret(&self.random))))
+                .with("pairing", Some(json!(PAIRING_VERSION))),
+        )
     }
 
     fn save(&self, cfg: &JsObj) -> Result<(), String> {
@@ -253,7 +275,8 @@ impl RemoteService {
             return Err(problem);
         }
         let _io = lock(&self.io);
-        let prev = self.load();
+        let loaded = self.load();
+        let prev = self.upgraded_pairing(&loaded).unwrap_or(loaded);
         let room = match prev.get("room").filter(|v| !v.is_null()) {
             Some(r) => r.clone(),
             None => json!(hello::new_room_code(&self.random)),
@@ -268,7 +291,8 @@ impl RemoteService {
             .with("stoppedBy", None)
             .with("relayUrl", Some(relay_url.clone()))
             .with("room", Some(room))
-            .with("secret", Some(secret));
+            .with("secret", Some(secret))
+            .with("pairing", Some(json!(PAIRING_VERSION)));
         self.save(&cfg)?;
         self.connect(&mut lock(&self.state), &cfg);
         drop(_io);
@@ -294,7 +318,8 @@ impl RemoteService {
             .with("enabled", Some(json!(true)))
             .with("relayUrl", Some(relay_url))
             .with("room", Some(room))
-            .with("secret", Some(secret));
+            .with("secret", Some(secret))
+            .with("pairing", Some(json!(PAIRING_VERSION)));
         self.save(&cfg)?;
         self.connect(&mut lock(&self.state), &cfg);
         drop(_io);
@@ -464,8 +489,11 @@ impl RemoteService {
         let prev = self.load();
         let room = hello::new_room_code(&self.random);
         let secret = hello::new_room_secret(&self.random);
-        let cfg =
-            prev.with("room", Some(json!(room))).with("secret", Some(json!(secret))).with("devices", Some(json!([])));
+        let cfg = prev
+            .with("room", Some(json!(room)))
+            .with("secret", Some(json!(secret)))
+            .with("pairing", Some(json!(PAIRING_VERSION)))
+            .with("devices", Some(json!([])));
         self.save(&cfg)?;
         // Every device is gone, and so is what they did.
         let _ = std::fs::remove_file(self.activity_file());
@@ -484,7 +512,11 @@ impl RemoteService {
     pub fn start_if_enabled(&self) {
         let cfg = {
             let _io = lock(&self.io);
-            self.load()
+            let cfg = self.load();
+            match self.upgraded_pairing(&cfg) {
+                Some(next) if self.save(&next).is_ok() => next,
+                _ => cfg,
+            }
         };
         let t = |k: &str| nekko_js::truthy(cfg.get(k));
         if t("enabled") && t("relayUrl") && t("room") && t("secret") {

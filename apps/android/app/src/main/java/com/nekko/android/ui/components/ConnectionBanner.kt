@@ -55,7 +55,7 @@ fun deniedCopy(reason: DenyReason?): String = when (reason) {
     DenyReason.BAD_CODE -> "That pairing code expired or was already used. Scan a fresh QR."
     DenyReason.UNKNOWN_DEVICE -> "Your computer doesn’t know this phone yet. Scan a pairing QR."
     DenyReason.KICKED -> "Your computer disconnected this phone. Pair it again."
-    DenyReason.BAD_KEY -> "The pairing key changed on your computer. Scan a fresh QR."
+    DenyReason.BAD_KEY -> "Your computer has a new pairing key. Pair this phone again: on the computer, Settings → Remote access → Pair a device, then scan the new QR here."
     DenyReason.UPDATE_REQUIRED -> "Your computer only accepts phones on the newest Nekko Agent. Update this app to connect to it."
     DenyReason.INVALID, null -> "Pairing failed. Scan a fresh QR on your computer."
 }

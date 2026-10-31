@@ -14,6 +14,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 - Your phone connects to the same relay with the pairing credentials.
 - Every payload is **end-to-end encrypted** (AES-GCM, key derived from the pairing secret). The
   relay routes ciphertext; it cannot read prompts, replies, files, or model output.
+- The relay never receives the pairing secret. Both ends present a room credential derived from it
+  under its own label (HMAC-SHA256 over `nekko-relay-auth:<room>`), which lets the relay match a phone
+  to its computer but gives it nothing the encryption key can be derived from
+  ([decision 0035](decisions/0035-the-relay-sees-a-derived-room-credential-never-the-pairing-secret.md)).
 - On top of the encrypted transport, every device must pass a **handshake against your computer's
   device registry**: new devices enroll only through a **single-use pairing code that expires in
   10 minutes**, and your computer answers each device individually (never broadcast).
@@ -29,6 +33,11 @@ and tools always execute on **your** machine, under its guardrails; the phone is
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to
    what a phone may do (below), so most desktop screens there are unavailable.
 3. The phone shows up under **Paired devices**, with a live connection dot.
+
+**Updating from a version before November 2026:** the first time your computer starts with the
+update, it replaces its pairing secret (the phones it knew stay listed). Each phone then says the
+pairing key changed: pair it again with a fresh QR from **Pair a device**. Phones and the computer
+both need the update; an older app cannot connect to an updated computer.
 
 ## The phone app
 
@@ -525,8 +534,8 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 
 | Threat | Defense |
 |---|---|
-| Relay operator reads your traffic | Impossible by construction: E2E encryption, relay sees ciphertext only |
-| Stranger connects to your room | Needs the pairing secret (128-bit) for transport auth, then a registered device or a live pairing code |
+| Relay operator reads your traffic | E2E encryption: the relay sees ciphertext and a room credential derived from the pairing secret, never the secret the key is derived from (decision 0035) |
+| Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, the secret itself to seal a HELLO, then a registered device or a live pairing code |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |

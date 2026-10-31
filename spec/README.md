@@ -194,6 +194,7 @@ Phone remote control and the native iOS and Android apps.
 - [Native phone implementation decision (2026-10-07)](phone/native-phone-implementation-decision.md) (2 KB)
 - [Nekko Cloud machines: a sandboxed computer the phone pairs with (2026-10-24)](phone/nekko-cloud-machines.md) (7 KB)
 - [Phone access classes and relay replay protection](phone/phone-access-classes-and-relay-replay-protection.md) (12 KB)
+- [Relay credential and re-pairing](phone/relay-credential-and-re-pairing.md) (3 KB)
 - [Your agent in your pocket (the iOS and Android app)](phone/your-agent-in-your-pocket-the-ios-and-android-app.md) (5 KB)
 
 ### platform

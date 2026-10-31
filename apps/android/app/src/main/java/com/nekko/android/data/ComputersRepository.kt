@@ -460,6 +460,13 @@ class ComputersRepository(
             )
         }
         liveList = false
+        if (secret.version < E2E.PAIRING_VERSION) {
+            // Paired before the computer replaced its pairing secret (decision 0035): it no longer
+            // answers on this pairing, so say so and ask for a fresh QR instead of dialing.
+            logStatus(RelayState.DENIED, denied = DenyReason.BAD_KEY)
+            _state.update { it.copy(conn = RelayState.DENIED, denied = DenyReason.BAD_KEY) }
+            return@withLock
+        }
         // Opening the app away from the computer: the list as it was, marked as saved.
         chatListCache?.load(id)?.let { saved ->
             _state.update { it.copy(summaries = saved.summaries, workspaces = saved.folders, savedListAt = saved.savedAt) }

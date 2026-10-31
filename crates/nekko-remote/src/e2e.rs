@@ -1,6 +1,8 @@
 //! The E2E layer (`packages/shared/src/e2e.ts`): a key derived from the
 //! pairing secret with the room as salt, and AES-256-GCM frames as base64 of
-//! `iv || ciphertext || tag`. The relay only ever sees these blobs.
+//! `iv || ciphertext || tag`. The relay only ever sees these blobs, and a
+//! room credential derived from the secret under its own label
+//! ([`relay_auth`], decision 0035), never the secret itself.
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -12,6 +14,22 @@ use serde_json::Value;
 /// Changing either breaks decryption for every existing pairing.
 const SALT_PREFIX: &str = "nekko-relay:";
 const ITERATIONS: u32 = 100_000;
+
+/// PROTOCOL CONSTANT: the label of the room credential the relay checks.
+const RELAY_AUTH_LABEL: &str = "nekko-relay-auth:";
+
+/// `relayAuth(secret, room)`: the `key=` a computer and its phones present
+/// to the relay, hex of HMAC-SHA256 keyed with the pairing secret over
+/// `"nekko-relay-auth:" + room`. It is one-way, so the relay can check that
+/// both ends hold the same pairing without learning the secret the E2E key
+/// derives from.
+pub fn relay_auth(secret: &str, room: &str) -> String {
+    use hmac::{Hmac, Mac};
+    let mut mac = <Hmac<sha2::Sha256> as Mac>::new_from_slice(secret.as_bytes()).expect("HMAC takes any key length");
+    mac.update(RELAY_AUTH_LABEL.as_bytes());
+    mac.update(room.as_bytes());
+    mac.finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect()
+}
 
 /// The AES-256 key for a room.
 #[derive(Clone)]

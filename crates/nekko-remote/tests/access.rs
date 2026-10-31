@@ -266,3 +266,21 @@ fn stopping_from_the_phone_turns_remote_off_and_says_who() {
     assert!(saved(&dir).get("stoppedBy").is_none());
     assert!(svc.route("remote:status", &[]).unwrap().get("stoppedBy").is_none());
 }
+
+#[test]
+fn a_pairing_from_before_derived_relay_credentials_is_replaced_at_start() {
+    let (dir, svc, said) = recorded();
+    let cfg = saved(&dir);
+    assert_ne!(cfg["secret"], json!("s"), "a fresh secret");
+    assert_ne!(cfg["room"], json!("r"), "a fresh room");
+    assert_eq!(cfg["pairing"], json!(2));
+    assert_eq!(cfg["devices"][0]["id"], "phone-1", "paired devices are kept");
+    assert_eq!(*said.lock().unwrap(), ["connect"]);
+    // Once current, a restart keeps it.
+    drop(svc);
+    let random: Random = Arc::new(|b: &mut [u8]| b.fill(9));
+    let again = RemoteService::new(dir.path(), random, Arc::new(|| NOW), Box::new(NoLink));
+    again.start_if_enabled();
+    assert_eq!(saved(&dir)["secret"], cfg["secret"]);
+    assert_eq!(saved(&dir)["room"], cfg["room"]);
+}
