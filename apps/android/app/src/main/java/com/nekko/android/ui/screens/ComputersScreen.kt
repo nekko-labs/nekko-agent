@@ -1,5 +1,10 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,7 +71,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () -> Unit) {
+fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () -> Unit, onOpen: (String) -> Unit = {}) {
     val s by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -102,6 +107,7 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
                         onPair = onPair,
                         onRename = { renaming = c },
                         onForget = { forgetting = c },
+                        onOpen = { onOpen(c.id) },
                     )
                 }
                 Button(onClick = onPair, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 4.dp)) {
@@ -181,6 +187,7 @@ private fun ComputerCard(
     onPair: () -> Unit,
     onRename: () -> Unit,
     onForget: () -> Unit,
+    onOpen: () -> Unit,
 ) {
     val p = Nekko.palette
     val active = s.activeId == c.id
@@ -194,7 +201,12 @@ private fun ComputerCard(
     }
     var menu by remember { mutableStateOf(false) }
     NCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // The name opens the computer's page (its details, models, hardware and round trip).
+        Row(
+            Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClickLabel = "Open ${c.name}", onClick = onOpen).testTag("computer.open"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Box(
                 Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(p.accentSoft),
                 contentAlignment = Alignment.Center,
@@ -213,6 +225,7 @@ private fun ComputerCard(
                 }
             }
             if (active) Pill("Active", Tone.ACCENT)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
         }
         if (active && s.lastError != null && state == CardState.ONLINE) {
             Text(s.lastError, style = MaterialTheme.typography.bodySmall, color = p.danger)
@@ -241,6 +254,11 @@ private fun ComputerCard(
                     Icon(Icons.Filled.MoreVert, contentDescription = "More options for ${c.name}", tint = p.inkSoft)
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Details") },
+                        leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
+                        onClick = { menu = false; onOpen() },
+                    )
                     DropdownMenuItem(
                         text = { Text("Rename") },
                         leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
