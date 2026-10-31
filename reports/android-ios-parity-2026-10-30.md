@@ -28,7 +28,7 @@ step-up. The only channels the iPhone uses and Android doesn't are `machine:summ
 | 11 | **Chat list view menu**: grouping, draggable / reorderable groups | `ChatListLayout.swift` | Done 2026-10-31 (`ChatListLayout.kt`, view menu in `ChatsScreen`) | M |
 | 12 | **Always-on dictation**: segments at pauses, "Nekko, …" voice commands, Hold to talk, first-open video | `VoiceSegmenter`, `VoiceCommands`, `HoldToTalk`, `VoiceRunner`, `VoiceIntroView` | One 30 s recording per tap | L |
 | 13 | **Languages and theme presets** (T201a remainder) | String Catalogs (7 languages), `ThemePresets.swift` | Only the mode strings are translated; presets drawn as mode + accent | L (mechanical) |
-| 14 | **A computer's page** (`machine:summary`, round trip, tiles) | `ComputerViews.swift`, `MachineModel.swift` | Computers screen: rename / switch / forget | M |
+| 14 | **A computer's page** (`machine:summary`, round trip, tiles) | `ComputerViews.swift`, `MachineModel.swift` | Done 2026-10-31 (`ComputerScreen`, `MachineController`, `Machine.kt`) | M |
 | 15 | **Nekko Cloud machines** | `CloudViews.swift`, `CloudSync.swift`, `CloudDeviceKey.swift` | None | L |
 | 16 | **First run** (three steps, notification permission after pairing) | `FirstRunView.swift` | None | S |
 | 17 | **Lock Screen card with Allow / Deny / Stop** (the one Live Activity, `card:set`) | `LiveCard.swift`, `RunActivities.swift` | Keep-alive Live Update with counts only, Deny in notifications | L, needs push to work while suspended |

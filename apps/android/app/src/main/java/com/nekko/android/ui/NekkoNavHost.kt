@@ -44,6 +44,7 @@ import com.nekko.android.ui.screens.AutomationsScreen
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.UsageScreen
 import com.nekko.android.ui.screens.ChatsScreen
+import com.nekko.android.ui.screens.ComputerScreen
 import com.nekko.android.ui.screens.ComputersScreen
 import com.nekko.android.ui.screens.NewChatScreen
 import com.nekko.android.ui.screens.PairScreen
@@ -90,6 +91,8 @@ object Routes {
     const val NEW = "new"
     const val PAIR = "pair?link={link}"
     const val COMPUTERS = "computers"
+    const val COMPUTER = "computers/{id}"
+    fun computer(id: String) = "computers/${Uri.encode(id)}"
     const val SETTINGS = "settings"
     const val LICENSES = "settings/licenses"
     const val MONITORS = "monitors"
@@ -284,6 +287,15 @@ fun NekkoNavHost(
                 repo = repo,
                 onBack = { nav.popBackStack() },
                 onPair = { nav.navigate(Routes.pair()) },
+                onOpen = { id -> nav.navigate(Routes.computer(id)) },
+            )
+        }
+        composable(Routes.COMPUTER, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            ComputerScreen(
+                repo = repo,
+                computerId = entry.arguments?.getString("id").orEmpty(),
+                onBack = { nav.popBackStack() },
+                onProviders = { nav.navigate(Routes.PROVIDERS) },
             )
         }
     }
