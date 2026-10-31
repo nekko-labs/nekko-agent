@@ -1,5 +1,10 @@
 package com.nekko.android.ui.screens
 
+import com.nekko.protocol.AgentRows
+import com.nekko.android.ui.chat.RowChip
+import androidx.compose.material.icons.filled.Outbox
+import androidx.compose.material.icons.filled.QuestionMark
+import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -446,11 +451,10 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            Modifier.padding(top = 2.dp).size(32.dp).clip(RoundedCornerShape(8.dp)).background(p.accentSoft),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.Computer, contentDescription = null, tint = p.accent, modifier = Modifier.size(16.dp))
+        // A glyph column says what the chat is doing before the title is read
+        // (the desktop's StatusIcon, as on the iPhone); the facts sit under the preview as chips.
+        Box(Modifier.padding(top = 2.dp).size(22.dp), contentAlignment = Alignment.Center) {
+            ChatStatusIcon(activity, waiting > 0, s.activeWatchCount)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -468,26 +472,55 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
             if (preview.isNotEmpty()) {
                 Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            // Prompts written offline for this chat, still in the outbox.
-            if (waiting > 0) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(14.dp))
-                    Text("$waiting waiting", style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
-                }
-            }
-            when (activity) {
-                Activity.NEEDS_YOU -> Box(Modifier.padding(top = 4.dp)) { Pill("Needs you", Tone.WARNING, Icons.Filled.Warning) }
-                Activity.RUNNING -> Box(Modifier.padding(top = 4.dp)) { Pill("Running", Tone.ACCENT, Icons.Filled.Bolt) }
-                null -> Box(Modifier.padding(top = 4.dp)) {
-                    if (s.activeWatchCount > 0) {
-                        Text("Zz", style = MaterialTheme.typography.labelMedium, color = p.inkFaint,
-                            modifier = Modifier.semantics { contentDescription = "Idle" })
-                    } else {
-                        Icon(Icons.Filled.Check, contentDescription = "Done", tint = p.inkFaint, modifier = Modifier.size(14.dp))
+            if (activity != null || waiting > 0) {
+                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    when (activity) {
+                        Activity.NEEDS_YOU -> RowChip("Needs you", tone = AgentRows.Tone.WARN)
+                        Activity.RUNNING -> RowChip("Working", accent = true)
+                        null -> Unit
+                    }
+                    // Prompts written offline for this chat, still in the outbox.
+                    if (waiting > 0) {
+                        Row(
+                            Modifier.semantics(mergeDescendants = true) {
+                                contentDescription = if (waiting == 1) "1 prompt waiting to send" else "$waiting prompts waiting to send"
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(Icons.Filled.Outbox, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(14.dp))
+                            Text("$waiting waiting", style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * What a chat is doing, as one glyph in the desktop's shapes (StatusIcon), so
+ * colour is never the only cue: a rocket while it works, a question mark when
+ * it needs you, a clock while prompts wait to send, a check when done, and
+ * "Zz" when it is idle with a watch armed.
+ */
+@Composable
+internal fun ChatStatusIcon(activity: Activity?, waiting: Boolean, activeWatchCount: Long) {
+    val p = Nekko.palette
+    val label = when {
+        activity == Activity.RUNNING -> "Working"
+        activity == Activity.NEEDS_YOU -> "Needs you"
+        waiting -> "Waiting to send"
+        activeWatchCount > 0 -> "Idle"
+        else -> "Done"
+    }
+    val m = Modifier.size(18.dp).semantics { contentDescription = label }
+    when (label) {
+        "Working" -> Icon(Icons.Outlined.RocketLaunch, contentDescription = null, tint = p.success, modifier = m)
+        "Needs you" -> Icon(Icons.Filled.QuestionMark, contentDescription = null, tint = p.warning, modifier = m)
+        "Waiting to send" -> Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = m)
+        "Idle" -> Text("Zz", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = p.inkFaint, modifier = Modifier.semantics { contentDescription = label })
+        else -> Icon(Icons.Filled.Check, contentDescription = null, tint = p.inkFaint, modifier = m)
     }
 }
 

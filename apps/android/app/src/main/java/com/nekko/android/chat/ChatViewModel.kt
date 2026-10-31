@@ -51,6 +51,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import com.nekko.protocol.Activity
+import com.nekko.protocol.SessionSummary
+import com.nekko.protocol.AgentWatch
+import com.nekko.protocol.AgentRows
 import kotlinx.serialization.json.JsonPrimitive
 
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
@@ -198,6 +203,49 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             repo.events.collect { e -> if (controller.onEvent(e)) launch { controller.reload() } }
+        }
+    }
+
+    private val _watches = MutableStateFlow<List<AgentWatch>>(emptyList())
+    /** The chat's durable watches (`session:watches`), for the watch rows' live chips. */
+    val watches: StateFlow<List<AgentWatch>> = _watches.asStateFlow()
+
+    /** This chat's subagent chats (the list hides them) and their live activity, for the delegation rows. */
+    data class Subagents(val children: List<SessionSummary> = emptyList(), val activity: Map<String, Activity> = emptyMap())
+
+    val subagents: StateFlow<Subagents> = repo.state.map { s ->
+        val children = s.summaries.filter { it.parentSessionId == sessionId }
+        Subagents(children, s.activity.filterKeys { id -> children.any { it.id == id } })
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, Subagents())
+
+    private fun calls(tool: String) = ui.value.blocks.any { it is Block.Tool && it.name == tool }
+
+    /**
+     * Re-read what the agent-work rows show beyond the transcript: the watches,
+     * and the child chats when the transcript delegates. Failures keep the last state.
+     */
+    suspend fun refreshAgentState() {
+        if (calls(AgentRows.WATCH_TOOL)) {
+            runCatching { AgentWatch.list(repo.caller.call(Channels.SESSION_WATCHES, JsonPrimitive(sessionId))) }
+                .onSuccess { _watches.value = it }
+        }
+        if (calls(AgentRows.SUBAGENT_TOOL)) runCatching { repo.reloadList() }
+    }
+
+    init {
+        // Re-read when the transcript first holds a watch or a delegation, and after each turn.
+        viewModelScope.launch {
+            ui.map { u -> Triple(u.blocks.any { it is Block.Tool && it.name == AgentRows.WATCH_TOOL },
+                u.blocks.any { it is Block.Tool && it.name == AgentRows.SUBAGENT_TOOL }, u.running) }
+                .distinctUntilChanged()
+                .collect { (watch, agent, _) -> if (watch || agent) refreshAgentState() }
+        }
+        // While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
+        viewModelScope.launch {
+            while (true) {
+                delay(15_000)
+                if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
+            }
         }
     }
 
