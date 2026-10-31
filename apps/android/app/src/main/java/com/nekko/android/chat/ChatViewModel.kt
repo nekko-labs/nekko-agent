@@ -213,9 +213,11 @@ class ChatViewModel(
     /** This chat's subagent chats (the list hides them) and their live activity, for the delegation rows. */
     data class Subagents(val children: List<SessionSummary> = emptyList(), val activity: Map<String, Activity> = emptyMap())
 
-    val subagents: StateFlow<Subagents> = repo.state.map { s ->
-        val children = s.summaries.filter { it.parentSessionId == sessionId }
-        Subagents(children, s.activity.filterKeys { id -> children.any { it.id == id } })
+    // The list the phone holds leaves subagent chats out (SessionSummary.visible), so they are read here.
+    private val children = MutableStateFlow<List<SessionSummary>>(emptyList())
+
+    val subagents: StateFlow<Subagents> = combine(children, repo.state.map { it.activity }.distinctUntilChanged()) { kids, activity ->
+        Subagents(kids, activity.filterKeys { id -> kids.any { it.id == id } })
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, Subagents())
 
     private fun calls(tool: String) = ui.value.blocks.any { it is Block.Tool && it.name == tool }
@@ -229,7 +231,10 @@ class ChatViewModel(
             runCatching { AgentWatch.list(repo.caller.call(Channels.SESSION_WATCHES, JsonPrimitive(sessionId))) }
                 .onSuccess { _watches.value = it }
         }
-        if (calls(AgentRows.SUBAGENT_TOOL)) runCatching { repo.reloadList() }
+        if (calls(AgentRows.SUBAGENT_TOOL)) {
+            runCatching { SessionSummary.children(repo.caller.call(Channels.SESSIONS_SUMMARIES), sessionId) }
+                .onSuccess { children.value = it }
+        }
     }
 
     init {

@@ -345,6 +345,10 @@ data class SessionSummary(
             )
         }
 
+        /** The subagent chats [parent] delegated to (the list leaves them out), as the computer lists them. */
+        fun children(list: JsonElement?, parent: String): List<SessionSummary> =
+            list.arr()?.mapNotNull { from(it) }?.filter { it.parentSessionId == parent } ?: emptyList()
+
         /** Every top-level chat, completed ones included, newest first. */
         fun visible(list: JsonElement?): List<SessionSummary> =
             list.arr()?.mapNotNull { from(it) }?.filter { it.isVisible }?.sortedByDescending { it.updatedAt } ?: emptyList()

@@ -118,6 +118,15 @@ class AgentRowsTest {
         assertFalse(AgentRows.isWake("plain prompt"))
     }
 
+    @Test fun `a chat's subagents come from the whole list, which the visible one leaves out`() {
+        val raw = Json.parseToJsonElement(
+            """[{"id":"p","title":"Parent","updatedAt":3},{"id":"c1","title":"Timer precision","updatedAt":2,"parentSessionId":"p"},{"id":"c9","title":"Other","updatedAt":1,"parentSessionId":"q"}]""",
+        )
+        assertEquals(listOf("p"), SessionSummary.visible(raw).map { it.id })
+        assertEquals(listOf("c1"), SessionSummary.children(raw, "p").map { it.id })
+        assertEquals(emptyList<SessionSummary>(), SessionSummary.children(null, "p"))
+    }
+
     @Test fun `subagent title, model and status`() {
         val call = input("""{"title":"Timer precision","task":"Find the 6 ms jitter in RouteSupervisor. Then report.","model_id":"claude-sonnet-5-5-20261001"}""")
         assertEquals("Timer precision", AgentRows.subagentTitle(call))
