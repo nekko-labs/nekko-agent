@@ -1,5 +1,9 @@
 package com.nekko.android.ui.settings
 
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.selection.selectable
+import com.nekko.protocol.LiveLevel
+import com.nekko.android.connection.LiveCards
 import androidx.compose.ui.platform.testTag
 
 import android.Manifest
@@ -60,6 +64,7 @@ fun ConnectionSection(deps: SettingsDeps) {
     val context = LocalContext.current
     val lock = LocalAppLock.current
     val keep by deps.phonePrefs.flow(KeepAlive.ENABLED).collectAsStateWithLifecycle()
+    val cardLevel by deps.phonePrefs.flow(LiveCards.LEVEL).collectAsStateWithLifecycle()
     val needsYou by deps.phonePrefs.flow(Notices.NEEDS_YOU).collectAsStateWithLifecycle()
     val finished by deps.phonePrefs.flow(Notices.FINISHED).collectAsStateWithLifecycle()
     val failed by deps.phonePrefs.flow(Notices.FAILED).collectAsStateWithLifecycle()
@@ -98,6 +103,29 @@ fun ConnectionSection(deps: SettingsDeps) {
                 checked = keep,
                 onChange = { deps.phonePrefs.set(KeepAlive.ENABLED, it) },
             )
+            if (keep) {
+                // The Lock Screen card (the iPhone's Live Activity levels): what that notification shows.
+                Text("Lock Screen card", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
+                // Stored at the app's first start (LiveCards.firstLevel); Minimal until then.
+                val current = cardLevel ?: LiveLevel.MINIMAL
+                for ((level, title, detail) in listOf(
+                    Triple(LiveLevel.NONE, "Counts only", "How many chats are running, nothing else"),
+                    Triple(LiveLevel.MINIMAL, "Minimal", "What the chat that needs you is doing, with Stop and Deny. No chat text"),
+                    Triple(LiveLevel.STANDARD, "Standard", "Adds the chat's name, its live step and Allow"),
+                    Triple(LiveLevel.DETAILED, "Detailed", "Adds the first line of the latest reply"),
+                )) {
+                    RadioRow(title, detail, selected = current == level, tag = "settings.card.${level.wire}") { deps.phonePrefs.set(LiveCards.LEVEL, level) }
+                }
+                Text(
+                    when (current) {
+                        LiveLevel.NONE, LiveLevel.MINIMAL -> "No chat text leaves your computer for the lock screen."
+                        else -> "Chat names and steps show when the phone is unlocked; a locked phone that hides sensitive content shows the Minimal words. Allow asks you to unlock first."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = p.inkSoft,
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                )
+            }
             HorizontalDivider(color = p.line)
             // Notify me about (the iPhone's IO-30): one switch per kind, while the app is out of sight.
             Text("Notify me about", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
@@ -181,6 +209,27 @@ fun ConnectionSection(deps: SettingsDeps) {
             color = p.inkFaint,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
         )
+    }
+}
+
+@Composable
+private fun RadioRow(title: String, detail: String, selected: Boolean, tag: String, onSelect: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = p.ink)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+        }
     }
 }
 
