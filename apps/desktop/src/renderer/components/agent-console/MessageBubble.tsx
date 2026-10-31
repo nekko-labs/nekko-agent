@@ -101,7 +101,7 @@ export const MessageBubble = memo(function MessageBubble({
             <div data-chat-search-text><Markdown basePath={basePath} text={message.content} /></div>
             {!entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
             {displayText && message.content && (
-              <div className="mt-1 flex gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+              <div className="mt-1 flex gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-70">
                 <button onClick={copy} title="Copy message" className="inline-flex items-center gap-1 hover:text-ink">{copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}{copied ? 'Copied' : 'Copy'}</button>
                 {onRestart && (
                   <button onClick={() => onRestart(message.id)} title="Keep the chat up to this reply and delete everything after it" className="hover:text-ink" data-message-restart>
@@ -168,7 +168,7 @@ export const MessageBubble = memo(function MessageBubble({
         {message.toolCalls?.map((c) => <ToolCard key={c.id} call={c} />)}
         {!isUser && !entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
         {(displayText && message.content || (isUser && (message.images?.length || message.videos?.length))) && (
-          <div className={`mt-1 flex items-center gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${isUser ? 'justify-end' : ''}`}>
+          <div className={`mt-1 flex items-center gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-70 ${isUser ? 'justify-end' : ''}`}>
             {isUser && message.createdAt > 0 && (
               <span className="text-ink-faint/70" title={fmtDateTime(message.createdAt)}>{fmtTime(message.createdAt)}</span>
             )}

@@ -602,7 +602,7 @@ function Command({ value, copyValue }: { value: string; copyValue?: string }) {
         {value}
       </pre>
       <button
-        className="absolute right-1.5 top-1.5 rounded-md p-1 text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus:opacity-100"
+        className="absolute right-1.5 top-1.5 rounded-md p-1 text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 touch:opacity-100 focus:opacity-100"
         title="Copy"
         aria-label="Copy"
         onClick={async () => {

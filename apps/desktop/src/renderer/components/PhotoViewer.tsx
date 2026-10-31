@@ -44,7 +44,7 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
 
   return (
     <Modal title={many ? `Photo ${index + 1} of ${items.length}: ${caption}` : caption} onClose={onClose} scrim="rgba(0,0,0,0.78)" overlayClassName="p-4" zIndex={55}>
-      <div className="flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] flex-col items-center gap-3" data-photo-viewer onClick={onClose}>
+      <div className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] flex-col items-center gap-3" data-photo-viewer onClick={onClose}>
         <div className="flex w-full items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <span className="min-w-0 flex-1 truncate text-sm text-white/90" title={item.url ?? caption}>
             {many && <span className="mr-2 tabular-nums text-white/60">{index + 1} / {items.length}</span>}

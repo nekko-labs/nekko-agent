@@ -726,7 +726,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                 {/* Not part of the row's project drag: a press that wanders a few
                     pixels would otherwise start dragging the project, and the
                     click on + never lands. */}
-                {byProject && <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100" data-group-actions
+                {byProject && <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100" data-group-actions
                   onPointerDown={() => { pressingGroupAction.current = true; }}>
                   <button className="rounded-md p-1 text-ink-faint hover:bg-paper hover:text-ink" title="New agent in this project"
                     disabled={pendingProjects.includes(b.key)} aria-label={`New agent in ${b.name}`}

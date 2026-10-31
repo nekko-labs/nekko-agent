@@ -281,7 +281,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
                 </button>
                 <button
                   type="button"
-                  className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-ink-faint opacity-0 hover:bg-surface-2 hover:text-ink focus:opacity-100 group-hover:opacity-100"
+                  className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-ink-faint opacity-0 hover:bg-surface-2 hover:text-ink focus:opacity-100 group-hover:opacity-100 touch:opacity-100"
                   title="Open the file with the system's default app"
                   aria-label={`Open file ${a.filename}`}
                   onClick={() => void window.nekko.openPath(a.path)}
@@ -305,7 +305,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
       role="dialog"
       aria-label="Search chats"
       className="chat-finder card fixed z-[1000] flex flex-col p-2 shadow-(--shadow-float)"
-      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: `calc(100vh - ${pos.top + 12}px)` }}
+      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: `calc(100dvh - ${pos.top + 12}px)` }}
       onKeyDown={onKeyDown}
     >
       <div className="flex items-center gap-1 px-1 pb-1">

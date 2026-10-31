@@ -525,7 +525,7 @@ function FolderAccordion({
         )}
         <button
           type="button"
-          className={`shrink-0 rounded-sm p-0.5 transition-opacity focus-visible:opacity-100 ${isDefault ? 'text-accent' : 'text-ink-faint opacity-0 hover:text-ink group-hover:opacity-100'}`}
+          className={`shrink-0 rounded-sm p-0.5 transition-opacity focus-visible:opacity-100 ${isDefault ? 'text-accent' : 'text-ink-faint opacity-0 hover:text-ink group-hover:opacity-100 touch:opacity-100'}`}
           aria-pressed={isDefault}
           aria-label={isDefault ? `Stop starting new chats in ${name}` : `Start new chats in ${name}`}
           title={isDefault ? 'Default for new chats (click to unset)' : 'Set as default for new chats'}
@@ -534,7 +534,7 @@ function FolderAccordion({
           <StarIcon className="h-3.5 w-3.5" filled={isDefault} />
         </button>
         <button
-          className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 transition-opacity hover:text-(--danger) focus-visible:opacity-100 group-hover:opacity-100"
+          className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 transition-opacity hover:text-(--danger) focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
           title="Remove this folder"
           onClick={onRemove}
         >
@@ -662,7 +662,7 @@ function Row({
       </div>
       {onRemove && (
         <button
-          className="shrink-0 text-ink-faint opacity-0 hover:text-(--danger) group-hover:opacity-100"
+          className="shrink-0 text-ink-faint opacity-0 hover:text-(--danger) group-hover:opacity-100 touch:opacity-100"
           title="Remove"
           onClick={(e) => {
             e.stopPropagation();

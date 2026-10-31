@@ -170,7 +170,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
       <button
         onClick={copy}
         title="Copy code"
-        className="absolute right-2 top-2 rounded-md border border-line px-2 py-0.5 text-2xs text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+        className="absolute right-2 top-2 rounded-md border border-line px-2 py-0.5 text-2xs text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
         style={{ background: 'var(--surface)' }}
       >
         {copied ? '✓ copied' : 'Copy'}
