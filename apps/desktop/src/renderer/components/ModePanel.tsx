@@ -412,7 +412,7 @@ export function ModePanel({
             </div>
             {sandbox && <button className="mode-link" onClick={onSandboxSetup}>Sandbox setup</button>}
 
-            <p className="mode-sec mt-3"><DialIcon /> Model</p>
+            <p className="mode-sec is-sub"><DialIcon /> Model</p>
             <div className="mode-row is-stacked">
               <span className="mode-ic">{scope === 'cloud' ? <CloudIcon /> : scope === 'local' ? <LaptopIcon /> : <RouteIcon />}</span>
               <span className="min-w-0 flex-1"><span className="mode-t">Models run</span><span className="mode-s">{MODEL_SCOPE_DESC[scope ?? 'any']}</span></span>
