@@ -25,7 +25,7 @@ step-up. The only channels the iPhone uses and Android doesn't are `machine:summ
 | 8 | **Rich Markdown** (MD-6): tables, link previews, Markdown composer and toolbar, rich paste | `MarkdownBlocks/Editing/Highlight.swift`, `RichPaste.swift`, `MarkdownComposer.swift` | Basic subset, no tables | L |
 | 9 | **Mermaid diagrams** (MM-4) in a locked WebView | `Mermaid.swift` | None | M |
 | 10 | **The agent's work as rows**: subagent groups, watches (`session:watches`), desktop-style status icons | `AgentRows.swift`, `AgentRowViews.swift`, `ChatStatusIcon.swift` | Done 2026-10-31 (`AgentRows.kt`, `AgentRowViews.kt`, `ChatStatusIcon`) | M |
-| 11 | **Chat list view menu**: grouping, draggable / reorderable groups | `ChatListLayout.swift` | Fixed grouping | M |
+| 11 | **Chat list view menu**: grouping, draggable / reorderable groups | `ChatListLayout.swift` | Done 2026-10-31 (`ChatListLayout.kt`, view menu in `ChatsScreen`) | M |
 | 12 | **Always-on dictation**: segments at pauses, "Nekko, …" voice commands, Hold to talk, first-open video | `VoiceSegmenter`, `VoiceCommands`, `HoldToTalk`, `VoiceRunner`, `VoiceIntroView` | One 30 s recording per tap | L |
 | 13 | **Languages and theme presets** (T201a remainder) | String Catalogs (7 languages), `ThemePresets.swift` | Only the mode strings are translated; presets drawn as mode + accent | L (mechanical) |
 | 14 | **A computer's page** (`machine:summary`, round trip, tiles) | `ComputerViews.swift`, `MachineModel.swift` | Computers screen: rename / switch / forget | M |

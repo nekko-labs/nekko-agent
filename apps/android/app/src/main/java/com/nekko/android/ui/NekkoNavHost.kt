@@ -170,6 +170,7 @@ fun NekkoNavHost(
                 onSettings = { nav.navigate(Routes.SETTINGS) },
                 onMonitors = { nav.navigate(Routes.MONITORS) },
                 onSkipFirstRun = firstRunSkip(phonePrefs),
+                phonePrefs = phonePrefs,
             )
         }
         composable(Routes.MONITORS) {
@@ -347,6 +348,7 @@ private fun Panes(
                 onSettings = { nav.navigate(Routes.SETTINGS) },
                 onMonitors = { panes.update(running) { l -> if (l[slot.side.other] == PaneContent.Monitors) l else l.replace(slot.side.other, PaneContent.Monitors) } },
                 pane = slot,
+                phonePrefs = phonePrefs,
             )
             PaneContent.Monitors -> {
                 val vm = viewModel(viewModelStoreOwner = panes.stores.owner(c.key), key = c.key) { MonitorsViewModel(repo) }
