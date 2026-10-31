@@ -252,7 +252,9 @@ final class Dictation {
         // Each of these leaves the microphone dead: stop listening with it, keeping what was said.
         let center = NotificationCenter.default
         let stop: @Sendable (Notification) -> Void = { [weak self] n in
-            MainActor.assumeIsolated { if Self.endsListening(n) { self?.stoppedUnasked() } }
+            // Read here, so the notification itself never crosses to the main actor.
+            let ends = Self.endsListening(n)
+            MainActor.assumeIsolated { if ends { self?.stoppedUnasked() } }
         }
         stops = [center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main, using: stop),
                  center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main, using: stop),
@@ -436,8 +438,9 @@ final class Dictation {
               let converter = AVAudioConverter(from: from, to: to) else { throw RelayError("Couldn’t start recording.") }
         input.installTap(onBus: 0, bufferSize: 4096, format: from) { [weak dictation] buffer, _ in
             guard let samples = convert(buffer, converter, to) else { return }
-            // The main queue keeps the buffers in order.
-            DispatchQueue.main.async { MainActor.assumeIsolated { dictation?.consume(samples) } }
+            // A constant for the hop (a weak capture is a variable); the main queue keeps the buffers in order.
+            let target = dictation
+            DispatchQueue.main.async { MainActor.assumeIsolated { target?.consume(samples) } }
         }
     }
 
