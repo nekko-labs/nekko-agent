@@ -105,14 +105,16 @@ pub fn fake_claude() {
             out(lifecycle("started"));
         }
         out(init());
-        if text == "background" {
+        if text == "background" || text == "background-slow" {
             // Start a background command, end the turn, then wake when it
             // finishes, with nothing written: a turn of Claude Code's own
-            // whose command needs a person to approve it.
+            // whose command needs a person to approve it. The slow one gives
+            // a test time to change the chat between the two.
             out(assistant("m_bg", json!([{ "type": "text", "text": "started" }])));
             out(result("started", "completed"));
             out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [{ "task_id": "b1" }] }));
-            std::thread::sleep(std::time::Duration::from_millis(300));
+            let wait = if text == "background" { 300 } else { 2_000 };
+            std::thread::sleep(std::time::Duration::from_millis(wait));
             out(
                 json!({ "type": "system", "subtype": "task_updated", "task_id": "b1", "patch": { "status": "completed" } }),
             );
@@ -500,6 +502,35 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     turn_record(&rig, "ccW2", "s_cc").await;
     let replies = assistant_texts(&saved(&rig));
     assert!(replies.last().unwrap().ends_with(": again"), "{replies:?}");
+}
+
+/// A chat whose mode changed after its turn still shows the wake-up: the
+/// child that woke is read as it is, not dropped as out of date over and
+/// over while its work goes unseen (#1408).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_wake_up_after_a_mode_change_still_reaches_the_chat() {
+    let rig = rig("wake-mode", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccM", "background-slow")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccM", "s_cc").await;
+    let (status, body) = post(rig.d.port, "session:setOptions", json!(["s_cc", { "mode": "plan" }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(saved(&rig)["mode"], "plan");
+
+    let approval = wait_pending(rig.d.port, "s_cc", "approval", "toolu_wake").await;
+    assert_eq!(approval["call"]["executedBy"], "claude-code");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cc", "toolu_wake", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    until("the wake-up to reach the chat", Duration::from_secs(30), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        let last = assistant_texts(&saved(&rig)).last().cloned();
+        (running == json!([]) && last.as_deref() == Some("woke: allow")).then_some(())
+    })
+    .await;
+    // One wake-up, not a turn started again and again.
+    let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
+    let metas = kinds(&events).iter().filter(|k| *k == "session_meta").count();
+    assert!(metas < 10, "{metas} session_meta events: {:?}", kinds(&events));
 }
 
 /// A Claude Agent on a second Claude Code account runs with that account's
