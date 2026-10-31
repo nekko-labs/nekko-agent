@@ -447,6 +447,11 @@ struct ConnectionBanner: View {
             return nil
         case .connecting:
             if let hint = app.tailnetHint { return (hint + waitingNote, palette.warning, "network.slash") }
+            if store.connDetail == RelayStatus.hostNotFound {
+                let host = store.active?.relayHost ?? "The relay"
+                return ("Can’t find \(host), the address this iPhone was paired with. On \(name), change how phones connect in Settings → Remote access, then pair again." + waitingNote,
+                        palette.danger, "exclamationmark.triangle")
+            }
             return ("Connecting to \(name)…" + (store.connDetail.map { " (\($0))" } ?? "") + waitingNote, palette.running, "arrow.triangle.2.circlepath")
         case .offline:
             return ("\(name) is offline. Open Nekko Agent on it, with Remote access on. This phone keeps trying." + waitingNote, palette.warning, "moon.zzz")
