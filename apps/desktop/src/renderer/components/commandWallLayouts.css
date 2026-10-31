@@ -391,21 +391,34 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .command-wall-window[data-zone-drop] > .panel { --panel-ring-color: var(--accent) !important; --panel-ring-width: 2px !important; border-color: var(--accent); background: var(--accent-soft); }
 
 /* The add-zone rails along the right and bottom edges are the wall's gaps to
-   the dock and the composer, so they are --wall-gap wide; their pluses overhang. */
-/* A zoned board always fits its viewport, so it clips instead of scrolling:
-   an overhanging plus must not bring up a scrollbar and its gutter. */
-.command-wall-layout[data-zone-rails] { padding-right: var(--wall-gap); padding-bottom: var(--wall-gap); overflow: clip; overflow-clip-margin: calc(8px - var(--wall-gap) / 2); }
-.wall-zone-rail { position: absolute; width: var(--wall-gap); height: var(--wall-gap); }
+   the dock and the composer, widened to --zone-rail so they can be hit. */
+/* A zoned board always fits its viewport, so it clips instead of scrolling. */
+.command-wall-layout[data-zone-rails] { --zone-rail: 14px; padding-right: var(--zone-rail); padding-bottom: var(--zone-rail); overflow: clip; }
+.wall-zone-rail { position: absolute; width: var(--zone-rail); height: var(--zone-rail); }
+/* Each plus is the whole stretch of edge beside its zone: a quiet hairline at
+   rest that fills and shows its plus on hover. The span button is the short
+   strip at the rail's end and keeps its icon. */
 .wall-zone-add {
-  position: absolute; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px;
-  color: var(--ink-faint); opacity: .45; transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+  position: absolute; display: grid; place-items: center; border-radius: 6px;
+  color: var(--ink-faint); transition: color 120ms ease, background 120ms ease;
 }
-.wall-zone-rail[data-side='right'] .wall-zone-add { left: calc(var(--wall-gap) / 2 - 8px); transform: translateY(-50%); }
-.wall-zone-rail[data-side='down'] .wall-zone-add { top: calc(var(--wall-gap) / 2 - 8px); transform: translateX(-50%); }
-.wall-zone-rail[data-side='down'] .wall-zone-span svg { transform: rotate(90deg); }
-.wall-zone-rail:hover .wall-zone-add { opacity: .8; }
-.wall-zone-add:hover, .wall-zone-add:focus-visible { opacity: 1 !important; color: var(--accent); background: var(--accent-soft); outline: none; }
-.wall-zone-add svg { stroke-width: 1.5; }
+.wall-zone-rail[data-side='right'] .wall-zone-add { left: 2px; width: calc(var(--zone-rail) - 4px); }
+.wall-zone-rail[data-side='down'] .wall-zone-add { top: 2px; height: calc(var(--zone-rail) - 4px); }
+.wall-zone-add::before {
+  content: ''; position: absolute; border-radius: 2px; background: currentColor; opacity: .3;
+  transition: opacity 120ms ease;
+}
+.wall-zone-rail[data-side='right'] .wall-zone-add::before { width: 2px; height: min(28px, 40%); }
+.wall-zone-rail[data-side='down'] .wall-zone-add::before { height: 2px; width: min(28px, 40%); }
+.wall-zone-add > svg { stroke-width: 1.75; opacity: 0; transition: opacity 120ms ease, transform 200ms cubic-bezier(.34, 1.56, .64, 1); transform: scale(.6); }
+.wall-zone-rail:hover .wall-zone-add::before { opacity: .55; }
+.wall-zone-add:hover, .wall-zone-add:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
+.wall-zone-add:is(:hover, :focus-visible)::before { opacity: 0 !important; }
+.wall-zone-add:is(:hover, :focus-visible) > svg { opacity: 1; transform: none; }
+.wall-zone-span::before { display: none; }
+.wall-zone-span > svg { opacity: .5; transform: none; }
+.wall-zone-rail[data-side='down'] .wall-zone-span > svg { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .wall-zone-add > svg { transition: none; } }
 /* Where a hovered plus would put the new zone. */
 .wall-zone-ghost {
   position: absolute; z-index: 3; pointer-events: none; display: grid; place-items: center;
