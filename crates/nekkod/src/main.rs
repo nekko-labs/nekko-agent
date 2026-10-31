@@ -100,6 +100,13 @@ pub fn random_token() -> String {
 }
 
 fn main() -> std::process::ExitCode {
+    // A parent Claude Code session's variables would put every `claude` this
+    // daemon starts (sign-in terminal, subscription turns) on that session's auth.
+    let names: Vec<String> = std::env::vars_os().filter_map(|(k, _)| k.into_string().ok()).collect();
+    for name in nekko_harness::host_session_vars(names) {
+        // SAFETY: first thing in main, before any other thread exists.
+        unsafe { std::env::remove_var(name) };
+    }
     machine::mark_started();
     let cfg = match config::load() {
         Ok(c) => c,

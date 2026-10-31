@@ -32,6 +32,7 @@
 
 mod account;
 mod auth;
+mod host_env;
 mod locate;
 mod map;
 mod session;
@@ -39,6 +40,7 @@ mod turn;
 
 pub use account::{MAX_ACCOUNT_LEN, account_config_dir, is_account_name};
 pub use auth::{AuthStatus, auth_status, parse_auth_status};
+pub use host_env::host_session_vars;
 pub use locate::{ClaudeBin, MIN_VERSION, locate, parse_version, pick_windows_candidate};
 pub use map::{Init, Mapped, Mapper, Outcome, ReportedContext, StopKind, TurnEnd, USER_STOPPED, user_content};
 pub use session::{

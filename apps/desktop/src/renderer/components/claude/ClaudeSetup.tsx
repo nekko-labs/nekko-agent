@@ -28,6 +28,12 @@ export function claudeInstallCommand(platform: string): string {
   return /^win/i.test(platform) ? 'irm https://claude.ai/install.ps1 | iex' : 'curl -fsSL https://claude.ai/install.sh | bash';
 }
 
+/**
+ * Claude Code's own sign-in for a Claude plan: it opens Anthropic's page in
+ * the browser, so the user never has to find `/login` inside Claude Code.
+ */
+export const CLAUDE_SIGNIN_COMMAND = 'claude auth login --claudeai';
+
 const hostPlatform = () => windowChrome?.platform ?? (typeof navigator === 'undefined' ? '' : navigator.platform);
 
 /** The Claude Code folder an account's login lives in. */
@@ -82,7 +88,7 @@ export function useClaudeCodeStatuses(providers: ProviderConfig[]): Record<strin
   return byId;
 }
 
-/** A Claude Code terminal shown inline: the installer, or `claude` to sign in. */
+/** A Claude Code terminal shown inline: the installer, or Claude Code's sign-in. */
 interface InlineTerminal { id: string; purpose: 'install' | 'signin'; account?: string }
 
 function useInlineTerminal(onTick: () => void) {
@@ -105,12 +111,16 @@ function useInlineTerminal(onTick: () => void) {
         ...(account ? { claudeAccount: account } : {}),
       });
       setTerm({ id: t.id, purpose, account });
-      await window.nekko.runInTerminal(t.id, purpose === 'install' ? claudeInstallCommand(hostPlatform()) : 'claude');
+      await window.nekko.runInTerminal(t.id, purpose === 'install' ? claudeInstallCommand(hostPlatform()) : CLAUDE_SIGNIN_COMMAND);
     } catch (e) {
       pushToast('error', `Could not open a terminal: ${String(e)}`);
     }
   };
-  return { term, open, close: () => setTerm(null) };
+  /** Start the sign-in again in the open terminal, after a cancelled or expired one. */
+  const retry = () => {
+    if (term) void window.nekko.runInTerminal(term.id, CLAUDE_SIGNIN_COMMAND).catch((e) => pushToast('error', String(e)));
+  };
+  return { term, open, retry, close: () => setTerm(null) };
 }
 
 /** What the user sees once a Claude account is connected. */
@@ -226,7 +236,8 @@ export function ClaudeSetup({
       );
     }
     if (!status.loggedIn) {
-      return <button type="button" className="btn btn-primary" onClick={() => void terminal.open('signin')}>Connect: sign in to Claude Code</button>;
+      const signingIn = terminal.term?.purpose === 'signin' && !terminal.term.account;
+      return <button type="button" className="btn btn-primary" onClick={() => void terminal.open('signin')} disabled={signingIn}>{signingIn ? 'Signing in…' : 'Connect: sign in to Claude Code'}</button>;
     }
     if (usualCheck?.verdict === 'blocked') return <button type="button" className="btn btn-primary" disabled>Already connected</button>;
     return <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={saving}>{saving ? 'Connecting…' : 'Connect'}</button>;
@@ -270,10 +281,20 @@ export function ClaudeSetup({
             <span className="min-w-0 flex-1">
               {terminal.term.purpose === 'install'
                 ? 'Installing Claude Code with Anthropic’s installer. This closes by itself when it finishes.'
-                : <>In Claude Code, type <code>/login</code> and finish signing in with Anthropic. Nekko never sees your login.</>}
+                : 'Claude Code is signing you in. Nekko never sees your login.'}
             </span>
+            {terminal.term.purpose === 'signin' && (
+              <button type="button" className="btn btn-ghost py-1 text-[12px]" onClick={terminal.retry}>Start sign-in again</button>
+            )}
             <button type="button" className="btn btn-ghost py-1 text-[12px]" onClick={terminal.close}>Hide</button>
           </div>
+          {terminal.term.purpose === 'signin' && (
+            <ol className="claude-signin-steps">
+              <li><b>Finish in your browser.</b> Claude Code opened Anthropic’s sign-in page. Sign in with the Claude account that has your plan and approve.</li>
+              <li><b>No page opened?</b> Open the link Claude Code shows below. If the page gives you a code, paste it into the terminal and press Enter.</li>
+              <li><b>That’s it.</b> This panel moves on by itself once Claude Code is signed in.</li>
+            </ol>
+          )}
           <div className="claude-terminal-body"><TerminalPane terminalId={terminal.term.id} /></div>
         </div>
       )}
