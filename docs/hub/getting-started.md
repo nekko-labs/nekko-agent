@@ -129,7 +129,7 @@ Closing the desktop window hides it to the tray; the engine and running work rem
 
 **Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
 
-**Games and other full-screen apps (Windows).** While a full-screen app is in front (a game, a presentation, a video), Nekko Agent waits: notices are held and shown together when you leave it, one per chat and kind, and a window that would open or come forward (at launch, from a link, from a second launch) does so when you leave instead. Nekko never takes the foreground from a game, so the game keeps exclusive fullscreen and its frame rate.
+**Full-screen games (Windows).** While a game runs in exclusive fullscreen, Nekko Agent holds its notices and shows them together when you leave the game, one per chat and kind. Windows you open yourself (launching the app, a link, the tray) still open at once.
 
 The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet landed. Image inspection and native toast delivery/click/permission testing remain pending. Known issue under review: the native listener currently also posts for a focused visible chat.
 

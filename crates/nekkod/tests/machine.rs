@@ -125,7 +125,7 @@ async fn machine_channels_are_served_without_a_backend() {
     assert_eq!(status, 200, "{fs}");
     let state = fs["state"].as_str().unwrap_or_default();
     assert!(["free", "d3dFullscreen", "busy", "presentation"].contains(&state), "{fs}");
-    assert_eq!(fs["quiet"], json!(state != "free"), "{fs}");
+    assert_eq!(fs["quiet"], json!(state == "d3dFullscreen"), "{fs}");
     assert_eq!(fs.as_object().map(|o| o.len()), Some(2), "{fs}");
     if !cfg!(windows) {
         assert_eq!(fs, json!({ "quiet": false, "state": "free" }));
