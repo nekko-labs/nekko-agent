@@ -220,7 +220,7 @@ export function ModelLibrary({
   return (
     <div>
       <div className="flex items-center justify-between">
-        <p className="text-[11.5px] text-ink-faint">
+        <p className="text-xs text-ink-faint">
           {models.length === 0
             ? 'No models yet.'
             : query.trim() || filter !== 'all'
@@ -229,7 +229,7 @@ export function ModelLibrary({
                   models.reduce((n, m) => n + m.sizeBytes, 0),
                 )} on disk${folders > 1 ? ` · across ${folders} folders` : ''}`}
         </p>
-        <button className="text-[11.5px] text-ink-faint hover:text-ink" onClick={() => setImporting((v) => !v)}>
+        <button className="text-xs text-ink-faint hover:text-ink" onClick={() => setImporting((v) => !v)}>
           Add a file I already have
         </button>
       </div>
@@ -237,13 +237,13 @@ export function ModelLibrary({
       {importing && (
         <div className="mt-2 flex gap-2">
           <input
-            className="input flex-1 font-mono text-[12px]"
+            className="input flex-1 font-mono text-xs"
             placeholder="C:\\models\\qwen2.5-7b-instruct-q4_k_m.gguf"
             value={importPath}
             onChange={(e) => setImportPath(e.target.value)}
             spellCheck={false}
           />
-          <button className="btn btn-outline py-1.5 text-[12px]" onClick={runImport} disabled={!importPath.trim()}>
+          <button className="btn btn-outline py-1 text-xs" onClick={runImport} disabled={!importPath.trim()}>
             Add
           </button>
         </div>
@@ -254,7 +254,7 @@ export function ModelLibrary({
           {buckets.map((f) => (
             <button
               key={f}
-              className="rounded-full px-2 py-0.5 text-[11px]"
+              className="rounded-full px-2 py-0.5 text-2xs"
               style={
                 filter === f
                   ? { background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }
@@ -269,18 +269,18 @@ export function ModelLibrary({
       )}
 
       {!canLoad && models.length > 0 && (
-        <p className="mt-2 rounded-xl border border-dashed px-3 py-2 text-[11.5px]" style={{ borderColor: 'var(--line)', color: 'var(--warning)' }}>
+        <p className="mt-2 rounded-xl border border-dashed px-3 py-2 text-xs" style={{ borderColor: 'var(--line)', color: 'var(--warning)' }}>
           These are on disk and ready. Download the engine above to run them here.
         </p>
       )}
 
       {models.length === 0 ? (
-        <p className="mt-3 rounded-xl border border-dashed px-4 py-3.5 text-[12.5px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+        <p className="mt-3 rounded-xl border border-dashed px-4 py-3 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
           Nothing here yet. Download one of the picks for this machine above or a model from the list, open{' '}
           <strong>Folders</strong> to point at a folder another app already fills, or add a GGUF you have.
         </p>
       ) : visible.length === 0 ? (
-        <p className="mt-3 text-[12px] text-ink-faint">
+        <p className="mt-3 text-xs text-ink-faint">
           Nothing on this machine matches {filter !== 'all' ? `${FILTER_LABELS[filter].toLowerCase()} models` : `"${query.trim()}"`}.
         </p>
       ) : (
@@ -288,9 +288,9 @@ export function ModelLibrary({
           {groups.map(([loc, ms]) => (
             <div key={loc} className="mt-2">
               {groups.length > 1 && (
-                <p className="px-1 pb-1 pt-1 text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">{loc}</p>
+                <p className="px-1 pb-1 pt-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">{loc}</p>
               )}
-              <div className="space-y-1.5">{ms.map(renderRow)}</div>
+              <div className="space-y-1">{ms.map(renderRow)}</div>
             </div>
           ))}
         </div>
@@ -308,7 +308,7 @@ export function ModelLibrary({
     return (
       <div key={m.id}>
         <div
-          className="flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px]"
+          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
           style={{
             background: 'var(--surface-2)',
             opacity: unsupported ? 0.85 : 1,
@@ -316,10 +316,10 @@ export function ModelLibrary({
           }}
         >
           <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <CheckIcon className="h-3 w-3 shrink-0 text-success" />
               <span className="min-w-0 max-w-full truncate font-medium">{m.name}</span>
-              <span className="text-[11px] text-ink-faint">{gpuGuidance(m.sizeBytes, undefined, m)}</span>
+              <span className="text-2xs text-ink-faint">{gpuGuidance(m.sizeBytes, undefined, m)}</span>
               {m.modality && m.modality !== 'chat' && (
                         <span
                           className="chip shrink-0"
@@ -341,7 +341,7 @@ export function ModelLibrary({
                       )}
                       {m.loaded && (
                         <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] text-white"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-2xs text-white"
                           style={{ background: 'var(--success)' }}
                         >
                           <CheckIcon className="h-2.5 w-2.5" /> in memory
@@ -381,7 +381,7 @@ export function ModelLibrary({
                         </span>
                       )}
                     </div>
-                    <p className="truncate text-[11px] text-ink-faint">
+                    <p className="truncate text-2xs text-ink-faint">
                       {[
                         m.quantization,
                         m.parameterSize,
@@ -391,20 +391,20 @@ export function ModelLibrary({
                         .filter(Boolean)
                         .join(' · ')}
                     </p>
-                    <p className="truncate font-mono text-[10.5px] text-ink-faint" title={m.path}>
+                    <p className="truncate font-mono text-2xs text-ink-faint" title={m.path}>
                       {m.path}
                     </p>
                   </div>
 
-                  <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                     {m.loaded && live?.loadedOn && (
-                      <span className="text-[10.5px] text-ink-faint" title={placementTitle(live)}>
+                      <span className="text-2xs text-ink-faint" title={placementTitle(live)}>
                         {placementLabel(live)}
                       </span>
                     )}
                     {!unsupported && !m.loaded && (
                       <button
-                        className="rounded-full border px-2 py-1 text-[11px]"
+                        className="rounded-full border px-2 py-1 text-2xs"
                         style={{ borderColor: autoloadIds?.has(m.id) ? 'var(--accent)' : 'var(--line)' }}
                         title={
                           autoloadIds?.has(m.id)
@@ -420,7 +420,7 @@ export function ModelLibrary({
                     )}
                     {!unsupported && (
                       <button
-                        className="rounded-full border px-2 py-1 text-[11px] hover:border-[var(--accent)]"
+                        className="rounded-full border px-2 py-1 text-2xs hover:border-[var(--accent)]"
                         style={{ borderColor: open === m.id ? 'var(--accent)' : 'var(--line)' }}
                         onClick={() => setOpen(open === m.id ? null : m.id)}
                       >
@@ -429,7 +429,7 @@ export function ModelLibrary({
                     )}
                     {unsupported ? null : m.loaded ? (
                       <button
-                        className="rounded-full border px-2 py-1 text-[11px]"
+                        className="rounded-full border px-2 py-1 text-2xs"
                         style={{ borderColor: 'var(--line)' }}
                         disabled={busy === m.id}
                         onClick={() => void unload(m.id)}
@@ -438,7 +438,7 @@ export function ModelLibrary({
                       </button>
                     ) : (
                       <button
-                        className="rounded-full px-2.5 py-1 text-[11px] text-white disabled:opacity-50"
+                        className="rounded-full px-3 py-1 text-2xs text-white disabled:opacity-50"
                         style={{ background: 'var(--accent)' }}
                         title={canLoad ? `Load ${m.name} into memory` : 'Download the engine first'}
                         disabled={busy === m.id || (!canLoad && m.modality !== 'image')}
@@ -451,13 +451,13 @@ export function ModelLibrary({
                       // The file belongs to whichever app downloaded it. Saying so
                       // beats a delete button that refuses after the click.
                       <span
-                        className="px-1.5 text-[10px] text-ink-faint"
+                        className="px-2 text-2xs text-ink-faint"
                         title={`Delete this in ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'the app that downloaded it'}`}
                       >
                         borrowed
                       </span>
                     ) : (
-                      <button className="btn btn-ghost px-1.5 py-1" title="Delete this model" onClick={() => void remove(m)}>
+                      <button className="btn btn-ghost px-2 py-1" title="Delete this model" onClick={() => void remove(m)}>
                         <TrashIcon className="h-3.5 w-3.5" />
                       </button>
                     )}
@@ -465,13 +465,13 @@ export function ModelLibrary({
                 </div>
 
                 {unsupported && (
-                  <p className="mt-1 flex items-start gap-1.5 px-2.5 text-[11px]" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-1 flex items-start gap-2 px-3 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     {unsupported}
                   </p>
                 )}
                 {missingProjector && !unsupported && (
-                  <p className="mt-1 flex flex-wrap items-center gap-1.5 px-2.5 text-[11px]" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 px-3 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
                     <WarningIcon className="h-3 w-3 shrink-0" />
                     Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.
                     <button
@@ -484,7 +484,7 @@ export function ModelLibrary({
                   </p>
                 )}
                 {m.lastLoadError && !m.loaded && (
-                  <p className="mt-1 flex flex-wrap items-start gap-1.5 px-2.5 text-[11px]" style={{ color: 'var(--danger, var(--warning, #d1a054))' }}>
+                  <p className="mt-1 flex flex-wrap items-start gap-2 px-3 text-2xs" style={{ color: 'var(--danger, var(--warning, #d1a054))' }}>
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     <span>Last load failed: {m.lastLoadError}</span>
                     {missingProjector && (

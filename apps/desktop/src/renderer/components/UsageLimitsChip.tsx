@@ -180,7 +180,7 @@ export function UsageLimitsChip({
 
       {/* Hover/focus popover: every window, plus plan + credits. */}
       <div
-        className="pointer-events-none absolute bottom-full left-0 z-40 mb-2 hidden w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line p-3 text-[11px] shadow-lg group-hover:block group-focus-within:block"
+        className="pointer-events-none absolute bottom-full left-0 z-40 mb-2 hidden w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line p-3 text-2xs shadow-(--shadow-float) group-hover:block group-focus-within:block"
         style={{ background: 'var(--surface)' }}
         role="tooltip"
       >
@@ -189,7 +189,7 @@ export function UsageLimitsChip({
             {subscription ? 'Subscription limits' : 'Session cost'}
           </span>
           {limits && (
-            <span className="text-[10px] text-ink-faint" title={stale ? 'Snapshot is stale; a new read will retry on the next update' : undefined}>
+            <span className="text-2xs text-ink-faint" title={stale ? 'Snapshot is stale; a new read will retry on the next update' : undefined}>
               {stale ? 'stale · ' : ''}updated {relTime(now - limits.updatedAt)}
             </span>
           )}
@@ -198,7 +198,7 @@ export function UsageLimitsChip({
         {liveTurn && (
           <div className="mb-2 flex items-baseline justify-between border-b border-line pb-2">
             <span className="text-ink-soft">This reply, so far</span>
-            <span className="text-[13px] font-semibold tabular-nums text-accent">{formatUSD(turnCost)}</span>
+            <span className="text-sm font-semibold tabular-nums text-accent">{formatUSD(turnCost)}</span>
           </div>
         )}
 
@@ -217,12 +217,12 @@ export function UsageLimitsChip({
           <>
             <div className="mb-2 flex items-baseline justify-between border-b border-line pb-2">
               <span className="text-ink-soft">This chat at API prices</span>
-              <span className="text-[13px] font-semibold tabular-nums">{unpriced && cost + turnCost === 0 ? 'Unavailable' : `${formatUSD(cost + (liveTurn ? turnCost : 0))}${unpriced ? '+' : ''}`}</span>
+              <span className="text-sm font-semibold tabular-nums">{unpriced && cost + turnCost === 0 ? 'Unavailable' : `${formatUSD(cost + (liveTurn ? turnCost : 0))}${unpriced ? '+' : ''}`}</span>
             </div>
             {sortedWindows.length === 0 ? (
               <p className="text-ink-faint">No limit windows reported yet. Send a message to refresh.</p>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 {sortedWindows.map((w) => {
                   const tone = w.status === 'rate_limited' ? 'danger' : w.status === 'warning' ? 'warning' : 'success';
                   const statusLabel = w.status === 'rate_limited' ? 'Limited' : w.status === 'warning' ? 'Warning' : 'OK';
@@ -245,7 +245,7 @@ export function UsageLimitsChip({
               </div>
             )}
 
-            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-2 text-[10px] text-ink-faint">
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-2 text-2xs text-ink-faint">
               <span>Plan: {limits?.planType ?? 'not reported'}</span>
               <span>Credits: {creditsLabel(limits)}</span>
             </div>
@@ -257,11 +257,11 @@ export function UsageLimitsChip({
               {/* Only while the reply is running. Once it finishes, the usage
                   log absorbs it into `cost`, and adding it again here would
                   count the same turn twice until the next send. */}
-              <span className="text-[13px] font-semibold tabular-nums">
+              <span className="text-sm font-semibold tabular-nums">
                 {formatUSD(cost + (liveTurn ? turnCost : 0))}
               </span>
             </div>
-            <p className="mt-1.5 text-ink-faint">
+            <p className="mt-1 text-ink-faint">
               {local
                 ? 'Local models run privately on this machine and cost nothing.'
                 : 'Estimate from published list prices. Your provider bill may differ.'}

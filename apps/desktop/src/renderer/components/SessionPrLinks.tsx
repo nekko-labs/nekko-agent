@@ -146,7 +146,7 @@ function PrOverflow({ prs }: { prs: PrInfo[] }) {
             ref={popover}
             role="menu"
             aria-label="Pull requests from this chat"
-            className="fade-in fixed z-50 w-[260px] rounded-lg border border-line bg-paper p-1 text-[11px] shadow-lg"
+            className="fade-in fixed z-50 w-[260px] rounded-lg border border-line bg-paper p-1 text-2xs shadow-(--shadow-float)"
             style={{ left: pos.left, top: pos.top }}
             onMouseEnter={enter}
             onMouseLeave={leave}
@@ -169,7 +169,7 @@ function PrOverflow({ prs }: { prs: PrInfo[] }) {
               >
                 <span className="shrink-0 font-medium tabular-nums" style={{ color: prTone(pr) }}>#{pr.number}</span>
                 <span className="min-w-0 flex-1 truncate text-ink-soft">{pr.title}</span>
-                <span className="shrink-0 text-[10px] text-ink-faint">{stateLabel(pr)}</span>
+                <span className="shrink-0 text-2xs text-ink-faint">{stateLabel(pr)}</span>
               </a>
             ))}
           </div>,
@@ -182,7 +182,7 @@ function PrOverflow({ prs }: { prs: PrInfo[] }) {
 export function SessionPrLinks({ prs }: { prs: PrInfo[] }) {
   if (!prs.length) return null;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5">
+    <span className="inline-flex shrink-0 items-center gap-2">
       {prs.length > MAX_INLINE_PRS ? <PrOverflow prs={prs} /> : prs.map((pr) => <PrLink key={pr.url} pr={pr} />)}
     </span>
   );

@@ -111,11 +111,11 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
 
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Spec-driven dev</span>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Spec-driven dev</span>
         {docs && docs.some((d) => d.exists) && (
           <button
-            className={`text-[10px] uppercase tracking-wide ${session?.specLinked ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+            className={`text-2xs uppercase tracking-wide ${session?.specLinked ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
             title="Rebuild the spec after every reply"
             onClick={toggleLive}
           >
@@ -125,7 +125,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
       </div>
 
       {!hasWorkspace && (
-        <p className="px-1 text-[11px] leading-snug text-ink-faint">
+        <p className="px-1 text-2xs leading-snug text-ink-faint">
           Add a project folder to this chat, then build a spec and tasks straight from the conversation.
         </p>
       )}
@@ -134,7 +134,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
         <>
           {workspaceIds.length > 1 && (
             <select
-              className="input mb-2 w-full text-[12px]"
+              className="input mb-2 w-full text-xs"
               value={selectedWorkspaceId ?? ''}
               onChange={(e) => setWorkspaceId(e.target.value)}
               title="Select the project whose spec and tasks are shown"
@@ -149,7 +149,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
           )}
           {/* Methodology picker */}
           <select
-            className="input mb-2 w-full text-[12px]"
+            className="input mb-2 w-full text-xs"
             value={methodologyId}
             onChange={(e) => changeMethodology(e.target.value)}
             title={methodology.description}
@@ -164,27 +164,27 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
           {/* Artifact rows. The name is always a link: a doc that exists opens
               in the file pane, and one that doesn't says so rather than being a
               dead control you can't tell apart from a live one. */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {(docs ?? methodology.docs.map((d) => ({ ...d, path: '', exists: false, content: '' }))).map((d) => (
               <div
                 key={d.id}
-                className={`rounded-lg border px-2.5 py-2 ${d.exists ? 'border-accent/40 bg-accent/5' : 'border-line'}`}
+                className={`rounded-lg border px-3 py-2 ${d.exists ? 'border-accent/40 bg-accent/5' : 'border-line'}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <button
-                    className="group flex min-w-0 items-center gap-1.5 text-left"
+                    className="group flex min-w-0 items-center gap-2 text-left"
                     onClick={() => (d.exists ? open(d.path) : build(d.id))}
                     disabled={!d.exists && !!busy}
                     title={d.exists ? `Open ${d.path}` : `Not created yet — click to write ${d.filename} from this chat`}
                   >
-                    <span className="truncate text-[12.5px] font-medium">{d.label}</span>
-                    <span className="chip shrink-0 text-[9px] lowercase">{d.filename}</span>
+                    <span className="truncate text-xs font-medium">{d.label}</span>
+                    <span className="chip shrink-0 text-2xs lowercase">{d.filename}</span>
                     {d.exists
                       ? <ExternalIcon className="h-3 w-3 shrink-0 text-ink-faint opacity-0 group-hover:opacity-100" />
-                      : <span className="shrink-0 text-[10px] text-ink-faint">not created</span>}
+                      : <span className="shrink-0 text-2xs text-ink-faint">not created</span>}
                   </button>
                   <button
-                    className="btn btn-outline shrink-0 text-[11px]"
+                    className="btn btn-outline shrink-0 text-2xs"
                     onClick={() => build(d.id)}
                     disabled={!!busy}
                     title={d.exists ? `Rewrite ${d.filename} from this conversation` : `Write ${d.filename} from this conversation`}
@@ -192,14 +192,14 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
                     {busy === d.id ? (d.exists ? 'Updating…' : 'Creating…') : d.exists ? 'Update' : 'Create'}
                   </button>
                 </div>
-                <p className="mt-0.5 text-[11px] leading-snug text-ink-faint">{d.description}</p>
+                <p className="mt-0.5 text-2xs leading-snug text-ink-faint">{d.description}</p>
               </div>
             ))}
           </div>
 
           {methodology.docs.length > 1 && (
             <button
-              className="btn btn-outline mt-2 w-full text-[12px]"
+              className="btn btn-outline mt-2 w-full text-xs"
               onClick={buildAll}
               disabled={!!busy}
               title={`Write every ${methodology.label} document for this project from the conversation`}
@@ -218,7 +218,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
           {tasks.length > 0 && (
             <div className="mt-3">
               <button
-                className="mb-1.5 flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-ink-faint"
+                className="mb-1 flex w-full items-center justify-between text-2xs font-semibold uppercase tracking-wide text-ink-faint"
                 onClick={() => setShowTasks((v) => !v)}
               >
                 <span>Tasks · {doneCount}/{tasks.length}</span>
@@ -235,7 +235,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
                   {tasks.map((t) => (
                     <label
                       key={t.line}
-                      className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2"
+                      className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1 hover:bg-surface-2"
                     >
                       <input
                         type="checkbox"
@@ -243,7 +243,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
                         checked={t.done}
                         onChange={() => toggleTask(t.line)}
                       />
-                      <span className={`text-[12px] leading-snug ${t.done ? 'text-ink-faint line-through' : ''}`}>
+                      <span className={`text-xs leading-snug ${t.done ? 'text-ink-faint line-through' : ''}`}>
                         {t.text}
                       </span>
                     </label>
@@ -348,31 +348,31 @@ function GuidelineDocs({ workspacePath, onOpen }: { workspacePath?: string; onOp
 
   return (
     <div className="mt-3">
-      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Create missing instructions</p>
-      <div className="space-y-1.5">
+      <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Create missing instructions</p>
+      <div className="space-y-1">
         {rows.map((g) => {
           const exists = present?.has(g.filename) ?? false;
           const path = join(g.filename);
           return (
             <div
               key={g.filename}
-              className={`rounded-lg border px-2.5 py-2 ${exists ? 'border-accent/40 bg-accent/5' : 'border-line'}`}
+              className={`rounded-lg border px-3 py-2 ${exists ? 'border-accent/40 bg-accent/5' : 'border-line'}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <button
-                  className="group flex min-w-0 items-center gap-1.5 text-left"
+                  className="group flex min-w-0 items-center gap-2 text-left"
                   onClick={() => (exists ? onOpen(path) : create(g))}
                   disabled={!exists && !!busy}
                   title={exists ? `Open ${path}` : `Not created yet — click to start ${g.filename}`}
                 >
-                  <span className="truncate text-[12.5px] font-medium">{g.filename}</span>
+                  <span className="truncate text-xs font-medium">{g.filename}</span>
                   {exists
                     ? <ExternalIcon className="h-3 w-3 shrink-0 text-ink-faint opacity-0 group-hover:opacity-100" />
-                    : <span className="shrink-0 text-[10px] text-ink-faint">not created</span>}
+                    : <span className="shrink-0 text-2xs text-ink-faint">not created</span>}
                 </button>
                 {!exists && (
                   <button
-                    className="btn btn-outline shrink-0 text-[11px]"
+                    className="btn btn-outline shrink-0 text-2xs"
                     onClick={() => create(g)}
                     disabled={!!busy}
                     title={`Write a starter ${g.filename} and open it`}
@@ -381,7 +381,7 @@ function GuidelineDocs({ workspacePath, onOpen }: { workspacePath?: string; onOp
                   </button>
                 )}
               </div>
-              <p className="mt-0.5 text-[11px] leading-snug text-ink-faint">{g.description}</p>
+              <p className="mt-0.5 text-2xs leading-snug text-ink-faint">{g.description}</p>
             </div>
           );
         })}

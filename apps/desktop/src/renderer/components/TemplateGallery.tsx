@@ -55,9 +55,9 @@ export function TemplateCards({ onPick }: { onPick: (t: WorkflowTemplate) => voi
 
 function TemplateCard({ template, needs, onClick }: { template: WorkflowTemplate; needs: TemplateNeed[]; onClick: () => void }) {
   return (
-    <button className="card flex flex-col px-3.5 py-3 text-left transition hover:bg-(--surface-2)" onClick={onClick} data-template={template.id}>
-      <span className="text-[13px] font-semibold leading-snug">{template.name}</span>
-      <span className="mt-1 text-[11.5px] leading-snug text-ink-faint">{template.summary ?? template.description}</span>
+    <button className="card flex flex-col px-4 py-3 text-left transition hover:bg-(--surface-2)" onClick={onClick} data-template={template.id}>
+      <span className="text-sm font-semibold leading-snug">{template.name}</span>
+      <span className="mt-1 text-xs leading-snug text-ink-faint">{template.summary ?? template.description}</span>
       {needs.length > 0 && (
         <span className="mt-2 flex flex-wrap gap-1">
           {needs.map((n) => (
@@ -89,8 +89,8 @@ export function TemplateGallery({
       <div className="card max-h-[86vh] overflow-y-auto p-5">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-semibold">Ready to use</h2>
-            <p className="mt-0.5 text-[12px] text-ink-faint">Pick one, answer a question or two, and it runs on its own.</p>
+            <h2 className="text-base font-semibold">Ready to use</h2>
+            <p className="mt-0.5 text-xs text-ink-faint">Pick one, answer a question or two, and it runs on its own.</p>
           </div>
           <button className="btn btn-ghost px-2! py-1!" aria-label="Close" onClick={onClose}>
             <CloseIcon className="h-4 w-4" />
@@ -100,24 +100,24 @@ export function TemplateGallery({
           <TemplateCards onPick={onSetup} />
         </div>
 
-        <h2 className="mt-5 text-[15px] font-semibold">Build your own</h2>
-        <p className="mt-0.5 text-[12px] text-ink-faint">
+        <h2 className="mt-5 text-base font-semibold">Build your own</h2>
+        <p className="mt-0.5 text-xs text-ink-faint">
           Examples of a pattern to edit, or a blank workflow. These open the editor.
         </p>
         <div className="mt-3 space-y-2">
           {examples.map((t) => (
-            <button key={t.id} className="card w-full px-3.5 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(t)}>
+            <button key={t.id} className="card w-full px-4 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(t)}>
               <div className="flex items-baseline gap-2">
-                <span className="text-[13px] font-semibold">{t.name}</span>
+                <span className="text-sm font-semibold">{t.name}</span>
                 <Badge tone="info">{t.category}</Badge>
               </div>
-              <p className="mt-1 text-[11.5px] leading-snug text-ink-faint">{t.description}</p>
+              <p className="mt-1 text-xs leading-snug text-ink-faint">{t.description}</p>
             </button>
           ))}
           {blank && (
-            <button className="card w-full border-dashed px-3.5 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(blank)}>
-              <span className="text-[13px] font-semibold">Blank workflow</span>
-              <p className="mt-1 text-[11.5px] leading-snug text-ink-faint">{blank.description}</p>
+            <button className="card w-full border-dashed px-4 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(blank)}>
+              <span className="text-sm font-semibold">Blank workflow</span>
+              <p className="mt-1 text-xs leading-snug text-ink-faint">{blank.description}</p>
             </button>
           )}
         </div>
@@ -221,8 +221,8 @@ export function TemplateSetup({
       <div className="card max-h-[86vh] overflow-y-auto p-5" data-template-setup={template.id}>
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-semibold leading-snug">{template.name}</h2>
-            <p className="mt-1 text-[12px] leading-snug text-ink-soft">{template.description}</p>
+            <h2 className="text-base font-semibold leading-snug">{template.name}</h2>
+            <p className="mt-1 text-xs leading-snug text-ink-soft">{template.description}</p>
           </div>
           <button className="btn btn-ghost px-2! py-1!" aria-label="Close" onClick={onClose}>
             <CloseIcon className="h-4 w-4" />
@@ -231,15 +231,15 @@ export function TemplateSetup({
 
         {needs.length > 0 && (
           <section className="mt-4">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">What it needs</p>
-            <ul className="space-y-1.5">
+            <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">What it needs</p>
+            <ul className="space-y-1">
               {needs.map((n) => (
-                <li key={n.id} className="flex items-center gap-2 text-[12.5px]">
+                <li key={n.id} className="flex items-center gap-2 text-xs">
                   <span className="w-4 text-center" style={{ color: n.ok ? STATUS.success : STATUS.warning }} aria-hidden>{n.ok ? '✓' : '!'}</span>
                   <span className="min-w-0 flex-1">{n.label}</span>
                   {n.fix === 'workspace' ? (
                     <select
-                      className="input max-w-52 py-1! text-[12px]"
+                      className="input max-w-52 py-1! text-xs"
                       aria-label="Project folder"
                       value={env.workspaceId ?? ''}
                       onChange={(e) => setWorkspaceId(e.target.value || undefined)}
@@ -257,16 +257,16 @@ export function TemplateSetup({
                       onChange={(providerId, modelId) => setModel({ providerId, modelId })}
                     />
                   ) : n.ok ? (
-                    n.fix === 'models' && <span className="truncate font-mono text-[11px] text-ink-faint">{env.defaultModelId}</span>
+                    n.fix === 'models' && <span className="truncate font-mono text-2xs text-ink-faint">{env.defaultModelId}</span>
                   ) : (
-                    <button className="btn btn-outline py-0.5! text-[11.5px]" onClick={() => go(n.fix)}>
+                    <button className="btn btn-outline py-0.5! text-xs" onClick={() => go(n.fix)}>
                       {n.fix === 'connectors' ? 'Connect' : n.fix === 'localModel' ? 'Set up a local model' : 'Choose a model'}
                     </button>
                   )}
                 </li>
               ))}
               {(template.notes ?? []).map((note) => (
-                <li key={note} className="flex items-center gap-2 text-[12.5px] text-ink-soft">
+                <li key={note} className="flex items-center gap-2 text-xs text-ink-soft">
                   <span className="w-4 text-center text-ink-faint" aria-hidden>·</span>
                   <span>{note}</span>
                 </li>
@@ -278,9 +278,9 @@ export function TemplateSetup({
         {base.offerLocalOnly && (
           <label className="mt-3 flex items-start gap-2" data-template-local-only>
             <input type="checkbox" className="mt-0.5" checked={localOnly} onChange={(e) => setLocalChoice(e.target.checked)} />
-            <span className="text-[12.5px]">
+            <span className="text-xs">
               Local models only
-              <span className="block text-[11px] text-ink-faint">
+              <span className="block text-2xs text-ink-faint">
                 The review runs on a model on this computer and never reaches a cloud provider.
                 {!hasLocalProvider && ' No local model is set up yet.'}
               </span>
@@ -297,7 +297,7 @@ export function TemplateSetup({
                 const known = skills.some((sk) => sk.id === value);
                 return (
                   <label key={input.key} className="block" data-template-skill>
-                    <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
+                    <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
                     <select
                       className="input w-full"
                       value={value}
@@ -313,13 +313,13 @@ export function TemplateSetup({
                         ) : null;
                       })}
                     </select>
-                    {input.hint && <span className="mt-1 block text-[11px] text-ink-faint">{input.hint}</span>}
+                    {input.hint && <span className="mt-1 block text-2xs text-ink-faint">{input.hint}</span>}
                   </label>
                 );
               }
               return (
                 <label key={input.key} className="block">
-                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
+                  <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
                   <input
                     className="input w-full"
                     type={input.kind === 'time' ? 'time' : 'text'}
@@ -330,9 +330,9 @@ export function TemplateSetup({
                     aria-invalid={!!problem}
                   />
                   {problem ? (
-                    <span className="mt-1 block text-[11px]" style={{ color: STATUS.danger }}>{problem}</span>
+                    <span className="mt-1 block text-2xs" style={{ color: STATUS.danger }}>{problem}</span>
                   ) : input.hint ? (
-                    <span className="mt-1 block text-[11px] text-ink-faint">{input.hint}</span>
+                    <span className="mt-1 block text-2xs text-ink-faint">{input.hint}</span>
                   ) : null}
                 </label>
               );
@@ -341,7 +341,7 @@ export function TemplateSetup({
         )}
 
         <label className="mt-4 block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Notify me</span>
+          <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Notify me</span>
           <select className="input w-full" value={notify} onChange={(e) => setNotify(e.target.value as WorkflowNotify)}>
             {WORKFLOW_NOTIFY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>

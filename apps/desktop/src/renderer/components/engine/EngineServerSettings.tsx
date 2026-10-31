@@ -53,8 +53,8 @@ export function EngineServerSettings({
           style={{ background: running ? 'var(--success)' : 'var(--ink-faint)' }}
           title={running ? 'Listening' : 'Not listening'}
         />
-        <code className="font-mono text-[12px]">{engineBaseUrl(draft)}</code>
-        <span className="text-[11px] text-ink-faint">
+        <code className="font-mono text-xs">{engineBaseUrl(draft)}</code>
+        <span className="text-2xs text-ink-faint">
           {running ? 'listening now' : 'not listening — starts when a model loads'}
         </span>
       </div>
@@ -63,7 +63,7 @@ export function EngineServerSettings({
         <Field label="Port" hint={`Default ${ENGINE_PORT_DEFAULT}. The address other apps point at.`}>
           <input
             type="number"
-            className="input w-28 py-1 text-[12px]"
+            className="input w-28 py-1 text-xs"
             min={1024}
             max={65535}
             value={draft.port}
@@ -80,7 +80,7 @@ export function EngineServerSettings({
           }
         >
           <select
-            className="input w-64 py-1 text-[12px]"
+            className="input w-64 py-1 text-xs"
             value={draft.bind}
             onChange={(e) => setDraft(withBind(draft, e.target.value as EngineSettings['bind']))}
           >
@@ -92,7 +92,7 @@ export function EngineServerSettings({
         <Field label="API key" hint="Required as a Bearer token when set. Leave empty on a loopback-only server; one is generated when you pick your network.">
           <input
             type="password"
-            className="input w-64 py-1 font-mono text-[12px]"
+            className="input w-64 py-1 font-mono text-xs"
             value={draft.apiKey ?? ''}
             placeholder="none"
             onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
@@ -101,7 +101,7 @@ export function EngineServerSettings({
 
         <Field label="Browser origins (CORS)" hint="Comma-separated origins allowed to call it from a web page. Empty blocks browsers.">
           <input
-            className="input w-64 py-1 font-mono text-[12px]"
+            className="input w-64 py-1 font-mono text-xs"
             value={draft.corsOrigins ?? ''}
             placeholder="none"
             onChange={(e) => setDraft({ ...draft, corsOrigins: e.target.value })}
@@ -111,7 +111,7 @@ export function EngineServerSettings({
         <Field label="Models resident at once" hint="Loading past this evicts whichever model was used least recently.">
           <input
             type="number"
-            className="input w-20 py-1 text-[12px]"
+            className="input w-20 py-1 text-xs"
             min={1}
             max={8}
             value={draft.maxLoaded}
@@ -122,7 +122,7 @@ export function EngineServerSettings({
         <Field label="Unload when idle" hint="Seconds without a request before a model is evicted. 0 keeps models loaded.">
           <input
             type="number"
-            className="input w-24 py-1 text-[12px]"
+            className="input w-24 py-1 text-xs"
             min={0}
             max={86_400}
             step={60}
@@ -136,41 +136,41 @@ export function EngineServerSettings({
         </Field>
       </div>
 
-      <p className="text-[11px] text-ink-faint">
+      <p className="text-2xs text-ink-faint">
         {(settings.autoload?.length ?? 0) > 0
           ? `${settings.autoload!.length} model${settings.autoload!.length === 1 ? '' : 's'} marked "on start" load with the engine.`
           : 'No models are marked "on start"; mark them in the Models tab.'}
       </p>
 
       <div>
-        <label className="text-[12px]">Where downloads are kept</label>
+        <label className="text-xs">Where downloads are kept</label>
         <input
-          className="input mt-1 w-full font-mono text-[12px]"
+          className="input mt-1 w-full font-mono text-xs"
           value={draft.modelsDir ?? ''}
           placeholder="~/.nekko-agent/models/{type}"
           spellCheck={false}
           onChange={(e) => setDraft({ ...draft, modelsDir: e.target.value })}
         />
-        <p className="mt-0.5 text-[11px] text-ink-faint">
+        <p className="mt-0.5 text-2xs text-ink-faint">
           The one folder Nekko Agent writes to. To read models out of folders another app fills — Ollama, LM Studio,
           a Hugging Face cache — use <strong>Folders</strong>. Files are never moved.
         </p>
       </div>
 
-      <p role="status" className="text-[11px] text-ink-faint">
+      <p role="status" className="text-2xs text-ink-faint">
         {error ?? (saveStatus === 'saving' ? 'Saving…' : saveStatus === 'pending' ? 'Changes save automatically.' : 'All changes saved.')}
         {saveStatus === 'error' && <button className="ml-2 underline" onClick={() => void autosave.flush()}>Retry</button>}
       </p>
 
       <div className="border-t pt-3" style={{ borderColor: 'var(--line)' }}>
-        <p className="text-[11.5px] text-ink-faint">
+        <p className="text-xs text-ink-faint">
           Engine: {install.version ?? 'unknown build'}
           {install.backend ? ` · ${ENGINE_BACKEND_LABELS[install.backend]}` : ''}
           {install.source === 'external' ? ' · yours, not managed by Nekko Agent' : ''}
         </p>
-        {install.binPath && <p className="mt-0.5 truncate font-mono text-[10.5px] text-ink-faint">{install.binPath}</p>}
+        {install.binPath && <p className="mt-0.5 truncate font-mono text-2xs text-ink-faint">{install.binPath}</p>}
         {install.source === 'managed' && (
-          <button className="mt-2 text-[11.5px] text-ink-faint hover:text-ink" onClick={removeEngine}>
+          <button className="mt-2 text-xs text-ink-faint hover:text-ink" onClick={removeEngine}>
             Remove the downloaded engine
           </button>
         )}
@@ -183,10 +183,10 @@ function Field({ label, hint, children }: { label: string; hint: string; childre
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <label className="text-[12px]">{label}</label>
+        <label className="text-xs">{label}</label>
         {children}
       </div>
-      <p className="mt-0.5 text-[11px] text-ink-faint">{hint}</p>
+      <p className="mt-0.5 text-2xs text-ink-faint">{hint}</p>
     </div>
   );
 }

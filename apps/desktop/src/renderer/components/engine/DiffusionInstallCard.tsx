@@ -37,23 +37,23 @@ export function DiffusionInstallCard({ install, onChanged }: { install?: EngineI
   };
   useEffect(() => { setPreview(null); if (!install?.binPath) void check(); }, [buildId, install?.binPath]);
   return <div className="mt-5 border-t border-line pt-4">
-    <h3 className="text-[13px] font-semibold">Image Generation Runtime</h3>
-    <p className="mt-1 text-[12px] text-ink-faint">stable-diffusion.cpp runs image models such as SD3.5 and FLUX. It is optional and downloaded only when you choose Install.</p>
-    {install?.binPath ? <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+    <h3 className="text-sm font-semibold">Image Generation Runtime</h3>
+    <p className="mt-1 text-xs text-ink-faint">stable-diffusion.cpp runs image models such as SD3.5 and FLUX. It is optional and downloaded only when you choose Install.</p>
+    {install?.binPath ? <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
       <span>{install.version ?? 'Installed'} · {install.source === 'external' ? 'External binary, never removed here' : 'Managed'}</span>
-      {install.source === 'managed' && <button className="btn btn-outline ml-auto py-1 text-[12px]" disabled={busy || download.active} onClick={() => void act(true)}>Uninstall image generation runtime</button>}
+      {install.source === 'managed' && <button className="btn btn-outline ml-auto py-1 text-xs" disabled={busy || download.active} onClick={() => void act(true)}>Uninstall image generation runtime</button>}
     </div> : <>
-      <select className="input mt-2 w-full text-[12px]" disabled={busy || download.active} aria-label="Image generation runtime build" value={buildId} onChange={e => setBuildId(e.target.value)}>
+      <select className="input mt-2 w-full text-xs" disabled={busy || download.active} aria-label="Image generation runtime build" value={buildId} onChange={e => setBuildId(e.target.value)}>
         <option value="">Recommended for this machine</option>
         {install?.available.map(b => <option key={b.id} value={b.id}>{b.backend} · {b.requires}</option>)}
       </select>
-      {preview && <p className="mt-2 text-[12px]">{preview.version} · {preview.build.backend} · {formatBytes(preview.sizeBytes)} download{preview.files.length > 1 ? ' (including runtime libraries)' : ''}</p>}
+      {preview && <p className="mt-2 text-xs">{preview.version} · {preview.build.backend} · {formatBytes(preview.sizeBytes)} download{preview.files.length > 1 ? ' (including runtime libraries)' : ''}</p>}
       <div className="mt-2 flex flex-wrap gap-2">
-        <button className="btn btn-outline py-1 text-[12px]" disabled={checking || busy || download.active} onClick={() => void check()}>{checking ? 'Checking…' : 'Check version and size'}</button>
-        {preview && <button className="btn btn-primary py-1 text-[12px]" disabled={busy || download.active} onClick={() => void act(false)}>{download.active ? 'Downloading…' : busy ? 'Starting…' : 'Install image generation runtime'}</button>}
+        <button className="btn btn-outline py-1 text-xs" disabled={checking || busy || download.active} onClick={() => void check()}>{checking ? 'Checking…' : 'Check version and size'}</button>
+        {preview && <button className="btn btn-primary py-1 text-xs" disabled={busy || download.active} onClick={() => void act(false)}>{download.active ? 'Downloading…' : busy ? 'Starting…' : 'Install image generation runtime'}</button>}
       </div>
       {download.active && <DownloadProgress group={download.group} />}
-      {error && <p role="alert" className="mt-2 text-[12px] text-ink-soft">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-xs text-ink-soft">{error}</p>}
     </>}
   </div>;
 }

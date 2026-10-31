@@ -112,11 +112,11 @@ export function CommandPalette() {
       onClose={() => setPaletteOpen(false)}
       align="top"
       initialFocus={inputRef}
-      className="card fade-in w-[520px] overflow-hidden p-0 shadow-2xl"
+      className="card fade-in w-[520px] overflow-hidden p-0 shadow-(--shadow-float)"
     >
       <input
         ref={inputRef}
-        className="w-full border-b border-line bg-transparent px-4 py-3 text-[14px] outline-hidden"
+        className="w-full border-b border-line bg-transparent px-4 py-3 text-sm outline-hidden"
         placeholder="Type a command or setting…"
         role="combobox"
         aria-expanded
@@ -135,15 +135,15 @@ export function CommandPalette() {
         }}
       />
       <div id={listId} role="listbox" aria-label="Commands" className="max-h-80 overflow-y-auto py-1">
-        {filtered.length === 0 && <div className="px-4 py-3 text-[13px] text-ink-faint">No matching commands or settings.</div>}
+        {filtered.length === 0 && <div className="px-4 py-3 text-sm text-ink-faint">No matching commands or settings.</div>}
         {filtered.map((item, i) => {
-          const row = `flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-[13px] ${i === active ? 'bg-surface-2' : ''}`;
+          const row = `flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm ${i === active ? 'bg-surface-2' : ''}`;
           if ('command' in item) {
             const c = item.command;
             return (
               <button key={item.id} id={`${listId}-${item.id}`} role="option" aria-selected={i === active} className={row} onMouseEnter={() => setActive(i)} onClick={() => choose(item)}>
                 <span>{c.label}</span>
-                {c.hint && <span className="text-[11px] text-ink-faint">{c.hint}</span>}
+                {c.hint && <span className="text-2xs text-ink-faint">{c.hint}</span>}
               </button>
             );
           }
@@ -152,10 +152,10 @@ export function CommandPalette() {
           const where = SETTINGS_PAGES.find((p) => p.group === e.group)?.label;
           return (
             <div key={item.id} id={`${listId}-${item.id}`} role="option" aria-selected={i === active} className={`${row} py-2`} onMouseEnter={() => setActive(i)} data-palette-setting={e.id}>
-              <span className="min-w-0 truncate">{e.label}<span className="ml-2 text-[11px] text-ink-faint">Settings: {where}</span></span>
+              <span className="min-w-0 truncate">{e.label}<span className="ml-2 text-2xs text-ink-faint">Settings: {where}</span></span>
               {settings && (control.kind === 'toggle'
                 ? <Toggle label={e.label} value={control.get(settings)} onChange={(v) => void saveSettings(control.set(v, settings))} />
-                : <select className="input max-w-[180px] shrink-0 py-1 text-[12px]" aria-label={e.label} value={control.get(settings)}
+                : <select className="input max-w-[180px] shrink-0 py-1 text-xs" aria-label={e.label} value={control.get(settings)}
                     onChange={(ev) => void saveSettings(control.set(ev.target.value, settings))}>
                     {control.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>)}

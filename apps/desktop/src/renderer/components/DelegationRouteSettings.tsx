@@ -27,8 +27,8 @@ export function DelegationRouteSettings({ settings, update }: { settings: AppSet
   };
   useEffect(() => { void refresh(providerId); return () => { generation.current++; }; }, [providerId]);
   return <div className="mt-4 border-t border-line pt-4">
-    <h3 className="text-[13px] font-medium">Delegation route</h3>
-    <p className="mt-1 text-[11px] text-ink-faint">Inherit the parent by default, or explicitly choose a worker. Unavailable routes never fall back. An external cloud route sends delegated task content to that provider.</p>
+    <h3 className="text-sm font-medium">Delegation route</h3>
+    <p className="mt-1 text-2xs text-ink-faint">Inherit the parent by default, or explicitly choose a worker. Unavailable routes never fall back. An external cloud route sends delegated task content to that provider.</p>
     <select className="input mt-3 w-full" aria-label="Delegation provider" value={providerId} onChange={(e) => { setProviderId(e.target.value); if (!e.target.value) void update({ orchestration: { ...cur, delegationRoute: undefined } }); }}>
       <option value="">Inherit parent provider and model</option>
       {route && !settings.providers.some((p) => p.enabled && p.id === route.providerId) && <option value={route.providerId}>Saved provider (unavailable)</option>}
@@ -43,7 +43,7 @@ export function DelegationRouteSettings({ settings, update }: { settings: AppSet
         </select>
         <button className="btn" disabled={busy} onClick={() => void refresh(providerId)}>Refresh</button>
       </div>
-      <p role="status" className="mt-2 text-[11px] text-ink-faint">{status}</p>
+      <p role="status" className="mt-2 text-2xs text-ink-faint">{status}</p>
     </>}
   </div>;
 }

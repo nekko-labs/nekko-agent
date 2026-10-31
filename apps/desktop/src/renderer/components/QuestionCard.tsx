@@ -190,9 +190,9 @@ export function QuestionCard({
       tabIndex={-1}
       onKeyDown={onKeyDown}
     >
-      <div className="mb-2 flex items-center gap-1.5">
+      <div className="mb-2 flex items-center gap-2">
         <PixelQuestionIcon className="h-4 w-4 shrink-0" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: hue }}>
+        <span className="text-2xs font-semibold uppercase tracking-wide" style={{ color: hue }}>
           Before I start
         </span>
         {total > 1 && (
@@ -221,21 +221,21 @@ export function QuestionCard({
                 );
               })}
             </span>
-            <span className="text-[10.5px] text-ink-soft">
+            <span className="text-2xs text-ink-soft">
               {index + 1} of {total}
             </span>
           </>
         )}
-        {total === 1 && <span className="ml-auto text-[10.5px] text-ink-soft">1 question</span>}
+        {total === 1 && <span className="ml-auto text-2xs text-ink-soft">1 question</span>}
       </div>
 
       {/* Keyed on the question so each step animates in as its own thing rather
           than the text swapping underneath the same box. */}
       <div key={q.id} className="fade-in">
-        <div className="mb-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
-          <span className="chip shrink-0 text-[9.5px] uppercase tracking-wide">{q.header}</span>
-          <span className={`${compact ? 'text-[12px]' : tone === 'attention' ? 'text-[14px] font-semibold' : 'text-[12.5px]'} font-medium text-ink`}>{q.question}</span>
-          <span className="text-[10px] text-ink-soft">{q.multiSelect ? 'pick any' : 'pick one'}</span>
+        <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="chip shrink-0 text-2xs uppercase tracking-wide">{q.header}</span>
+          <span className={`${compact ? 'text-xs' : tone === 'attention' ? 'text-sm font-semibold' : 'text-xs'} font-medium text-ink`}>{q.question}</span>
+          <span className="text-2xs text-ink-soft">{q.multiSelect ? 'pick any' : 'pick one'}</span>
         </div>
 
         <div
@@ -249,7 +249,7 @@ export function QuestionCard({
             return (
               <button
                 key={o.label}
-                className="flex w-full items-start gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors"
+                className="flex w-full items-start gap-2 rounded-lg border px-3 py-1 text-left transition-colors"
                 style={{
                   borderColor: on ? 'var(--accent)' : here ? 'color-mix(in srgb, var(--accent) 40%, var(--line))' : 'var(--line)',
                   background: on
@@ -269,23 +269,23 @@ export function QuestionCard({
                 <Marker on={on} multi={!!q.multiSelect} />
                 <span className="min-w-0 flex-1">
                   <span
-                    className="block text-[11.5px] font-medium"
+                    className="block text-xs font-medium"
                     style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}
                   >
                     {o.label}
                   </span>
                   {o.description && (
-                    <span className="mt-0.5 block text-[10.5px] leading-snug text-ink-soft">{o.description}</span>
+                    <span className="mt-0.5 block text-2xs leading-snug text-ink-soft">{o.description}</span>
                   )}
                 </span>
-                {!compact && <span className="mt-0.5 shrink-0 text-[10px] text-ink-soft">{i + 1}</span>}
+                {!compact && <span className="mt-0.5 shrink-0 text-2xs text-ink-soft">{i + 1}</span>}
               </button>
             );
           })}
 
           {!otherShown ? (
             <button
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-2.5 py-1.5 text-left text-[11.5px] text-ink-soft transition-colors hover:text-ink"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-1 text-left text-xs text-ink-soft transition-colors hover:text-ink"
               style={{
                 borderColor: cursor >= q.options.length ? 'color-mix(in srgb, var(--accent) 40%, var(--line))' : 'var(--line)',
                 background: cursor >= q.options.length ? 'color-mix(in srgb, white 8%, var(--surface-2))' : 'color-mix(in srgb, white 4%, var(--surface-2))',
@@ -298,7 +298,7 @@ export function QuestionCard({
             </button>
           ) : (
             <input
-              className="input mt-0.5 py-1 text-[12px]"
+              className="input mt-0.5 py-1 text-xs"
               autoFocus
               placeholder={`${ASK_OTHER_LABEL} — type it here`}
               aria-label={ASK_OTHER_LABEL}
@@ -309,14 +309,14 @@ export function QuestionCard({
         </div>
       </div>
 
-      <div className="mt-2.5 flex items-center gap-2">
+      <div className="mt-2 flex items-center gap-2">
         {index > 0 && (
-          <button className="btn btn-ghost px-2 py-1 text-[12px]" onClick={() => setStep(index - 1)}>
+          <button className="btn btn-ghost px-2 py-1 text-xs" onClick={() => setStep(index - 1)}>
             Back
           </button>
         )}
         <button
-          className={`btn px-2.5 py-1 text-[12px] ${hasAnswer ? 'btn-primary' : 'btn-outline'}`}
+          className={`btn px-3 py-1 text-xs ${hasAnswer ? 'btn-primary' : 'btn-outline'}`}
           onClick={goNext}
           title={
             last && !complete ? 'Anything left blank goes back as unanswered' : undefined
@@ -325,12 +325,12 @@ export function QuestionCard({
           {last ? `Send answer${total > 1 || !complete ? 's' : ''}` : hasAnswer ? 'Next' : 'Skip'}
         </button>
         {!compact && (
-          <span className="ml-1 truncate text-[10px] text-ink-soft">
+          <span className="ml-1 truncate text-2xs text-ink-soft">
             ↑↓ or 1–{q.options.length} to pick, ↵ for {last ? 'send' : 'next'}
           </span>
         )}
         <button
-          className="btn btn-ghost ml-auto shrink-0 px-2 py-1 text-[12px]"
+          className="btn btn-ghost ml-auto shrink-0 px-2 py-1 text-xs"
           onClick={onSkip}
           title="Let the agent choose and say which it chose"
         >

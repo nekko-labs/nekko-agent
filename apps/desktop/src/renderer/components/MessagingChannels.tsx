@@ -62,7 +62,7 @@ export function MessagingChannels() {
           </div>
           <div>
             <h3 className="font-semibold">Telegram</h3>
-            <p className="text-[12px] text-ink-faint">
+            <p className="text-xs text-ink-faint">
               Message your agent from Telegram; it replies in the same chat. Long-polls, so no public URL needed.
             </p>
           </div>
@@ -78,7 +78,7 @@ export function MessagingChannels() {
 
       <div className="mt-3 space-y-2">
         <input
-          className="input py-1.5 text-[12px]"
+          className="input py-1 text-xs"
           type="password"
           placeholder="Bot token from @BotFather"
           aria-label="Telegram bot token"
@@ -87,7 +87,7 @@ export function MessagingChannels() {
           disabled={saving}
         />
         <input
-          className="input py-1.5 text-[12px]"
+          className="input py-1 text-xs"
           placeholder="Allowed chat ids, comma separated (message the bot, then check getUpdates)"
           aria-label="Allowed Telegram chat ids"
           value={chatIds}
@@ -96,30 +96,30 @@ export function MessagingChannels() {
         />
         <div className="flex flex-row-reverse items-center gap-2">
           <button
-            className="btn btn-primary py-1.5 text-[12px]"
+            className="btn btn-primary py-1 text-xs"
             disabled={saving || !token.trim() || !chatIds.trim()}
             onClick={() => void save({ enabled: true })}
           >
             {saving ? 'Saving…' : cfg.enabled ? 'Save' : 'Enable'}
           </button>
           {cfg.enabled && (
-            <button className="btn btn-ghost py-1.5 text-[12px]" disabled={saving} onClick={() => void save({ enabled: false })}>
+            <button className="btn btn-ghost py-1 text-xs" disabled={saving} onClick={() => void save({ enabled: false })}>
               Disable
             </button>
           )}
         </div>
-        <p className="text-[11px] text-ink-faint">
+        <p className="text-2xs text-ink-faint">
           Only the listed chat ids can reach the agent, everything else is refused. Approvals and the agent's
           questions arrive as buttons; replies stream into one edited message.
         </p>
         {status?.lastError && (
-          <p className="text-[11px]" style={{ color: 'var(--danger)' }}>
+          <p className="text-2xs" style={{ color: 'var(--danger)' }}>
             {status.lastError}
           </p>
         )}
-        {status && status.boundChats > 0 && <p className="text-[11px] text-ink-faint">{status.boundChats} chat{status.boundChats === 1 ? '' : 's'} bound to sessions.</p>}
+        {status && status.boundChats > 0 && <p className="text-2xs text-ink-faint">{status.boundChats} chat{status.boundChats === 1 ? '' : 's'} bound to sessions.</p>}
         {error && (
-          <p className="text-[11px]" style={{ color: 'var(--danger)' }}>
+          <p className="text-2xs" style={{ color: 'var(--danger)' }}>
             {error}
           </p>
         )}

@@ -50,7 +50,7 @@ export function ModelFolders({ onChanged }: { onChanged: () => void }) {
     onChanged();
   };
 
-  if (!report) return <p className="text-[12px] text-ink-faint">Reading folders…</p>;
+  if (!report) return <p className="text-xs text-ink-faint">Reading folders…</p>;
 
   const extra = report.folders.filter((f) => !f.primary);
   const asFolders = (list: ModelFolderStatus[]): ModelFolder[] =>
@@ -76,11 +76,11 @@ export function ModelFolders({ onChanged }: { onChanged: () => void }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11.5px] text-ink-faint">
+        <p className="text-xs text-ink-faint">
           Every folder here is scanned for GGUF files. Models found outside Nekko Agent's own folder can be run and
           loaded, but never deleted from here.
         </p>
-        <button className="btn btn-outline py-1 text-[11.5px]" onClick={() => setAdding((v) => !v)} disabled={busy}>
+        <button className="btn btn-outline py-1 text-xs" onClick={() => setAdding((v) => !v)} disabled={busy}>
           <PlusIcon className="h-3.5 w-3.5" /> Add a folder
         </button>
       </div>
@@ -88,7 +88,7 @@ export function ModelFolders({ onChanged }: { onChanged: () => void }) {
       {adding && (
         <div className="flex gap-2">
           <input
-            className="input flex-1 font-mono text-[12px]"
+            className="input flex-1 font-mono text-xs"
             placeholder="D:\\models"
             value={newPath}
             spellCheck={false}
@@ -96,13 +96,13 @@ export function ModelFolders({ onChanged }: { onChanged: () => void }) {
             onChange={(e) => setNewPath(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addTyped()}
           />
-          <button className="btn btn-outline py-1.5 text-[12px]" onClick={addTyped} disabled={!newPath.trim()}>
+          <button className="btn btn-outline py-1 text-xs" onClick={addTyped} disabled={!newPath.trim()}>
             Add
           </button>
         </div>
       )}
 
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {report.folders.map((folder) => (
           <FolderRow
             key={folder.id}
@@ -117,11 +117,11 @@ export function ModelFolders({ onChanged }: { onChanged: () => void }) {
 
       {report.suggestions.length > 0 && (
         <div className="border-t pt-3" style={{ borderColor: 'var(--line)' }}>
-          <p className="text-[11.5px] font-medium text-ink-soft">Also on this machine</p>
-          <p className="mt-0.5 text-[11px] text-ink-faint">
+          <p className="text-xs font-medium text-ink-soft">Also on this machine</p>
+          <p className="mt-0.5 text-2xs text-ink-faint">
             Folders we recognise that have models in them, and that this list does not cover yet.
           </p>
-          <div className="mt-2 space-y-1.5">
+          <div className="mt-2 space-y-1">
             {report.suggestions.map((s) => (
               <SuggestionRow key={s.path} suggestion={s} busy={busy} onAdd={() => add(folderFor(s))} />
             ))}
@@ -130,7 +130,7 @@ export function ModelFolders({ onChanged }: { onChanged: () => void }) {
       )}
 
       <div className="border-t pt-3" style={{ borderColor: 'var(--line)' }}>
-        <p className="text-[11px] text-ink-faint">
+        <p className="text-2xs text-ink-faint">
           Looked for in the usual places for Ollama, LM Studio, Jan, GPT4All, llama.cpp, KoboldCpp, LocalAI, Bionic,
           text-generation-webui and the Hugging Face cache that vLLM serves from. A folder somewhere else just needs
           adding by hand.
@@ -167,11 +167,11 @@ function FolderRow({
 
   return (
     <div
-      className="rounded-xl px-3 py-2.5"
+      className="rounded-xl px-3 py-2"
       style={{ background: 'var(--surface-2)', opacity: off ? 0.62 : 1 }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[12.5px] font-medium">{label}</span>
+        <span className="text-xs font-medium">{label}</span>
         {folder.primary && (
           <Badge tone="info" variant="soft" title="New downloads land here">
             downloads here
@@ -179,11 +179,11 @@ function FolderRow({
         )}
         {!folder.primary && <span className="chip">read only</span>}
         {!folder.exists && (
-          <span className="text-[10.5px]" style={{ color: 'var(--warning)' }}>
+          <span className="text-2xs" style={{ color: 'var(--warning)' }}>
             not on disk
           </span>
         )}
-        <span className="ml-auto flex shrink-0 items-center gap-2 text-[11px] text-ink-faint">
+        <span className="ml-auto flex shrink-0 items-center gap-2 text-2xs text-ink-faint">
           {folder.exists && (
             <span>
               {folder.modelCount} model{folder.modelCount === 1 ? '' : 's'}
@@ -193,7 +193,7 @@ function FolderRow({
           {!folder.primary && (
             <>
               <button
-                className="rounded-full border px-2 py-0.5 text-[10.5px] hover:border-[var(--accent)]"
+                className="rounded-full border px-2 py-0.5 text-2xs hover:border-[var(--accent)]"
                 style={{ borderColor: off ? 'var(--line)' : 'var(--accent)', color: off ? undefined : 'var(--accent)' }}
                 disabled={busy}
                 onClick={() => onToggle(off)}
@@ -207,7 +207,7 @@ function FolderRow({
                 )}
               </button>
               <button
-                className="btn btn-ghost px-1.5 py-1"
+                className="btn btn-ghost px-2 py-1"
                 title="Remove this folder from the list"
                 disabled={busy}
                 onClick={onRemove}
@@ -220,7 +220,7 @@ function FolderRow({
       </div>
 
       <input
-        className="input mt-1.5 w-full py-1 font-mono text-[11.5px]"
+        className="input mt-1 w-full py-1 font-mono text-xs"
         value={draft}
         spellCheck={false}
         disabled={folder.primary || busy}
@@ -229,7 +229,7 @@ function FolderRow({
         onBlur={() => draft.trim() !== folder.path && onPath(draft.trim())}
         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
       />
-      {meta && <p className="mt-0.5 text-[10.5px] text-ink-faint">{meta.hint}</p>}
+      {meta && <p className="mt-0.5 text-2xs text-ink-faint">{meta.hint}</p>}
     </div>
   );
 }
@@ -247,16 +247,16 @@ function SuggestionRow({
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--line)' }}>
       <div className="min-w-0 flex-1">
-        <span className="text-[12.5px] font-medium">{meta.label}</span>
-        <p className="truncate font-mono text-[10.5px] text-ink-faint" title={suggestion.path}>
+        <span className="text-xs font-medium">{meta.label}</span>
+        <p className="truncate font-mono text-2xs text-ink-faint" title={suggestion.path}>
           {suggestion.path}
         </p>
       </div>
-      <span className="shrink-0 text-[11px] text-ink-faint">
+      <span className="shrink-0 text-2xs text-ink-faint">
         {suggestion.modelCount} model{suggestion.modelCount === 1 ? '' : 's'}
         {suggestion.sizeBytes > 0 ? ` · ${formatBytes(suggestion.sizeBytes)}` : ''}
       </span>
-      <button className="btn btn-outline shrink-0 py-1 text-[11.5px]" onClick={onAdd} disabled={busy}>
+      <button className="btn btn-outline shrink-0 py-1 text-xs" onClick={onAdd} disabled={busy}>
         Add
       </button>
     </div>

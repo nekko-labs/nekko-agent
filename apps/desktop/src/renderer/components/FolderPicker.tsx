@@ -23,7 +23,7 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
 }) {
   const primary = chat?.workspaceId;
   const supporting = new Set(chat?.supportingWorkspaceIds ?? []);
-  const row = 'flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2';
+  const row = 'flex w-full flex-col rounded-lg px-3 py-1 text-left hover:bg-surface-2';
 
   return <>
     {folders.map((f) => {
@@ -33,19 +33,19 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
         {onToggleDefault && (
           <button type="button" aria-pressed={starred} aria-label={starred ? `Stop starting new chats in ${f.name}` : `Start new chats in ${f.name}`}
             title={starred ? 'Default for new chats (click to unset)' : 'Set as default for new chats'}
-            className={`shrink-0 rounded p-1.5 hover:bg-surface-2 ${starred ? 'text-accent' : 'text-ink-faint hover:text-ink'}`} onClick={() => onToggleDefault(f.id)}>
+            className={`shrink-0 rounded p-2 hover:bg-surface-2 ${starred ? 'text-accent' : 'text-ink-faint hover:text-ink'}`} onClick={() => onToggleDefault(f.id)}>
             <StarIcon className="h-3.5 w-3.5" filled={starred} />
           </button>
         )}
         <button role="menuitemradio" aria-checked={primary === f.id} title={f.path}
           className={`${row} ${primary === f.id ? 'text-accent' : ''}`} onClick={() => onPick(f.id)}>
-          <span className="flex items-center gap-1.5 text-[12px] font-medium">
+          <span className="flex items-center gap-2 text-xs font-medium">
             {f.name}
-            {supporting.has(f.id) && <span className="text-[10px] font-normal text-ink-faint">supporting</span>}
+            {supporting.has(f.id) && <span className="text-2xs font-normal text-ink-faint">supporting</span>}
           </span>
-          <span className="truncate text-[10px] text-ink-faint">{f.path}</span>
+          <span className="truncate text-2xs text-ink-faint">{f.path}</span>
         </button>
-        <button type="button" aria-label={`Revoke access to ${f.name}`} title="Revoke saved folder access, not delete files" className="shrink-0 rounded p-1.5 text-ink-faint hover:bg-surface-2 hover:text-ink" onClick={() => onRemove(f.id)}>
+        <button type="button" aria-label={`Revoke access to ${f.name}`} title="Revoke saved folder access, not delete files" className="shrink-0 rounded p-2 text-ink-faint hover:bg-surface-2 hover:text-ink" onClick={() => onRemove(f.id)}>
           <CloseIcon className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -53,12 +53,12 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
     })}
 
     <button role="menuitemradio" aria-checked={!primary} className={`${row} ${!primary ? 'text-accent' : ''}`} onClick={onClear}>
-      <span className="text-[12px] font-medium">No folder</span>
-      <span className="text-[10px] text-ink-faint">No working directory</span>
+      <span className="text-xs font-medium">No folder</span>
+      <span className="text-2xs text-ink-faint">No working directory</span>
     </button>
 
     <div className="mt-1 border-t border-line pt-1">
-      <button role="menuitem" className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-accent hover:bg-surface-2" onClick={onAdd}>
+      <button role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs text-accent hover:bg-surface-2" onClick={onAdd}>
         <PlusIcon className="h-3.5 w-3.5" /> Add folder…
       </button>
     </div>
@@ -166,7 +166,7 @@ export function FolderPicker({ sessionId, session, disabled, onChange }: {
         <span className="ctl-caret">▾</span>
       </button>
       {open && createPortal(
-        <div ref={menu} style={position} className="card fixed z-[100] overflow-y-auto p-1.5 shadow-lg" role="menu" aria-label="Primary folder">
+        <div ref={menu} style={position} className="card fixed z-[100] overflow-y-auto p-2 shadow-(--shadow-float)" role="menu" aria-label="Primary folder">
           <FolderPickerMenu folders={folders} chat={chat} defaults={defaults} onPick={pick} onClear={clear} onAdd={add} onRemove={remove} onToggleDefault={toggleDefaultFolder} />
         </div>, document.body,
       )}

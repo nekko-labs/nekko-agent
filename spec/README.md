@@ -74,6 +74,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Ask before memory runs out (low-memory prompt)](desktop/low-memory-prompt.md) (4 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Customizable UI: customizations, mods and custom layouts](desktop/customizable-ui.md) (6 KB)
+- [Design quality: one type scale, readable faint text, tinted elevation, 4px spacing](desktop/design-quality-type-contrast-and-elevation.md) (2 KB)
 - [Desktop: Simple and Expert modes, the effort dial, the context ring and the hardware strip (2026-10-25)](desktop/desktop-simple-and-expert-modes.md) (3 KB)
 - [Dynamic view: zones](desktop/dynamic-zones.md) (6 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (13 KB)

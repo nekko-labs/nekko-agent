@@ -106,7 +106,7 @@ export function WizardShell({
           })}
         </div>
         <div className="flex w-24 justify-end">
-          <button className="btn btn-ghost px-2 py-1 text-[12px]" onClick={onSkipAll}>
+          <button className="btn btn-ghost px-2 py-1 text-xs" onClick={onSkipAll}>
             Skip setup
           </button>
         </div>

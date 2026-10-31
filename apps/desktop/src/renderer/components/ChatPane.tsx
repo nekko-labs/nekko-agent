@@ -291,13 +291,13 @@ function ImageMenu({ x, y, item, onClose }: { x: number; y: number; item: ChatIm
   const HEIGHT = link ? 152 : 76;
   const left = Math.min(x, Math.max(8, window.innerWidth - WIDTH - 8));
   const top = Math.min(y, Math.max(8, window.innerHeight - HEIGHT - 8));
-  const row = 'flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2';
+  const row = 'flex w-full items-center rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2';
   const run = (action: () => unknown) => () => { onClose(); void action(); };
 
   return createPortal(
     <div
       ref={ref}
-      className="card fixed w-[196px] p-1.5 shadow-lg"
+      className="card fixed w-[196px] p-2 shadow-(--shadow-float)"
       style={{ left, top, zIndex: 60 }}
       role="menu"
       aria-label="Image actions"
@@ -364,7 +364,7 @@ function ChatHeader({
       <>
         <PaneMetadata>{lead}{metadata}</PaneMetadata>
         <PaneActions>
-          {subAgent && <span className="chip shrink-0 text-[10px]">sub-agent</span>}
+          {subAgent && <span className="chip shrink-0 text-2xs">sub-agent</span>}
           {children}
         </PaneActions>
       </>
@@ -374,13 +374,13 @@ function ChatHeader({
     <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {lead}
-        <span className="truncate text-[13px] font-medium">{title}</span>
+        <span className="truncate text-sm font-medium">{title}</span>
         {/* The "/" names the boundary between what this is (the title) and
             where it lives (the project and git context), so it leads that
             context rather than trailing it. */}
         {metadata && <span aria-hidden="true" className="text-ink-faint opacity-40">/</span>}
         {metadata}
-        {subAgent && <span className="chip shrink-0 text-[10px]">sub-agent</span>}
+        {subAgent && <span className="chip shrink-0 text-2xs">sub-agent</span>}
       </div>
       <div className="flex shrink-0 items-center gap-1">{children}</div>
     </header>
@@ -2460,7 +2460,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
     <ChatImages.Provider value={chatImages}>
     <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
-      {contextChangeNotice && <Modal title="Context on your next reply" zIndex={100} overlayClassName="p-4" className="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-ink shadow-xl" onClose={closeContextNotice}>
+      {contextChangeNotice && <Modal title="Context on your next reply" zIndex={100} overlayClassName="p-4" className="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-ink shadow-(--shadow-float)" onClose={closeContextNotice}>
             <h2 className="font-semibold">Context on your next reply</h2>
             <p className="mt-3 text-sm text-ink-soft">Your selection is saved. Changing the model or effort does not send a request now or change an already-running reply. The next reply sends the assembled chat context again, as ordinary follow-up replies do.</p>
             <p className="mt-3 text-sm text-ink-soft">{ctx ? 'Estimated input context: ~' + ctxUsed.toLocaleString() + ' tokens.' : 'Input context estimate is unavailable.'} History may be compacted or trimmed; caching and billing depend on the provider. A different model may not reuse cached context. Effort applies to all chats.</p>
@@ -2488,7 +2488,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {surface !== 'composer' && !cleanStart && (
         <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} lead={<ModeToggle />} metadata={
             git && (
-              <span className="flex min-w-0 shrink items-center gap-1 text-[11px]">
+              <span className="flex min-w-0 shrink items-center gap-1 text-2xs">
                 {session && <WorktreeChip session={session} git={git} disabled={hasLive} onChange={setSession} />}
               </span>
             )}>
@@ -2500,7 +2500,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 of Changes and Files, in their exact button and icon style. */}
             <button
               type="button"
-              className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-[11px] ${searchOpen ? 'font-medium text-accent' : ''}`}
+              className={`btn btn-ghost shrink-0 gap-1 px-2 py-1 text-2xs ${searchOpen ? 'font-medium text-accent' : ''}`}
               onClick={() => (searchOpen ? closeSearch() : openSearch())}
               title={`Find in this chat (${SHORTCUTS.findInChat.label})`}
               aria-label="Find in this chat"
@@ -2511,7 +2511,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             </button>
             <AgentCompanionButtons sessionId={sessionId} changeCount={changeSummary.files} added={changeSummary.added} removed={changeSummary.removed} commandCenter={commandCenter} compact={compact} />
             <button
-              className="btn btn-ghost shrink-0 px-2 py-1 text-[11px]"
+              className="btn btn-ghost shrink-0 px-2 py-1 text-2xs"
               aria-label="Open agent logs"
               aria-expanded={commandCenter ? logsOpen : undefined}
               disabled={session?.executionMode === 'sandbox'}
@@ -2551,10 +2551,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               <div className={`${commandCenter ? '' : 'fade-in '}mt-16 flex flex-col items-center gap-3 text-center`} data-chat-welcome>
                 {!hasProvider ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
                 <div>
-                  <h2 className="text-[15px] font-semibold">
+                  <h2 className="text-base font-semibold">
                     {!hasProvider ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : 'What should Nekko Agent work on?'}
                   </h2>
-                  <p className="mx-auto mt-1 max-w-sm text-[13px] text-ink-faint">
+                  <p className="mx-auto mt-1 max-w-sm text-sm text-ink-faint">
                     {!hasProvider
                       ? 'Connect an AI account or a local model. We’ll walk you through it — no technical experience needed.'
                       : needsModel
@@ -2567,7 +2567,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 ) : null}
                 {surface !== 'transcript' && welcomeState.modelChoice && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
                   <div className="flex items-center justify-between gap-2 px-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Choose a model</span>
+                    <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Choose a model</span>
 
                   </div>
                   {imageMode && session ? <ImageModeControls session={session} onChange={setSession} busy={streaming} /> :
@@ -2613,7 +2613,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   const tone = interruption.paused ? 'var(--warning)' : 'var(--danger)';
                   return (
                   <div
-                    className="fade-in flex flex-col gap-2 rounded-xl border px-3 py-2 text-[12px]"
+                    className="fade-in flex flex-col gap-2 rounded-xl border px-3 py-2 text-xs"
                     style={{
                       borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`,
                       background: `color-mix(in srgb, ${tone} 7%, transparent)`,
@@ -2622,9 +2622,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   >
                     {/* Message on top, actions underneath: beside a long
                         message the buttons wrapped into a ragged column. */}
-                    <div className="flex items-start gap-2.5">
+                    <div className="flex items-start gap-3">
                       <span className="min-w-0 flex-1 text-ink-soft">
-                        <span className="mr-1.5 font-medium" style={{ color: tone }}>{interruption.title}</span>
+                        <span className="mr-2 font-medium" style={{ color: tone }}>{interruption.title}</span>
                         {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
                       </span>
                       <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
@@ -2633,13 +2633,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                     <div className="flex flex-wrap items-center gap-2 empty:hidden">
                     {session?.messages.some((m) => m.role === 'user') && (
-                      <button className="btn btn-primary shrink-0 px-2.5 py-0.5 text-[11px]"
+                      <button className="btn btn-primary shrink-0 px-3 py-0.5 text-2xs"
                         title="Retry using the saved conversation and work" onClick={() => void resumeRun()}>
                         Retry
                       </button>
                     )}
                     {cuts.deleteLast && !readOnly && (
-                      <button className="btn btn-outline shrink-0 px-2.5 py-0.5 text-[11px]" data-notice-delete
+                      <button className="btn btn-outline shrink-0 px-3 py-0.5 text-2xs" data-notice-delete
                         title="Delete your last message and anything after it, then write it again (for example without the picture)"
                         onClick={() => onDelete(cuts.deleteLast!.id)}>
                         Delete last message
@@ -2695,7 +2695,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           )}
           {showJump && (
             <button
-              className="fade-in absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-line px-3 py-1 text-[12px] font-medium text-ink-soft shadow-md hover:text-ink"
+              className="fade-in absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-line px-3 py-1 text-xs font-medium text-ink-soft shadow-(--shadow-md) hover:text-ink"
               style={{ background: 'var(--surface)' }}
               onClick={jumpToLatest}
             >
@@ -2710,7 +2710,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
-        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-4 pt-1.5`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
+        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-4 pt-1`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
           {/* The resize grip rides the composer's top border: a wide invisible
               hit area over a hairline that lights up on hover. */}
           {surface !== 'composer' && !cleanStart && <div
@@ -2761,7 +2761,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </div>
             )}
             {header && (
-              <div className="composer-head flex min-w-0 items-center gap-1.5 border-b border-line px-2 py-1 text-[12px]" data-composer-head>
+              <div className="composer-head flex min-w-0 items-center gap-2 border-b border-line px-2 py-1 text-xs" data-composer-head>
                 {header}
                 {!imageMode && (
                   <button
@@ -2778,7 +2778,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             {showControls && !header && !wallWindow && (<>
             {/* Chat-wide switches live at the top of the input surface; the
                 model and its effort sit in the bottom bar beside Send. */}
-            <div className="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1.5">
+            <div className="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1">
               <div className="min-w-0 shrink">
               <ChatControls
                 session={session}
@@ -2810,7 +2810,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               )}
               {autoPick && (
                 <span
-                  className="min-w-0 shrink truncate text-[10px] text-ink-faint"
+                  className="min-w-0 shrink truncate text-2xs text-ink-faint"
                   title={`Auto will run this message on ${autoPick.name}. ${autoPick.reason}`}
                 >
                   → {autoPick.name}{autoPick.switched ? ` · ${autoPick.providerLabel}` : ''}
@@ -2839,7 +2839,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             </div>
             </>)}
             {showControls && imageMode && session && (
-              <div className="flex min-w-0 flex-wrap items-center gap-1 border-b border-line px-2 py-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-1 border-b border-line px-2 py-1">
                 <ImageModeControls session={session} onChange={setSession} busy={streaming} />
               </div>
             )}
@@ -2848,7 +2848,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <div className={`collapse-wrap ${queued.length > 0 ? '' : 'collapsed'}`} aria-hidden={queued.length === 0}>
               <div className="min-h-0 overflow-hidden">
                 <div className="border-b border-line bg-surface-2 px-3 py-2">
-                  <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-ink-faint">
+                  <div className="mb-1 flex items-center gap-2 text-2xs uppercase tracking-wide text-ink-faint">
                     <ListIcon className="h-3 w-3" /> Queued · {queued.length} {streaming ? 'after this reply' : 'waiting to run'}
                   </div>
                   <div className="space-y-1">
@@ -2856,11 +2856,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       const payload = queueItemPayload(q);
                       const label = queuedTitle(q);
                       return (
-                      <div key={i} className="flex items-center gap-2 text-[12px]">
-                        <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">{i + 1}</span>
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{i + 1}</span>
                         <span className="min-w-0 flex-1 truncate text-ink-soft" title={label}>{payload.text || '(no text)'}</span>
-                        {payload.skill && <span className="skill-pill shrink-0 text-[10px]" title={`Skill: ${payload.skill.name}`}><span className="skill-pill-slash">/</span>{payload.skill.name}</span>}
-                        {!!payload.images?.length && <span className="shrink-0 rounded-full border border-line px-1.5 py-px text-[10px] text-ink-faint">{payload.images.length} image{payload.images.length === 1 ? '' : 's'}</span>}
+                        {payload.skill && <span className="skill-pill shrink-0 text-2xs" title={`Skill: ${payload.skill.name}`}><span className="skill-pill-slash">/</span>{payload.skill.name}</span>}
+                        {!!payload.images?.length && <span className="shrink-0 rounded-full border border-line px-2 py-px text-2xs text-ink-faint">{payload.images.length} image{payload.images.length === 1 ? '' : 's'}</span>}
                         {streaming && !payload.images?.length && !payload.skill && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Steer the running reply with this message at its next step, without stopping it" onClick={() => void steerQueued(i)}>Steer</button>}
                         {streaming && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Interrupt the current reply and send this message now" onClick={() => void sendQueuedNow(i)}>Send now</button>}
                         <button
@@ -2881,25 +2881,25 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <div className="composer-editing-body relative w-full">
               {atMenuOpen && (
                 <div
-                  className="card absolute bottom-full left-0 z-40 mb-2 w-full max-w-md overflow-hidden p-1.5 shadow-lg"
+                  className="card absolute bottom-full left-0 z-40 mb-2 w-full max-w-md overflow-hidden p-2 shadow-(--shadow-float)"
                   id={`at-menu-${sessionId}`}
                   role="listbox"
                   aria-label="Attach a file"
                 >
-                  <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-ink-faint">Attach a file</div>
+                  <div className="px-2 py-1 text-2xs uppercase tracking-wide text-ink-faint">Attach a file</div>
                   {atMatches.length === 0 ? (
-                    <div className="px-2.5 py-1.5 text-[11px] text-ink-faint">{atFiles.length === 0 ? 'Attach a project folder (+ → Folder) to mention its files.' : 'No matching files.'}</div>
+                    <div className="px-3 py-1 text-2xs text-ink-faint">{atFiles.length === 0 ? 'Attach a project folder (+ → Folder) to mention its files.' : 'No matching files.'}</div>
                   ) : (
                     atMatches.map((f, i) => (
                       <button
                         key={f.path}
                         role="option"
                         aria-selected={i === menuSel}
-                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${i === menuSel ? 'bg-surface-2' : ''}`}
+                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left hover:bg-surface-2 ${i === menuSel ? 'bg-surface-2' : ''}`}
                         onClick={() => pickFile(f)}
                         onMouseEnter={() => setMenuSel(i)}
                       >
-                        <span className="font-mono text-[12px] text-accent">@{f.relPath}</span>
+                        <span className="font-mono text-xs text-accent">@{f.relPath}</span>
                       </button>
                     ))
                   )}
@@ -2907,34 +2907,34 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               )}
               {slashMenuOpen && (
                 <div
-                  className="card absolute bottom-full left-0 z-40 mb-2 max-h-80 w-full max-w-md overflow-y-auto p-1.5 shadow-lg"
+                  className="card absolute bottom-full left-0 z-40 mb-2 max-h-80 w-full max-w-md overflow-y-auto p-2 shadow-(--shadow-float)"
                   id={`slash-menu-${sessionId}`}
                   role="listbox"
                   aria-label="Skills and prompts"
                 >
                   {skillMatches.length > 0 && (
                     <>
-                      <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-ink-faint">Skills</div>
+                      <div className="px-2 py-1 text-2xs uppercase tracking-wide text-ink-faint">Skills</div>
                       {skillMatches.map((sk, i) => (
                         <button
                           key={sk.id}
                           role="option"
                           aria-selected={i === menuSel}
-                          className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${i === menuSel ? 'bg-surface-2' : ''}`}
+                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left hover:bg-surface-2 ${i === menuSel ? 'bg-surface-2' : ''}`}
                           onClick={() => armSkill(sk, caretAt)}
                           onMouseEnter={() => setMenuSel(i)}
                           title={sk.description}
                         >
-                          {sk.highlighted && <span className="text-[12px] text-accent">★</span>}
-                          <span className="font-mono text-[13px] text-accent">/{sk.name}</span>
-                          <span className="min-w-0 flex-1 truncate text-[11px] text-ink-faint">{sk.description}</span>
+                          {sk.highlighted && <span className="text-xs text-accent">★</span>}
+                          <span className="font-mono text-sm text-accent">/{sk.name}</span>
+                          <span className="min-w-0 flex-1 truncate text-2xs text-ink-faint">{sk.description}</span>
                         </button>
                       ))}
                     </>
                   )}
                   {slashMatches.length > 0 && (
                     <>
-                      <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-ink-faint">Prompts</div>
+                      <div className="px-2 py-1 text-2xs uppercase tracking-wide text-ink-faint">Prompts</div>
                       {slashMatches.map((p, i) => {
                         const idx = skillMatches.length + i;
                         return (
@@ -2942,12 +2942,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                             key={p.id}
                             role="option"
                             aria-selected={idx === menuSel}
-                            className={`flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${idx === menuSel ? 'bg-surface-2' : ''}`}
+                            className={`flex w-full flex-col rounded-lg px-3 py-1 text-left hover:bg-surface-2 ${idx === menuSel ? 'bg-surface-2' : ''}`}
                             onClick={() => { setDraft(p.body); composerRef.current?.focus(); }}
                             onMouseEnter={() => setMenuSel(idx)}
                           >
-                            <span className="font-mono text-[13px] text-accent">/{p.name}</span>
-                            <span className="truncate text-[11px] text-ink-faint">{p.body}</span>
+                            <span className="font-mono text-sm text-accent">/{p.name}</span>
+                            <span className="truncate text-2xs text-ink-faint">{p.body}</span>
                           </button>
                         );
                       })}
@@ -2961,7 +2961,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     a hairline. Floated above it they covered the instrument
                     strip. */}
                 {(pendingImages.length > 0 || pendingVideos.length > 0 || (session?.attachedPaths?.length ?? 0) > 0) && (
-                  <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-3 py-2.5" data-composer-attachments>
+                  <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-line px-3 py-2" data-composer-attachments>
                     {pendingVideos.map((video, i) => (
                       <div key={`v-${video.slice(0, 24)}-${i}`} className="composer-media-in group relative shrink-0">
                         <video
@@ -2974,9 +2974,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           onMouseEnter={(e) => { void e.currentTarget.play().catch(() => {}); }}
                           onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                         />
-                        <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9px] uppercase tracking-wide text-white">video</span>
+                        <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1 text-2xs uppercase tracking-wide text-white">video</span>
                         <button
-                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-[10px] leading-4 text-paper group-hover:block"
+                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-2xs leading-4 text-paper group-hover:block"
                           onClick={(e) => {
                             e.stopPropagation();
                             setPendingVideos((current) => current.filter((_, index) => index !== i));
@@ -2998,7 +2998,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           title="Click to preview · right-click to copy or save"
                         />
                         <button
-                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-[10px] leading-4 text-paper group-hover:block"
+                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-2xs leading-4 text-paper group-hover:block"
                           onClick={(e) => {
                             e.stopPropagation();
                             setPendingImages((current) => current.filter((_, index) => index !== i));
@@ -3016,13 +3016,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       return (
                         <span
                           key={path}
-                          className={`composer-media-in group inline-flex h-7 max-w-[220px] shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[12px] ${note ? 'border-dashed border-line text-ink-faint' : 'border-line text-ink-soft'}`}
+                          className={`composer-media-in group inline-flex h-7 max-w-[220px] shrink-0 items-center gap-2 rounded-lg border px-2 text-xs ${note ? 'border-dashed border-line text-ink-faint' : 'border-line text-ink-soft'}`}
                           title={note ? `${path}\n${note}` : path}
                           data-composer-file
                         >
                           <FileIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{attachmentName(path)}</span>
-                          {note && <span className="shrink-0 text-[10px] uppercase tracking-wide">name only</span>}
+                          {note && <span className="shrink-0 text-2xs uppercase tracking-wide">name only</span>}
                           <button
                             className="ml-0.5 shrink-0 rounded opacity-60 hover:opacity-100"
                             onClick={() => { void removeAttachedPath(path); }}
@@ -3037,8 +3037,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   </div>
                 )}
                 {activeSkill && (
-                  <div className="flex shrink-0 items-center gap-2 px-3.5 pt-2.5" data-composer-skill>
-                    <span className="skill-pill text-[12px]" title={activeSkill.description}>
+                  <div className="flex shrink-0 items-center gap-2 px-4 pt-2" data-composer-skill>
+                    <span className="skill-pill text-xs" title={activeSkill.description}>
                       <span className="skill-pill-slash">/</span>{activeSkill.name}
                       <button
                         className="ml-1 opacity-60 hover:opacity-100"
@@ -3048,7 +3048,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         ×
                       </button>
                     </span>
-                    <span className="truncate text-[11px] text-ink-faint">
+                    <span className="truncate text-2xs text-ink-faint">
                       Runs on send · shown in context →
                     </span>
                   </div>
@@ -3062,7 +3062,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       textarea's padding so it never overlaps the text. */}
                   {ghostSuggestion && (
                     <span
-                      className="pointer-events-none absolute right-3 top-3 z-10 select-none rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] leading-none text-ink-faint"
+                      className="pointer-events-none absolute right-3 top-3 z-10 select-none rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-2xs leading-none text-ink-faint"
                       aria-hidden
                     >
                       →
@@ -3070,7 +3070,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                   <MarkdownEditor
                     ref={composerRef}
-                    className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[64px] py-3'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-3.5 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
+                    className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[64px] py-3'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
                     placeholder={imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter steers the running reply)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
@@ -3107,13 +3107,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       <PlusIcon className="h-4 w-4" />
                     </button>
                     {attachMenuOpen && (
-                      <div className="card absolute bottom-full left-0 z-40 mb-2 w-60 p-1.5 shadow-lg" role="menu">
+                      <div className="card absolute bottom-full left-0 z-40 mb-2 w-60 p-2 shadow-(--shadow-float)" role="menu">
                         {/* Photo / Video follows the picked model: a text-only
                             model greys the row and says why, instead of taking
                             a picture it will never see. */}
                         <button
                           role="menuitem"
-                          className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] ${mediaDisabled ? 'cursor-not-allowed text-ink-faint' : 'hover:bg-surface-2'}`}
+                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs ${mediaDisabled ? 'cursor-not-allowed text-ink-faint' : 'hover:bg-surface-2'}`}
                           onClick={() => { if (mediaDisabled) return; closeAttachMenu(); imageInputRef.current?.click(); }}
                           onMouseEnter={closeSkillsFly}
                           aria-disabled={mediaDisabled}
@@ -3122,16 +3122,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         >
                           <PhotoIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="flex-1">Photo / Video</span>
-                          {!mediaDisabled && mediaSupport.video === 'no' && <span className="text-[10px] text-ink-faint">photos only</span>}
+                          {!mediaDisabled && mediaSupport.video === 'no' && <span className="text-2xs text-ink-faint">photos only</span>}
                         </button>
                         {(mediaDisabled || (mediaSupport.image !== 'yes' || mediaSupport.video !== 'yes')) && (
-                          <p className="px-2.5 pb-1.5 text-[11px] leading-snug text-ink-faint" role="note" data-composer-media-note>
+                          <p className="px-3 pb-1 text-2xs leading-snug text-ink-faint" role="note" data-composer-media-note>
                             {mediaDisabled ? photoNotice : mediaSupport.image !== 'yes' ? photoNotice : videoNotice}
                           </p>
                         )}
                         <button
                           role="menuitem"
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
                           onClick={() => { closeAttachMenu(); void addFiles(); }}
                           onMouseEnter={closeSkillsFly}
                         >
@@ -3140,7 +3140,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         </button>
                         <button
                           role="menuitem"
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
                           onClick={() => {
                             closeAttachMenu();
                             const chat = useStore.getState().sessions.find((x) => x.id === sessionId) ?? session;
@@ -3159,7 +3159,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <div className="relative" onMouseEnter={openSkillsFly} onMouseLeave={closeSkillsFly}>
                           <button
                             role="menuitem"
-                            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] ${skillsHover ? 'bg-surface-2' : 'hover:bg-surface-2'}`}
+                            className={`flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs ${skillsHover ? 'bg-surface-2' : 'hover:bg-surface-2'}`}
                             onClick={() => setSkillsHover((v) => !v)}
                             onFocus={openSkillsFly}
                             aria-haspopup="menu"
@@ -3168,22 +3168,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                             <WandIcon className="h-3.5 w-3.5 shrink-0" />
                             <span className="flex-1">Skill</span>
                             {allSkills.length > 0 && (
-                              <span className="tabular-nums text-[11px] text-ink-faint">{allSkills.length}</span>
+                              <span className="tabular-nums text-2xs text-ink-faint">{allSkills.length}</span>
                             )}
-                            <span className="text-[10px] text-ink-faint">&#9656;</span>
+                            <span className="text-2xs text-ink-faint">&#9656;</span>
                           </button>
                           {skillsHover && (
                             <div
-                              className="card absolute bottom-0 left-full z-50 ml-1.5 w-72 p-1.5 shadow-lg"
+                              className="card absolute bottom-0 left-full z-50 ml-2 w-72 p-2 shadow-(--shadow-float)"
                               role="menu"
                               aria-label="Skills"
                               onMouseEnter={openSkillsFly}
                               onMouseLeave={closeSkillsFly}
                             >
-                              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-ink-faint">Skills</div>
+                              <div className="px-1 pb-1 text-2xs uppercase tracking-wide text-ink-faint">Skills</div>
                               <div className="max-h-64 overflow-y-auto">
                                 {allSkills.length === 0 && (
-                                  <p className="px-2.5 py-2 text-[11px] text-ink-faint">
+                                  <p className="px-3 py-2 text-2xs text-ink-faint">
                                     No skills registered yet. Add one to run it from any chat.
                                   </p>
                                 )}
@@ -3191,20 +3191,20 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                                   <button
                                     key={sk.id}
                                     role="menuitem"
-                                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2"
+                                    className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left hover:bg-surface-2"
                                     onClick={() => { closeAttachMenu(); armSkill(sk); }}
                                     title={sk.description}
                                   >
-                                    {sk.highlighted && <span className="shrink-0 text-[12px] text-accent">&#9733;</span>}
-                                    <span className="shrink-0 font-mono text-[12px] text-accent">/{sk.name}</span>
-                                    <span className="min-w-0 flex-1 truncate text-[11px] text-ink-faint">{sk.description}</span>
+                                    {sk.highlighted && <span className="shrink-0 text-xs text-accent">&#9733;</span>}
+                                    <span className="shrink-0 font-mono text-xs text-accent">/{sk.name}</span>
+                                    <span className="min-w-0 flex-1 truncate text-2xs text-ink-faint">{sk.description}</span>
                                   </button>
                                 ))}
                               </div>
                               <div className="mt-1 border-t border-line pt-1">
                                 <button
                                   role="menuitem"
-                                  className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-accent hover:bg-surface-2"
+                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs text-accent hover:bg-surface-2"
                                   onClick={() => { closeAttachMenu(); useStore.getState().setView('skills'); }}
                                 >
                                   <PlusIcon className="h-3.5 w-3.5" /> Add skill
@@ -3238,7 +3238,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
-                  {streaming && <button className="btn btn-outline h-8 px-3 py-0 text-[12px]" onClick={() => window.nekko.abortChat(sessionId)}>Stop</button>}
+                  {streaming && <button className="btn btn-outline h-8 px-3 py-0 text-xs" onClick={() => window.nekko.abortChat(sessionId)}>Stop</button>}
                   {/* Prompt suggestions: one chip beside the microphone; its
                       details open above it rather than pushing the editor. */}
                   {!imageMode && (
@@ -3287,9 +3287,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             composer. */}
         {/* The PR deck sits between the composer and the footer controls, on the window surface. */}
         {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!session?.agentPlan?.length || (activeProvider?.kind === CLAUDE_CODE_PROVIDER_KIND && !!session?.messages?.some(m => m.role === 'user'))} />}
-        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1.5'} aria-label="Chat actions and information">
+        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
-          {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
+          {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
           {!imageMode && surface !== 'composer' && !wallWindow && <div className="flex flex-wrap items-center gap-2">
                   <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />
                   {modelControls}
@@ -3323,7 +3323,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <div className="agent-footer-reach ml-auto flex shrink-0 items-center gap-1" data-agent-footer-controls>
               {session && <>
                 <ToolsMenu session={session} onChange={setSession} />
-                {session?.executionMode === 'sandbox' ? <span className="text-[11px] text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
+                {session?.executionMode === 'sandbox' ? <span className="text-2xs text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
               </>}
               <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />
                           </div>
@@ -3385,14 +3385,14 @@ function ArchivedChatBar({ sessionId, contentWidth }: { sessionId: string; conte
   const [busy, setBusy] = useState(false);
   return (
     <div className="border-t border-line px-4 py-3">
-      <div className={`${contentWidth} flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5`} style={{ background: 'var(--surface-2)' }}>
+      <div className={`${contentWidth} flex flex-wrap items-center gap-2 rounded-xl px-3 py-2`} style={{ background: 'var(--surface-2)' }}>
         <CheckIcon className="h-4 w-4 shrink-0 text-ink-faint" />
-        <p className="min-w-0 flex-1 text-[12px] text-ink-soft">
+        <p className="min-w-0 flex-1 text-xs text-ink-soft">
           Completed and read-only.
           <span className="text-ink-faint"> Kept until you delete it.</span>
         </p>
         <button
-          className="btn btn-outline h-8 px-3 py-0 text-[12px] text-(--danger)"
+          className="btn btn-outline h-8 px-3 py-0 text-xs text-(--danger)"
           disabled={busy}
           onClick={async () => {
             setBusy(true);
@@ -3403,7 +3403,7 @@ function ArchivedChatBar({ sessionId, contentWidth }: { sessionId: string; conte
           <TrashIcon className="h-3.5 w-3.5" /> Delete forever
         </button>
         <button
-          className="btn btn-primary h-8 px-3 py-0 text-[12px]"
+          className="btn btn-primary h-8 px-3 py-0 text-xs"
           disabled={busy}
           onClick={async () => {
             setBusy(true);

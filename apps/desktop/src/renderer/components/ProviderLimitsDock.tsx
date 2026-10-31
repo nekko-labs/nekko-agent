@@ -96,23 +96,23 @@ export function ProviderLimitsDock({ standalone = false }: { standalone?: boolea
     .sort((a, b) => b.usedPercent - a.usedPercent)[0];
 
   return (
-    <div className={`shrink-0 border-t border-line px-4 text-[11px] ${open ? 'py-4' : 'py-2'}`}>
+    <div className={`shrink-0 border-t border-line px-4 text-2xs ${open ? 'py-4' : 'py-2'}`}>
       <button
         className="flex w-full items-center justify-between text-left"
         onClick={toggle}
         aria-expanded={open}
         title={open ? 'Collapse provider capacity' : 'Show capacity across every provider'}
       >
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Capacity
-          <span className="chip text-[9px]">{rows.length}</span>
+          <span className="chip text-2xs">{rows.length}</span>
         </span>
         {/* Collapsed, the header still carries the number worth glancing at:
             whichever window across every provider is closest to stopping work. */}
         {!open && worst && (
           <span
-            className="shrink-0 text-[10px] tabular-nums"
+            className="shrink-0 text-2xs tabular-nums"
             style={{ color: toneFor(worst.status, worst.usedPercent) }}
             title={`Most-used window anywhere: ${worst.label} at ${Math.round(worst.usedPercent)}%`}
           >
@@ -122,11 +122,11 @@ export function ProviderLimitsDock({ standalone = false }: { standalone?: boolea
       </button>
 
       {open && (
-        <div className="mt-2.5 space-y-2">
+        <div className="mt-2 space-y-2">
           {rows.map(({ provider, limits, answered: settled }) => (
             <ProviderRow key={provider.id} provider={provider} email={accountEmailOf(provider, accountEmails)} limits={limits} answered={settled} />
           ))}
-          <p className="pt-0.5 text-[10px] leading-snug text-ink-faint">
+          <p className="pt-0.5 text-2xs leading-snug text-ink-faint">
             Live reads from each provider's documented usage endpoint, not a bill. Providers
             without one say so instead of guessing.
           </p>
@@ -186,17 +186,17 @@ function ProviderRow({
 
   return (
     <div>
-      <div className="flex items-baseline gap-1.5">
+      <div className="flex items-baseline gap-2">
         <span className="min-w-0 flex-1 truncate font-medium text-ink-soft" title={email ? `${provider.label} · ${email}` : provider.label}>
           {provider.label}
           {email && <span className="font-normal text-ink-faint" data-account-email> · {email}</span>}
         </span>
         {limits?.creditsState === 'balance' && limits.creditsBalance !== undefined && (
-          <span className="shrink-0 text-[10px] tabular-nums text-ink-faint" title="Credit balance left">
+          <span className="shrink-0 text-2xs tabular-nums text-ink-faint" title="Credit balance left">
             {formatUSD(limits.creditsBalance)}
           </span>
         )}
-        <span className="shrink-0 text-[10px] tabular-nums" style={s.tone ? { color: s.tone } : undefined}>
+        <span className="shrink-0 text-2xs tabular-nums" style={s.tone ? { color: s.tone } : undefined}>
           {s.text}
         </span>
       </div>
@@ -206,8 +206,8 @@ function ProviderRow({
           {windows.map((w) => {
             const tone = toneFor(w.status, w.usedPercent);
             return (
-              <div key={w.id} className="flex items-center gap-1.5">
-                <span className="w-20 shrink-0 truncate text-[10px] text-ink-faint" title={w.label}>
+              <div key={w.id} className="flex items-center gap-2">
+                <span className="w-20 shrink-0 truncate text-2xs text-ink-faint" title={w.label}>
                   {w.label}
                 </span>
                 <span
@@ -219,11 +219,11 @@ function ProviderRow({
                     style={{ width: `${Math.min(100, w.usedPercent)}%`, background: tone }}
                   />
                 </span>
-                <span className="w-8 shrink-0 text-right text-[10px] tabular-nums" style={{ color: tone }}>
+                <span className="w-8 shrink-0 text-right text-2xs tabular-nums" style={{ color: tone }}>
                   {Math.round(w.usedPercent)}%
                 </span>
                 <span
-                  className="w-6 shrink-0 text-right text-[10px] tabular-nums text-ink-faint"
+                  className="w-6 shrink-0 text-right text-2xs tabular-nums text-ink-faint"
                   title={w.resetAt > now ? `Resets in ${untilShort(w.resetAt - now)}` : 'Resets soon'}
                 >
                   {w.resetAt > now ? untilShort(w.resetAt - now) : '~'}

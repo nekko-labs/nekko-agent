@@ -447,7 +447,7 @@ export function DockSignIn({ provider, onSignedIn }: { provider: ProviderConfig;
   };
   return <div className="monitors-dock__signin" data-dock-signin>
     {!open
-      ? <button type="button" className="btn btn-primary py-1 text-[12px]" onClick={() => { setError(null); setOpen(true); }}>Sign in again</button>
+      ? <button type="button" className="btn btn-primary py-1 text-xs" onClick={() => { setError(null); setOpen(true); }}>Sign in again</button>
       : <>
           <SubscriptionSignIn oauthProvider={oauth} label={`Sign in with ${name}`} onConnected={connected} />
           <button type="button" className="monitors-dock__text-button" onClick={() => setOpen(false)}>Cancel</button>

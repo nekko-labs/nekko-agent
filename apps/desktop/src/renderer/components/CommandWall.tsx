@@ -843,7 +843,7 @@ export function CommandWall({
             <>
               {/* The project only when there is more than one to tell apart:
                   on a one-project wall it is the same word on every strip. */}
-              {project && projects.length > 1 && !density && <span className="chip hidden shrink-0 text-[10px] sm:inline">{project.name}</span>}
+              {project && projects.length > 1 && !density && <span className="chip hidden shrink-0 text-2xs sm:inline">{project.name}</span>}
             </>
           }
           isActive={false}
