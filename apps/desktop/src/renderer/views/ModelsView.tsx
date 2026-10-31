@@ -74,12 +74,20 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
   // A notice action ("Use my subscription", "Add API key") opens the form on a kind.
   const [addKind, setAddKind] = useState<ProviderKind | undefined>();
   const requestedKind = useStore((s) => s.addProviderKind);
+  // The local and cloud sections share one page, so the form may open below the fold.
+  const reveal = useRef(false);
   useEffect(() => {
-    if (!requestedKind) return;
+    if (!requestedKind || isLocal(requestedKind) !== localOnly) return;
     setAddKind(requestedKind);
     setAdding(true);
+    reveal.current = true;
     useStore.setState({ addProviderKind: null });
-  }, [requestedKind]);
+  }, [requestedKind, localOnly]);
+  useEffect(() => {
+    if (!adding || !reveal.current) return;
+    reveal.current = false;
+    setupRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [adding]);
   const [discovering, setDiscovering] = useState(false);
 
   useEffect(() => {

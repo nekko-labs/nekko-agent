@@ -3578,6 +3578,9 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .models-provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; max-width: 1800px; }
 .models-provider-grid > div { min-width: 0; scroll-margin-top: 20px; }
 .models-local-connections { margin-top: 36px; }
+.models-section { scroll-margin-top: 12px; }
+/* Tall enough to scroll to the top even with one provider, so its subnavigation entry lands on it. */
+.models-section-cloud { margin-top: 48px; padding-top: 32px; border-top: 1px solid var(--line); min-height: calc(100% - 88px); }
 @media (max-width: 767px) {
   .models-workspace { flex-direction: column; width: 100%; padding-top: 16px; gap: 0; }
   .models-subnav { width: auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 12px 16px; }
