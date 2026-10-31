@@ -71,6 +71,10 @@ import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
 import com.nekko.android.ui.chat.PurposeGroupCard
+import com.nekko.android.ui.chat.AgentContext
+import com.nekko.android.ui.chat.LocalAgentContext
+import com.nekko.android.ui.chat.SubagentGroup
+import com.nekko.android.ui.chat.allSubagents
 import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
@@ -156,6 +160,9 @@ fun ChatScreen(
     onNewChat: (() -> Unit)? = null,
 ) {
     val chat by vm.ui.collectAsStateWithLifecycle()
+    val watches by vm.watches.collectAsStateWithLifecycle()
+    val subagents by vm.subagents.collectAsStateWithLifecycle()
+    val agentContext = AgentContext(watches, subagents.children, subagents.activity, chat.running, chat.modelId)
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
@@ -481,18 +488,26 @@ fun ChatScreen(
                             }
                         }
                         itemsIndexed(rows, key = { _, run -> rowKey(run) }) { _, run ->
-                            when (run) {
-                                is PurposeRun.Single -> {
-                                    val block = run.item.second
-                                    // Long press: Copy, and fork the chat from a saved message.
-                                    val fork = forkAction(block)
-                                    // In a pane a message can be dragged into the other pane's message box.
-                                    // A reply's links to files and loopback pages open previews from the computer (AN-35).
-                                    CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
-                                        if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
+                            // Watch chips and subagent rows read the chat's watches and child chats.
+                            CompositionLocalProvider(LocalAgentContext provides agentContext) {
+                                when (run) {
+                                    is PurposeRun.Single -> {
+                                        val block = run.item.second
+                                        // Long press: Copy, and fork the chat from a saved message.
+                                        val fork = forkAction(block)
+                                        // In a pane a message can be dragged into the other pane's message box.
+                                        // A reply's links to files and loopback pages open previews from the computer (AN-35).
+                                        CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
+                                            if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
+                                        }
+                                    }
+                                    is PurposeRun.Group -> {
+                                        val blocks = run.items.map { it.second }
+                                        // Consecutive delegations read as one group, as on the desktop.
+                                        if (allSubagents(blocks)) SubagentGroup(blocks.filterIsInstance<Block.Tool>(), agentContext)
+                                        else PurposeGroupCard(run.purpose, blocks, run.calls)
                                     }
                                 }
-                                is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
                             }
                         }
                         item(key = "footer") {
