@@ -40,7 +40,7 @@ export function AdvancedControls({
 
   return (
     <details className="mt-3 rounded-lg border" style={{ borderColor: 'var(--line)' }}>
-      <summary className="cursor-pointer select-none px-3 py-2 text-[12px] text-ink-faint">
+      <summary className="cursor-pointer select-none px-3 py-2 text-xs text-ink-faint">
         Advanced
       </summary>
       <div className="space-y-3 border-t px-3 py-3" style={{ borderColor: 'var(--line)' }}>
@@ -58,7 +58,7 @@ export function AdvancedControls({
             type="number"
             min={1}
             max={16}
-            className="input w-20 py-1 text-[12px]"
+            className="input w-20 py-1 text-xs"
             value={request.parallelSlots}
             onChange={(e) => onChange({ parallelSlots: Math.max(1, Number(e.target.value) || 1) })}
           />
@@ -79,7 +79,7 @@ export function AdvancedControls({
           }
         >
           <select
-            className="input w-28 py-1 text-[12px]"
+            className="input w-28 py-1 text-xs"
             value={request.kvCacheDtype}
             onChange={(e) => onChange({ kvCacheDtype: e.target.value as KvCacheDtype })}
           >
@@ -107,7 +107,7 @@ export function AdvancedControls({
                 onChange={(e) => onChange({ gpuLayerFraction: Number(e.target.value) / 100 })}
                 className="w-32"
               />
-              <span className="w-10 text-right font-mono text-[11px] text-ink-faint">
+              <span className="w-10 text-right font-mono text-2xs text-ink-faint">
                 {Math.round(request.gpuLayerFraction * 100)}%
               </span>
             </div>
@@ -115,7 +115,7 @@ export function AdvancedControls({
         )}
 
         {facts.maxContext && (
-          <p className="text-[11px] text-ink-faint">
+          <p className="text-2xs text-ink-faint">
             This model supports up to {formatTokens(facts.maxContext)} of context
             {facts.quantization ? `, quantized as ${facts.quantization}` : ''}.
           </p>
@@ -141,17 +141,17 @@ function Row({
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <label className="text-[12px]">{label}</label>
+        <label className="text-xs">{label}</label>
         {children}
       </div>
-      <p className="mt-0.5 text-[11px] text-ink-faint">{hint}</p>
+      <p className="mt-0.5 text-2xs text-ink-faint">{hint}</p>
       {restartRequired && env && (
         <div className="mt-1 flex items-center gap-1">
-          <code className="rounded bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)] px-1.5 py-0.5 font-mono text-[10px]">
+          <code className="rounded bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)] px-1.5 py-0.5 font-mono text-2xs">
             {env}
           </code>
           <CopyButton text={env} />
-          <span className="text-[10px] text-ink-faint">restart required</span>
+          <span className="text-2xs text-ink-faint">restart required</span>
         </div>
       )}
     </div>
@@ -175,13 +175,13 @@ function LaunchCommand({ facts, request }: { facts: ModelFacts; request: FitRequ
 
   return (
     <div className="mt-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
-      <p className="text-[12px]">Launch command</p>
-      <p className="mt-0.5 text-[11px] text-ink-faint">
+      <p className="text-xs">Launch command</p>
+      <p className="mt-0.5 text-2xs text-ink-faint">
         vLLM serves one model per process and takes its whole configuration at launch, so these
         settings are a command to run rather than controls Nekko Agent can apply.
       </p>
       <div className="mt-2 flex items-start gap-1.5">
-        <code className="flex-1 break-all rounded bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)] px-2 py-1.5 font-mono text-[11px]">
+        <code className="flex-1 break-all rounded bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)] px-2 py-1.5 font-mono text-2xs">
           {cmd}
         </code>
         <CopyButton text={cmd} />

@@ -653,7 +653,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
             <div
               ref={newMenuPopRef}
               data-new-agent-menu
-              className="create-menu card fixed z-[1000] w-max min-w-48 p-1 shadow-lg"
+              className="create-menu card fixed z-[1000] w-max min-w-48 p-1 shadow-(--shadow-float)"
               style={{ top: newMenuPos.top, left: newMenuPos.left }}
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
@@ -718,7 +718,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   ><path d="M9 6l6 6-6 6" /></svg>
                   <span className="agent-panel-group-label truncate font-semibold uppercase tracking-wider">{b.name}</span>
                   {isCollapsed && (items.length > 0 || completedGroup) && (
-                    <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] tabular-nums text-ink-faint">
+                    <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-1.5 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
                     </span>
                   )}
@@ -741,7 +741,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
-                    <p className="px-3.5 py-1 text-[11px] text-ink-faint">No active agents</p>
+                    <p className="px-3.5 py-1 text-2xs text-ink-faint">No active agents</p>
                   )}
                   {items.map((entry) => {
                     const { w, s } = entry;
@@ -806,7 +806,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   {done.length > 0 && (
                     <div className={completedGroup ? '' : 'pt-1'}>
                       {!completedGroup && <button
-                        className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-[11px] text-ink-faint hover:bg-surface-2 hover:text-ink"
+                        className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-2xs text-ink-faint hover:bg-surface-2 hover:text-ink"
                         style={showTips && done.some((s) => s.id === completionTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
                         aria-expanded={completedOpen}
                         ref={showTips && done.some((s) => s.id === completionTipSessionId) ? completionDestinationRef : undefined}
@@ -819,7 +819,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         ><path d="M9 6l6 6-6 6" /></svg>
                         {completedOpen ? 'Hide completed' : `Show completed (${done.length})`}
                       </button>}
-                      {tipHere && <div role="status" className="mt-1 rounded-md border border-line p-2 text-[11px] text-ink-soft">
+                      {tipHere && <div role="status" className="mt-1 rounded-md border border-line p-2 text-2xs text-ink-soft">
                         {completedGroup ? 'Your completed chat is here. Open Completed to find or restore it.' : 'Your completed chat is here. Open Show completed to find or restore it.'}
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
                       </div>}
@@ -858,7 +858,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     >
       {viewMenu && <AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-        <div className="select-text break-all px-2.5 py-2 font-mono text-[10px] text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
+        <div className="select-text break-all px-2.5 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction onClick={() => void runAction('complete',menu.ids)}>Mark as completed</ContextAction>
@@ -885,7 +885,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         <button className="btn btn-ghost" aria-label="Open agent list" aria-expanded={mobileNav}
           style={!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
           onClick={() => setMobileNav(true)}>Agents</button>
-        {!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) && <div role="status" className="mt-1 max-w-40 rounded-md border border-line p-2 text-[11px] text-ink-soft">
+        {!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) && <div role="status" className="mt-1 max-w-40 rounded-md border border-line p-2 text-2xs text-ink-soft">
           Your completed chat is in the agent list. Open Agents, then Show completed to find or restore it.
           <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
         </div>}
@@ -966,9 +966,9 @@ function CompletedRow({
       <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">
         <CheckIcon className="h-3 w-3" />
       </span>
-      <span className={`min-w-0 flex-1 truncate text-[12px] line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.title}</span>
+      <span className={`min-w-0 flex-1 truncate text-xs line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.title}</span>
       <time
-        className="shrink-0 text-[10px] tabular-nums"
+        className="shrink-0 text-2xs tabular-nums"
         style={{ color: 'var(--ink-faint)' }}
         dateTime={new Date(at).toISOString()}
       >
@@ -987,7 +987,7 @@ function SubAgentRow({
   return (
     <button
       onClick={onOpen}
-      className={`flex w-full items-center gap-2 rounded-lg py-1 pl-6 pr-2 text-left text-[12px] transition-colors duration-150 ${
+      className={`flex w-full items-center gap-2 rounded-lg py-1 pl-6 pr-2 text-left text-xs transition-colors duration-150 ${
         isActive ? 'bg-accent-soft text-ink' : 'text-ink-soft hover:bg-surface-2'
       }`}
     >

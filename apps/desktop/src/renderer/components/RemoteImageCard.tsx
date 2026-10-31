@@ -58,7 +58,7 @@ export function RemoteImageCard({ url, alt, items, index = 0, tile = false }: {
     body = (
       <span className={`flex ${frame} flex-col items-center justify-center gap-2 p-4 text-center text-xs text-ink-soft`} role="status">
         <span>Couldn't load the image from {host}.</span>
-        <span className="text-[11px] text-ink-faint">{state.message}</span>
+        <span className="text-2xs text-ink-faint">{state.message}</span>
         <button type="button" className="btn btn-ghost h-7 px-2.5 text-xs" onClick={retry}>Retry</button>
       </span>
     );
@@ -66,7 +66,7 @@ export function RemoteImageCard({ url, alt, items, index = 0, tile = false }: {
     body = (
       <span className={`flex ${frame} flex-col items-center justify-center gap-2 p-4 text-center text-xs text-ink-soft`}>
         <span>Image from <strong className="font-medium text-ink">{host}</strong></span>
-        <span className="max-w-[320px] text-[11px] text-ink-faint">Not from a search or page in this chat, so it waits for you. Loading it contacts {host}.</span>
+        <span className="max-w-[320px] text-2xs text-ink-faint">Not from a search or page in this chat, so it waits for you. Loading it contacts {host}.</span>
         <button type="button" className="btn btn-ghost h-7 px-2.5 text-xs" onClick={() => setClicked(true)}>Load image</button>
       </span>
     );
@@ -84,8 +84,8 @@ export function RemoteImageCard({ url, alt, items, index = 0, tile = false }: {
     >
       {body}
       <span className="flex min-w-0 items-center gap-2 px-3 py-1.5">
-        <span className="min-w-0 flex-1 truncate text-[12px] text-ink" title={alt || undefined}>{alt || host}</span>
-        <span className="shrink-0 truncate text-[11px] text-ink-faint" title={url}>{host}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-ink" title={alt || undefined}>{alt || host}</span>
+        <span className="shrink-0 truncate text-2xs text-ink-faint" title={url}>{host}</span>
       </span>
     </span>
   );

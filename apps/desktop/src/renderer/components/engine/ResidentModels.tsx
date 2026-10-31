@@ -89,8 +89,8 @@ export function ResidentModels({
   return (
     <div className="rounded-xl border p-3" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[12px] font-semibold">In memory</p>
-        <p className="text-[11px] text-ink-faint">
+        <p className="text-xs font-semibold">In memory</p>
+        <p className="text-2xs text-ink-faint">
           {[
             resident.length === 0
               ? 'nothing loaded'
@@ -104,7 +104,7 @@ export function ResidentModels({
       </div>
 
       {resident.length === 0 && loadingRows.length === 0 ? (
-        <p className="mt-1.5 text-[11.5px] text-ink-faint">
+        <p className="mt-1.5 text-xs text-ink-faint">
           Load a model below, or let one load itself when a request arrives
           {settings.jitLoad ? '' : ' (load-on-demand is off)'}.
         </p>
@@ -128,16 +128,16 @@ export function ResidentModels({
                   else rowRefs.current.delete(r.id);
                 }}
               >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-2.5 py-2 text-[12px]" style={{ borderColor: 'var(--line)' }}>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-2.5 py-2 text-xs" style={{ borderColor: 'var(--line)' }}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--success)' }} />
                     <span className="truncate font-medium">{model?.name ?? r.id}</span>
                     {model?.modality && model.modality !== 'chat' && (
-                      <span className="chip shrink-0 text-[10px]">{model.modality === 'vision' ? 'vision' : model.modality}</span>
+                      <span className="chip shrink-0 text-2xs">{model.modality === 'vision' ? 'vision' : model.modality}</span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-[11px] text-ink-faint">
+                  <p className="mt-0.5 text-2xs text-ink-faint">
                     {[
                       formatBytes(r.vramBytes ?? r.sizeBytes ?? 0),
                       r.contextLength ? `${formatTokens(r.contextLength)} context` : undefined,
@@ -153,7 +153,7 @@ export function ResidentModels({
                       running model: all-GPU is fast, partly CPU much less so. */}
                   {r.loadedOn && (
                     <span
-                      className="text-[10.5px] text-ink-faint"
+                      className="text-2xs text-ink-faint"
                       style={r.loadedOn !== 'gpu' ? { color: 'var(--warning, #d1a054)' } : undefined}
                       title={placementTitle(r)}
                     >
@@ -162,7 +162,7 @@ export function ResidentModels({
                   )}
                   {model && (
                     <button
-                      className="rounded-full border px-2 py-1 text-[11px] hover:border-[var(--accent)]"
+                      className="rounded-full border px-2 py-1 text-2xs hover:border-[var(--accent)]"
                       style={{ borderColor: open === r.id ? 'var(--accent)' : 'var(--line)' }}
                       title="Adjust this model's settings and reload it"
                       onClick={() => { setJumped(null); setOpen(open === r.id ? null : r.id); }}
@@ -171,7 +171,7 @@ export function ResidentModels({
                     </button>
                   )}
                   <button
-                    className="rounded-full border px-2 py-1 text-[11px]"
+                    className="rounded-full border px-2 py-1 text-2xs"
                     style={{ borderColor: 'var(--line)' }}
                     disabled={busy === r.id}
                     title={
@@ -184,7 +184,7 @@ export function ResidentModels({
                     {kept ? 'Use idle limit' : 'Keep loaded'}
                   </button>
                   <button
-                    className="rounded-full border px-2 py-1 text-[11px]"
+                    className="rounded-full border px-2 py-1 text-2xs"
                     style={{ borderColor: 'var(--line)' }}
                     disabled={busy === r.id}
                     onClick={() => void unload(r.id)}
@@ -236,14 +236,14 @@ function formatAge(ms: number): string {
 function LoadingRow({ load, name, elapsedMs }: { load: LoadingModel; name: string; elapsedMs: number }) {
   const pct = load.progress === undefined ? null : Math.round(load.progress * 100);
   return (
-    <div className="rounded-lg border px-2.5 py-2 text-[12px]" style={{ borderColor: 'var(--line)' }}>
+    <div className="rounded-lg border px-2.5 py-2 text-xs" style={{ borderColor: 'var(--line)' }}>
       <div className="flex items-center gap-1.5">
         <span
           className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
           style={{ background: 'var(--accent)' }}
         />
         <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
-        <span className="shrink-0 font-mono text-[11px] text-ink-faint">
+        <span className="shrink-0 font-mono text-2xs text-ink-faint">
           {load.phase === 'queued' ? 'queued' : pct === null ? 'loading' : `${pct}%`}
         </span>
       </div>
@@ -265,7 +265,7 @@ function LoadingRow({ load, name, elapsedMs }: { load: LoadingModel; name: strin
           />
         </div>
       )}
-      <p className="mt-1 text-[10.5px] text-ink-faint">
+      <p className="mt-1 text-2xs text-ink-faint">
         {load.phase === 'queued'
           ? 'Loads run one at a time; this starts when the one ahead of it finishes.'
           : `Reading the file into memory · ${formatAge(elapsedMs)} so far`}

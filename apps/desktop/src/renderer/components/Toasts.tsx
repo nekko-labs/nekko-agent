@@ -13,11 +13,11 @@ export function Toasts() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="fade-in card pointer-events-auto flex items-start gap-3 p-3 shadow-lg"
+          className="fade-in card pointer-events-auto flex items-start gap-3 p-3 shadow-(--shadow-float)"
           onClick={() => dismissToast(t.id)}
         >
           <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: COLOR[t.kind] }} />
-          <span className="text-[13px] leading-snug">{t.message}</span>
+          <span className="text-sm leading-snug">{t.message}</span>
         </div>
       ))}
     </div>

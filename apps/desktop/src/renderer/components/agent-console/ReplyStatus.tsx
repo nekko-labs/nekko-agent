@@ -86,7 +86,7 @@ export function ReplyStatus({ streaming, status, elapsed, tps, out, last, done, 
   if (!streaming && !blocked && !sleeping && !showNumbers && !showDone) return null;
   const lead = sleeping ? '' : '· ';
   return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-1 text-[12px] text-ink-faint" role="status" data-reply-status>
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-1 text-xs text-ink-faint" role="status" data-reply-status>
       {streaming ? (
         <span className="flex items-center gap-2 text-ink-soft"><ReplyActivityIcon state={iconState} /><span className="dots dots-lead -mr-1.5" aria-hidden="true" />{status || 'Working'}</span>
       ) : blocked ? (

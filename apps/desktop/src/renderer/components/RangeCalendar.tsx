@@ -38,7 +38,7 @@ export function RangeCalendar({ value, onChange, now = Date.now() }: {
         <button type="button" className="grid h-6 w-6 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" aria-label="Previous month" onClick={() => step(-1)}>
           <ChevronIcon className="h-3.5 w-3.5 rotate-180" />
         </button>
-        <span className="text-[12px] font-semibold text-ink" aria-live="polite">
+        <span className="text-xs font-semibold text-ink" aria-live="polite">
           {new Date(month.y, month.m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
         </span>
         <button type="button" className="grid h-6 w-6 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" aria-label="Next month" onClick={() => step(1)}>
@@ -46,7 +46,7 @@ export function RangeCalendar({ value, onChange, now = Date.now() }: {
         </button>
       </div>
       <div className="grid grid-cols-7 gap-y-0.5 text-center" role="grid" aria-label="Pick a from and to date">
-        {WEEKDAYS.map((d, i) => <span key={i} className="pb-0.5 text-[10px] font-semibold uppercase text-ink-faint" role="columnheader">{d}</span>)}
+        {WEEKDAYS.map((d, i) => <span key={i} className="pb-0.5 text-2xs font-semibold uppercase text-ink-faint" role="columnheader">{d}</span>)}
         {days.map((day) => {
           const outside = new Date(day).getMonth() !== month.m;
           const sel = !!shown && day >= startOfDay(shown.from) && day <= shown.to;
@@ -62,7 +62,7 @@ export function RangeCalendar({ value, onChange, now = Date.now() }: {
               data-in-range={sel || undefined}
               data-edge={edge || undefined}
               data-today={day === today || undefined}
-              className={`chat-finder-day h-7 text-[11.5px] tabular-nums ${outside ? 'opacity-40' : ''} ${day > today ? 'is-future' : ''}`}
+              className={`chat-finder-day h-7 text-xs tabular-nums ${outside ? 'opacity-40' : ''} ${day > today ? 'is-future' : ''}`}
               onMouseEnter={() => { if (start !== null) setHover(day); }}
               onClick={() => pick(day)}
             >
@@ -71,7 +71,7 @@ export function RangeCalendar({ value, onChange, now = Date.now() }: {
           );
         })}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px]">
+      <div className="mt-2 flex flex-wrap items-center gap-1 text-2xs">
         {([['Today', 0], ['7 days', 6], ['30 days', 29], ['90 days', 89]] as const).map(([label, back]) => (
           <button key={label} type="button" className="chat-finder-chip" onClick={() => preset(back)}>{label}</button>
         ))}

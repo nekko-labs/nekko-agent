@@ -14,7 +14,7 @@ export const CREATE_OPTIONS = [
 export function CreateMenuRows({ onCreate }: { onCreate: (kind: CreateKind) => void }) {
   return <>{CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" aria-label={label} title={`${label} (${shortcut.label})`} onClick={() => onCreate(kind)}>
     <span className="create-tile">{icon}</span>
-    <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug">{label}</span>
+    <span className="min-w-0 flex-1 text-sm font-medium leading-snug">{label}</span>
     <kbd className="kbd shrink-0">{shortcut.label}</kbd>
   </button>)}</>;
 }
@@ -54,6 +54,6 @@ export function CreateMenu({ onCreate, anchorRef }: { onCreate: (kind: CreateKin
   }, [open]);
   return <>
     <button ref={anchor} type="button" className="btn btn-ghost agent-panel-plus px-1.5 py-1" aria-label="Create new" aria-haspopup="dialog" aria-expanded={open} data-wall-create-toggle onMouseEnter={show} onMouseLeave={leave} onClick={show} onKeyDown={e => { if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); requestAnimationFrame(() => pop.current?.querySelector('button')?.focus()); } }}><PlusIcon className="h-[22px] w-[22px]" /></button>
-    {open && createPortal(<div ref={pop} role="dialog" aria-label="Create new" data-wall-create-menu className="create-menu card fixed z-[1000] w-max p-1 shadow-lg" style={pos} onMouseEnter={cancel} onMouseLeave={leave} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) close(); }}><CreateMenuRows onCreate={kind => { close(); onCreate(kind); }} /></div>, document.body)}
+    {open && createPortal(<div ref={pop} role="dialog" aria-label="Create new" data-wall-create-menu className="create-menu card fixed z-[1000] w-max p-1 shadow-(--shadow-float)" style={pos} onMouseEnter={cancel} onMouseLeave={leave} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) close(); }}><CreateMenuRows onCreate={kind => { close(); onCreate(kind); }} /></div>, document.body)}
   </>;
 }

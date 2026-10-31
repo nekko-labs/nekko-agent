@@ -61,7 +61,7 @@ export function WorkflowCanvas({
 
   if (steps.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-[12.5px] text-ink-faint">
+      <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-xs text-ink-faint">
         No steps yet. Add one and it appears here.
       </p>
     );
@@ -123,7 +123,7 @@ export function WorkflowCanvas({
           return (
             <button
               key={n.id}
-              className="card absolute flex flex-col justify-center overflow-hidden px-3 py-2 text-left shadow-xs transition"
+              className="card absolute flex flex-col justify-center overflow-hidden px-3 py-2 text-left transition"
               style={{
                 left: n.x,
                 top: n.y,
@@ -139,10 +139,10 @@ export function WorkflowCanvas({
             >
               <div className="flex items-center gap-1.5">
                 <span style={{ color: kind.color }}>{kind.glyph}</span>
-                <span className="truncate text-[12.5px] font-medium leading-tight">{n.label}</span>
+                <span className="truncate text-xs font-medium leading-tight">{n.label}</span>
                 {n.step && modelLabel?.(n.step) ? (
                   <span
-                    className="ml-auto min-w-0 max-w-[60%] shrink truncate rounded-sm px-1 text-[9.5px] text-ink-soft"
+                    className="ml-auto min-w-0 max-w-[60%] shrink truncate rounded-sm px-1 text-2xs text-ink-soft"
                     style={{ background: 'var(--surface-2)' }}
                     data-step-model
                     title={`Model: ${modelLabel(n.step)}`}
@@ -154,12 +154,12 @@ export function WorkflowCanvas({
                   <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full" style={{ background: STATUS.running }} />
                 )}
                 {outcome && outcome.attempt > 1 && (
-                  <span className="ml-auto shrink-0 font-mono text-[9.5px] text-ink-faint">×{outcome.attempt}</span>
+                  <span className="ml-auto shrink-0 font-mono text-2xs text-ink-faint">×{outcome.attempt}</span>
                 )}
               </div>
-              {n.detail && <p className="mt-0.5 truncate text-[10.5px] text-ink-faint">{n.detail}</p>}
+              {n.detail && <p className="mt-0.5 truncate text-2xs text-ink-faint">{n.detail}</p>}
               {n.step?.retries ? (
-                <p className="truncate font-mono text-[9.5px] text-ink-faint">retries {n.step.retries}</p>
+                <p className="truncate font-mono text-2xs text-ink-faint">retries {n.step.retries}</p>
               ) : null}
             </button>
           );

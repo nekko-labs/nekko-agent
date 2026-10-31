@@ -41,11 +41,11 @@ function EventLog({ id }: { id: string }) {
     const t = setInterval(load, POLL_MS);
     return () => { live = false; clearInterval(t); };
   }, [id]);
-  if (failed) return <p className="mt-2 text-[12px] text-danger" role="status">Couldn’t read the log.</p>;
-  if (!events) return <p className="mt-2 text-[12px] text-ink-faint">Loading…</p>;
-  if (!events.length) return <p className="mt-2 text-[12px] text-ink-faint">Nothing logged yet.</p>;
+  if (failed) return <p className="mt-2 text-xs text-danger" role="status">Couldn’t read the log.</p>;
+  if (!events) return <p className="mt-2 text-xs text-ink-faint">Loading…</p>;
+  if (!events.length) return <p className="mt-2 text-xs text-ink-faint">Nothing logged yet.</p>;
   return (
-    <ol className="mt-2 max-h-56 overflow-auto rounded-md border border-line p-2 font-mono text-[11px]" aria-label="Connection log">
+    <ol className="mt-2 max-h-56 overflow-auto rounded-md border border-line p-2 font-mono text-2xs" aria-label="Connection log">
       {events.map((e, i) => (
         <li key={`${e.at}-${i}`} className={`flex gap-3 py-0.5 ${e.kind === 'blocked' || e.error || (e.status ?? 0) >= 400 ? 'text-danger' : ''}`}>
           <time className="shrink-0 text-ink-faint" dateTime={new Date(e.at).toISOString()}>{new Date(e.at).toLocaleTimeString()}</time>
@@ -69,10 +69,10 @@ function Row({ c, st, on, disabled, onChange, now }: {
     <div className="border-t border-line py-3" data-connection={c.id}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="text-[13px]">{c.label}</span>
-          <span className="ml-2 text-[11px] text-ink-faint">{c.where}</span>
-          <p className="text-[11px] text-ink-faint">{c.desc}</p>
-          <p className="mt-0.5 text-[11px] text-ink-faint">
+          <span className="text-sm">{c.label}</span>
+          <span className="ml-2 text-2xs text-ink-faint">{c.where}</span>
+          <p className="text-2xs text-ink-faint">{c.desc}</p>
+          <p className="mt-0.5 text-2xs text-ink-faint">
             {statusLine(st, now)}
             <button className="ml-2 underline" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide log' : 'Show log'}</button>
           </p>
@@ -112,13 +112,13 @@ export function ConnectionsSettings({ settings, update }: {
   return (
     <section className="card mt-5 p-5" id="connections">
       <div className="flex items-center gap-2"><GlobeIcon className="h-4 w-4" /><h2 className="font-semibold">Connections</h2></div>
-      <p className="mt-1 text-[12px] text-ink-faint">
+      <p className="mt-1 text-xs text-ink-faint">
         Everything Nekko Agent connects to besides this computer. Nekko Agent sends no usage or crash reports unless you turn them on under System. The log keeps when each connection was used and where it went, never what was sent.
       </p>
       <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3 rounded-md p-3" style={{ background: allOff ? 'color-mix(in srgb, var(--warning) 12%, transparent)' : 'var(--surface-2, transparent)' }}>
         <div className="min-w-0">
-          <span className="text-[13px] font-medium">All connections off</span>
-          <p className="text-[11px] text-ink-faint">
+          <span className="text-sm font-medium">All connections off</span>
+          <p className="text-2xs text-ink-faint">
             Nothing reaches or leaves this computer over the network. Every chat runs Offline, so only local models on this computer answer.
           </p>
         </div>
@@ -126,8 +126,8 @@ export function ConnectionsSettings({ settings, update }: {
       </div>
       {CONNECTION_GROUPS.map((g) => (
         <div key={g.id} className="mt-4">
-          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-ink-faint">{g.label}</h3>
-          <p className="text-[11px] text-ink-faint">{g.desc}</p>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{g.label}</h3>
+          <p className="text-2xs text-ink-faint">{g.desc}</p>
           {CONNECTIONS.filter((c) => c.group === g.id).map((c) => (
             <Row
               key={c.id}
@@ -142,8 +142,8 @@ export function ConnectionsSettings({ settings, update }: {
         </div>
       ))}
       <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
-        <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => void clear()}>Clear connection logs</button>
-        <span className="text-[11px] text-ink-faint">Kept in logs/connections.log, at most about 6 MB.</span>
+        <button className="btn btn-outline py-1.5 text-xs" onClick={() => void clear()}>Clear connection logs</button>
+        <span className="text-2xs text-ink-faint">Kept in logs/connections.log, at most about 6 MB.</span>
       </div>
     </section>
   );

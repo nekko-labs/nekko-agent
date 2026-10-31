@@ -192,7 +192,7 @@ export function SplitCompass({
       {open && createPortal(
         <div
           ref={panel}
-          className="card fixed z-50 p-2.5 shadow-lg"
+          className="card fixed z-50 p-2.5 shadow-(--shadow-float)"
           // Opaque, unlike the cards that sit on a page: this one floats over a
           // conversation, and a translucent panel would read the chat's text
           // straight through the compass.
@@ -204,9 +204,9 @@ export function SplitCompass({
         >
           {!dir ? (
             <>
-              <p className="mb-1 px-0.5 text-[11px] text-ink-faint">Where should it go?</p>
+              <p className="mb-1 px-0.5 text-2xs text-ink-faint">Where should it go?</p>
               <Compass kind={kind} hover={hover} canSplit={canSplit} onHover={setHover} onPick={pick} />
-              <p className="mt-1 h-4 text-center text-[11px] text-ink-faint">
+              <p className="mt-1 h-4 text-center text-2xs text-ink-faint">
                 {hover ? (canSplit(hover) ? DIR_LABEL[hover] : `No room — ${MAX_ACROSS} is the limit`) : ''}
               </p>
             </>
@@ -221,7 +221,7 @@ export function SplitCompass({
                 >
                   <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
                 </button>
-                <span className="text-[11px] text-ink-faint">{DIR_LABEL[dir]} — what goes there?</span>
+                <span className="text-2xs text-ink-faint">{DIR_LABEL[dir]} — what goes there?</span>
               </div>
               {offered.map(({ kind: k, label, hint, Icon }) => (
                 <button
@@ -234,8 +234,8 @@ export function SplitCompass({
                 >
                   <Icon className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[12px] font-medium">{label}</span>
-                    <span className="block text-[10px] leading-tight text-ink-faint">{hint}</span>
+                    <span className="block text-xs font-medium">{label}</span>
+                    <span className="block text-2xs leading-tight text-ink-faint">{hint}</span>
                   </span>
                 </button>
               ))}

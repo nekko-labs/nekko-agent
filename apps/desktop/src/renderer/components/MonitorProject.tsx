@@ -95,12 +95,12 @@ export function MonitorProject({ sessionId, projectPath }: { sessionId: string; 
 
   return (
     <details open className="group rounded-lg p-2" data-monitor-project data-project-source={current ?? (fileSource ? 'repo' : 'none')}>
-      <summary className="flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+      <summary className="flex cursor-pointer items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
         <span className="flex-1">Project{data && 'items' in data && <span className="ml-1 tabular-nums">{data.items.length}</span>}</span>
-        {(current || fileSource) && <button type="button" className="rounded px-1 text-[10px] normal-case tracking-normal hover:bg-surface-2 disabled:opacity-50" disabled={busy}
+        {(current || fileSource) && <button type="button" className="rounded px-1 text-2xs normal-case tracking-normal hover:bg-surface-2 disabled:opacity-50" disabled={busy}
           onClick={(e) => { e.preventDefault(); if (current) void load(current); else void reload(); }} title="Reload tasks">{busy ? 'Loading…' : 'Refresh'}</button>}
       </summary>
-      {sourceLabel && sources.length <= 1 && <p className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-faint" data-project-label>
+      {sourceLabel && sources.length <= 1 && <p className="mt-1 flex items-center gap-1.5 text-2xs text-ink-faint" data-project-label>
         {current ? <ConnectorIcon kind={current} size={12} /> : <span aria-hidden className="font-mono">#</span>}
         {fileSource
           ? <button type="button" className="truncate hover:text-ink hover:underline" title={`Open ${fileSource.path}`} onClick={() => useStore.getState().openFilePane(fileSource.path, sessionId)}>{sourceLabel}</button>
@@ -118,12 +118,12 @@ export function MonitorProject({ sessionId, projectPath }: { sessionId: string; 
         </div>
       )}
       <div className="mt-1.5">
-        {none ? <p className="text-[11px] leading-snug text-ink-faint">
+        {none ? <p className="text-2xs leading-snug text-ink-faint">
             No project tracker yet. <button type="button" className="underline hover:text-ink" onClick={() => useStore.getState().setView('connectors')}>Connect Linear, Jira or Asana</button>{projectPath ? ', or add a TASKS.md to this repo.' : '.'}
           </p>
-          : !data ? <p className="text-[11px] text-ink-faint">Loading tasks…</p>
-          : 'error' in data ? <p className="text-[11px]" style={{ color: 'var(--danger)' }}>{data.error}</p>
-          : data.items.length === 0 ? <p className="text-[11px] text-ink-faint">No open tasks.</p>
+          : !data ? <p className="text-2xs text-ink-faint">Loading tasks…</p>
+          : 'error' in data ? <p className="text-2xs" style={{ color: 'var(--danger)' }}>{data.error}</p>
+          : data.items.length === 0 ? <p className="text-2xs text-ink-faint">No open tasks.</p>
           : <ul className="max-h-64 space-y-0.5 overflow-y-auto">{data.items.slice(0, 50).map((t) => (
             <li key={t.id}>
               <button type="button" className="flex w-full items-start gap-1.5 rounded-lg px-1 py-1 text-left hover:bg-surface-2"
@@ -131,8 +131,8 @@ export function MonitorProject({ sessionId, projectPath }: { sessionId: string; 
                 onClick={() => seed(t)}>
                 <span className="mt-[5px] block h-2.5 w-2.5 shrink-0 rounded-[3px] border" style={{ borderColor: 'var(--ink-faint)' }} />
                 <span className="min-w-0 flex-1">
-                  <span className="block break-words text-[12px] leading-snug text-ink-soft">{t.title}</span>
-                  {t.subtitle && <span className="block truncate text-[10px] text-ink-faint">{t.subtitle}</span>}
+                  <span className="block break-words text-xs leading-snug text-ink-soft">{t.title}</span>
+                  {t.subtitle && <span className="block truncate text-2xs text-ink-faint">{t.subtitle}</span>}
                 </span>
               </button>
             </li>

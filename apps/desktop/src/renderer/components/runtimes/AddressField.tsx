@@ -60,7 +60,7 @@ export function AddressField({
     return (
       <div className="flex items-center gap-1.5">
         <input
-          className="input flex-1 py-1 font-mono text-[11px]"
+          className="input flex-1 py-1 font-mono text-2xs"
           value={value}
           autoFocus
           spellCheck={false}
@@ -73,11 +73,11 @@ export function AddressField({
             }
           }}
         />
-        <button className="btn btn-outline px-2 py-1 text-[11px]" onClick={save} disabled={saving}>
+        <button className="btn btn-outline px-2 py-1 text-2xs" onClick={save} disabled={saving}>
           {saving ? 'Saving' : 'Save'}
         </button>
         <button
-          className="btn btn-ghost px-2 py-1 text-[11px]"
+          className="btn btn-ghost px-2 py-1 text-2xs"
           onClick={() => {
             setValue(provider.baseUrl);
             setEditing(false);
@@ -91,7 +91,7 @@ export function AddressField({
 
   return (
     <div className="flex items-center gap-1">
-      <code className="flex-1 truncate font-mono text-[11px] text-ink-faint">{provider.baseUrl}</code>
+      <code className="flex-1 truncate font-mono text-2xs text-ink-faint">{provider.baseUrl}</code>
       <button
         className="btn btn-ghost px-1.5 py-1"
         onClick={copy}

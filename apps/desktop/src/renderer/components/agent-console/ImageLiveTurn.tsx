@@ -27,10 +27,10 @@ export function ImageLiveTurn({ sessionId, streaming }: { sessionId: string; str
   if (!streaming) return null;
   return (
     <div className="flex items-start gap-3 py-2" role="status" aria-live="polite">
-      <div className="grid h-40 w-40 shrink-0 animate-pulse place-items-center rounded-xl border border-line bg-surface-2 text-[11px] text-ink-faint">
+      <div className="grid h-40 w-40 shrink-0 animate-pulse place-items-center rounded-xl border border-line bg-surface-2 text-2xs text-ink-faint">
         {seconds}s
       </div>
-      <p className="pt-1 text-[12px] text-ink-soft">{label}…</p>
+      <p className="pt-1 text-xs text-ink-soft">{label}…</p>
     </div>
   );
 }

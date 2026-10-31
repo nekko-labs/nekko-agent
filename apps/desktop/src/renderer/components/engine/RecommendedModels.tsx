@@ -91,8 +91,8 @@ export function UpgradeNudges({
       data-upgrade-nudges
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-[13px] font-semibold">{nudgeTitle(recs)}</p>
-        <button className="btn btn-ghost py-0.5 text-[11.5px] text-ink-faint" onClick={onDismiss}>
+        <p className="text-sm font-semibold">{nudgeTitle(recs)}</p>
+        <button className="btn btn-ghost py-0.5 text-xs text-ink-faint" onClick={onDismiss}>
           Not now
         </button>
       </div>
@@ -102,12 +102,12 @@ export function UpgradeNudges({
           const state = queued[t.task];
           return (
             <div key={n.task} className="flex flex-wrap items-center gap-x-2 gap-y-1" data-upgrade-nudge={n.task}>
-              <span className="w-[118px] shrink-0 text-[11.5px] text-ink-faint">{t.label}</span>
-              <span className="min-w-0 flex-1 text-[12px]">
+              <span className="w-[118px] shrink-0 text-xs text-ink-faint">{t.label}</span>
+              <span className="min-w-0 flex-1 text-xs">
                 <span className="font-medium">{p.name}</span> <span className="text-ink-faint">{p.quant} · {formatBytes(p.downloadBytes)} download, instead of {n.haveName}</span>
               </span>
               {state ? (
-                <span className="text-[12px] text-ink-faint">{state}</span>
+                <span className="text-xs text-ink-faint">{state}</span>
               ) : (
                 <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={res => onDownload(t, res)} />
               )}
@@ -143,9 +143,9 @@ export function RecommendationList({
     <details className="group card mb-5 p-4" open={open} data-recommendations>
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1">
         <ChevronIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform group-open:rotate-90" />
-        <span className="text-[14px] font-semibold">Best for this machine</span>
-        <span className="text-[11.5px] text-ink-faint">{hardwareText(recs)}</span>
-        <span className="ml-auto text-[11.5px] text-ink-faint group-open:hidden">
+        <span className="text-sm font-semibold">Best for this machine</span>
+        <span className="text-xs text-ink-faint">{hardwareText(recs)}</span>
+        <span className="ml-auto text-xs text-ink-faint group-open:hidden">
           {picked.length} pick{picked.length === 1 ? '' : 's'}
         </span>
       </summary>
@@ -158,13 +158,13 @@ export function RecommendationList({
           const state = queued[t.task];
           return (
             <div key={t.task} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5" data-recommendation={t.task}>
-              <div className="w-[118px] shrink-0 text-[11.5px] text-ink-faint">{t.label}</div>
+              <div className="w-[118px] shrink-0 text-xs text-ink-faint">{t.label}</div>
               <div className="min-w-[180px] flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[12.5px] font-medium">{p.name}</span>
+                  <span className="text-xs font-medium">{p.name}</span>
                   <span className="chip" title={`${p.repo}: ${p.files.join(', ')}`}>{p.quant}</span>
                   <span
-                    className="rounded-full px-1.5 py-0.5 text-[10px]"
+                    className="rounded-full px-1.5 py-0.5 text-2xs"
                     style={{
                       background: `color-mix(in srgb, ${p.fit === 'fits' ? 'var(--success)' : 'var(--warning, #d1a054)'} 16%, transparent)`,
                       color: p.fit === 'fits' ? 'var(--success)' : 'var(--warning, #d1a054)',
@@ -174,7 +174,7 @@ export function RecommendationList({
                     {fit.text}
                   </span>
                 </div>
-                <p className="mt-0.5 text-[11px] text-ink-faint">
+                <p className="mt-0.5 text-2xs text-ink-faint">
                   <span title="Weights, the conversation's memory at this task's context, and the engine's working buffers">
                     {memoryText(p, recs.budget)}
                   </span>
@@ -190,18 +190,18 @@ export function RecommendationList({
                   )}
                 </p>
                 {t.belowTargetSpeed && (
-                  <p className="mt-0.5 text-[11px]" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-0.5 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
                     Slower than the {t.minTokensPerSecond} tok/s this task wants; the fastest that fits here.
                   </p>
                 )}
               </div>
               <div className="shrink-0">
                 {have ? (
-                  <span className="inline-flex items-center gap-1 text-[12px] text-success">
+                  <span className="inline-flex items-center gap-1 text-xs text-success">
                     <CheckIcon className="h-3.5 w-3.5" /> Downloaded
                   </span>
                 ) : state ? (
-                  <span className="text-[12px] text-ink-faint" role="status">{state}</span>
+                  <span className="text-xs text-ink-faint" role="status">{state}</span>
                 ) : (
                   <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={res => onDownload(t, res)} />
                 )}
@@ -210,11 +210,11 @@ export function RecommendationList({
           );
         })}
       </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-ink-faint">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-2xs text-ink-faint">
         <span>
           From the model list shipped with this version ({recs.feedVersion}). Speeds are for the start of a conversation: ~ marks an estimate, "here" what this machine measured.
         </span>
-        <button className="btn btn-ghost py-1 text-[11.5px]" onClick={onRecheck} disabled={checking}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onRecheck} disabled={checking}>
           {checking ? 'Checking…' : 'Check this machine again'}
         </button>
       </div>

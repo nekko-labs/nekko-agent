@@ -56,9 +56,9 @@ export function HypergatePane({ url }: { url: string }) {
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
       <div className="flex items-center gap-2 border-b border-line px-3 py-1.5">
         <ShieldIcon className="h-3.5 w-3.5 text-accent" />
-        <span className="text-[12px] font-medium">Hypergate</span>
+        <span className="text-xs font-medium">Hypergate</span>
         {hypergate && (
-          <span className="text-[11.5px] text-ink-faint">
+          <span className="text-xs text-ink-faint">
             v{hypergate.version} · {hypergate.servers} server{hypergate.servers === 1 ? '' : 's'}
             {hypergate.agent ? ` · connected as ${hypergate.agent}` : ''}
           </span>
@@ -78,11 +78,11 @@ export function HypergatePane({ url }: { url: string }) {
         {failed ? (
           <div className="grid h-full place-items-center px-6 text-center">
             <div>
-              <p className="text-[13px] font-medium">Hypergate isn't answering</p>
-              <p className="mt-1 text-[12px] text-ink-faint">
+              <p className="text-sm font-medium">Hypergate isn't answering</p>
+              <p className="mt-1 text-xs text-ink-faint">
                 The daemon on <code>{url}</code> stopped or restarted. Its tools stay configured; they come back when it does.
               </p>
-              <button className="btn btn-outline mt-3 py-1 text-[12px]" onClick={() => void retry()} disabled={retrying}>
+              <button className="btn btn-outline mt-3 py-1 text-xs" onClick={() => void retry()} disabled={retrying}>
                 {retrying ? 'Reconnecting…' : 'Reconnect'}
               </button>
             </div>

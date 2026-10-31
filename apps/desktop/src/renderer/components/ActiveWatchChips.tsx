@@ -14,7 +14,7 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
     return () => clearInterval(timer);
   }, [watches.length]);
   if (!watches.length && !error) return null;
-  return <div className="flex flex-wrap gap-2 border-b border-line px-3 py-2 text-[12px]" data-active-watch-chips>
+  return <div className="flex flex-wrap gap-2 border-b border-line px-3 py-2 text-xs" data-active-watch-chips>
     {watches.map(w => {
       const clock = watchClock({ action: 'create', kind: w.kind, prompt: '' }, w, now);
       return <details key={w.id} className="min-w-0 max-w-full rounded-lg border border-line px-2 py-1">
@@ -26,7 +26,7 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
           <div className="break-all text-ink-faint">Watch {w.id}</div>
           {w.url && /^https:\/\/github\.com\//i.test(w.url) && <a href={w.url} target="_blank" rel="noreferrer" className="underline">Open pull request</a>}
           <p>{clock?.title}</p>
-          <button type="button" className="btn btn-outline text-[12px]" disabled={busy !== null} onClick={async () => {
+          <button type="button" className="btn btn-outline text-xs" disabled={busy !== null} onClick={async () => {
             setBusy(w.id); setError(null);
             try { await window.nekko.cancelAgentWatch(sessionId, w.id); refreshAgentWatches(sessionId); }
             catch (e) { setError(`Could not cancel watcher: ${String(e)}`); }

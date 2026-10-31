@@ -66,7 +66,7 @@ export function SandboxSetup({ session, onChange, onClose }: { session: Session;
     finally { setBusy(false); }
   };
   return createPortal(<div className="fixed inset-0 z-[110] grid place-items-center bg-black/30" role="presentation">
-    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Set up Sandbox" className="card mx-4 w-[480px] max-w-full space-y-3 p-5 shadow-lg">
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Set up Sandbox" className="card mx-4 w-[480px] max-w-full space-y-3 p-5 shadow-(--shadow-float)">
       <h2 className="font-medium">Set up Sandbox</h2>
       <p className="text-sm text-ink-soft">Use an already-local container image pinned by SHA-256 digest. No images will be pulled. Sandbox supports scoped files and bash only. Setup starts with fresh Ask permissions.</p>
       {session.sandbox && <p className="text-sm text-ink-soft">This sandbox identity is immutable. After a restart, Review sandbox diff verifies and reconnects to a running owned container. Failed or stopped sandboxes must be cleaned up, then continued in a new sandbox chat. Cleanup permanently deletes the copied files, not the source folders.</p>}

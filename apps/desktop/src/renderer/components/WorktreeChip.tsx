@@ -85,7 +85,7 @@ export function WorktreeChip({ session, git, disabled, onChange }: {
       <span className="truncate">{isolated ? git.worktree?.name : git.branch ?? git.head ?? 'detached'}</span>
     </button>
     {open && createPortal(<div ref={panel} role="dialog" aria-label="Git checkout options"
-      className="fixed z-50 max-w-[calc(100vw-16px)] w-[340px] rounded-lg border border-line bg-paper p-3 text-[12px] shadow-lg"
+      className="fixed z-50 max-w-[calc(100vw-16px)] w-[340px] rounded-lg border border-line bg-paper p-3 text-xs shadow-(--shadow-float)"
       style={pos} onMouseEnter={enter} onMouseLeave={leave} onFocus={enter}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) leave(); }}>
       <div className="flex items-center justify-between gap-2">
@@ -99,11 +99,11 @@ export function WorktreeChip({ session, git, disabled, onChange }: {
           <p key={notice}>{notice.replace(/ Interrupt if you want[\s\S]*?(?= Copied from|$)/, '')}</p>)
           : <p>This chat uses the project’s current Git branch, including local changes. Other chats using this checkout share its files.</p>}
       </div>
-      {git.worktree && isolated && <p className="mt-2 break-all text-[11px] text-ink-faint">{git.worktree.path}</p>}
+      {git.worktree && isolated && <p className="mt-2 break-all text-2xs text-ink-faint">{git.worktree.path}</p>}
 
-      <p className="mt-2 text-[11px] text-ink-faint">Applies to this chat and new chats. Existing worktrees are kept; edits and commits are not moved between checkouts.</p>
-      {disabled && <p className="mt-2 text-[11px] text-ink-faint">Stop the current run before switching.</p>}
-      {error && <p role="alert" className="mt-2 text-[11px] text-danger">{error}</p>}
+      <p className="mt-2 text-2xs text-ink-faint">Applies to this chat and new chats. Existing worktrees are kept; edits and commits are not moved between checkouts.</p>
+      {disabled && <p className="mt-2 text-2xs text-ink-faint">Stop the current run before switching.</p>}
+      {error && <p role="alert" className="mt-2 text-2xs text-danger">{error}</p>}
       <div className="mt-3 space-y-1">
         {[{ value: true, label: 'Use worktrees' }, { value: false, label: 'Use current Git branch' }].map(({ value, label }) =>
           <button key={label} type="button" disabled={disabled || busy} aria-pressed={(session.gitIsolation !== false) === value}

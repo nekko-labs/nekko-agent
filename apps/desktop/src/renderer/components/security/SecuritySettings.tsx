@@ -196,23 +196,23 @@ export function SecuritySettingsView(p: {
           </Badge>
         )}
       </div>
-      <p className="mt-1 text-[12px] text-ink-faint">
+      <p className="mt-1 text-xs text-ink-faint">
         Ask for a security key, a passkey or a one-time code before anyone at this computer, or on a paired phone, turns on
         remote access, pairs a phone, signs phones out, changes what a phone may do, touches a provider key, or raises a
         chat to Guardrails or YOLO from a phone. This computer checks every answer itself; nothing goes to Nekko Cloud.
       </p>
 
       {s?.damaged && (
-        <p className="mt-2 rounded border border-line px-2 py-1.5 text-[12px]" style={{ color: 'var(--danger)' }}>
+        <p className="mt-2 rounded border border-line px-2 py-1.5 text-xs" style={{ color: 'var(--danger)' }}>
           security.json can’t be read, so every guarded action is refused. Restore it, or remove it with access to this computer to start over.
         </p>
       )}
-      {p.webAuthnBlocked && <p className="mt-2 rounded border border-line px-2 py-1.5 text-[12px] text-ink-soft" data-needs-https>{p.webAuthnBlocked}</p>}
+      {p.webAuthnBlocked && <p className="mt-2 rounded border border-line px-2 py-1.5 text-xs text-ink-soft" data-needs-https>{p.webAuthnBlocked}</p>}
 
       {/* Registered methods */}
       <ul className="mt-3 divide-y divide-line rounded-lg border border-line" aria-label="Registered methods">
         {(s?.methods ?? []).map((m) => (
-          <li key={m.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-[12.5px]" data-method={m.id}>
+          <li key={m.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs" data-method={m.id}>
             <span aria-hidden>{m.kind === 'passkey' ? '👤' : '🔑'}</span>
             <span className="font-medium">{m.name}</span>
             <span className="text-ink-faint">{m.kind === 'passkey' ? 'Passkey' : 'Security key'}</span>
@@ -222,50 +222,50 @@ export function SecuritySettingsView(p: {
               </Badge>
             )}
             <span className="ml-auto text-ink-faint">added {when(m.addedAt, now)} · used {when(m.lastUsedAt, now)}</span>
-            <button className="btn btn-ghost py-0.5 text-[12px]" style={{ color: 'var(--danger)' }} onClick={() => p.onRemove(m.id, m.name)} disabled={p.busy}>
+            <button className="btn btn-ghost py-0.5 text-xs" style={{ color: 'var(--danger)' }} onClick={() => p.onRemove(m.id, m.name)} disabled={p.busy}>
               Remove
             </button>
           </li>
         ))}
         {s?.totp && (
-          <li className="flex flex-wrap items-center gap-2 px-3 py-2 text-[12.5px]" data-method="totp">
+          <li className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs" data-method="totp">
             <span aria-hidden>🔢</span>
             <span className="font-medium">One-time code app</span>
             {s.totp.lockedUntil ? <Badge tone="warning" variant="soft">locked for a minute after wrong codes</Badge> : null}
             <span className="ml-auto text-ink-faint">added {when(s.totp.addedAt, now)} · used {when(s.totp.lastUsedAt, now)}</span>
-            <button className="btn btn-ghost py-0.5 text-[12px]" style={{ color: 'var(--danger)' }} onClick={() => p.onRemove('totp', 'the one-time code app')} disabled={p.busy}>
+            <button className="btn btn-ghost py-0.5 text-xs" style={{ color: 'var(--danger)' }} onClick={() => p.onRemove('totp', 'the one-time code app')} disabled={p.busy}>
               Remove
             </button>
           </li>
         )}
-        {s && s.methods.length === 0 && !s.totp && <li className="px-3 py-2 text-[12px] text-ink-faint">Nothing registered yet.</li>}
+        {s && s.methods.length === 0 && !s.totp && <li className="px-3 py-2 text-xs text-ink-faint">Nothing registered yet.</li>}
       </ul>
 
       {/* Add a method */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <input
-          className="input max-w-[200px] py-1.5 text-[12.5px]"
+          className="input max-w-[200px] py-1.5 text-xs"
           placeholder="Name, e.g. YubiKey 5C"
           aria-label="Name for the new key"
           value={keyName}
           maxLength={60}
           onChange={(e) => setKeyName(e.target.value)}
         />
-        <button className="btn btn-outline py-1.5 text-[12.5px]" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('security-key', keyName); setKeyName(''); }}>
+        <button className="btn btn-outline py-1.5 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('security-key', keyName); setKeyName(''); }}>
           Add security key
         </button>
         {p.passkeys && (
-          <button className="btn btn-outline py-1.5 text-[12.5px]" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('passkey', keyName); setKeyName(''); }}>
+          <button className="btn btn-outline py-1.5 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('passkey', keyName); setKeyName(''); }}>
             Add passkey on this computer
           </button>
         )}
         {!s?.totp && !p.totp && (
-          <button className="btn btn-outline py-1.5 text-[12.5px]" disabled={p.busy} onClick={p.onTotpBegin}>
+          <button className="btn btn-outline py-1.5 text-xs" disabled={p.busy} onClick={p.onTotpBegin}>
             Set up a one-time code app
           </button>
         )}
       </div>
-      <p className="mt-1 text-[11.5px] text-ink-faint">
+      <p className="mt-1 text-xs text-ink-faint">
         A key is registered per computer: touch it once on each computer you protect. Keys that hold only a few
         passkeys still work here, since this computer keeps the key’s id itself.{!p.passkeys && ' On Linux, use a security key: there is no built-in passkey.'}
         {p.rpId !== 'localhost' && ` Keys registered here work at ${p.rpId} only.`}
@@ -275,11 +275,11 @@ export function SecuritySettingsView(p: {
       {p.totp && (
         <div data-shot="security-totp" className="mt-3 flex flex-col gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
           {p.totp.qr && <img src={p.totp.qr} alt="One-time code QR" width={140} height={140} className="rounded-lg border border-line" />}
-          <div className="min-w-0 text-[12.5px]">
+          <div className="min-w-0 text-xs">
             <div className="font-medium">Scan with an authenticator app, then type the code it shows.</div>
             <details className="mt-1">
-              <summary className="cursor-pointer text-[12px] text-ink-faint">Can’t scan? Type the key</summary>
-              <code className="mt-1 block break-all rounded px-2 py-1 font-mono text-[11.5px]" style={{ background: 'var(--surface-2)' }}>
+              <summary className="cursor-pointer text-xs text-ink-faint">Can’t scan? Type the key</summary>
+              <code className="mt-1 block break-all rounded px-2 py-1 font-mono text-xs" style={{ background: 'var(--surface-2)' }}>
                 {p.totp.secret}
               </code>
             </details>
@@ -300,10 +300,10 @@ export function SecuritySettingsView(p: {
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
               />
-              <button className="btn btn-primary py-1.5 text-[12.5px]" type="submit" disabled={p.busy || code.replace(/\D/g, '').length !== 6}>
+              <button className="btn btn-primary py-1.5 text-xs" type="submit" disabled={p.busy || code.replace(/\D/g, '').length !== 6}>
                 Confirm
               </button>
-              <button className="btn btn-ghost py-1.5 text-[12px]" type="button" onClick={p.onTotpCancel}>
+              <button className="btn btn-ghost py-1.5 text-xs" type="button" onClick={p.onTotpCancel}>
                 Cancel
               </button>
             </form>
@@ -314,21 +314,21 @@ export function SecuritySettingsView(p: {
       {/* Recovery codes: shown once */}
       {p.codes && (
         <div data-shot="security-recovery" className="mt-3 rounded-lg border p-3" style={{ borderColor: 'var(--warning)' }} role="alert">
-          <div className="text-[13px] font-medium">Save these recovery codes now</div>
-          <p className="mt-0.5 text-[12px] text-ink-faint">
+          <div className="text-sm font-medium">Save these recovery codes now</div>
+          <p className="mt-0.5 text-xs text-ink-faint">
             Each one turns step-up off once, when every key and code app is lost. They are shown only this once, and
             Nekko Labs can’t reset step-up for you.
           </p>
-          <ol className="mt-2 grid grid-cols-2 gap-x-6 gap-y-0.5 font-mono text-[12.5px] sm:grid-cols-5">
+          <ol className="mt-2 grid grid-cols-2 gap-x-6 gap-y-0.5 font-mono text-xs sm:grid-cols-5">
             {p.codes.map((c) => (
               <li key={c}>{c}</li>
             ))}
           </ol>
           <div className="mt-2 flex gap-2">
-            <button className="btn btn-outline py-1 text-[12px]" onClick={() => p.onCopyCodes(p.codes!)}>
+            <button className="btn btn-outline py-1 text-xs" onClick={() => p.onCopyCodes(p.codes!)}>
               Copy
             </button>
-            <button className="btn btn-primary py-1 text-[12px]" onClick={p.onCodesSaved}>
+            <button className="btn btn-primary py-1 text-xs" onClick={p.onCodesSaved}>
               I saved them
             </button>
           </div>
@@ -339,14 +339,14 @@ export function SecuritySettingsView(p: {
       {s && (
         <div className="mt-4 flex flex-wrap items-start justify-between gap-3 rounded-md border border-line p-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-medium">Require a step-up</div>
-            <p className="mt-0.5 text-[12px] text-ink-faint">
+            <div className="text-sm font-medium">Require a step-up</div>
+            <p className="mt-0.5 text-xs text-ink-faint">
               {s.enabled
                 ? 'On. One confirmation covers the same kind of action here for five minutes. Turning it off needs a method or a recovery code.'
                 : blocker ?? 'Two methods are registered: you can turn it on.'}
             </p>
-            {!s.enabled && !blocker && warning && <p className="mt-1 text-[12px]" style={{ color: 'var(--warning)' }}>{warning}</p>}
-            <p className="mt-1 text-[11.5px] text-ink-faint">
+            {!s.enabled && !blocker && warning && <p className="mt-1 text-xs" style={{ color: 'var(--warning)' }}>{warning}</p>}
+            <p className="mt-1 text-xs text-ink-faint">
               {s.recoveryLeft} recovery code{s.recoveryLeft === 1 ? '' : 's'} left.{' '}
               {(s.methods.length > 0 || s.totp) && (
                 <button className="underline" onClick={p.onNewCodes} disabled={p.busy}>
@@ -356,11 +356,11 @@ export function SecuritySettingsView(p: {
             </p>
           </div>
           {s.enabled ? (
-            <button className="btn btn-outline py-1.5 text-[12.5px]" onClick={p.onDisable} disabled={p.busy}>
+            <button className="btn btn-outline py-1.5 text-xs" onClick={p.onDisable} disabled={p.busy}>
               Turn off…
             </button>
           ) : (
-            <button className="btn btn-primary py-1.5 text-[12.5px]" onClick={p.onEnable} disabled={p.busy || !!blocker}>
+            <button className="btn btn-primary py-1.5 text-xs" onClick={p.onEnable} disabled={p.busy || !!blocker}>
               Turn on
             </button>
           )}
@@ -368,7 +368,7 @@ export function SecuritySettingsView(p: {
       )}
 
       {p.error && (
-        <p className="mt-2 text-[12px]" style={{ color: 'var(--danger)' }} role="alert">
+        <p className="mt-2 text-xs" style={{ color: 'var(--danger)' }} role="alert">
           {p.error}
         </p>
       )}

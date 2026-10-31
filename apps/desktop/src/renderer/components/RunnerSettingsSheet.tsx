@@ -65,7 +65,7 @@ function Seg<T extends string | number>({ label, value, options, onChange }: {
           type="button"
           aria-pressed={o.value === value && !o.disabled}
           disabled={o.disabled}
-          className={`rounded-lg border px-2 py-1 text-[11.5px] transition disabled:opacity-40 ${o.value === value && !o.disabled ? 'border-transparent' : 'border-line text-ink-faint'}`}
+          className={`rounded-lg border px-2 py-1 text-xs transition disabled:opacity-40 ${o.value === value && !o.disabled ? 'border-transparent' : 'border-line text-ink-faint'}`}
           style={o.value === value && !o.disabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
           onClick={() => onChange(o.value)}
         >
@@ -78,16 +78,16 @@ function Seg<T extends string | number>({ label, value, options, onChange }: {
 
 const Row = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
   <div className="grid gap-x-3 gap-y-1 sm:grid-cols-[200px_1fr] sm:items-center">
-    <p className="text-[13px] font-medium text-ink">
+    <p className="text-sm font-medium text-ink">
       {label}
-      {hint && <span className="block text-[11.5px] font-normal text-ink-faint">{hint}</span>}
+      {hint && <span className="block text-xs font-normal text-ink-faint">{hint}</span>}
     </p>
     <div className="min-w-0">{children}</div>
   </div>
 );
 
 const Check = ({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange(v: boolean): void; disabled?: boolean }) => (
-  <label className="flex items-center gap-2 text-[13px] text-ink">
+  <label className="flex items-center gap-2 text-sm text-ink">
     <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
     {label}
   </label>
@@ -95,9 +95,9 @@ const Check = ({ label, checked, onChange, disabled }: { label: string; checked:
 
 const UNSAMPLED = "Waiting for this Mac's first reading.";
 /** A Mac without VM support is never sampled: its error says why, where waiting would never end. */
-const Unsampled = ({ error }: { error: string | null }) => <span className="text-[12px] text-ink-faint">{error ?? UNSAMPLED}</span>;
+const Unsampled = ({ error }: { error: string | null }) => <span className="text-xs text-ink-faint">{error ?? UNSAMPLED}</span>;
 
-const Val = ({ children }: { children: React.ReactNode }) => <span className="ml-2.5 whitespace-nowrap font-mono text-[12px] text-ink-soft">{children}</span>;
+const Val = ({ children }: { children: React.ReactNode }) => <span className="ml-2.5 whitespace-nowrap font-mono text-xs text-ink-soft">{children}</span>;
 
 const PRIORITIES: Priority[] = ['doNotDisturb', 'balanced', 'runnerFirst'];
 const KEEP_AWAKE: KeepAwake[] = ['systemDefault', 'whileActive', 'always'];
@@ -125,12 +125,12 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
 
   return (
     <div className="flex flex-col gap-3.5 p-5">
-      <h2 className="text-[17px] font-semibold text-ink">Runner settings · This Mac</h2>
+      <h2 className="text-base font-semibold text-ink">Runner settings · This Mac</h2>
 
       <Row label="Runner">
         <div className="flex items-center gap-2.5">
           <Toggle value={enabled} disabled={toggling} onChange={onEnabled} label="Runner on" />
-          <span className="text-[12.5px] text-ink-faint">{enabled ? 'On. Turning off stops and deletes any running VM.' : 'Off.'}</span>
+          <span className="text-xs text-ink-faint">{enabled ? 'On. Turning off stops and deletes any running VM.' : 'Off.'}</span>
         </div>
       </Row>
       <Row label="Priority">
@@ -146,7 +146,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
           options={[...[0, 1, 2].map((n) => ({ value: n, label: String(n) })), { value: 3, label: '3 not allowed', disabled: true }]}
           onChange={(v) => set('macosSlots', v)}
         />
-        {view.limit && <p className="mt-1 text-[11.5px] text-ink-faint">{slotLimitText(view.limit)}</p>}
+        {view.limit && <p className="mt-1 text-xs text-ink-faint">{slotLimitText(view.limit)}</p>}
       </Row>
       <Row label="Memory per VM" hint={sampled ? `${Math.round(host.ramMb / GB)} GB Mac, runner cap ${Math.round(host.runnerMemoryMb / GB)} GB` : undefined}>
         {sampled ? (
@@ -159,13 +159,13 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-[12px] text-ink-soft">{`${Math.round(draft.memoryPerVmMb / GB)} GB per VM`}</span>
+            <span className="font-mono text-xs text-ink-soft">{`${Math.round(draft.memoryPerVmMb / GB)} GB per VM`}</span>
             <Unsampled error={view.error} />
           </div>
         )}
       </Row>
       <Row label="Total runner memory">
-        <div role="radiogroup" aria-label="Total runner memory" className="flex flex-wrap items-center gap-3 text-[13px] text-ink">
+        <div role="radiogroup" aria-label="Total runner memory" className="flex flex-wrap items-center gap-3 text-sm text-ink">
           <label className="flex items-center gap-2">
             <input type="radio" name="runner-memory" disabled={!sampled} checked={draft.runnerMemoryMb === null} onChange={() => set('runnerMemoryMb', null)} />
             Use the recommendation
@@ -187,7 +187,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
           )}
           {!sampled && <Unsampled error={view.error} />}
         </div>
-        {recommendation && <p className="mt-1 text-[11.5px] text-ink-faint">{recommendation}</p>}
+        {recommendation && <p className="mt-1 text-xs text-ink-faint">{recommendation}</p>}
       </Row>
       <Row label="CPU per VM">
         <div className="flex flex-wrap items-center gap-3">
@@ -212,7 +212,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
         </div>
       </Row>
       <Row label="Disk" hint="images and clones">
-        <div className="flex flex-wrap items-center gap-3 text-[13px] text-ink">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-ink">
           <label className="flex items-center gap-1.5">
             Image budget
             <input type="number" className="input w-24" min={50} max={4000} value={draft.diskBudgetGb} onChange={(e) => set('diskBudgetGb', Number(e.target.value))} />
@@ -236,15 +236,15 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
       <Row label="Trusted networks" hint="recognised by the router's hardware address">
         <ul className="flex flex-col gap-1">
           {draft.trustedNetworks.map((id) => (
-            <li key={id} className="flex items-center gap-2 text-[12.5px]">
-              <code className="font-mono text-[11.5px] text-ink-soft">{id}</code>
+            <li key={id} className="flex items-center gap-2 text-xs">
+              <code className="font-mono text-xs text-ink-soft">{id}</code>
               {id === host.networkId && <Badge tone="success">This network</Badge>}
-              <button type="button" className="btn btn-outline ml-auto px-2! py-0.5! text-[11.5px]" onClick={() => set('trustedNetworks', draft.trustedNetworks.filter((x) => x !== id))}>Remove</button>
+              <button type="button" className="btn btn-outline ml-auto px-2! py-0.5! text-xs" onClick={() => set('trustedNetworks', draft.trustedNetworks.filter((x) => x !== id))}>Remove</button>
             </li>
           ))}
         </ul>
         {trustNetwork(draft, host) !== draft && (
-          <button type="button" className="btn btn-outline mt-1.5 py-1! text-[12px]" onClick={() => onDraft(trustNetwork(draft, host))}>Trust this network</button>
+          <button type="button" className="btn btn-outline mt-1.5 py-1! text-xs" onClick={() => onDraft(trustNetwork(draft, host))}>Trust this network</button>
         )}
       </Row>
       <Row label="Safety">
@@ -315,7 +315,7 @@ export function RunnerSettingsSheet({ view, onClose, beginReply }: { view: Runne
   };
 
   return (
-    <Modal title="Runner settings · This Mac" onClose={onClose} overlayClassName="p-4" className="card w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-xl">
+    <Modal title="Runner settings · This Mac" onClose={onClose} overlayClassName="p-4" className="card w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
       <SettingsBody
         view={view}
         draft={draft}

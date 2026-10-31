@@ -259,7 +259,7 @@ function WorkspaceCardImpl({
          findable without reading a word; a terminal's stays neutral. */
       /* A card waiting on you (a question, or stopped on an error) takes the
          active card's highlight too, so it is findable at a glance. */
-      className={`agent-chip group w-full cursor-pointer rounded-xl border px-2.5 py-1.5 text-left shadow-xs transition-colors duration-150 ${
+      className={`agent-chip group w-full cursor-pointer rounded-xl border px-2.5 py-1.5 text-left transition-colors duration-150 ${
         isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'bg-surface hover:bg-surface-2'
       }`}
       style={{
@@ -274,11 +274,11 @@ function WorkspaceCardImpl({
     >
       <div className="flex items-center gap-1.5">
         <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
-        <span className={`min-w-0 flex-1 truncate text-[13px] ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
+        <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
           {title}
         </span>
         {lastReply && (!status || status === 'done' || status === 'idle') && (
-          <time className="shrink-0 text-[10px] tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
+          <time className="shrink-0 text-2xs tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
         )}
@@ -306,7 +306,7 @@ function WorkspaceCardImpl({
       {/* Line 2: what is running it: the model, then how full the context
           window is. Where the model comes from is subtext on the next line. */}
       {showMetadata && <>
-      <div className="mt-0.5 flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
+      <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
         <Fact
           grow
           tone={isChat ? 'var(--accent-2)' : 'var(--success)'}
@@ -340,7 +340,7 @@ function WorkspaceCardImpl({
       </div>
 
       {showProvider && provider && (
-        <div className="truncate pl-3 text-[10px] leading-[13px] text-ink-faint" data-card-provider>
+        <div className="truncate pl-3 text-2xs leading-[13px] text-ink-faint" data-card-provider>
           {isLocalProvider(provider.kind) ? 'Local' : provider.label}
         </div>
       )}
@@ -348,7 +348,7 @@ function WorkspaceCardImpl({
       {/* Line 3: its git position, then the PRs it made. The project is the
           group heading the card sits under, so the card does not repeat it. */}
       {(git || prs.length > 0) && (
-        <div className="flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
+        <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
           {git ? (
             <Fact
               shrink
@@ -387,7 +387,7 @@ function WorkspaceCardImpl({
       {/* Line 4: what it has spun up. Only when there is something to say: a
           card for a plain one-window chat should not carry an empty row. */}
       {(subAgentCount > 0 || windows > 1) && (
-        <div className="flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
+        <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
           {subAgentCount > 0 && (
             <Fact
               tone="var(--accent-2)"

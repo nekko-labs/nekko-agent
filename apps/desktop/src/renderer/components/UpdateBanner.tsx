@@ -373,14 +373,14 @@ export function UpdateBanner() {
   return (
     <div className="pointer-events-none absolute right-4 top-12 z-50 flex w-80 flex-col gap-3">
       {showFirstRun && (
-        <div className="card pointer-events-auto fade-in p-3 shadow-lg">
-          <div className="text-[13px] font-semibold">Auto-check for updates?</div>
-          <p className="mt-1 text-[11px] text-ink-faint">
+        <div className="card pointer-events-auto fade-in p-3 shadow-(--shadow-float)">
+          <div className="text-sm font-semibold">Auto-check for updates?</div>
+          <p className="mt-1 text-2xs text-ink-faint">
             Periodically checks GitHub for new versions. <span className="italic">Note: connects to the internet.</span>
           </p>
           <div className="mt-2.5 flex justify-end gap-2">
-            <button className="btn btn-ghost px-2.5 py-1 text-[12px]" onClick={declineAuto}>No thanks</button>
-            <button className="btn btn-primary px-2.5 py-1 text-[12px]" onClick={enableAuto} disabled={busy}>
+            <button className="btn btn-ghost px-2.5 py-1 text-xs" onClick={declineAuto}>No thanks</button>
+            <button className="btn btn-primary px-2.5 py-1 text-xs" onClick={enableAuto} disabled={busy}>
               {busy ? 'Checking…' : 'Yes, check'}
             </button>
           </div>
@@ -388,9 +388,9 @@ export function UpdateBanner() {
       )}
 
       {available && (
-        <div className="card pointer-events-auto fade-in p-3 shadow-lg">
+        <div className="card pointer-events-auto fade-in p-3 shadow-(--shadow-float)">
           <div className="flex items-center justify-between">
-            <div className="text-[13px] font-semibold">A new version is available</div>
+            <div className="text-sm font-semibold">A new version is available</div>
             <button className="text-ink-faint hover:text-ink" onClick={updater.skip} aria-label="Skip this update">×</button>
           </div>
           {update.state === 'downloading' ? (
@@ -398,12 +398,12 @@ export function UpdateBanner() {
               <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
                 <div className="h-full rounded-full" style={{ width: `${update.percent ?? 0}%`, background: 'var(--accent)' }} />
               </div>
-              <p className="mt-1 text-[11px] text-ink-faint">Downloading… {update.percent ?? 0}%</p>
+              <p className="mt-1 text-2xs text-ink-faint">Downloading… {update.percent ?? 0}%</p>
             </div>
           ) : (
             <div className="mt-2.5 flex items-center justify-between">
-              <button className="text-[12px] text-accent hover:underline" onClick={openNotes}>What's new</button>
-              <button className="btn btn-primary px-2.5 py-1 text-[12px]" onClick={doUpdate} disabled={busy}>Refresh now</button>
+              <button className="text-xs text-accent hover:underline" onClick={openNotes}>What's new</button>
+              <button className="btn btn-primary px-2.5 py-1 text-xs" onClick={doUpdate} disabled={busy}>Refresh now</button>
             </div>
           )}
         </div>

@@ -200,13 +200,13 @@ export function RemoteAccess() {
           </Badge>
         )}
       </div>
-      <p className="mt-1 text-[12px] text-ink-faint">
+      <p className="mt-1 text-xs text-ink-faint">
         Run and manage your chats, training runs, and goals from your phone. Everything is end-to-end encrypted;
         inference and tools keep running here, under this machine's guardrails.{!status.enabled && ' Pick how your phone connects:'}
       </p>
       {!status.enabled && status.stoppedBy && <RemoteStoppedBanner stoppedBy={status.stoppedBy} />}
       {status.error && !status.online && (
-        <p className="mt-2 rounded border border-line px-2 py-1.5 text-[12px] text-ink-soft">{status.error}</p>
+        <p className="mt-2 rounded border border-line px-2 py-1.5 text-xs text-ink-soft">{status.error}</p>
       )}
 
       {!status.enabled ? (
@@ -229,8 +229,8 @@ export function RemoteAccess() {
           {/* Paired devices */}
           <div data-shot="phone-pairing">
             <div className="flex items-center justify-between">
-              <h3 className="text-[13px] font-medium">Paired devices</h3>
-              <button className="btn btn-primary py-1.5 text-[12.5px]" onClick={pair}>
+              <h3 className="text-sm font-medium">Paired devices</h3>
+              <button className="btn btn-primary py-1.5 text-xs" onClick={pair}>
                 + Pair a device
               </button>
             </div>
@@ -239,23 +239,23 @@ export function RemoteAccess() {
               <div className="mt-2 flex flex-col items-start gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
                 {qr && <img src={qr} alt="Pairing QR" width={132} height={132} className="rounded-lg border border-line" />}
                 <div className="min-w-0">
-                  <div className="text-[13px] font-medium">Scan with your phone's camera to connect.</div>
+                  <div className="text-sm font-medium">Scan with your phone's camera to connect.</div>
                   <div
                     className="mt-2 inline-flex items-baseline gap-2 rounded-full px-3 py-1"
                     style={{ background: 'var(--surface-2)' }}
                     aria-label={`Code expires in ${Math.floor(secsLeft / 60)} minutes ${secsLeft % 60} seconds`}
                   >
-                    <span className="text-[11px] text-ink-faint">Expires in</span>
-                    <span className={`font-mono text-[20px] font-semibold tabular-nums ${secsLeft < 60 ? 'text-amber-500' : ''}`}>
+                    <span className="text-2xs text-ink-faint">Expires in</span>
+                    <span className={`font-mono text-xl font-semibold tabular-nums ${secsLeft < 60 ? 'text-amber-500' : ''}`}>
                       {Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}
                     </span>
                   </div>
                   <details className="mt-1">
-                    <summary className="cursor-pointer text-[12px] text-ink-faint">Can’t scan? Show the link</summary>
-                    <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
+                    <summary className="cursor-pointer text-xs text-ink-faint">Can’t scan? Show the link</summary>
+                    <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-2xs" style={{ background: 'var(--surface-2)' }}>
                       {link}
                     </code>
-                    <button className="btn btn-outline mt-2 py-1 text-[12px]" onClick={() => navigator.clipboard?.writeText(link)}>
+                    <button className="btn btn-outline mt-2 py-1 text-xs" onClick={() => navigator.clipboard?.writeText(link)}>
                       Copy link
                     </button>
                   </details>
@@ -263,7 +263,7 @@ export function RemoteAccess() {
               </div>
             )}
             {active.length === 0 ? (
-              <p className="mt-2 text-[12px] text-ink-faint">
+              <p className="mt-2 text-xs text-ink-faint">
                 Nothing paired yet. Hit “Pair a device” and scan the QR from your phone.
               </p>
             ) : (
@@ -272,11 +272,11 @@ export function RemoteAccess() {
                   .slice()
                   .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
                   .map((d) => (
-                    <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-[12.5px]">
+                    <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-xs">
                       <span aria-hidden>{platformIcon(d.platform)}</span>
                       {renaming === d.id ? (
                         <input
-                          className="input max-w-[180px] py-0.5 text-[12.5px]"
+                          className="input max-w-[180px] py-0.5 text-xs"
                           value={renameText}
                           autoFocus
                           onChange={(e) => setRenameText(e.target.value)}
@@ -297,7 +297,7 @@ export function RemoteAccess() {
                         style={{ background: connected.has(d.id) ? 'var(--success)' : 'var(--line)' }}
                       />
                       <span className="ml-auto text-ink-faint">{connected.has(d.id) ? 'connected' : `seen ${ago(d.lastSeenAt, now)}`}</span>
-                      <button className="btn btn-ghost py-0.5 text-[12px]" style={{ color: 'var(--danger)' }} onClick={() => revoke(d)}>
+                      <button className="btn btn-ghost py-0.5 text-xs" style={{ color: 'var(--danger)' }} onClick={() => revoke(d)}>
                         Revoke
                       </button>
                     </li>
@@ -306,7 +306,7 @@ export function RemoteAccess() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-1 text-[12.5px] sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
             <Field label="Connected through" value={connectionName(status.relayUrl!, localRelay)} />
             <Field label="Room" value={status.room!} mono />
           </div>
@@ -318,10 +318,10 @@ export function RemoteAccess() {
           <QuitFromPhoneSwitch />
 
           <div className="flex flex-wrap gap-2">
-            <button className="btn btn-ghost py-1.5 text-[12px]" onClick={disable} disabled={busy}>
+            <button className="btn btn-ghost py-1.5 text-xs" onClick={disable} disabled={busy}>
               Disable remote access
             </button>
-            <button className="btn btn-ghost py-1.5 text-[12px]" title="Re-keys the room with a new secret; every phone must pair again" onClick={rotate}>
+            <button className="btn btn-ghost py-1.5 text-xs" title="Re-keys the room with a new secret; every phone must pair again" onClick={rotate}>
               Sign out all phones…
             </button>
           </div>
@@ -372,46 +372,46 @@ export function PairingChoiceView({
         {tailscale && (
           <div data-shot="pair-tailscale" className="flex flex-col rounded-lg border border-line p-3">
             <div className="flex items-center gap-2">
-              <h3 className="text-[13px] font-medium">Tailscale</h3>
+              <h3 className="text-sm font-medium">Tailscale</h3>
               <Badge tone="neutral" variant="soft">Free</Badge>
             </div>
-            <p className="mt-1 flex-1 text-[12px] text-ink-faint">
+            <p className="mt-1 flex-1 text-xs text-ink-faint">
               Your phone connects straight to this computer. Needs the Tailscale app on both.
             </p>
             {connected ? (
-              <p className="mt-2 flex items-center gap-2 text-[12px] text-ink-soft">
+              <p className="mt-2 flex items-center gap-2 text-xs text-ink-soft">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--success)' }} aria-hidden />
                 <span className="truncate">Connected: <span className="font-mono">{local!.tailnetName ?? local!.tailnetIp}</span></span>
               </p>
             ) : (
-              <p className="mt-2 text-[12px] text-ink-soft">
+              <p className="mt-2 text-xs text-ink-soft">
                 <a className="underline" href={TAILSCALE_DOWNLOAD} target="_blank" rel="noreferrer">Get Tailscale</a> and sign in on this computer and your phone.
               </p>
             )}
-            <button className="btn btn-outline mt-3 self-start py-1.5 text-[12.5px] disabled:opacity-50" onClick={onTailscale} disabled={busy || !connected}>
+            <button className="btn btn-outline mt-3 self-start py-1.5 text-xs disabled:opacity-50" onClick={onTailscale} disabled={busy || !connected}>
               Use Tailscale
             </button>
           </div>
         )}
         <div data-shot="pair-cloud" className="flex flex-col rounded-lg border border-line p-3">
-          <h3 className="text-[13px] font-medium">Nekko Cloud</h3>
-          <p className="mt-1 flex-1 text-[12px] text-ink-faint">
+          <h3 className="text-sm font-medium">Nekko Cloud</h3>
+          <p className="mt-1 flex-1 text-xs text-ink-faint">
             Works anywhere, nothing to install. End-to-end encrypted: Nekko Cloud only passes along messages it can’t read.
           </p>
-          <button className="btn btn-primary mt-3 self-start py-1.5 text-[12.5px]" onClick={onCloud} disabled={busy}>
+          <button className="btn btn-primary mt-3 self-start py-1.5 text-xs" onClick={onCloud} disabled={busy}>
             {busy ? 'Connecting…' : 'Use Nekko Cloud'}
           </button>
         </div>
       </div>
       {problem && (
-        <p className="text-[12px]" style={{ color: 'var(--danger)' }}>
+        <p className="text-xs" style={{ color: 'var(--danger)' }}>
           {problem}
         </p>
       )}
-      <details className="text-[12px] text-ink-faint">
+      <details className="text-xs text-ink-faint">
         <summary className="cursor-pointer">Use your own relay</summary>
         <div className="mt-2 flex gap-2">
-          <input className="input py-1.5 text-[13px]" placeholder="wss://relay.example.com" value={relayUrl} onChange={(e) => onRelayUrl(e.target.value)} />
+          <input className="input py-1.5 text-sm" placeholder="wss://relay.example.com" value={relayUrl} onChange={(e) => onRelayUrl(e.target.value)} />
           <button className="btn btn-outline py-1.5" onClick={onOwnRelay} disabled={busy || !relayUrl.trim()}>
             Connect
           </button>
@@ -507,27 +507,27 @@ export function LocalRelayView({
   return (
     <div data-shot="local-relay" className="rounded-lg border border-line p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-[13px] font-medium">Relay on this computer</h3>
+        <h3 className="text-sm font-medium">Relay on this computer</h3>
         <Badge tone={relay.running ? 'success' : relay.tailnetIp ? 'neutral' : 'warning'} variant="soft">
           {relay.running ? 'running' : relay.enabled ? 'waiting' : 'Tailscale'}
         </Badge>
-        <button className={`btn ${relay.enabled ? 'btn-ghost' : 'btn-outline'} ml-auto py-1 text-[12px]`} onClick={onToggle} disabled={busy}>
+        <button className={`btn ${relay.enabled ? 'btn-ghost' : 'btn-outline'} ml-auto py-1 text-xs`} onClick={onToggle} disabled={busy}>
           {busy ? (relay.enabled ? 'Stopping…' : 'Starting…') : relay.enabled ? 'Stop' : 'Start relay'}
         </button>
       </div>
-      <p className="mt-1 text-[12px] text-ink-faint">
+      <p className="mt-1 text-xs text-ink-faint">
         Phones on your Tailscale network connect straight to this computer over WireGuard, with no hosted relay in
         between. {relay.lan === false ? 'Listens on the tailnet address only.' : 'Listens on the tailnet address and on this computer’s private network addresses.'}
       </p>
       {relay.tailnetIp ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="h-2 w-2 rounded-full" style={{ background: 'var(--success)' }} aria-hidden />
           <span className="text-ink-soft">
             Tailscale connected: <span className="font-mono">{where}</span>
           </span>
         </div>
       ) : (
-        <p className="mt-2 text-[12px] text-ink-soft">
+        <p className="mt-2 text-xs text-ink-soft">
           Tailscale isn’t connected on this computer.{' '}
           <a className="underline" href={TAILSCALE_DOWNLOAD} target="_blank" rel="noreferrer">
             Get Tailscale
@@ -537,15 +537,15 @@ export function LocalRelayView({
       )}
       {relay.running && relay.url && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <code className="rounded px-2 py-1 font-mono text-[11.5px]" style={{ background: 'var(--surface-2)' }}>
+          <code className="rounded px-2 py-1 font-mono text-xs" style={{ background: 'var(--surface-2)' }}>
             {relay.url}
           </code>
           {usedHere ? (
-            <span className="text-[12px] text-ink-faint">
+            <span className="text-xs text-ink-faint">
               {onUse ? 'Remote access will use this relay.' : 'Remote access is using this relay.'}
             </span>
           ) : onUse ? (
-            <button className="btn btn-primary py-1 text-[12px]" onClick={() => onUse(relay.url!)}>
+            <button className="btn btn-primary py-1 text-xs" onClick={() => onUse(relay.url!)}>
               Use this relay
             </button>
           ) : null}
@@ -554,15 +554,15 @@ export function LocalRelayView({
       {onLan && (
         <div className="mt-3 flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[12.5px] font-medium">Also on this Wi-Fi</div>
-            <p className="text-[12px] text-ink-faint">
+            <div className="text-xs font-medium">Also on this Wi-Fi</div>
+            <p className="text-xs text-ink-faint">
               A phone on the same network connects over the LAN and moves to Tailscale by itself when it leaves. Only
               private addresses (192.168.x.x, 10.x.x.x, 172.16.x.x to 172.31.x.x), never the internet. Pair again after changing this.
             </p>
             {relay.running && !!relay.lanUrls?.length && (
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {relay.lanUrls.map((u) => (
-                  <code key={u} className="rounded px-1.5 py-0.5 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
+                  <code key={u} className="rounded px-1.5 py-0.5 font-mono text-2xs" style={{ background: 'var(--surface-2)' }}>
                     {u}
                   </code>
                 ))}
@@ -573,7 +573,7 @@ export function LocalRelayView({
         </div>
       )}
       {relay.error && relay.tailnetIp && (
-        <p className="mt-2 text-[12px]" style={{ color: 'var(--danger)' }}>
+        <p className="mt-2 text-xs" style={{ color: 'var(--danger)' }}>
           {relay.error}
         </p>
       )}
@@ -660,19 +660,19 @@ export function NetworkVisibilityView({ vis, busy, onChange }: { vis: NetworkVis
   return (
     <div data-shot="network-visibility" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
       <div className="min-w-0">
-        <div className="text-[13px] font-medium">Visible on this network</div>
-        <p className="mt-0.5 text-[12px] text-ink-faint">
+        <div className="text-sm font-medium">Visible on this network</div>
+        <p className="mt-0.5 text-xs text-ink-faint">
           Phones on the same Wi-Fi can find this computer by name. Anyone on the network can see the name
           {vis.relayUrl ? ' and this computer’s relay address' : ''}, nothing else. Pairing still takes this computer’s QR code or link.
         </p>
         {vis.enabled && vis.advertising && vis.name && (
-          <p className="mt-1 text-[12px] text-ink-soft">
+          <p className="mt-1 text-xs text-ink-soft">
             Showing as <span className="font-medium">{vis.name}</span>
             {vis.addresses?.length ? <span className="font-mono"> ({vis.addresses.join(', ')})</span> : null}
           </p>
         )}
         {vis.enabled && vis.error && (
-          <p className="mt-1 text-[12px]" style={{ color: 'var(--danger)' }}>
+          <p className="mt-1 text-xs" style={{ color: 'var(--danger)' }}>
             {vis.error}
           </p>
         )}
@@ -779,8 +779,8 @@ export function PhoneAccessView({
   if (devices.length === 0) return null;
   return (
     <div data-shot="phone-access" className="rounded-md border border-line p-3">
-      <div className="text-[13px] font-medium">What phones can do</div>
-      <p className="mt-0.5 text-[12px] text-ink-faint">
+      <div className="text-sm font-medium">What phones can do</div>
+      <p className="mt-0.5 text-xs text-ink-faint">
         <span className="font-medium text-ink-soft">Read</span>: see chats, files, git, logs and boards.{' '}
         <span className="font-medium text-ink-soft">Change</span>: send prompts, approve tools, run automations, edit
         and save files, commit and push, type in terminals. File, git and terminal changes, and switching a chat to
@@ -793,12 +793,12 @@ export function PhoneAccessView({
           const list = activity[d.id];
           const open = openId === d.id;
           return (
-            <li key={d.id} className="px-3 py-2 text-[12.5px]" data-device={d.id}>
+            <li key={d.id} className="px-3 py-2 text-xs" data-device={d.id}>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="min-w-0 flex-1 truncate font-medium">
                   {d.name}
                   {d.legacyProtocol && (
-                    <span className="ml-2 text-[11.5px] font-normal text-ink-faint">Older app: update it on the phone</span>
+                    <span className="ml-2 text-xs font-normal text-ink-faint">Older app: update it on the phone</span>
                   )}
                 </span>
                 <label className="flex items-center gap-1.5 text-ink-soft">
@@ -809,25 +809,25 @@ export function PhoneAccessView({
                   Change
                   <Toggle value={access.change} onChange={(v) => onSet(d.id, { change: v })} disabled={busyId === d.id} label={`Change from ${d.name}`} />
                 </label>
-                <button className="btn btn-ghost py-0.5 text-[12px]" aria-expanded={open} onClick={() => onOpen(d.id)}>
+                <button className="btn btn-ghost py-0.5 text-xs" aria-expanded={open} onClick={() => onOpen(d.id)}>
                   {open ? 'Hide activity' : 'Activity'}
                 </button>
               </div>
               {open && (
                 <div className="mt-2" data-shot="phone-activity">
                   {!list ? (
-                    <p className="text-[12px] text-ink-faint">Loading…</p>
+                    <p className="text-xs text-ink-faint">Loading…</p>
                   ) : list.length === 0 ? (
-                    <p className="text-[12px] text-ink-faint">No changes from this phone yet.</p>
+                    <p className="text-xs text-ink-faint">No changes from this phone yet.</p>
                   ) : (
                     <ul className="space-y-1">
                       {list
                         .slice()
                         .reverse()
                         .map((e, i) => (
-                          <li key={`${e.at}-${i}`} className="flex items-center gap-2 text-[12px]">
+                          <li key={`${e.at}-${i}`} className="flex items-center gap-2 text-xs">
                             <span className="w-24 shrink-0 text-ink-faint">{ago(e.at, now)}</span>
-                            <span className="truncate font-mono text-[11.5px]">{activityAction(e.channel)}</span>
+                            <span className="truncate font-mono text-xs">{activityAction(e.channel)}</span>
                             <span className="ml-auto shrink-0" style={{ color: e.ok ? 'var(--success)' : 'var(--danger)' }}>
                               {activityReason(e.ok ? undefined : e.reason)}
                             </span>
@@ -855,8 +855,8 @@ export function PhoneChangesSwitch() {
   return (
     <div className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
       <div className="min-w-0">
-        <div className="text-[13px] font-medium">Let phones see changes</div>
-        <p className="mt-0.5 text-[12px] text-ink-faint">
+        <div className="text-sm font-medium">Let phones see changes</div>
+        <p className="mt-0.5 text-xs text-ink-faint">
           Paired phones can read the diff of files the agent changed in a chat. Read only: phones can’t accept or
           revert changes, open other files or terminals. Secret files like .env and keys are hidden.
         </p>
@@ -872,7 +872,7 @@ export function PhoneChangesSwitch() {
  */
 export function RemoteStoppedBanner({ stoppedBy, time }: { stoppedBy: { name?: string | null; at: number }; time?: (at: number) => string }) {
   return (
-    <p data-shot="remote-stopped" role="status" className="mt-2 rounded border px-2 py-1.5 text-[12px] text-ink-soft" style={{ borderColor: 'var(--warning)' }}>
+    <p data-shot="remote-stopped" role="status" className="mt-2 rounded border px-2 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--warning)' }}>
       {remoteStoppedBanner(stoppedBy, time)}
     </p>
   );
@@ -909,8 +909,8 @@ export function LockPhonesView({ devices, busy, onChange }: { devices: RemoteDev
   return (
     <div data-shot="lock-phones" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
       <div className="min-w-0">
-        <div className="text-[13px] font-medium">Lock phones</div>
-        <p className="mt-0.5 text-[12px] text-ink-faint">
+        <div className="text-sm font-medium">Lock phones</div>
+        <p className="mt-0.5 text-xs text-ink-faint">
           Every paired phone can still read, but can’t change anything: no prompts, approvals, file or git changes.
           Turn it off to give each phone its Change switch back.
         </p>
@@ -939,8 +939,8 @@ export function QuitFromPhoneView({ on, onChange }: { on: boolean; onChange: (v:
   return (
     <div data-shot="quit-from-phone" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
       <div className="min-w-0">
-        <div className="text-[13px] font-medium">Let a phone quit Nekko Agent</div>
-        <p className="mt-0.5 text-[12px] text-ink-faint">
+        <div className="text-sm font-medium">Let a phone quit Nekko Agent</div>
+        <p className="mt-0.5 text-xs text-ink-faint">
           A paired phone can quit the app on this computer in an emergency; running chats stop and you start it again
           here. Stopping remote access from a phone always works, with this on or off.
         </p>
@@ -984,19 +984,19 @@ export function ProtectComputerPrompt() {
 export function ProtectComputerPromptView({ onSetUp, onDismiss }: { onSetUp: () => void; onDismiss: () => void }) {
   return (
     <div data-shot="protect-computer" className="rounded-md border border-line p-3" style={{ background: 'var(--surface-2)' }}>
-      <div className="text-[13px] font-medium">Protect this computer</div>
-      <p className="mt-0.5 text-[12px] text-ink-faint">
+      <div className="text-sm font-medium">Protect this computer</div>
+      <p className="mt-0.5 text-xs text-ink-faint">
         Remote access is on. Add a security key so pairing a phone, signing phones out, changing what a phone may do or
         touching a provider key needs the key in your hand, not only this computer’s login.
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-[12.5px]">
-        <button className="btn btn-primary py-1 text-[12px]" onClick={onSetUp}>
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+        <button className="btn btn-primary py-1 text-xs" onClick={onSetUp}>
           Set up in Security
         </button>
         <a className="underline" href={PROTECT_COMPUTER_DOCS_URL} target="_blank" rel="noreferrer">
           How it works
         </a>
-        <button className="btn btn-ghost py-1 text-[12px]" onClick={onDismiss}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onDismiss}>
           Not now
         </button>
       </div>

@@ -83,22 +83,22 @@ export function ModelDock() {
   if (!status?.install.binPath) return null;
 
   return (
-    <div className={`shrink-0 border-t border-line px-4 text-[11px] ${open ? 'py-4' : 'py-2'}`}>
+    <div className={`shrink-0 border-t border-line px-4 text-2xs ${open ? 'py-4' : 'py-2'}`}>
       <button
         className="flex w-full items-center justify-between text-left"
         onClick={toggle}
         aria-expanded={open}
         title={open ? 'Collapse model settings' : 'Show the loaded models and their settings'}
       >
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Model settings
-          {rows.length > 0 && <span className="chip text-[9px]">{rows.length} loaded</span>}
+          {rows.length > 0 && <span className="chip text-2xs">{rows.length} loaded</span>}
         </span>
         {/* Collapsed, still say whether anything runs on the CPU: it is the one
             fact that explains a slow reply without opening the group. */}
         {!open && rows.some((r) => r.resident.loadedOn && r.resident.loadedOn !== 'gpu') && (
-          <span className="shrink-0 text-[10px]" style={{ color: 'var(--warning, #d1a054)' }}>
+          <span className="shrink-0 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
             part on CPU
           </span>
         )}
@@ -107,12 +107,12 @@ export function ModelDock() {
       {open && (
         <div className="mt-2.5 space-y-2">
           {status.running && rows.length === 0 && (
-            <p className="text-[11px] leading-snug text-ink-faint">
+            <p className="text-2xs leading-snug text-ink-faint">
               Nothing is in memory yet. Models load on the Models tab, or on their own when a request arrives.
             </p>
           )}
           {!status.running && (
-            <p className="text-[11px] leading-snug text-ink-faint">
+            <p className="text-2xs leading-snug text-ink-faint">
               The model server is stopped. Start it on the Model Server page to load models here.
             </p>
           )}
@@ -256,7 +256,7 @@ function DockRow({
         </span>
         {resident.loadedOn && (
           <span
-            className="shrink-0 text-[10px] tabular-nums"
+            className="shrink-0 text-2xs tabular-nums"
             style={split ? { color: 'var(--warning, #d1a054)' } : undefined}
             title={placementTitle(resident)}
           >
@@ -267,7 +267,7 @@ function DockRow({
       </button>
 
       {/* Where it sits and what it holds, at a glance. */}
-      <p className="px-2.5 pb-1.5 text-[10px] tabular-nums text-ink-faint">
+      <p className="px-2.5 pb-1.5 text-2xs tabular-nums text-ink-faint">
         {[
           formatBytes(resident.vramBytes ?? resident.sizeBytes ?? 0),
           resident.contextLength ? `${formatTokens(resident.contextLength)} context` : undefined,
@@ -288,11 +288,11 @@ function DockRow({
           {/* Unloading is a property of the row, not of the edit, so it sits
               in the corner rather than beside the reload it has nothing to do with. */}
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Settings</span>
+            <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Settings</span>
             {/* The quick fields below are a subset; everything else (Runs on,
                 threads, batch, flash attention) is one jump away. */}
             <button
-              className="ml-auto text-[11px] text-ink-faint underline underline-offset-2 hover:text-ink"
+              className="ml-auto text-2xs text-ink-faint underline underline-offset-2 hover:text-ink"
               data-local-model-settings={model.id}
               onClick={() => useStore.getState().openLocalModelSettings(model.id)}
               title={`Open all of ${model.name}'s settings on Model Server`}
@@ -300,7 +300,7 @@ function DockRow({
               All settings
             </button>
             <button
-              className="btn btn-outline h-6 rounded-lg px-2 py-0.5 text-[11px] disabled:opacity-60"
+              className="btn btn-outline h-6 rounded-lg px-2 py-0.5 text-2xs disabled:opacity-60"
               disabled={busy !== null}
               onClick={() => void unload()}
               title={`Free the memory ${model.name} is holding`}
@@ -319,7 +319,7 @@ function DockRow({
                 onChange={(e) => patch({ gpuLayers: Number(e.target.value) })}
               />
             ) : (
-              <p className="text-[10px] text-ink-faint">This file does not say how many layers it has.</p>
+              <p className="text-2xs text-ink-faint">This file does not say how many layers it has.</p>
             )}
           </Field>
           <Field label="Context" value={`${formatTokens(ctx)} of ${formatTokens(maxCtx)}`}>
@@ -333,14 +333,14 @@ function DockRow({
               onChange={(i) => patch({ contextTokens: ctxStops[i] })}
             />
             {overVram && (
-              <p className="mt-0.5 text-[10px] leading-snug" style={{ color: 'var(--danger)' }}>
+              <p className="mt-0.5 text-2xs leading-snug" style={{ color: 'var(--danger)' }}>
                 Past {formatTokens(vramLimit ?? 0)} the KV cache spills out of VRAM, so replies slow down.
               </p>
             )}
           </Field>
           <Field label="KV cache">
             <select
-              className="input w-full py-1 text-[11px]"
+              className="input w-full py-1 text-2xs"
               value={params.kvCacheDtype ?? 'f16'}
               onChange={(e) => patch({ kvCacheDtype: e.target.value as KvCacheDtype })}
             >
@@ -350,7 +350,7 @@ function DockRow({
             </select>
           </Field>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10.5px] text-ink-soft" title="Never evict it for sitting idle">
+            <span className="text-2xs text-ink-soft" title="Never evict it for sitting idle">
               Keep it loaded
             </span>
             <Toggle
@@ -363,19 +363,19 @@ function DockRow({
               there reads as something you are meant to press. */}
           {(dirty || busy === 'reload') && (
             <>
-              <p className="text-[10px] leading-snug text-ink-faint">
+              <p className="text-2xs leading-snug text-ink-faint">
                 Changes apply on reload: the model is unloaded and brought back with these settings.
               </p>
               <div className="flex items-center gap-2">
                 <button
-                  className="btn btn-primary h-6 flex-1 rounded-lg py-0.5 text-[11px] disabled:opacity-60"
+                  className="btn btn-primary h-6 flex-1 rounded-lg py-0.5 text-2xs disabled:opacity-60"
                   disabled={busy !== null}
                   onClick={() => void reload()}
                 >
                   {busy === 'reload' ? 'Reloading…' : 'Reload with changes'}
                 </button>
                 <button
-                  className="shrink-0 text-[11px] text-ink-faint hover:text-ink disabled:opacity-60"
+                  className="shrink-0 text-2xs text-ink-faint hover:text-ink disabled:opacity-60"
                   disabled={busy !== null}
                   onClick={() => setParams(initial)}
                   title="Discard these edits"
@@ -580,8 +580,8 @@ function Field({ label, value, children }: { label: string; value?: string; chil
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <span className="text-[10.5px] text-ink-soft">{label}</span>
-        {value && <span className="text-[10px] tabular-nums text-ink-faint">{value}</span>}
+        <span className="text-2xs text-ink-soft">{label}</span>
+        {value && <span className="text-2xs tabular-nums text-ink-faint">{value}</span>}
       </div>
       {children}
     </div>

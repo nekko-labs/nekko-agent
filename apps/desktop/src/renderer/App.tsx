@@ -283,7 +283,7 @@ export function App() {
                 name is never shown twice. */}
             {!hasAppChrome && <div className="mb-3 flex h-9 items-center gap-2 px-1.5">
               <span className="grid h-8 w-8 shrink-0 place-items-center text-ink"><BrandMark size={24} title={hasAppChrome ? undefined : 'Nekko Agent'} /></span>
-              {!hasAppChrome && <span className="rail-label text-[15px] font-semibold tracking-tight">Nekko Agent</span>}
+              {!hasAppChrome && <span className="rail-label text-base font-semibold tracking-tight">Nekko Agent</span>}
             </div>}
             {visibleNav.map(({ view: v, labelKey, Icon }, navIndex) => (
               <button
@@ -307,7 +307,7 @@ export function App() {
                 onClick={() => setView(v)}
               >
                 <span className="grid h-10 w-10 shrink-0 place-items-center"><Icon /></span>
-                <span className="rail-label text-[13px] font-medium">{t(labelKey)}</span>
+                <span className="rail-label text-sm font-medium">{t(labelKey)}</span>
               </button>
             ))}
             </div>
@@ -316,7 +316,7 @@ export function App() {
             {/* Not a destination: it opens the Send feedback sheet over the current view. */}
             <button className="nav-item rail-feedback" aria-label={t('nav.feedback')} title={t('nav.feedback')} onClick={openFeedback} data-testid="rail-feedback">
               <span className="grid h-10 w-10 shrink-0 place-items-center text-ink-faint"><FeedbackIcon className="h-[18px] w-[18px]" /></span>
-              <span className="rail-label text-[13px] font-medium">{t('nav.feedback')}</span>
+              <span className="rail-label text-sm font-medium">{t('nav.feedback')}</span>
             </button>
           </div>
         </nav>
@@ -325,7 +325,7 @@ export function App() {
         <main className="relative flex min-w-0 flex-1 flex-col pb-16 md:pb-0">
           {providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
             <button
-              className="flex items-center justify-center gap-2 border-b border-line py-2.5 text-[13px]"
+              className="flex items-center justify-center gap-2 border-b border-line py-2.5 text-sm"
               style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
               onClick={() => setView('models')}
             >
@@ -369,7 +369,7 @@ export function App() {
               onClick={() => setView(v)}
             >
               <span className="grid h-7 w-7 place-items-center"><Icon /></span>
-              <span className="text-[10px] font-medium">{t(item.labelKey)}</span>
+              <span className="text-2xs font-medium">{t(item.labelKey)}</span>
             </button>
           );
         })}

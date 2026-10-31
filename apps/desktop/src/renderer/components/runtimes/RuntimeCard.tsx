@@ -96,10 +96,10 @@ export function RuntimeCard({
     <div className="rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
       <div className="flex items-center gap-2">
         <StatusDot running={running} busy={busy !== null} error={Boolean(status?.error)} />
-        <span className="text-[13px]">{running ? 'Running' : 'Stopped'}</span>
-        {status?.version && <span className="text-[11px] text-ink-faint">v{status.version}</span>}
+        <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
+        {status?.version && <span className="text-2xs text-ink-faint">v{status.version}</span>}
         {status?.owned && (
-          <span className="text-[11px] text-ink-faint" title="Nekko Agent started this server, so it will stop cleanly">
+          <span className="text-2xs text-ink-faint" title="Nekko Agent started this server, so it will stop cleanly">
             started here
           </span>
         )}
@@ -107,7 +107,7 @@ export function RuntimeCard({
         <div className="ml-auto">
           {caps.canStart && status?.installed === false && !running ? (
             <span
-              className="rounded-full border px-2 py-0.5 text-[11px] text-ink-faint"
+              className="rounded-full border px-2 py-0.5 text-2xs text-ink-faint"
               style={{ borderColor: 'var(--line)' }}
               title={status.reason}
             >
@@ -115,7 +115,7 @@ export function RuntimeCard({
             </span>
           ) : caps.canStart ? (
             <button
-              className="btn btn-outline py-1 text-[12px]"
+              className="btn btn-outline py-1 text-xs"
               onClick={() => (running ? stop() : start())}
               disabled={busy !== null}
               title={running ? 'Stop this model server' : 'Start this model server'}
@@ -125,7 +125,7 @@ export function RuntimeCard({
             </button>
           ) : running && caps.canStop ? (
             <button
-              className="btn btn-outline py-1 text-[12px]"
+              className="btn btn-outline py-1 text-xs"
               onClick={() => stop()}
               disabled={busy !== null}
               style={{ color: 'var(--danger)', borderColor: 'color-mix(in srgb, var(--danger) 40%, transparent)' }}
@@ -134,7 +134,7 @@ export function RuntimeCard({
             </button>
           ) : (
             <span
-              className="rounded-full border px-2 py-0.5 text-[11px] text-ink-faint"
+              className="rounded-full border px-2 py-0.5 text-2xs text-ink-faint"
               style={{ borderColor: 'var(--line)' }}
               title="This runtime is started outside Nekko Agent"
             >
@@ -149,7 +149,7 @@ export function RuntimeCard({
       </div>
 
       {status?.metrics && (
-        <p className="mt-1 text-[11px] text-ink-faint">
+        <p className="mt-1 text-2xs text-ink-faint">
           {status.metrics.kvCacheUsagePct !== undefined && `KV cache ${status.metrics.kvCacheUsagePct.toFixed(0)}% used`}
           {status.metrics.requestsWaiting !== undefined && ` · ${status.metrics.requestsWaiting} queued`}
         </p>
@@ -158,7 +158,7 @@ export function RuntimeCard({
       {status?.resident?.length ? (
         <div className="mt-2 space-y-1">
           {status.resident.map((r) => (
-            <div key={r.id} className="flex items-center gap-2 text-[11px]">
+            <div key={r.id} className="flex items-center gap-2 text-2xs">
               <span className="truncate">{r.id}</span>
               {r.contextLength !== undefined && (
                 <span className="text-ink-faint">{Math.round(r.contextLength / 1024)}k ctx</span>
@@ -179,19 +179,19 @@ export function RuntimeCard({
             </div>
           ))}
           {spilled && (
-            <p className="text-[11px]" style={{ color: 'var(--warning, #d1a054)' }}>
+            <p className="text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
               Part of what is loaded is running on the CPU, which is much slower than the GPU.
             </p>
           )}
         </div>
       ) : running ? (
-        <p className="mt-2 text-[11px] text-ink-faint">Nothing loaded into memory.</p>
+        <p className="mt-2 text-2xs text-ink-faint">Nothing loaded into memory.</p>
       ) : null}
 
       {status?.log?.length && showLog ? (
         <details className="mt-2" open>
-          <summary className="cursor-pointer text-[11px] text-ink-faint">Server output</summary>
-          <pre className="mt-1 max-h-40 overflow-auto rounded bg-[color-mix(in_srgb,var(--ink-faint)_8%,transparent)] p-2 font-mono text-[10px]">
+          <summary className="cursor-pointer text-2xs text-ink-faint">Server output</summary>
+          <pre className="mt-1 max-h-40 overflow-auto rounded bg-[color-mix(in_srgb,var(--ink-faint)_8%,transparent)] p-2 font-mono text-2xs">
             {status.log.join('\n')}
           </pre>
         </details>
@@ -199,12 +199,12 @@ export function RuntimeCard({
 
       {facts.length > 0 && (
         <div className="mt-3 border-t pt-2" style={{ borderColor: 'var(--line)' }}>
-          <p className="text-[11px] text-ink-faint">Check a model against this machine</p>
+          <p className="text-2xs text-ink-faint">Check a model against this machine</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {facts.slice(0, 12).map((f) => (
               <button
                 key={f.id}
-                className="rounded-full border px-2 py-1 text-[11px] hover:border-[var(--accent)]"
+                className="rounded-full border px-2 py-1 text-2xs hover:border-[var(--accent)]"
                 style={{
                   borderColor: openModel === f.id ? 'var(--accent)' : 'var(--line)',
                 }}

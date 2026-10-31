@@ -227,7 +227,7 @@ describe('Markdown (document mode)', () => {
 // The chat renderer splits text into blocks so a streaming reply re-parses only
 // its tail. It has to produce exactly what parsing the whole string produces.
 const whole = (text: string) =>
-  renderToStaticMarkup(<div className="space-y-1 text-[14px] leading-relaxed">{renderWhole(text, { doc: false })}</div>);
+  renderToStaticMarkup(<div className="space-y-1 text-sm leading-relaxed">{renderWhole(text, { doc: false })}</div>);
 
 const FIXTURES = [
   'Nekko Agent project.\n- first thing\n- second thing',

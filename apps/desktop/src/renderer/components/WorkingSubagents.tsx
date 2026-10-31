@@ -38,13 +38,13 @@ export function WorkingSubagents({ children, running, pending, onOpen }: {
   const waiting = active.some(child => pending[child.id]?.question || pending[child.id]?.approval);
   return <div ref={root} className="absolute bottom-3 right-3 z-20 flex flex-col items-end" data-working-subagents>
     {expanded && <div className="card mb-2 max-h-48 w-64 overflow-y-auto p-1" role="group" aria-label="Working subagents">
-      {active.map(child => <button key={child.id} type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[12px] hover:bg-surface-2" onClick={() => onOpen(child.id)}>
+      {active.map(child => <button key={child.id} type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-surface-2" onClick={() => onOpen(child.id)}>
         <RobotIcon className="h-4 w-4 shrink-0" />
         <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: pending[child.id]?.question || pending[child.id]?.approval ? 'var(--warning)' : 'var(--success)' }} />
         <span className="min-w-0"><span className="block truncate">{child.title || 'Subagent'}{child.modelId && <span className="text-ink-faint" title={`Model: ${child.modelId}`}> · {shortModelName(child.modelId)}</span>}</span><span className="block truncate text-ink-faint">{activitySentence(childActivity(child, running.has(child.id), pending[child.id]))}</span></span>
       </button>)}
     </div>}
-    <button type="button" className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-[12px] shadow-md" aria-expanded={expanded} aria-label={`${active.length} working subagents`} onClick={() => setExpanded(!expanded)}>
+    <button type="button" className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-xs shadow-(--shadow-md)" aria-expanded={expanded} aria-label={`${active.length} working subagents`} onClick={() => setExpanded(!expanded)}>
       <RobotIcon className="h-4 w-4" />
       <span className="h-2 w-2 rounded-full" style={{ background: waiting ? 'var(--warning)' : 'var(--success)' }} />
       <span>{active.length}</span>

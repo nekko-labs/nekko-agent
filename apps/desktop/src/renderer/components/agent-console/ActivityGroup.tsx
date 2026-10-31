@@ -92,7 +92,7 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
   // The tip lists each group with its count, then lone calls by their purpose.
   const hoverText = [summary, ...rows.flatMap((r) => (r.kind === 'group' ? [`• ${rowHeadline(r, false)} (${r.calls.length})`] : r.step.item.kind === 'tool' ? [`• ${rowHeadline(r, false)}`] : []))].join('\n');
   return (
-    <div className={`${streaming ? 'fade-in ' : ''}mt-1 font-mono text-[12px]`}>
+    <div className={`${streaming ? 'fade-in ' : ''}mt-1 font-mono text-xs`}>
       <div className="flex min-w-0 items-center gap-1">
         <HoverTip label={ordinary ? hoverText : agents.length ? subagentSummary(agents[agents.length - 1].call) : watchCallHeadline(lastWatch.call, lastWatch.result)} multiline>
         <button
@@ -100,7 +100,7 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
           onClick={() => setOpen(!open)}
           aria-expanded={open}
         >
-          <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
+          <span className="w-3 shrink-0 text-2xs">{open ? '▾' : '▸'}</span>
           {agents.length ? <SubagentCue /> : watchOnly ? <WatchIcon /> : <ToolActivityIcon kind={iconRow ? rowIconKind(iconRow) : 'other'} className="h-3 w-3 shrink-0 text-accent" />}
           {streaming && !paused && !!lastRow && <LeadDots />}
           <span className="min-w-0 truncate font-medium text-ink-soft">{agents.length ? <SubagentHeadline call={agents[agents.length - 1].call} result={agents[agents.length - 1].result} /> : watchOnly ? watchCallHeadline(lastWatch.call, lastWatch.result) : summary}</span>
@@ -118,7 +118,7 @@ const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = f
       </div>
       {modelActive && <div className="ml-[22px] border-l border-line py-1 pl-2 text-ink-soft" data-model-activity>
         <div className="flex items-center gap-1.5"><LeadDots /><span>{publicReasoning ? 'Thinking' : toolCount ? 'Tools finished. Waiting for the model…' : 'Waiting for the model…'}</span></div>
-        {publicReasoning && <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed" data-public-reasoning>{publicReasoning}</pre>}
+        {publicReasoning && <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-sans text-xs leading-relaxed" data-public-reasoning>{publicReasoning}</pre>}
       </div>}
       {tools.filter((it) => it.call.name === 'remember').map((it) => <MemoryCard key={it.call.id} call={it.call} result={it.result} />)}
       {!open && watchOnly && <WatchThen text={thenSummary(parseWatchCall(lastWatch.call).prompt)} className="pl-[38px]" />}
@@ -203,15 +203,15 @@ function PurposeGroupRow({ row, live, streaming, total, toolActivity, pendingCal
         aria-expanded={open}
         title={`${headline}\n${row.calls.length} calls`}
       >
-        <span className="w-4 shrink-0 text-right text-[10px] tabular-nums opacity-60">{first}</span>
+        <span className="w-4 shrink-0 text-right text-2xs tabular-nums opacity-60">{first}</span>
         <ToolElapsed startedAt={startedAt} endedAt={endedAt} live={live} />
-        <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
+        <span className="w-3 shrink-0 text-2xs">{open ? '▾' : '▸'}</span>
         <span className="self-center"><ToolActivityIcon kind={purposeIconKind(row.purpose, row.calls)} /></span>
         {live && <LeadDots />}
         <span className={`min-w-0 max-w-[70%] shrink-0 truncate font-medium ${live ? 'text-accent' : 'text-ink-soft'}`}>{headline}</span>
         {quiet && <span className="min-w-0 truncate" title={quiet}>· {quiet}</span>}
         {failed > 0 && <span className="shrink-0 text-danger">· {failed} failed</span>}
-        <span className="ml-auto shrink-0 pl-2 text-[10px] tabular-nums opacity-60">{row.calls.length}</span>
+        <span className="ml-auto shrink-0 pl-2 text-2xs tabular-nums opacity-60">{row.calls.length}</span>
         {!open && quiets.length > 0 && <ToolProgressChip since={Math.min(...quiets)} />}
       </button>
       {open && (
@@ -244,7 +244,7 @@ function ToolElapsed({ startedAt, endedAt, live }: { startedAt?: number; endedAt
   }, [running]);
   const end = endedAt ?? (running ? now : undefined);
   const text = startedAt !== undefined && end !== undefined ? fmtElapsed(end - startedAt) : '';
-  return <span className="w-11 shrink-0 text-right text-[10px] tabular-nums opacity-70" data-tool-elapsed data-running={running || undefined} title={text ? `${running ? 'Running for' : 'Took'} ${text}` : undefined}>{text}</span>;
+  return <span className="w-11 shrink-0 text-right text-2xs tabular-nums opacity-70" data-tool-elapsed data-running={running || undefined} title={text ? `${running ? 'Running for' : 'Took'} ${text}` : undefined}>{text}</span>;
 }
 
 /**
@@ -290,9 +290,9 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
         >
-          <span className="w-4 shrink-0 text-right text-[10px] tabular-nums opacity-60">{index}</span>
+          <span className="w-4 shrink-0 text-right text-2xs tabular-nums opacity-60">{index}</span>
           {item.kind === 'tool' ? <ToolElapsed startedAt={item.startedAt} endedAt={item.endedAt} live={live} /> : <span className="w-11 shrink-0" />}
-          <span className="w-3 shrink-0 text-[10px]">{open ? '▾' : '▸'}</span>
+          <span className="w-3 shrink-0 text-2xs">{open ? '▾' : '▸'}</span>
           <span className="self-center">{icon}</span>
           {live && <LeadDots />}
           {label && <span className={`shrink-0 font-medium ${live ? 'text-accent' : item.kind === 'tool' && item.failed ? 'text-danger' : 'text-ink-soft'}`}>{label}</span>}
@@ -311,16 +311,16 @@ function StepRow({ index, item, live, quietSince }: { index: number; item: Activ
             <div className="text-ink-soft">Task</div>
             <pre className="max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-soft">{typeof item.call.input.task === 'string' ? item.call.input.task : JSON.stringify(item.call.input, null, 2)}</pre>
             <div className="text-ink-soft">{item.result?.isError ? 'Delegation tool error' : item.result ? 'Delegation tool result' : 'No delegation tool result recorded'}</div>
-            {item.result && <div className="max-h-60 overflow-auto font-sans text-[13px] text-ink-soft"><Markdown text={item.result.output} /></div>}
+            {item.result && <div className="max-h-60 overflow-auto font-sans text-sm text-ink-soft"><Markdown text={item.result.output} /></div>}
           </div>
         ) : kind === 'watch' && item.kind === 'tool' ? (
           <div className="ml-[84px]"><WatchDetail call={item.call} result={item.result} /></div>
         ) : item.kind === 'note' ? (
-          <div className="ml-[84px] border-l border-line py-0.5 pl-2 font-sans text-[13px] text-ink-soft">
+          <div className="ml-[84px] border-l border-line py-0.5 pl-2 font-sans text-sm text-ink-soft">
             <Markdown text={item.text} />
           </div>
         ) : (
-          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] border-l border-line pl-2 text-[12px] leading-relaxed text-ink-faint">
+          <pre className="ml-[84px] mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] border-l border-line pl-2 text-xs leading-relaxed text-ink-faint">
             {item.kind === 'reasoning' ? item.text : JSON.stringify(item.call.input, null, 2)}
           </pre>
         )

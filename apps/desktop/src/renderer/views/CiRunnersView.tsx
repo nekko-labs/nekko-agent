@@ -16,8 +16,8 @@ export function CiRunnersFirstVisit({ onConnect }: { onConnect(): void }) {
       <div className="mx-auto mb-2.5 grid h-13 w-13 place-items-center rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
         <LaptopIcon className="h-6.5 w-6.5" />
       </div>
-      <h2 className="mb-1 text-[18px] font-semibold">Use this Mac as a CI runner</h2>
-      <p className="mx-auto mb-3.5 max-w-130 text-[13.5px] text-ink-soft">
+      <h2 className="mb-1 text-xl font-semibold">Use this Mac as a CI runner</h2>
+      <p className="mx-auto mb-3.5 max-w-130 text-sm text-ink-soft">
         Run your GitHub Actions jobs here, each in a throwaway VM that is deleted afterward. Your own work comes first.
       </p>
       <button className="btn btn-primary" onClick={onConnect}>

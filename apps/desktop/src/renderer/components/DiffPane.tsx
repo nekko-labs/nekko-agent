@@ -55,21 +55,21 @@ export function DiffPane({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[12px]">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">
         <span className="font-semibold">Changes</span>
-        <span className="chip text-[10px]">{changes.length} file{changes.length === 1 ? '' : 's'}</span>
+        <span className="chip text-2xs">{changes.length} file{changes.length === 1 ? '' : 's'}</span>
         {changes.length > 0 && (
           <span className="ml-auto flex items-center gap-1">
-            <button className="btn btn-ghost px-2 py-0.5 text-[11px]" onClick={keepAll} title="Keep every change">Keep all</button>
-            <button className="btn btn-ghost px-2 py-0.5 text-[11px] text-red-400" onClick={revertAll} title="Revert every file to its original">Revert all</button>
+            <button className="btn btn-ghost px-2 py-0.5 text-2xs" onClick={keepAll} title="Keep every change">Keep all</button>
+            <button className="btn btn-ghost px-2 py-0.5 text-2xs text-red-400" onClick={revertAll} title="Revert every file to its original">Revert all</button>
           </span>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {!loaded ? (
-          <p className="p-4 text-[12px] text-ink-faint">Loading…</p>
+          <p className="p-4 text-xs text-ink-faint">Loading…</p>
         ) : changes.length === 0 ? (
-          <div className="grid h-full place-items-center px-6 text-center text-[13px] text-ink-faint">
+          <div className="grid h-full place-items-center px-6 text-center text-sm text-ink-faint">
             No pending changes. Files the agent edits this chat show up here to review.
           </div>
         ) : (
@@ -124,32 +124,32 @@ function FileDiff({ sessionId, change, onChanged }: { sessionId: string; change:
 
   return (
     <div className="border-b border-line">
-      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5 text-[12px]" style={{ background: 'var(--surface-2)' }}>
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5 text-xs" style={{ background: 'var(--surface-2)' }}>
         <button className="flex min-w-0 flex-1 items-center gap-1.5 text-left" onClick={() => setOpen((o) => !o)}>
-          <span className="w-2 text-[9px] text-ink-faint">{open ? '▾' : '▸'}</span>
+          <span className="w-2 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
           <FileTypeIcon name={name} size={14} />
           <span className="truncate font-medium">{name}</span>
-          {change.original === '' && <span className="chip text-[9px] uppercase">new</span>}
-          <span className="ml-1 shrink-0 text-[10px]">
+          {change.original === '' && <span className="chip text-2xs uppercase">new</span>}
+          <span className="ml-1 shrink-0 text-2xs">
             <span className="text-green-500">+{adds}</span> <span className="text-red-400">-{dels}</span>
           </span>
         </button>
         <span className="flex shrink-0 items-center gap-1">
           {revert.size > 0 && (
-            <button className="btn btn-ghost px-2 py-0.5 text-[10.5px] text-accent" onClick={revertSelected}>
+            <button className="btn btn-ghost px-2 py-0.5 text-2xs text-accent" onClick={revertSelected}>
               Revert {revert.size} line{revert.size === 1 ? '' : 's'}
             </button>
           )}
-          <button className="btn btn-ghost px-2 py-0.5 text-[10.5px]" onClick={keepFile} title="Keep this file's changes">Keep</button>
-          <button className="btn btn-ghost px-2 py-0.5 text-[10.5px] text-red-400" onClick={revertFile} title="Revert this file to its original">Revert file</button>
+          <button className="btn btn-ghost px-2 py-0.5 text-2xs" onClick={keepFile} title="Keep this file's changes">Keep</button>
+          <button className="btn btn-ghost px-2 py-0.5 text-2xs text-red-400" onClick={revertFile} title="Revert this file to its original">Revert file</button>
         </span>
       </div>
 
       {open && (
         ops === null ? (
-          <p className="px-3 py-2 text-[11px] text-ink-faint">File too large to diff inline. Use Keep or Revert file.</p>
+          <p className="px-3 py-2 text-2xs text-ink-faint">File too large to diff inline. Use Keep or Revert file.</p>
         ) : (
-          <div className="font-mono text-[12px] leading-relaxed">
+          <div className="font-mono text-xs leading-relaxed">
             {ops.map((op, i) => {
               if (op.type === 'eq') {
                 return (

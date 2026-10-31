@@ -78,7 +78,7 @@ export function ScheduleTaskModal({
       className="card w-full max-w-md p-4"
     >
       <div className="flex items-center justify-between">
-        <h2 id={titleId} className="text-[15px] font-semibold">⚡ Automate this agent</h2>
+        <h2 id={titleId} className="text-base font-semibold">⚡ Automate this agent</h2>
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" onClick={onClose} aria-label="Close"><CloseIcon className="h-4 w-4" /></button>
       </div>
 
@@ -86,35 +86,35 @@ export function ScheduleTaskModal({
         {KIND_OPTS.map((o) => (
           <button
             key={o.k}
-            className={`rounded-xl border p-2.5 text-left text-[12px] transition-colors ${kind === o.k ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2'}`}
+            className={`rounded-xl border p-2.5 text-left text-xs transition-colors ${kind === o.k ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2'}`}
             onClick={() => setKind(o.k)}
           >
             <div className="text-base">{o.icon}</div>
             <div className="mt-0.5 font-semibold">{o.label}</div>
-            <div className="text-[10.5px] text-ink-faint">{o.sub}</div>
+            <div className="text-2xs text-ink-faint">{o.sub}</div>
           </button>
         ))}
       </div>
 
-      <label className="mt-3 block text-[11px] font-medium text-ink-faint">Title</label>
-      <input className="input mt-1 text-[12.5px]" placeholder="e.g. Nightly test run" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <label className="mt-3 block text-2xs font-medium text-ink-faint">Title</label>
+      <input className="input mt-1 text-xs" placeholder="e.g. Nightly test run" value={title} onChange={(e) => setTitle(e.target.value)} />
 
-      <label className="mt-3 block text-[11px] font-medium text-ink-faint">What should the agent do each time?</label>
-      <textarea className="input mt-1 min-h-[64px] resize-none text-[12.5px]" placeholder="Run the test suite and summarize any failures." value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+      <label className="mt-3 block text-2xs font-medium text-ink-faint">What should the agent do each time?</label>
+      <textarea className="input mt-1 min-h-[64px] resize-none text-xs" placeholder="Run the test suite and summarize any failures." value={prompt} onChange={(e) => setPrompt(e.target.value)} />
 
       {kind === 'scheduled' && (
         <div className="mt-3">
-          <label className="block text-[11px] font-medium text-ink-faint">Run at</label>
-          <input type="datetime-local" className="input mt-1 text-[12.5px]" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
+          <label className="block text-2xs font-medium text-ink-faint">Run at</label>
+          <input type="datetime-local" className="input mt-1 text-xs" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
         </div>
       )}
 
       {kind === 'recurring' && (
         <div className="mt-3">
-          <label className="block text-[11px] font-medium text-ink-faint">Run every</label>
+          <label className="block text-2xs font-medium text-ink-faint">Run every</label>
           <div className="mt-1 flex gap-2">
-            <input type="number" min={1} className="input w-24 text-[12.5px]" value={every} onChange={(e) => setEvery(Number(e.target.value))} />
-            <select className="input flex-1 text-[12.5px]" value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)}>
+            <input type="number" min={1} className="input w-24 text-xs" value={every} onChange={(e) => setEvery(Number(e.target.value))} />
+            <select className="input flex-1 text-xs" value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)}>
               <option value="min">minutes</option>
               <option value="hour">hours</option>
               <option value="day">days</option>
@@ -125,18 +125,18 @@ export function ScheduleTaskModal({
 
       {kind === 'background' && (
         <div className="mt-3">
-          <label className="block text-[11px] font-medium text-ink-faint">Keep alive</label>
+          <label className="block text-2xs font-medium text-ink-faint">Keep alive</label>
           <div className="mt-1 flex gap-2">
-            <button className={`flex-1 rounded-lg border py-1.5 text-[12px] ${keepAlive === 'forever' ? 'border-accent bg-accent-soft' : 'border-line'}`} onClick={() => setKeepAlive('forever')}>Forever</button>
-            <button className={`flex-1 rounded-lg border py-1.5 text-[12px] ${keepAlive === 'until' ? 'border-accent bg-accent-soft' : 'border-line'}`} onClick={() => setKeepAlive('until')}>Until a condition</button>
+            <button className={`flex-1 rounded-lg border py-1.5 text-xs ${keepAlive === 'forever' ? 'border-accent bg-accent-soft' : 'border-line'}`} onClick={() => setKeepAlive('forever')}>Forever</button>
+            <button className={`flex-1 rounded-lg border py-1.5 text-xs ${keepAlive === 'until' ? 'border-accent bg-accent-soft' : 'border-line'}`} onClick={() => setKeepAlive('until')}>Until a condition</button>
           </div>
           {keepAlive === 'until' && (
-            <input className="input mt-2 text-[12.5px]" placeholder="Stop when… (e.g. all tests pass)" value={condition} onChange={(e) => setCondition(e.target.value)} />
+            <input className="input mt-2 text-xs" placeholder="Stop when… (e.g. all tests pass)" value={condition} onChange={(e) => setCondition(e.target.value)} />
           )}
-          <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-faint">
+          <div className="mt-2 flex items-center gap-2 text-2xs text-ink-faint">
             <span>Nudge every</span>
-            <input type="number" min={1} className="input w-20 py-1 text-[12px]" value={every} onChange={(e) => setEvery(Number(e.target.value))} />
-            <select className="input py-1 text-[12px]" value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)}>
+            <input type="number" min={1} className="input w-20 py-1 text-xs" value={every} onChange={(e) => setEvery(Number(e.target.value))} />
+            <select className="input py-1 text-xs" value={unit} onChange={(e) => setUnit(e.target.value as typeof unit)}>
               <option value="min">minutes</option>
               <option value="hour">hours</option>
               <option value="day">days</option>
@@ -151,8 +151,8 @@ export function ScheduleTaskModal({
 
       {blocked && <div className="mt-3"><ClaudeReasonLine message={blocked} /></div>}
       <div className="mt-4 flex justify-end gap-2">
-        <button className="btn btn-ghost py-1.5 text-[12px]" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary py-1.5 text-[12px]" disabled={!valid} onClick={create}>Create task</button>
+        <button className="btn btn-ghost py-1.5 text-xs" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary py-1.5 text-xs" disabled={!valid} onClick={create}>Create task</button>
       </div>
     </Modal>
   );

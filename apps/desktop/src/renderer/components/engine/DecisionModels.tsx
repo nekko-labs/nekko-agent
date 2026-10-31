@@ -72,7 +72,7 @@ export function DecisionModels() {
   const folders = installed.filter((m) => m.external);
   return (
     <div className="space-y-5">
-      <p className="text-[12px] text-ink-faint">
+      <p className="text-xs text-ink-faint">
         Decision models answer typed questions about a text or JSON state (pick one option, score on a scale, true or false) with calibrated probabilities, in one pass and without generating text. Agents use them for routing, triage and guardrails. One is loaded at a time.
       </p>
 
@@ -80,22 +80,22 @@ export function DecisionModels() {
         <CatalogCard key={entry.id} entry={entry} have={installed.find((m) => m.id === entry.id)} status={status} busy={busy} act={act} refresh={refresh} />
       ))}
 
-      <div className="rounded-lg border border-line p-3 text-[12px]" data-decision-folders>
-        <div className="text-[13px] font-semibold">Your own exports</div>
+      <div className="rounded-lg border border-line p-3 text-xs" data-decision-folders>
+        <div className="text-sm font-semibold">Your own exports</div>
         <p className="mt-1 text-ink-soft">A folder with an ONNX export of a Laya checkpoint, its tokenizer.json and rl_agent_config.json, read where it is. docs/decision-models.md has the recipe.</p>
         {folders.map((m) => (
           <FolderModel key={m.id} model={m} status={status} busy={busy} act={act} />
         ))}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
-            className="input min-w-0 flex-1 py-1 text-[12px]"
+            className="input min-w-0 flex-1 py-1 text-xs"
             aria-label="Export folder"
             placeholder="Add an export folder, e.g. C:\models\laya-en-onnx"
             value={folder}
             onChange={(e) => setFolder(e.target.value)}
           />
           <button
-            className="btn btn-outline py-1 text-[12px]"
+            className="btn btn-outline py-1 text-xs"
             disabled={!folder.trim() || busy !== null}
             onClick={() => void act('folder', () => window.nekko.decisionsAddFolder(folder)).then((r) => { if (r.ok) setFolder(''); })}
           >
@@ -105,16 +105,16 @@ export function DecisionModels() {
         {status && !status.local.available && <p className="mt-2 text-ink-faint">{status.local.reason}</p>}
       </div>
 
-      <div className="rounded-lg border border-line p-3 text-[12px]">
+      <div className="rounded-lg border border-line p-3 text-xs">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-semibold">TypeSafe Jev</span>
+          <span className="text-sm font-semibold">TypeSafe Jev</span>
           <span className="chip">hosted</span>
           {status?.typesafe.configured && <span className="chip" style={{ color: 'var(--success)' }}>key set</span>}
         </div>
         <p className="mt-1 text-ink-soft">TypeSafe's hosted decision model, with the same questions and answers. Requests go to api.typesafe.ai with your key; keys come from console.typesafe.ai.</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
-            className="input min-w-0 flex-1 py-1 text-[12px]"
+            className="input min-w-0 flex-1 py-1 text-xs"
             type="password"
             autoComplete="off"
             aria-label="TypeSafe API key"
@@ -122,12 +122,12 @@ export function DecisionModels() {
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />
-          <button className="btn btn-outline py-1 text-[12px]" disabled={!key.trim()} onClick={() => void saveKey()}>Save key</button>
+          <button className="btn btn-outline py-1 text-xs" disabled={!key.trim()} onClick={() => void saveKey()}>Save key</button>
           {settings?.typesafeApiKey && !key.trim() && (
-            <button className="btn btn-ghost py-1 text-[12px] text-ink-faint" onClick={() => void saveKey()}>Remove key</button>
+            <button className="btn btn-ghost py-1 text-xs text-ink-faint" onClick={() => void saveKey()}>Remove key</button>
           )}
           {status?.typesafe.configured && (
-            <button className="btn btn-ghost py-1 text-[12px]" disabled={busy !== null} onClick={() => void act('typesafe', () => window.nekko.decisionsCheckTypesafe())}>Check key</button>
+            <button className="btn btn-ghost py-1 text-xs" disabled={busy !== null} onClick={() => void act('typesafe', () => window.nekko.decisionsCheckTypesafe())}>Check key</button>
           )}
         </div>
       </div>
@@ -172,9 +172,9 @@ function DecisionPlayground({ status }: { status: DecisionStatus | null }) {
   };
 
   return (
-    <div className="rounded-lg border border-line p-3 text-[12px]">
+    <div className="rounded-lg border border-line p-3 text-xs">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[13px] font-semibold">Try it</span>
+        <span className="text-sm font-semibold">Try it</span>
         <div role="radiogroup" aria-label="Decision provider" className="inline-flex rounded-lg border border-line p-0.5">
           {(['local', 'typesafe'] as const).map((p) => (
             <button
@@ -182,17 +182,17 @@ function DecisionPlayground({ status }: { status: DecisionStatus | null }) {
               role="radio"
               aria-checked={provider === p}
               onClick={() => setProvider(p)}
-              className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${provider === p ? 'bg-surface-2 text-ink' : 'text-ink-faint hover:text-ink'}`}
+              className={`rounded-md px-2 py-0.5 text-2xs font-medium ${provider === p ? 'bg-surface-2 text-ink' : 'text-ink-faint hover:text-ink'}`}
             >
               {p === 'local' ? 'Laya (local)' : 'Jev (TypeSafe)'}
             </button>
           ))}
         </div>
       </div>
-      <label className="mt-2 block">State<textarea className="input mt-1 min-h-16 w-full text-[12px]" value={state} onChange={(e) => setState(e.target.value)} /></label>
-      <label className="mt-2 block">Questions (JSON)<textarea className="input mt-1 min-h-40 w-full font-mono text-[11.5px]" spellCheck={false} value={questions} onChange={(e) => setQuestions(e.target.value)} /></label>
+      <label className="mt-2 block">State<textarea className="input mt-1 min-h-16 w-full text-xs" value={state} onChange={(e) => setState(e.target.value)} /></label>
+      <label className="mt-2 block">Questions (JSON)<textarea className="input mt-1 min-h-40 w-full font-mono text-xs" spellCheck={false} value={questions} onChange={(e) => setQuestions(e.target.value)} /></label>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button className="btn btn-primary py-1 text-[12px]" disabled={running || !ready} onClick={() => void run()}>{running ? 'Deciding…' : 'Decide'}</button>
+        <button className="btn btn-primary py-1 text-xs" disabled={running || !ready} onClick={() => void run()}>{running ? 'Deciding…' : 'Decide'}</button>
         {!ready && <span className="text-ink-faint">{provider === 'local' ? 'Load Laya above first.' : 'Save a TypeSafe key above first.'}</span>}
         {result && <span className="text-ink-faint">{result.model} · {result.latencyMs} ms</span>}
       </div>
@@ -219,7 +219,7 @@ function AnswerCard({ id, answer }: { id: string; answer: DecisionAnswer }) {
   return (
     <div>
       <div className="flex items-baseline gap-2">
-        <span className="font-mono text-[11.5px]">{id}</span>
+        <span className="font-mono text-xs">{id}</span>
         <span className="chip">{answer.type}</span>
         <span className="font-semibold">{headline}</span>
         {answer.confidence !== undefined && <span className="text-ink-faint">confidence {Math.round(answer.confidence * 100)}%</span>}
@@ -261,16 +261,16 @@ function FolderModel({ model, status, busy, act }: {
         </p>
       )}
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        <select className="input w-auto py-1 text-[12px]" aria-label="Precision" value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)} disabled={loaded}>
+        <select className="input w-auto py-1 text-xs" aria-label="Precision" value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)} disabled={loaded}>
           {model.precisions.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         {status?.local.available && !loaded && (
-          <button className="btn btn-primary py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(model.id, () => window.nekko.decisionsLoad(model.id, precision))}>
+          <button className="btn btn-primary py-1 text-xs" disabled={busy !== null} onClick={() => void act(model.id, () => window.nekko.decisionsLoad(model.id, precision))}>
             {busy === model.id ? 'Loading…' : 'Load'}
           </button>
         )}
-        {loaded && <button className="btn btn-outline py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(model.id, () => window.nekko.decisionsUnload())}>Unload</button>}
-        <button className="btn btn-ghost py-1 text-[12px] text-ink-faint" disabled={busy !== null} onClick={() => void act(model.id, () => window.nekko.decisionsDelete(model.id))}>Remove from list</button>
+        {loaded && <button className="btn btn-outline py-1 text-xs" disabled={busy !== null} onClick={() => void act(model.id, () => window.nekko.decisionsUnload())}>Unload</button>}
+        <button className="btn btn-ghost py-1 text-xs text-ink-faint" disabled={busy !== null} onClick={() => void act(model.id, () => window.nekko.decisionsDelete(model.id))}>Remove from list</button>
       </div>
     </div>
   );
@@ -300,9 +300,9 @@ export function CatalogCard({ entry, have, status, busy, act, refresh }: {
   const variant = entry.variants.find((v) => v.precision === precision) ?? recommended;
   const bytes = variant.bytes + entry.shared.reduce((n, f) => n + f.bytes, 0);
   return (
-    <div className="rounded-lg border border-line p-3 text-[12px]" data-decision-model={entry.id}>
+    <div className="rounded-lg border border-line p-3 text-xs" data-decision-model={entry.id}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[13px] font-semibold">{entry.name}</span>
+        <span className="text-sm font-semibold">{entry.name}</span>
         <span className="chip">{entry.license}</span>
         <span className="text-ink-faint">{entry.publisher}{entry.source ? ` · ${entry.source}` : ''}</span>
         {loaded && <span className="chip" style={{ color: 'var(--success)' }}>loaded</span>}
@@ -315,14 +315,14 @@ export function CatalogCard({ entry, have, status, busy, act, refresh }: {
         </p>
       )}
       {(!entry.unavailable || have) && <div className="mt-2 flex flex-wrap items-center gap-2">
-        <select className="input w-auto py-1 text-[12px]" disabled={downloading} aria-label={`${entry.name} precision`} value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)}>
+        <select className="input w-auto py-1 text-xs" disabled={downloading} aria-label={`${entry.name} precision`} value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)}>
           {entry.variants.map((v) => (
             <option key={v.precision} value={v.precision}>{v.precision}{v.recommended ? ' (recommended)' : ''} · {formatBytes(v.bytes)}</option>
           ))}
         </select>
         {!entry.unavailable && !have?.precisions.includes(precision) && (
           <button
-            className="btn btn-outline py-1 text-[12px]"
+            className="btn btn-outline py-1 text-xs"
             disabled={busy !== null || downloading}
             onClick={() => void download.run(() => act(entry.id, () => window.nekko.decisionsDownload(entry.id, precision)))}
           >
@@ -331,16 +331,16 @@ export function CatalogCard({ entry, have, status, busy, act, refresh }: {
         )}
         {downloading && <DownloadProgress group={download.group} />}
         {have?.precisions.includes(precision) && status?.local.available && !loaded && (
-          <button className="btn btn-primary py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsLoad(entry.id, precision))}>
+          <button className="btn btn-primary py-1 text-xs" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsLoad(entry.id, precision))}>
             {busy === entry.id ? 'Loading…' : 'Load'}
           </button>
         )}
         {loaded && (
-          <button className="btn btn-outline py-1 text-[12px]" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsUnload())}>Unload</button>
+          <button className="btn btn-outline py-1 text-xs" disabled={busy !== null} onClick={() => void act(entry.id, () => window.nekko.decisionsUnload())}>Unload</button>
         )}
         {have && (
           <button
-            className="btn btn-ghost py-1 text-[12px] text-ink-faint"
+            className="btn btn-ghost py-1 text-xs text-ink-faint"
             disabled={busy !== null}
             onClick={() => { if (window.confirm(`Delete ${entry.name} from disk?`)) void act(entry.id, () => window.nekko.decisionsDelete(entry.id)); }}
           >

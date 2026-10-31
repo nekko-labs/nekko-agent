@@ -15,7 +15,7 @@ export function ArtifactPreview({ source, title = 'Design preview' }: { source: 
     try { await bridge.open(source); setError(''); } catch (e) { setError((e as Error).message); }
   };
   return <div className="flex h-full min-h-96 flex-col gap-2 p-3">
-    <div className="flex flex-wrap items-center gap-2 text-[12px]">
+    <div className="flex flex-wrap items-center gap-2 text-xs">
       <strong>{title}</strong>
       <select aria-label="Preview viewport" className="input w-auto" value={width} onChange={(e) => setWidth(e.target.value)}>
         <option value="100%">Fit</option><option value="375px">Phone · 375</option><option value="768px">Tablet · 768</option><option value="1280px">Desktop · 1280</option>
@@ -23,7 +23,7 @@ export function ArtifactPreview({ source, title = 'Design preview' }: { source: 
       <button className="chip chip-action" onClick={openInteractive}>Open interactive preview</button>
       <span className="text-ink-faint">Isolated · network blocked</span>
     </div>
-    {error && <p role="status" className="text-[12px] text-ink-soft">{error}</p>}
+    {error && <p role="status" className="text-xs text-ink-soft">{error}</p>}
     <div className="min-h-96 flex-1 overflow-auto rounded-lg border border-line bg-surface-2">
       <iframe title={title} sandbox="" referrerPolicy="no-referrer"
         srcDoc={isolatedDocument(source)} style={{ width, height: '100%', minHeight: 480, border: 0, background: 'white' }} />
@@ -91,7 +91,7 @@ export function ZoomFrame({ srcDoc, title }: { srcDoc: string; title: string }) 
         className="absolute inset-0 h-full w-full border-0 bg-transparent"
         style={{ pointerEvents: 'none', transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, transformOrigin: 'center center' }}
       />
-      <span className="pointer-events-none absolute bottom-2 right-3 rounded-md bg-black/50 px-1.5 py-0.5 font-mono text-[10px] text-white" aria-live="polite">{Math.round(view.z * 100)}%</span>
+      <span className="pointer-events-none absolute bottom-2 right-3 rounded-md bg-black/50 px-1.5 py-0.5 font-mono text-2xs text-white" aria-live="polite">{Math.round(view.z * 100)}%</span>
     </div>
   );
 }
@@ -160,9 +160,9 @@ export function MermaidDiagram({ code }: { code: string }) {
   const copy = () => {
     navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); });
   };
-  const toolbarButton = 'rounded-md border border-line px-1.5 py-0.5 text-[10px] text-ink-faint hover:text-ink';
+  const toolbarButton = 'rounded-md border border-line px-1.5 py-0.5 text-2xs text-ink-faint hover:text-ink';
   return <div className="group/diagram relative my-2 rounded-xl p-3 diagram-canvas diagram-card" data-mermaid-diagram>
-    {error ? <p role="status" className="text-[12px] text-ink-soft">{error}</p> : svg
+    {error ? <p role="status" className="text-xs text-ink-soft">{error}</p> : svg
       ? <>
           <iframe title="Mermaid diagram" sandbox="" srcDoc={diagramDocument(svg, theme.background, theme.line)} className="h-80 w-full border-0 bg-transparent" />
           <div className="absolute right-4 top-4 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/diagram:opacity-100">
@@ -170,12 +170,12 @@ export function MermaidDiagram({ code }: { code: string }) {
             <button type="button" className={toolbarButton} style={{ background: 'var(--surface)' }} onClick={() => setFull(true)} title="Open the diagram in a full window" data-mermaid-expand>Expand</button>
           </div>
         </>
-      : <p className="text-[12px] text-ink-faint">Rendering diagram…</p>}
-    <details><summary className="cursor-pointer text-[12px]">Mermaid source</summary><pre className="overflow-auto text-[12px]">{code}</pre></details>
+      : <p className="text-xs text-ink-faint">Rendering diagram…</p>}
+    <details><summary className="cursor-pointer text-xs">Mermaid source</summary><pre className="overflow-auto text-xs">{code}</pre></details>
     {full && svg && typeof document !== 'undefined' && createPortal(
       <div className="fixed inset-0 z-[120] flex flex-col bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Diagram, full window" data-mermaid-fullscreen onClick={() => setFull(false)}>
-        <div className="card flex min-h-0 flex-1 flex-col overflow-hidden p-0 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-[12px]">
+        <div className="card flex min-h-0 flex-1 flex-col overflow-hidden p-0 shadow-(--shadow-float)" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-xs">
             <strong className="flex-1">Diagram</strong>
             <span className="text-ink-faint">Scroll to zoom · drag to pan · double-click to reset</span>
             <button type="button" className={toolbarButton} onClick={copy}>{copied ? '✓ copied' : 'Copy source'}</button>

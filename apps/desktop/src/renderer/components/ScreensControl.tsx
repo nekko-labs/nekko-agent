@@ -167,7 +167,7 @@ export function ScreensMenu({ state, open, busy = false, rootRef, onHover, onTog
   // Fit the row: the widest screen is drawn 96px wide, the rest to scale.
   const scale = 96 / Math.max(1, ...state.displays.map((d) => d.bounds.width));
   return <div className="screens-control" ref={rootRef} onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} onFocus={() => onHover?.(true)}>
-    <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" aria-haspopup="dialog" aria-expanded={open}
+    <button type="button" className="btn btn-outline gap-1.5 py-1 text-xs" aria-haspopup="dialog" aria-expanded={open}
       aria-label={state.displays.length < 2 && state.spaces ? `Desktops: ${state.spaces.desktops.filter((d) => d.enabled).length} of ${state.spaces.desktops.length} on` : `Screens: ${on} of ${state.displays.length} on`} title="Screens" data-screens-button onClick={onToggleOpen}>
       <MultiMonitorIcon className="h-4 w-4" />{state.displays.length > 1
         ? <span className="tabular-nums">{on}/{state.displays.length}</span>
@@ -192,8 +192,8 @@ export function ScreensMenu({ state, open, busy = false, rootRef, onHover, onTog
           <p className="spaces-ask__lead">Jump to Desktop {askingDesktop.label} and open Nekko there?</p>
           <p className="spaces-ask__body">macOS only lets an app change desktops by pressing its shortcuts for you, which needs the <strong>Accessibility</strong> permission (macOS also asks once to let Nekko control System Events). It also lets you say &ldquo;Nekko, switch to desktop 2&rdquo;. Without it, the window opens the next time you go to that desktop yourself.</p>
           <div className="spaces-ask__actions">
-            <button type="button" className="btn btn-primary py-1 text-[12px]" onClick={() => { setAsking(null); onToggleDesktop?.(askingDesktop, 'switch'); }}>Allow and switch</button>
-            <button type="button" className="btn btn-outline py-1 text-[12px]" onClick={() => { setAsking(null); onToggleDesktop?.(askingDesktop, 'arrive'); }}>Open when I get there</button>
+            <button type="button" className="btn btn-primary py-1 text-xs" onClick={() => { setAsking(null); onToggleDesktop?.(askingDesktop, 'switch'); }}>Allow and switch</button>
+            <button type="button" className="btn btn-outline py-1 text-xs" onClick={() => { setAsking(null); onToggleDesktop?.(askingDesktop, 'arrive'); }}>Open when I get there</button>
           </div>
         </div>}
         {spaces.mode === 'switch' && !spaces.access && <p className="screens-picker__note">Accessibility is off for Nekko in System Settings, so desktop windows open when you get there.</p>}

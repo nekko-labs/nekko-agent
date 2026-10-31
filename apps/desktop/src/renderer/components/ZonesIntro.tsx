@@ -320,7 +320,7 @@ export function ZonesIntro({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Zones" labelledBy={titleId} onClose={onClose} overlayClassName="p-4" className="card zones-intro w-full max-w-[600px] p-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 id={titleId} className="text-[15px] font-semibold">Agents now live in zones</h2>
+        <h2 id={titleId} className="text-base font-semibold">Agents now live in zones</h2>
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" onClick={onClose} aria-label="Close"><CloseIcon className="h-4 w-4" /></button>
       </div>
       <div className="zones-intro-demo" aria-hidden data-zones-intro-step={step}>
@@ -340,8 +340,8 @@ export function ZonesIntro({ onClose }: { onClose: () => void }) {
           clickToPlay={false}
         />
       </div>
-      <h3 className="mt-4 text-[14px] font-semibold">{current.title}</h3>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-ink-soft">{current.body}</p>
+      <h3 className="mt-4 text-sm font-semibold">{current.title}</h3>
+      <p className="mt-1 text-xs leading-relaxed text-ink-soft">{current.body}</p>
       <div className="mt-4 flex items-center gap-3">
         <div className="flex gap-1.5" role="group" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
           {STEPS.map((s, i) => <button key={s.title} type="button" className="zones-intro-dot" aria-label={`Step ${i + 1}: ${s.title}`} aria-current={i === step || undefined} onClick={() => setStep(i)} />)}

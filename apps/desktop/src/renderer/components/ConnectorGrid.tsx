@@ -202,7 +202,7 @@ function ConnectorCard({
           </div>
           <div>
             <h3 className="font-semibold">{meta.label}</h3>
-            <p className="text-[12px] text-ink-faint">{meta.description}</p>
+            <p className="text-xs text-ink-faint">{meta.description}</p>
           </div>
         </div>
         {connected && (
@@ -215,11 +215,11 @@ function ConnectorCard({
       {connected ? (
         <div className="mt-3 flex justify-end gap-2">
           {!compact && (
-            <button className="btn btn-outline py-1.5 text-[12px]" onClick={onFetch}>
+            <button className="btn btn-outline py-1.5 text-xs" onClick={onFetch}>
               Fetch sample
             </button>
           )}
-          <button className="btn btn-ghost py-1.5 text-[12px]" onClick={onDisconnect}>
+          <button className="btn btn-ghost py-1.5 text-xs" onClick={onDisconnect}>
             Disconnect
           </button>
         </div>
@@ -228,7 +228,7 @@ function ConnectorCard({
           {extra.map((f) => (
             <input
               key={f.key}
-              className="input mb-2 py-1.5 text-[12px]"
+              className="input mb-2 py-1.5 text-xs"
               aria-label={`${meta.label} ${f.label}`}
               placeholder={`${f.label}: ${f.placeholder}`}
               value={fields[f.key] ?? ''}
@@ -241,7 +241,7 @@ function ConnectorCard({
           ))}
           <div className="flex justify-end gap-2">
             {!NO_TOKEN.has(meta.kind) && <input
-              className="input py-1.5 text-[12px]"
+              className="input py-1.5 text-xs"
               type="password"
               placeholder={TOKEN_LABEL[meta.kind] ?? (meta.auth === 'oauth' ? 'OAuth access token' : 'API token')}
               value={token}
@@ -252,21 +252,21 @@ function ConnectorCard({
               disabled={busy}
             />}
             <button
-              className="btn btn-primary py-1.5 text-[12px]"
+              className="btn btn-primary py-1.5 text-xs"
               disabled={busy || !canConnect(meta.kind, token.trim(), fields)}
               onClick={onConnect}
             >
               {busy ? 'Connecting…' : 'Connect'}
             </button>
           </div>
-          <p className="mt-1.5 text-[11px] text-ink-faint">
+          <p className="mt-1.5 text-2xs text-ink-faint">
             {help.hint}{' '}
             <button className="text-accent hover:underline" onClick={() => window.nekko.openPath(help.url)}>
               Where to get it →
             </button>
           </p>
           {error && (
-            <p className="mt-1 text-[11px]" style={{ color: 'var(--danger)' }}>
+            <p className="mt-1 text-2xs" style={{ color: 'var(--danger)' }}>
               {error}
             </p>
           )}
@@ -276,14 +276,14 @@ function ConnectorCard({
       {!compact && data && (
         <div className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-xl p-2" style={{ background: 'var(--surface-2)' }}>
           {typeof data === 'string' ? (
-            <p className="text-[12px]" style={{ color: 'var(--danger)' }}>
+            <p className="text-xs" style={{ color: 'var(--danger)' }}>
               {data}
             </p>
           ) : data.length === 0 ? (
-            <p className="text-[12px] text-ink-faint">No results.</p>
+            <p className="text-xs text-ink-faint">No results.</p>
           ) : (
             data.map((r) => (
-              <div key={r.id} className="text-[12px]">
+              <div key={r.id} className="text-xs">
                 <span className="font-medium">{r.title}</span>
                 {r.subtitle && <span className="text-ink-faint"> · {r.subtitle}</span>}
               </div>

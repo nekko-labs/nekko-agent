@@ -80,16 +80,16 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
   return (
     <section className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
       <PaneMetadata>
-        <span className="chip shrink-0 text-[10px]">{tasks.length === 0 ? 'nothing scheduled' : `${active} active of ${tasks.length}`}</span>
+        <span className="chip shrink-0 text-2xs">{tasks.length === 0 ? 'nothing scheduled' : `${active} active of ${tasks.length}`}</span>
       </PaneMetadata>
       {paused && (
         <div
-          className="mb-2 flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[11.5px]"
+          className="mb-2 flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs"
           style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
           role="status"
         >
           <span className="min-w-0 flex-1">All automations are paused: nothing fires on its own. Run now still works.</span>
-          <button className="btn btn-ghost px-2 py-0.5 text-[11.5px]" onClick={() => void setAutomationsPaused(false).catch(() => {})}>Resume</button>
+          <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => void setAutomationsPaused(false).catch(() => {})}>Resume</button>
         </div>
       )}
       {sorted.length === 0 ? (
@@ -105,18 +105,18 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
             return (
               <div key={t.id} className="group px-4 py-2.5" data-task-row={t.id}>
                 <div className="flex items-center gap-2.5">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[13px]" style={{ background: 'var(--surface-2)' }} title={meta.label}>{meta.icon}</span>
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm" style={{ background: 'var(--surface-2)' }} title={meta.label}>{meta.icon}</span>
                   <button
-                    className="min-w-0 truncate text-left text-[13px] font-medium enabled:hover:text-accent"
+                    className="min-w-0 truncate text-left text-sm font-medium enabled:hover:text-accent"
                     onClick={() => t.lastSessionId && onOpen(t.lastSessionId)}
                     disabled={!t.lastSessionId}
                     title={t.lastSessionId ? 'Open this automation’s chat' : t.title}
                   >
                     {t.title}
                   </button>
-                  <span className="shrink-0 text-[11px] text-ink-faint">{taskCadence(t)}</span>
+                  <span className="shrink-0 text-2xs text-ink-faint">{taskCadence(t)}</span>
                   <span
-                    className="ml-auto flex shrink-0 items-center gap-1.5 tabular-nums text-[11.5px] font-medium"
+                    className="ml-auto flex shrink-0 items-center gap-1.5 tabular-nums text-xs font-medium"
                     style={{ color: st.color }}
                     data-task-state
                     title={t.waitingSince ? `Due ${relTime(now - t.waitingSince)}. It runs once nobody is using this computer, or after 2 hours. Run now starts it at once.` : undefined}
@@ -126,17 +126,17 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
                   </span>
                   <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
                     {t.status !== 'done' && (
-                      <button className="btn btn-ghost px-2 py-0.5 text-[11.5px]" onClick={() => window.nekko.runTaskNow(t.id)}>Run now</button>
+                      <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => window.nekko.runTaskNow(t.id)}>Run now</button>
                     )}
                     {t.status === 'active' ? (
-                      <button className="btn btn-ghost px-2 py-0.5 text-[11.5px]" onClick={() => window.nekko.updateTask(t.id, { status: 'paused' })}>Pause</button>
+                      <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => window.nekko.updateTask(t.id, { status: 'paused' })}>Pause</button>
                     ) : t.status === 'paused' ? (
-                      <button className="btn btn-ghost px-2 py-0.5 text-[11.5px]" onClick={() => window.nekko.updateTask(t.id, { status: 'active' })}>Resume</button>
+                      <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => window.nekko.updateTask(t.id, { status: 'active' })}>Resume</button>
                     ) : null}
                     <button className="rounded-sm p-1 text-ink-faint hover:text-red-400" title="Delete automation" onClick={() => window.nekko.deleteTask(t.id)}><TrashIcon className="h-3.5 w-3.5" /></button>
                   </span>
                 </div>
-                <div className="mt-0.5 flex items-baseline gap-2 pl-[34px] text-[11.5px] text-ink-faint">
+                <div className="mt-0.5 flex items-baseline gap-2 pl-[34px] text-xs text-ink-faint">
                   {t.runCount > 0 && <span className="shrink-0 tabular-nums">{t.runCount} run{t.runCount === 1 ? '' : 's'}{t.lastRunAt ? ` · last ${relTime(now - t.lastRunAt)}` : ''}{ran ? ` · ${ran}` : ''}</span>}
                   {t.lastResult && <span className="min-w-0 truncate text-ink-soft" title={t.lastResult}>{t.lastResult}</span>}
                 </div>

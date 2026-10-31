@@ -77,10 +77,10 @@ export const MessageBubble = memo(function MessageBubble({
               ))}
             </div>
           ) : null}
-          <textarea className="input max-h-48 min-h-[60px] resize-none text-[14px]" value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} />
+          <textarea className="input max-h-48 min-h-[60px] resize-none text-sm" value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} />
           <div className="mt-1.5 flex justify-end gap-2">
-            <button className="btn btn-ghost py-1 text-[12px]" onClick={() => { setEditing(false); setDraft(displayText); }}>Cancel</button>
-            <button className="btn btn-primary py-1 text-[12px]" onClick={() => { setEditing(false); onResend?.(message.id, draft); }}>Save &amp; send</button>
+            <button className="btn btn-ghost py-1 text-xs" onClick={() => { setEditing(false); setDraft(displayText); }}>Cancel</button>
+            <button className="btn btn-primary py-1 text-xs" onClick={() => { setEditing(false); onResend?.(message.id, draft); }}>Save &amp; send</button>
           </div>
         </div>
       </div>
@@ -101,7 +101,7 @@ export const MessageBubble = memo(function MessageBubble({
             <div data-chat-search-text><Markdown basePath={basePath} text={message.content} /></div>
             {!entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
             {displayText && message.content && (
-              <div className="mt-1 flex gap-3 text-[11px] text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+              <div className="mt-1 flex gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
                 <button onClick={copy} title="Copy message" className="inline-flex items-center gap-1 hover:text-ink">{copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}{copied ? 'Copied' : 'Copy'}</button>
                 {onRestart && (
                   <button onClick={() => onRestart(message.id)} title="Keep the chat up to this reply and delete everything after it" className="hover:text-ink" data-message-restart>
@@ -125,7 +125,7 @@ export const MessageBubble = memo(function MessageBubble({
     <div className={`group ${entering ? 'fade-in ' : ''}flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={isUser ? 'msg-user' : 'msg-ai'}>
         {isUser && message.skill && (
-          <span className="skill-pill mb-2 inline-flex text-[11px]">
+          <span className="skill-pill mb-2 inline-flex text-2xs">
             <span className="skill-pill-slash">/</span>{message.skill.name}
           </span>
         )}
@@ -168,7 +168,7 @@ export const MessageBubble = memo(function MessageBubble({
         {message.toolCalls?.map((c) => <ToolCard key={c.id} call={c} />)}
         {!isUser && !entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
         {(displayText && message.content || (isUser && (message.images?.length || message.videos?.length))) && (
-          <div className={`mt-1.5 flex items-center gap-3 text-[11px] text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${isUser ? 'justify-end' : ''}`}>
+          <div className={`mt-1.5 flex items-center gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${isUser ? 'justify-end' : ''}`}>
             {isUser && message.createdAt > 0 && (
               <span className="text-ink-faint/70" title={fmtDateTime(message.createdAt)}>{fmtTime(message.createdAt)}</span>
             )}
@@ -242,7 +242,7 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu }
         />
       ))}
       {g && (
-        <p className="text-[11px] text-ink-faint">
+        <p className="text-2xs text-ink-faint">
           {model} · {g.width}×{g.height} · {g.steps} steps · CFG {g.cfgScale} · seed {g.seed} · {(g.ms / 1000).toFixed(1)}s
         </p>
       )}

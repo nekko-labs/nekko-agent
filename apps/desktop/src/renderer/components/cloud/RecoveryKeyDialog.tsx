@@ -48,16 +48,16 @@ export function RecoveryKeyDialog({ recoveryKey, email, onDone }: { recoveryKey:
               {groups.map((g, i) => <span key={i}>{g}</span>)}
             </div>
             <div className="mt-3 flex gap-2">
-              <button className="btn btn-outline flex-1 py-1.5! text-[12.5px]!" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button>
-              <button className="btn btn-outline flex-1 py-1.5! text-[12.5px]!" onClick={() => void saveKit(recoveryKey, email)} data-testid="recovery-kit">Save recovery kit</button>
+              <button className="btn btn-outline flex-1 py-1.5! text-xs!" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button>
+              <button className="btn btn-outline flex-1 py-1.5! text-xs!" onClick={() => void saveKit(recoveryKey, email)} data-testid="recovery-kit">Save recovery kit</button>
             </div>
-            <p className="mt-3 text-[11.5px] leading-relaxed text-ink-faint">Keep it somewhere other than this computer: a password manager, or the printed kit with your important papers. Anyone with this key and your sign-in can read your synced chats.</p>
-            <label className="mt-4 flex items-center gap-2 text-[13px]">
+            <p className="mt-3 text-xs leading-relaxed text-ink-faint">Keep it somewhere other than this computer: a password manager, or the printed kit with your important papers. Anyone with this key and your sign-in can read your synced chats.</p>
+            <label className="mt-4 flex items-center gap-2 text-sm">
               <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} data-testid="recovery-saved" />
               I've saved my recovery key somewhere safe
             </label>
             <div className="mt-4 flex gap-2">
-              <button className="btn btn-ghost flex-1 text-[12.5px]!" onClick={onDone}>Remind me later</button>
+              <button className="btn btn-ghost flex-1 text-xs!" onClick={onDone}>Remind me later</button>
               <button className="btn btn-primary flex-1" disabled={!saved} onClick={() => setStep('confirm')} data-testid="recovery-continue">Continue</button>
             </div>
           </>
@@ -65,11 +65,11 @@ export function RecoveryKeyDialog({ recoveryKey, email, onDone }: { recoveryKey:
           <>
             <h1 id="recovery-title">Check your recovery key</h1>
             <p className="cloud-lede">Type or paste it from where you saved it, to make sure it's right.</p>
-            <textarea className="input mt-5 h-20 w-full resize-none font-mono text-[13px] tracking-wider" placeholder="XXXXX-XXXXX-XXXXX-…" value={typed}
+            <textarea className="input mt-5 h-20 w-full resize-none font-mono text-sm tracking-wider" placeholder="XXXXX-XXXXX-XXXXX-…" value={typed}
               onChange={(e) => setTyped(e.target.value)} spellCheck={false} aria-label="Recovery key" data-testid="recovery-typed" />
-            {error && <p role="alert" className="mt-2 text-[12px] text-(--danger)">{error}</p>}
+            {error && <p role="alert" className="mt-2 text-xs text-(--danger)">{error}</p>}
             <div className="mt-4 flex gap-2">
-              <button className="btn btn-ghost flex-1 text-[12.5px]!" onClick={onDone}>Later</button>
+              <button className="btn btn-ghost flex-1 text-xs!" onClick={onDone}>Later</button>
               <button className="btn btn-primary flex-1" disabled={busy || typed.replace(/[\s-]/g, '').length < 55} onClick={() => void confirm()} data-testid="recovery-confirm">
                 {busy ? 'Checking…' : 'Confirm'}
               </button>

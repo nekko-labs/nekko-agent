@@ -191,7 +191,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
           <Kind kind={current.kind} current={current.status === 'active'} />
           <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
           <Pass step={current} />
-          <span className="shrink-0 tabular-nums text-[11px] text-ink-faint">{position} of {plan.length}</span>
+          <span className="shrink-0 tabular-nums text-2xs text-ink-faint">{position} of {plan.length}</span>
           <span aria-hidden className="ctl-caret">▴</span>
         </span>
       </button>
@@ -225,7 +225,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
               <Pass step={step} />
             </p>
             {(detail || chips) && <div className="plan-sheet-more" data-plan-more><div>
-              {detail && <p className="truncate text-[11.5px] text-ink-faint" title={detail}>{detail}</p>}
+              {detail && <p className="truncate text-xs text-ink-faint" title={detail}>{detail}</p>}
               {chips && <div className="plan-sheet-chips">
                 {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
                 {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}

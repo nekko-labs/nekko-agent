@@ -128,7 +128,7 @@ export function ContextWarning({
 
   return (
     <div
-      className={`fade-in mx-auto w-full max-w-3xl rounded-xl border px-4 py-3 text-[12px] ${isCritical ? 'border-(--danger)/30' : 'border-line'}`}
+      className={`fade-in mx-auto w-full max-w-3xl rounded-xl border px-4 py-3 text-xs ${isCritical ? 'border-(--danger)/30' : 'border-line'}`}
       style={{ background: isCritical ? 'color-mix(in srgb, var(--danger) 6%, transparent)' : 'var(--surface-2)' }}
       role={running ? 'status' : 'alert'}
       aria-live="polite"
@@ -162,7 +162,7 @@ export function ContextWarning({
                   style={{ width: `${Math.max(4, steps.fraction * 100)}%` }}
                 />
               </div>
-              <p className="mt-1 text-[11px] tabular-nums text-ink-faint">{steps.label}</p>
+              <p className="mt-1 text-2xs tabular-nums text-ink-faint">{steps.label}</p>
             </div>
           )}
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -170,35 +170,35 @@ export function ContextWarning({
               <>
                 {progress.target !== 'new' && (
                   <button
-                    className="btn btn-primary h-7 px-3 text-[11px]"
+                    className="btn btn-primary h-7 px-3 text-2xs"
                     onClick={() => void compact(true)}
                     title="Finish the summary, then start a new chat from it and leave this chat as it is"
                   >
                     Send summary to new chat
                   </button>
                 )}
-                <button className="btn btn-outline h-7 px-3 text-[11px]" onClick={stop} title="Stop summarizing and keep the conversation as it is">
+                <button className="btn btn-outline h-7 px-3 text-2xs" onClick={stop} title="Stop summarizing and keep the conversation as it is">
                   Stop compacting
                 </button>
               </>
             ) : (
               <>
                 <button
-                  className="btn btn-primary h-7 px-3 text-[11px]"
+                  className="btn btn-primary h-7 px-3 text-2xs"
                   onClick={() => void compact(false)}
                   title="Summarize the older turns and keep going in this chat"
                 >
                   {failed ? 'Retry compaction' : 'Compact now'}
                 </button>
                 <button
-                  className="btn btn-outline h-7 px-3 text-[11px]"
+                  className="btn btn-outline h-7 px-3 text-2xs"
                   onClick={() => void compact(true)}
                   title="Summarize this conversation into a new chat and leave this one as it is"
                 >
                   Send summary to new chat
                 </button>
                 <button
-                  className="btn btn-outline h-7 px-3 text-[11px]"
+                  className="btn btn-outline h-7 px-3 text-2xs"
                   onClick={openBlankChat}
                   title="Open a blank chat with the same workspace, provider, and model"
                 >

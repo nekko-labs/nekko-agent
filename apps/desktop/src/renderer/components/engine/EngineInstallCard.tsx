@@ -49,8 +49,8 @@ export function EngineInstallCard({
 
   return (
     <div className="rounded-xl border p-4" style={{ borderColor: 'var(--line)' }}>
-      <h3 className="text-[14px] font-semibold">Run models without installing anything else</h3>
-      <p className="mt-1 text-[12.5px] text-ink-faint">
+      <h3 className="text-sm font-semibold">Run models without installing anything else</h3>
+      <p className="mt-1 text-xs text-ink-faint">
         {install.reason ??
           'Nekko Agent can download a small engine and serve models itself, so you do not need LM Studio, Ollama, or vLLM.'}
       </p>
@@ -58,11 +58,11 @@ export function EngineInstallCard({
       {install.recommended ? (
         <>
           <div className="mt-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+            <label className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">
               Build for this machine
             </label>
             <select
-              className="input mt-1 w-full text-[12px]"
+              className="input mt-1 w-full text-xs"
               disabled={busy}
               value={buildId}
               onChange={(e) => setBuildId(e.target.value)}
@@ -74,50 +74,50 @@ export function EngineInstallCard({
                 </option>
               ))}
             </select>
-            <p className="mt-1.5 text-[11.5px] text-ink-faint">
+            <p className="mt-1.5 text-xs text-ink-faint">
               {install.available.find((b) => b.id === buildId)?.requires ?? install.recommended.requires}
             </p>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button className="btn btn-primary py-1.5 text-[12px]" onClick={start} disabled={busy}>
+            <button className="btn btn-primary py-1.5 text-xs" onClick={start} disabled={busy}>
               <DownloadIcon className="mr-1 inline h-3.5 w-3.5" />
               {busy ? 'Downloading…' : 'Download the engine'}
             </button>
-            <button className="btn btn-ghost py-1.5 text-[12px]" onClick={() => setShowOther((v) => !v)}>
+            <button className="btn btn-ghost py-1.5 text-xs" onClick={() => setShowOther((v) => !v)}>
               I already have llama.cpp
             </button>
           </div>
           {busy && <DownloadProgress group={download.group} />}
-          <p className="mt-2 text-[11px] text-ink-faint">
+          <p className="mt-2 text-2xs text-ink-faint">
             From llama.cpp's own GitHub releases: tens of megabytes for Vulkan or CPU, several hundred for CUDA.
             Nothing is downloaded until you press the button.
           </p>
         </>
       ) : (
-        <p className="mt-3 text-[12px]" style={{ color: 'var(--warning, #d1a054)' }}>
+        <p className="mt-3 text-xs" style={{ color: 'var(--warning, #d1a054)' }}>
           There is no published build for this platform. Point Nekko Agent at a llama-server you built yourself.
         </p>
       )}
 
       {(showOther || !install.recommended) && (
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+          <label className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">
             Path to llama-server
           </label>
           <div className="mt-1 flex gap-2">
             <input
-              className="input flex-1 font-mono text-[12px]"
+              className="input flex-1 font-mono text-xs"
               value={ownPath}
               onChange={(e) => setOwnPath(e.target.value)}
               placeholder="/usr/local/bin/llama-server"
               spellCheck={false}
             />
-            <button className="btn btn-outline py-1.5 text-[12px]" onClick={useOwn} disabled={!ownPath.trim()}>
+            <button className="btn btn-outline py-1.5 text-xs" onClick={useOwn} disabled={!ownPath.trim()}>
               Use it
             </button>
           </div>
-          <p className="mt-1.5 text-[11px] text-ink-faint">
+          <p className="mt-1.5 text-2xs text-ink-faint">
             A binary you point at is yours: Nekko Agent runs it but never updates or removes it.
           </p>
         </div>

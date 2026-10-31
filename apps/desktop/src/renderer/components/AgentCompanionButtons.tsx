@@ -45,7 +45,7 @@ export function AgentCompanionButtons({ sessionId, changeCount, added = 0, remov
           <button
             key={kind}
             type="button"
-            className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-[11px] ${count || open === kind ? 'font-medium text-accent' : ''} ${count ? 'agent-changes-pending' : ''}`}
+            className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-2xs ${count || open === kind ? 'font-medium text-accent' : ''} ${count ? 'agent-changes-pending' : ''}`}
             aria-label={count ? `${label} (${count})` : label}
             title={count ? `${title} (${count} changed file${count === 1 ? '' : 's'})` : title}
             data-agent-companion={kind}

@@ -144,7 +144,7 @@ function Meter({ label, value, pct, sub }: { label: string; value: string; pct: 
           style={{ width: `${Math.min(100, pct)}%`, minWidth: pct > 0 ? 3 : 0, background: loadColor(pct) }}
         />
       </div>
-      {sub && <div className="mt-0.5 text-[10px] tabular-nums text-ink-faint">{sub}</div>}
+      {sub && <div className="mt-0.5 text-2xs tabular-nums text-ink-faint">{sub}</div>}
     </div>
   );
 }
@@ -208,22 +208,22 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
   const memLabel = gpuMemoryLabel(gpu);
 
   return (
-    <div ref={ref} className={`monitor-absorb shrink-0 border-t border-line px-4 text-[11px] ${open ? 'py-4' : 'py-2'}`}>
+    <div ref={ref} className={`monitor-absorb shrink-0 border-t border-line px-4 text-2xs ${open ? 'py-4' : 'py-2'}`}>
       <button
         className="flex w-full items-center justify-between text-left"
         onClick={toggle}
         aria-expanded={open}
         title={open ? 'Collapse the resource meters' : 'Show the resource meters'}
       >
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Resources
           {gpu && (monitors.gpu || monitors.vram) && (
-            <span className="chip text-[9px]">{gpu.devices.length} GPU{gpu.devices.length === 1 ? '' : 's'}</span>
+            <span className="chip text-2xs">{gpu.devices.length} GPU{gpu.devices.length === 1 ? '' : 's'}</span>
           )}
         </span>
         {/* Collapsed, the header still carries the numbers worth glancing at. */}
-        <span className="flex shrink-0 items-center gap-2 text-[10px] tabular-nums text-ink-faint">
+        <span className="flex shrink-0 items-center gap-2 text-2xs tabular-nums text-ink-faint">
           {!open && monitors.cpu && system && <span>CPU {system.cpuPct}%</span>}
           {!open && monitors.vram && gpu && <span>{memLabel} {Math.round(pctOf(gpu.usedMB, gpu.totalMB))}%</span>}
           {open && 'live'}
@@ -268,14 +268,14 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
             const dp = pctOf(d.memoryUsedMB, d.memoryTotalMB);
             return (
               <div key={i}>
-                <div className="flex items-center justify-between text-[10.5px] text-ink-faint">
+                <div className="flex items-center justify-between text-2xs text-ink-faint">
                   <span className="min-w-0 truncate" title={d.name}>{d.name}</span>
                   {d.utilizationPct != null && <span className="shrink-0 tabular-nums">{d.utilizationPct}% util</span>}
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
                   <span className="block h-full rounded-full" style={{ width: `${dp}%`, background: loadColor(dp) }} />
                 </div>
-                <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-ink-faint">
+                <div className="mt-0.5 flex justify-between text-2xs tabular-nums text-ink-faint">
                   <span>{GB(d.memoryUsedMB)} GB used</span>
                   <span>{GB(d.memoryFreeMB)} GB free</span>
                 </div>
@@ -286,10 +286,10 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
       )}
 
       {(monitors.gpu || monitors.vram) && !gpu && (
-        <p className="mt-2 text-[10px] text-ink-faint">No GPU stats available on this machine.</p>
+        <p className="mt-2 text-2xs text-ink-faint">No GPU stats available on this machine.</p>
       )}
       {/* Name the probes, so a number can be checked against the tool it came from. */}
-      <p className="mt-2 text-right text-[10px] text-ink-faint">
+      <p className="mt-2 text-right text-2xs text-ink-faint">
         {(monitors.gpu || monitors.vram) && gpu ? `os + ${gpu.source}` : 'os'}
       </p>
       </>
@@ -365,7 +365,7 @@ export function ResourceHud() {
     >
       {open && (
         <div
-          className="absolute bottom-full right-0 mb-2 w-72 rounded-xl border border-line p-3 text-[11px]"
+          className="absolute bottom-full right-0 mb-2 w-72 rounded-xl border border-line p-3 text-2xs"
           style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-md)' }}
         >
           <div className="mb-2 flex items-center justify-between font-semibold text-ink">
@@ -383,7 +383,7 @@ export function ResourceHud() {
                 onClick={() => setMonitor(monitors, kind, !monitors[kind])}
               >
                 <span
-                  className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[4px] border text-[8px] font-bold"
+                  className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[4px] border text-2xs font-bold"
                   style={
                     monitors[kind]
                       ? { background: 'var(--accent)', borderColor: 'var(--accent)', color: 'var(--surface)' }
@@ -434,7 +434,7 @@ export function ResourceHud() {
       )}
 
       <button
-        className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[11px] tabular-nums text-ink-faint"
+        className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-2xs tabular-nums text-ink-faint"
         style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}
         aria-label="Resource monitors"
         aria-expanded={open}

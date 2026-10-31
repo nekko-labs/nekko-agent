@@ -262,13 +262,13 @@ export function PaneFrame({
       >
         {icon}
         {statusIndicator}
-        <span className="min-w-0 max-w-[35%] truncate text-[12px]" style={{ fontWeight: isActive ? 500 : 400 }}>
+        <span className="min-w-0 max-w-[35%] truncate text-xs" style={{ fontWeight: isActive ? 500 : 400 }}>
           {title}
         </span>
         {/* The "/" leads the window's location: the project it belongs to, the
             git branch it is on. It hides when neither has anything to say, and
             it sits between the name and that context, never trailing after. */}
-        <span aria-hidden="true" className="pane-strip-sep text-[14px] text-ink-faint opacity-40">/</span>
+        <span aria-hidden="true" className="pane-strip-sep text-sm text-ink-faint opacity-40">/</span>
         <span className="pane-strip-badge flex min-w-0 items-center gap-1 overflow-hidden">{badge}</span>
         <div ref={setMetadataSlot} className="pane-strip-meta flex min-w-0 items-center gap-1 overflow-hidden" />
         <div className="min-w-0 flex-1" />

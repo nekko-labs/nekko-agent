@@ -54,9 +54,9 @@ export function PrCard({ url, info, event = 'created' }: { url: string; info?: P
       style={merged ? MERGED_CARD_STYLE : { borderColor: 'var(--line)', background: 'var(--surface)' }}>
       {merged && spooky && <AutumnConfetti />}
       <div className="relative flex flex-wrap items-center gap-x-2 gap-y-1">
-        <a href={url} className="min-w-0 truncate font-mono text-[12px] font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
-        {info?.title && <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-soft">{info.title}</span>}
-        <span className="ml-auto text-[12px] font-semibold" style={{ color: merged ? 'var(--merged-ink)' : event === 'closed' ? 'var(--danger)' : 'var(--success)' }}>
+        <a href={url} className="min-w-0 truncate font-mono text-xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
+        {info?.title && <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{info.title}</span>}
+        <span className="ml-auto text-xs font-semibold" style={{ color: merged ? 'var(--merged-ink)' : event === 'closed' ? 'var(--danger)' : 'var(--success)' }}>
           {merged ? 'PR merged' : event === 'closed' ? 'PR closed' : 'PR created'}
         </span>
       </div>
@@ -109,20 +109,20 @@ export function PrActionCard({ url, info, sessionId, onDismiss, checksInPlan = f
     } catch (error) { useStore.getState().pushToast('error', (error as Error).message); }
     finally { setBusy(null); }
   };
-  const actionClass = 'rounded-md px-1.5 py-0.5 text-[11px] font-medium hover:bg-surface-2 disabled:opacity-50';
+  const actionClass = 'rounded-md px-1.5 py-0.5 text-2xs font-medium hover:bg-surface-2 disabled:opacity-50';
   return (
     <div className="pr-deck-card rounded-lg border border-line px-2.5 py-1.5" data-pr-actions={url}>
       <div className="pr-action-layout">
       <div className="pr-action-content min-w-0 flex-1">
         <div className="pr-action-heading flex flex-wrap items-center gap-x-2 gap-y-1">
-          <a href={url} className="truncate font-mono text-[11px] font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
-          <span className="text-[10px] text-ink-faint">{info ? info.isDraft ? 'Draft' : 'Open' : 'Status unavailable'}</span>
-          {!info?.checkProgress && check.dot && <span className="text-[10px]" style={{ color: check.color }}>{check.dot} {check.label}</span>}
+          <a href={url} className="truncate font-mono text-2xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
+          <span className="text-2xs text-ink-faint">{info ? info.isDraft ? 'Draft' : 'Open' : 'Status unavailable'}</span>
+          {!info?.checkProgress && check.dot && <span className="text-2xs" style={{ color: check.color }}>{check.dot} {check.label}</span>}
         </div>
-        {info?.title && <p className="truncate text-[12px]">{info.title}</p>}
+        {info?.title && <p className="truncate text-xs">{info.title}</p>}
         <PrProgress url={url} info={info} checks={!checksInPlan} />
-        {info?.stack && <span className="text-[10px] text-ink-soft">GitHub stack · {info.stack.size} PRs</span>}
-        {parent && <a className="block truncate text-[10px] text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}
+        {info?.stack && <span className="text-2xs text-ink-soft">GitHub stack · {info.stack.size} PRs</span>}
+        {parent && <a className="block truncate text-2xs text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}
       </div>
       <div className="flex max-w-[55%] shrink-0 flex-wrap items-center justify-end gap-0" data-pr-action-controls>
         {(['approve', 'close', 'merge'] as const).map((action) => (
@@ -249,27 +249,27 @@ export function PrPane({ url }: { url: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[12px]">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">
         <span className="shrink-0 text-green-400">⑂</span>
         <span className="truncate font-semibold">{label}</span>
         {loaded && (
-          <span className="shrink-0 text-[10.5px]">
+          <span className="shrink-0 text-2xs">
             <span className="text-green-500">+{totals.adds}</span> <span className="text-red-400">-{totals.dels}</span> · {totals.files} file{totals.files === 1 ? '' : 's'}
           </span>
         )}
-        <button className="ml-auto shrink-0 text-[11px] text-ink-faint hover:text-ink" onClick={() => openExternally(url)}>Open on GitHub ↗</button>
+        <button className="ml-auto shrink-0 text-2xs text-ink-faint hover:text-ink" onClick={() => openExternally(url)}>Open on GitHub ↗</button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {!loaded ? (
-          <p className="p-4 text-[12px] text-ink-faint">Loading diff…</p>
+          <p className="p-4 text-xs text-ink-faint">Loading diff…</p>
         ) : !diff || diff.files.length === 0 ? (
-          <div className="grid h-full place-items-center px-6 text-center text-[13px] text-ink-faint">
+          <div className="grid h-full place-items-center px-6 text-center text-sm text-ink-faint">
             Couldn't load the diff. The PR may be private, or gh/GitHub isn't reachable — open it on GitHub instead.
           </div>
         ) : (
           <>
             {diff.files.map((f) => <PrFileDiff key={f.path} file={f} />)}
-            {diff.truncated && <p className="p-3 text-[11px] text-ink-faint">Diff truncated (large PR). Open on GitHub for the full change.</p>}
+            {diff.truncated && <p className="p-3 text-2xs text-ink-faint">Diff truncated (large PR). Open on GitHub for the full change.</p>}
           </>
         )}
       </div>
@@ -282,17 +282,17 @@ function PrFileDiff({ file }: { file: PrDiff['files'][number] }) {
   const name = file.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || file.path;
   return (
     <div className="border-b border-line">
-      <button className="sticky top-0 z-10 flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px]" style={{ background: 'var(--surface-2)' }} onClick={() => setOpen((o) => !o)}>
-        <span className="w-2 text-[9px] text-ink-faint">{open ? '▾' : '▸'}</span>
+      <button className="sticky top-0 z-10 flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs" style={{ background: 'var(--surface-2)' }} onClick={() => setOpen((o) => !o)}>
+        <span className="w-2 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
         <span className="truncate font-medium" title={file.path}>{name}</span>
-        {file.status !== 'modified' && <span className="chip text-[9px] uppercase">{file.status}</span>}
-        <span className="ml-auto shrink-0 text-[10px]"><span className="text-green-500">+{file.additions}</span> <span className="text-red-400">-{file.deletions}</span></span>
+        {file.status !== 'modified' && <span className="chip text-2xs uppercase">{file.status}</span>}
+        <span className="ml-auto shrink-0 text-2xs"><span className="text-green-500">+{file.additions}</span> <span className="text-red-400">-{file.deletions}</span></span>
       </button>
       {open && (
         file.patch ? (
-          <div className="font-mono text-[12px] leading-relaxed">{patchLines(file.patch)}</div>
+          <div className="font-mono text-xs leading-relaxed">{patchLines(file.patch)}</div>
         ) : (
-          <p className="px-3 py-2 text-[11px] text-ink-faint">No inline patch (binary or too large).</p>
+          <p className="px-3 py-2 text-2xs text-ink-faint">No inline patch (binary or too large).</p>
         )
       )}
     </div>
@@ -306,7 +306,7 @@ export function PrBadge({ prs, compact = false }: { prs: PrInfo[]; compact?: boo
   if (compact) {
     const label = `${merged} merged, ${open} open, ${closed} closed PRs`;
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 text-[10px] tabular-nums text-ink-faint" aria-label={label} title={label}>
+      <span className="inline-flex shrink-0 items-center gap-1 text-2xs tabular-nums text-ink-faint" aria-label={label} title={label}>
         <BranchIcon className="h-3 w-3" />
         {merged > 0 && <span className="inline-flex items-center gap-0.5" style={{ color: 'var(--success)' }}>{merged}<CheckIcon className="h-3 w-3" /></span>}
         {open > 0 && <span className="inline-flex items-center gap-0.5" style={{ color: 'var(--warning)' }}>{open}<svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg></span>}
@@ -319,7 +319,7 @@ export function PrBadge({ prs, compact = false }: { prs: PrInfo[]; compact?: boo
     chips.push(
       <span
         key="open"
-        className="shrink-0 rounded-sm px-1 py-px text-[9px] font-medium leading-normal"
+        className="shrink-0 rounded-sm px-1 py-px text-2xs font-medium leading-normal"
         style={ready ? { background: 'rgba(46,160,67,0.18)', color: '#3fb950' } : { background: 'var(--accent-soft)', color: 'var(--accent)' }}
         title={ready ? 'PR ready to merge' : `${open} open PR${open === 1 ? '' : 's'}`}
       >
@@ -329,7 +329,7 @@ export function PrBadge({ prs, compact = false }: { prs: PrInfo[]; compact?: boo
   }
   if (merged > 0 && (!compact || open === 0)) {
     chips.push(
-      <span key="merged" className="shrink-0 rounded-sm px-1 py-px text-[9px] font-medium leading-normal" style={{ background: 'var(--merged-chip)', color: 'var(--merged-ink)' }} title={`${merged} merged PR${merged === 1 ? '' : 's'}`}>
+      <span key="merged" className="shrink-0 rounded-sm px-1 py-px text-2xs font-medium leading-normal" style={{ background: 'var(--merged-chip)', color: 'var(--merged-ink)' }} title={`${merged} merged PR${merged === 1 ? '' : 's'}`}>
         ✓ {merged}
       </span>,
     );

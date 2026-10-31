@@ -22,7 +22,7 @@ export function ExplorerPane({ paneId, root }: { paneId: string; root: string })
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
         <FolderIcon className="h-5 w-5 text-ink-faint" />
-        <p className="text-[12px] text-ink-faint">
+        <p className="text-xs text-ink-faint">
           {projects.length === 0
             ? 'Add a project folder in Settings to browse it here.'
             : 'Pick a folder to browse.'}
@@ -31,7 +31,7 @@ export function ExplorerPane({ paneId, root }: { paneId: string; root: string })
           {projects.map((p) => (
             <button
               key={p.id}
-              className="btn btn-outline px-2 py-1 text-[12px]"
+              className="btn btn-outline px-2 py-1 text-xs"
               title={p.path}
               onClick={() => retargetPane(paneId, p.path)}
             >
@@ -45,7 +45,7 @@ export function ExplorerPane({ paneId, root }: { paneId: string; root: string })
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1 text-[11px] text-ink-faint">
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1 text-2xs text-ink-faint">
         <FolderIcon className="h-3 w-3 shrink-0" />
         <span className="min-w-0 truncate" title={root}>{name}</span>
       </div>

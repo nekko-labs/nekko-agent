@@ -130,7 +130,7 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
   return (
     <div className="w-full">
       <h1 className="text-center text-2xl font-semibold tracking-tight">Connect a model</h1>
-      <p className="mx-auto mt-2 max-w-md text-center text-[14px] leading-relaxed text-ink-soft">
+      <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-ink-soft">
         Nekko Agent chats through providers you connect: a ChatGPT subscription, an API key,
         or a local server like Ollama or LM Studio.
       </p>
@@ -138,9 +138,9 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
       <section className="mt-6 w-full">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--info)' }} />
-          <h2 className="text-[15px] font-semibold">Online</h2>
+          <h2 className="text-base font-semibold">Online</h2>
         </div>
-        <p className="mt-0.5 text-[12px] text-ink-faint">
+        <p className="mt-0.5 text-xs text-ink-faint">
           Subscriptions first, so you run on a plan you already pay for instead of a metered key.
         </p>
         <div className="mt-3 space-y-2">
@@ -154,10 +154,10 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
               label="Sign in with ChatGPT"
               onConnected={connectSubscription('chatgpt', chatgptModel)}
             />
-            <label className="mt-3 block text-[12px] font-medium text-ink-soft">
+            <label className="mt-3 block text-xs font-medium text-ink-soft">
               Custom model id (optional)
               <input
-                className="input mt-1 text-[12px]"
+                className="input mt-1 text-xs"
                 value={chatgptModel}
                 onChange={(e) => setChatgptModel(e.target.value)}
                 placeholder="Override the curated list, e.g. gpt-5-codex"
@@ -212,24 +212,24 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
       <section className="mt-6 w-full">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--success)' }} />
-          <h2 className="text-[15px] font-semibold">Local</h2>
+          <h2 className="text-base font-semibold">Local</h2>
         </div>
-        <p className="mt-0.5 text-[12px] text-ink-faint">
+        <p className="mt-0.5 text-xs text-ink-faint">
           Model servers on this machine: private, free, and fast.
         </p>
         <div className="mt-3 space-y-2">
           {scan === 'scanning' && (
-            <p className="rounded-xl border border-dashed p-4 text-[12px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+            <p className="rounded-xl border border-dashed p-4 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
               Checking for Ollama, LM Studio, and vLLM on localhost…
             </p>
           )}
           {scan === 'failed' && (
-            <p className="rounded-xl border border-dashed p-4 text-[12px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+            <p className="rounded-xl border border-dashed p-4 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
               Couldn't scan automatically. Models can discover local servers too.
             </p>
           )}
           {scan === 'done' && found.length === 0 && extraLocal.length === 0 && (
-            <p className="rounded-xl border border-dashed p-4 text-[12px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+            <p className="rounded-xl border border-dashed p-4 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
               No local servers found on the usual ports. Start Ollama, LM Studio, or vLLM and they'll
               show up here next time.
             </p>
@@ -261,15 +261,15 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
           <div className="rounded-xl border p-4" style={{ borderColor: 'var(--line)' }}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="text-[14px] font-semibold">
+                <h3 className="text-sm font-semibold">
                   Nekko Agent <span className="font-normal text-ink-faint">(this app)</span>
                 </h3>
-                <p className="mt-0.5 text-[12px] text-ink-faint">
+                <p className="mt-0.5 text-xs text-ink-faint">
                   Run models here, with nothing else installed. Model Server downloads the engine, and picks up
                   anything Ollama or LM Studio already pulled onto this machine.
                 </p>
               </div>
-              <button className="btn btn-outline shrink-0 py-1.5 text-[12px]" onClick={openModels}>
+              <button className="btn btn-outline shrink-0 py-1.5 text-xs" onClick={openModels}>
                 Open Model Server
               </button>
             </div>
@@ -279,7 +279,7 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
 
       <DefaultOffer providers={providers} />
 
-      <p className="mt-6 text-center text-[12px] text-ink-faint">
+      <p className="mt-6 text-center text-xs text-ink-faint">
         You can add or tune providers any time in Models.
       </p>
     </div>
@@ -320,20 +320,20 @@ function OnlineCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[14px] font-semibold">{title}</h3>
+            <h3 className="text-sm font-semibold">{title}</h3>
             {isConnected && (
               <Badge tone="success" variant="soft">
                 <CheckIcon className="h-3 w-3" /> Connected
               </Badge>
             )}
           </div>
-          <p className="mt-0.5 text-[12px] text-ink-faint">
+          <p className="mt-0.5 text-xs text-ink-faint">
             {isConnected ? connected.map(describeConnection).join(' · ') : blurb}
           </p>
         </div>
         {!isConnected && (
           <button
-            className="btn btn-outline shrink-0 py-1.5 text-[12px]"
+            className="btn btn-outline shrink-0 py-1.5 text-xs"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
           >
@@ -379,36 +379,36 @@ function LocalServerRow({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <ServerIcon className="h-3.5 w-3.5 text-ink-faint" />
-            <h3 className="text-[14px] font-semibold">{title}</h3>
+            <h3 className="text-sm font-semibold">{title}</h3>
             {saved && (
               <Badge tone="success" variant="soft">
                 <CheckIcon className="h-3 w-3" /> Connected
               </Badge>
             )}
           </div>
-          <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{baseUrl}</p>
+          <p className="mt-0.5 font-mono text-2xs text-ink-faint">{baseUrl}</p>
         </div>
         {saved ? (
           <button
-            className="btn btn-ghost shrink-0 px-2 py-1 text-[12px]"
+            className="btn btn-ghost shrink-0 px-2 py-1 text-xs"
             onClick={() => onTest(saved.id)}
             disabled={test?.state === 'testing'}
           >
             {test?.state === 'testing' ? 'Testing…' : 'Test'}
           </button>
         ) : (
-          <button className="btn btn-primary shrink-0 py-1.5 text-[12px]" onClick={onAdd} disabled={adding}>
+          <button className="btn btn-primary shrink-0 py-1.5 text-xs" onClick={onAdd} disabled={adding}>
             {adding ? 'Adding…' : 'Add'}
           </button>
         )}
       </div>
       {test?.state === 'done' && (
-        <p className="mt-2 text-[12px]" style={{ color: test.ok ? 'var(--success)' : 'var(--danger)' }}>
+        <p className="mt-2 text-xs" style={{ color: test.ok ? 'var(--success)' : 'var(--danger)' }}>
           {test.ok ? 'Connected' : test.message}
         </p>
       )}
       {candidate && !saved && (
-        <p className="mt-1.5 text-[11px] text-ink-faint">Detected running on this machine.</p>
+        <p className="mt-1.5 text-2xs text-ink-faint">Detected running on this machine.</p>
       )}
     </div>
   );
@@ -422,7 +422,7 @@ function ApiKeyDisclosure({ kind, apiKeyOnly = false, onSaved }: { kind: Provide
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
-      <button className="mt-2 text-[12px] text-ink-faint hover:text-ink" onClick={() => setOpen(true)}>
+      <button className="mt-2 text-xs text-ink-faint hover:text-ink" onClick={() => setOpen(true)}>
         Use an API key instead (billed per token)
       </button>
     );
@@ -508,7 +508,7 @@ function DefaultOffer({ providers }: { providers: ProviderConfig[] }) {
 
   if (current && !choosing) {
     return (
-      <p className="mt-6 text-center text-[12px] text-ink-faint">
+      <p className="mt-6 text-center text-xs text-ink-faint">
         New chats default to{' '}
         <span className="text-ink-soft">
           {current.label}
@@ -528,12 +528,12 @@ function DefaultOffer({ providers }: { providers: ProviderConfig[] }) {
 
   return (
     <div className="card mt-6 p-4">
-      <h3 className="text-[13px] font-semibold">Use one as your default?</h3>
-      <p className="mt-0.5 text-[12px] text-ink-faint">
+      <h3 className="text-sm font-semibold">Use one as your default?</h3>
+      <p className="mt-0.5 text-xs text-ink-faint">
         New chats start on your default provider and model.
       </p>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="text-[12px] font-medium text-ink-soft">
+        <label className="text-xs font-medium text-ink-soft">
           Provider
           <select className="input mt-1" value={pid} onChange={(e) => setPicked(e.target.value)}>
             {providers.map((p) => (
@@ -543,7 +543,7 @@ function DefaultOffer({ providers }: { providers: ProviderConfig[] }) {
             ))}
           </select>
         </label>
-        <label className="text-[12px] font-medium text-ink-soft">
+        <label className="text-xs font-medium text-ink-soft">
           Model
           <select
             className="input mt-1"
@@ -575,13 +575,13 @@ function DefaultOffer({ providers }: { providers: ProviderConfig[] }) {
       </div>
       <div className="mt-3 flex justify-end gap-2">
         <button
-          className="btn btn-ghost py-1.5 text-[12px]"
+          className="btn btn-ghost py-1.5 text-xs"
           onClick={() => (current ? setChoosing(false) : setDismissed(true))}
           disabled={saving}
         >
           {current ? 'Cancel' : 'Not now'}
         </button>
-        <button className="btn btn-primary py-1.5 text-[12px]" onClick={() => void setDefault()} disabled={saving || !pid}>
+        <button className="btn btn-primary py-1.5 text-xs" onClick={() => void setDefault()} disabled={saving || !pid}>
           {saving ? 'Saving…' : 'Use as default'}
         </button>
       </div>

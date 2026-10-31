@@ -88,14 +88,14 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
       aria-haspopup="menu"
       aria-expanded={sub === id}
       data-view-menu-row={id}
-      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] ${sub === id ? 'bg-surface-2 text-ink' : 'text-ink-soft hover:bg-surface-2 hover:text-ink'}`}
+      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm ${sub === id ? 'bg-surface-2 text-ink' : 'text-ink-soft hover:bg-surface-2 hover:text-ink'}`}
       onMouseEnter={() => openSub(id)}
       onMouseLeave={closeSubSoon}
       onClick={() => { openSub(id); focusSub(); }}
       onKeyDown={(e) => { if (e.key === 'ArrowRight') { e.preventDefault(); openSub(id); focusSub(); } }}
     >
       <span className="flex-1">{label}</span>
-      {value && <span className="truncate text-[12px] text-ink-faint">{value}</span>}
+      {value && <span className="truncate text-xs text-ink-faint">{value}</span>}
       <ChevronIcon className="h-3 w-3 shrink-0 text-ink-faint" />
     </button>
   );
@@ -110,7 +110,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         aria-label="Agent panel view"
         tabIndex={-1}
         data-agent-view-menu
-        className="context-menu card fixed z-[1000] p-1.5 shadow-xl outline-hidden"
+        className="context-menu card fixed z-[1000] p-1.5 shadow-(--shadow-float) outline-hidden"
         style={{ left, top, width: MENU_W }}
         onContextMenu={(e) => e.preventDefault()}
         onKeyDown={(e) => {
@@ -128,7 +128,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         <button
           role="menuitem"
           disabled={isDefaultView(view)}
-          className="block w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+          className="block w-full rounded-lg px-2.5 py-1.5 text-left text-sm text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
           onMouseEnter={() => setSub(null)}
           onClick={() => onChange(DEFAULT_AGENT_PANEL_VIEW)}
         >
@@ -141,7 +141,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           role="menu"
           aria-label={sub === 'group' ? 'Group by' : sub === 'sort' ? 'Sort by' : 'Show'}
           data-agent-view-submenu={sub}
-          className="context-menu card fixed z-[1001] p-1.5 shadow-xl"
+          className="context-menu card fixed z-[1001] p-1.5 shadow-(--shadow-float)"
           style={{ width: SUB_W, left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
           onMouseEnter={keepSub}
           onMouseLeave={closeSubSoon}
@@ -211,7 +211,7 @@ function Choice({ checked, toggle = false, disabled = false, title, onClick, chi
       aria-checked={checked}
       disabled={disabled}
       title={title}
-      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
       onClick={onClick}
     >
       <span className="flex-1">{children}</span>

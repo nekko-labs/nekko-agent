@@ -23,10 +23,10 @@ export function MonitorArtifacts({ sessionId, artifacts, hydrated }: {
     borderColor: highlighted ? 'var(--accent)' : 'transparent',
     background: highlighted ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
   }}>
-    <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+    <summary className="cursor-pointer text-2xs font-semibold uppercase tracking-wide text-ink-faint">
       Artifacts <span className="ml-1 tabular-nums">{artifacts.length}</span>
       <span role="status" aria-live="polite" aria-atomic="true" className="ml-2 normal-case tracking-normal text-ink">{highlighted ? 'New artifact' : ''}</span>
     </summary>
-    {artifacts.length ? <ChatArtifacts artifacts={artifacts} sessionId={sessionId} /> : <p className="mt-2 text-[11px] text-ink-faint">No artifacts yet.</p>}
+    {artifacts.length ? <ChatArtifacts artifacts={artifacts} sessionId={sessionId} /> : <p className="mt-2 text-2xs text-ink-faint">No artifacts yet.</p>}
   </details>;
 }

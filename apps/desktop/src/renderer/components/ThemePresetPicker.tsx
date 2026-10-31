@@ -80,13 +80,13 @@ export function ThemePresetPicker({
 
   return (
     <div className={showLabel ? 'mt-4' : undefined}>
-      {showLabel && <span className="text-[13px]">{tr('settings.theme')}</span>}
+      {showLabel && <span className="text-sm">{tr('settings.theme')}</span>}
 
       <div className={showLabel ? 'mt-2 space-y-3' : 'space-y-3'}>
         {GROUPS.map((group) => {
           if (group.experimental) return FAMILIES.length ? (
             <div key="experimental">
-              <span className="text-[11px] font-medium tracking-wide text-ink-faint uppercase">Experimental</span>
+              <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Experimental</span>
               <div className="mt-1.5 grid grid-cols-4 gap-2" role="group" aria-label="Experimental">
                 {FAMILIES.map((family) => {
                   const active = family.presets.some((p) => p.id === activeId);
@@ -100,12 +100,12 @@ export function ThemePresetPicker({
                       aria-expanded={open}
                       aria-controls={`theme-family-${family.id}`}
                       data-theme-family={family.id}
-                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-[11px] font-medium transition-colors ${
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-2xs font-medium transition-colors ${
                         active ? 'border-accent bg-accent-soft' : open ? 'border-ink-faint bg-surface-2' : 'border-line bg-surface hover:bg-surface-2'
                       }`}
                     >
                       <span
-                        className={`${large ? 'h-14 w-14' : 'h-10 w-10'} rounded-full border border-line shadow-sm`}
+                        className={`${large ? 'h-14 w-14' : 'h-10 w-10'} rounded-full border border-line`}
                         style={{ background: slicedSwatch([first.accent, first.paper ?? first.accent2, ...family.presets.slice(1).map((p) => p.paper ?? p.accent)]) }}
                       />
                       <span className={active ? 'text-accent' : 'text-ink-soft'}>
@@ -117,7 +117,7 @@ export function ThemePresetPicker({
               </div>
               {FAMILIES.filter((f) => f.id === openFamily).map((family) => (
                 <div key={family.id} id={`theme-family-${family.id}`} className="mt-2 rounded-xl border border-line bg-surface-2 p-2">
-                  <span className="text-[11px] text-ink-faint">{family.label} versions</span>
+                  <span className="text-2xs text-ink-faint">{family.label} versions</span>
                   <div className={`mt-1.5 grid gap-2 ${family.presets.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`} role="radiogroup" aria-label={`${family.label} versions`}>
                     {family.presets.map((preset) => {
                       const active = activeId === preset.id;
@@ -128,11 +128,11 @@ export function ThemePresetPicker({
                           title={`${family.label} ${preset.label}`}
                           role="radio"
                           aria-checked={active}
-                          className={`flex items-center gap-2 rounded-lg border p-2 text-[11px] font-medium transition-colors ${
+                          className={`flex items-center gap-2 rounded-lg border p-2 text-2xs font-medium transition-colors ${
                             active ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-surface-2'
                           }`}
                         >
-                          <span className="h-7 w-7 shrink-0 rounded-full border border-line shadow-sm" style={{ background: slicedSwatch(preset.swatch) }} />
+                          <span className="h-7 w-7 shrink-0 rounded-full border border-line" style={{ background: slicedSwatch(preset.swatch) }} />
                           <span className={active ? 'text-accent' : 'text-ink-soft'}>{preset.label}</span>
                         </button>
                       );
@@ -146,7 +146,7 @@ export function ThemePresetPicker({
           if (presets.length === 0) return null;
           return (
             <div key={group.titleKey}>
-              <span className="text-[11px] font-medium tracking-wide text-ink-faint uppercase">
+              <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">
                 {group.fun ? 'Fun!' : tr(group.titleKey)}
               </span>
               <div className="mt-1.5 grid grid-cols-4 gap-2" role="radiogroup" aria-label={group.fun ? 'Fun!' : tr(group.titleKey)}>
@@ -160,12 +160,12 @@ export function ThemePresetPicker({
                       title={preset.label}
                       role="radio"
                       aria-checked={active}
-                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-[11px] font-medium transition-colors ${
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-2xs font-medium transition-colors ${
                         active ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-surface-2'
                       }`}
                     >
                       <span
-                        className={`${large ? 'h-14 w-14' : 'h-10 w-10'} rounded-full border border-line shadow-sm`}
+                        className={`${large ? 'h-14 w-14' : 'h-10 w-10'} rounded-full border border-line`}
                         style={{ background: gradient }}
                       />
                       <span className={active ? 'text-accent' : 'text-ink-soft'}>{preset.label}</span>
@@ -186,12 +186,12 @@ export function ThemePresetPicker({
           className="flex w-full items-center gap-2.5 p-2.5 text-left"
         >
           <span
-            className="h-8 w-8 shrink-0 rounded-full border border-line shadow-sm"
+            className="h-8 w-8 shrink-0 rounded-full border border-line"
             style={{ background: WHEEL_SWATCH }}
           />
           <span className="min-w-0 flex-1">
-            <span className="block text-[12px] font-medium">{tr('settings.customColors')}</span>
-            <span className="block truncate text-[11px] text-ink-faint">
+            <span className="block text-xs font-medium">{tr('settings.customColors')}</span>
+            <span className="block truncate text-2xs text-ink-faint">
               {customized ? tr('settings.customColorsOn') : tr('settings.customColorsHint')}
             </span>
           </span>
@@ -200,7 +200,7 @@ export function ThemePresetPicker({
             className="h-5 w-10 shrink-0 rounded-full border border-line"
             style={{ background: `linear-gradient(135deg, ${accent}, ${accent2})` }}
           />
-          <span aria-hidden className="text-[11px] text-ink-faint">
+          <span aria-hidden className="text-2xs text-ink-faint">
             {open ? '▲' : '▼'}
           </span>
         </button>
@@ -222,7 +222,7 @@ export function ThemePresetPicker({
                       role="radio"
                       aria-checked={on}
                       onClick={() => setEditing(which)}
-                      className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                      className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-2xs font-medium transition-colors ${
                         on ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2'
                       }`}
                     >
@@ -239,7 +239,7 @@ export function ThemePresetPicker({
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  className="input py-1 font-mono text-[12px]"
+                  className="input py-1 font-mono text-xs"
                   aria-label={editing === 'accent' ? tr('settings.accent') : tr('settings.accent2')}
                   value={editing === 'accent' ? accent : accent2}
                   onChange={(e) => {
@@ -259,7 +259,7 @@ export function ThemePresetPicker({
                 />
               </div>
               <button
-                className="text-[11px] text-accent hover:underline disabled:text-ink-faint disabled:no-underline"
+                className="text-2xs text-accent hover:underline disabled:text-ink-faint disabled:no-underline"
                 onClick={resetColors}
                 disabled={!customized}
               >

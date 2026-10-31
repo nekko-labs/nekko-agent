@@ -53,7 +53,7 @@
   position: relative; width: min(400px, 100%); border-radius: 20px; padding: 28px 28px 22px;
   background: color-mix(in srgb, var(--win, var(--surface)) 70%, transparent);
   -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent), 0 30px 80px -30px color-mix(in srgb, var(--accent) 50%, transparent), 0 2px 12px -4px color-mix(in srgb, #000 30%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent), 0 30px 80px -30px color-mix(in srgb, var(--accent) 50%, transparent), 0 2px 12px -4px color-mix(in srgb, var(--shadow-ink) 30%, transparent);
   animation: cloud-rise 0.24s var(--ease-out);
 }
 .cloud-signin::after, .cloud-prism-edge::after {
@@ -64,18 +64,18 @@
 }
 [data-theme='light'] .cloud-signin { background: color-mix(in srgb, #fff 78%, transparent); }
 @media (prefers-reduced-transparency: reduce) { .cloud-signin { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; } }
-.cloud-signin h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; text-align: center; }
-.cloud-signin .cloud-lede { margin-top: 6px; font-size: 13px; color: var(--ink-soft); text-align: center; line-height: 1.45; }
+.cloud-signin h1 { font-size: var(--text-xl); font-weight: 600; letter-spacing: -0.01em; text-align: center; }
+.cloud-signin .cloud-lede { margin-top: 6px; font-size: var(--text-sm); color: var(--ink-soft); text-align: center; line-height: 1.45; }
 .cloud-provider {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 40px;
   border-radius: 11px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-  font-size: 13.5px; font-weight: 500; transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  font-size: var(--text-sm); font-weight: 500; transition: border-color 0.15s, background 0.15s, transform 0.1s;
 }
 .cloud-provider:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
 .cloud-provider:active { transform: translateY(1px); }
 .cloud-provider:disabled { opacity: 0.55; }
 .cloud-provider svg { width: 17px; height: 17px; }
-.cloud-or { display: flex; align-items: center; gap: 10px; margin: 16px 0; font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+.cloud-or { display: flex; align-items: center; gap: 10px; margin: 16px 0; font-size: var(--text-2xs); color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; }
 .cloud-or::before, .cloud-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 .cloud-otp { display: flex; justify-content: center; gap: 8px; }
 .cloud-otp input {
@@ -85,7 +85,7 @@
 }
 .cloud-otp input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
 .cloud-otp input:nth-child(3) { margin-right: 10px; }
-.cloud-fineprint { margin-top: 18px; display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: var(--ink-faint); line-height: 1.45; }
+.cloud-fineprint { margin-top: 18px; display: flex; gap: 8px; align-items: flex-start; font-size: var(--text-xs); color: var(--ink-faint); line-height: 1.45; }
 .cloud-fineprint svg { flex: none; margin-top: 1px; color: var(--success); }
 @keyframes cloud-fade { from { opacity: 0; } }
 @keyframes cloud-rise { from { opacity: 0; transform: translateY(8px) scale(0.985); } }
@@ -100,7 +100,7 @@
   radial-gradient(60% 90% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
   radial-gradient(55% 80% at 100% 0%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 70%); }
 .sync-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
-.sync-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 500; }
+.sync-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: var(--text-xs); font-weight: 500; }
 .sync-pill.ok { background: var(--success-soft); color: var(--success); }
 .sync-pill.busy { background: var(--accent-soft); color: var(--accent); }
 .sync-pill.warn { background: var(--warning-soft); color: var(--warning); }

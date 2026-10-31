@@ -32,7 +32,7 @@ export function BackgroundChip({ state, compact = false }: { state: BackgroundSt
   const color = paused ? 'var(--warning)' : 'var(--success)';
   return (
     <span
-      className={compact ? 'flex items-center gap-1' : 'flex min-w-0 items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-soft'}
+      className={compact ? 'flex items-center gap-1' : 'flex min-w-0 items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-2xs text-ink-soft'}
       title={`${line}. ${paused ? 'It carries on from where it stopped once this computer is free.' : 'It pauses if you come back.'}`}
       data-background-chip={paused ? 'paused' : 'running'}
     >

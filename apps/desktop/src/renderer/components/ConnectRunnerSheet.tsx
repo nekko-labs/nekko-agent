@@ -68,10 +68,10 @@ export async function submitConnect(
 }
 
 const Field = ({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) => (
-  <label className="block text-[13px] font-medium text-ink">
+  <label className="block text-sm font-medium text-ink">
     {label}
     <div className="mt-1">{children}</div>
-    {hint && <span className="mt-1 block text-[11.5px] font-normal text-ink-faint">{hint}</span>}
+    {hint && <span className="mt-1 block text-xs font-normal text-ink-faint">{hint}</span>}
   </label>
 );
 
@@ -82,8 +82,8 @@ const Choice = ({ name, checked, onChange, title, description }: { name: string;
   >
     <input type="radio" name={name} className="mt-0.5" checked={checked} onChange={onChange} />
     <span>
-      <span className="block text-[13px] font-semibold text-ink">{title}</span>
-      {description && <span className="block text-[12px] text-ink-soft">{description}</span>}
+      <span className="block text-sm font-semibold text-ink">{title}</span>
+      {description && <span className="block text-xs text-ink-soft">{description}</span>}
     </span>
   </label>
 );
@@ -104,8 +104,8 @@ export function ConnectBody({
   const scope = form.target.trim() || (form.kind === 'repo' ? 'This repo' : 'This org');
   return (
     <div className="flex flex-col gap-3.5 p-5">
-      <h2 className="text-[17px] font-semibold text-ink">Connect GitHub</h2>
-      <ol className="flex flex-wrap gap-1.5 text-[12px]">
+      <h2 className="text-base font-semibold text-ink">Connect GitHub</h2>
+      <ol className="flex flex-wrap gap-1.5 text-xs">
         {STEPS.map((s, i) => {
           const n = (i + 1) as ConnectStep;
           return (
@@ -128,7 +128,7 @@ export function ConnectBody({
 
       {step === 1 && (
         <>
-          <p className="text-[12.5px] text-ink-soft">
+          <p className="text-xs text-ink-soft">
             Create a GitHub App for your account or org, install it, and paste its private key. It is saved in this Mac's keychain only after GitHub accepts it.{' '}
             <a className="text-accent" href={CREATE_APP_DOCS} onClick={(e) => { e.preventDefault(); void window.nekko.openPath(CREATE_APP_DOCS); }}>
               How to create the app <ExternalIcon className="inline h-2.5 w-2.5" />
@@ -138,7 +138,7 @@ export function ConnectBody({
           <Field label="Installation ID"><input className="input w-full" inputMode="numeric" value={form.installationId} onChange={(e) => onField('installationId', e.target.value)} /></Field>
           <Field label="Private key">
             <textarea
-              className="input min-h-28 w-full resize-y font-mono text-[11.5px]"
+              className="input min-h-28 w-full resize-y font-mono text-xs"
               autoComplete="off"
               spellCheck={false}
               placeholder="-----BEGIN RSA PRIVATE KEY-----"
@@ -165,11 +165,11 @@ export function ConnectBody({
               </Field>
             </>
           )}
-          <label className="flex items-start gap-2 text-[13px] text-ink">
+          <label className="flex items-start gap-2 text-sm text-ink">
             <input type="checkbox" className="mt-0.5" checked={form.allowPublic} onChange={(e) => onField('allowPublic', e.target.checked)} />
             <span>
               Allow public repos
-              <span className="block text-[11.5px] text-ink-faint">Anyone can open a pull request on a public repo, and its workflows could ask for this Mac.</span>
+              <span className="block text-xs text-ink-faint">Anyone can open a pull request on a public repo, and its workflows could ask for this Mac.</span>
             </span>
           </label>
           <Field label="Runner label" hint={<>Use it in <code className="font-mono">{`runs-on: [self-hosted, macOS, ARM64, ${label}]`}</code></>}>
@@ -181,8 +181,8 @@ export function ConnectBody({
       {step === 3 && (
         <>
           <div>
-            <h3 className="text-[15px] font-semibold text-ink">How should this Mac help?</h3>
-            <p className="text-[13px] text-ink-soft">You can change this any time.</p>
+            <h3 className="text-base font-semibold text-ink">How should this Mac help?</h3>
+            <p className="text-sm text-ink-soft">You can change this any time.</p>
           </div>
           <div role="radiogroup" aria-label="Priority" className="flex flex-col gap-2">
             {PRIORITIES.map((p) => (
@@ -190,14 +190,14 @@ export function ConnectBody({
             ))}
           </div>
           {form.allowPublic && (
-            <p className="rounded-xl border px-3 py-2 text-[12.5px]" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
+            <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
               {`${scope} may be public. Keep "Require approval for all external contributors" on in the repo's Actions settings so fork pull requests wait for you.`}
             </p>
           )}
         </>
       )}
 
-      {error && <p role="alert" className="text-[12.5px] text-[var(--danger)]">{error}</p>}
+      {error && <p role="alert" className="text-xs text-[var(--danger)]">{error}</p>}
 
       <div className="flex justify-end gap-2">
         {step > 1 && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => onStep((step - 1) as ConnectStep)}>Back</button>}
@@ -239,7 +239,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   };
 
   return (
-    <Modal title="Connect GitHub" onClose={close} overlayClassName="p-4" className="card w-[560px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-xl">
+    <Modal title="Connect GitHub" onClose={close} overlayClassName="p-4" className="card w-[560px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
       <ConnectBody
         step={step}
         form={form}

@@ -189,11 +189,11 @@ export function PromptAnalyzer({
   };
 
   const details = (
-    <div className="space-y-2 p-2.5 text-[12px]">
+    <div className="space-y-2 p-2.5 text-xs">
       {/* What this prompt will reference — mentioned projects + their context. */}
       {refCount > 0 && (
         <div className="space-y-1.5">
-          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+          <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
             <FolderIcon className="h-3 w-3" /> Will reference
           </p>
           {mentionedIds.map((id) => {
@@ -203,12 +203,12 @@ export function PromptAnalyzer({
               <div key={id} className="rounded-lg border border-line p-2" style={{ background: 'var(--surface-2)' }}>
                 <div className="flex items-center gap-1.5">
                   <span
-                    className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium"
+                    className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-2xs font-medium"
                     style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
                   >
                     <FolderIcon className="h-3 w-3" />{baseName(entry.folder.path) || entry.folder.name}
                   </span>
-                  {!entry.active && <span className="chip text-[10px]" title="Mentioned, but not added to this chat yet">not in chat</span>}
+                  {!entry.active && <span className="chip text-2xs" title="Mentioned, but not added to this chat yet">not in chat</span>}
                 </div>
                 {entry.active ? (
                   entry.refs.length > 0 ? (
@@ -216,7 +216,7 @@ export function PromptAnalyzer({
                       {entry.refs.map((r, i) => (
                         <span
                           key={i}
-                          className="inline-flex items-center gap-1 rounded-full border border-line px-1.5 py-0.5 text-[10px] text-ink-soft"
+                          className="inline-flex items-center gap-1 rounded-full border border-line px-1.5 py-0.5 text-2xs text-ink-soft"
                           title={REF_META[r.kind].label}
                         >
                           <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: REF_META[r.kind].color }} />
@@ -225,19 +225,19 @@ export function PromptAnalyzer({
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-1 text-[11px] text-ink-faint">Grounding this chat. No guideline or spec files detected yet.</p>
+                    <p className="mt-1 text-2xs text-ink-faint">Grounding this chat. No guideline or spec files detected yet.</p>
                   )
                 ) : (
-                  <p className="mt-1 text-[11px] text-ink-faint">Add this folder to the chat to ground it in its code, guidelines, and specs.</p>
+                  <p className="mt-1 text-2xs text-ink-faint">Add this folder to the chat to ground it in its code, guidelines, and specs.</p>
                 )}
               </div>
             );
           })}
           {looseFolders.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 text-[11px] text-ink-faint">
+            <div className="flex flex-wrap items-center gap-1 text-2xs text-ink-faint">
               <span>Folders:</span>
               {looseFolders.map((f, i) => (
-                <span key={i} className="rounded-sm px-1 py-0.5 font-mono text-[10px]" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{f}</span>
+                <span key={i} className="rounded-sm px-1 py-0.5 font-mono text-2xs" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{f}</span>
               ))}
             </div>
           )}
@@ -253,7 +253,7 @@ export function PromptAnalyzer({
               <span
                 key={p.id}
                 title={p.hint}
-                className="cursor-help rounded-full border px-2 py-0.5 text-[11px]"
+                className="cursor-help rounded-full border px-2 py-0.5 text-2xs"
                 style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
               >
                 ✓ {p.label}
@@ -266,7 +266,7 @@ export function PromptAnalyzer({
               <span
                 key={p.id}
                 title={p.hint}
-                className="cursor-help rounded-full border px-2 py-0.5 text-[11px]"
+                className="cursor-help rounded-full border px-2 py-0.5 text-2xs"
                 style={{ borderColor: 'var(--line)', color: 'var(--ink-faint)' }}
               >
                 + {p.label}
@@ -283,7 +283,7 @@ export function PromptAnalyzer({
                   ? `${p.hint} Click to have the model draft it for this prompt.`
                   : `${p.hint} Click to insert: "${fill?.snippet}"`
               }
-              className="rounded-full border border-dashed border-line px-2 py-0.5 text-[11px] text-ink-faint transition-colors hover:border-solid hover:border-accent hover:text-accent disabled:opacity-60"
+              className="rounded-full border border-dashed border-line px-2 py-0.5 text-2xs text-ink-faint transition-colors hover:border-solid hover:border-accent hover:text-accent disabled:opacity-60"
               onClick={() => void fillPart(p)}
             >
               + {p.label}{busy && <span className="dots" />}
@@ -292,7 +292,7 @@ export function PromptAnalyzer({
         })}
       </div>
   
-      <p className="text-[11px] text-ink-faint">
+      <p className="text-2xs text-ink-faint">
         <span className="font-medium text-ink-soft">Suggested model:</span> {a.model.reason}
       </p>
   
@@ -310,7 +310,7 @@ export function PromptAnalyzer({
       )}
 
       {showAnnotated && (
-        <div className="rounded-lg border border-line p-2 font-mono text-[11px] leading-relaxed" style={{ background: 'var(--surface-2)' }}>
+        <div className="rounded-lg border border-line p-2 font-mono text-2xs leading-relaxed" style={{ background: 'var(--surface-2)' }}>
           <Annotated text={text} findings={a.findings} mentions={mentions} />
         </div>
       )}
@@ -357,12 +357,12 @@ export function PromptAnalyzer({
           <span>{label}</span>
         </button>
         {open && anchor && createPortal(
-          <div ref={popRef} role="dialog" aria-label="Prompt suggestions" className="card fixed z-[100] max-h-[60vh] w-[480px] max-w-[calc(100vw-16px)] overflow-y-auto shadow-lg" style={{ left: anchor.left, bottom: anchor.bottom, background: 'var(--paper)' }}>
-            <div className="flex items-center gap-2 border-b border-line px-2.5 py-1.5 text-[11px] text-ink-soft">
+          <div ref={popRef} role="dialog" aria-label="Prompt suggestions" className="card fixed z-[100] max-h-[60vh] w-[480px] max-w-[calc(100vw-16px)] overflow-y-auto shadow-(--shadow-float)" style={{ left: anchor.left, bottom: anchor.bottom, background: 'var(--paper)' }}>
+            <div className="flex items-center gap-2 border-b border-line px-2.5 py-1.5 text-2xs text-ink-soft">
               <GradeBadge grade={a.grade} />
               <span>{present}/{a.parts.length} parts</span>
               {refCount > 0 && <span className="flex items-center gap-1 text-accent"><FolderIcon className="h-3 w-3" />{refCount}</span>}
-              <span className="ml-auto chip text-[10px] uppercase" title={a.model.reason}>{a.model.tier} model</span>
+              <span className="ml-auto chip text-2xs uppercase" title={a.model.reason}>{a.model.tier} model</span>
             </div>
             {details}
           </div>,
@@ -376,7 +376,7 @@ export function PromptAnalyzer({
     <div className={`collapse-wrap ${active ? '' : 'collapsed'}`} aria-hidden={!active}>
       <div className="min-h-0 overflow-hidden">
         <div className="mx-auto mb-2 w-full max-w-3xl">
-      <div className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1 text-[11px]" style={{ background: 'var(--surface-2)' }}>
+      <div className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1 text-2xs" style={{ background: 'var(--surface-2)' }}>
         <GradeBadge grade={a.grade} />
         <button onClick={() => setOpen((o) => !o)} className="flex flex-1 items-center gap-2 text-left text-ink-soft">
           <span>{present}/{a.parts.length} parts</span>
@@ -390,7 +390,7 @@ export function PromptAnalyzer({
               </span>
             </>
           )}
-          <span className="ml-auto chip text-[10px] uppercase" title={a.model.reason}>{a.model.tier} model</span>
+          <span className="ml-auto chip text-2xs uppercase" title={a.model.reason}>{a.model.tier} model</span>
           <span className="text-ink-faint">{open ? '▾' : '▸'}</span>
         </button>
       </div>
@@ -405,7 +405,7 @@ export function PromptAnalyzer({
 function GradeBadge({ grade }: { grade: 'A' | 'B' | 'C' | 'D' | 'F' }) {
   return (
     <span
-      className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white"
+      className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-2xs font-bold text-white"
       style={{ background: GRADE_COLOR[grade] }}
       title={`Prompt health: ${grade}`}
     >

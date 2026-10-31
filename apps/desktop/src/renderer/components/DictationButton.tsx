@@ -43,24 +43,24 @@ export function DictationButton(props: VoiceTarget) {
         </svg>
       </button>
       {intro && <Suspense fallback={null}><VoiceIntro onClose={() => setIntro(false)} onTurnOn={() => void listen()} /></Suspense>}
-      {setup && <div className="absolute bottom-full right-0 z-40 mb-2 w-80 rounded-xl border border-line bg-surface p-3 shadow-lg"><VoiceSettings compact /><button className="mt-2 text-[12px]" onClick={() => setSetup(false)}>Close setup</button></div>}
-      {shown && (snap.listening || busy || pending || snap.error) && <div className="absolute bottom-full right-0 z-40 mb-2 w-72 rounded-xl border border-line bg-surface p-3 shadow-lg" data-voice-strip>
-        {(snap.listening || busy) && <div role="status" className="flex items-center gap-2 text-[12px] text-ink-soft">
+      {setup && <div className="absolute bottom-full right-0 z-40 mb-2 w-80 rounded-xl border border-line bg-surface p-3 shadow-(--shadow-float)"><VoiceSettings compact /><button className="mt-2 text-xs" onClick={() => setSetup(false)}>Close setup</button></div>}
+      {shown && (snap.listening || busy || pending || snap.error) && <div className="absolute bottom-full right-0 z-40 mb-2 w-72 rounded-xl border border-line bg-surface p-3 shadow-(--shadow-float)" data-voice-strip>
+        {(snap.listening || busy) && <div role="status" className="flex items-center gap-2 text-xs text-ink-soft">
           <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
             <span className="block h-full rounded-full bg-(--danger) transition-[width] duration-100" style={{ width: Math.round(Math.min(1, snap.level) * 100) + '%' }} />
           </span>
           <span className="min-w-0 truncate">{busy || (snap.heard ? `Heard: ${snap.heard}` : 'Listening locally… Say ‘Nekko…’ for commands.')}</span>
         </div>}
         {pending && <div className={snap.listening || busy ? 'mt-2' : ''}>
-          <p className="text-[12px]">{pending.message}</p>
+          <p className="text-xs">{pending.message}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {pending.kind === 'confirm'
-              ? <button className="btn btn-primary py-1! text-[12px]!" onClick={() => void voiceListener.answer({ kind: 'yes' })}>Confirm</button>
-              : pending.options.map((option, i) => <button key={i} className="btn btn-outline max-w-full truncate py-1! text-[12px]!" onClick={() => void voiceListener.answer({ kind: 'pick', n: (i + 1) as 1 | 2 | 3 })}>{i + 1}. {option.label}</button>)}
-            <button className="btn btn-outline py-1! text-[12px]!" onClick={() => void voiceListener.answer({ kind: 'no' })}>Cancel</button>
+              ? <button className="btn btn-primary py-1! text-xs!" onClick={() => void voiceListener.answer({ kind: 'yes' })}>Confirm</button>
+              : pending.options.map((option, i) => <button key={i} className="btn btn-outline max-w-full truncate py-1! text-xs!" onClick={() => void voiceListener.answer({ kind: 'pick', n: (i + 1) as 1 | 2 | 3 })}>{i + 1}. {option.label}</button>)}
+            <button className="btn btn-outline py-1! text-xs!" onClick={() => void voiceListener.answer({ kind: 'no' })}>Cancel</button>
           </div>
         </div>}
-        {snap.error && <><p role="alert" className="mt-1 text-[12px] text-(--danger)">{snap.error}</p><button className="mt-2 text-[12px] text-ink-soft" onClick={voiceListener.dismissError}>Dismiss</button></>}
+        {snap.error && <><p role="alert" className="mt-1 text-xs text-(--danger)">{snap.error}</p><button className="mt-2 text-xs text-ink-soft" onClick={voiceListener.dismissError}>Dismiss</button></>}
       </div>}
     </div>
   );

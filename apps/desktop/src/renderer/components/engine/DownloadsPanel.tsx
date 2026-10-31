@@ -42,7 +42,7 @@ function progressLine(p: { receivedBytes: number; totalBytes?: number; bytesPerS
 export function DownloadsPanel({ jobs, onChanged }: { jobs: DownloadJob[]; onChanged: () => void }) {
   if (jobs.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed px-4 py-3.5 text-[12.5px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+      <p className="rounded-xl border border-dashed px-4 py-3.5 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
         Nothing downloading. Anything you start from <strong>Find models</strong> shows its progress here.
       </p>
     );
@@ -66,9 +66,9 @@ function DownloadGroupRow({ group, onChanged }: { group: DownloadGroup; onChange
   return (
     <div className="rounded-lg px-2.5 py-2" style={{ background: 'var(--surface-2)' }} data-download-group={group.id}>
       <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-[12.5px]">{group.label}</span>
-        {multi && <span className="shrink-0 text-[11px] text-ink-faint">{files} files</span>}
-        <span className="shrink-0 text-[11px]" style={{ color: stateColor(group.state) }}>
+        <span className="min-w-0 flex-1 truncate text-xs">{group.label}</span>
+        {multi && <span className="shrink-0 text-2xs text-ink-faint">{files} files</span>}
+        <span className="shrink-0 text-2xs" style={{ color: stateColor(group.state) }}>
           {STATE_LABEL[group.state]}
         </span>
         <button
@@ -89,7 +89,7 @@ function DownloadGroupRow({ group, onChanged }: { group: DownloadGroup; onChange
 
       {active && <ProgressBar pct={pct} />}
 
-      <p className="mt-1 text-[11px] text-ink-faint">{group.message ?? progressLine(group)}</p>
+      <p className="mt-1 text-2xs text-ink-faint">{group.message ?? progressLine(group)}</p>
 
       {multi && (
         <ul className="mt-2 space-y-1 border-t pt-2" style={{ borderColor: 'color-mix(in srgb, var(--ink-faint) 15%, transparent)' }}>
@@ -111,18 +111,18 @@ function FileRow({ job }: { job: DownloadJob }) {
   return (
     <li className="pl-2.5" style={{ borderLeft: '2px solid color-mix(in srgb, var(--ink-faint) 20%, transparent)' }} data-download-file={name}>
       <div className="flex items-baseline gap-2">
-        <span className="shrink-0 text-[12px]">{role.title}</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-ink-faint" title={file}>
+        <span className="shrink-0 text-xs">{role.title}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-2xs text-ink-faint" title={file}>
           {name}
         </span>
-        <span className="shrink-0 text-[10.5px] text-ink-faint">
+        <span className="shrink-0 text-2xs text-ink-faint">
           {job.state === 'done' ? formatBytes(job.totalBytes ?? job.receivedBytes) : progressLine({ ...job, bytesPerSecond: undefined })}
         </span>
-        <span className="shrink-0 text-[10.5px]" style={{ color: stateColor(job.state) }}>
+        <span className="shrink-0 text-2xs" style={{ color: stateColor(job.state) }}>
           {job.state === 'downloading' && pct !== null ? `${Math.round(pct)}%` : STATE_LABEL[job.state]}
         </span>
       </div>
-      <p className="text-[10.5px] text-ink-faint">{job.state === 'failed' && job.message ? job.message : role.purpose}</p>
+      <p className="text-2xs text-ink-faint">{job.state === 'failed' && job.message ? job.message : role.purpose}</p>
       {active && <ProgressBar pct={pct} thin />}
     </li>
   );

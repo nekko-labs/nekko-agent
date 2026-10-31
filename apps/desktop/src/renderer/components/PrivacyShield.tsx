@@ -103,11 +103,11 @@ export function PrivacyShieldMenu({
       >
         <span className="ctl-dot" />
         <ShieldIcon className="h-3.5 w-3.5" /> <span className="foot-label">Shield</span>
-        {count > 0 && <span className="tabular-nums text-[10.5px] text-ink-faint">{count}</span>}
+        {count > 0 && <span className="tabular-nums text-2xs text-ink-faint">{count}</span>}
       </button>
       {open && createPortal(
         <div ref={pop} style={floating} data-privacy-shield-panel
-          className="card fixed z-[100] overflow-y-auto p-3 text-[12px] shadow-lg" role="dialog" aria-label="Privacy Shield">
+          className="card fixed z-[100] overflow-y-auto p-3 text-xs shadow-(--shadow-float)" role="dialog" aria-label="Privacy Shield">
           <PrivacyShieldPanel
             on={on}
             preview={preview}
@@ -167,20 +167,20 @@ export function PrivacyShieldPanel({
     <div className="flex items-start gap-2">
       <ShieldIcon className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-medium text-ink">Privacy Shield</div>
-        <p className="text-[11px] text-ink-faint">
+        <div className="text-sm font-medium text-ink">Privacy Shield</div>
+        <p className="text-2xs text-ink-faint">
           Replaces private values with placeholders before a request leaves this computer, and puts the real values back in the reply. Tools and this chat keep the real values.
         </p>
       </div>
       <Switch on={on} label="Shield this chat" onToggle={onToggleShield} />
     </div>
 
-    {reachNote && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1.5 text-[11px] text-ink-faint">{reachNote}</p>}
-    {error && <p className="mt-2 text-[11px] text-danger">Could not preview: {error}</p>}
+    {reachNote && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1.5 text-2xs text-ink-faint">{reachNote}</p>}
+    {error && <p className="mt-2 text-2xs text-danger">Could not preview: {error}</p>}
 
     <Section title={on ? 'What the model reads instead' : 'What the shield would hide'}>
-      {!preview && !error && <p className="text-[11px] text-ink-faint">Checking…</p>}
-      {preview && findings.length === 0 && <p className="text-[11px] text-ink-faint">Nothing private found in this chat or your draft.</p>}
+      {!preview && !error && <p className="text-2xs text-ink-faint">Checking…</p>}
+      {preview && findings.length === 0 && <p className="text-2xs text-ink-faint">Nothing private found in this chat or your draft.</p>}
       {findings.length > 0 && (
         <ul className="space-y-0.5" aria-label="Values the shield replaces">
           {findings.map((f) => <FindingRow key={f.token} finding={f} on={on} onSend={() => onAllow(f.value, true)} />)}
@@ -193,9 +193,9 @@ export function PrivacyShieldPanel({
         <ul className="space-y-0.5">
           {preview.allowed.map((a) => (
             <li key={a.value} className="flex items-center gap-2">
-              <span className="w-16 shrink-0 truncate text-[10.5px] text-ink-faint" title={PRIVACY_KIND_LABELS[a.kind]}>{KIND_SHORT[a.kind]}</span>
-              <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{a.value}</span>
-              <button className="text-[11px] text-accent hover:underline" onClick={() => onAllow(a.value, false)}>Hide again</button>
+              <span className="w-16 shrink-0 truncate text-2xs text-ink-faint" title={PRIVACY_KIND_LABELS[a.kind]}>{KIND_SHORT[a.kind]}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-2xs">{a.value}</span>
+              <button className="text-2xs text-accent hover:underline" onClick={() => onAllow(a.value, false)}>Hide again</button>
             </li>
           ))}
         </ul>
@@ -204,11 +204,11 @@ export function PrivacyShieldPanel({
 
     {draft.trim() !== '' && preview && (
       <Section title="Your message as the model reads it">
-        <button className="text-[11px] text-accent hover:underline" aria-expanded={showSent} onClick={() => setShowSent((s) => !s)}>
+        <button className="text-2xs text-accent hover:underline" aria-expanded={showSent} onClick={() => setShowSent((s) => !s)}>
           {showSent ? 'Hide' : 'Show'}
         </button>
         {showSent && (
-          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-2 font-mono text-[11px]" data-privacy-sent>
+          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-2 font-mono text-2xs" data-privacy-sent>
             {on && preview.reach === 'cloud' ? preview.draft : draft}
           </pre>
         )}
@@ -218,7 +218,7 @@ export function PrivacyShieldPanel({
     <Section title="Hide in this chat">
       <div className="flex flex-wrap gap-1">
         {PRIVACY_KINDS.map((k) => (
-          <button key={k} className="ctl-toggle ctl-toggle-neutral text-[11px]" aria-pressed={!disabled.has(k)} onClick={() => onToggleKind(k)}>
+          <button key={k} className="ctl-toggle ctl-toggle-neutral text-2xs" aria-pressed={!disabled.has(k)} onClick={() => onToggleKind(k)}>
             <span className="ctl-dot" />{PRIVACY_KIND_LABELS[k]}
           </button>
         ))}
@@ -226,10 +226,10 @@ export function PrivacyShieldPanel({
     </Section>
 
     <Section title="Your terms (every chat)">
-      <p className="mb-1 text-[11px] text-ink-faint">Clients, codenames, people: always replaced when the shield is on.</p>
+      <p className="mb-1 text-2xs text-ink-faint">Clients, codenames, people: always replaced when the shield is on.</p>
       <div className="flex flex-wrap gap-1">
         {terms.map((t) => (
-          <span key={t} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">
+          <span key={t} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-2xs">
             {t}
             <button aria-label={`Remove ${t}`} className="text-ink-faint hover:text-ink" onClick={() => onTerms(terms.filter((x) => x !== t))}>×</button>
           </span>
@@ -237,17 +237,17 @@ export function PrivacyShieldPanel({
       </div>
       <form className="mt-1 flex gap-1" onSubmit={(e) => { e.preventDefault(); addTerm(); }}>
         <input
-          className="input min-w-0 flex-1 px-2 py-1 text-[12px]"
+          className="input min-w-0 flex-1 px-2 py-1 text-xs"
           value={term}
           placeholder="Add a term, e.g. Acme Corp"
           onChange={(e) => setTerm(e.target.value)}
           aria-label="New term to hide"
         />
-        <button type="submit" className="btn px-2 py-1 text-[12px]" disabled={term.trim().length < 2}>Add</button>
+        <button type="submit" className="btn px-2 py-1 text-xs" disabled={term.trim().length < 2}>Add</button>
       </form>
     </Section>
 
-    <p className="mt-3 text-[10.5px] text-ink-faint">
+    <p className="mt-3 text-2xs text-ink-faint">
       Detection runs on this computer and is pattern-based: it can miss things (a name in prose, an address) and catch harmless ones. Read the list before sending anything sensitive.
     </p>
   </>);
@@ -256,7 +256,7 @@ export function PrivacyShieldPanel({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-3">
-      <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-ink-faint">{title}</div>
+      <div className="mb-1 text-2xs font-medium uppercase tracking-wide text-ink-faint">{title}</div>
       {children}
     </div>
   );
@@ -266,12 +266,12 @@ function FindingRow({ finding, on, onSend }: { finding: PrivacyFinding; on: bool
   const where = [finding.inDraft && 'draft', finding.inChat && 'chat'].filter(Boolean).join(' · ');
   return (
     <li className="flex items-center gap-2" data-privacy-finding={finding.kind}>
-      <span className="w-16 shrink-0 truncate text-[10.5px] text-ink-faint" title={PRIVACY_KIND_LABELS[finding.kind]}>{KIND_SHORT[finding.kind]}</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[11px]" title={finding.value}>{finding.value}</span>
+      <span className="w-16 shrink-0 truncate text-2xs text-ink-faint" title={PRIVACY_KIND_LABELS[finding.kind]}>{KIND_SHORT[finding.kind]}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-2xs" title={finding.value}>{finding.value}</span>
       <span className="shrink-0 text-ink-faint" aria-hidden="true">→</span>
-      <span className={`w-32 shrink-0 truncate font-mono text-[11px] ${on ? 'text-accent' : 'text-ink-faint line-through'}`} title={on ? 'What the model reads' : 'Shield is off: sent as written'}>{finding.token}</span>
-      <span className="w-14 shrink-0 text-right text-[10px] text-ink-faint" title={`${finding.count} time(s)`}>{where}</span>
-      <button className="shrink-0 text-[11px] text-accent hover:underline" onClick={onSend} title="Send this value as it is in this chat">Send</button>
+      <span className={`w-32 shrink-0 truncate font-mono text-2xs ${on ? 'text-accent' : 'text-ink-faint line-through'}`} title={on ? 'What the model reads' : 'Shield is off: sent as written'}>{finding.token}</span>
+      <span className="w-14 shrink-0 text-right text-2xs text-ink-faint" title={`${finding.count} time(s)`}>{where}</span>
+      <button className="shrink-0 text-2xs text-accent hover:underline" onClick={onSend} title="Send this value as it is in this chat">Send</button>
     </li>
   );
 }
@@ -281,7 +281,7 @@ function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle:
     <button role="switch" aria-checked={on} aria-label={label} title={label} onClick={onToggle}
       className="relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors"
       style={{ background: on ? 'var(--accent)' : 'color-mix(in srgb, var(--ink-faint) 40%, transparent)' }}>
-      <span className="absolute h-3 w-3 rounded-full bg-white shadow-sm transition-transform" style={{ transform: on ? 'translateX(14px)' : 'translateX(2px)' }} />
+      <span className="absolute h-3 w-3 rounded-full bg-white shadow-(--shadow-sm) transition-transform" style={{ transform: on ? 'translateX(14px)' : 'translateX(2px)' }} />
     </button>
   );
 }

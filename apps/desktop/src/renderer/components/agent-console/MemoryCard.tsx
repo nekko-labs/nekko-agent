@@ -27,11 +27,11 @@ export function MemoryCard({ call, result }: { call: ToolCall; result?: ToolResu
     <div className="mt-1.5 flex max-w-xl items-start gap-2.5 rounded-xl border border-line px-3 py-2 font-sans" role="status">
       <MemoryColorIcon className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0 flex-1">
-        <div className="text-[12px] text-ink-faint">{saved.action === 'added' ? 'Memory added' : 'Memory updated'}</div>
-        <div className="truncate text-[13px] font-medium text-ink-soft">{saved.title}</div>
-        <p className="line-clamp-2 text-[12px] text-ink-faint">{saved.body}</p>
+        <div className="text-xs text-ink-faint">{saved.action === 'added' ? 'Memory added' : 'Memory updated'}</div>
+        <div className="truncate text-sm font-medium text-ink-soft">{saved.title}</div>
+        <p className="line-clamp-2 text-xs text-ink-faint">{saved.body}</p>
       </div>
-      <button className="shrink-0 self-center text-[12px] font-medium text-accent hover:underline" onClick={open}>
+      <button className="shrink-0 self-center text-xs font-medium text-accent hover:underline" onClick={open}>
         {memoryOn ? 'View in Memory' : 'Turn on Memory to view'}
       </button>
     </div>

@@ -94,14 +94,14 @@ export function FitDrawer({
     <div className="mt-2 rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[13px]">{facts.id}</p>
-          <p className="text-[11px] text-ink-faint">
+          <p className="truncate text-sm">{facts.id}</p>
+          <p className="text-2xs text-ink-faint">
             {[facts.parameterSize, facts.quantization].filter(Boolean).join(' · ') || 'Fit projection'}
           </p>
         </div>
         {plan && (
           <span
-            className="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
+            className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
             style={{
               color: verdictColor(plan.verdict),
               border: `1px solid color-mix(in srgb, ${verdictColor(plan.verdict)} 40%, transparent)`,
@@ -113,9 +113,9 @@ export function FitDrawer({
       </div>
 
       <div className="mt-3">
-        <div className="flex items-center justify-between text-[12px]">
+        <div className="flex items-center justify-between text-xs">
           <label htmlFor={`ctx-${facts.id}`}>Context length</label>
-          <span className="font-mono text-[11px] text-ink-faint">{formatTokens(request.contextTokens)}</span>
+          <span className="font-mono text-2xs text-ink-faint">{formatTokens(request.contextTokens)}</span>
         </div>
         <input
           id={`ctx-${facts.id}`}
@@ -131,12 +131,12 @@ export function FitDrawer({
 
       {plan ? <FitBar plan={plan} /> : <div className="mt-2 h-6 animate-pulse rounded-md bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)]" />}
 
-      <p className="mt-2 text-[12px]" style={{ opacity: planning ? 0.6 : 1 }}>
+      <p className="mt-2 text-xs" style={{ opacity: planning ? 0.6 : 1 }}>
         {plan ? verdictSentence(plan) : 'Working out what this needs…'}
       </p>
       {plan &&
         verdictNotes(plan).map((n) => (
-          <p key={n} className="mt-1 text-[11px] text-ink-faint">
+          <p key={n} className="mt-1 text-2xs text-ink-faint">
             {n}
           </p>
         ))}
@@ -146,7 +146,7 @@ export function FitDrawer({
           {plan.suggestions.map((s) => (
             <button
               key={s.label}
-              className="rounded-full border px-2 py-1 text-[11px] hover:border-[var(--accent)]"
+              className="rounded-full border px-2 py-1 text-2xs hover:border-[var(--accent)]"
               style={{ borderColor: 'var(--line)' }}
               onClick={() => s.apply && patch(s.apply)}
               disabled={!s.apply}
@@ -168,16 +168,16 @@ export function FitDrawer({
 
       <div className="mt-3 flex items-center gap-2">
         {capabilities.canLoad && (
-          <button className="btn btn-primary py-1.5 text-[12px]" onClick={load} disabled={loading}>
+          <button className="btn btn-primary py-1.5 text-xs" onClick={load} disabled={loading}>
             {loading ? 'Loading…' : facts.loaded ? 'Reload with these settings' : 'Load model'}
           </button>
         )}
-        <button className="btn btn-ghost py-1.5 text-[12px]" onClick={onClose}>
+        <button className="btn btn-ghost py-1.5 text-xs" onClick={onClose}>
           Close
         </button>
         {plan?.verdict === 'wont-load' && capabilities.canLoad && (
           // Never block the load. Our estimate can be wrong and it is their machine.
-          <span className="text-[11px] text-ink-faint">Loading anyway is allowed; it may fail or be very slow.</span>
+          <span className="text-2xs text-ink-faint">Loading anyway is allowed; it may fail or be very slow.</span>
         )}
       </div>
     </div>

@@ -155,32 +155,32 @@ export function StepUpSheetView(p: {
   return (
     <div data-shot="step-up-sheet" className="card w-[420px] max-w-[92vw] p-5" style={{ background: 'var(--surface)' }}>
       <div className="flex items-center gap-2">
-        <span aria-hidden className="text-[18px]">🔑</span>
+        <span aria-hidden className="text-xl">🔑</span>
         <h2 className="font-semibold">{p.title}</h2>
       </div>
-      {p.what && <p className="mt-2 text-[13px] text-ink-soft">{p.what}</p>}
-      <p className="mt-1 text-[12px] text-ink-faint">{p.message}</p>
+      {p.what && <p className="mt-2 text-sm text-ink-soft">{p.what}</p>}
+      <p className="mt-1 text-xs text-ink-faint">{p.message}</p>
 
       {p.phase === 'done' ? (
-        <p className="mt-4 text-[13px]" style={{ color: 'var(--success)' }} role="status">
+        <p className="mt-4 text-sm" style={{ color: 'var(--success)' }} role="status">
           {p.answered ? `Confirmed with ${p.answered}.` : 'Confirmed.'}
         </p>
       ) : (
         <div className="mt-4 space-y-3">
-          {p.loading && <p className="text-[12px] text-ink-faint">Checking which methods this computer has…</p>}
+          {p.loading && <p className="text-xs text-ink-faint">Checking which methods this computer has…</p>}
           {canKey && p.entry === null && (
             <div>
-              <button className="btn btn-primary py-1.5 text-[13px]" onClick={p.onUseKey} disabled={busy}>
+              <button className="btn btn-primary py-1.5 text-sm" onClick={p.onUseKey} disabled={busy}>
                 {p.phase === 'key' ? 'Touch your key…' : p.phase === 'checking' ? 'Checking…' : 'Use security key'}
               </button>
-              <p className="mt-1 text-[11.5px] text-ink-faint">
+              <p className="mt-1 text-xs text-ink-faint">
                 {p.keyNames.length === 1 ? p.keyNames[0] : `${p.keyNames.slice(0, -1).join(', ')} or ${p.keyNames.at(-1)}`}. Insert or tap it, then touch it.
               </p>
             </div>
           )}
-          {p.blocked && p.keyNames.length > 0 && <p className="text-[12px] text-ink-soft">{p.blocked}</p>}
+          {p.blocked && p.keyNames.length > 0 && <p className="text-xs text-ink-soft">{p.blocked}</p>}
           {p.keysElsewhere && !p.blocked && (
-            <p className="text-[12px] text-ink-soft">Your keys were registered from another address of this computer, so this page can’t use them. Use a code.</p>
+            <p className="text-xs text-ink-soft">Your keys were registered from another address of this computer, so this page can’t use them. Use a code.</p>
           )}
           {p.entry !== null ? (
             <form
@@ -191,7 +191,7 @@ export function StepUpSheetView(p: {
               }}
             >
               <input
-                className="input max-w-[200px] py-1.5 font-mono text-[14px] tracking-widest"
+                className="input max-w-[200px] py-1.5 font-mono text-sm tracking-widest"
                 autoFocus
                 inputMode={p.entry === 'code' ? 'numeric' : 'text'}
                 autoComplete="one-time-code"
@@ -200,24 +200,24 @@ export function StepUpSheetView(p: {
                 value={p.code}
                 onChange={(e) => p.onCode(e.target.value)}
               />
-              <button className="btn btn-primary py-1.5 text-[12.5px]" type="submit" disabled={busy || !p.code.trim()}>
+              <button className="btn btn-primary py-1.5 text-xs" type="submit" disabled={busy || !p.code.trim()}>
                 {p.phase === 'checking' ? 'Checking…' : 'Confirm'}
               </button>
-              <button className="btn btn-ghost py-1.5 text-[12px]" type="button" onClick={() => p.onEntry(null)}>Back</button>
+              <button className="btn btn-ghost py-1.5 text-xs" type="button" onClick={() => p.onEntry(null)}>Back</button>
             </form>
           ) : (
-            <div className="flex flex-wrap gap-3 text-[12.5px]">
+            <div className="flex flex-wrap gap-3 text-xs">
               {p.totp && <button className="underline" onClick={() => p.onEntry('code')} disabled={busy}>Use a code</button>}
               {p.recovery && <button className="underline" onClick={() => p.onEntry('recovery')} disabled={busy}>Use a recovery code</button>}
             </div>
           )}
-          {p.error && <p className="text-[12px]" style={{ color: 'var(--danger)' }} role="alert">{p.error}</p>}
+          {p.error && <p className="text-xs" style={{ color: 'var(--danger)' }} role="alert">{p.error}</p>}
         </div>
       )}
 
       <div className="mt-4 flex items-end justify-between gap-3">
         <UntestedHardwareNote className="max-w-[300px]" />
-        {p.phase !== 'done' && <button className="btn btn-ghost py-1.5 text-[12.5px]" onClick={p.onCancel}>Cancel</button>}
+        {p.phase !== 'done' && <button className="btn btn-ghost py-1.5 text-xs" onClick={p.onCancel}>Cancel</button>}
       </div>
     </div>
   );
