@@ -299,9 +299,13 @@ pub fn usage(usage: &Value, views: &Views) -> Value {
 }
 
 /// `limitsKeyFor` (packages/shared/src/limits.ts): a subscription's token
-/// reference, or `provider:<id>` for an API key whose limits can be read.
+/// reference, `provider:<id>` for an API key whose limits can be read, or
+/// `claude-code:<id>` for a Claude Agent.
 fn limits_key_for(p: &Value) -> Option<String> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).filter(|v| !v.is_empty());
+    if p.get("kind").and_then(Value::as_str) == Some("claude-code") {
+        return Some(format!("claude-code:{}", p.get("id").and_then(Value::as_str).unwrap_or("undefined")));
+    }
     if p.get("auth").and_then(Value::as_str) == Some("subscription")
         && let Some(token) = s("tokenKey")
     {

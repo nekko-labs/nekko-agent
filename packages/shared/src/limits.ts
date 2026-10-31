@@ -21,16 +21,22 @@ const API_KEY_LIMIT_KINDS: ReadonlySet<ProviderConfig['kind']> = new Set(['openr
  * families). nekkod records them after each turn under the same
  * `provider:<id>` key; there is nothing to poll between turns.
  */
+/** The limits key prefix of a Claude Agent provider (`claude-code:<provider id>`). */
+export const CLAUDE_CODE_LIMITS_PREFIX = 'claude-code:';
+
 const API_KEY_HEADER_LIMIT_KINDS: ReadonlySet<ProviderConfig['kind']> = new Set(['anthropic']);
 
 /**
  * The key the limits service can fetch for this provider, or null when nothing
  * can be read. A signed-in provider reads by `tokenKey`; an API-key provider
  * with a documented read gets `provider:<id>` so its snapshot lives in the same
- * store without a token. Everything else is null, which the UI reports
- * distinctly rather than showing an empty read.
+ * store without a token. A Claude Agent gets `claude-code:<id>`: the plan
+ * usage its own Claude Code printed, answered where the Claude policy allows.
+ * Everything else is null, which the UI reports distinctly rather than
+ * showing an empty read.
  */
 export function limitsKeyFor(provider: ProviderConfig): string | null {
+  if (provider.kind === 'claude-code') return `${CLAUDE_CODE_LIMITS_PREFIX}${provider.id}`;
   if (provider.auth === 'subscription' && provider.tokenKey) return provider.tokenKey;
   if (provider.apiKey && (API_KEY_LIMIT_KINDS.has(provider.kind) || API_KEY_HEADER_LIMIT_KINDS.has(provider.kind))) {
     return `provider:${provider.id}`;

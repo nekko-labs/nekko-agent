@@ -154,6 +154,13 @@ pub fn fake_claude() {
             tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
             out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
             out(result("planned", "completed"));
+        } else if text == "usage" {
+            // Plan usage Claude Code reports on its own while it works.
+            out(json!({ "type": "rate_limit_event", "rate_limit_info": {
+                "status": "allowed_warning", "resetsAt": 1_761_231_600, "utilization": 0.62,
+            } }));
+            out(assistant("m_u", json!([{ "type": "text", "text": "used" }])));
+            out(result("used", "completed"));
         } else if text == "run rm" {
             // A prompt only a person may answer in guardrails mode, through the bridge.
             out(assistant(
@@ -386,6 +393,36 @@ async fn claude_codes_own_plan_is_the_chats_plan() {
         ]
     );
     assert_eq!(plan[0]["note"], "Find the parser");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn plan_usage_claude_code_printed_is_its_limits() {
+    let rig = rig("usage", "guardrails", true);
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    // `cc` has a sign-in nekkod has not read yet (`unknown`), which fails closed.
+    let settings = json!({ "providers": [
+        provider("cc", json!({})),
+        provider("cc_key", json!({ "authSource": "nekko-anthropic-key" })),
+    ] });
+    write_settings(&rig, settings).await;
+    let port = rig.d.port;
+    let read = |id: &'static str| async move {
+        post(port, "limits:get", json!([format!("claude-code:{id}")]), Some(TOKEN)).await.1
+    };
+    assert_eq!(read("cc_key").await, Value::Null, "nothing until Claude Code reports");
+
+    for (turn, id) in [("cu1", "cc"), ("cu2", "cc_key")] {
+        let spec = spec_on(&rig, turn, "usage", provider(id, json!({})));
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+    }
+    let limits = read("cc_key").await;
+    let window = &limits["windows"][0];
+    assert_eq!((window["id"].clone(), window["status"].clone()), (json!("session"), json!("warning")), "{limits}");
+    assert_eq!(window["usedPercent"].as_f64(), Some(62.0));
+    assert_eq!(read("cc").await, Value::Null, "an unread sign-in shows no plan usage");
 }
 
 #[tokio::test(flavor = "multi_thread")]
