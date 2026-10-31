@@ -3417,9 +3417,10 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .mode-panel { display: flex; overflow: hidden; padding: 0; font-size: 12.5px; color: var(--ink); }
 .mode-panel svg { width: 15px; height: 15px; flex: none; }
 .mode-rail { width: 176px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: var(--surface-2); border-right: 1px solid var(--line); overflow-y: auto; }
-.mode-sec { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; padding: 0 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
-.mode-sec svg { width: 12px; height: 12px; }
-.mode-rail .mode-sec { padding: 0 8px 4px; }
+.mode-sec { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 0 10px 6px; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--line); }
+.mode-sec svg { width: 13px; height: 13px; color: var(--accent); }
+.mode-sec.is-sub { margin-top: 22px; }
+.mode-rail .mode-sec { padding: 0 8px 6px; border-bottom: 1px solid var(--line); }
 .mode-rail-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 4px 6px 7px; border-radius: 9px; text-align: left; cursor: pointer; }
 .mode-rail-item:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 .mode-rail-item[aria-checked="true"] { background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
@@ -3452,7 +3453,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 
 .mode-scroll { min-height: 0; overflow-y: auto; }
 .mode-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.mode-col { min-width: 0; padding: 12px 6px 8px; border-right: 1px solid var(--line); }
+.mode-col { min-width: 0; padding: 16px 8px 12px; border-right: 1px solid var(--line); }
 .mode-col:last-child { border-right: 0; }
 .mode-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 7px 10px; border-radius: 9px; text-align: left; }
 .mode-row:hover { background: var(--surface-2); }
