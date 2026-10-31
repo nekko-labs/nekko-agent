@@ -205,8 +205,10 @@ final class AppModel {
         // A little time to deliver an approval or a finished turn as a notification:
         // a healthy socket stays open for the grace (IO-20), then closes before
         // iOS would suspend it; the same background task covers it, no new mode.
+        // UIKit calls the expiration handler on the main thread and needs the task
+        // ended before it returns, or it ends the app: no hop, no Task.
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "nekko.relay") { [weak self] in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.store.suspend()
                 self?.endBackgroundTask()
             }
@@ -363,15 +365,31 @@ final class AppModel {
     }
 
     /// From a notification action or a Live Activity button: wait for the
-    /// connection (the app may have just been woken), then answer.
+    /// connection (the app may have just been woken), then answer. Callers
+    /// await it, and it holds background time until the answer is sent, so iOS
+    /// does not suspend the app mid-answer. A failure is posted as a
+    /// notification rather than dropped: the user believes they answered.
     func answerApproval(_ sessionId: String, _ callId: String, _ allow: Bool) async {
         // Allowing a tool from outside the app needs an unlocked phone (the
         // notification action asks for it; a Lock Screen button may not).
-        if allow && !UIApplication.shared.isProtectedDataAvailable { return }
+        if allow && !UIApplication.shared.isProtectedDataAvailable {
+            notifier.postUnsent(sessionId: sessionId, allow: allow, why: "Allowing a tool needs your iPhone unlocked.")
+            return
+        }
+        let time = BackgroundTime("nekko.approval")
+        defer { time.end() }
         start(force: true)
         store.resume()
-        guard await waitOnline(seconds: 10), let r = try? store.remote() else { return }
-        _ = try? await r.call(Channels.toolApprove, [.string(sessionId), .string(callId), .bool(allow)])
+        guard await waitOnline(seconds: 10), let r = try? store.remote() else {
+            notifier.postUnsent(sessionId: sessionId, allow: allow, why: "Couldn’t reach \(store.active?.name ?? "your computer").")
+            return
+        }
+        do {
+            _ = try await r.call(Channels.toolApprove, [.string(sessionId), .string(callId), .bool(allow)])
+        } catch {
+            notifier.postUnsent(sessionId: sessionId, allow: allow, why: "\(store.active?.name ?? "Your computer") didn’t take it: \(error.localizedDescription)")
+            return
+        }
         notifier.clear(sessionId: sessionId)
     }
 
