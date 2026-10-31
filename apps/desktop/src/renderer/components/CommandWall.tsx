@@ -41,7 +41,7 @@ import {
 import { AGENT_DRAG_TYPE, isAgentDrag, useAgentDrag, type AgentDrag } from '../agentDrag.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { useStore, type Workspace } from '../store.js';
-import { foldWindow, growWindow, mostOverlapping, outerSide, type Box } from '../wallMotion.js';
+import { foldWindow, growWindow, mostOverlapping, outerSide, slideWindow, type Box } from '../wallMotion.js';
 import { ChatPane } from './ChatPane.js';
 import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
@@ -80,12 +80,15 @@ export function TerminalExcerpt({ terminalId }: { terminalId: string }) {
 
 /**
  * The drag handle between an agent and its companions. Sets a CSS variable on
- * the window's content box while dragging (no React render per pointer move),
+ * the companions column while dragging (no React render per pointer move),
  * then saves the share for that chat. Arrow keys nudge it; double-click resets.
  */
 function CompanionResizer({ sessionId }: { sessionId: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const apply = (share: number) => ref.current?.parentElement?.style.setProperty('--companion-share', `${(share * 100).toFixed(1)}%`);
+  // Set on the companions column itself, not the content box: a custom
+  // property on the box is inherited by the whole chat beside it, so every
+  // drag frame restyled the transcript too.
+  const apply = (share: number) => ref.current?.parentElement?.querySelector<HTMLElement>(':scope > .command-wall-companions')?.style.setProperty('--companion-share', `${(share * 100).toFixed(1)}%`);
   useLayoutEffect(() => { apply(readCompanionWidth(sessionId)); }, [sessionId]);
   const [share, setShare] = useState(() => readCompanionWidth(sessionId));
   const commit = (next: number) => { apply(next); setShare(next); saveCompanionWidth(sessionId, next); };
@@ -689,6 +692,18 @@ export function CommandWall({
     stage.querySelectorAll<HTMLElement>(':scope > [data-wall-pane]').forEach((el) => els.set(el.dataset.wallPane!, el));
     const before = lastPush.current;
     lastPush.current = size.width > 0 ? { ids, boxes: new Map(shownPanes), els, mode: wallArrangement(state.layout) } : null;
+    // Windows that stayed but moved slide on a transform. Not while a window
+    // is held (its own transition shows the zones opening), while a divider is
+    // dragged (the preview already put them there), or when leaving Focus.
+    if (before && !snapping && !lift && !document.body.classList.contains('wall-resizing') && !document.body.classList.contains('wall-dividing')) {
+      for (const id of ids) {
+        const was = before.boxes.get(id);
+        const box = shownPanes.get(id);
+        const el = els.get(id);
+        if (!was || !box || !el || el.hasAttribute('data-wall-parked') || (was.x === box.x && was.y === box.y)) continue;
+        slideWindow(el, was, box);
+      }
+    }
     if (!before || before.mode !== wallArrangement(state.layout) || state.layout.mode === 'focus' || snapping) return;
     for (const id of ids) {
       if (before.ids.has(id)) continue;
@@ -891,6 +906,35 @@ export function CommandWall({
     }} />;
   };
 
+  // A divider drag draws its result straight onto the windows (and the
+  // divider), with no React render per pointer move: re-rendering the wall at
+  // pointer rate was the cost. Divider commits once, on release. Not while a
+  // window is held, a log drawer has moved the windows, or in Focus.
+  const previewSplit = (id: string, index: number, value: number, handle: HTMLElement): boolean => {
+    const stage = pushStageRef.current;
+    if (!stage || lift || logsLayout || state.layout.mode === 'focus' || size.width <= 0) return false;
+    const target = state.snap ? splitBoundary(companionTree(evenTree(state.root), expanded), id, index) : null;
+    const fraction = snapFraction(value, target);
+    const root = resizeCompanionSplit(state.root, expanded, id, index, fraction);
+    const panes = commandWallGeometry({ ...state, root }, size.width, size.height, expanded, !!addContent).panes;
+    document.body.classList.add('wall-dividing');
+    stage.querySelectorAll<HTMLElement>(':scope > [data-wall-pane]').forEach((el) => {
+      const b = panes.get(el.dataset.wallPane!);
+      if (!b || el.hasAttribute('data-wall-parked')) return;
+      el.style.left = `${b.x}px`; el.style.top = `${b.y}px`; el.style.width = `${b.width}px`; el.style.height = `${b.height}px`;
+    });
+    const box = handle.parentElement;
+    if (box) {
+      const row = handle.getAttribute('aria-orientation') === 'vertical';
+      box.style.setProperty(row ? '--wall-divider-left' : '--wall-divider-top', `${fraction * (row ? box.offsetWidth : box.offsetHeight) - 4}px`);
+    }
+    return true;
+  };
+
+  // The commit renders the same boxes the preview drew; keep slides off until
+  // it has painted, so the windows don't replay the drag from where it began.
+  const endPreviewSoon = () => requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('wall-dividing')));
+
   // Each divider retains its original split box as its parent so pointer and
   // keyboard resize fractions still address the saved tree, not the whole wall.
   const sourceSplitIds = new Set<string>();
@@ -911,11 +955,11 @@ export function CommandWall({
           '--wall-divider-width': `${node.dir === 'row' ? 8 : r.width}px`,
           '--wall-divider-height': `${node.dir === 'col' ? 8 : r.height}px`,
         } as React.CSSProperties}>
-          <Divider splitId={node.id} index={i - 1} dir={node.dir} snapped={!!state.snap && Math.abs((splitBoundary(companionTree(state.root, expanded), node.id, i - 1) ?? -1) - (splitBoundary(companionTree(evenTree(state.root), expanded), node.id, i - 1) ?? -2)) < 1e-6} onResize={(id, index, value) => update((root) => {
+          <Divider splitId={node.id} index={i - 1} dir={node.dir} onPreview={previewSplit} snapped={!!state.snap && Math.abs((splitBoundary(companionTree(state.root, expanded), node.id, i - 1) ?? -1) - (splitBoundary(companionTree(evenTree(state.root), expanded), node.id, i - 1) ?? -2)) < 1e-6} onResize={(id, index, value) => { endPreviewSoon(); update((root) => {
             // Snap to grid: even spacing is a snap point the divider pulls onto when near it.
             const target = state.snap ? splitBoundary(companionTree(evenTree(root), expanded), id, index) : null;
             return resizeCompanionSplit(root, expanded, id, index, snapFraction(value, target));
-          })} />
+          }); }} />
         </div>}
         {renderDividers(child, childRect)}
       </React.Fragment>;

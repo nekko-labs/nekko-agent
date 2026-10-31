@@ -87,7 +87,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
   const [openTrees, setOpenTrees] = useState<Set<string>>(new Set());
   // The height you asked for (persisted), and the room there is for it.
   const [explorerH, setExplorerH] = useState(readExplorerHeight);
-  const explorerHRef = useRef(explorerH);
+  const explorerRef = useRef<HTMLElement>(null);
   const [splitH, setSplitH] = useState(0);
   // The area the divider splits (Folders + Context), excluding the pinned dock.
   const splitRef = useRef<HTMLDivElement>(null);
@@ -225,9 +225,6 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
     });
 
   // --- The draggable divider between Folders and Context ---
-  // The pointerup handler closes over the height at drag start, so the live value
-  // is read from a ref when persisting.
-  explorerHRef.current = explorerH;
   // What the Folders section gets on screen: the asked-for height, capped so the
   // Context section below it always keeps a usable minimum.
   const maxExplorerH = Math.max(MIN_EXPLORER_H, (splitH || DEFAULT_EXPLORER_H + MIN_CONTEXT_H) - MIN_CONTEXT_H);
@@ -237,14 +234,21 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
     e.preventDefault();
     const startY = e.clientY;
     const startH = shownExplorerH;
+    const section = explorerRef.current;
+    let latest = startH;
+    // The section's height is written directly while dragging and committed
+    // to state once on release, not a render of the inspector per move.
     const onMove = (ev: PointerEvent) => {
-      setExplorerH(Math.min(maxExplorerH, Math.max(MIN_EXPLORER_H, startH + (ev.clientY - startY))));
+      latest = Math.min(maxExplorerH, Math.max(MIN_EXPLORER_H, startH + (ev.clientY - startY)));
+      if (section) section.style.height = `${latest}px`;
+      else setExplorerH(latest);
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      setExplorerH(latest);
       try {
-        window.localStorage.setItem(EXPLORER_KEY, String(Math.round(explorerHRef.current)));
+        window.localStorage.setItem(EXPLORER_KEY, String(Math.round(latest)));
       } catch { /* best effort */ }
     };
     window.addEventListener('pointermove', onMove);
@@ -285,6 +289,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
       <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
         {/* ---- Folders + file explorer ---- */}
         <section
+          ref={explorerRef}
           className="flex min-h-0 shrink-0 flex-col"
           style={treesOpen ? { height: shownExplorerH } : undefined}
         >

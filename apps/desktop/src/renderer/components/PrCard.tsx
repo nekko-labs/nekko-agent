@@ -196,7 +196,7 @@ export function PrActionDock({ sessionId, prs, urls, floating = false, checksInP
   return <section aria-label="Pending pull requests" className="pr-action-deck" data-expanded={expanded} data-floating={floating}>
     <div className="pr-deck-reveal" id={'pr-deck-' + sessionId} inert={!expanded}>
       <div className="pr-deck-clip"><div className="pr-deck-list">
-        {active.map((url) => <div key={url} className="pr-deck-slot" data-closing={closing.has(url)} onAnimationEnd={(event) => { if (event.target === event.currentTarget && event.animationName === 'pr-deck-retract') finishDismiss(url); }}>
+        {active.map((url) => <div key={url} className="pr-deck-slot" data-closing={closing.has(url)} onTransitionEnd={(event) => { if (event.target === event.currentTarget && event.propertyName === 'opacity') finishDismiss(url); }}>
           <PrActionCard url={url} info={byUrl.get(url)} sessionId={sessionId} onDismiss={() => dismiss(url)} checksInPlan={checksInPlan} />
         </div>)}
       </div></div>

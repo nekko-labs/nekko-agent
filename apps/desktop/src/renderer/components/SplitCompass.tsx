@@ -284,7 +284,7 @@ function Compass({
               }}
             />
             <button
-              className="absolute grid place-items-center rounded-lg border transition-all duration-150"
+              className="absolute grid place-items-center rounded-lg border transition-[background-color,border-color,color,opacity,transform] duration-150"
               style={{
                 ...SPOT[d],
                 width: horizontal ? 30 : 44,

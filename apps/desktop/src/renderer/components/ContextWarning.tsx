@@ -158,8 +158,8 @@ export function ContextWarning({
               >
                 {/* A sliver while nothing has finished, so a started run never looks idle. */}
                 <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
-                  style={{ width: `${Math.max(4, steps.fraction * 100)}%` }}
+                  className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-200 ease-(--ease-out)"
+                  style={{ transform: `scaleX(${Math.max(0.04, steps.fraction)})` }}
                 />
               </div>
               <p className="mt-1 text-2xs tabular-nums text-ink-faint">{steps.label}</p>

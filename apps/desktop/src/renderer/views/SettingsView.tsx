@@ -86,7 +86,15 @@ export function SettingsView() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<SettingsGroupId>('general');
   const jumping = useRef(0);
-  const onScroll = () => { if (scrollRef.current && !jumping.current) setActive(activeGroup(scrollRef.current)); };
+  // Section spy: it measures the page, so at most once a frame, not per scroll event.
+  const spyFrame = useRef(0);
+  const onScroll = () => {
+    if (spyFrame.current) return;
+    spyFrame.current = requestAnimationFrame(() => {
+      spyFrame.current = 0;
+      if (scrollRef.current && !jumping.current) setActive(activeGroup(scrollRef.current));
+    });
+  };
   const goTo = (id: SettingsGroupId) => {
     setActive(id);
     const scroller = scrollRef.current;
