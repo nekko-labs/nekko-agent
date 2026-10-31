@@ -1,10 +1,23 @@
 ---
 status: active
-last-updated: 2026-10-28
+last-updated: 2026-10-31
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Per-chat watching Nekko and resolved Claude model (added 2026-10-31)
+
+Nekko used to sit in the app's bottom-left corner as one global mascot. Philip asked for her to live inside each agent window at the top-right (~80% along the top edge) and to watch the composer as the user types; the single `mascotEnabled` setting still hides them all at once. In the same session he asked that a Claude subscription chat stop reading as the generic "Opus" alias once Claude Code reports which version it resolved to. Both ride under the existing H-group's `claude-code` plumbing (`claudeCodeContext.model`).
+
+- [x] **PM-1, `pupilOffset` on `NekkoAvatar` (2026-10-31).** `apps/desktop/src/renderer/components/Mascot.tsx` adds an optional `{x,y}` prop; `PixelHead` wraps `data-part="pixel-eyes"` in a `<g transform="translate(x y)">` so the pupils can watch something without touching the five `d="..."` paths the marketing-geometry test counts. The CSS keyframes still animate the eye paths' opacity (blink, happy) over the translated group. Covered by a new unit test in `Mascot.test.tsx`.
+- [x] **PM-2, `ChatMascot` component (2026-10-31).** New `apps/desktop/src/renderer/components/ChatMascot.tsx`. Positions a 56px Nekko absolutely at `top-2 right-[20%]` of its chat pane, pointer-events none, and watches the composer caret with the same `selectionchange + input + scroll + resize` loop `GreetingNekko` uses (scoped to the owning pane). Feeds `greetingGaze(dx,dy)` as `pupilOffset`. Honors `enabled` (the `mascotEnabled` setting) and dresses up with the Spooky `wizardHat` under the autumn preset.
+- [x] **PM-3, Mount per-chat and retire the global mascot (2026-10-31).** `ChatPane.tsx` renders `<ChatMascot>` inside the pane root when `surface === 'full' && !cleanStart`, so a wall window and the single-pane chat view each get their own Nekko and the welcome state keeps the composer-peek `GreetingNekko` alone. `App.tsx` drops the global `<Mascot>` + `mascotMood`/`useAnyAgentWorking` imports. `chatPaneSettings` now carries `mascotEnabled` so the window re-renders when it toggles.
+- [x] **PM-4, Shared `shortModelName` util (2026-10-31).** The `claude-opus-4-7` → `Opus 4.7` regex moves from `WorkspaceCard.tsx` into `packages/shared/src/model-capabilities.ts` and is exported from `@nekko-agent/shared`. The card and the chip now read the same function.
+- [x] **PM-5, Model chip shows the resolved Claude Code version (2026-10-31).** `ModelPicker.tsx` takes a new optional `resolvedModelId`. When the current provider is `claude-code` and the prop is set, the chip reads `shortModelName(resolvedModelId)` ("Opus 4.7") instead of the generic alias ("Claude Opus"); the dropdown still lists Claude Code's three accepted aliases. `ChatPane.tsx` derives `resolvedClaudeCodeModel` from `claudeCodeContext.model` only when `claudeCodeContext.modelId === modelId`, so a mid-chat alias switch clears the stale version until the next `system/init`. Passed to both ModelPicker call sites (the composer bar and the welcome-state expanded picker).
+- [x] **PM-6, WorkspaceCard shows the resolved Claude Code version (2026-10-31).** `WorkspaceCard.tsx` prefers `session.claudeCodeContext.model` over `session.modelId` for the card's model line (same guard as above), so an agent card in the sidebar also reads "Opus 4.7" rather than generic "opus".
+- [x] **PM-7, Tests (2026-10-31).** `Mascot.test.tsx`'s autumn-shell assertion now checks that the app shell carries no `pixel-mascot` (the global one is retired) and a new case asserts `pupilOffset` translates both pixel eyes.
+- [ ] **PM-8, Visual check in a packaged build.** Capture a wall of three windows and a single chat view to confirm the ~80% top-right placement reads right at common pane widths; verify eye-tracking on a running desktop against a real composer caret.
 
 ## A composer in every wall window (#1317)
 

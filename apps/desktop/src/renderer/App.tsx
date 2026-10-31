@@ -3,7 +3,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
 import { startLiveRuns } from './liveRuns.js';
-import { useAnyAgentWorking } from './workingAgents.js';
 import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
@@ -21,7 +20,7 @@ import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
-import { Mascot, NekkoAvatar } from './components/Mascot.js';
+import { NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
 import { StepUpSheet } from './components/security/StepUpSheet.js';
@@ -76,11 +75,10 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 const MOBILE_NAV: View[] = ['command', 'training', 'workflows', 'settings'];
 
 export function App() {
-  const { view, setView, mascotMood, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
+  const { view, setView, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
-      mascotMood: s.mascotMood,
       settings: s.settings,
       settingsLoaded: s.settingsLoaded,
       providers: s.providers,
@@ -91,7 +89,6 @@ export function App() {
       refreshTerminals: s.refreshTerminals,
     })),
   );
-  const working = useAnyAgentWorking();
   const t = useT();
 
   // Experimental surfaces only exist in the nav once their Settings flag is on.
@@ -387,7 +384,6 @@ export function App() {
       <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
       {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}
-      <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} working={working} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
       <ErrorBoundary label="Command palette"><CommandPalette /></ErrorBoundary>
       <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
       <ErrorBoundary label="Claude plan"><ClaudePlanSheet /></ErrorBoundary>

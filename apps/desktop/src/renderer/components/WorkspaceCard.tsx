@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext } from '@nekko-agent/shared';
+import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
@@ -131,20 +131,6 @@ function compactTokens(n: number): string {
   return String(n);
 }
 
-/**
- * A model id as a card can say it. The provider already names the vendor on
- * the same line, so "claude-opus-5-5" reads as "Opus 5.5" beside "Claude".
- */
-function shortModelName(id: string, known?: string): string {
-  if (known) return known.replace(/^Claude\s+/i, '');
-  const claude = /^(?:.*\/)?claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/i.exec(id);
-  if (claude) {
-    const family = claude[1][0].toUpperCase() + claude[1].slice(1).toLowerCase();
-    return `${family} ${claude[2]}${claude[3] ? `.${claude[3]}` : ''}`;
-  }
-  return id;
-}
-
 /** PRs by URL, the branch's own first, so one PR is never counted twice. */
 function mergePrs(branchPr: PrInfo | undefined, mentioned: PrInfo[] | undefined): PrInfo[] {
   const out = new Map<string, PrInfo>();
@@ -235,14 +221,23 @@ function WorkspaceCardImpl({
   const lastReply = session?.lastReplyAt;
   const title = session?.title ?? terminal?.title ?? 'Agent';
   const isChat = !!session;
+  // Claude Code picks the version from the plan: when its `system/init` reports
+  // a specific id for the alias we sent ("claude-opus-4-7" against our "opus"),
+  // the card says that so a plan chat reads "Opus 4.7" rather than generic "opus".
+  const resolvedClaudeCodeModel = session?.claudeCodeContext?.model
+    && session.claudeCodeContext.modelId === session.modelId
+    ? session.claudeCodeContext.model
+    : undefined;
   const model = session
     ? session.chatType === 'image'
       ? `🎨 ${session.imageParams?.modelId ? (session.imageParams.modelId.split('/').pop() as string) : 'No image model yet'}`
       : session.autoModel
       ? 'Auto'
-      : session.modelId
-        ? shortModelName(session.modelId, modelInfo?.name)
-        : 'No model yet'
+      : resolvedClaudeCodeModel
+        ? shortModelName(resolvedClaudeCodeModel)
+        : session.modelId
+          ? shortModelName(session.modelId, modelInfo?.name)
+          : 'No model yet'
     : terminal
       ? terminal.shell.split(/[\\/]/).pop() || terminal.shell
       : 'Shell';

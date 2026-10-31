@@ -5,7 +5,7 @@ import { filteredModelGroups, isModelPickerEscape, modelRowLabel, nextFavoriteMo
 import type { AutoQuality, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 import {
   AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, formatModelPriceLabel,
-  isLocalProvider, modelPricing, resolveModelAvailability,
+  isLocalProvider, modelPricing, resolveModelAvailability, shortModelName,
 } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
@@ -46,6 +46,7 @@ export function ModelPicker({
   allowAuto = true,
   filterProviders,
   placeholder,
+  resolvedModelId,
 }: {
   providers: ProviderConfig[];
   providerId: string | null;
@@ -71,6 +72,14 @@ export function ModelPicker({
   filterProviders?: (p: ProviderConfig) => boolean;
   /** Chip text while no model is chosen (an inherited model), instead of "No model". */
   placeholder?: string;
+  /**
+   * The specific model id Claude Code reported in its `system/init` for this
+   * chat (`session.claudeCodeContext.model`). Claude Code picks from the user's
+   * plan, so this is "Opus 4.7" or "Opus 5.5" rather than the generic "opus"
+   * alias we send on `--model`. The chip reads it as the label; the picker's
+   * list stays the alias list because that is what Claude Code will accept.
+   */
+  resolvedModelId?: string;
 }) {
   // A provider switched off on the Models page is neither listed nor contacted.
   const providers = useMemo(() => allProviders.filter((p) => p.enabled !== false && (!filterProviders || filterProviders(p))), [allProviders, filterProviders]);
@@ -175,8 +184,19 @@ export function ModelPicker({
   const currentProvider = allProviders.find((p) => p.id === providerId);
   const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
   const currentModel = models.find((m) => m.id === modelId);
+  // A Claude subscription chat gets its model picked by Claude Code, not us:
+  // the picker still shows the alias "Opus"/"Sonnet" row that we send with
+  // `--model`, but once Claude Code has reported which version it resolved
+  // ("claude-opus-4-7") the chip reads that instead of the generic alias.
+  const claudeCodeResolved = currentProvider?.kind === 'claude-code' && resolvedModelId
+    ? shortModelName(resolvedModelId)
+    : null;
   const currentName =
-    modelId === AUTO_MODEL_ID ? '✨ Auto' : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name : 'No model';
+    modelId === AUTO_MODEL_ID ? '✨ Auto'
+      : claudeCodeResolved
+        ? claudeCodeResolved
+        : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name
+        : 'No model';
 
   const pick = (pid: string, mid: string) => {
     if (pid !== providerId) onProvider(pid);

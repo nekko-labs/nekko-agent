@@ -81,6 +81,7 @@ import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
 import { PrCard, PrActionDock } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
+import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
@@ -975,6 +976,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     () => reportedClaudeCodeContext({ claudeCodeContext }, modelId ?? undefined),
     [claudeCodeContext, modelId],
   );
+  // Claude Code's `system/init` reports the specific version it resolved the
+  // alias to. The chip prefers that over the generic alias so a plan chat
+  // reads "Opus 4.7" instead of just "Opus", but only when the resolved entry
+  // still matches the picker's current alias (switching alias clears the
+  // older claim until the next init event comes in for the new one).
+  const resolvedClaudeCodeModel = claudeCodeChat && claudeCodeContext?.model && claudeCodeContext.modelId === modelId
+    ? claudeCodeContext.model
+    : undefined;
   const latestReportedRef = useRef(reportedCtx);
   latestReportedRef.current = reportedCtx;
   const latestCtxRef = useRef(ctx);
@@ -2413,6 +2422,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       providerId={providerId}
       models={models}
       modelId={modelId}
+      resolvedModelId={resolvedClaudeCodeModel}
       open={modelMenuOpen}
       onOpenChange={openModelMenu}
       needsChoice={needsModel}
@@ -2463,6 +2473,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       </ContextMenu>}
       <section className={`relative isolate flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
         {emptyWave && <PixelWaveBackground wave={emptyWave} visible={paneShown} />}
+        {/* The per-chat Nekko watches this composer's caret; wall windows and
+            the lone composer surface already carry their own picker and don't
+            need another cat on top of the transcript. */}
+        {surface === 'full' && !cleanStart && <ChatMascot
+          enabled={settings?.mascotEnabled ?? true}
+          working={streaming || hasLive}
+          wizardHat={settings?.themePreset === 'autumn'}
+          paneRef={paneRef}
+        />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
@@ -2553,6 +2572,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   </div>
                   {imageMode && session ? <ImageModeControls session={session} onChange={setSession} busy={streaming} /> :
                     <ModelPicker providers={providers} filterProviders={cloudOnlyFilter} providerId={providerId} models={models} modelId={modelId}
+                      resolvedModelId={resolvedClaudeCodeModel}
                       open={false} onOpenChange={openModelMenu} expanded
                       recent={recentModels}
                       onProvider={setProviderId} onModel={(pid, mid) => { setProviderId(pid); setModelId(mid); setUnavailableModel(null); void window.nekko.setSessionOptions(sessionId, { providerId: pid, modelId: mid, autoModel: mid === AUTO_MODEL_ID }).then((s) => { if (s) { useStore.getState().rememberModel(pid, mid); window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); } }).catch((e) => useStore.getState().pushToast('error', String(e))); }} />}
