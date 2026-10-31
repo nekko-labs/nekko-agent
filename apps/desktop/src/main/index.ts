@@ -15,6 +15,7 @@ import { EngineProcess } from './engine-process.js';
 import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
 import { createTrayCompanion } from './trayCompanion.js';
+import { createMemoryWatch } from './memoryWatch.js';
 import { createForegroundGuard, holdNotices, type ForegroundGuard } from './foregroundGuard.js';
 import { startAgentBrowser } from './agentBrowser.js';
 import { guardSession } from './connectionsGuard.js';
@@ -37,6 +38,7 @@ let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let quitting = false;
 let mainWindow: BrowserWindow | null = null;
 let trayCompanion: ReturnType<typeof createTrayCompanion> | undefined;
+let memoryWatch: ReturnType<typeof createMemoryWatch> | undefined;
 let stopNotifications: (() => void) | undefined;
 let nativeNotifications: ReturnType<typeof createNativeNotificationPoster> | undefined;
 const notificationSessions = new Map<number, string | null>();
@@ -692,6 +694,7 @@ app.whenReady().then(async () => {
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),
     });
+    memoryWatch = createMemoryWatch({ tray: desktopTray.tray, engine: service, quiet: async () => (await foreground?.quiet()) === true, onError: message => dialog.showErrorBox('Nekko Agent', message) });
   }
 
   // Under `npm run dev`, hand the launcher what it needs for its banner.
@@ -718,6 +721,7 @@ app.on('before-quit', (event) => {
   quitting = true;
   displayWindows?.dispose();
   trayCompanion?.dispose();
+  memoryWatch?.dispose();
   stopNotifications?.();
   stopNotifications = undefined;
   foreground?.dispose();
