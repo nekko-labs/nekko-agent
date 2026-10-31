@@ -159,15 +159,20 @@ struct ChatView: View {
             .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
             .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
             .overlay(alignment: .bottomTrailing) {
-                if !atBottom && chat.running {
-                    Button { scrollToEnd(proxy) } label: {
-                        Label("Jump to latest", systemImage: "arrow.down").labelStyle(.iconOnly)
-                            .font(.body.weight(.semibold)).frame(width: 44, height: 44)
-                            .background(.regularMaterial, in: Circle())
+                // Fades in and out (a fade, so also with Reduce Motion) rather than popping:
+                // `atBottom` changes outside any animation, as the end scrolls in or out of view.
+                ZStack {
+                    if !atBottom && chat.running {
+                        Button { scrollToEnd(proxy) } label: {
+                            Label("Jump to latest", systemImage: "arrow.down").labelStyle(.iconOnly)
+                                .font(.body.weight(.semibold)).frame(width: 44, height: 44)
+                                .background(.regularMaterial, in: Circle())
+                        }
+                        .padding(16)
+                        .transition(.opacity)
                     }
-                    .padding(16)
-                    .transition(.opacity)
                 }
+                .animation(.smooth(duration: 0.2), value: !atBottom && chat.running)
             }
             .safeAreaInset(edge: .bottom) {
                 if flex == nil { bottomBar(chat) }
@@ -731,7 +736,8 @@ struct HoldToTalkButton: View {
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
             .scaleEffect(down ? 1.15 : 1)
-            .animation(.easeOut(duration: 0.12), value: down)
+            // A critically damped spring: a fast press and release reverses from where it is.
+            .animation(.spring(response: 0.25, dampingFraction: 1), value: down)
             .gesture(DragGesture(minimumDistance: 0).updating($down) { _, pressed, _ in pressed = true })
             // Down, and up whether released or cancelled.
             .onChange(of: down) { _, pressed in
