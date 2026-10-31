@@ -18,7 +18,7 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 
 Vision, users, product names, scope boundaries, open questions and policies.
 
-- [Claude policy (2026-10-19)](product/claude-policy.md) (8 KB)
+- [Claude policy (2026-10-19)](product/claude-policy.md) (9 KB)
 - [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
@@ -71,6 +71,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
+- [Ask before memory runs out (low-memory prompt)](desktop/low-memory-prompt.md) (4 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Customizable UI: customizations, mods and custom layouts](desktop/customizable-ui.md) (6 KB)
 - [Design quality: one type scale, readable faint text, tinted elevation, 4px spacing](desktop/design-quality-type-contrast-and-elevation.md) (2 KB)
@@ -122,7 +123,7 @@ Agents panel, monitors, subagents and delegation.
 What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 - [Code mode: a chat's tools as code (2026-10-22)](context/code-mode-tools-as-code.md) (7 KB)
-- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (12 KB)
+- [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (13 KB)
 - [Floop task connector](context/floop-task-connector.md) (2 KB)
 - [Living spec from a conversation](context/living-spec-from-a-conversation.md) (1 KB)
 - [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (8 KB)
@@ -139,7 +140,7 @@ Providers, local models, the Model Server, training.
 - [Anthropic image-dimension rejection prevention and continuation](models/anthropic-image-dimension-rejection-prevention-and-continuation.md) (1 KB)
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
-- [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (4 KB)
+- [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (5 KB)
 - [Models & providers](models/models-providers.md) (44 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
@@ -206,7 +207,7 @@ Architecture, speed contract, distribution, builds and startup.
 - [Development macOS identity](platform/development-macos-identity.md) (2 KB)
 - [Distribution & platforms](platform/distribution-platforms.md) (10 KB)
 - [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (17 KB)
-- [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (26 KB)
+- [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (27 KB)
 - [Limits on what grows in the data folder](platform/data-folder-growth-limits.md) (2 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
 - [Opt-in usage and crash reports](platform/opt-in-usage-and-crash-reports.md) (3 KB)

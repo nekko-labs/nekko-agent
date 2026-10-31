@@ -3,8 +3,9 @@
 //! `engine:settings`, `engine:residentTtl` and `engine:generateImage`, the
 //! router's questions about models it does not have running, and for the
 //! runtime control plane, `engine:start`, `engine:stop`, `engine:load`,
-//! `engine:unload`, `engine:resident`, `engine:running` and
-//! `engine:loadedIds`.
+//! `engine:unload`, `engine:resident`, `engine:running`,
+//! `engine:loadedIds` and `engine:releaseIdle` (the low-memory prompt's
+//! "free Nekko's memory").
 
 use crate::installs::Installs;
 use crate::library::{Library, engine_settings};
@@ -29,6 +30,7 @@ pub const CHANNELS: &[&str] = &[
     "engine:resident",
     "engine:running",
     "engine:loadedIds",
+    "engine:releaseIdle",
 ];
 
 /// The daemon's own processes and router, as the policy drives them.
@@ -345,6 +347,7 @@ impl Server {
             "engine:resident" => json!(self.model.resident()),
             "engine:running" => json!(self.model.is_running()),
             "engine:loadedIds" => json!(self.model.loaded_ids()),
+            "engine:releaseIdle" => self.model.release_idle().await,
             other => return Err(format!("{other} is not a model-server channel")),
         })
     }

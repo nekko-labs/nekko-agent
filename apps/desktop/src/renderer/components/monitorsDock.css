@@ -131,6 +131,9 @@
 .monitors-dock__reading { color: var(--ink-faint); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; }
 .monitors-dock__resize { position: absolute; top: 0; bottom: 0; left: -9px; width: 10px; z-index: 5; cursor: col-resize; touch-action: none; }
 .monitors-dock[data-dock-side='left'] .monitors-dock__resize { left: auto; right: -9px; }
+/* Beside a zoned board the gap is the add-zone rail, so the handle moves onto
+   the dock's own edge instead of covering the rail's strips. */
+.wall-workspace[data-dock-side='right']:has(.command-wall-layout[data-zone-rails]) .monitors-dock__resize { left: -1px; width: 8px; }
 /* The same grip as the agent list's resize handle (WorkspacesView): a 3px
    rounded line centred in the gap, hidden until hover or focus. */
 .monitors-dock__resize:focus-visible { outline: none; }

@@ -173,6 +173,9 @@ impl Wanted {
             permission_prompt_tool: None,
             add_dirs: self.add_dirs.clone(),
             config_dir: self.config_dir.clone(),
+            // Claude Code runs read-only git without asking: keep repository
+            // configuration from naming programs those commands run.
+            env: nekko_tools::gitguard::agent_git_env(),
         }
     }
 }
@@ -428,11 +431,23 @@ const SHELL_TOOLS: &[&str] = &["Bash", "PowerShell"];
 const EDIT_TOOLS: &[&str] = &["Edit", "MultiEdit", "Write", "NotebookEdit"];
 
 /// Whether `path` is inside one of the chat's folders (relative paths are
-/// the first folder's). Case-insensitive on Windows, as its paths are.
+/// the first folder's). Case-insensitive on Windows, as its paths are. Both
+/// where the path is written and where it really is (links followed) must
+/// be inside: a link in a folder may point anywhere.
 pub fn inside(path: &str, roots: &[PathBuf]) -> bool {
     let Some(first) = roots.first() else { return false };
     let p = std::path::Path::new(path);
     let full = if p.is_absolute() { p.to_path_buf() } else { first.join(p) };
+    if !lexically_inside(&full, roots) {
+        return false;
+    }
+    let real = PathBuf::from(nekko_tools::real_location(&full.to_string_lossy()));
+    let real_roots: Vec<PathBuf> =
+        roots.iter().map(|r| PathBuf::from(nekko_tools::real_location(&r.to_string_lossy()))).collect();
+    lexically_inside(&real, &real_roots)
+}
+
+fn lexically_inside(full: &std::path::Path, roots: &[PathBuf]) -> bool {
     let norm = |p: &std::path::Path| -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for c in p.components() {
@@ -449,7 +464,7 @@ pub fn inside(path: &str, roots: &[PathBuf]) -> bool {
         }
         out
     };
-    let full = norm(&full);
+    let full = norm(full);
     roots.iter().any(|r| {
         let r = norm(r);
         full.len() >= r.len() && full[..r.len()] == r[..]
@@ -523,6 +538,24 @@ pub fn decide(
     }
 }
 
+/// The input a prompt Nekko allowed without asking runs with: a shell command
+/// gets `--no-ext-diff --no-textconv` on its git diff, log and show, so it
+/// cannot run a diff or textconv program named in repository configuration.
+pub fn auto_run_input(tool: &str, input: &serde_json::Value) -> serde_json::Value {
+    let mut out = input.clone();
+    if !SHELL_TOOLS.contains(&tool) {
+        return out;
+    }
+    let dialect = if tool == "PowerShell" { nekko_tools::Dialect::PowerShell } else { nekko_tools::Dialect::Posix };
+    if let Some(command) = input.get("command").and_then(serde_json::Value::as_str) {
+        let hardened = nekko_tools::gitguard::harden_git_command(command, dialect);
+        if hardened != command {
+            out["command"] = serde_json::Value::String(hardened);
+        }
+    }
+    out
+}
+
 /// `nekko-agent` on PATH: the launcher the app installs, or the npm package.
 pub fn cli_on_path() -> Option<PathBuf> {
     let names: &[&str] = if cfg!(windows) { &["nekko-agent.cmd", "nekko-agent.exe"] } else { &["nekko-agent"] };
@@ -540,6 +573,7 @@ pub fn new_token() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn wanted() -> Wanted {
         Wanted {
@@ -636,6 +670,66 @@ mod tests {
         if cfg!(windows) {
             assert!(inside(r"c:\WORK\Repo\x", &roots()));
         }
+    }
+
+    #[test]
+    fn a_link_in_a_chat_folder_is_judged_where_it_points() {
+        let base = std::env::temp_dir().join(format!("nekkod-harness-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (ws, outside) = (base.join("ws"), base.join("outside"));
+        std::fs::create_dir_all(&ws).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        #[cfg(unix)]
+        let linked = std::os::unix::fs::symlink(&outside, ws.join("link"));
+        // A junction needs no privilege, unlike a symlink.
+        #[cfg(windows)]
+        let linked = std::os::windows::fs::symlink_dir(&outside, ws.join("link")).or_else(|_| {
+            let ok = std::process::Command::new("cmd")
+                .args(["/d", "/c", "mklink", "/J"])
+                .arg(ws.join("link"))
+                .arg(&outside)
+                .output()
+                .is_ok_and(|o| o.status.success());
+            if ok { Ok(()) } else { Err(std::io::Error::other("mklink /J failed")) }
+        });
+        if linked.is_err() {
+            eprintln!("cannot create a symlink here; skipped");
+            let _ = std::fs::remove_dir_all(&base);
+            return;
+        }
+        let roots = vec![ws.clone()];
+        assert!(inside(&ws.join("real.txt").to_string_lossy(), &roots));
+        assert!(!inside(&ws.join("link").join("target.txt").to_string_lossy(), &roots));
+        assert!(!inside("link/target.txt", &roots));
+        assert_eq!(
+            decide("guardrails", "Write", &json!({ "file_path": ws.join("link").join("t.txt") }), &[], &roots),
+            Decision::Ask {
+                reason: format!(
+                    "Claude Code wants to change a file outside this chat's folders: {}",
+                    ws.join("link").join("t.txt").display()
+                ),
+                severity: "high"
+            }
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn auto_allowed_shell_commands_turn_off_git_drivers() {
+        let out = auto_run_input("Bash", &json!({ "command": "git diff && git status", "description": "d" }));
+        assert_eq!(out["command"], "git diff --no-ext-diff --no-textconv && git status");
+        assert_eq!(out["description"], "d");
+        let same = json!({ "command": "ls -la" });
+        assert_eq!(auto_run_input("Bash", &same), same);
+        let edit = json!({ "file_path": "a", "command": "git diff" });
+        assert_eq!(auto_run_input("Write", &edit), edit);
+    }
+
+    #[test]
+    fn claude_code_launches_with_the_agent_git_env() {
+        let w = wanted();
+        let spec = w.launch(bin(), None);
+        assert!(spec.env.iter().any(|(_, v)| v.as_deref() == Some("safe.bareRepository")), "{:?}", spec.env);
     }
 
     #[test]

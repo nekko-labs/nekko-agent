@@ -164,8 +164,8 @@ function ProviderRow({
    * which it is.
    */
   const status = (): { text: string; tone?: string } => {
-    // A Claude Agent's plan usage lives in Claude Code; Nekko shows none (claude-policy.ts).
-    if (provider.kind === 'claude-code') return { text: 'usage shown in Claude Code' };
+    // A Claude Agent's plan usage is what its own Claude Code last printed.
+    if (provider.kind === 'claude-code' && !limits) return { text: answered ? 'reported once Claude Code runs' : 'reading…' };
     if (subscription && !provider.tokenKey) return { text: 'not signed in' };
     if (!limits) {
       if (!subscription) {

@@ -15,7 +15,30 @@ export function DesktopBehaviorSection({ settings, update }: Props) {
         <option value="tray">Keep running in tray</option><option value="shutdown">Shut down Nekko</option>
       </select>
     </div>
+    <LowMemoryRows settings={settings} update={update} />
   </section>;
+}
+
+/** The tray's low-memory prompt: the remembered choice, and the apps always closed. */
+function LowMemoryRows({ settings, update }: Props) {
+  const apps = settings.lowMemoryCloseApps ?? [];
+  return <>
+    <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+      <div><label htmlFor="desktop-low-memory" className="text-sm">When memory runs low</label>
+        <p className="text-2xs text-ink-faint">Nekko asks above the tray whether to close the app holding the most memory, free Nekko's own (its idle local models), or ignore it. A remembered choice is used without asking.</p></div>
+      <select id="desktop-low-memory" className="input max-w-[200px] py-1" value={settings.lowMemoryAction ?? 'ask'} onChange={e => update({ lowMemoryAction: e.target.value === 'release' || e.target.value === 'ignore' ? e.target.value : undefined })}>
+        <option value="ask">Ask me</option><option value="release">Free Nekko's memory</option><option value="ignore">Do nothing</option>
+      </select>
+    </div>
+    {apps.length > 0 && <div className="mt-2" aria-labelledby="desktop-low-memory-apps">
+      <span id="desktop-low-memory-apps" className="text-sm">Always ask these apps to close</span>
+      <p className="text-2xs text-ink-faint">When one of them holds the most memory, Nekko asks it to close the way its close button would, so it can still ask to save.</p>
+      <ul className="mt-1 flex flex-wrap gap-2">
+        {apps.map(app => <li key={app} className="flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-xs">{app}
+          <button type="button" className="text-ink-faint hover:text-ink" aria-label={`Stop closing ${app}`} onClick={() => update({ lowMemoryCloseApps: apps.filter(a => a !== app) })}>×</button></li>)}
+      </ul>
+    </div>}
+  </>;
 }
 
 export function FunSection({ settings, update }: Props) {
