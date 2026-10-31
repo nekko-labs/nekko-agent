@@ -100,9 +100,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func clear(sessionId: String) {
-        let center = UNUserNotificationCenter.current()
-        center.getDeliveredNotifications { list in
-            let ids = list.filter { $0.request.content.threadIdentifier == sessionId }.map(\.request.identifier)
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let ids = await center.deliveredNotifications().filter { $0.request.content.threadIdentifier == sessionId }.map(\.request.identifier)
             center.removeDeliveredNotifications(withIdentifiers: ids)
         }
     }

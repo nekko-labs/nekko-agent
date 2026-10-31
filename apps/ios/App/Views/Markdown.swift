@@ -389,16 +389,12 @@ struct CodeBlock: View {
 /// every token re-renders the whole reply; without this each finished paragraph
 /// went through `AttributedString(markdown:)` again on every token.
 enum InlineMarkdown {
-    private final class Box {
+    private final class Box: Sendable {
         let value: AttributedString?
         init(_ value: AttributedString?) { self.value = value }
     }
 
-    private static let cache: NSCache<NSString, Box> = {
-        let c = NSCache<NSString, Box>()
-        c.countLimit = 800
-        return c
-    }()
+    private static let cache = SharedCache<Box>(countLimit: 800)
 
     private static let options = AttributedString.MarkdownParsingOptions(
         interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)

@@ -477,7 +477,7 @@ final class MermaidRenderer {
         var loaded: ((Result<Void, Error>) -> Void)?
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+                     decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
             if allowNext && action.request.url?.absoluteString == "about:blank" {
                 allowNext = false
                 decisionHandler(.allow)

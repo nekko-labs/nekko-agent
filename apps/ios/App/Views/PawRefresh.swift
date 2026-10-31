@@ -4,19 +4,19 @@ import UIKit
 extension View {
     /// Pull to refresh with Nekko in place of the system spinner: a "!" over a shocked
     /// cat, a quick grab and pull of the spinner, and a smile once the reload is done.
-    func pawRefreshable(action: @escaping @Sendable () async -> Void) -> some View {
+    func pawRefreshable(action: @escaping @MainActor () async -> Void) -> some View {
         modifier(OwnedPawRefresh(action: action))
     }
 
     /// The same, played by the screen's toolbar mascot (`RootMascot(pull:)`) rather than
     /// a cat of its own inside the refresh control.
-    func pawRefreshable(_ pull: PawPull, action: @escaping @Sendable () async -> Void) -> some View {
+    func pawRefreshable(_ pull: PawPull, action: @escaping @MainActor () async -> Void) -> some View {
         modifier(PawRefreshModifier(pull: pull, action: action))
     }
 }
 
 private struct OwnedPawRefresh: ViewModifier {
-    let action: @Sendable () async -> Void
+    let action: @MainActor () async -> Void
     @StateObject private var pull = PawPull()
 
     func body(content: Content) -> some View {
@@ -26,7 +26,7 @@ private struct OwnedPawRefresh: ViewModifier {
 
 private struct PawRefreshModifier: ViewModifier {
     let pull: PawPull
-    let action: @Sendable () async -> Void
+    let action: @MainActor () async -> Void
 
     func body(content: Content) -> some View {
         content
@@ -284,7 +284,10 @@ final class PawProbeView: UIView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    deinit { host?.view.removeFromSuperview() }
+    deinit {
+        // A deinit isn't on the main actor; the hosted view is taken down there.
+        if let host { Task { @MainActor in host.view.removeFromSuperview() } }
+    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
@@ -310,8 +313,9 @@ final class PawProbeView: UIView {
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         control.addSubview(host.view)
         self.host = host
+        // UIKit changes the offset, and so reports it, on the main thread.
         observation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] scroll, _ in
-            self?.update(scroll)
+            MainActor.assumeIsolated { self?.update(scroll) }
         }
     }
 

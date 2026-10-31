@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 extension XCTestCase {
     /// The appearances the light-and-dark tests run in: NEKKO_UI_THEMES ("light" on CI
     /// for a change that keeps its colours; scripts/ios-theme-scope.mjs), else both.
