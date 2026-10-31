@@ -220,7 +220,7 @@ export function ModelPicker({
   const accountSwitcher = accounts.length > 1 && (
     <div className="model-accounts mb-1 px-1" data-account-switcher>
       <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Account">
-        <span className="px-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Account</span>
+        <span className="px-2 text-xs font-medium text-ink-soft">Account</span>
         {accounts.map((p) => {
           const current = p.id === providerId;
           const blocked = current ? null : accountBlocked(p);
@@ -334,7 +334,7 @@ export function ModelPicker({
     <p
       className={provider
         ? 'truncate px-3 pb-0.5 pt-2 text-xs font-semibold text-ink'
-        : 'truncate px-3 pb-0.5 pt-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint'}
+        : 'truncate px-3 pb-0.5 pt-1 text-xs font-medium text-ink-soft'}
       data-provider-heading={provider || undefined}
       title={email ? `${label} · ${email}` : undefined}
     >

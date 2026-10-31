@@ -191,7 +191,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
 
   const empty = (text: string) => <p className="px-3 py-3 text-center text-xs text-ink-faint" role="presentation">{text}</p>;
   const sectionHead = (text: string, count?: number) => (
-    <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-2xs font-semibold uppercase tracking-wider text-ink-faint" role="presentation">
+    <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-xs font-medium text-ink-soft" role="presentation">
       {text}{count !== undefined && <span className="tabular-nums font-normal normal-case tracking-normal">{count}</span>}
     </p>
   );

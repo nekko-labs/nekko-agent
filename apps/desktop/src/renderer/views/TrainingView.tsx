@@ -215,7 +215,7 @@ function NewRunForm({
   };
 
   const L = ({ children }: { children: React.ReactNode }) => (
-    <label className="mb-1 block font-mono text-2xs uppercase tracking-[0.14em] text-(--ink-faint)">{children}</label>
+    <label className="mb-1 block text-xs text-ink-soft">{children}</label>
   );
 
   return (
@@ -317,7 +317,7 @@ function NewRunForm({
         </div>
 
         <details className="rounded-lg border border-(--line) px-3 py-2">
-          <summary className="cursor-pointer select-none font-mono text-2xs uppercase tracking-[0.14em] text-(--ink-faint)">
+          <summary className="cursor-pointer select-none text-xs text-ink-soft">
             Expert levers
           </summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">

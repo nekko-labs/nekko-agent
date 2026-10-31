@@ -103,7 +103,7 @@ export function ProviderLimitsDock({ standalone = false }: { standalone?: boolea
         aria-expanded={open}
         title={open ? 'Collapse provider capacity' : 'Show capacity across every provider'}
       >
-        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-xs font-medium text-ink-soft">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Capacity
           <span className="chip text-2xs">{rows.length}</span>

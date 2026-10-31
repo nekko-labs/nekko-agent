@@ -126,7 +126,7 @@ export function ConnectionsSettings({ settings, update }: {
       </div>
       {CONNECTION_GROUPS.map((g) => (
         <div key={g.id} className="mt-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{g.label}</h3>
+          <h3 className="text-xs font-medium text-ink-soft">{g.label}</h3>
           <p className="text-2xs text-ink-faint">{g.desc}</p>
           {CONNECTIONS.filter((c) => c.group === g.id).map((c) => (
             <Row

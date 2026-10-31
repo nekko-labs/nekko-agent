@@ -884,7 +884,7 @@ export function ExpertControls({
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <p className="border-t pt-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+      <p className="border-t pt-2 text-xs font-medium text-ink-soft" style={{ borderColor: 'var(--line)' }}>
         {title}
       </p>
       {children}

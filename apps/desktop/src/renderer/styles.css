@@ -29,11 +29,12 @@
 /* Context menus remain neutral even when a preset gives the page a vivid tint. */
 .context-menu, .create-menu { background: #ffffff; color: #17191f; }
 [data-theme='dark'] :is(.context-menu, .create-menu) { background: #191c23; color: #f3f4f6; }
+/* Hover, checked and open rows are a neutral wash of the menu's own ink: the
+   accent is kept for the primary action, focus and data. */
 .context-menu [role^="menuitem"]:not(:disabled):is(:hover, :focus-visible),
 .context-menu [role^="menuitem"][aria-checked="true"],
 .context-menu [role="menuitem"][aria-expanded="true"] {
-  background: var(--accent);
-  color: var(--on-accent, white);
+  background: color-mix(in srgb, currentColor 9%, transparent);
   outline: none;
 }
 
@@ -261,12 +262,13 @@
   }
 }
 
+/* One flat fill in the accent: no gradient, no resting shadow, no glow. Keep
+   it to the one main action of a view; the rest are outline or ghost. */
 @utility btn-primary {
-  background: var(--brand-grad);
+  background: var(--accent);
   color: var(--on-accent);
-  box-shadow: var(--shadow-sm);
   &:hover {
-    filter: brightness(1.06) saturate(1.05);
+    background: color-mix(in srgb, var(--accent) 88%, var(--ink));
   }
 }
 
@@ -306,8 +308,8 @@
     border-color var(--dur-fast) ease,
     background var(--dur-fast) ease;
   &:hover {
-    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-    background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+    border-color: var(--line);
+    background: var(--surface-2);
   }
 }
 
@@ -323,14 +325,11 @@
   border: 1px solid transparent;
   transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
   &:hover, &:focus-visible {
-    background: var(--accent);
-    color: var(--on-accent);
-    border-color: var(--accent);
+    background: color-mix(in srgb, currentColor 9%, transparent);
     outline: none;
   }
 }
 
-.create-row:is(:hover, :focus-visible) .create-tile { color: inherit; }
 .create-row .kbd { background: transparent; color: inherit; border-color: currentColor; opacity: .75; }
 
 @utility create-tile {
@@ -636,30 +635,20 @@
   height: var(--rail-row);
   border-radius: 12px;
   pointer-events: none;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  /* Navigation recedes: a neutral tile, the same wash as hover, one step
+     stronger. The accent stays for actions, focus and data. */
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
   transform: translateY(calc(var(--i, 0) * (var(--rail-row) + var(--rail-gap))));
   transition:
     transform var(--rail-slide-ms) var(--rail-slide),
     opacity 160ms ease;
-  /* The brand-gradient notch on the wall travels with it. */
-  &::before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 50%;
-    width: 3px;
-    height: 18px;
-    border-radius: 0 3px 3px 0;
-    background: var(--brand-grad);
-    transform: translateY(-50%);
-  }
 }
 
 .rail .nav-item {
   z-index: 1;
   transition: color 140ms ease, background-color 140ms ease;
-  &:hover { color: var(--ink); background: color-mix(in srgb, var(--accent) 6%, transparent); }
-  &.active { color: var(--accent); background: transparent; }
+  &:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+  &.active { color: var(--ink); background: transparent; }
   &.active::before { content: none; }
 }
 
@@ -743,9 +732,9 @@
 
 @utility titlebar-heading {
   /* The current view's name beside the brand mark, the same size as every
-     other view's title (`view-title`) and well above the 10.5px version pill
+     other view's title (`view-title`) and well above the 11px version pill
      that follows it, so the heading leads the row. */
-  @apply ml-3 shrink-0 truncate text-2xl font-semibold tracking-tight;
+  @apply ml-3 shrink-0 truncate text-2xl font-semibold tracking-tight text-ink;
   line-height: 1.3;
 }
 
@@ -753,7 +742,7 @@
   /* Every view's page title (Agents off the desktop shell, Settings, Skills,
      Workflows...), one size so moving between tabs doesn't jump. Matches
      `titlebar-heading`. */
-  @apply text-2xl font-semibold tracking-tight;
+  @apply text-2xl font-semibold tracking-tight text-ink;
   line-height: 1.3;
 }
 
@@ -892,7 +881,7 @@
   width: 100%;
   height: 100%;
   border-radius: inherit;
-  background: var(--brand-grad);
+  background: var(--accent);
   transform-origin: left;
   transition: transform 0.25s var(--ease-out);
 }
@@ -947,7 +936,7 @@
   height: 21px;
   place-items: center;
   border-radius: 6px;
-  background: var(--brand-grad);
+  background: var(--accent);
   color: #fff;
   font-size: var(--text-sm);
   font-weight: 750;
@@ -975,7 +964,7 @@
 
 .title-update-primary {
   border-color: transparent;
-  background: var(--brand-grad);
+  background: var(--accent);
   color: var(--on-accent);
 }
 
@@ -1042,63 +1031,28 @@
     color: var(--ink);
   }
   &.active {
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--surface-2);
+    color: var(--ink);
   }
-  /* A small brand-gradient indicator on the active rail item. */
-  &.active::before {
-    content: '';
-    position: absolute;
-    left: -0px;
-    top: 50%;
-    height: 18px;
-    width: 3px;
-    transform: translateY(-50%);
-    border-radius: 0 3px 3px 0;
-    background: var(--brand-grad);
-  }
-  /* Playful motion for the colorful rail icons: a springy scale + wiggle on
-     hover, a satisfying squish on press, and a pop when a tab becomes active. */
+  /* The rail is used hundreds of times a day, so it answers with colour and
+     opacity only: no spring, no wiggle, no pop on a view switch. */
   & svg {
     opacity: 0.82;
-    transition:
-      transform var(--dur-med) var(--ease-spring),
-      opacity 0.15s ease;
-    will-change: transform;
+    transition: opacity var(--dur-fast) ease;
   }
-  &:hover svg {
-    opacity: 1;
-    transform: scale(1.16) rotate(-4deg);
-  }
-  &:active svg {
-    transform: scale(0.86);
-  }
+  &:hover svg,
   &.active svg {
     opacity: 1;
-    animation: nav-pop 0.45s var(--ease-spring);
   }
 }
 
 @utility active {
   &.nav-item {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-  /* A small brand-gradient indicator on the active rail item. */
-  &.nav-item::before {
-    content: '';
-    position: absolute;
-    left: -0px;
-    top: 50%;
-    height: 18px;
-    width: 3px;
-    transform: translateY(-50%);
-    border-radius: 0 3px 3px 0;
-    background: var(--brand-grad);
+    background: var(--surface-2);
+    color: var(--ink);
   }
   &.nav-item svg {
     opacity: 1;
-    animation: nav-pop 0.45s var(--ease-spring);
   }
 }
 
@@ -1115,12 +1069,11 @@
     --accent: #6d5efc;
     /* Text on the accent fill (primary buttons). Themes with a light accent switch it to dark ink. */
     --on-accent: #ffffff;
-    /* A cyan secondary paired with the indigo-violet accent into a violet→cyan
-     brand gradient (the modern developer-tool look). Derived soft/gradient
-     tokens track --accent (which the user can recolor in Settings). */
+    /* One brand hue. --accent-2 is a second data colour (charts, the code
+     highlight, a celebration); it never fills a button, a title or the nav.
+     Derived soft tokens track --accent, which the user can recolour. */
     --accent-2: #06b6d4;
     --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
-    --brand-grad: linear-gradient(135deg, var(--accent), var(--accent-2));
     /* Shadows: tinted, never pure black, blur twice the offset, and only on
      what floats (menus, popovers, toasts, a dragged card). Resting cards get a
      border instead. --shadow-ink is the hue they are tinted with: the ink in
@@ -1200,7 +1153,6 @@
     --accent: #8b7dff;
     --accent-2: #22d3ee;
     --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
-    --brand-grad: linear-gradient(135deg, var(--accent), var(--accent-2));
     --shadow-ink: color-mix(in srgb, var(--paper) 40%, #000);
     --shadow-sm: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 40%, transparent);
     --shadow-md:
@@ -2080,14 +2032,6 @@
     letter-spacing: -0.02em;
   }
 
-  /* Brand wordmark / accent text using the warm→cool gradient. */
-  .text-gradient {
-    background: var(--brand-grad);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    color: transparent;
-  }
 
   ::-webkit-scrollbar {
     width: 10px;
@@ -2100,14 +2044,6 @@
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--ink-faint);
-  }
-}
-
-@layer components {
-  @keyframes nav-pop {
-    0% { transform: scale(0.7); }
-    55% { transform: scale(1.22) rotate(5deg); }
-    100% { transform: scale(1) rotate(0); }
   }
 }
 
@@ -2249,7 +2185,7 @@
    rounded block on the right; the assistant's reply is plain full-width prose on
    the left, the way Claude Code / a document reads. */
 .msg-user {
-  max-width: 85%;
+  max-width: min(85%, calc(68ch + 32px));
   border-radius: 16px;
   padding: 8px 16px;
   background: var(--surface-2);
@@ -2260,6 +2196,12 @@
   min-width: 0;
   color: var(--ink);
   line-height: 1.6;
+}
+/* A readable measure: prose stops at about 68 characters however wide the
+   window gets, and documents read the same way. Code blocks, tables and
+   diagrams keep the full width; they scroll on their own. */
+:is(.msg-ai, .md-doc) :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+  max-width: 68ch;
 }
 
 /* Find in this chat (ChatSearchBar): a small bar floating at the top right of
@@ -2305,7 +2247,7 @@
 .settings-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .settings-group { scroll-margin-top: 16px; padding-top: 24px; }
 .settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
-.settings-group-title { font-size: var(--text-2xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.settings-group-title { font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
 .settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 4px 8px 4px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-float); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: var(--text-sm); color: var(--ink); }
 .settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
@@ -2635,7 +2577,7 @@
 .plan-sheet-fold { display: block; width: 100%; text-align: left; border-radius: 6px; }
 .plan-sheet-line { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .plan-sheet-fold-chips { padding-left: 20px; }
-.plan-sheet-kind { flex-shrink: 0; font-size: var(--text-2xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.plan-sheet-kind { flex-shrink: 0; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
 .plan-sheet-kind[data-current] { color: var(--accent); }
 .plan-sheet-steps .plan-sheet-kind { width: 46px; }
 .plan-sheet-pass { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; font-size: var(--text-2xs); color: var(--ink-faint); }
@@ -3008,7 +2950,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .screens-control { position: relative; display: inline-flex; align-items: center; }
 .screens-control::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 8px; -webkit-app-region: no-drag; }
 .screens-picker { -webkit-app-region: no-drag; position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: max-content; min-width: 260px; max-width: 360px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-md); }
-.screens-picker__title { margin: 0 0 8px; font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
+.screens-picker__title { margin: 0 0 8px; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
 .screens-picker__note { margin: 4px 0 0; font-size: var(--text-2xs); color: var(--ink-faint); }
 .screens-picker__divider { margin: 8px -12px; border: 0; border-top: 1px solid var(--line); }
 .screens-row { display: flex; align-items: flex-end; gap: 8px; }
@@ -3133,7 +3075,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .claude-zone { position: relative; display: flex; align-items: center; gap: 8px; padding: 28px 12px 12px; border: 2px dashed var(--line); border-radius: 16px; }
 .claude-zone[data-zone="machine"] { flex: 1 1 auto; min-width: 0; }
 .claude-zone[data-zone="cloud"] { flex: none; border-color: color-mix(in srgb, var(--claude) 50%, transparent); background: color-mix(in srgb, var(--claude) 5%, transparent); }
-.claude-zone-label { position: absolute; top: 7px; left: 12px; display: flex; align-items: center; gap: 4px; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+.claude-zone-label { position: absolute; top: 7px; left: 12px; display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
 .claude-wire { align-self: center; display: flex; flex-direction: column; align-items: center; min-width: 52px; padding: 0 4px; font-size: var(--text-2xs); color: var(--ink-faint); }
 .claude-wire > span { font-size: var(--text-base); line-height: 1; }
 .claude-nekko { flex: 1 1 auto; min-width: 0; padding: 12px; border: 2px solid var(--accent); border-radius: 14px; }
@@ -3462,7 +3404,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .mode-panel { display: flex; overflow: hidden; padding: 0; font-size: var(--text-xs); color: var(--ink); }
 .mode-panel svg { width: 15px; height: 15px; flex: none; }
 .mode-rail { width: 176px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: var(--surface-2); border-right: 1px solid var(--line); overflow-y: auto; }
-.mode-sec { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; padding: 0 12px; font-size: var(--text-2xs); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
+.mode-sec { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; padding: 0 12px; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
 .mode-sec svg { width: 12px; height: 12px; }
 .mode-rail .mode-sec { padding: 0 8px 4px; }
 .mode-rail-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 4px 4px 8px; border-radius: 9px; text-align: left; cursor: pointer; }
@@ -3547,7 +3489,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .mode-fly-body { display: flex; min-height: 0; flex-direction: column; overflow-y: auto; }
 .mode-inline-fly { margin: 2px 0 4px 20px; padding-left: 8px; border-left: 2px solid var(--accent-soft); }
 .mode-note { margin: 0 4px 4px; padding: 4px 8px; border-radius: 8px; background: var(--surface-2); font-size: var(--text-2xs); color: var(--ink-faint); }
-.mode-group { margin: 4px 0 2px; padding: 0 12px; font-size: var(--text-2xs); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
+.mode-group { margin: 4px 0 2px; padding: 0 12px; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
 .mode-opt { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 8px 8px; border-radius: 9px; text-align: left; }
 .mode-opt:hover { background: var(--surface-2); }
 .mode-opt[aria-checked="true"] { background: var(--accent-soft); }

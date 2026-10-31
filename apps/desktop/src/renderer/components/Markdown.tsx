@@ -48,14 +48,14 @@ export function Markdown({ text, doc = false, basePath }: MarkdownProps) {
 /** A document is parsed whole: it is read, not streamed, and its HTML stripping works line by line. */
 function DocMarkdown({ text, basePath }: { text: string; basePath?: string }) {
   const blocks = React.useMemo(() => renderWhole(text, { doc: true, basePath }), [text, basePath]);
-  return <div className="md-doc text-sm leading-7">{blocks}</div>;
+  return <div className="md-doc text-sm leading-[1.6]">{blocks}</div>;
 }
 
 function ChatMarkdown({ text, basePath }: { text: string; basePath?: string }) {
   const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath }), [basePath]);
   const segments = markdownSegments(text);
   return (
-    <div className="space-y-1 text-sm leading-relaxed">
+    <div className="space-y-1 text-sm leading-[1.6]">
       {segments.map((s) =>
         s.kind === 'code'
           ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} />
@@ -164,7 +164,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
         className="overflow-x-auto rounded-xl border border-line p-3 font-mono text-sm leading-relaxed"
         style={{ background: 'var(--surface-2)' }}
       >
-        {lang && <div className="mb-1 text-2xs uppercase tracking-wide text-ink-faint">{lang}</div>}
+        {lang && <div className="mb-1 text-xs text-ink-soft">{lang}</div>}
         <code>{code}</code>
       </pre>
       <button
@@ -195,8 +195,8 @@ const DOC_HEADING: Record<number, string> = {
   2: 'mt-6 mb-2 text-xl font-semibold leading-snug',
   3: 'mt-5 mb-1 text-base font-semibold',
   4: 'mt-4 mb-1 text-sm font-semibold',
-  5: 'mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-ink-soft',
-  6: 'mt-3 mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint',
+  5: 'mt-3 mb-1 text-xs font-medium text-ink-soft',
+  6: 'mt-3 mb-1 text-xs font-medium text-ink-soft',
 };
 
 /** Drop HTML comments, which markdown hides but a plain reader would show. */

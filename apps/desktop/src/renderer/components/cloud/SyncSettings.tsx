@@ -180,7 +180,7 @@ function Devices({ devices, pending, busy, act }: { devices: SyncDevice[]; pendi
   if (!live.length) return null;
   return (
     <div className="sync-row flex-col items-stretch!">
-      <div className="text-xs font-medium uppercase tracking-wide text-ink-faint">Devices</div>
+      <div className="text-xs font-medium text-ink-soft">Devices</div>
       {pending.length > 0 && (
         <p className="mt-2 text-xs text-ink-soft">A device is waiting to join. Approve it only if it's yours: type the code its screen shows.</p>
       )}

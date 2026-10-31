@@ -630,7 +630,7 @@ function PageSheet({
       <div className="px-3 py-3">
         {concept && (
           <>
-            <div className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Refine</div>
+            <div className="mb-1 text-xs font-medium text-ink-soft">Refine</div>
             {page.prompt && <p className="mb-1 line-clamp-2 text-2xs italic text-ink-faint">"{page.prompt}"</p>}
             <textarea
               className="input min-h-[52px] w-full resize-none text-xs"
@@ -650,7 +650,7 @@ function PageSheet({
         )}
 
         {/* Notes, persistent */}
-        <div className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Notes</div>
+        <div className="mb-1 text-xs font-medium text-ink-soft">Notes</div>
         {page.notes.length === 0 && <p className="mb-2 text-xs text-ink-faint">No notes yet, pin design intent that sticks with this page.</p>}
         {page.notes.map((n) => (
           <div key={n.id} className="mb-1 flex items-start gap-2 rounded-lg border border-line p-2">
@@ -666,7 +666,7 @@ function PageSheet({
         </div>
 
         {/* Comment, routes to the agent */}
-        <div className="mb-1 mt-4 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Comment for the agent</div>
+        <div className="mb-1 mt-4 text-xs font-medium text-ink-soft">Comment for the agent</div>
         <textarea className="input min-h-[60px] resize-none text-xs" rows={3} placeholder="Describe a change to this page…"
           value={comment} onChange={(e) => setComment(e.target.value)} />
         <div className="mt-1 flex justify-end gap-2">

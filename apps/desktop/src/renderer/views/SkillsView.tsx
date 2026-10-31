@@ -177,7 +177,7 @@ function LibraryTab() {
         <div className="mx-auto max-w-[1400px] px-6 pt-5 pb-8">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
-              {!hasAppChrome && <h1 className="view-title text-gradient">Skills</h1>}
+              {!hasAppChrome && <h1 className="view-title">Skills</h1>}
               <p className="mt-0.5 text-xs text-ink-faint">
                 Ready-made agent workflows. Open one to see how it runs, then use it in a chat.
               </p>
@@ -216,7 +216,7 @@ function LibraryTab() {
             if (items.length === 0) return null;
             return (
               <section key={cat} className="mt-6">
-                <p className="pb-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">{cat}</p>
+                <p className="pb-2 text-xs font-medium text-ink-soft">{cat}</p>
                 <div data-skill-grid className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
                   {items.map((s) => (
                     <SkillCard
@@ -596,7 +596,7 @@ function MarketplaceTab() {
       {/* Shelves */}
       <aside className="flex w-80 flex-col border-r border-line">
         <div className="p-4">
-          <h1 className="view-title text-gradient">Marketplace</h1>
+          <h1 className="view-title">Marketplace</h1>
           <p className="mt-0.5 text-xs text-ink-faint">
             Install skills into Nekko Agent, or export them to Claude Code / Codex.
           </p>
@@ -656,7 +656,7 @@ function MarketplaceTab() {
           {shelves.map((shelf) => (
             <div key={shelf.key} className="mb-4">
               <div className="flex items-center justify-between px-2">
-                <p className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">{shelf.title}</p>
+                <p className="text-xs font-medium text-ink-soft">{shelf.title}</p>
                 {shelf.key === 'vaizer' && (
                   <span className="flex items-center gap-2">
                     <button
@@ -967,7 +967,7 @@ function SearchResults({
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between px-2">
-        <p className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Search results · GitHub</p>
+        <p className="text-xs font-medium text-ink-soft">Search results · GitHub</p>
         <button className="text-2xs text-accent hover:underline" onClick={onClose}>
           Clear
         </button>
@@ -1087,7 +1087,7 @@ function WorkflowExplainer({ workflow, children }: { workflow: SkillWorkflow; ch
               <p className="mt-3 text-xs leading-relaxed text-ink-faint">{KIND_EXPLAIN[selNode.kind]}</p>
               {describeEdges(selNode.id, workflow).length > 0 && (
                 <div className="mt-3">
-                  <p className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Where it goes</p>
+                  <p className="text-xs font-medium text-ink-soft">Where it goes</p>
                   <ul className="mt-1 space-y-1">
                     {describeEdges(selNode.id, workflow).map((n, i) => (
                       <li key={i} className="text-xs text-ink-soft">{n}</li>
@@ -1098,7 +1098,7 @@ function WorkflowExplainer({ workflow, children }: { workflow: SkillWorkflow; ch
             </div>
           ) : (
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">How this skill runs</h3>
+              <h3 className="text-xs font-medium text-ink-soft">How this skill runs</h3>
               <p className="mt-1 text-xs text-ink-faint">Click any step, here or on the canvas, to see what it does.</p>
               <ol className="mt-3 space-y-1">
                 {ordered.map((n, i) => (

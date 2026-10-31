@@ -112,10 +112,10 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Spec-driven dev</span>
+        <span className="text-xs font-medium text-ink-soft">Spec-driven dev</span>
         {docs && docs.some((d) => d.exists) && (
           <button
-            className={`text-2xs uppercase tracking-wide ${session?.specLinked ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+            className={`text-xs ${session?.specLinked ? 'text-accent' : 'text-ink-soft hover:text-ink'}`}
             title="Rebuild the spec after every reply"
             onClick={toggleLive}
           >
@@ -218,7 +218,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
           {tasks.length > 0 && (
             <div className="mt-3">
               <button
-                className="mb-1 flex w-full items-center justify-between text-2xs font-semibold uppercase tracking-wide text-ink-faint"
+                className="mb-1 flex w-full items-center justify-between text-xs font-medium text-ink-soft"
                 onClick={() => setShowTasks((v) => !v)}
               >
                 <span>Tasks · {doneCount}/{tasks.length}</span>
@@ -348,7 +348,7 @@ function GuidelineDocs({ workspacePath, onOpen }: { workspacePath?: string; onOp
 
   return (
     <div className="mt-3">
-      <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Create missing instructions</p>
+      <p className="mb-1 text-xs font-medium text-ink-soft">Create missing instructions</p>
       <div className="space-y-1">
         {rows.map((g) => {
           const exists = present?.has(g.filename) ?? false;

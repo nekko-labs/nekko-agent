@@ -288,7 +288,7 @@ export function ModelLibrary({
           {groups.map(([loc, ms]) => (
             <div key={loc} className="mt-2">
               {groups.length > 1 && (
-                <p className="px-1 pb-1 pt-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">{loc}</p>
+                <p className="px-1 pb-1 pt-1 text-xs font-medium text-ink-soft">{loc}</p>
               )}
               <div className="space-y-1">{ms.map(renderRow)}</div>
             </div>

@@ -472,7 +472,7 @@ export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRu
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mt-4">
-      <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">{label}</p>
+      <p className="mb-1 text-xs font-medium text-ink-soft">{label}</p>
       {children}
     </div>
   );
@@ -685,7 +685,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
       </div>
 
       <div className="mt-3">
-        <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <p className="mb-1 text-xs font-medium text-ink-soft">
           {shownRun ? `Steps · ${STATUS_TONE[shownRun.status].label} run` : 'Steps'}
         </p>
         <WorkflowCanvas steps={wf.steps} run={shownRun} />
@@ -694,7 +694,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
       {shownRun && (
         <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_220px]">
           <div>
-            <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+            <p className="mb-1 text-xs font-medium text-ink-soft">
               This run · {STATUS_TONE[shownRun.status].label}
               {shownRun.status !== 'running' && ` in ${formatDuration(runDurationMs(shownRun))}`} · {relative(shownRun.startedAt)}
               {runPolicyNote(shownRun.lowPriority, shownRun.waitedMs) && ` · ${runPolicyNote(shownRun.lowPriority, shownRun.waitedMs)}`}
@@ -718,7 +718,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
               <div className="mb-2 rounded-lg border border-line bg-(--surface) px-3 py-2" data-run-result>
                 <div className="flex items-start gap-2">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Result</span>
+                    <span className="block text-xs font-medium text-ink-soft">Result</span>
                     <span className="mt-0.5 block max-h-48 overflow-y-auto whitespace-pre-wrap text-xs leading-snug">{outcome.result.text}</span>
                   </span>
                   {transcript(outcome.result.sessionId)}
@@ -757,7 +757,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
           </div>
 
           <div>
-            <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">History</p>
+            <p className="mb-1 text-xs font-medium text-ink-soft">History</p>
             <div className="space-y-0.5">
               {runs.slice(0, 10).map((r) => {
                 const failedAt = runOutcome(r, wf.steps).failed?.name;

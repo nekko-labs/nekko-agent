@@ -86,7 +86,7 @@ export function ThemePresetPicker({
         {GROUPS.map((group) => {
           if (group.experimental) return FAMILIES.length ? (
             <div key="experimental">
-              <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Experimental</span>
+              <span className="text-xs font-medium text-ink-soft">Experimental</span>
               <div className="mt-1 grid grid-cols-4 gap-2" role="group" aria-label="Experimental">
                 {FAMILIES.map((family) => {
                   const active = family.presets.some((p) => p.id === activeId);
@@ -146,7 +146,7 @@ export function ThemePresetPicker({
           if (presets.length === 0) return null;
           return (
             <div key={group.titleKey}>
-              <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">
+              <span className="text-xs font-medium text-ink-soft">
                 {group.fun ? 'Fun!' : tr(group.titleKey)}
               </span>
               <div className="mt-1 grid grid-cols-4 gap-2" role="radiogroup" aria-label={group.fun ? 'Fun!' : tr(group.titleKey)}>

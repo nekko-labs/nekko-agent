@@ -2567,7 +2567,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 ) : null}
                 {surface !== 'transcript' && welcomeState.modelChoice && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
                   <div className="flex items-center justify-between gap-2 px-2">
-                    <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Choose a model</span>
+                    <span className="text-xs font-medium text-ink-soft">Choose a model</span>
 
                   </div>
                   {imageMode && session ? <ImageModeControls session={session} onChange={setSession} busy={streaming} /> :
@@ -2848,7 +2848,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <div className={`collapse-wrap ${queued.length > 0 ? '' : 'collapsed'}`} aria-hidden={queued.length === 0}>
               <div className="min-h-0 overflow-hidden">
                 <div className="border-b border-line bg-surface-2 px-3 py-2">
-                  <div className="mb-1 flex items-center gap-2 text-2xs uppercase tracking-wide text-ink-faint">
+                  <div className="mb-1 flex items-center gap-2 text-xs text-ink-soft">
                     <ListIcon className="h-3 w-3" /> Queued · {queued.length} {streaming ? 'after this reply' : 'waiting to run'}
                   </div>
                   <div className="space-y-1">
@@ -2886,7 +2886,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   role="listbox"
                   aria-label="Attach a file"
                 >
-                  <div className="px-2 py-1 text-2xs uppercase tracking-wide text-ink-faint">Attach a file</div>
+                  <div className="px-2 py-1 text-xs text-ink-soft">Attach a file</div>
                   {atMatches.length === 0 ? (
                     <div className="px-3 py-1 text-2xs text-ink-faint">{atFiles.length === 0 ? 'Attach a project folder (+ → Folder) to mention its files.' : 'No matching files.'}</div>
                   ) : (
@@ -2914,7 +2914,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 >
                   {skillMatches.length > 0 && (
                     <>
-                      <div className="px-2 py-1 text-2xs uppercase tracking-wide text-ink-faint">Skills</div>
+                      <div className="px-2 py-1 text-xs text-ink-soft">Skills</div>
                       {skillMatches.map((sk, i) => (
                         <button
                           key={sk.id}
@@ -2934,7 +2934,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                   {slashMatches.length > 0 && (
                     <>
-                      <div className="px-2 py-1 text-2xs uppercase tracking-wide text-ink-faint">Prompts</div>
+                      <div className="px-2 py-1 text-xs text-ink-soft">Prompts</div>
                       {slashMatches.map((p, i) => {
                         const idx = skillMatches.length + i;
                         return (
@@ -2974,7 +2974,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           onMouseEnter={(e) => { void e.currentTarget.play().catch(() => {}); }}
                           onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                         />
-                        <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1 text-2xs uppercase tracking-wide text-white">video</span>
+                        <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1 text-xs text-white">Video</span>
                         <button
                           className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-2xs leading-4 text-paper group-hover:block"
                           onClick={(e) => {
@@ -3022,7 +3022,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         >
                           <FileIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{attachmentName(path)}</span>
-                          {note && <span className="shrink-0 text-2xs uppercase tracking-wide">name only</span>}
+                          {note && <span className="shrink-0 text-xs">Name only</span>}
                           <button
                             className="ml-0.5 shrink-0 rounded opacity-60 hover:opacity-100"
                             onClick={() => { void removeAttachedPath(path); }}
@@ -3180,7 +3180,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                               onMouseEnter={openSkillsFly}
                               onMouseLeave={closeSkillsFly}
                             >
-                              <div className="px-1 pb-1 text-2xs uppercase tracking-wide text-ink-faint">Skills</div>
+                              <div className="px-1 pb-1 text-xs text-ink-soft">Skills</div>
                               <div className="max-h-64 overflow-y-auto">
                                 {allSkills.length === 0 && (
                                   <p className="px-3 py-2 text-2xs text-ink-faint">

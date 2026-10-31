@@ -179,7 +179,7 @@ export function QuestionCard({
       className="rounded-xl border p-3 outline-hidden"
       data-question-tone={tone}
       style={{
-        ...(tone === 'attention' ? { '--accent': 'var(--warning)', '--brand-grad': 'var(--warning)', '--on-accent': '#201609' } : {}),
+        ...(tone === 'attention' ? { '--accent': 'var(--warning)', '--on-accent': '#201609' } : {}),
         borderColor: `color-mix(in srgb, ${hue} 70%, transparent)`,
         borderWidth: 1.5,
         background: `color-mix(in srgb, ${hue} 8%, var(--surface-2))`,
@@ -192,7 +192,7 @@ export function QuestionCard({
     >
       <div className="mb-2 flex items-center gap-2">
         <PixelQuestionIcon className="h-4 w-4 shrink-0" />
-        <span className="text-2xs font-semibold uppercase tracking-wide" style={{ color: hue }}>
+        <span className="text-xs font-medium" style={{ color: hue }}>
           Before I start
         </span>
         {total > 1 && (
@@ -233,7 +233,7 @@ export function QuestionCard({
           than the text swapping underneath the same box. */}
       <div key={q.id} className="fade-in">
         <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="chip shrink-0 text-2xs uppercase tracking-wide">{q.header}</span>
+          <span className="chip shrink-0 text-xs">{q.header}</span>
           <span className={`${compact ? 'text-xs' : tone === 'attention' ? 'text-sm font-semibold' : 'text-xs'} font-medium text-ink`}>{q.question}</span>
           <span className="text-2xs text-ink-soft">{q.multiSelect ? 'pick any' : 'pick one'}</span>
         </div>

@@ -661,7 +661,7 @@ export function WallToolbar({
 
   const controls = (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${slot ? 'wall-toolbar-titlebar' : ''}`} data-wall-toolbar>
-      {!hasAppChrome && <h1 className="view-title text-gradient">Agents</h1>}
+      {!hasAppChrome && <h1 className="view-title">Agents</h1>}
       <div className={`ml-auto flex flex-wrap items-center ${slot ? 'gap-2' : 'gap-3'}`}>
 
         {/* Adding to the wall, first in the row: an agent, an image session or a

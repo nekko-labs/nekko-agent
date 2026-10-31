@@ -73,7 +73,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Customizable UI: customizations, mods and custom layouts](desktop/customizable-ui.md) (6 KB)
-- [Design quality: one type scale, readable faint text, tinted elevation, 4px spacing](desktop/design-quality-type-contrast-and-elevation.md) (2 KB)
+- [Design quality: type scale, readable text, quiet buttons and navigation](desktop/design-quality-type-contrast-and-elevation.md) (4 KB)
 - [Desktop: Simple and Expert modes, the effort dial, the context ring and the hardware strip (2026-10-25)](desktop/desktop-simple-and-expert-modes.md) (3 KB)
 - [Dynamic view: zones](desktop/dynamic-zones.md) (6 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (13 KB)
@@ -224,6 +224,6 @@ Brand, website, onboarding and the mascot.
 - [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (10 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
-- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (12 KB)
+- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (13 KB)
 
 <!-- index:end -->

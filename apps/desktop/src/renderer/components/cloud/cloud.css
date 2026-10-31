@@ -75,7 +75,7 @@
 .cloud-provider:active { transform: translateY(1px); }
 .cloud-provider:disabled { opacity: 0.55; }
 .cloud-provider svg { width: 17px; height: 17px; }
-.cloud-or { display: flex; align-items: center; gap: 12px; margin: 16px 0; font-size: var(--text-2xs); color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+.cloud-or { display: flex; align-items: center; gap: 12px; margin: 16px 0; font-size: var(--text-xs); color: var(--ink-soft); }
 .cloud-or::before, .cloud-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 .cloud-otp { display: flex; justify-content: center; gap: 8px; }
 .cloud-otp input {

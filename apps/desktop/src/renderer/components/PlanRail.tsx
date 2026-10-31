@@ -54,7 +54,7 @@ export function PlanRail({ sessionId, session, onMinimize }: {
     <aside className="flex h-full w-full flex-col overflow-hidden border-l border-line" style={{ background: 'transparent' }} aria-label="Plan and sub-agents">
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
         <ControlPanelIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
-        <span className="min-w-0 flex-1 truncate text-2xs font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink-soft">Agent Monitor</span>
         {/* Minimizing hides the panel and brings back the chat area's floating
             Agent Monitor button, which reopens it. */}
         {onMinimize && <button type="button" className="-mr-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" data-plan-minimize onClick={onMinimize} title="Minimize Agent Monitor" aria-label="Minimize Agent Monitor"><MinimizeIcon className="h-3.5 w-3.5" /></button>}
@@ -64,7 +64,7 @@ export function PlanRail({ sessionId, session, onMinimize }: {
         <MonitorProject sessionId={sessionId} projectPath={basePath} />
         <section>
           <div className="mb-1 flex items-center gap-2">
-            <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Sub-agents</span>
+            <span className="text-xs font-medium text-ink-soft">Sub-agents</span>
             {activeChildren.length > 0 && <span className="text-2xs tabular-nums text-ink-faint">{activeChildren.length}</span>}
           </div>
           {activeChildren.length === 0 ? <p className="px-0.5 text-2xs leading-snug text-ink-faint">{spawnAllowed ? 'No sub-agents working right now.' : 'Delegation is off. Enable it in Settings → Orchestration.'}</p> : (
@@ -80,7 +80,7 @@ export function PlanRail({ sessionId, session, onMinimize }: {
           )}
         </section>
         {queued.length > 0 && <section>
-          <div className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">After this · {queued.length}</div>
+          <div className="mb-1 text-xs font-medium text-ink-soft">After this · {queued.length}</div>
           {queued.map((q, i) => {
             const payload = queueItemPayload(q);
             const label = queueLabel(q);

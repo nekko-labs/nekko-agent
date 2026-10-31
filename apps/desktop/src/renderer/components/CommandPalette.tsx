@@ -112,7 +112,7 @@ export function CommandPalette() {
       onClose={() => setPaletteOpen(false)}
       align="top"
       initialFocus={inputRef}
-      className="card fade-in w-[520px] overflow-hidden p-0 shadow-(--shadow-float)"
+      className="card w-[520px] max-w-[calc(100vw-16px)] overflow-hidden p-0 shadow-(--shadow-float)"
     >
       <input
         ref={inputRef}

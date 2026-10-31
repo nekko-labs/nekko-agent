@@ -272,7 +272,7 @@ export function ModelDetail({
 function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="rounded-xl px-3 py-2" style={{ background: 'var(--surface-2)' }} title={hint}>
-      <p className="text-2xs uppercase tracking-wide text-ink-faint">{label}</p>
+      <p className="text-xs text-ink-soft">{label}</p>
       <p className="mt-0.5 text-base font-semibold tabular-nums">{value}</p>
     </div>
   );

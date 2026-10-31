@@ -25,7 +25,7 @@ export function FirstProviderSetup() {
   return <section className="mx-auto max-w-3xl px-6 py-8">
     <div className="flex flex-col items-center text-center">
       <SetupIllustration />
-      <p className="text-2xs font-semibold uppercase tracking-widest text-ink-faint">Your first agent · Step {step} of 3</p>
+      <p className="text-xs font-medium text-ink-soft">Your first agent · Step {step} of 3</p>
       <h1 className="mt-3 text-2xl font-semibold">{connected ? 'Your provider is connected' : kind ? `Connect ${kind === 'anthropic' ? 'Claude' : PROVIDER_DEFAULTS[kind].label}` : 'Bring your first agent to life'}</h1>
       <p className="mt-2 max-w-lg text-sm text-ink-soft">{connected ? 'Next, choose a model and give your agent its first task.' : kind ? 'Follow the steps below. You can change your choice at any time.' : 'Choose where your agent gets its AI. Use an account you already have, or connect models on your computer.'}</p>
       <ol className="my-6 flex gap-5 text-xs text-ink-soft" aria-label="Setup progress">
