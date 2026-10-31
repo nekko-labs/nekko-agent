@@ -24,6 +24,8 @@ struct ChatView: View {
     @State private var viewing: PhotoSet?
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
+    /// The transcript's rows between renders (a streamed token patches only the last one).
+    @State private var rowCache = TranscriptRowCache()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(Prefs.self) private var prefs
     /// Expert mode's hardware and loaded models, read while the chat is on screen.
@@ -88,7 +90,7 @@ struct ChatView: View {
                             .font(.footnote).foregroundStyle(palette.inkFaint).frame(maxWidth: .infinity)
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
-                    ForEach(TranscriptRow.of(chat.blocks)) { row in
+                    ForEach(rowCache.rows(chat)) { row in
                         switch row {
                         case .block(let b):
                             BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : []) { i in
@@ -151,7 +153,7 @@ struct ChatView: View {
           }
             // Follow streamed output only while the reader is at the end, and
             // without animating every token (overlapping animations shudder).
-            .onChange(of: chat.blocks.last) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
+            .onChange(of: chat.blocksRevision) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
             // An approval or question card grows the bottom bar: keep the latest step above it.
             // After the card has been laid out: scrolling in the same update used the old inset.
             .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
@@ -446,6 +448,37 @@ enum TranscriptRow: Identifiable {
                 return purpose == .delegate && subagents ? .agents(items) : .purpose(purpose, items, calls)
             }
         }
+    }
+}
+
+/// `TranscriptRow.of`, kept between renders. While a reply streams, each token
+/// changes only the chat's last block (`ChatModel.blocksLayout` stays put), so
+/// only the last row is replaced instead of grouping the whole transcript again.
+/// A plain class in `@State`: reading it in `body` is memoization, not state.
+@MainActor
+final class TranscriptRowCache {
+    private var chat: ObjectIdentifier?
+    private var layout = -1
+    private var rows: [TranscriptRow] = []
+
+    func rows(_ chat: ChatModel) -> [TranscriptRow] {
+        let blocks = chat.blocks
+        if ObjectIdentifier(chat) == self.chat, chat.blocksLayout == layout, let last = blocks.last,
+           case .block(let shown)? = rows.last, shown.id == last.id, Self.breaker(shown), Self.breaker(last) {
+            rows[rows.count - 1] = .block(last)
+            return rows
+        }
+        self.chat = ObjectIdentifier(chat)
+        layout = chat.blocksLayout
+        rows = TranscriptRow.of(blocks)
+        return rows
+    }
+
+    /// A reply with text ends any purpose group (`Purpose.role`): its own row
+    /// whatever the text grows to. A reply still blank (reasoning only) may not be.
+    private static func breaker(_ b: Block) -> Bool {
+        if case .assistant(_, let text, _, _, _) = b { return text.contains { !$0.isWhitespace } }
+        return false
     }
 }
 
