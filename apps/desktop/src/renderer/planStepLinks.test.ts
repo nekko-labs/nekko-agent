@@ -57,3 +57,41 @@ describe('planStepLinks', () => {
     expect(planStepLinks([msg({ content: '[x](file:///tmp/x.html)' })], undefined).size).toBe(0);
   });
 });
+
+describe('planStepLinks on a Claude Agent chat', () => {
+  const ccPr = 'https://github.com/o/r/pull/9';
+  const create = (id: string) => ({ id, name: 'Bash', input: { command: `gh pr create --title "Fix" --body "$(cat <<'EOF'\n## Summary\n- fixed it; done\nEOF\n)"` } });
+
+  it('places a PR Claude Code opened on the task it had in progress', () => {
+    const messages = [
+      msg({ toolCalls: [{ id: 't1', name: 'TaskCreate', input: { subject: 'Fix', description: '' } }] }),
+      msg({ role: 'tool', toolResult: { toolCallId: 't1', output: 'Task #1 created successfully: Fix' } }),
+      msg({ toolCalls: [{ id: 't2', name: 'TaskUpdate', input: { taskId: '1', status: 'in_progress' } }, create('gh')] }),
+      msg({ role: 'tool', toolResult: { toolCallId: 'gh', output: ccPr } }),
+    ];
+    expect(planStepLinks(messages, live).get('live_1')?.prs).toEqual([ccPr]);
+  });
+
+  it('follows TodoWrite to the step in progress', () => {
+    const messages = [
+      msg({ toolCalls: [{ id: 'tw', name: 'TodoWrite', input: { todos: [{ content: 'Trace', status: 'completed' }, { content: 'Ship', status: 'in_progress' }] } }, create('gh')] }),
+      msg({ role: 'tool', toolResult: { toolCallId: 'gh', output: ccPr } }),
+    ];
+    expect(planStepLinks(messages, live).get('live_2')?.prs).toEqual([ccPr]);
+  });
+
+  it('gives each turn of a turn plan its own PRs', async () => {
+    const { claudeCodeTurnPlan } = await import('./claudeAgentPlan.js');
+    const messages = [
+      msg({ id: 'a', role: 'user', content: 'Fix the parser' }),
+      msg({ toolCalls: [create('gh')] }),
+      msg({ role: 'tool', toolResult: { toolCallId: 'gh', output: ccPr } }),
+      msg({ id: 'b', role: 'user', content: 'Now the docs' }),
+    ];
+    const turns = claudeCodeTurnPlan(messages, true);
+    expect(turns.map(t => [t.title, t.status])).toEqual([['Ask Claude Code: Fix the parser', 'done'], ['Ask Claude Code: Now the docs', 'active']]);
+    const links = planStepLinks(messages, turns);
+    expect(links.get('turn:a')?.prs).toEqual([ccPr]);
+    expect(links.has('turn:b')).toBe(false);
+  });
+});

@@ -1,5 +1,6 @@
 import { applyPlanUpdate, collectSessionPrUrls, extractPrUrls, type ChatMessage, type PlanStep, type PlanUpdateInput } from '@nekko-agent/shared';
 import { chatArtifacts, type ChatArtifact } from './chatArtifacts.js';
+import { TURN_STEP_PREFIX } from './claudeAgentPlan.js';
 
 /** A task in a project-management tool that the chat linked to. */
 export interface ProjectLink {
@@ -49,6 +50,10 @@ export function projectLinks(text: string): ProjectLink[] {
  * Task links and sub-agents follow the same clock (a sub-agent by when its chat
  * was created). Those that came before any step was active, such as the task
  * the chat was started from, belong to the first step.
+ *
+ * A Claude Agent chat's clock is Claude Code's own plan calls (`TodoWrite`,
+ * `TaskCreate`/`TaskUpdate`), and on a plan made of its turns
+ * (claudeAgentPlan.ts) each request starts its own step.
  */
 export function planStepLinks(messages: ChatMessage[], plan: PlanStep[] | undefined, basePath?: string, children: Array<{ id: string; createdAt: number }> = []): Map<string, PlanStepLinks> {
   const links = new Map<string, PlanStepLinks>();
@@ -65,7 +70,22 @@ export function planStepLinks(messages: ChatMessage[], plan: PlanStep[] | undefi
     return e;
   };
   const add = (item: (entry: PlanStepLinks) => void) => { if (active) item(entry(active)); };
+  const ids = new Set(plan.map(step => step.id));
+  const work = (title: string | undefined, at: number) => {
+    active = title ? byTitle.get(title.trim().toLowerCase()) : undefined;
+    timeline.push({ at, step: active });
+  };
+  // Claude Code's tasks by id, from each TaskCreate's input and its result.
+  const creating = new Map<string, string>();
+  const tasks = new Map<string, string>();
   for (const message of messages) {
+    if (message.role === 'user' && ids.has(TURN_STEP_PREFIX + message.id)) {
+      active = TURN_STEP_PREFIX + message.id;
+      timeline.push({ at: message.createdAt, step: active });
+    }
+    const subject = message.toolResult && !message.toolResult.isError ? creating.get(message.toolResult.toolCallId) : undefined;
+    const taskId = subject && /Task #(\S+) created/.exec(message.toolResult?.output ?? '')?.[1];
+    if (subject && taskId) tasks.set(taskId, subject);
     if (message.role === 'assistant') for (const artifact of chatArtifacts(message.content, basePath).filter(a => !a.inlineImage)) add(e => { if (!e.artifacts.some(a => a.path === artifact.path)) e.artifacts.push(artifact); });
     if (message.role === 'user' || message.role === 'assistant') {
       for (const link of projectLinks(message.content)) {
@@ -74,6 +94,14 @@ export function planStepLinks(messages: ChatMessage[], plan: PlanStep[] | undefi
       }
     }
     for (const call of message.toolCalls ?? []) {
+      const input = (call.input ?? {}) as Record<string, unknown>;
+      if (call.name === 'TodoWrite') {
+        const todos = Array.isArray(input.todos) ? input.todos as Array<{ content?: unknown; status?: unknown }> : [];
+        work(todos.find(t => t.status === 'in_progress')?.content as string | undefined, message.createdAt);
+        continue;
+      }
+      if (call.name === 'TaskCreate' && typeof input.subject === 'string') { creating.set(call.id, input.subject); continue; }
+      if (call.name === 'TaskUpdate' && input.status === 'in_progress') { work(tasks.get(String(input.taskId)), message.createdAt); continue; }
       if (call.name !== 'update_plan') continue;
       const result = applyPlanUpdate(replay, call.input as unknown as PlanUpdateInput);
       if ('error' in result) continue;
