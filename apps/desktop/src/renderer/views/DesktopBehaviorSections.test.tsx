@@ -13,6 +13,18 @@ describe('Desktop and Fun settings', () => {
     const select = (tree.props.children[1].props.children as React.ReactElement<any>[])[1];
     select.props.onChange({ target: { value: 'shutdown' } }); expect(update).toHaveBeenCalledWith({ desktopCloseBehavior: 'shutdown' });
   });
+  it('asks about low memory by default, saves a remembered choice and forgets an app', () => {
+    const update = vi.fn();
+    const html = renderToStaticMarkup(<DesktopBehaviorSection settings={{} as AppSettings} update={update} />);
+    expect(html).toContain('value="ask" selected'); expect(html).not.toContain('Always ask these apps to close');
+    const tree = DesktopBehaviorSection({ settings: { lowMemoryAction: 'release', lowMemoryCloseApps: ['PioneerGame', 'chrome'] } as AppSettings, update });
+    const rows = renderToStaticMarkup(tree);
+    expect(rows).toContain('value="release" selected'); expect(rows).toContain('aria-label="Stop closing PioneerGame"');
+    const low = tree.props.children[2];
+    const [choice, list] = (low.type as (p: any) => React.ReactElement<any>)(low.props).props.children;
+    choice.props.children[1].props.onChange({ target: { value: 'ask' } }); expect(update).toHaveBeenLastCalledWith({ lowMemoryAction: undefined });
+    list.props.children[2].props.children[0].props.children[1].props.onClick(); expect(update).toHaveBeenLastCalledWith({ lowMemoryCloseApps: ['chrome'] });
+  });
   it('groups independent mascot and default-on farewell switches under Fun', () => {
     const html = renderToStaticMarkup(<FunSection settings={{ mascotEnabled: false } as AppSettings} update={vi.fn()} />);
     expect(html).toContain('>Fun</h2>'); expect(html).toContain('aria-checked="true" aria-label="Tray farewell"');

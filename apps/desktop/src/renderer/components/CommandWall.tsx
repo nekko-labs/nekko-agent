@@ -146,6 +146,9 @@ import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './comp
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
 
+/** Length of the span button at the end of each add-zone rail. */
+const RAIL_SPAN = 24;
+
 /** The kinds the wall's compass offers, in order. */
 const WALL_ADDABLE: PaneKind[] = [...WALL_KINDS];
 
@@ -979,15 +982,23 @@ export function CommandWall({
           const across = side === 'right';
           const { span, fit } = spanWord(side);
           const preview = (spot: ZoneSpot) => ({ onPointerEnter: () => setRailPreview(spot), onFocus: () => setRailPreview(spot), onPointerLeave: () => setRailPreview(null), onBlur: () => setRailPreview(null) });
+          // Each plus covers its zone's whole edge; the span button takes the
+          // rail's last RAIL_SPAN pixels, so the strip beside it stops short.
+          const end = across ? geometry.stageHeight : size.width;
+          const spans = segments.some((g) => !g.full);
+          const stop = spans ? end - RAIL_SPAN - 4 : end;
           return <div key={side} className="wall-zone-rail" data-side={side} style={across ? { left: size.width, top: 0, height: geometry.stageHeight } : { left: 0, top: geometry.stageHeight, width: size.width }}>
-            {segments.map((g) => <button key={g.paneId} type="button" className="wall-zone-add" style={across ? { top: g.from + g.len / 2 } : { left: g.from + g.len / 2 }}
-              aria-label={`Add a zone to this ${fit}`} title={`Add a zone to this ${fit} (Shift-click: span the ${span})`}
-              {...preview({ paneId: g.paneId, side })}
-              onClick={(e) => { addZoneAt(e.shiftKey ? { edge: side } : { paneId: g.paneId, side }); setRailPreview(null); }}><PlusIcon className="h-3.5 w-3.5" /></button>)}
-            {segments.some((g) => !g.full) && <button type="button" className="wall-zone-add wall-zone-span" style={across ? { top: geometry.stageHeight - 12 } : { left: size.width - 12 }}
+            {segments.map((g) => {
+              const len = Math.max(0, Math.min(g.from + g.len, stop) - g.from);
+              return <button key={g.paneId} type="button" className="wall-zone-add" style={across ? { top: g.from, height: len } : { left: g.from, width: len }}
+                aria-label={`Add a zone to this ${fit}`} title={`Add a zone to this ${fit} (Shift-click: span the ${span})`}
+                {...preview({ paneId: g.paneId, side })}
+                onClick={(e) => { addZoneAt(e.shiftKey ? { edge: side } : { paneId: g.paneId, side }); setRailPreview(null); }}><PlusIcon className="h-3 w-3" /></button>;
+            })}
+            {spans && <button type="button" className="wall-zone-add wall-zone-span" style={across ? { top: end - RAIL_SPAN, height: RAIL_SPAN } : { left: end - RAIL_SPAN, width: RAIL_SPAN }}
               aria-label={`Add a zone spanning the ${span}`} title={`Add a zone spanning the ${span}`}
               {...preview({ edge: side })}
-              onClick={() => { addZoneAt({ edge: side }); setRailPreview(null); }}><SpanIcon className="h-3.5 w-3.5" /></button>}
+              onClick={() => { addZoneAt({ edge: side }); setRailPreview(null); }}><SpanIcon className="h-3 w-3" /></button>}
           </div>;
         })}
         {/* Add window lives beside the composer; the wall only shows the slot it opens. */}

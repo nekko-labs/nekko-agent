@@ -587,7 +587,9 @@ impl Turns {
             .unwrap_or_else(nekko_tools::default_guardrails);
         let allow = || json!({ "behavior": "allow", "updatedInput": input });
         match crate::harness::decide(&mode, &tool, &input, &rules, &entry.roots) {
-            crate::harness::Decision::Allow => Some(allow()),
+            crate::harness::Decision::Allow => {
+                Some(json!({ "behavior": "allow", "updatedInput": crate::harness::auto_run_input(&tool, &input) }))
+            }
             crate::harness::Decision::Deny(message) => Some(deny(&message)),
             crate::harness::Decision::Ask { reason, severity } => {
                 let id = str_at(prompt, "tool_use_id")
@@ -1336,9 +1338,14 @@ impl Turns {
         };
 
         // One turn per chat at a time: the slot stays taken until the end.
-        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && wanted.matches(&s.spec));
+        // A wake-up reads the child that woke, whatever it was launched with:
+        // its work is already running, and a change of model, mode or folders
+        // applies at the next message (#1408).
+        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && (wake || wanted.matches(&s.spec)));
         if wake && !reuse {
-            // The child that woke is gone or out of date: nothing to read.
+            // The child that woke is gone: drop it, or its unread line would
+            // wake the chat again at once.
+            slot.session = None;
             return;
         }
         if !reuse {

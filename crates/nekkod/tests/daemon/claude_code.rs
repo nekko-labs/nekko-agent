@@ -105,14 +105,16 @@ pub fn fake_claude() {
             out(lifecycle("started"));
         }
         out(init());
-        if text == "background" {
+        if text == "background" || text == "background-slow" {
             // Start a background command, end the turn, then wake when it
             // finishes, with nothing written: a turn of Claude Code's own
-            // whose command needs a person to approve it.
+            // whose command needs a person to approve it. The slow one gives
+            // a test time to change the chat between the two.
             out(assistant("m_bg", json!([{ "type": "text", "text": "started" }])));
             out(result("started", "completed"));
             out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [{ "task_id": "b1" }] }));
-            std::thread::sleep(std::time::Duration::from_millis(300));
+            let wait = if text == "background" { 300 } else { 2_000 };
+            std::thread::sleep(std::time::Duration::from_millis(wait));
             out(
                 json!({ "type": "system", "subtype": "task_updated", "task_id": "b1", "patch": { "status": "completed" } }),
             );
@@ -154,6 +156,13 @@ pub fn fake_claude() {
             tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
             out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
             out(result("planned", "completed"));
+        } else if text == "usage" {
+            // Plan usage Claude Code reports on its own while it works.
+            out(json!({ "type": "rate_limit_event", "rate_limit_info": {
+                "status": "allowed_warning", "resetsAt": 1_761_231_600, "utilization": 0.62,
+            } }));
+            out(assistant("m_u", json!([{ "type": "text", "text": "used" }])));
+            out(result("used", "completed"));
         } else if text == "run rm" {
             // A prompt only a person may answer in guardrails mode, through the bridge.
             out(assistant(
@@ -389,6 +398,36 @@ async fn claude_codes_own_plan_is_the_chats_plan() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn plan_usage_claude_code_printed_is_its_limits() {
+    let rig = rig("usage", "guardrails", true);
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    // `cc` has a sign-in nekkod has not read yet (`unknown`), which fails closed.
+    let settings = json!({ "providers": [
+        provider("cc", json!({})),
+        provider("cc_key", json!({ "authSource": "nekko-anthropic-key" })),
+    ] });
+    write_settings(&rig, settings).await;
+    let port = rig.d.port;
+    let read = |id: &'static str| async move {
+        post(port, "limits:get", json!([format!("claude-code:{id}")]), Some(TOKEN)).await.1
+    };
+    assert_eq!(read("cc_key").await, Value::Null, "nothing until Claude Code reports");
+
+    for (turn, id) in [("cu1", "cc"), ("cu2", "cc_key")] {
+        let spec = spec_on(&rig, turn, "usage", provider(id, json!({})));
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+    }
+    let limits = read("cc_key").await;
+    let window = &limits["windows"][0];
+    assert_eq!((window["id"].clone(), window["status"].clone()), (json!("session"), json!("warning")), "{limits}");
+    assert_eq!(window["usedPercent"].as_f64(), Some(62.0));
+    assert_eq!(read("cc").await, Value::Null, "an unread sign-in shows no plan usage");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn permission_prompts_reach_nekko_approvals() {
     let rig = rig("approve", "guardrails", true);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccA", "run rm")]), Some(TOKEN)).await;
@@ -500,6 +539,35 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     turn_record(&rig, "ccW2", "s_cc").await;
     let replies = assistant_texts(&saved(&rig));
     assert!(replies.last().unwrap().ends_with(": again"), "{replies:?}");
+}
+
+/// A chat whose mode changed after its turn still shows the wake-up: the
+/// child that woke is read as it is, not dropped as out of date over and
+/// over while its work goes unseen (#1408).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_wake_up_after_a_mode_change_still_reaches_the_chat() {
+    let rig = rig("wake-mode", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccM", "background-slow")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccM", "s_cc").await;
+    let (status, body) = post(rig.d.port, "session:setOptions", json!(["s_cc", { "mode": "plan" }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(saved(&rig)["mode"], "plan");
+
+    let approval = wait_pending(rig.d.port, "s_cc", "approval", "toolu_wake").await;
+    assert_eq!(approval["call"]["executedBy"], "claude-code");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cc", "toolu_wake", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    until("the wake-up to reach the chat", Duration::from_secs(30), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        let last = assistant_texts(&saved(&rig)).last().cloned();
+        (running == json!([]) && last.as_deref() == Some("woke: allow")).then_some(())
+    })
+    .await;
+    // One wake-up, not a turn started again and again.
+    let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
+    let metas = kinds(&events).iter().filter(|k| *k == "session_meta").count();
+    assert!(metas < 10, "{metas} session_meta events: {:?}", kinds(&events));
 }
 
 /// A Claude Agent on a second Claude Code account runs with that account's

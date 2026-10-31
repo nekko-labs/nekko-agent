@@ -75,7 +75,7 @@ export function useProviderLimitsPortfolio(
   const configured = useStore((s) => s.providers);
   const running = new Set<string>(JSON.parse(useRunningSessionsSnapshot()));
   const activeKeys = new Set((sessions ?? []).filter(s => running.has(s.id)).flatMap(s => {
-    const provider = (configured ?? []).find(p => p.id === s.providerId && p.auth === 'subscription');
+    const provider = (configured ?? []).find(p => p.id === s.providerId && (p.auth === 'subscription' || p.kind === 'claude-code'));
     const key = provider && limitsKeyFor(provider);
     return key ? [key] : [];
   }));

@@ -21,6 +21,8 @@ describe('side panel resize grips', () => {
     expect(cssRule(board, '.agent-list-resize')['z-index']).toBe('5');
     expect(cssRule(dock, '.monitors-dock')['z-index']).toBe('5');
     expect(cssRule(dock, '.monitors-dock__resize')).toMatchObject({ width: '10px', 'z-index': '5' });
+    // Beside a zoned board the gap belongs to the add-zone rail, so the handle keeps to the dock's edge.
+    expect(cssRule(dock, ".wall-workspace[data-dock-side='right']:has(.command-wall-layout[data-zone-rails]) .monitors-dock__resize")).toMatchObject({ left: '-1px', width: '8px' });
   });
 
   it('uses opaque bright grips, revealed on hover, keyboard focus and active drag', () => {

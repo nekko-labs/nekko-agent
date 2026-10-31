@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { LimitWindow, ProviderConfig, SubscriptionLimits } from '@nekko-agent/shared';
-import { formatUSD, isLocalProvider } from '@nekko-agent/shared';
+import { formatUSD, isLocalProvider, limitsKeyFor } from '@nekko-agent/shared';
 import { afterPaint } from '../afterPaint.js';
 
 /** Relative time from now to a future timestamp, in compact words. */
@@ -82,9 +82,11 @@ export function UsageLimitsChip({
     return () => clearInterval(t);
   }, []);
 
-  // Load + subscribe to limits for this provider's token key.
+  // Load + subscribe to limits for this provider's token key, or a Claude
+  // Agent's plan usage as its own Claude Code reported it.
+  const limitsKey = provider?.kind === 'claude-code' ? limitsKeyFor(provider) : provider?.tokenKey;
   useEffect(() => {
-    const tokenKey = provider?.tokenKey;
+    const tokenKey = limitsKey;
     if (!tokenKey) {
       setLimits(null);
       return;
@@ -98,15 +100,15 @@ export function UsageLimitsChip({
       if (e.tokenKey === tokenKey) setLimits(e.limits);
     });
     return () => { live = false; cancel(); off(); };
-  }, [provider?.tokenKey]);
+  }, [limitsKey]);
 
   if (!provider) return null;
 
   const local = isLocalProvider(provider.kind);
-  const subscription = provider.auth === 'subscription';
-
   // Binding window: the highest-utilization window is what the user is most likely to hit next.
   const windows = limits?.windows ?? [];
+  // A Claude Agent reads as a subscription once its Claude Code reported plan windows.
+  const subscription = provider.auth === 'subscription' || (provider.kind === 'claude-code' && windows.length > 0);
   const binding = windows.length
     ? [...windows].sort((a, b) => b.usedPercent - a.usedPercent)[0]
     : undefined;
