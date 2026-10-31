@@ -152,7 +152,8 @@ class ProtocolBannerTest {
         override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = answer(channel)
 
         private fun answer(channel: String): JsonElement = when (channel) {
-            Channels.SESSIONS_SUMMARIES -> WireJson.parseToJsonElement("""[{"id":"s1","title":"Tidy the release notes","updatedAt":1}]""")
+            // Touched just now: the list shows a group's recent chats, older ones behind Show more.
+            Channels.SESSIONS_SUMMARIES -> WireJson.parseToJsonElement("""[{"id":"s1","title":"Tidy the release notes","updatedAt":${System.currentTimeMillis()}}]""")
             Channels.WORKSPACE_LIST -> JsonArray(emptyList())
             else -> JsonNull
         }

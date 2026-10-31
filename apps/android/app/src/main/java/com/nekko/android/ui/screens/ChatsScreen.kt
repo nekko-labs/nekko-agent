@@ -5,6 +5,28 @@ import com.nekko.android.ui.chat.RowChip
 import androidx.compose.material.icons.filled.Outbox
 import androidx.compose.material.icons.filled.QuestionMark
 import androidx.compose.material.icons.outlined.RocketLaunch
+import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.automirrored.filled.Sort
+import com.nekko.android.data.PhonePrefs
+import com.nekko.android.data.ChatListPrefs
+import com.nekko.protocol.ChatGroupOrder
+import com.nekko.protocol.ChatSections
+import com.nekko.protocol.ChatSection
+import com.nekko.protocol.ChatListView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -113,6 +135,8 @@ fun ChatsScreen(
     pane: PaneSlot? = null,
     /** During the first run, pairing is its step 2: the welcome says so and offers Skip. */
     onSkipFirstRun: (() -> Unit)? = null,
+    /** Where the view menu and the group order are kept; null keeps them for this screen only (tests). */
+    phonePrefs: PhonePrefs? = null,
 ) {
     val s by repo.state.collectAsStateWithLifecycle()
     val outbox by repo.outbox.state.collectAsStateWithLifecycle()
@@ -128,10 +152,28 @@ fun ChatsScreen(
     var actionError by remember { mutableStateOf<String?>(null) }
     // Long-press on a completed chat: Restore it, or delete it for good.
     var pressedDone by remember { mutableStateOf<SessionSummary?>(null) }
-    // Folded groups and groups showing their completed chats; kept while a chat is open.
+    // Folded groups and groups showing all their chats; kept while a chat is open.
     var collapsed by rememberSaveable { mutableStateOf(setOf<String>()) }
-    var showCompleted by rememberSaveable { mutableStateOf(setOf<String>()) }
-    val groups = remember(s.summaries, s.workspaces) { ChatGroup.of(s.summaries, s.workspaces) }
+    var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
+    // The view menu (group by, sort by, what is shown) and the project groups' order, kept on this phone.
+    val localView = remember { MutableStateFlow(ChatListView.STANDARD) }
+    val localOrder = remember { MutableStateFlow(emptyMap<String, List<String>>()) }
+    val view by (phonePrefs?.flow(ChatListPrefs.VIEW) ?: localView).collectAsStateWithLifecycle()
+    val orders by (phonePrefs?.flow(ChatListPrefs.GROUP_ORDER) ?: localOrder).collectAsStateWithLifecycle()
+    val setView: (ChatListView) -> Unit = { v -> if (phonePrefs != null) phonePrefs.set(ChatListPrefs.VIEW, v) else localView.value = v }
+    val groupOrder = orders[active?.id].orEmpty()
+    val setGroupOrder: (List<String>) -> Unit = { keys ->
+        active?.id?.let { id -> if (phonePrefs != null) phonePrefs.set(ChatListPrefs.GROUP_ORDER, orders + (id to keys)) else localOrder.value = orders + (id to keys) }
+    }
+    var reordering by remember { mutableStateOf(false) }
+    val now = System.currentTimeMillis()
+    val sections = remember(s.summaries, s.workspaces, view, s.activity, groupOrder) {
+        ChatSections.make(s.summaries, s.workspaces, view, s.activity, groupOrder, now)
+    }
+    // Status groups lead with their own Needs you group; other views get one at the top.
+    val needsYou = remember(s.summaries, s.activity, view) {
+        if (view.groupBy == ChatListView.GroupBy.STATUS) emptyList() else s.summaries.filter { !it.archived && s.activity[it.id] == Activity.NEEDS_YOU }
+    }
     // Search: every word, any case or accent, in the title, first prompt or last reply, completed chats too.
     var query by rememberSaveable { mutableStateOf("") }
     val found = remember(s.summaries, query) { if (query.isBlank()) emptyList() else ChatSearch.matches(s.summaries.filter { it.isVisible }, query) }
@@ -229,6 +271,14 @@ fun ChatsScreen(
         )
     }
 
+    if (reordering) {
+        ReorderGroupsDialog(
+            sections.map { it.key to it.name },
+            onDismiss = { reordering = false },
+            onDone = { keys -> reordering = false; setGroupOrder(keys) },
+        )
+    }
+
     Scaffold(
         containerColor = p.paper,
         topBar = {
@@ -236,6 +286,7 @@ fun ChatsScreen(
                 title = { Text("Chats", style = MaterialTheme.typography.headlineMedium) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 actions = {
+                    if (active != null) ChatListViewMenu(view, setView, onReorder = { reordering = true })
                     IconButton(onClick = onComputers) {
                         Icon(Icons.Filled.Computer, contentDescription = "Computers", tint = p.inkSoft)
                     }
@@ -274,7 +325,7 @@ fun ChatsScreen(
                 },
                 modifier = Modifier.fillMaxSize().padding(padding),
             ) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+                LazyColumn(Modifier.fillMaxSize().testTag("chats.list"), contentPadding = PaddingValues(bottom = 96.dp)) {
                     item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
                     // Offline mode: what waits on the phone, and chats started offline not created yet.
                     if (outbox.waiting.isNotEmpty() && s.conn != RelayState.ONLINE) {
@@ -351,18 +402,27 @@ fun ChatsScreen(
                             )
                         }
                     }
-                    // The desktop's agent sidebar: General, then each folder; active
-                    // chats first, completed ones folded away under Show completed.
-                    if (query.isBlank()) groups.forEach { g ->
+                    if (query.isBlank() && needsYou.isNotEmpty()) {
+                        item(key = "needs-you") { GroupHeader("Needs you", open = true, count = "${needsYou.size}", onToggle = null) }
+                        items(needsYou, key = { "needs:${it.id}" }) { summary ->
+                            ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
+                                waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews)
+                        }
+                    }
+                    // The desktop's agent sidebar as the view menu arranges it: by project (General, then each
+                    // folder, in the order arranged here), status, date or none; the recent few, then Show more.
+                    if (query.isBlank()) sections.forEach { g ->
                         val open = g.key !in collapsed
-                        val showDone = g.key in showCompleted
+                        val all = g.key in expanded
+                        val (shown, hidden) = ChatSections.split(g, s.activity, now)
                         item(key = "group:${g.key}") {
-                            GroupHeader(g.name, open, g.active.size) {
-                                collapsed = if (open) collapsed + g.key else collapsed - g.key
-                            }
+                            GroupHeader(
+                                g.name, open, groupCounts(g),
+                                onReorder = if (view.canReorderGroups && sections.size > 1) ({ reordering = true }) else null,
+                            ) { collapsed = if (open) collapsed + g.key else collapsed - g.key }
                         }
                         if (!open) return@forEach
-                        if (g.active.isEmpty()) {
+                        if (g.chats.isEmpty()) {
                             item(key = "none:${g.key}") {
                                 Text(
                                     "No active agents",
@@ -372,19 +432,14 @@ fun ChatsScreen(
                                 )
                             }
                         }
-                        items(g.active, key = { it.id }) { summary ->
-                            ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) }, waiting = outbox.waitingFor(summary.id).size)
+                        items(if (all) g.chats else shown, key = { "${g.key}:${it.id}" }) { summary ->
+                            if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
+                            else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
+                                waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews)
                         }
-                        if (g.completed.isNotEmpty()) {
-                            item(key = "done-toggle:${g.key}") {
-                                CompletedToggle(showDone, g.completed.size) {
-                                    showCompleted = if (showDone) showCompleted - g.key else showCompleted + g.key
-                                }
-                            }
-                            if (showDone) {
-                                items(g.completed, key = { it.id }) { summary ->
-                                    CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
-                                }
+                        if (hidden > 0) {
+                            item(key = "more:${g.key}") {
+                                ShowMoreToggle(all, hidden) { expanded = if (all) expanded - g.key else expanded + g.key }
                             }
                         }
                     }
@@ -441,7 +496,7 @@ private fun ChatActionDialog(
 }
 
 @Composable
-internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0) {
+internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0, showPreview: Boolean = true) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
@@ -469,7 +524,7 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
                 if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = p.warning, modifier = Modifier.size(14.dp))
                 Text(ago(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
             }
-            if (preview.isNotEmpty()) {
+            if (showPreview && preview.isNotEmpty()) {
                 Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (activity != null || waiting > 0) {
@@ -551,23 +606,36 @@ private fun MonitorsRow(onClick: () -> Unit) {
     }
 }
 
-/** A group's title row (General or a folder): tap to fold it, like the desktop sidebar. */
+/**
+ * A group's title row: tap to fold it, like the desktop sidebar, with its
+ * counts ("3 active · 12 done"). Project groups offer Reorder groups on a long
+ * press (and as an accessibility action).
+ */
 @Composable
-private fun GroupHeader(name: String, open: Boolean, activeCount: Int, onToggle: () -> Unit) {
+private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (() -> Unit)? = null, onToggle: (() -> Unit)?) {
     val p = Nekko.palette
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClickLabel = if (open) "Collapse $name" else "Expand $name", onClick = onToggle)
-            .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
-            .padding(start = 12.dp, end = 16.dp, top = 14.dp, bottom = 6.dp),
+            .then(
+                if (onToggle == null) Modifier
+                else Modifier.combinedClickable(
+                    role = Role.Button,
+                    onClickLabel = if (open) "Collapse $name" else "Expand $name",
+                    onLongClickLabel = if (onReorder != null) "Reorder groups" else null,
+                    onLongClick = onReorder,
+                    onClick = onToggle,
+                ).semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
+            )
+            .padding(start = 12.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)
+            .testTag("chats.group"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(
             Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = p.inkFaint,
+            tint = if (onToggle == null) Color.Transparent else p.inkFaint,
             modifier = Modifier.size(18.dp).rotate(if (open) 90f else 0f),
         )
         Text(
@@ -580,41 +648,148 @@ private fun GroupHeader(name: String, open: Boolean, activeCount: Int, onToggle:
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        if (!open && activeCount > 0) {
-            Text(
-                "$activeCount",
-                style = MaterialTheme.typography.labelSmall,
-                color = p.inkFaint,
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(p.surface2).padding(horizontal = 6.dp, vertical = 1.dp),
-            )
-        }
+        if (count.isNotEmpty()) Text(count, style = MaterialTheme.typography.labelSmall, color = p.inkFaint, maxLines = 1)
     }
 }
 
-/** "Show completed (N)" / "Hide completed" under a group's active chats. */
+/** "3 active · 12 done", as the desktop's group headings count. */
+private fun groupCounts(g: ChatSection): String = buildList {
+    if (g.activeCount > 0) add("${g.activeCount} active")
+    if (g.doneCount > 0) add("${g.doneCount} done")
+}.joinToString(" · ")
+
+/** "Show N more" / "Show fewer" under a group's recent chats. */
 @Composable
-private fun CompletedToggle(open: Boolean, count: Int, onToggle: () -> Unit) {
+private fun ShowMoreToggle(open: Boolean, hidden: Int, onToggle: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(role = Role.Button, onClick = onToggle)
-            .padding(start = 40.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 40.dp, end = 16.dp, top = 6.dp, bottom = 6.dp)
+            .testTag("chats.showMore"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
             contentDescription = null,
-            tint = p.inkFaint,
-            modifier = Modifier.size(14.dp).rotate(if (open) 90f else 0f),
+            tint = p.inkSoft,
+            modifier = Modifier.size(16.dp),
         )
-        Text(
-            if (open) "Hide completed" else "Show completed ($count)",
-            style = MaterialTheme.typography.bodySmall,
-            color = p.inkFaint,
-        )
+        Text(if (open) "Show fewer" else "Show $hidden more", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = p.inkSoft)
     }
+}
+
+/** Group by, sort by, and what is shown: the desktop Agents panel's view menu, as on the iPhone. */
+@Composable
+private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Unit, onReorder: () -> Unit) {
+    val p = Nekko.palette
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }, modifier = Modifier.testTag("chats.view")) {
+            Icon(
+                if (view.isStandard) Icons.AutoMirrored.Outlined.Sort else Icons.AutoMirrored.Filled.Sort,
+                contentDescription = "View options",
+                tint = if (view.isStandard) p.inkSoft else p.accent,
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            @Composable
+            fun heading(text: String) = Text(
+                text.uppercase(), style = MaterialTheme.typography.labelSmall, color = p.inkFaint, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp),
+            )
+            @Composable
+            fun choice(text: String, on: Boolean, change: () -> Unit) = DropdownMenuItem(
+                text = { Text(text) },
+                leadingIcon = { Icon(Icons.Filled.Check, contentDescription = null, tint = if (on) p.accent else Color.Transparent) },
+                onClick = change,
+                modifier = Modifier.semantics { selected = on },
+            )
+            heading("Group by")
+            ChatListView.GroupBy.entries.forEach { g -> choice(groupName(g), view.groupBy == g) { onChange(view.copy(groupBy = g)) } }
+            HorizontalDivider()
+            heading("Sort by")
+            ChatListView.SortBy.entries.forEach { o -> choice(sortName(o), view.sortBy == o) { onChange(view.withSort(o)) } }
+            // Manual order has no direction: it is whatever was dragged on the computer.
+            if (view.sortBy != ChatListView.SortBy.MANUAL) {
+                HorizontalDivider()
+                heading("Order")
+                val name = view.sortBy == ChatListView.SortBy.NAME
+                choice(if (name) "A to Z" else "Oldest first", view.ascending) { onChange(view.copy(ascending = true)) }
+                choice(if (name) "Z to A" else "Newest first", !view.ascending) { onChange(view.copy(ascending = false)) }
+            }
+            HorizontalDivider()
+            heading("Show")
+            choice("Previews", view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }
+            choice("Completed chats", view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
+            choice("Empty groups", view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
+            if (view.canReorderGroups) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Reorder groups…") },
+                    leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null) },
+                    onClick = { open = false; onReorder() },
+                    modifier = Modifier.testTag("chats.reorder"),
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Reset to defaults") },
+                enabled = !view.isStandard,
+                onClick = { open = false; onChange(ChatListView.STANDARD) },
+            )
+        }
+    }
+}
+
+private fun groupName(g: ChatListView.GroupBy) = when (g) {
+    ChatListView.GroupBy.PROJECT -> "Project"
+    ChatListView.GroupBy.STATUS -> "Status"
+    ChatListView.GroupBy.DATE -> "Date"
+    ChatListView.GroupBy.NONE -> "None"
+}
+
+private fun sortName(s: ChatListView.SortBy) = when (s) {
+    ChatListView.SortBy.MANUAL -> "Manual"
+    ChatListView.SortBy.UPDATED -> "Last updated"
+    ChatListView.SortBy.NAME -> "Name"
+}
+
+/**
+ * The project groups in a list with Move up / Move down on each, kept on this
+ * phone for this computer (the iPhone's Reorder groups sheet).
+ */
+@Composable
+private fun ReorderGroupsDialog(groups: List<Pair<String, String>>, onDismiss: () -> Unit, onDone: (List<String>) -> Unit) {
+    val p = Nekko.palette
+    var order by remember(groups) { mutableStateOf(groups) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reorder groups") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                order.forEachIndexed { i, (key, name) ->
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("groups.row"),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(name, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        IconButton(enabled = i > 0, onClick = { order = ChatGroupOrder.move(order.map { it.first }, key, order[i - 1].first).map { k -> order.first { it.first == k } } }) {
+                            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move $name up")
+                        }
+                        IconButton(enabled = i < order.lastIndex, onClick = { order = ChatGroupOrder.move(order.map { it.first }, key, order.getOrNull(i + 2)?.first).map { k -> order.first { it.first == k } } }) {
+                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move $name down")
+                        }
+                    }
+                }
+                Text("The order is kept on this phone.", style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        confirmButton = { TextButton(onClick = { onDone(order.map { it.first }) }, modifier = Modifier.testTag("groups.done")) { Text("Done") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /**
