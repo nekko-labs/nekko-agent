@@ -1,22 +1,18 @@
 package com.nekko.android.connection
 
 import android.net.NetworkCapabilities
-import android.security.NetworkSecurityPolicy
+import com.nekko.android.BuildConfig
 import com.nekko.protocol.NetworkPath
-import com.nekko.protocol.RelayRoute
+import com.nekko.protocol.RelayHint
 
 /**
- * Which of a computer's relay routes this phone may dial (AN-28). The network
- * security config (`res/xml/network_security_config.xml`) allows plain
- * `ws://` only to the tailnet, so a computer's `ws://` LAN address is kept
- * but never dialed: it would fail on every try. `wss://` is always allowed.
+ * Which of a computer's relay routes this phone may dial (AN-28), by the
+ * iPhone's rule (`RelayHint`): `wss://` anywhere, plain `ws://` to the
+ * tailnet or the LAN, never to the open internet; a loopback relay only in
+ * debug builds, where adb reverse forwards it.
  */
 object RoutePolicy {
-    fun allowed(url: String): Boolean {
-        if (!url.trim().startsWith("ws://", ignoreCase = true)) return true
-        val host = RelayRoute.host(url)
-        return host.isNotEmpty() && NetworkSecurityPolicy.getInstance().isCleartextTrafficPermitted(host)
-    }
+    fun allowed(url: String): Boolean = RelayHint.problem(url, BuildConfig.DEBUG) == null
 
     /** The kind of network, for the route choice: a LAN address only works on Wi-Fi or Ethernet. */
     fun path(caps: NetworkCapabilities?): NetworkPath = when {

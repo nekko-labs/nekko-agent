@@ -40,7 +40,7 @@ class ConnectionLogTest {
         assertEquals(emptyList<String>(), ask(ts, RelayState.ONLINE))
         assertTrue(ask(ts, RelayState.CONNECTING, tailscale = false).first().startsWith("Tailscale is off"))
         assertTrue(ask(ts, RelayState.CONNECTING).first().startsWith("Tailscale is on"))
-        assertTrue(ask("ws://192.168.1.5:4400", RelayState.CONNECTING).first().contains("blocks unencrypted"))
+        assertTrue(ask("ws://relay.example:4400", RelayState.CONNECTING).first().contains("not encrypted"))
         assertTrue(ask("wss://relay.example", RelayState.OFFLINE).first().contains("isn’t connected to it"))
         assertTrue(ask("wss://relay.example", RelayState.DENIED, DenyReason.BAD_CODE).first().contains("10 minutes"))
         assertTrue(ask("wss://relay.example", RelayState.DENIED, DenyReason.REVOKED).first().contains("removed this phone"))

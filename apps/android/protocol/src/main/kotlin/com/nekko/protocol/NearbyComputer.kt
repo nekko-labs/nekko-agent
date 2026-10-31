@@ -30,7 +30,7 @@ data class NearbyComputer(
         /**
          * Anyone on the network can write this record, so the relay is shown
          * only when it's a ws/wss address this phone would accept anyway
-         * (Android: wss://, or ws:// to a *.ts.net name).
+         * (wss://, or ws:// to the tailnet or the LAN).
          */
         internal fun usableRelay(raw: String?): String? {
             val url = raw?.trim().orEmpty()

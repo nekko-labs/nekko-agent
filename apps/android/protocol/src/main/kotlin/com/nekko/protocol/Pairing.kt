@@ -67,7 +67,7 @@ object Pairing {
     /** `relayUrlProblem` (packages/shared/src/relay-route.ts): bad shape, or plain ws:// to the open internet. */
     private fun urlProblem(url: String): Boolean {
         if (!Regex("^wss?://[^/?#]", RegexOption.IGNORE_CASE).containsMatchIn(url)) return true
-        return url.startsWith("ws://", ignoreCase = true) && RelayRoute.of(url) == RelayRoute.INTERNET
+        return RelayRoute.publicCleartext(url)
     }
 
     /** URLSearchParams semantics: every pair in order (first wins for get()), `+` is a space. */

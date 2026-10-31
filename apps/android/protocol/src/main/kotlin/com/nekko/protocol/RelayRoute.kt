@@ -25,6 +25,15 @@ enum class RelayRoute {
             return INTERNET
         }
 
+        /**
+         * Plain `ws://` toward the open internet: the one thing the app refuses
+         * to dial. The network security config permits cleartext app-wide
+         * (it can't name IP ranges), so this check is the barrier, run before
+         * every socket and health probe (`OkHttpTransport`, `HealthProber`).
+         */
+        fun publicCleartext(url: String): Boolean =
+            url.trim().startsWith("ws://", ignoreCase = true) && of(url) == INTERNET
+
         /** `relayHost` in relay-route.ts: lowercased, IPv6 without brackets, past userinfo. */
         fun host(url: String): String {
             var s = url.trim().substringAfter("://")

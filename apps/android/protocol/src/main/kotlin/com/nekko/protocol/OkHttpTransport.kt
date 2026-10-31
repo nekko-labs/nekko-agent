@@ -10,9 +10,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * OkHttp WebSocket transport. The relay URL is `wss://` in production; `ws://`
- * is accepted only because a self-hosted relay on a LAN or a local test relay
- * may use it. Payloads are E2E-sealed either way, but the app layer decides
- * whether to allow a cleartext relay (see the Android network security config).
+ * is accepted toward a tailnet or the LAN (a computer's own relay) and refused
+ * toward the open internet before anything is sent. Payloads are E2E-sealed
+ * either way. The network security config permits cleartext app-wide, so this
+ * check, not the system, is what stops a public `ws://` dial.
  */
 class OkHttpTransport(
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -21,6 +22,7 @@ class OkHttpTransport(
         .build(),
 ) : WsTransport {
     override fun open(url: String, listener: WsListener): WsConnection {
+        require(!RelayRoute.publicCleartext(url)) { "plain ws:// to the open internet is refused: use wss://" }
         // OkHttp wants http(s) schemes for the upgrade request.
         val httpUrl = url.replaceFirst(Regex("^ws", RegexOption.IGNORE_CASE), "http")
         val closed = AtomicBoolean(false)
