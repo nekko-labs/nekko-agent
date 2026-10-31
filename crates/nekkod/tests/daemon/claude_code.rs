@@ -132,6 +132,28 @@ pub fn fake_claude() {
             let reply = format!("woke: {}", decision["behavior"].as_str().unwrap_or("?"));
             out(assistant("m_w2", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "plan" {
+            // Claude Code's own plan: two tasks, the first started.
+            let tool = |id: &str, name: &str, input: Value, output: &str| {
+                out(assistant(
+                    &format!("m_{id}"),
+                    json!([{ "type": "tool_use", "id": id, "name": name, "input": input }]),
+                ));
+                out(json!({ "type": "user", "message": { "role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": id, "content": output,
+                }] }, "parent_tool_use_id": null }));
+            };
+            let created = |n: u8, subject: &str| format!("Task #{n} created successfully: {subject}");
+            tool(
+                "toolu_t1",
+                "TaskCreate",
+                json!({ "subject": "Read the code", "description": "Find the parser" }),
+                &created(1, "Read the code"),
+            );
+            tool("toolu_t2", "TaskCreate", json!({ "subject": "Fix it", "description": "" }), &created(2, "Fix it"));
+            tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
+            out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
+            out(result("planned", "completed"));
         } else if text == "run rm" {
             // A prompt only a person may answer in guardrails mode, through the bridge.
             out(assistant(
@@ -339,6 +361,31 @@ async fn runs_turns_on_one_claude_code_process_and_keeps_its_session() {
     let replies = assistant_texts(&second);
     let pid = |r: &str| r.split(':').next().unwrap().to_string();
     assert_eq!(pid(&replies[0]), pid(&replies[1]), "{replies:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_codes_own_plan_is_the_chats_plan() {
+    let rig = rig("plan", "guardrails", true);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cp1", "plan")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (events, end) = turn_record(&rig, "cp1", "s_cc").await;
+    assert_eq!(end["aborted"], false, "{end}");
+    assert!(kinds(&events).contains(&"session_meta".into()), "the plan sheet hears of each change");
+    let plan = saved(&rig)["agentPlan"].clone();
+    let steps: Vec<_> = plan
+        .as_array()
+        .expect("the plan is saved")
+        .iter()
+        .map(|s| (s["id"].clone(), s["title"].clone(), s["status"].clone()))
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            (json!("task_1"), json!("Read the code"), json!("active")),
+            (json!("task_2"), json!("Fix it"), json!("pending")),
+        ]
+    );
+    assert_eq!(plan[0]["note"], "Find the parser");
 }
 
 #[tokio::test(flavor = "multi_thread")]
