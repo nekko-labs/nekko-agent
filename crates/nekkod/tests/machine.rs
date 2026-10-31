@@ -131,6 +131,17 @@ async fn machine_channels_are_served_without_a_backend() {
         assert_eq!(fs, json!({ "quiet": false, "state": "free" }));
     }
 
+    // Low memory: the level, and with detail, the daemon's own share and the
+    // biggest app. Closing is refused for Nekko and the system.
+    let (status, mem) = post(d.port, "memory:state", json!([{ "detail": true }])).await;
+    assert_eq!(status, 200, "{mem}");
+    assert!(["ok", "low", "critical"].contains(&mem["level"].as_str().unwrap_or_default()), "{mem}");
+    assert!(mem["totalBytes"].as_u64().unwrap() > 0 && mem["nekkoBytes"].as_u64().unwrap() > 0, "{mem}");
+    for name in ["nekkod", "explorer", ""] {
+        let (status, closed) = post(d.port, "memory:closeApp", json!([name])).await;
+        assert_eq!((status, closed["ok"].clone()), (200, json!(false)), "{name}: {closed}");
+    }
+
     let (status, body) = post(d.port, "resource:queue", json!(["list", {}])).await;
     assert_eq!((status, body["error"].clone()), (400, json!("Resource queue experiment is disabled")));
 
