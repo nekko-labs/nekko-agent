@@ -177,15 +177,7 @@ public enum Transcript {
     /// repeats an earlier turn is never swallowed.
     public static func mergeLive(saved: [Block], live: [Block]) -> [Block] {
         if live.isEmpty { return saved }
-        let prompt: String? = live.lazy.compactMap { if case .user(_, let text, _, _) = $0 { return text } else { return nil } }.first
-        let lastUserAt = saved.lastIndex(where: \.isUser)
-        var lastUserText: String?
-        if let i = lastUserAt, case .user(_, let text, _, _) = saved[i] { lastUserText = text }
-        func trim(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if let prompt, lastUserText.map(trim) != trim(prompt) { return saved + live }
-        let headEnd = (lastUserAt ?? -1) + 1
-        let head = Array(saved.prefix(headEnd))
-        let turn = Array(saved.dropFirst(headEnd))
+        guard let (head, turn) = savedTurn(saved: saved, live: live) else { return saved + live }
         var toolIds = Set<String>()
         var replies = Set<String>()
         for b in turn {
@@ -205,7 +197,31 @@ public enum Transcript {
             if case .tool(let id, _, _, _, _, _) = b, let l = liveTools[id] { return l }
             return b
         }
-        return head + mergedTurn + extra
+        return Array(head) + mergedTurn + extra
+    }
+
+    /// Whether `mergeLive` keeps every live reply as it is: true when the saved
+    /// transcript has no reply yet for the turn the overlay is running (the usual
+    /// case while it streams). Then a streamed token changes only the last merged
+    /// block, and a caller may patch it instead of merging again.
+    public static func keepsLiveReplies(saved: [Block], live: [Block]) -> Bool {
+        guard !live.isEmpty, let (_, turn) = savedTurn(saved: saved, live: live) else { return true }
+        return !turn.contains(where: \.isAssistant)
+    }
+
+    private static func trim(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// The saved transcript split at the overlay's prompt: what came before it, and
+    /// the saved blocks of this turn. Nil when the saved transcript doesn't end with
+    /// the overlay's prompt (the computer hasn't saved this turn yet).
+    private static func savedTurn(saved: [Block], live: [Block]) -> (head: ArraySlice<Block>, turn: ArraySlice<Block>)? {
+        let prompt: String? = live.lazy.compactMap { if case .user(_, let text, _, _) = $0 { return text } else { return nil } }.first
+        let lastUserAt = saved.lastIndex(where: \.isUser)
+        var lastUserText: String?
+        if let i = lastUserAt, case .user(_, let text, _, _) = saved[i] { lastUserText = text }
+        if let prompt, lastUserText.map(trim) != trim(prompt) { return nil }
+        let headEnd = (lastUserAt ?? -1) + 1
+        return (saved.prefix(headEnd), saved.dropFirst(headEnd))
     }
 
     /// When a turn ends its live blocks (`pending-…`, `live-…`) are replaced by

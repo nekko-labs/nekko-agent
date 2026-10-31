@@ -253,28 +253,24 @@ struct TerminalScreenView: View {
         VStack(spacing: 6) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    key("esc") { session.key(.escape) }
-                    key("tab") { session.key(.tab) }
+                    key("esc", "Escape") { session.key(.escape) }
+                    key("tab", "Tab") { session.key(.tab) }
                     Button { ctrl.toggle() } label: {
-                        Text("ctrl").font(.system(size: 14, weight: .medium, design: .monospaced))
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(ctrl ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 6))
-                            .foregroundStyle(ctrl ? palette.onAccent : palette.ink)
+                        keyFace(selected: ctrl) { Text("ctrl") }
                     }
                     .accessibilityLabel("Control")
                     .accessibilityAddTraits(ctrl ? .isSelected : [])
-                    key("^C") { session.key(.ctrl("c")) }
-                    key("↑") { session.key(.up) }
-                    key("↓") { session.key(.down) }
-                    key("←") { session.key(.left) }
-                    key("→") { session.key(.right) }
-                    key("⌫") { session.key(.backspace) }
-                    key("⏎") { session.key(.enter) }
+                    key("^C", "Control C") { session.key(.ctrl("c")) }
+                    key("↑", "Up") { session.key(.up) }
+                    key("↓", "Down") { session.key(.down) }
+                    key("←", "Left") { session.key(.left) }
+                    key("→", "Right") { session.key(.right) }
+                    key("⌫", "Delete") { session.key(.backspace) }
+                    key("⏎", "Return") { session.key(.enter) }
                     Button {
                         if let text = UIPasteboard.general.string { session.paste(text) }
                     } label: {
-                        Image(systemName: "doc.on.clipboard").padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(palette.surface2, in: RoundedRectangle(cornerRadius: 6))
+                        keyFace { Image(systemName: "doc.on.clipboard") }
                     }
                     .accessibilityLabel("Paste")
                 }
@@ -282,7 +278,7 @@ struct TerminalScreenView: View {
             }
             HStack(spacing: 8) {
                 TextField(ctrl ? "Ctrl + a key" : "Type or dictate a command", text: $line)
-                    .font(.system(size: 15, design: .monospaced))
+                    .font(.system(.subheadline, design: .monospaced))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .submitLabel(.send)
@@ -312,13 +308,22 @@ struct TerminalScreenView: View {
         lineFocused = true
     }
 
-    private func key(_ label: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label).font(.system(size: 14, weight: .medium, design: .monospaced))
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(palette.surface2, in: RoundedRectangle(cornerRadius: 6))
-                .foregroundStyle(palette.ink)
-        }
+    /// A terminal key: its glyph on the key, its name for VoiceOver ("Up", not "up arrow").
+    private func key(_ label: String, _ spoken: LocalizedStringKey, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) { keyFace { Text(label) } }
+            .accessibilityLabel(Text(spoken))
+    }
+
+    /// A key's look: text that follows Dynamic Type, and a 44 pt tall target
+    /// around the drawn key, which stays compact.
+    private func keyFace(selected: Bool = false, @ViewBuilder _ content: () -> some View) -> some View {
+        content()
+            .font(.system(.subheadline, design: .monospaced).weight(.medium))
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(selected ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 6))
+            .foregroundStyle(selected ? palette.onAccent : palette.ink)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
     }
 
     // MARK: Colours
