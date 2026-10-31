@@ -580,7 +580,7 @@ on. Without Tailscale on this computer the option links to Tailscale and stays o
   after changing it. Phones paired before this keep the one route until they scan a new code.
 
 On the iPhone, **Settings → Connection** shows the route in use (on Android, **Settings →
-Connection status**, with the other routes). **Check routes** looks up,
+Connection status**, with the other routes). **Check routes** (iPhone and Android) looks up,
 connects to and says hello on each route with timings, and **Share diagnostics** shares those
 results and the connection log as text, without rooms, keys, codes or messages.
 
