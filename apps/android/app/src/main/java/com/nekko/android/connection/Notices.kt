@@ -1,5 +1,8 @@
 package com.nekko.android.connection
 
+import com.nekko.protocol.LiveLevel
+import com.nekko.protocol.LiveChatState
+import com.nekko.protocol.LiveCardState
 import com.nekko.protocol.E2E
 
 import android.Manifest
@@ -107,25 +110,77 @@ class Notices(private val context: Context) {
     }
 
     /**
-     * The ongoing notification of [KeepAliveService]; tapping it opens the app.
-     * On Android 16+ it asks to be a Live Update: a "Running" chip in the status
-     * bar and a place at the top of the lock screen, like the iPhone's Live
-     * Activity. The user can turn that off per app; it then stays an ordinary
-     * ongoing notification. Counts only, never chat content.
+     * The ongoing notification of [KeepAliveService]. On Android 16+ it asks to
+     * be a Live Update: a chip in the status bar and a place at the top of the
+     * lock screen, like the iPhone's Live Activity. The user can turn that off
+     * per app; it then stays an ordinary ongoing notification.
+     *
+     * With a [card] it is the Lock Screen card ([LiveCards]): the chat that most
+     * needs you, its live step, and its buttons. Minimal shows no chat text;
+     * Standard adds the chat's short title, its step and Allow; Detailed adds the
+     * reply line. At Standard and Detailed a locked phone that hides sensitive
+     * content shows the Minimal words. Without a card it says counts only.
      */
-    fun keepAlive(status: KeepAlive.Status): Notification =
-        NotificationCompat.Builder(context, CHANNEL_CONNECTION)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Staying connected")
-            .setContentText(status.line)
-            .setRequestPromotedOngoing(true)
-            .setShortCriticalText(status.chip)
-            .setOngoing(true)
-            .setSilent(true)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setContentIntent(openApp())
-            .build()
+    fun keepAlive(status: KeepAlive.Status, card: LiveCardState? = null, level: LiveLevel = LiveLevel.NONE): Notification {
+        val focused = card?.focused
+        if (card == null || focused == null || level == LiveLevel.NONE) {
+            return base(status.chip)
+                .setContentTitle("Staying connected")
+                .setContentText(status.line)
+                .setContentIntent(openApp())
+                .build()
+        }
+        val generic = LiveCards.generic(focused.state)
+        val others = card.chats.size - 1 + card.more
+        val count = if (others > 0) "+$others more" else null
+        val chip = if (focused.state == LiveChatState.NEEDS_YOU) "Needs you" else status.chip
+        fun minimal() = base(chip)
+            .setContentTitle(generic)
+            .setContentText(count ?: status.line)
+        val b = if (level == LiveLevel.MINIMAL) {
+            minimal().setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        } else {
+            val text = focused.step.ifEmpty { generic }
+            base(chip)
+                .setContentTitle(focused.short.ifEmpty { generic })
+                .setContentText(text)
+                .setSubText(count)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(if (focused.reply.isNotEmpty()) "$text\n${focused.reply}" else text))
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(minimal().setContentIntent(openApp()).build())
+        }
+        if (focused.startedAt != null && (focused.state == LiveChatState.WORKING || focused.state == LiveChatState.NEEDS_YOU)) {
+            b.setWhen((focused.startedAt!! * 1000).toLong()).setUsesChronometer(true).setShowWhen(true)
+        }
+        b.setContentIntent(openChat(focused.id))
+        val callId = focused.callId
+        when {
+            focused.state == LiveChatState.NEEDS_YOU && callId != null -> {
+                // Allow needs an unlocked phone (Android 12+); below that it stays in the chat. Deny is safe unseen.
+                if (level != LiveLevel.MINIMAL && Build.VERSION.SDK_INT >= 31) {
+                    b.addAction(
+                        NotificationCompat.Action.Builder(0, "Allow", CardReceiver.intent(context, CardReceiver.ALLOW, focused.id, callId))
+                            .setAuthenticationRequired(true)
+                            .build(),
+                    )
+                }
+                b.addAction(0, "Deny", deny(focused.id, callId))
+            }
+            focused.state == LiveChatState.WORKING -> b.addAction(0, "Stop", CardReceiver.intent(context, CardReceiver.STOP, focused.id))
+        }
+        if (others > 0) b.addAction(0, "Next", CardReceiver.intent(context, CardReceiver.NEXT, focused.id))
+        return b.build()
+    }
+
+    private fun base(chip: String) = NotificationCompat.Builder(context, CHANNEL_CONNECTION)
+        .setSmallIcon(R.drawable.ic_launcher_foreground)
+        .setRequestPromotedOngoing(true)
+        .setShortCriticalText(chip)
+        .setOngoing(true)
+        .setSilent(true)
+        .setOnlyAlertOnce(true)
+        .setCategory(NotificationCompat.CATEGORY_SERVICE)
+        .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
 
     private fun openChat(sessionId: String): PendingIntent {
         // The same deep link as nekko-agent://chat/<id>; it goes through the app lock like any other.
