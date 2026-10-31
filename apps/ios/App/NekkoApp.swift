@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         // Push is optional: the relay's content-free "finished" pings just won't arrive.
+        Log.push.error("Push registration failed: \(error.localizedDescription, privacy: .public)")
     }
 
     /// The relay's silent push after an approval or a question was handled
