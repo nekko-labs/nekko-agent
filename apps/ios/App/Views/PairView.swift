@@ -276,7 +276,8 @@ struct ConfirmPairSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        // Large too: at accessibility text sizes the confirmation does not fit in half the screen.
+        .presentationDetents([.medium, .large])
     }
 }
 
