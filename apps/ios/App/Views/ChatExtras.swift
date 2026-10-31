@@ -116,6 +116,8 @@ struct QueueEditor: View {
             }
         }
         .presentationDetents([.medium, .large])
+        // A swipe down doesn't drop an edit (as FileEditor): Cancel does, on purpose.
+        .interactiveDismissDisabled(busy || text != prompt.text)
         .onAppear {
             text = prompt.text
             focused = true
@@ -161,23 +163,30 @@ struct PhotoStrip: View {
     }
 }
 
-/// Full-screen photos: swipe between them, pinch or double-tap to zoom.
+/// Full-screen photos: swipe between them, pinch or double-tap to zoom where
+/// you pinch or tap, and pan a zoomed photo (UIScrollView: it follows the
+/// fingers and bounces at the edges and at the zoom limits). Each photo is
+/// decoded once, when its page is made, not on every render.
 struct ImageViewer: View {
     let photos: [String]
     @State var index: Int
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        let shown = photos.compactMap(DataURLImage.decode)
+        // Pages keep the photos' own indices; a photo the computer kept back ("") has none.
+        let pages = photos.indices.filter { !photos[$0].isEmpty }
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
             TabView(selection: $index) {
-                ForEach(Array(shown.enumerated()), id: \.offset) { i, image in
-                    ZoomableImage(image: image).tag(i)
-                        .accessibilityLabel("Photo \(i + 1) of \(shown.count)")
+                ForEach(Array(pages.enumerated()), id: \.element) { n, i in
+                    ZoomingPhoto(source: photos[i]).tag(i)
+                        .ignoresSafeArea()
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Photo \(n + 1) of \(pages.count)")
+                        .accessibilityAddTraits(.isImage)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: shown.count > 1 ? .automatic : .never))
+            .tabViewStyle(.page(indexDisplayMode: pages.count > 1 ? .automatic : .never))
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.body.weight(.bold)).foregroundStyle(.white)
                     .frame(width: 44, height: 44).background(.black.opacity(0.5), in: Circle())
@@ -190,22 +199,78 @@ struct ImageViewer: View {
     }
 }
 
-private struct ZoomableImage: View {
-    let image: UIImage
-    @State private var scale: CGFloat = 1
-    @State private var settled: CGFloat = 1
+/// One photo in a zooming scroll view. The data URL is decoded in
+/// `makeUIView`, once per page.
+private struct ZoomingPhoto: UIViewRepresentable {
+    let source: String
 
-    var body: some View {
-        Image(uiImage: image).resizable().scaledToFit()
-            .scaleEffect(scale)
-            .gesture(MagnifyGesture()
-                .onChanged { scale = min(5, max(1, settled * $0.magnification)) }
-                .onEnded { _ in settled = scale })
-            .onTapGesture(count: 2) {
-                withAnimation(.snappy) { scale = scale > 1 ? 1 : 2.5 }
-                settled = scale
-            }
-            .accessibilityAddTraits(.isImage)
+    func makeUIView(context: Context) -> PhotoScrollView { PhotoScrollView(image: DataURLImage.decode(source)) }
+
+    func updateUIView(_ view: PhotoScrollView, context: Context) {}
+}
+
+/// The photo fitted to the screen at zoom 1, centred while it is smaller than
+/// the screen, zoomable to 5x around the pinch and pannable once zoomed.
+/// Double-tap zooms to 2.5x at the tapped point, or back out.
+final class PhotoScrollView: UIScrollView, UIScrollViewDelegate {
+    private let imageView = UIImageView()
+    /// The size the image was last fitted to, so a resize or rotation fits it again.
+    private var fitted: CGSize = .zero
+
+    init(image: UIImage?) {
+        super.init(frame: .zero)
+        imageView.image = image
+        imageView.contentMode = .scaleAspectFit
+        addSubview(imageView)
+        delegate = self
+        minimumZoomScale = 1
+        maximumZoomScale = 5
+        bouncesZoom = true
+        showsHorizontalScrollIndicator = false
+        showsVerticalScrollIndicator = false
+        contentInsetAdjustmentBehavior = .never
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        addGestureRecognizer(doubleTap)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let size = imageView.image?.size, size.width > 0, size.height > 0, bounds.width > 0, bounds.height > 0 else { return }
+        if fitted != bounds.size {
+            fitted = bounds.size
+            zoomScale = minimumZoomScale
+            let s = min(bounds.width / size.width, bounds.height / size.height)
+            imageView.frame = CGRect(x: 0, y: 0, width: size.width * s, height: size.height * s)
+            contentSize = imageView.frame.size
+        }
+        centre()
+    }
+
+    /// While the photo is smaller than the screen in a direction, it sits in the middle of it.
+    private func centre() {
+        let h = max(0, (bounds.width - contentSize.width) / 2)
+        let v = max(0, (bounds.height - contentSize.height) / 2)
+        let inset = UIEdgeInsets(top: v, left: h, bottom: v, right: h)
+        if contentInset != inset { contentInset = inset }
+    }
+
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+    func scrollViewDidZoom(_ scrollView: UIScrollView) { centre() }
+
+    @objc private func doubleTapped(_ tap: UITapGestureRecognizer) {
+        if zoomScale > minimumZoomScale {
+            setZoomScale(minimumZoomScale, animated: true)
+            return
+        }
+        let point = tap.location(in: imageView)
+        let scale: CGFloat = 2.5
+        let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
+        zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)
     }
 }
 
