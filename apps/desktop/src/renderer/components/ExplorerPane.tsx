@@ -45,7 +45,7 @@ export function ExplorerPane({ paneId, root }: { paneId: string; root: string })
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1 text-2xs text-ink-faint">
+      <div className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-1 text-2xs text-ink-faint">
         <FolderIcon className="h-3 w-3 shrink-0" />
         <span className="min-w-0 truncate" title={root}>{name}</span>
       </div>

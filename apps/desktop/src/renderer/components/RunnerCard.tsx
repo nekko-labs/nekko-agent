@@ -52,9 +52,9 @@ export function RunnerCard({ view, now, onSettings, beginReply }: { view: Runner
   };
 
   return (
-    <div className="mt-3.5 rounded-xl border px-4 py-3.5" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }} data-runner-card={config.id}>
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex min-w-0 items-center gap-2.5">
+    <div className="mt-3 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }} data-runner-card={config.id}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <StatusDot tone={TONE[state] ?? 'neutral'} pulse={state === 'running'} />
           <div className="min-w-0">
             <p className="text-sm font-semibold">{runnerTitle(view)}</p>
@@ -87,9 +87,9 @@ export function RunnerCard({ view, now, onSettings, beginReply }: { view: Runner
         </ul>
       )}
 
-      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2.5">
+      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
         {slotLines(view, now).map((s) => (
-          <div key={s.title} className={`rounded-xl border px-3 py-2.5 ${s.dim ? 'opacity-50' : ''}`} style={{ borderColor: 'var(--line)', background: 'var(--paper)' }}>
+          <div key={s.title} className={`rounded-xl border px-3 py-2 ${s.dim ? 'opacity-50' : ''}`} style={{ borderColor: 'var(--line)', background: 'var(--paper)' }}>
             <p className="font-mono text-2xs uppercase tracking-wide text-ink-faint">{s.title}</p>
             <p className={`mt-0.5 text-sm ${s.progress > 0 ? '' : 'text-ink-faint'}`}>{s.text}</p>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
@@ -112,7 +112,7 @@ export function RunnerCard({ view, now, onSettings, beginReply }: { view: Runner
       </div>
 
       {view.recent.length > 0 && (
-        <ul className="mt-3 space-y-1 border-t pt-2.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }}>
+        <ul className="mt-3 space-y-1 border-t pt-2 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }}>
           {view.recent.map((l, i) => (
             <li key={`${l.ts}-${i}`} className="flex items-center gap-2">
               <StatusDot tone={l.result === 'finished' ? 'success' : 'warning'} size={6} />

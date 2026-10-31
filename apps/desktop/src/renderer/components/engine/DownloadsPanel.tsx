@@ -42,14 +42,14 @@ function progressLine(p: { receivedBytes: number; totalBytes?: number; bytesPerS
 export function DownloadsPanel({ jobs, onChanged }: { jobs: DownloadJob[]; onChanged: () => void }) {
   if (jobs.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed px-4 py-3.5 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+      <p className="rounded-xl border border-dashed px-4 py-3 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
         Nothing downloading. Anything you start from <strong>Find models</strong> shows its progress here.
       </p>
     );
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {groupDownloads(jobs).map((group) => (
         <DownloadGroupRow key={group.id} group={group} onChanged={onChanged} />
       ))}
@@ -64,7 +64,7 @@ function DownloadGroupRow({ group, onChanged }: { group: DownloadGroup; onChange
   const files = group.jobs.length;
 
   return (
-    <div className="rounded-lg px-2.5 py-2" style={{ background: 'var(--surface-2)' }} data-download-group={group.id}>
+    <div className="rounded-lg px-3 py-2" style={{ background: 'var(--surface-2)' }} data-download-group={group.id}>
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-xs">{group.label}</span>
         {multi && <span className="shrink-0 text-2xs text-ink-faint">{files} files</span>}
@@ -72,7 +72,7 @@ function DownloadGroupRow({ group, onChanged }: { group: DownloadGroup; onChange
           {STATE_LABEL[group.state]}
         </span>
         <button
-          className="btn btn-ghost shrink-0 px-1.5 py-1"
+          className="btn btn-ghost shrink-0 px-2 py-1"
           title={active ? (multi ? 'Cancel this download (every file)' : 'Cancel this download') : 'Remove from the list'}
           aria-label={active ? 'Cancel download' : 'Remove from the list'}
           onClick={async () => {
@@ -109,7 +109,7 @@ function FileRow({ job }: { job: DownloadJob }) {
   const active = isActive(job.state);
   const pct = job.totalBytes && job.totalBytes > 0 ? Math.min(100, (job.receivedBytes / job.totalBytes) * 100) : null;
   return (
-    <li className="pl-2.5" style={{ borderLeft: '2px solid color-mix(in srgb, var(--ink-faint) 20%, transparent)' }} data-download-file={name}>
+    <li className="pl-3" style={{ borderLeft: '2px solid color-mix(in srgb, var(--ink-faint) 20%, transparent)' }} data-download-file={name}>
       <div className="flex items-baseline gap-2">
         <span className="shrink-0 text-xs">{role.title}</span>
         <span className="min-w-0 flex-1 truncate font-mono text-2xs text-ink-faint" title={file}>
@@ -131,7 +131,7 @@ function FileRow({ job }: { job: DownloadJob }) {
 function ProgressBar({ pct, thin }: { pct: number | null; thin?: boolean }) {
   return (
     <div
-      className={`${thin ? 'mt-1 h-1' : 'mt-1.5 h-1.5'} w-full overflow-hidden rounded-full`}
+      className={`${thin ? 'mt-1 h-1' : 'mt-1 h-1.5'} w-full overflow-hidden rounded-full`}
       style={{ background: 'color-mix(in srgb, var(--ink-faint) 15%, transparent)' }}
     >
       <div

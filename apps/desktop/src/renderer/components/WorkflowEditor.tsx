@@ -347,7 +347,7 @@ export function WorkflowEditor({
               {WORKFLOW_NOTIFY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
           </label>
-          <label className="flex items-end gap-2 pb-1.5 sm:col-span-2">
+          <label className="flex items-end gap-2 pb-1 sm:col-span-2">
             <input type="checkbox" checked={draft.enabled} onChange={(e) => set('enabled', e.target.checked)} />
             <span className="text-xs">Enabled (triggers fire)</span>
           </label>
@@ -476,7 +476,7 @@ export function WorkflowEditor({
           </div>
           <div className="mt-2 space-y-2">
             {draft.steps.length === 0 && (
-              <p className="rounded-xl border border-dashed border-line px-4 py-3.5 text-xs text-ink-faint">
+              <p className="rounded-xl border border-dashed border-line px-4 py-3 text-xs text-ink-faint">
                 A workflow needs at least one step.
               </p>
             )}
@@ -521,7 +521,7 @@ export function WorkflowEditor({
           </div>
           <div className="mt-2 space-y-2">
             {draft.triggers.length === 0 && (
-              <p className="rounded-xl border border-dashed border-line px-4 py-3.5 text-xs text-ink-faint">
+              <p className="rounded-xl border border-dashed border-line px-4 py-3 text-xs text-ink-faint">
                 No triggers, so this only runs when you press Run.
               </p>
             )}
@@ -656,7 +656,7 @@ function StepEditor({
   const stepSkill = step.kind === 'skill' ? findWorkflowSkill(skills, step.run) : undefined;
   return (
     <div
-      className="card px-3.5 py-3"
+      className="card px-4 py-3"
       style={highlighted ? { boxShadow: '0 0 0 2px var(--accent)' } : undefined}
       onFocusCapture={onFocus}
     >
@@ -679,9 +679,9 @@ function StepEditor({
           {WORKFLOW_STEP_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}
         </select>
         <span className="flex shrink-0 items-center gap-1">
-          <button className="btn btn-ghost px-1.5! py-1! text-xs" disabled={index === 0} aria-label="Move up" onClick={() => onMove(-1)}>↑</button>
-          <button className="btn btn-ghost px-1.5! py-1! text-xs" disabled={index === total - 1} aria-label="Move down" onClick={() => onMove(1)}>↓</button>
-          <button className="btn btn-ghost px-1.5! py-1! text-xs text-danger" aria-label="Remove step" onClick={onRemove}>✕</button>
+          <button className="btn btn-ghost px-2! py-1! text-xs" disabled={index === 0} aria-label="Move up" onClick={() => onMove(-1)}>↑</button>
+          <button className="btn btn-ghost px-2! py-1! text-xs" disabled={index === total - 1} aria-label="Move down" onClick={() => onMove(1)}>↓</button>
+          <button className="btn btn-ghost px-2! py-1! text-xs text-danger" aria-label="Remove step" onClick={onRemove}>✕</button>
         </span>
       </div>
       {kindMeta && <p className="mt-1 text-2xs text-ink-faint">{kindMeta.hint}</p>}
@@ -1130,7 +1130,7 @@ function WebhookTriggerFields({
       </label>
       <div className="block sm:col-span-2">
         <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Webhook URL</span>
-        <code className="block break-all rounded-lg border border-line bg-(--surface) px-2.5 py-1.5 font-mono text-2xs text-ink-soft">
+        <code className="block break-all rounded-lg border border-line bg-(--surface) px-3 py-1 font-mono text-2xs text-ink-soft">
           POST https://&lt;your-host&gt;/api/hooks/{slug}?key={secret}
         </code>
         <p className="mt-1 text-2xs text-ink-faint">
@@ -1196,7 +1196,7 @@ function TriggerEditor({
   const events = new Set(trigger.events ?? []);
 
   return (
-    <div className="card px-3.5 py-3">
+    <div className="card px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <select
           className="input w-[132px] py-1! text-xs"
@@ -1213,11 +1213,11 @@ function TriggerEditor({
           {WORKFLOW_TRIGGER_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}
         </select>
         <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">{meta?.hint}</span>
-        <label className="flex shrink-0 items-center gap-1.5">
+        <label className="flex shrink-0 items-center gap-2">
           <input type="checkbox" checked={trigger.enabled !== false} onChange={(e) => onPatch({ enabled: e.target.checked })} />
           <span className="text-xs">Armed</span>
         </label>
-        <button className="btn btn-ghost px-1.5! py-1! text-xs text-danger" aria-label="Remove trigger" onClick={onRemove}>✕</button>
+        <button className="btn btn-ghost px-2! py-1! text-xs text-danger" aria-label="Remove trigger" onClick={onRemove}>✕</button>
       </div>
 
       {trigger.kind === 'schedule' && (
@@ -1337,13 +1337,13 @@ function TriggerEditor({
           </div>
           <div>
             <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Events</span>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {GIT_EVENTS.map((e) => {
                 const on = events.has(e.id);
                 return (
                   <button
                     key={e.id}
-                    className={`rounded-full border px-2.5 py-0.5 text-2xs transition ${on ? 'border-transparent' : 'border-line text-ink-faint'}`}
+                    className={`rounded-full border px-3 py-0.5 text-2xs transition ${on ? 'border-transparent' : 'border-line text-ink-faint'}`}
                     style={on ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
                     onClick={() => {
                       const next = new Set(events);
@@ -1441,7 +1441,7 @@ export function WorkflowModelField({
       />
       </div>
       {set && (
-        <button className="btn btn-ghost px-1.5! py-1! text-xs" onClick={() => onChange(undefined, undefined)} title={unsetLabel}>
+        <button className="btn btn-ghost px-2! py-1! text-xs" onClick={() => onChange(undefined, undefined)} title={unsetLabel}>
           Reset
         </button>
       )}

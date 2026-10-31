@@ -215,7 +215,7 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
         aria-expanded={open}
         title={open ? 'Collapse the resource meters' : 'Show the resource meters'}
       >
-        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Resources
           {gpu && (monitors.gpu || monitors.vram) && (
@@ -232,7 +232,7 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
 
       {!open ? null : (
       <>
-      <div className="mt-2.5 space-y-2.5">
+      <div className="mt-2 space-y-2">
         {monitors.cpu && (
           <Meter
             label="CPU"
@@ -263,7 +263,7 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
       </div>
 
       {monitors.vram && gpu && gpu.devices.length > 0 && (
-        <div className="mt-2.5 max-h-32 space-y-2 overflow-y-auto border-t border-line pt-2.5">
+        <div className="mt-2 max-h-32 space-y-2 overflow-y-auto border-t border-line pt-2">
           {gpu.devices.map((d, i) => {
             const dp = pctOf(d.memoryUsedMB, d.memoryTotalMB);
             return (
@@ -378,7 +378,7 @@ export function ResourceHud() {
                 key={kind}
                 role="switch"
                 aria-checked={monitors[kind]}
-                className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-surface-2"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-surface-2"
                 title={MONITOR_HINTS[kind]}
                 onClick={() => setMonitor(monitors, kind, !monitors[kind])}
               >
@@ -406,7 +406,7 @@ export function ResourceHud() {
             ))}
           </div>
           {(monitors.gpu || monitors.vram) && gpu && (
-            <div className="mt-2 space-y-1.5 border-t border-line pt-2">
+            <div className="mt-2 space-y-1 border-t border-line pt-2">
               {gpu.devices.map((d, i) => {
                 const dp = pctOf(d.memoryUsedMB, d.memoryTotalMB);
                 return (
@@ -434,7 +434,7 @@ export function ResourceHud() {
       )}
 
       <button
-        className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-2xs tabular-nums text-ink-faint"
+        className="flex items-center gap-2 rounded-full border border-line px-3 py-1 text-2xs tabular-nums text-ink-faint"
         style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}
         aria-label="Resource monitors"
         aria-expanded={open}
@@ -461,7 +461,7 @@ export function ResourceHud() {
           </span>
         )}
         {monitors.vram && (
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-2">
             <span className="h-1.5 w-10 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
               <span
                 className="block h-full rounded-full transition-[width] duration-500"

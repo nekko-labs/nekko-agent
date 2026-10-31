@@ -401,7 +401,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
       {framed ? (
         <PaneActions>{status}</PaneActions>
       ) : (
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1.5">{status}</div>
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1">{status}</div>
       )}
       <div
         ref={hostRef}

@@ -343,7 +343,7 @@ export function ZonesIntro({ onClose }: { onClose: () => void }) {
       <h3 className="mt-4 text-sm font-semibold">{current.title}</h3>
       <p className="mt-1 text-xs leading-relaxed text-ink-soft">{current.body}</p>
       <div className="mt-4 flex items-center gap-3">
-        <div className="flex gap-1.5" role="group" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
+        <div className="flex gap-2" role="group" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
           {STEPS.map((s, i) => <button key={s.title} type="button" className="zones-intro-dot" aria-label={`Step ${i + 1}: ${s.title}`} aria-current={i === step || undefined} onClick={() => setStep(i)} />)}
         </div>
         <div className="ml-auto flex gap-2">

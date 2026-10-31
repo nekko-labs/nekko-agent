@@ -236,7 +236,7 @@ export function PaneFrame({
       onMouseDown={() => { focusWindow(pane.id); onFocus(); }}
     >
       <div
-        className="flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1"
+        className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-1"
         style={{ background: isActive ? 'var(--surface-2)' : 'transparent', cursor: 'grab', ...stripStyle }}
         draggable={!locked && !onPickUp}
         onDragStart={(e) => {

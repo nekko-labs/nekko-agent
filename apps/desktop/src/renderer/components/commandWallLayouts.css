@@ -7,11 +7,11 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
-  padding: 14px 1px 0;
+  padding: 12px 1px 0;
 }
 .command-wall-stage { position: relative; min-height: 304px; }
 /* Windows stop one gap short of a composer docked below them. */
-.wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout { padding-bottom: var(--wall-gap); }
+.wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout { padding-bottom: var(--pane-gap); }
 /* Keep in step with WALL_PUSH_MS and WALL_PUSH_EASE in wallMotion.ts. */
 .command-wall-layout { --wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1); }
 /* A closing window's last picture folds away here, under the live windows. */
@@ -51,7 +51,7 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
 .command-wall-companion-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .command-wall-content[data-companions-visible] .command-wall-companions { display: flex; flex-direction: column; }
 .command-wall-companion { display: flex; flex-direction: column; flex: 1 0 240px; min-height: 240px; min-width: 0; border-left: 1px solid var(--line); }
-.command-wall-companion > header { padding: 6px 8px; font-size: var(--text-2xs); color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-wall-companion > header { padding: 4px 8px; font-size: var(--text-2xs); color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .command-wall-companion-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 @media (max-width: 639px) {
   .command-wall-content[data-companions-visible] { flex-direction: column; }
@@ -84,8 +84,8 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
 /* An empty wall centres its illustration in the space the windows would use. */
 .command-wall-stage[data-wall-vacant] { min-height: 100%; }
 .command-wall-stage[data-wall-vacant] > .command-wall-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-.command-wall-empty-state { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 340px; text-align: center; line-height: 1.5; }
-.command-wall-empty-title { margin-top: 6px; color: var(--ink); font-size: var(--text-base); font-weight: 600; }
+.command-wall-empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 340px; text-align: center; line-height: 1.5; }
+.command-wall-empty-title { margin-top: 4px; color: var(--ink); font-size: var(--text-base); font-weight: 600; }
 .wall-empty-art { position: relative; width: 240px; height: 150px; }
 .wall-empty-art > svg { display: block; }
 /* Nekko sits on the floor line, below the wall's frame. */
@@ -129,7 +129,7 @@ body:has(.wall-drag-shield) { user-select: none; }
 }
 .wall-held-card[data-picking] { transition: left 200ms cubic-bezier(.2, .9, .3, 1.2), top 200ms cubic-bezier(.2, .9, .3, 1.2), width 200ms cubic-bezier(.2, .9, .3, 1.2), height 200ms cubic-bezier(.2, .9, .3, 1.2); }
 .wall-held-card-strip {
-  display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px;
   background: var(--accent-soft); color: var(--ink); font-size: var(--text-xs); font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -169,7 +169,7 @@ body:has(.wall-drag-shield) { user-select: none; }
 @keyframes wall-liquid-border { 0%, 100% { border-radius: 22px 34px 24px 30px; } 50% { border-radius: 34px 20px 32px 22px; } }
 @media (prefers-reduced-motion: reduce) { .command-wall-add { animation: none; } }
 .command-wall-add-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:14px; background:var(--accent-soft); color:var(--accent); font-size: var(--text-2xl); }
-.command-wall-companion > header { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:3px 4px 3px 10px; background:var(--surface); }
+.command-wall-companion > header { display:flex; gap:8px; align-items:center; justify-content:space-between; padding: 4px 4px 4px 12px; background:var(--surface); }
 .command-wall-companion > header span { overflow:hidden; text-overflow:ellipsis; }
 .command-wall-deck-window .command-wall-content { visibility:hidden; } .command-wall-card { position:absolute; inset:0; display:flex; flex-direction:column; gap:8px; padding:12px; text-align:left; color:var(--ink-soft); font-size: var(--text-xs); } .command-wall-card span { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; } .command-wall-card small { margin-top:auto; color:var(--ink-faint); }
 
@@ -189,8 +189,8 @@ body:has(.wall-drag-shield) { user-select: none; }
    ~1.1px low (3.6px of head above them, 1.4px below). */
 .numbered-agent-icon > span { position: absolute; left: 0; right: 0; top: 8.9px; text-align: center; font-size: var(--text-2xs); font-weight: 700; line-height: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
 [data-wall-selected] .numbered-agent-icon, [data-wall-working] .numbered-agent-icon { color: var(--accent); }
-.wall-focus-agents { display: flex; gap: 6px; flex-shrink: 0; overflow-x: auto; padding: 2px; }
-.wall-focus-agent { display: flex; align-items: center; gap: 6px; max-width: 260px; flex-shrink: 0; padding: 3px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: var(--text-xs); color: var(--ink-soft); }
+.wall-focus-agents { display: flex; gap: 8px; flex-shrink: 0; overflow-x: auto; padding: 2px; }
+.wall-focus-agent { display: flex; align-items: center; gap: 8px; max-width: 260px; flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: var(--text-xs); color: var(--ink-soft); }
 .wall-focus-agent[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .command-wall-content[data-focus-chat] .command-wall-primary { flex: 1 1 100%; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1); }
 .command-wall-content[data-focus-chat] .command-wall-companions { display: flex; flex: 0 0 0%; width: 0; opacity: 0; overflow: hidden; transform: translateX(100%); transform-origin: left center; border-radius: 28px; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease, transform 360ms cubic-bezier(.22, 1, .36, 1), border-radius 360ms ease; }
@@ -222,7 +222,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* Tab placement remains independent of focus/grid/fixed window layout. */
 .wall-agent-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 /* The wall's 1px inset makes up the rest of the gap to the agent panel. */
-.wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: calc(var(--wall-gap) - 1px); }
+.wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: calc(var(--pane-gap) - 1px); }
 /* The vertical agent panel spans exactly the wall's windows: CommandCenterView
    measures how far they sit from the column's top and bottom. Only beside the
    wall: stacked above it (narrow), the measurement includes the panel itself. */
@@ -265,7 +265,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .agent-panel-row { max-height: 168px; padding-block: 0; }
 .agent-panel-row .collapse-wrap > div { padding-bottom: 0; }
 .agent-panel-row > * { flex: 0 0 auto; margin-bottom: 0 !important; }
-.agent-panel-row .collapse-wrap > div { display: flex; flex-direction: row; gap: 6px; }
+.agent-panel-row .collapse-wrap > div { display: flex; flex-direction: row; gap: 8px; }
 .agent-panel-row .collapse-wrap > div > * { flex: 0 0 240px; min-width: 0; }
 /* A closed group hides its cards completely. In the row its strip collapses to
    nothing (a 0fr grid row leaves the cards' width behind), and in the column
@@ -324,7 +324,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 /* Separate project/status/date sections without inflating the agent cards. */
 .agent-panel-group + .agent-panel-group { margin-top: 16px; }
-.agent-panel-group-heading { margin-bottom: 6px; }
+.agent-panel-group-heading { margin-bottom: 4px; }
 .agent-panel-group-label { font-size: var(--text-sm); line-height: 20px; color: var(--accent); }
 .agent-panel-row > .agent-panel-group + .agent-panel-group { margin-top: 0; }
 
@@ -344,10 +344,10 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* ---------- Zones ---------- */
 /* A zone is a slim name bar over its window. The bar is the zone's handle:
    drag it to move the zone, right-click it to close the zone. */
-.command-wall-window[data-zone] { flex-direction: column; gap: 3px; }
+.command-wall-window[data-zone] { flex-direction: column; gap: 4px; }
 .command-wall-window[data-zone] > .panel { flex: 1 1 0; }
 .wall-zone-header {
-  flex: 0 0 16px; display: flex; align-items: center; gap: 6px; padding: 0 6px;
+  flex: 0 0 16px; display: flex; align-items: center; gap: 8px; padding: 0 8px;
   border-radius: 6px; cursor: grab; user-select: none;
   color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 500; letter-spacing: .02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -361,14 +361,14 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 /* An empty zone keeps its place, drawn dotted. */
 .wall-zone-empty {
-  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
   padding: 16px; text-align: center; color: var(--ink-faint); font-size: var(--text-xs); line-height: 1.5;
   border: 1.5px dotted color-mix(in srgb, var(--ink) 28%, transparent); border-radius: var(--pane-radius);
   transition: border-color 140ms ease, background 140ms ease;
 }
 .wall-zone-empty-title { color: var(--ink-soft); font-size: var(--text-sm); font-weight: 600; }
 .wall-zone-create { display: flex; flex-direction: column; align-items: stretch; max-width: 100%; margin-top: 4px; }
-.wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; }
+.wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; }
 /* Each option leans in on hover and its plus turns a quarter; a press squeezes it and turns the plus on. */
 .wall-zone-empty .wall-zone-option { transition: transform 180ms cubic-bezier(.2, .8, .2, 1), background var(--dur-fast) ease, color var(--dur-fast) ease; }
 /* The label takes the slack so every shortcut lines up on the right. */
@@ -391,17 +391,17 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .command-wall-window[data-zone-drop] > .panel { --panel-ring-color: var(--accent) !important; --panel-ring-width: 2px !important; border-color: var(--accent); background: var(--accent-soft); }
 
 /* The add-zone rails along the right and bottom edges are the wall's gaps to
-   the dock and the composer, so they are --wall-gap wide; their pluses overhang. */
+   the dock and the composer, so they are --pane-gap wide; their pluses overhang. */
 /* A zoned board always fits its viewport, so it clips instead of scrolling:
    an overhanging plus must not bring up a scrollbar and its gutter. */
-.command-wall-layout[data-zone-rails] { padding-right: var(--wall-gap); padding-bottom: var(--wall-gap); overflow: clip; overflow-clip-margin: calc(8px - var(--wall-gap) / 2); }
-.wall-zone-rail { position: absolute; width: var(--wall-gap); height: var(--wall-gap); }
+.command-wall-layout[data-zone-rails] { padding-right: var(--pane-gap); padding-bottom: var(--pane-gap); overflow: clip; overflow-clip-margin: calc(8px - var(--pane-gap) / 2); }
+.wall-zone-rail { position: absolute; width: var(--pane-gap); height: var(--pane-gap); }
 .wall-zone-add {
   position: absolute; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px;
   color: var(--ink-faint); opacity: .45; transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
 }
-.wall-zone-rail[data-side='right'] .wall-zone-add { left: calc(var(--wall-gap) / 2 - 8px); transform: translateY(-50%); }
-.wall-zone-rail[data-side='down'] .wall-zone-add { top: calc(var(--wall-gap) / 2 - 8px); transform: translateX(-50%); }
+.wall-zone-rail[data-side='right'] .wall-zone-add { left: calc(var(--pane-gap) / 2 - 8px); transform: translateY(-50%); }
+.wall-zone-rail[data-side='down'] .wall-zone-add { top: calc(var(--pane-gap) / 2 - 8px); transform: translateX(-50%); }
 .wall-zone-rail[data-side='down'] .wall-zone-span svg { transform: rotate(90deg); }
 .wall-zone-rail:hover .wall-zone-add { opacity: .8; }
 .wall-zone-add:hover, .wall-zone-add:focus-visible { opacity: 1 !important; color: var(--accent); background: var(--accent-soft); outline: none; }
@@ -415,7 +415,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 .wall-span-hint {
   position: absolute; z-index: 4; transform: translate(-50%, -50%); pointer-events: none;
-  padding: 4px 10px; border-radius: 999px; background: var(--win); color: var(--ink-soft);
+  padding: 4px 12px; border-radius: 999px; background: var(--win); color: var(--ink-soft);
   font-size: var(--text-xs); white-space: nowrap; box-shadow: var(--shadow-md);
 }
 
@@ -451,7 +451,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 .hover-tip-heading { text-align: center; font-size: var(--text-base); font-weight: 600; padding: 2px 8px 12px; overflow-wrap: anywhere; }
 .hover-tip-content {
-  margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px;
+  margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px;
   max-height: min(420px, calc(100vh - 110px)); overflow: auto; white-space: pre-wrap;
   overflow-wrap: anywhere; font-size: var(--text-sm); font-weight: 400; line-height: 1.6;
   background: var(--bg); pointer-events: auto;

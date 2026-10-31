@@ -96,13 +96,13 @@ export function ModelFolders({ onChanged }: { onChanged: () => void }) {
             onChange={(e) => setNewPath(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addTyped()}
           />
-          <button className="btn btn-outline py-1.5 text-xs" onClick={addTyped} disabled={!newPath.trim()}>
+          <button className="btn btn-outline py-1 text-xs" onClick={addTyped} disabled={!newPath.trim()}>
             Add
           </button>
         </div>
       )}
 
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {report.folders.map((folder) => (
           <FolderRow
             key={folder.id}
@@ -121,7 +121,7 @@ export function ModelFolders({ onChanged }: { onChanged: () => void }) {
           <p className="mt-0.5 text-2xs text-ink-faint">
             Folders we recognise that have models in them, and that this list does not cover yet.
           </p>
-          <div className="mt-2 space-y-1.5">
+          <div className="mt-2 space-y-1">
             {report.suggestions.map((s) => (
               <SuggestionRow key={s.path} suggestion={s} busy={busy} onAdd={() => add(folderFor(s))} />
             ))}
@@ -167,7 +167,7 @@ function FolderRow({
 
   return (
     <div
-      className="rounded-xl px-3 py-2.5"
+      className="rounded-xl px-3 py-2"
       style={{ background: 'var(--surface-2)', opacity: off ? 0.62 : 1 }}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -207,7 +207,7 @@ function FolderRow({
                 )}
               </button>
               <button
-                className="btn btn-ghost px-1.5 py-1"
+                className="btn btn-ghost px-2 py-1"
                 title="Remove this folder from the list"
                 disabled={busy}
                 onClick={onRemove}
@@ -220,7 +220,7 @@ function FolderRow({
       </div>
 
       <input
-        className="input mt-1.5 w-full py-1 font-mono text-xs"
+        className="input mt-1 w-full py-1 font-mono text-xs"
         value={draft}
         spellCheck={false}
         disabled={folder.primary || busy}

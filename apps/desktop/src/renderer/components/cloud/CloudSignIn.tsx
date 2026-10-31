@@ -73,14 +73,14 @@ export function CloudSignIn({ status, onClose }: { status: CloudStatus | null; o
                 <button className="btn btn-outline mt-3 py-1! text-xs!" onClick={() => void window.nekko.cloudCancelOAuth()}>Cancel</button>
               </div>
             ) : (
-              <div className="mt-6 space-y-2.5">
+              <div className="mt-6 space-y-2">
                 <button className="cloud-provider" disabled={!!busy} onClick={() => void oauth('github')} data-testid="cloud-github"><GitHubMark /> Continue with GitHub</button>
                 <button className="cloud-provider" disabled={!!busy} onClick={() => void oauth('google')} data-testid="cloud-google"><GoogleMark /> Continue with Google</button>
                 <button className="cloud-provider" disabled={!!busy} onClick={() => void oauth('apple')} data-testid="cloud-apple"><AppleMark /> Continue with Apple</button>
               </div>
             )}
             <div className="cloud-or">or</div>
-            <form onSubmit={(e) => { e.preventDefault(); void sendCode(); }} className="space-y-2.5">
+            <form onSubmit={(e) => { e.preventDefault(); void sendCode(); }} className="space-y-2">
               <input className="input w-full" type="email" autoComplete="email" placeholder="you@example.com" aria-label="Email"
                 value={email} onChange={(e) => setEmail(e.target.value)} data-testid="cloud-email" />
               <button className="btn btn-primary w-full" type="submit" disabled={!!busy || !/\S+@\S+\.\S+/.test(email)} data-testid="cloud-send-code">

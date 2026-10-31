@@ -24,7 +24,7 @@ export function MemoryCard({ call, result }: { call: ToolCall; result?: ToolResu
     useStore.getState().setView(memoryOn ? 'memory' : 'settings');
   };
   return (
-    <div className="mt-1.5 flex max-w-xl items-start gap-2.5 rounded-xl border border-line px-3 py-2 font-sans" role="status">
+    <div className="mt-1 flex max-w-xl items-start gap-3 rounded-xl border border-line px-3 py-2 font-sans" role="status">
       <MemoryColorIcon className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="text-xs text-ink-faint">{saved.action === 'added' ? 'Memory added' : 'Memory updated'}</div>

@@ -21,7 +21,7 @@ export function StyleSection({ settings, update }: Props) {
   const families = customFonts?.families ?? [];
 
   const fontSelect = (id: string, value: string | undefined, onChange: (v: string) => void, def: string, system: string) => (
-    <select id={id} className="input max-w-[220px] py-1.5" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+    <select id={id} className="input max-w-[220px] py-1" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
       <option value="">{def} (default)</option>
       <option value={system}>System</option>
       {families.length > 0 && <optgroup label="Your fonts">{families.map((f) => <option key={f} value={f}>{f}</option>)}</optgroup>}
@@ -35,7 +35,7 @@ export function StyleSection({ settings, update }: Props) {
     <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
       <div className="min-w-0"><label htmlFor="style-text-size" className="text-sm">Text size</label>
         <p className="text-2xs text-ink-faint">Scales all text and controls in the app.</p></div>
-      <select id="style-text-size" className="input max-w-[220px] py-1.5" value={textScaleOf(settings.textScale)} onChange={(e) => update({ textScale: Number(e.target.value) })}>
+      <select id="style-text-size" className="input max-w-[220px] py-1" value={textScaleOf(settings.textScale)} onChange={(e) => update({ textScale: Number(e.target.value) })}>
         {SCALES.map((s) => <option key={s} value={s}>{s}%{s === 100 ? ' (default)' : ''}</option>)}
       </select>
     </div>
@@ -53,10 +53,10 @@ export function StyleSection({ settings, update }: Props) {
       <span className="text-sm">Add your own fonts</span>
       <p className="text-2xs text-ink-faint">Drop .ttf, .otf, .woff or .woff2 files into your fonts folder, then press Reload. Each file appears in the lists above under its file name.</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-xs" disabled={!customFonts} onClick={() => customFonts && void window.nekko.openPath(customFonts.dir)}>
+        <button className="btn btn-outline py-1 text-xs" disabled={!customFonts} onClick={() => customFonts && void window.nekko.openPath(customFonts.dir)}>
           <FolderIcon className="h-3.5 w-3.5" />Open fonts folder
         </button>
-        <button className="btn btn-outline py-1.5 text-xs" onClick={() => void loadCustomFonts()}>Reload fonts</button>
+        <button className="btn btn-outline py-1 text-xs" onClick={() => void loadCustomFonts()}>Reload fonts</button>
         <a className="text-xs text-accent" href={FONTS_DOCS} onClick={(e) => { e.preventDefault(); void window.nekko.openPath(FONTS_DOCS); }}>How to add fonts <ExternalIcon className="inline h-2.5 w-2.5" /></a>
         {customFonts && <code className="min-w-0 truncate text-2xs text-ink-faint" title={customFonts.dir}>{customFonts.dir}</code>}
       </div>

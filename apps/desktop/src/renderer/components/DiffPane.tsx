@@ -55,7 +55,7 @@ export function DiffPane({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-xs">
         <span className="font-semibold">Changes</span>
         <span className="chip text-2xs">{changes.length} file{changes.length === 1 ? '' : 's'}</span>
         {changes.length > 0 && (
@@ -124,8 +124,8 @@ function FileDiff({ sessionId, change, onChanged }: { sessionId: string; change:
 
   return (
     <div className="border-b border-line">
-      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5 text-xs" style={{ background: 'var(--surface-2)' }}>
-        <button className="flex min-w-0 flex-1 items-center gap-1.5 text-left" onClick={() => setOpen((o) => !o)}>
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1 text-xs" style={{ background: 'var(--surface-2)' }}>
+        <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setOpen((o) => !o)}>
           <span className="w-2 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
           <FileTypeIcon name={name} size={14} />
           <span className="truncate font-medium">{name}</span>

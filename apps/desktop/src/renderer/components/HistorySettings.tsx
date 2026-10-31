@@ -47,7 +47,7 @@ export function HistorySettings({ openSync, refreshSessions }: { openSync: () =>
       <label htmlFor="history-range" className="mt-4 block text-sm">Clear completed chat history</label>
       <p id="history-range-hint" className="mt-1 text-2xs text-ink-faint">Based on last activity. Today starts at local midnight; month ranges use calendar months. Active and running chats are kept. This removes local conversations and their command logs, not project files or settings.</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <select id="history-range" className="input min-w-0 max-w-full py-1.5" aria-describedby="history-range-hint" value={range} disabled={busy || confirming} onChange={e => { setRange(e.target.value as HistoryRange); setResult(''); }}>
+        <select id="history-range" className="input min-w-0 max-w-full py-1" aria-describedby="history-range-hint" value={range} disabled={busy || confirming} onChange={e => { setRange(e.target.value as HistoryRange); setResult(''); }}>
           {HISTORY_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
         <button type="button" className="btn btn-outline text-xs text-(--danger)" disabled={busy || confirming || !usage || usage.count === 0} onClick={() => { setResult(''); setConfirming(true); }} data-history-clear>Clear history…</button>

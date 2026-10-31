@@ -12,7 +12,7 @@ export function isRecoveryNotice(message: ChatMessage): boolean {
 
 export function RecoveryNotice() {
   return (
-    <div role="note" aria-label="Reply interrupted by app restart" className="my-2 flex items-start gap-2.5 rounded-lg border border-line bg-surface-2/50 px-3 py-2.5 text-xs text-ink-soft">
+    <div role="note" aria-label="Reply interrupted by app restart" className="my-2 flex items-start gap-3 rounded-lg border border-line bg-surface-2/50 px-3 py-2 text-xs text-ink-soft">
       <span aria-hidden="true" className="mt-0.5 text-ink-faint">ⓘ</span>
       <div className="min-w-0">
         <p className="font-medium">Reply interrupted</p>

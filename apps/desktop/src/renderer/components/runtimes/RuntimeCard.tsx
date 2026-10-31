@@ -200,7 +200,7 @@ export function RuntimeCard({
       {facts.length > 0 && (
         <div className="mt-3 border-t pt-2" style={{ borderColor: 'var(--line)' }}>
           <p className="text-2xs text-ink-faint">Check a model against this machine</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
+          <div className="mt-1 flex flex-wrap gap-2">
             {facts.slice(0, 12).map((f) => (
               <button
                 key={f.id}

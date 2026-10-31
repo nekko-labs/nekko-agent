@@ -131,7 +131,7 @@ export function DesignBoardView() {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+      <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
         {!hasAppChrome && <h1 className="view-title">Design</h1>}
         {workspaces.length > 1 && (
           <select className="input py-1 text-xs" value={wsId} onChange={(e) => setActiveProject(e.target.value)}>
@@ -139,19 +139,19 @@ export function DesignBoardView() {
           </select>
         )}
         {updating && (
-          <button className="chip flex items-center gap-1.5 text-2xs text-accent" onClick={goToAgent} title="An agent is updating your app, open its chat">
+          <button className="chip flex items-center gap-2 text-2xs text-accent" onClick={goToAgent} title="An agent is updating your app, open its chat">
             <span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Updating… open agent
           </button>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <label className="hidden items-center gap-1.5 text-2xs text-ink-faint sm:flex">
+          <label className="hidden items-center gap-2 text-2xs text-ink-faint sm:flex">
             Zoom
             <input type="range" min={0.5} max={1.5} step={0.1} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
           </label>
           <button className="btn btn-ghost px-2 py-1 text-xs" title="Reload all previews" onClick={() => setReloadNonce((x) => x + 1)}>↻</button>
-          <button className="btn btn-outline px-2.5 py-1 text-xs" onClick={() => setMode('live')}><PlusIcon className="h-3.5 w-3.5" /> Live page</button>
-          <button className="btn btn-outline px-2.5 py-1 text-xs" onClick={() => setMode('sketch')}>✏️ Sketch</button>
-          <button className="btn btn-primary px-2.5 py-1 text-xs" onClick={() => setMode('prompt')}>✨ Generate</button>
+          <button className="btn btn-outline px-3 py-1 text-xs" onClick={() => setMode('live')}><PlusIcon className="h-3.5 w-3.5" /> Live page</button>
+          <button className="btn btn-outline px-3 py-1 text-xs" onClick={() => setMode('sketch')}>✏️ Sketch</button>
+          <button className="btn btn-primary px-3 py-1 text-xs" onClick={() => setMode('prompt')}>✨ Generate</button>
         </div>
       </header>
 
@@ -227,7 +227,7 @@ function EmptyBoard({ onSketch, onPrompt, onLive }: { onSketch: () => void; onPr
   return (
     <div className="mx-auto mt-10 max-w-3xl">
       <h2 className="text-center text-xl font-bold tracking-tight">Design something</h2>
-      <p className="mx-auto mt-1.5 max-w-md text-center text-sm text-ink-faint">
+      <p className="mx-auto mt-1 max-w-md text-center text-sm text-ink-faint">
         Two ways in. Both end as a working HTML prototype in your workspace that you (or an agent) can keep iterating on.
       </p>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -266,7 +266,7 @@ function BusyCard({ label, zoom }: { label: string; zoom: number }) {
           </div>
         </div>
       </div>
-      <div className="border-t border-line px-2.5 py-1.5">
+      <div className="border-t border-line px-3 py-1">
         <div className="truncate text-xs font-medium">{label}</div>
         <div className="truncate text-2xs text-ink-faint">generating</div>
       </div>
@@ -322,7 +322,7 @@ function PageCard({
           </button>
         )}
       </div>
-      <div className="flex items-center gap-2 border-t border-line px-2.5 py-1.5">
+      <div className="flex items-center gap-2 border-t border-line px-3 py-1">
         <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
           <div className="truncate text-xs font-medium">{page.label}</div>
           <div className="truncate text-2xs text-ink-faint">
@@ -469,7 +469,7 @@ function SketchStudio({ onCancel, onGenerate }: { onCancel: () => void; onGenera
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
         <span id={titleId} className="text-sm font-semibold">✏️ Sketch a design</span>
         <span className="hidden text-2xs text-ink-faint md:inline">boxes + labels are enough, the model fills in the design</span>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {SKETCH_COLORS.map((c) => (
             <button
               key={c}
@@ -516,8 +516,8 @@ function SketchStudio({ onCancel, onGenerate }: { onCancel: () => void; onGenera
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
-        <button className="btn btn-ghost py-1.5 text-xs" onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary py-1.5 text-xs" disabled={!strokeCount} onClick={generate}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary py-1 text-xs" disabled={!strokeCount} onClick={generate}>
           Generate prototype →
         </button>
       </div>
@@ -559,7 +559,7 @@ function PromptStudio({ onCancel, onGenerate }: { onCancel: () => void; onGenera
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && prompt.trim()) onGenerate(prompt.trim(), label.trim() || undefined); }}
       />
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-2">
         {PROMPT_IDEAS.map((idea) => (
           <button key={idea} className="chip max-w-full truncate text-2xs hover:text-ink" onClick={() => setPrompt(idea)}>
             {idea}
@@ -568,8 +568,8 @@ function PromptStudio({ onCancel, onGenerate }: { onCancel: () => void; onGenera
       </div>
       <div className="mt-3 flex items-center gap-2">
         <input className="input flex-1 text-xs" placeholder="Card label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} />
-        <button className="btn btn-ghost py-1.5 text-xs" onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary py-1.5 text-xs" disabled={!prompt.trim()} onClick={() => onGenerate(prompt.trim(), label.trim() || undefined)}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary py-1 text-xs" disabled={!prompt.trim()} onClick={() => onGenerate(prompt.trim(), label.trim() || undefined)}>
           Generate →
         </button>
       </div>
@@ -630,8 +630,8 @@ function PageSheet({
       <div className="px-3 py-3">
         {concept && (
           <>
-            <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Refine</div>
-            {page.prompt && <p className="mb-1.5 line-clamp-2 text-2xs italic text-ink-faint">"{page.prompt}"</p>}
+            <div className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Refine</div>
+            {page.prompt && <p className="mb-1 line-clamp-2 text-2xs italic text-ink-faint">"{page.prompt}"</p>}
             <textarea
               className="input min-h-[52px] w-full resize-none text-xs"
               rows={2}
@@ -640,7 +640,7 @@ function PageSheet({
               onChange={(e) => setRefineText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) refine(); }}
             />
-            <div className="mt-1.5 flex justify-end">
+            <div className="mt-1 flex justify-end">
               <button className="btn btn-primary py-1 text-xs" disabled={!refineText.trim() || refining} onClick={refine}>
                 {refining ? 'Refining…' : 'Refine design'}
               </button>
@@ -650,15 +650,15 @@ function PageSheet({
         )}
 
         {/* Notes, persistent */}
-        <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Notes</div>
+        <div className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Notes</div>
         {page.notes.length === 0 && <p className="mb-2 text-xs text-ink-faint">No notes yet, pin design intent that sticks with this page.</p>}
         {page.notes.map((n) => (
-          <div key={n.id} className="mb-1.5 flex items-start gap-2 rounded-lg border border-line p-2">
+          <div key={n.id} className="mb-1 flex items-start gap-2 rounded-lg border border-line p-2">
             <p className="min-w-0 flex-1 whitespace-pre-wrap text-xs">{n.text}</p>
             <button className="shrink-0 text-2xs text-ink-faint hover:text-ink" onClick={() => onResolveNote(n.id)} title="Remove note">✕</button>
           </div>
         ))}
-        <div className="mt-1 flex gap-1.5">
+        <div className="mt-1 flex gap-2">
           <input ref={noteRef} className="input flex-1 text-xs" placeholder="Pin a note…" value={note}
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && note.trim()) { onAddNote(note); setNote(''); } }} />
@@ -666,10 +666,10 @@ function PageSheet({
         </div>
 
         {/* Comment, routes to the agent */}
-        <div className="mb-1.5 mt-4 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Comment for the agent</div>
+        <div className="mb-1 mt-4 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Comment for the agent</div>
         <textarea className="input min-h-[60px] resize-none text-xs" rows={3} placeholder="Describe a change to this page…"
           value={comment} onChange={(e) => setComment(e.target.value)} />
-        <div className="mt-1.5 flex justify-end gap-2">
+        <div className="mt-1 flex justify-end gap-2">
           <button className="btn btn-outline py-1 text-xs" disabled={!comment.trim()} onClick={() => { onComment(comment, false); setComment(''); }}>Add to prompt</button>
           <button className="btn btn-primary py-1 text-xs" disabled={!comment.trim()} onClick={() => { onComment(comment, true); setComment(''); }}>Run now</button>
         </div>

@@ -44,7 +44,7 @@ export function WorkingSubagents({ children, running, pending, onOpen }: {
         <span className="min-w-0"><span className="block truncate">{child.title || 'Subagent'}{child.modelId && <span className="text-ink-faint" title={`Model: ${child.modelId}`}> · {shortModelName(child.modelId)}</span>}</span><span className="block truncate text-ink-faint">{activitySentence(childActivity(child, running.has(child.id), pending[child.id]))}</span></span>
       </button>)}
     </div>}
-    <button type="button" className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-xs shadow-(--shadow-md)" aria-expanded={expanded} aria-label={`${active.length} working subagents`} onClick={() => setExpanded(!expanded)}>
+    <button type="button" className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs shadow-(--shadow-md)" aria-expanded={expanded} aria-label={`${active.length} working subagents`} onClick={() => setExpanded(!expanded)}>
       <RobotIcon className="h-4 w-4" />
       <span className="h-2 w-2 rounded-full" style={{ background: waiting ? 'var(--warning)' : 'var(--success)' }} />
       <span>{active.length}</span>

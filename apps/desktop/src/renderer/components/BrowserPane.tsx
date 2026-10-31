@@ -69,7 +69,7 @@ export function BrowserPane({ url: initial }: { url: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-1 border-b border-line px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b border-line px-2 py-1">
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Back" onClick={back}>‹</button>
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Forward" onClick={forward}>›</button>
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Reload" onClick={reload}>⟳</button>

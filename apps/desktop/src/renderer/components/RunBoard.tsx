@@ -28,7 +28,7 @@ export function RunStatusChip({ run }: { run: TrainingRun }) {
   const color = STATUS_COLOR[run.status];
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-2xs uppercase tracking-wider"
+      className="inline-flex items-center gap-2 rounded-full border px-2 py-0.5 font-mono text-2xs uppercase tracking-wider"
       style={{ color, borderColor: `color-mix(in srgb, ${color} 45%, transparent)` }}
     >
       <span className={`inline-block h-1.5 w-1.5 rounded-full ${run.status === 'running' ? 'animate-pulse' : ''}`} style={{ background: color }} />
@@ -69,7 +69,7 @@ export function ChampionCard({ run }: { run: TrainingRun }) {
   const best = run.experiments.find((e) => e.id === run.bestExperimentId);
   if (!best) return null;
   return (
-    <div className="card px-3.5 py-3" style={{ borderColor: 'color-mix(in srgb, var(--success) 35%, var(--line))' }}>
+    <div className="card px-4 py-3" style={{ borderColor: 'color-mix(in srgb, var(--success) 35%, var(--line))' }}>
       <div className="font-mono text-2xs uppercase tracking-[0.14em]" style={{ color: STATUS.success }}>
         Current champion{best.approach ? ` · ${best.approach}` : ''}
       </div>
@@ -114,7 +114,7 @@ export function ArtifactsCard({ run }: { run: TrainingRun }) {
   const artifacts = run.artifacts ?? [];
   const open = (rel: string) => void window.nekko.openPath(joinPath(wsPath, rel));
   return (
-    <div className="card px-3.5 py-3">
+    <div className="card px-4 py-3">
       <div className="flex items-center justify-between gap-2">
         <div className="font-mono text-2xs uppercase tracking-[0.14em] text-(--ink-faint)">
           Artifacts{artifacts.length ? ` · ${artifacts.length}` : ''}
@@ -133,7 +133,7 @@ export function ArtifactsCard({ run }: { run: TrainingRun }) {
           <span className="font-mono text-(--ink-soft)">{outDir}</span>.
         </p>
       ) : (
-        <ul className="mt-2 space-y-1.5">
+        <ul className="mt-2 space-y-1">
           {artifacts.map((a) => {
             const m = ARTIFACT_META[a.kind] ?? ARTIFACT_META.other;
             return (
@@ -176,7 +176,7 @@ export function RunNowStrip({ run }: { run: TrainingRun }) {
       ? `Running: ${activeExp.title}`
       : 'Working…';
   return (
-    <div className="card flex items-center gap-2.5 px-3.5 py-2.5" style={{ borderColor: 'color-mix(in srgb, var(--running) 35%, var(--line))' }}>
+    <div className="card flex items-center gap-3 px-4 py-2" style={{ borderColor: 'color-mix(in srgb, var(--running) 35%, var(--line))' }}>
       <span className="relative flex h-2.5 w-2.5 shrink-0">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: STATUS.running }} />
         <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: STATUS.running }} />
@@ -234,7 +234,7 @@ export function IdeaMaze({ run }: { run: TrainingRun }) {
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-(--line) px-3.5 py-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-(--line) px-4 py-2">
         <span className="font-mono text-2xs uppercase tracking-[0.16em] text-(--ink-faint)">
           The idea maze — every idea the agent tried, growing over time
         </span>
@@ -247,7 +247,7 @@ export function IdeaMaze({ run }: { run: TrainingRun }) {
         </span>
       </div>
       {lastLog && (
-        <div className="border-b border-(--line) px-3.5 py-1.5 font-mono text-2xs text-(--ink-soft)">
+        <div className="border-b border-(--line) px-4 py-1 font-mono text-2xs text-(--ink-soft)">
           {lastLog.text}
         </div>
       )}
@@ -317,7 +317,7 @@ export function IdeaMaze({ run }: { run: TrainingRun }) {
         </svg>
       </div>
       {sel && (
-        <div className="border-t border-(--line) px-3.5 py-2.5 text-xs">
+        <div className="border-t border-(--line) px-4 py-2 text-xs">
           <div className="flex flex-wrap items-baseline gap-x-3">
             <b className="font-mono">{sel.title}</b>
             <span className="font-mono text-2xs uppercase text-(--ink-faint)">{sel.status}</span>
@@ -360,7 +360,7 @@ export function HintComposer({
     await window.nekko.addTrainingHint(run.id, t);
   };
   return (
-    <div className="card px-3.5 py-3">
+    <div className="card px-4 py-3">
       <div className="font-mono text-2xs uppercase tracking-[0.14em] text-(--ink-faint)">{title}</div>
       <div className="mt-2 flex gap-2">
         <textarea
@@ -381,7 +381,7 @@ export function HintComposer({
         </button>
       </div>
       {pending.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap gap-2">
           {pending.map((h) => (
             <span key={h.id} className="rounded-full border border-amber-400/40 px-2 py-0.5 text-2xs text-amber-300" title="Will be folded into the agent's next iteration">
               ⏳ {h.text.slice(0, 60)}
@@ -389,7 +389,7 @@ export function HintComposer({
           ))}
         </div>
       )}
-      <div className="mt-1.5 text-2xs text-(--ink-faint)">{helper}</div>
+      <div className="mt-1 text-2xs text-(--ink-faint)">{helper}</div>
     </div>
   );
 }
@@ -412,13 +412,13 @@ export function RunLog({ run, max = 5000 }: { run: TrainingRun; max?: number }) 
   const entries = run.log.length > max ? run.log.slice(-max) : run.log;
   if (!entries.length) return null;
   return (
-    <div className="card px-3.5 py-2.5">
+    <div className="card px-4 py-2">
       <div className="font-mono text-2xs uppercase tracking-[0.14em] text-(--ink-faint)">Activity</div>
       <LogSurface
         items={entries}
         label="Run activity log"
         rowHeight={20}
-        className="mt-1.5 max-h-64"
+        className="mt-1 max-h-64"
         keyOf={(l, i) => `${l.at}-${i}`}
         renderRow={(l) => (
           <div className="flex w-full min-w-0 gap-2 text-xs">
@@ -465,7 +465,7 @@ export function RunModelPicker({
   }, [providerId]);
 
   return (
-    <div className="grid gap-1.5 sm:grid-cols-2">
+    <div className="grid gap-2 sm:grid-cols-2">
       <select
         className="input w-full"
         value={providerId}

@@ -16,5 +16,5 @@ export function ContextMenu({ x, y, onClose, children }: { x: number; y: number;
 }
 
 export function ContextAction({ children, onClick, disabled = false }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
-  return <button role="menuitem" disabled={disabled} className="block w-full rounded-lg px-2.5 py-2 text-left text-xs context-action disabled:cursor-not-allowed disabled:opacity-40" onClick={onClick}>{children}</button>;
+  return <button role="menuitem" disabled={disabled} className="block w-full rounded-lg px-3 py-2 text-left text-xs context-action disabled:cursor-not-allowed disabled:opacity-40" onClick={onClick}>{children}</button>;
 }

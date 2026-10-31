@@ -70,7 +70,7 @@ export function InsightsBox({
   const gear = (
     <div className="relative" ref={gearRef}>
       <button
-        className={`rounded-md p-1.5 text-ink-faint hover:bg-surface-2 hover:text-ink ${gearOpen ? 'bg-surface-2 text-ink' : ''}`}
+        className={`rounded-md p-2 text-ink-faint hover:bg-surface-2 hover:text-ink ${gearOpen ? 'bg-surface-2 text-ink' : ''}`}
         title="Choose which stats and charts to show"
         aria-label="Insights settings"
         aria-expanded={gearOpen}
@@ -82,7 +82,7 @@ export function InsightsBox({
         <div className="card absolute right-0 top-9 z-30 w-72 p-2 shadow-(--shadow-float)" style={{ background: 'var(--paper)' }} role="menu">
           <p className="px-2 pb-1 pt-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Show</p>
           {availablePanels.map((p) => (
-            <label key={p.key} className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surface-2">
+            <label key={p.key} className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-1 hover:bg-surface-2">
               <input type="checkbox" className="mt-0.5" checked={on(p.key)} onChange={() => toggle(p.key)} />
               <span className="min-w-0">
                 <span className="block text-xs font-medium">{p.label}</span>
@@ -132,7 +132,7 @@ export function InsightsBox({
 
 function VitalsStrip({ vitals, hideCost = false }: { vitals: Vitals; hideCost?: boolean }) {
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-y border-line py-2.5 text-xs text-ink-faint">
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-y border-line py-2 text-xs text-ink-faint">
       <Stat live={vitals.working > 0} value={vitals.working} label={vitals.working === 1 ? 'agent working' : 'agents working'} />
       <StatDivider />
       <Stat value={vitals.waiting} label="waiting on you" tone={vitals.waiting > 0 ? 'var(--warning)' : undefined} />
@@ -145,7 +145,7 @@ function VitalsStrip({ vitals, hideCost = false }: { vitals: Vitals; hideCost?: 
       <StatDivider />
       {!hideCost && <Stat value={vitals.spend} label="est. spend" />}
       {vitals.fleet.length > 0 && (
-        <span className="ml-auto flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
           {vitals.fleet.map((g) => (
             <span key={g.type.role} className="flex items-center gap-1" title={`${g.count} ${g.type.label}${g.count === 1 ? '' : 's'}${g.live > 0 ? `, ${g.live} working` : ''}`}>
               <span>{g.type.icon}</span>
@@ -160,7 +160,7 @@ function VitalsStrip({ vitals, hideCost = false }: { vitals: Vitals; hideCost?: 
 
 export function Stat({ value, label, live, tone }: { value: number | string; label: string; live?: boolean; tone?: string }) {
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex items-center gap-2">
       {live != null && (
         <span className={`h-1.5 w-1.5 rounded-full ${live ? 'animate-pulse' : ''}`} style={{ background: live ? 'var(--success)' : 'var(--ink-faint)' }} />
       )}
@@ -232,7 +232,7 @@ function TokensPanel({ usage }: { usage: UsageSummary | null }) {
   const output = daily.reduce((sum, d) => sum + d.output, 0);
   const max = Math.max(1, ...daily.map((d) => d.input + d.output));
   return (
-    <div className="rounded-xl border border-line p-3.5">
+    <div className="rounded-xl border border-line p-4">
       <PanelTitle>Tokens</PanelTitle>
       <RangeToggles chart="Tokens" range={range} onChange={setRange} />
       <div className="mt-2 flex gap-5 text-xs">
@@ -257,7 +257,7 @@ function TokensPanel({ usage }: { usage: UsageSummary | null }) {
 function ModelsPanel({ usage, hideCost = false }: { usage: UsageSummary | null; hideCost?: boolean }) {
   const entries = Object.entries(usage?.byModel ?? {}).sort((a, b) => b[1].input + b[1].output - (a[1].input + a[1].output));
   return (
-    <div className="rounded-xl border border-line p-3.5">
+    <div className="rounded-xl border border-line p-4">
       <PanelTitle aside="tokens and cost">By model</PanelTitle>
       {entries.length === 0 ? (
         <EmptyHint className="mt-2">No model has answered yet.</EmptyHint>
@@ -296,7 +296,7 @@ function RepliesPanel({ usage, sessions }: { usage: UsageSummary | null; session
   const titleOf = (id: string) => sessions.find((s) => s.id === id)?.title ?? 'Chat';
   const stops = (Object.keys(STOP_LABEL) as Array<ReplyStop | 'other'>).filter((k) => r.byStop[k] > 0);
   return (
-    <div className="rounded-xl border border-line p-3.5">
+    <div className="rounded-xl border border-line p-4">
       <PanelTitle aside="tool steps per reply">Replies</PanelTitle>
       <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs">
         <div><span className="text-ink-faint">Replies</span> <span className="font-semibold tabular-nums">{r.total.toLocaleString()}</span></div>
@@ -370,14 +370,14 @@ function CostPanel({ usage, sessions, providers }: { usage: UsageSummary | null;
   }, [usage, sessions, providers]);
 
   return (
-    <div className="rounded-xl border border-line p-3.5">
+    <div className="rounded-xl border border-line p-4">
       <PanelTitle aside="est. · list prices · local models are free">Cost</PanelTitle>
       <RangeToggles chart="Cost" range={range} onChange={setRange} />
       {!hasData ? (
         <ChartEmpty message="No spend yet. Once a cloud model answers, this month, the projection and the top agents show here." />
       ) : (
         <>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-faint">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
             <Stat value={formatUSD(monthActual)} label={`this month (${dayOfMonth}/${daysInMonth})`} />
             <StatDivider />
             <Stat value={formatUSD(projected)} label="projected" />
@@ -394,7 +394,7 @@ function CostPanel({ usage, sessions, providers }: { usage: UsageSummary | null;
             ))}
           </div>
           {topAgents.length > 0 && (
-            <div className="mt-3 space-y-1.5">
+            <div className="mt-3 space-y-1">
               <div className="text-2xs font-medium text-ink-faint">By agent</div>
               {topAgents.map(([sid, cost]) => (
                 <div key={sid}>

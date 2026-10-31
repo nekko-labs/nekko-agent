@@ -146,8 +146,8 @@ export function WallComposer({
               <LayoutIcon className="h-3.5 w-3.5" />
             </button>
             {pickerOpen && (
-              <div className="card absolute right-0 top-8 z-40 p-2.5 shadow-(--shadow-float)" style={{ background: 'var(--paper)' }} role="dialog" aria-label="Where the composer sits">
-                <p className="mb-1.5 px-0.5 text-2xs text-ink-faint">Where should the composer sit?</p>
+              <div className="card absolute right-0 top-8 z-40 p-3 shadow-(--shadow-float)" style={{ background: 'var(--paper)' }} role="dialog" aria-label="Where the composer sits">
+                <p className="mb-1 px-0.5 text-2xs text-ink-faint">Where should the composer sit?</p>
                 <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(3, 44px)' }} role="grid">
                   {SIDES.map((side) => ALIGNS.map((align) => {
                     const on = dock.side === side && dock.align === align;
@@ -201,7 +201,7 @@ export function WallComposer({
         onPointerUp={() => { widthDrag.current = null; }} onPointerCancel={() => { widthDrag.current = null; }} onLostPointerCapture={() => { widthDrag.current = null; }}
         onDoubleClick={() => setWidth(null)}
         onKeyDown={e => { if (e.key === 'Home') { e.preventDefault(); setWidth(null); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); resizeWidth((panelRef.current?.offsetWidth ?? 320) + (e.key === 'ArrowRight' ? 20 : -20) * (edge === 'left' ? -1 : 1)); } }} />)}
-      {!agent && <div className="composer-head flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1 text-xs" data-composer-head>{head}</div>}
+      {!agent && <div className="composer-head flex shrink-0 items-center gap-2 border-b border-line px-2 py-1 text-xs" data-composer-head>{head}</div>}
       {agent ? (
         <div className="wall-composer-body min-h-0">
           <ChatPane key={agent.session.id} sessionId={agent.session.id} commandCenter surface="composer" header={head} />

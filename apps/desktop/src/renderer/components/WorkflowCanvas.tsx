@@ -137,7 +137,7 @@ export function WorkflowCanvas({
               title={n.detail}
               onClick={() => isStep && onSelect?.(n.id)}
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <span style={{ color: kind.color }}>{kind.glyph}</span>
                 <span className="truncate text-xs font-medium leading-tight">{n.label}</span>
                 {n.step && modelLabel?.(n.step) ? (

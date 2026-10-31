@@ -203,11 +203,11 @@ export function SecuritySettingsView(p: {
       </p>
 
       {s?.damaged && (
-        <p className="mt-2 rounded border border-line px-2 py-1.5 text-xs" style={{ color: 'var(--danger)' }}>
+        <p className="mt-2 rounded border border-line px-2 py-1 text-xs" style={{ color: 'var(--danger)' }}>
           security.json can’t be read, so every guarded action is refused. Restore it, or remove it with access to this computer to start over.
         </p>
       )}
-      {p.webAuthnBlocked && <p className="mt-2 rounded border border-line px-2 py-1.5 text-xs text-ink-soft" data-needs-https>{p.webAuthnBlocked}</p>}
+      {p.webAuthnBlocked && <p className="mt-2 rounded border border-line px-2 py-1 text-xs text-ink-soft" data-needs-https>{p.webAuthnBlocked}</p>}
 
       {/* Registered methods */}
       <ul className="mt-3 divide-y divide-line rounded-lg border border-line" aria-label="Registered methods">
@@ -244,23 +244,23 @@ export function SecuritySettingsView(p: {
       {/* Add a method */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <input
-          className="input max-w-[200px] py-1.5 text-xs"
+          className="input max-w-[200px] py-1 text-xs"
           placeholder="Name, e.g. YubiKey 5C"
           aria-label="Name for the new key"
           value={keyName}
           maxLength={60}
           onChange={(e) => setKeyName(e.target.value)}
         />
-        <button className="btn btn-outline py-1.5 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('security-key', keyName); setKeyName(''); }}>
+        <button className="btn btn-outline py-1 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('security-key', keyName); setKeyName(''); }}>
           Add security key
         </button>
         {p.passkeys && (
-          <button className="btn btn-outline py-1.5 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('passkey', keyName); setKeyName(''); }}>
+          <button className="btn btn-outline py-1 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('passkey', keyName); setKeyName(''); }}>
             Add passkey on this computer
           </button>
         )}
         {!s?.totp && !p.totp && (
-          <button className="btn btn-outline py-1.5 text-xs" disabled={p.busy} onClick={p.onTotpBegin}>
+          <button className="btn btn-outline py-1 text-xs" disabled={p.busy} onClick={p.onTotpBegin}>
             Set up a one-time code app
           </button>
         )}
@@ -292,7 +292,7 @@ export function SecuritySettingsView(p: {
               }}
             >
               <input
-                className="input max-w-[140px] py-1.5 font-mono tracking-widest"
+                className="input max-w-[140px] py-1 font-mono tracking-widest"
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 aria-label="Code from the app"
@@ -300,10 +300,10 @@ export function SecuritySettingsView(p: {
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
               />
-              <button className="btn btn-primary py-1.5 text-xs" type="submit" disabled={p.busy || code.replace(/\D/g, '').length !== 6}>
+              <button className="btn btn-primary py-1 text-xs" type="submit" disabled={p.busy || code.replace(/\D/g, '').length !== 6}>
                 Confirm
               </button>
-              <button className="btn btn-ghost py-1.5 text-xs" type="button" onClick={p.onTotpCancel}>
+              <button className="btn btn-ghost py-1 text-xs" type="button" onClick={p.onTotpCancel}>
                 Cancel
               </button>
             </form>
@@ -356,11 +356,11 @@ export function SecuritySettingsView(p: {
             </p>
           </div>
           {s.enabled ? (
-            <button className="btn btn-outline py-1.5 text-xs" onClick={p.onDisable} disabled={p.busy}>
+            <button className="btn btn-outline py-1 text-xs" onClick={p.onDisable} disabled={p.busy}>
               Turn off…
             </button>
           ) : (
-            <button className="btn btn-primary py-1.5 text-xs" onClick={p.onEnable} disabled={p.busy || !!blocker}>
+            <button className="btn btn-primary py-1 text-xs" onClick={p.onEnable} disabled={p.busy || !!blocker}>
               Turn on
             </button>
           )}

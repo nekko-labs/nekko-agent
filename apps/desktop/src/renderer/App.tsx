@@ -281,7 +281,7 @@ export function App() {
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
                 name is never shown twice. */}
-            {!hasAppChrome && <div className="mb-3 flex h-9 items-center gap-2 px-1.5">
+            {!hasAppChrome && <div className="mb-3 flex h-9 items-center gap-2 px-2">
               <span className="grid h-8 w-8 shrink-0 place-items-center text-ink"><BrandMark size={24} title={hasAppChrome ? undefined : 'Nekko Agent'} /></span>
               {!hasAppChrome && <span className="rail-label text-base font-semibold tracking-tight">Nekko Agent</span>}
             </div>}
@@ -325,7 +325,7 @@ export function App() {
         <main className="relative flex min-w-0 flex-1 flex-col pb-16 md:pb-0">
           {providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
             <button
-              className="flex items-center justify-center gap-2 border-b border-line py-2.5 text-sm"
+              className="flex items-center justify-center gap-2 border-b border-line py-2 text-sm"
               style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
               onClick={() => setView('models')}
             >
@@ -363,7 +363,7 @@ export function App() {
           return (
             <button
               key={v}
-              className="flex flex-1 flex-col items-center gap-0.5 py-1.5"
+              className="flex flex-1 flex-col items-center gap-0.5 py-1"
               style={view === v ? { color: 'var(--accent)' } : { color: 'var(--ink-faint)' }}
               aria-label={t(item.labelKey)}
               onClick={() => setView(v)}

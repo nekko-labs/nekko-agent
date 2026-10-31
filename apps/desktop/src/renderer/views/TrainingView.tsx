@@ -34,9 +34,9 @@ export function TrainingView() {
     <div className="flex h-full min-h-0">
       {/* run list */}
       <aside className="flex w-60 shrink-0 flex-col border-r border-(--line)">
-        <div className="flex items-center justify-between px-3 py-2.5">
+        <div className="flex items-center justify-between px-3 py-2">
           <span className="text-sm font-semibold">Training runs</span>
-          <button className="btn btn-primary px-2.5! py-1! text-xs" onClick={() => setCreating(true)}>+ New</button>
+          <button className="btn btn-primary px-3! py-1! text-xs" onClick={() => setCreating(true)}>+ New</button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {mine.length === 0 && (
@@ -47,7 +47,7 @@ export function TrainingView() {
           {mine.map((r) => (
             <button
               key={r.id}
-              className={`mb-1 w-full rounded-lg px-2.5 py-2 text-left transition hover:bg-(--surface-2) ${selected?.id === r.id && !creating ? 'bg-(--surface-2)' : ''}`}
+              className={`mb-1 w-full rounded-lg px-3 py-2 text-left transition hover:bg-(--surface-2) ${selected?.id === r.id && !creating ? 'bg-(--surface-2)' : ''}`}
               onClick={() => { setSelectedId(r.id); setCreating(false); }}
             >
               <div className="truncate text-xs font-medium">{r.name}</div>
@@ -96,26 +96,26 @@ function RunDashboard({ run, onOpenChat }: { run: TrainingRun; onOpenChat: (sess
   const showRunControls = run.status !== 'completed';
   return (
     <div className="mx-auto max-w-5xl space-y-3">
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-3">
         <h1 className="mr-1 text-xl font-bold tracking-tight">{run.name}</h1>
         <RunStatusChip run={run} />
         <span className="ml-auto flex items-center gap-2">
           {showRunControls && (
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-2">
               {run.status !== 'running' && (
-                <button className="btn btn-primary py-1.5!" onClick={start}>{run.turns ? 'Resume' : 'Start training'}</button>
+                <button className="btn btn-primary py-1!" onClick={start}>{run.turns ? 'Resume' : 'Start training'}</button>
               )}
-              {run.status === 'running' && <button className="btn btn-outline py-1.5!" onClick={pause}>Pause</button>}
+              {run.status === 'running' && <button className="btn btn-outline py-1!" onClick={pause}>Pause</button>}
               {(run.status === 'running' || run.status === 'paused') && (
-                <button className="btn btn-outline py-1.5! border-red-400/40! text-red-400!" onClick={stop}>Stop</button>
+                <button className="btn btn-outline py-1! border-red-400/40! text-red-400!" onClick={stop}>Stop</button>
               )}
             </span>
           )}
-          <span className={`flex items-center gap-1.5 ${showRunControls ? 'border-l border-(--line) pl-2' : ''}`}>
+          <span className={`flex items-center gap-2 ${showRunControls ? 'border-l border-(--line) pl-2' : ''}`}>
             {run.sessionId && (
-              <button className="btn btn-ghost py-1.5!" onClick={() => onOpenChat(run.sessionId!)}>Open chat →</button>
+              <button className="btn btn-ghost py-1!" onClick={() => onOpenChat(run.sessionId!)}>Open chat →</button>
             )}
-            <button className="btn btn-ghost py-1.5! text-red-400" onClick={remove}>Delete</button>
+            <button className="btn btn-ghost py-1! text-red-400" onClick={remove}>Delete</button>
           </span>
         </span>
       </div>
@@ -227,7 +227,7 @@ function NewRunForm({
         </p>
       </div>
 
-      <div className="card space-y-3.5 p-4">
+      <div className="card space-y-3 p-4">
         <div>
           <L>Purpose: what should this model do?</L>
           <textarea
@@ -260,7 +260,7 @@ function NewRunForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <L>Dataset</L>
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <select className="input w-32 shrink-0" value={dsSource} onChange={(e) => setDsSource(e.target.value as DatasetRef['source'])}>
                 <option value="huggingface">🤗 HF</option>
                 <option value="kaggle">Kaggle</option>
@@ -277,7 +277,7 @@ function NewRunForm({
           </div>
           <div>
             <L>Base model</L>
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <select className="input w-32 shrink-0" value={bmSource} onChange={(e) => setBmSource(e.target.value as BaseModelRef['source'])}>
                 <option value="none">From scratch</option>
                 <option value="huggingface">🤗 HF</option>
@@ -294,16 +294,16 @@ function NewRunForm({
             <L>Metric (optional)</L>
             <div className="flex items-center gap-2">
               <input className="input w-full" placeholder="accuracy, f1, r2, rmse…" value={metric} onChange={(e) => setMetric(e.target.value)} />
-              <label className="flex shrink-0 items-center gap-1.5 text-xs text-(--ink-soft)">
+              <label className="flex shrink-0 items-center gap-2 text-xs text-(--ink-soft)">
                 <input type="checkbox" checked={minimize} onChange={(e) => setMinimize(e.target.checked)} /> lower is better
               </label>
             </div>
           </div>
           <div>
             <L>Harness for the use case</L>
-            <div className="flex flex-wrap gap-3 pt-1.5 text-xs">
+            <div className="flex flex-wrap gap-3 pt-1 text-xs">
               {([['agentsMd', 'Agent file'], ['skill', 'Skill'], ['spec', 'Spec']] as const).map(([k, label]) => (
-                <label key={k} className="flex items-center gap-1.5">
+                <label key={k} className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={harness[k]}

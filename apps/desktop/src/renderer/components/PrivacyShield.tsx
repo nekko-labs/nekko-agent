@@ -175,7 +175,7 @@ export function PrivacyShieldPanel({
       <Switch on={on} label="Shield this chat" onToggle={onToggleShield} />
     </div>
 
-    {reachNote && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1.5 text-2xs text-ink-faint">{reachNote}</p>}
+    {reachNote && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1 text-2xs text-ink-faint">{reachNote}</p>}
     {error && <p className="mt-2 text-2xs text-danger">Could not preview: {error}</p>}
 
     <Section title={on ? 'What the model reads instead' : 'What the shield would hide'}>

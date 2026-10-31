@@ -11,7 +11,7 @@ export function DesktopBehaviorSection({ settings, update }: Props) {
     <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
       <div><label htmlFor="desktop-close-behavior" className="text-sm">When I close the window</label>
         <p className="text-2xs text-ink-faint">Keep agents working in the system tray, or shut down Nekko and its managed processes. Sleep and shutdown can interrupt background work.</p></div>
-      <select id="desktop-close-behavior" className="input max-w-[200px] py-1.5" value={settings.desktopCloseBehavior ?? 'tray'} onChange={e => update({ desktopCloseBehavior: e.target.value === 'shutdown' ? 'shutdown' : 'tray' })}>
+      <select id="desktop-close-behavior" className="input max-w-[200px] py-1" value={settings.desktopCloseBehavior ?? 'tray'} onChange={e => update({ desktopCloseBehavior: e.target.value === 'shutdown' ? 'shutdown' : 'tray' })}>
         <option value="tray">Keep running in tray</option><option value="shutdown">Shut down Nekko</option>
       </select>
     </div>

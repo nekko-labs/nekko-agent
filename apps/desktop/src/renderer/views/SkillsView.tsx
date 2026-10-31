@@ -86,7 +86,7 @@ export function SkillsView() {
         {(['library', 'market'] as Tab[]).map((k) => (
           <button
             key={k}
-            className={`rounded-t-lg border-b-2 px-3.5 py-2 text-sm font-medium transition ${
+            className={`rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition ${
               tab === k ? 'border-accent text-ink' : 'border-transparent text-ink-faint hover:text-ink'
             }`}
             onClick={() => setTab(k)}
@@ -113,7 +113,7 @@ function OriginChip({ origin }: { origin?: SkillOrigin }) {
   if (!origin) return null;
   return (
     <span
-      className="shrink-0 rounded-full px-1.5 py-0 text-2xs"
+      className="shrink-0 rounded-full px-2 py-0 text-2xs"
       style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}
       title={`Read from ${origin.dir}. Nekko Agent never edits or removes these files.`}
     >
@@ -190,7 +190,7 @@ function LibraryTab() {
             />
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Skill categories">
+          <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Skill categories">
             {(['all', ...categories] as const).map((c) => {
               const n = c === 'all' ? matching.length : matching.filter((s) => s.category === c).length;
               const on = category === c;
@@ -199,13 +199,13 @@ function LibraryTab() {
                   key={c}
                   role="tab"
                   aria-selected={on}
-                  className={`rounded-lg border px-2.5 py-1 text-xs transition ${
+                  className={`rounded-lg border px-3 py-1 text-xs transition ${
                     on ? 'border-accent bg-accent-soft text-ink' : 'border-line text-ink-soft hover:border-ink-faint hover:text-ink'
                   }`}
                   onClick={() => setCategory(c)}
                 >
                   {c === 'all' ? 'All' : c}
-                  <span className="ml-1.5 text-2xs text-ink-faint">{n}</span>
+                  <span className="ml-2 text-2xs text-ink-faint">{n}</span>
                 </button>
               );
             })}
@@ -243,7 +243,7 @@ function LibraryTab() {
           className="slide-up flex h-[58%] min-h-[300px] shrink-0 flex-col border-t border-line bg-surface"
           style={{ boxShadow: '0 -12px 32px -16px rgb(0 0 0 / 0.45)' }}
         >
-          <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-3.5">
+          <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 {selected.highlighted && <StarIcon className="h-4 w-4 text-accent" filled />}
@@ -265,10 +265,10 @@ function LibraryTab() {
                 </p>
               )}
               {selected.tools && selected.tools.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="text-2xs text-ink-faint">Tools:</span>
                   {selected.tools.map((t) => (
-                    <span key={t} className="rounded-sm px-1.5 py-0.5 font-mono text-2xs" style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}>
+                    <span key={t} className="rounded-sm px-2 py-0.5 font-mono text-2xs" style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}>
                       {t}
                     </span>
                   ))}
@@ -277,7 +277,7 @@ function LibraryTab() {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <button
-                className="btn btn-primary gap-1.5"
+                className="btn btn-primary gap-2"
                 onClick={() => attachSkillToChat(selected)}
                 title="Attach this skill to the chat composer"
               >
@@ -321,14 +321,14 @@ function SkillCard({ skill, installed, selected, onOpen }: { skill: SkillDef; in
         {skill.highlighted && <StarIcon className="h-3.5 w-3.5 shrink-0 text-accent" filled />}
       </div>
       <p className="mt-3 line-clamp-2 text-xs leading-snug text-ink-soft">{skill.description}</p>
-      <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
         <span className="text-2xs text-ink-faint">{skill.workflow.nodes.length} steps</span>
         {skill.kind === 'goal' && (
-          <span className="rounded-full px-1.5 py-0 text-2xs" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+          <span className="rounded-full px-2 py-0 text-2xs" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
             background agent
           </span>
         )}
-        {installed && <span className="chip px-1.5! py-0! text-2xs">installed</span>}
+        {installed && <span className="chip px-2! py-0! text-2xs">installed</span>}
         <OriginChip origin={skill.origin} />
       </div>
     </button>
@@ -350,7 +350,7 @@ function TierChip({ tier }: { tier?: MarketplaceSkill['tier'] }) {
   const official = tier === 'nekko-official';
   return (
     <span
-      className="shrink-0 rounded-full px-1.5 py-0 text-2xs"
+      className="shrink-0 rounded-full px-2 py-0 text-2xs"
       style={{ background: 'var(--surface-2)', color: official ? '#a78bfa' : 'var(--success)' }}
       title={official ? 'Built and reviewed by Nekko Labs' : 'Community-submitted: audit before use, skills run with your permissions'}
     >
@@ -728,19 +728,19 @@ function MarketplaceTab() {
                   return (
                     <button
                       key={`${shelf.key}:${s.id}`}
-                      className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
+                      className={`w-full rounded-lg border px-3 py-2 text-left transition ${
                         selected?.id === s.id ? 'border-accent' : 'border-transparent hover:bg-surface-2'
                       }`}
                       onClick={() => setSelectedId(s.id)}
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <span className="min-w-0 truncate font-mono text-sm font-medium">/{s.name}</span>
-                        <span className="shrink-0 rounded-full px-1.5 py-0 text-2xs" style={{ background: 'var(--surface-2)', color: SOURCE_META[s.source].color }}>
+                        <span className="shrink-0 rounded-full px-2 py-0 text-2xs" style={{ background: 'var(--surface-2)', color: SOURCE_META[s.source].color }}>
                           {SOURCE_META[s.source].label}
                         </span>
                         {s.source !== 'github' && <TierChip tier={s.tier} />}
                         {s.blocked && <span className="shrink-0 text-2xs text-ink-faint" title={s.blocked}>link only</span>}
-                        {installs.length > 0 && <span className="chip px-1.5! py-0! text-2xs">✓ {installs.length}</span>}
+                        {installs.length > 0 && <span className="chip px-2! py-0! text-2xs">✓ {installs.length}</span>}
                       </div>
                       <p className="mt-0.5 line-clamp-2 text-xs text-ink-soft">{s.description}</p>
                       <div className="mt-1 flex items-center gap-2 text-2xs text-ink-faint">
@@ -775,23 +775,23 @@ function MarketplaceTab() {
                 </div>
                 <p className="mt-1 text-sm text-ink-soft">{selected.description}</p>
                 {selected.tier === 'community' && !selected.blocked && (
-                  <p className="mt-1.5 rounded-lg px-2.5 py-1.5 text-xs" style={{ background: 'color-mix(in srgb, var(--warning) 12%, transparent)', color: 'var(--warning)' }}>
+                  <p className="mt-1 rounded-lg px-3 py-1 text-xs" style={{ background: 'color-mix(in srgb, var(--warning) 12%, transparent)', color: 'var(--warning)' }}>
                     {selected.source === 'github'
                       ? "From GitHub, not reviewed by Nekko Labs: it runs with your machine's permissions. Read its instructions before installing."
                       : "Community skill: it runs with your machine's permissions. Read its instructions before installing."}
                   </p>
                 )}
                 {selected.blocked && (
-                  <p className="mt-1.5 rounded-lg px-2.5 py-1.5 text-xs" style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}>
+                  <p className="mt-1 rounded-lg px-3 py-1 text-xs" style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}>
                     {selected.blocked} Open it on GitHub to use it from its source.
                   </p>
                 )}
                 {selected.extraFiles && !selected.blocked && (
-                  <p className="mt-1.5 text-2xs text-ink-faint">
+                  <p className="mt-1 text-2xs text-ink-faint">
                     This skill's folder also ships scripts or reference files. Only SKILL.md is installed, so steps that rely on those files may not work.
                   </p>
                 )}
-                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs text-ink-faint">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-2xs text-ink-faint">
                   <span>by {selected.author}</span>
                   {selected.license && <span>license: {selected.license}</span>}
                   {selected.stars != null && <span>★ {fmtMetric(selected.stars)} stars</span>}
@@ -811,10 +811,10 @@ function MarketplaceTab() {
                   )}
                 </div>
                 {selected.tools && selected.tools.length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="text-2xs text-ink-faint">Tools:</span>
                     {selected.tools.map((t) => (
-                      <span key={t} className="rounded-sm px-1.5 py-0.5 font-mono text-2xs" style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}>
+                      <span key={t} className="rounded-sm px-2 py-0.5 font-mono text-2xs" style={{ background: 'var(--surface-2)', color: 'var(--ink-soft)' }}>
                         {t}
                       </span>
                     ))}
@@ -823,7 +823,7 @@ function MarketplaceTab() {
               </div>
               {selectedInstalls.some((r) => normalizeInstallTarget(r.target) === 'nekko-agent') && (
                 <button
-                  className="btn btn-primary shrink-0 gap-1.5"
+                  className="btn btn-primary shrink-0 gap-2"
                   // Prefer the installed snapshot: a Vaizer install carries the
                   // SKILL.md it was installed with, the shelf entry does not.
                   onClick={() => {
@@ -842,7 +842,7 @@ function MarketplaceTab() {
               {targets.map((t) => {
                 const installed = selectedInstalls.some((r) => r.target === t.id);
                 return (
-                  <div key={t.id} className="flex items-center gap-1.5 rounded-xl border border-line px-2.5 py-1.5">
+                  <div key={t.id} className="flex items-center gap-2 rounded-xl border border-line px-3 py-1">
                     <span className="text-xs font-medium">{t.label}</span>
                     <span className="text-2xs text-ink-faint" title={t.dir ?? ''}>{t.hint}</span>
                     {installed ? (
@@ -907,9 +907,9 @@ function AddFromGitHub({
     }
   };
   return (
-    <div className="mt-2 rounded-lg border border-line p-2.5">
+    <div className="mt-2 rounded-lg border border-line p-3">
       <p className="text-2xs text-ink-faint">A skill folder or a whole repository. You see it before anything is installed.</p>
-      <div className="mt-1.5 flex gap-1.5">
+      <div className="mt-1 flex gap-2">
         <input
           className="input flex-1 text-xs"
           placeholder="github.com/owner/repo/tree/main/skills/name"
@@ -925,14 +925,14 @@ function AddFromGitHub({
         </button>
       </div>
       {result && (
-        <p className="mt-1.5 text-2xs" style={{ color: result.ok ? 'var(--ink-soft)' : 'var(--danger, #f87171)' }} role="status">
+        <p className="mt-1 text-2xs" style={{ color: result.ok ? 'var(--ink-soft)' : 'var(--danger, #f87171)' }} role="status">
           {result.ok ? `${result.skills.length} skill${result.skills.length === 1 ? '' : 's'} found in ${result.repo}.` : result.message}
         </p>
       )}
       {result?.ok && result.skills.length > 1 && (
         <div className="mt-1 flex max-h-32 flex-wrap gap-1 overflow-y-auto">
           {result.skills.map((r) => (
-            <button key={r.id} className="chip px-1.5! py-0! font-mono text-2xs" onClick={() => onFound([r])} title={r.description}>
+            <button key={r.id} className="chip px-2! py-0! font-mono text-2xs" onClick={() => onFound([r])} title={r.description}>
               /{r.name}
             </button>
           ))}
@@ -980,7 +980,7 @@ function SearchResults({
           return (
             <button
               key={r.id}
-              className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${selectedId === r.id ? 'border-accent' : 'border-transparent hover:bg-surface-2'}`}
+              className={`w-full rounded-lg border px-3 py-2 text-left transition ${selectedId === r.id ? 'border-accent' : 'border-transparent hover:bg-surface-2'}`}
               onClick={() => onSelect(r.id)}
             >
               <span className="font-mono text-sm font-medium">/{r.name}</span>
@@ -990,7 +990,7 @@ function SearchResults({
           );
         })}
         {result.repos.map((r) => (
-          <div key={r.repo} className="rounded-lg px-2.5 py-2 hover:bg-surface-2">
+          <div key={r.repo} className="rounded-lg px-3 py-2 hover:bg-surface-2">
             <div className="flex items-center justify-between gap-2">
               <span className="min-w-0 truncate text-xs font-medium">{r.repo}</span>
               <button
@@ -1078,7 +1078,7 @@ function WorkflowExplainer({ workflow, children }: { workflow: SkillWorkflow; ch
                 <h3 className="text-sm font-semibold">{selNode.label}</h3>
               </div>
               <span
-                className="mt-1.5 inline-block rounded-full px-2 py-0.5 text-2xs font-medium"
+                className="mt-1 inline-block rounded-full px-2 py-0.5 text-2xs font-medium"
                 style={{ background: 'var(--surface-2)', color: KIND[selNode.kind].color }}
               >
                 {KIND[selNode.kind].label} step
@@ -1100,11 +1100,11 @@ function WorkflowExplainer({ workflow, children }: { workflow: SkillWorkflow; ch
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">How this skill runs</h3>
               <p className="mt-1 text-xs text-ink-faint">Click any step, here or on the canvas, to see what it does.</p>
-              <ol className="mt-3 space-y-1.5">
+              <ol className="mt-3 space-y-1">
                 {ordered.map((n, i) => (
                   <li key={n.id}>
                     <button
-                      className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-surface-2"
+                      className="flex w-full items-start gap-2 rounded-lg px-2 py-1 text-left transition hover:bg-surface-2"
                       onClick={() => setSelId(n.id)}
                     >
                       <span
@@ -1239,7 +1239,7 @@ function NodeCard({
       title={node.detail}
       onClick={() => onSelect?.(node.id)}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <span style={{ color: k.color }}>{k.glyph}</span>
         <span className="truncate text-xs font-medium leading-tight">{node.label}</span>
       </div>

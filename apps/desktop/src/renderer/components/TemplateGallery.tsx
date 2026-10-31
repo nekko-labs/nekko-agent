@@ -55,7 +55,7 @@ export function TemplateCards({ onPick }: { onPick: (t: WorkflowTemplate) => voi
 
 function TemplateCard({ template, needs, onClick }: { template: WorkflowTemplate; needs: TemplateNeed[]; onClick: () => void }) {
   return (
-    <button className="card flex flex-col px-3.5 py-3 text-left transition hover:bg-(--surface-2)" onClick={onClick} data-template={template.id}>
+    <button className="card flex flex-col px-4 py-3 text-left transition hover:bg-(--surface-2)" onClick={onClick} data-template={template.id}>
       <span className="text-sm font-semibold leading-snug">{template.name}</span>
       <span className="mt-1 text-xs leading-snug text-ink-faint">{template.summary ?? template.description}</span>
       {needs.length > 0 && (
@@ -106,7 +106,7 @@ export function TemplateGallery({
         </p>
         <div className="mt-3 space-y-2">
           {examples.map((t) => (
-            <button key={t.id} className="card w-full px-3.5 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(t)}>
+            <button key={t.id} className="card w-full px-4 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(t)}>
               <div className="flex items-baseline gap-2">
                 <span className="text-sm font-semibold">{t.name}</span>
                 <Badge tone="info">{t.category}</Badge>
@@ -115,7 +115,7 @@ export function TemplateGallery({
             </button>
           ))}
           {blank && (
-            <button className="card w-full border-dashed px-3.5 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(blank)}>
+            <button className="card w-full border-dashed px-4 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(blank)}>
               <span className="text-sm font-semibold">Blank workflow</span>
               <p className="mt-1 text-xs leading-snug text-ink-faint">{blank.description}</p>
             </button>
@@ -231,8 +231,8 @@ export function TemplateSetup({
 
         {needs.length > 0 && (
           <section className="mt-4">
-            <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">What it needs</p>
-            <ul className="space-y-1.5">
+            <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">What it needs</p>
+            <ul className="space-y-1">
               {needs.map((n) => (
                 <li key={n.id} className="flex items-center gap-2 text-xs">
                   <span className="w-4 text-center" style={{ color: n.ok ? STATUS.success : STATUS.warning }} aria-hidden>{n.ok ? '✓' : '!'}</span>

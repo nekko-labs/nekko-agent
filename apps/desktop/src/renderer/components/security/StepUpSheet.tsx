@@ -170,7 +170,7 @@ export function StepUpSheetView(p: {
           {p.loading && <p className="text-xs text-ink-faint">Checking which methods this computer has…</p>}
           {canKey && p.entry === null && (
             <div>
-              <button className="btn btn-primary py-1.5 text-sm" onClick={p.onUseKey} disabled={busy}>
+              <button className="btn btn-primary py-1 text-sm" onClick={p.onUseKey} disabled={busy}>
                 {p.phase === 'key' ? 'Touch your key…' : p.phase === 'checking' ? 'Checking…' : 'Use security key'}
               </button>
               <p className="mt-1 text-xs text-ink-faint">
@@ -191,7 +191,7 @@ export function StepUpSheetView(p: {
               }}
             >
               <input
-                className="input max-w-[200px] py-1.5 font-mono text-sm tracking-widest"
+                className="input max-w-[200px] py-1 font-mono text-sm tracking-widest"
                 autoFocus
                 inputMode={p.entry === 'code' ? 'numeric' : 'text'}
                 autoComplete="one-time-code"
@@ -200,10 +200,10 @@ export function StepUpSheetView(p: {
                 value={p.code}
                 onChange={(e) => p.onCode(e.target.value)}
               />
-              <button className="btn btn-primary py-1.5 text-xs" type="submit" disabled={busy || !p.code.trim()}>
+              <button className="btn btn-primary py-1 text-xs" type="submit" disabled={busy || !p.code.trim()}>
                 {p.phase === 'checking' ? 'Checking…' : 'Confirm'}
               </button>
-              <button className="btn btn-ghost py-1.5 text-xs" type="button" onClick={() => p.onEntry(null)}>Back</button>
+              <button className="btn btn-ghost py-1 text-xs" type="button" onClick={() => p.onEntry(null)}>Back</button>
             </form>
           ) : (
             <div className="flex flex-wrap gap-3 text-xs">
@@ -217,7 +217,7 @@ export function StepUpSheetView(p: {
 
       <div className="mt-4 flex items-end justify-between gap-3">
         <UntestedHardwareNote className="max-w-[300px]" />
-        {p.phase !== 'done' && <button className="btn btn-ghost py-1.5 text-xs" onClick={p.onCancel}>Cancel</button>}
+        {p.phase !== 'done' && <button className="btn btn-ghost py-1 text-xs" onClick={p.onCancel}>Cancel</button>}
       </div>
     </div>
   );

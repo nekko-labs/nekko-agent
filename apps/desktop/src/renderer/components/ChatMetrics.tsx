@@ -95,7 +95,7 @@ export function ContextGauge({
           the phone. `~` marks a window guessed from the model family rather
           than reported. */}
       <span
-        className="context-bar flex h-6 cursor-default items-center gap-1.5 rounded-md px-1.5 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
+        className="context-bar flex h-6 cursor-default items-center gap-2 rounded-md px-2 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
         tabIndex={0}
         aria-label={`Context window: ${num(used)}${windowTokens ? ` of ${num(windowTokens)}` : ''} tokens in use`}
       >
@@ -125,7 +125,7 @@ export function ContextGauge({
           : windowReported ? 'Window reported by the model catalog. Usage is estimated.' : 'Window estimated from model family; the provider has not reported its exact limit.'}</p>
         {/* Segmented usage bar */}
         {windowTokens > 0 && (
-          <div className="mb-2.5 flex h-2 w-full overflow-hidden rounded-full" style={{ background: FREE_COLOR }}>
+          <div className="mb-2 flex h-2 w-full overflow-hidden rounded-full" style={{ background: FREE_COLOR }}>
             {rows.map((r) => (
               <span key={r.src} title={`${r.meta.label}: ${num(r.n)} tok`} style={{ width: `${r.pctWin}%`, background: r.meta.color }} />
             ))}
@@ -148,7 +148,7 @@ export function ContextGauge({
             <span className="w-9 shrink-0 text-right tabular-nums text-ink-faint">{freePct.toFixed(1)}%</span>
           </div>
         )}
-        <div className="mt-1.5 flex justify-between border-t border-line pt-1.5 font-medium text-ink">
+        <div className="mt-1 flex justify-between border-t border-line pt-1 font-medium text-ink">
           <span>Total in use</span>
           <span className="tabular-nums">{num(used)} tok</span>
         </div>
@@ -216,7 +216,7 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
       <button
         ref={pop.anchor}
         type="button"
-        className="flex items-center gap-1.5 px-2 py-1"
+        className="flex items-center gap-2 px-2 py-1"
         onClick={() => pop.setOpen((o) => !o)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); step(1); }

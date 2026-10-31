@@ -269,7 +269,7 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
                   anything Ollama or LM Studio already pulled onto this machine.
                 </p>
               </div>
-              <button className="btn btn-outline shrink-0 py-1.5 text-xs" onClick={openModels}>
+              <button className="btn btn-outline shrink-0 py-1 text-xs" onClick={openModels}>
                 Open Model Server
               </button>
             </div>
@@ -333,7 +333,7 @@ function OnlineCard({
         </div>
         {!isConnected && (
           <button
-            className="btn btn-outline shrink-0 py-1.5 text-xs"
+            className="btn btn-outline shrink-0 py-1 text-xs"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
           >
@@ -397,7 +397,7 @@ function LocalServerRow({
             {test?.state === 'testing' ? 'Testing…' : 'Test'}
           </button>
         ) : (
-          <button className="btn btn-primary shrink-0 py-1.5 text-xs" onClick={onAdd} disabled={adding}>
+          <button className="btn btn-primary shrink-0 py-1 text-xs" onClick={onAdd} disabled={adding}>
             {adding ? 'Adding…' : 'Add'}
           </button>
         )}
@@ -408,7 +408,7 @@ function LocalServerRow({
         </p>
       )}
       {candidate && !saved && (
-        <p className="mt-1.5 text-2xs text-ink-faint">Detected running on this machine.</p>
+        <p className="mt-1 text-2xs text-ink-faint">Detected running on this machine.</p>
       )}
     </div>
   );
@@ -575,13 +575,13 @@ function DefaultOffer({ providers }: { providers: ProviderConfig[] }) {
       </div>
       <div className="mt-3 flex justify-end gap-2">
         <button
-          className="btn btn-ghost py-1.5 text-xs"
+          className="btn btn-ghost py-1 text-xs"
           onClick={() => (current ? setChoosing(false) : setDismissed(true))}
           disabled={saving}
         >
           {current ? 'Cancel' : 'Not now'}
         </button>
-        <button className="btn btn-primary py-1.5 text-xs" onClick={() => void setDefault()} disabled={saving || !pid}>
+        <button className="btn btn-primary py-1 text-xs" onClick={() => void setDefault()} disabled={saving || !pid}>
           {saving ? 'Saving…' : 'Use as default'}
         </button>
       </div>

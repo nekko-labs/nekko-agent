@@ -220,7 +220,7 @@ export function UsageLimitsChip({
             {sortedWindows.length === 0 ? (
               <p className="text-ink-faint">No limit windows reported yet. Send a message to refresh.</p>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 {sortedWindows.map((w) => {
                   const tone = w.status === 'rate_limited' ? 'danger' : w.status === 'warning' ? 'warning' : 'success';
                   const statusLabel = w.status === 'rate_limited' ? 'Limited' : w.status === 'warning' ? 'Warning' : 'OK';
@@ -243,7 +243,7 @@ export function UsageLimitsChip({
               </div>
             )}
 
-            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-2 text-2xs text-ink-faint">
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-line pt-2 text-2xs text-ink-faint">
               <span>Plan: {limits?.planType ?? 'not reported'}</span>
               <span>Credits: {creditsLabel(limits)}</span>
             </div>
@@ -259,7 +259,7 @@ export function UsageLimitsChip({
                 {formatUSD(cost + (liveTurn ? turnCost : 0))}
               </span>
             </div>
-            <p className="mt-1.5 text-ink-faint">
+            <p className="mt-1 text-ink-faint">
               {local
                 ? 'Local models run privately on this machine and cost nothing.'
                 : 'Estimate from published list prices. Your provider bill may differ.'}

@@ -220,7 +220,7 @@ export function ModelPicker({
   const accountSwitcher = accounts.length > 1 && (
     <div className="model-accounts mb-1 px-1" data-account-switcher>
       <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Account">
-        <span className="px-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Account</span>
+        <span className="px-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Account</span>
         {accounts.map((p) => {
           const current = p.id === providerId;
           const blocked = current ? null : accountBlocked(p);
@@ -242,7 +242,7 @@ export function ModelPicker({
         })}
       </div>
       {currentProvider?.kind === 'claude-code' && (
-        <p className="px-1.5 pt-1 text-2xs text-ink-faint">Switching starts a new Claude Code conversation on that account; this chat keeps its history here.</p>
+        <p className="px-2 pt-1 text-2xs text-ink-faint">Switching starts a new Claude Code conversation on that account; this chat keeps its history here.</p>
       )}
     </div>
   );
@@ -281,7 +281,7 @@ export function ModelPicker({
           aria-selected={selected}
           aria-disabled={blocked}
           disabled={blocked}
-          className={`flex min-w-0 flex-1 flex-col px-2.5 py-1.5 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
+          className={`flex min-w-0 flex-1 flex-col px-3 py-1 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
           onClick={() => pick(p.id, m.id)}
           title={blocked ? `${label.name} · ${why}` : sub ? `${label.name} · ${sub}` : m.id === label.name ? label.name : `${label.name} · ${m.id}`}
         >
@@ -316,7 +316,7 @@ export function ModelPicker({
           </span>
         </button>
         {!readOnly && <button
-          className={`shrink-0 rounded-sm p-1.5 ${fav ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+          className={`shrink-0 rounded-sm p-2 ${fav ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
           title={fav ? 'Unstar' : 'Star (pin to the top of this list)'}
           aria-label={fav ? `Unstar ${m.name}` : `Star ${m.name}`}
           aria-pressed={fav}
@@ -333,8 +333,8 @@ export function ModelPicker({
   const header = (label: string, email?: string, provider = false) => (
     <p
       className={provider
-        ? 'truncate px-2.5 pb-0.5 pt-2 text-xs font-semibold text-ink'
-        : 'truncate px-2.5 pb-0.5 pt-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint'}
+        ? 'truncate px-3 pb-0.5 pt-2 text-xs font-semibold text-ink'
+        : 'truncate px-3 pb-0.5 pt-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint'}
       data-provider-heading={provider || undefined}
       title={email ? `${label} · ${email}` : undefined}
     >
@@ -344,8 +344,8 @@ export function ModelPicker({
   );
 
   const popup = (
-        <div ref={popupRef} style={expanded ? undefined : placement} className={expanded ? 'card flex h-full min-h-0 w-full flex-col p-2 text-left' : 'card fixed z-50 flex flex-col p-1.5 shadow-(--shadow-float)'}>
-          <div role="group" aria-label="Model source" className="mb-1.5 grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-surface-2 p-0.5">
+        <div ref={popupRef} style={expanded ? undefined : placement} className={expanded ? 'card flex h-full min-h-0 w-full flex-col p-2 text-left' : 'card fixed z-50 flex flex-col p-2 shadow-(--shadow-float)'}>
+          <div role="group" aria-label="Model source" className="mb-1 grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-surface-2 p-0.5">
             {([
               ['all', 'All', GridIcon], ['fusion', 'Fusion', RouteIcon],
               ['cloud', 'Cloud', CloudIcon], ['local', 'Local', LaptopIcon],
@@ -354,7 +354,7 @@ export function ModelPicker({
                 disabled={value === 'fusion' && !allowAuto}
                 title={value === 'fusion' ? (allowAuto ? 'Auto routing between models' : 'Auto routing is not available here') : `${label} models`}
                 onClick={() => setScope(value)}
-                className={`flex min-w-0 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-2xs font-medium disabled:opacity-40 ${scope === value ? 'bg-paper text-accent shadow-(--shadow-sm)' : 'text-ink-faint hover:text-ink'}`}>
+                className={`flex min-w-0 items-center justify-center gap-1 rounded-md px-2 py-1 text-2xs font-medium disabled:opacity-40 ${scope === value ? 'bg-paper text-accent shadow-(--shadow-sm)' : 'text-ink-faint hover:text-ink'}`}>
                 <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{label}
               </button>
             ))}
@@ -363,7 +363,7 @@ export function ModelPicker({
               capped so it never runs off a narrow pane. */}
           {(expanded || total > 8) && (
             <input
-              className="input mb-1 rounded-lg px-2.5 py-1 text-xs"
+              className="input mb-1 rounded-lg px-3 py-1 text-xs"
               placeholder="Filter models…"
               value={query}
               autoFocus={!expanded}
@@ -373,16 +373,16 @@ export function ModelPicker({
           )}
           {accountSwitcher}
           <div className="min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label="Model">
-            {defaultKey && !q && scope !== 'fusion' && (scope === 'all' || defaultProvider) && (defaultProvider && defaultModel ? row(defaultProvider, defaultModel, true) : <button role="option" disabled aria-disabled="true" className="w-full px-2.5 py-2 text-left text-xs text-ink-faint">{settings?.defaultModelId} <span className="text-2xs">Default · {defaultStatus}</span></button>)}
-            {providers.length === 0 && <p className="px-2.5 py-1.5 text-2xs text-ink-faint">No provider configured.</p>}
+            {defaultKey && !q && scope !== 'fusion' && (scope === 'all' || defaultProvider) && (defaultProvider && defaultModel ? row(defaultProvider, defaultModel, true) : <button role="option" disabled aria-disabled="true" className="w-full px-3 py-2 text-left text-xs text-ink-faint">{settings?.defaultModelId} <span className="text-2xs">Default · {defaultStatus}</span></button>)}
+            {providers.length === 0 && <p className="px-3 py-1 text-2xs text-ink-faint">No provider configured.</p>}
             {providers.length > 0 && groups.length === 0 && scope !== 'fusion' && (
-              <p className="px-2.5 py-1.5 text-2xs text-ink-faint">{q ? 'No models match.' : pending ? 'Loading models…' : 'No models available.'}</p>
+              <p className="px-3 py-1 text-2xs text-ink-faint">{q ? 'No models match.' : pending ? 'Loading models…' : 'No models available.'}</p>
             )}
             {allowAuto && total > 1 && !q && (scope === 'all' || scope === 'fusion') && (
               <button
                 role="option"
                 aria-selected={modelId === AUTO_MODEL_ID}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-surface-2 ${modelId === AUTO_MODEL_ID ? 'text-accent' : ''}`}
+                className={`flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2 ${modelId === AUTO_MODEL_ID ? 'text-accent' : ''}`}
                 onClick={() => { onModel(providerId ?? '', AUTO_MODEL_ID); setOpen(false); }}
                 title="Nekko Agent picks the best model for each message"
               >
@@ -498,13 +498,13 @@ export function AutoQualityMenu({
         <span className="ctl-caret">▾</span>
       </button>
       {open && (
-        <div className="card absolute bottom-8 left-0 z-40 w-60 p-1.5 shadow-(--shadow-float)" role="menu">
+        <div className="card absolute bottom-8 left-0 z-40 w-60 p-2 shadow-(--shadow-float)" role="menu">
           {AUTO_QUALITIES.map((q) => (
             <button
               key={q}
               role="menuitemradio"
               aria-checked={quality === q}
-              className={`flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${quality === q ? 'text-accent' : ''}`}
+              className={`flex w-full flex-col rounded-lg px-3 py-1 text-left hover:bg-surface-2 ${quality === q ? 'text-accent' : ''}`}
               onClick={() => { onPick(q); setOpen(false); }}
             >
               <span className="text-sm font-medium">{AUTO_QUALITY_META[q].label}</span>
@@ -515,7 +515,7 @@ export function AutoQualityMenu({
             <button
               role="menuitemcheckbox"
               aria-checked={!!followCapacity}
-              className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2"
+              className="flex w-full items-start gap-2 rounded-lg px-3 py-1 text-left hover:bg-surface-2"
               onClick={() => onFollowCapacity(!followCapacity)}
             >
               <span
@@ -532,7 +532,7 @@ export function AutoQualityMenu({
               </span>
             </button>
           )}
-          <p className="border-t border-line px-2.5 pb-0.5 pt-1.5 text-2xs text-ink-faint">Applies to this chat only.</p>
+          <p className="border-t border-line px-3 pb-0.5 pt-1 text-2xs text-ink-faint">Applies to this chat only.</p>
         </div>
       )}
     </div>

@@ -147,7 +147,7 @@ function Row({
       <p className="mt-0.5 text-2xs text-ink-faint">{hint}</p>
       {restartRequired && env && (
         <div className="mt-1 flex items-center gap-1">
-          <code className="rounded bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)] px-1.5 py-0.5 font-mono text-2xs">
+          <code className="rounded bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)] px-2 py-0.5 font-mono text-2xs">
             {env}
           </code>
           <CopyButton text={env} />
@@ -180,8 +180,8 @@ function LaunchCommand({ facts, request }: { facts: ModelFacts; request: FitRequ
         vLLM serves one model per process and takes its whole configuration at launch, so these
         settings are a command to run rather than controls Nekko Agent can apply.
       </p>
-      <div className="mt-2 flex items-start gap-1.5">
-        <code className="flex-1 break-all rounded bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)] px-2 py-1.5 font-mono text-2xs">
+      <div className="mt-2 flex items-start gap-2">
+        <code className="flex-1 break-all rounded bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)] px-2 py-1 font-mono text-2xs">
           {cmd}
         </code>
         <CopyButton text={cmd} />
@@ -194,7 +194,7 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
-      className="btn btn-ghost px-1.5 py-1"
+      className="btn btn-ghost px-2 py-1"
       title={copied ? 'Copied' : 'Copy'}
       onClick={async () => {
         try {

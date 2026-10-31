@@ -47,12 +47,12 @@ describe('reply stats in the transcript', () => {
     expect(renderToStaticMarkup(<MessageBubble message={{ ...reply, id: 'live' }} chronological />)).not.toContain('High effort');
   });
 
-  it('puts the stats right-aligned on the Done row, 30px clear, wrapping when narrow', () => {
+  it('puts the stats right-aligned on the Done row, 32px clear, wrapping when narrow', () => {
     const reply: ChatMessage = { id: 'a1', role: 'assistant', content: 'Finished.', createdAt: 1, turnStats: stats };
     for (const chronological of [true, false]) {
       const html = renderToStaticMarkup(<MessageBubble message={reply} chronological={chronological} />);
       const row = html.slice(html.indexOf('data-done-row'));
-      expect(html).toMatch(/flex flex-wrap items-center gap-x-\[30px\][^"]*" data-done-row/);
+      expect(html).toMatch(/flex flex-wrap items-center gap-x-8[^"]*" data-done-row/);
       expect(row.indexOf('Done.')).toBeLessThan(row.indexOf('data-turn-stats'));
       expect(row).toMatch(/class="ml-auto justify-end flex min-w-0 flex-wrap[^"]*" data-turn-stats/);
       expect(html.match(/data-turn-stats/g)).toHaveLength(1);

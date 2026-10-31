@@ -206,7 +206,7 @@ export function RemoteAccess() {
       </p>
       {!status.enabled && status.stoppedBy && <RemoteStoppedBanner stoppedBy={status.stoppedBy} />}
       {status.error && !status.online && (
-        <p className="mt-2 rounded border border-line px-2 py-1.5 text-xs text-ink-soft">{status.error}</p>
+        <p className="mt-2 rounded border border-line px-2 py-1 text-xs text-ink-soft">{status.error}</p>
       )}
 
       {!status.enabled ? (
@@ -230,7 +230,7 @@ export function RemoteAccess() {
           <div data-shot="phone-pairing">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium">Paired devices</h3>
-              <button className="btn btn-primary py-1.5 text-xs" onClick={pair}>
+              <button className="btn btn-primary py-1 text-xs" onClick={pair}>
                 + Pair a device
               </button>
             </div>
@@ -252,7 +252,7 @@ export function RemoteAccess() {
                   </div>
                   <details className="mt-1">
                     <summary className="cursor-pointer text-xs text-ink-faint">Can’t scan? Show the link</summary>
-                    <code className="mt-1 block break-all rounded-lg px-2 py-1.5 font-mono text-2xs" style={{ background: 'var(--surface-2)' }}>
+                    <code className="mt-1 block break-all rounded-lg px-2 py-1 font-mono text-2xs" style={{ background: 'var(--surface-2)' }}>
                       {link}
                     </code>
                     <button className="btn btn-outline mt-2 py-1 text-xs" onClick={() => navigator.clipboard?.writeText(link)}>
@@ -318,10 +318,10 @@ export function RemoteAccess() {
           <QuitFromPhoneSwitch />
 
           <div className="flex flex-wrap gap-2">
-            <button className="btn btn-ghost py-1.5 text-xs" onClick={disable} disabled={busy}>
+            <button className="btn btn-ghost py-1 text-xs" onClick={disable} disabled={busy}>
               Disable remote access
             </button>
-            <button className="btn btn-ghost py-1.5 text-xs" title="Re-keys the room with a new secret; every phone must pair again" onClick={rotate}>
+            <button className="btn btn-ghost py-1 text-xs" title="Re-keys the room with a new secret; every phone must pair again" onClick={rotate}>
               Sign out all phones…
             </button>
           </div>
@@ -388,7 +388,7 @@ export function PairingChoiceView({
                 <a className="underline" href={TAILSCALE_DOWNLOAD} target="_blank" rel="noreferrer">Get Tailscale</a> and sign in on this computer and your phone.
               </p>
             )}
-            <button className="btn btn-outline mt-3 self-start py-1.5 text-xs disabled:opacity-50" onClick={onTailscale} disabled={busy || !connected}>
+            <button className="btn btn-outline mt-3 self-start py-1 text-xs disabled:opacity-50" onClick={onTailscale} disabled={busy || !connected}>
               Use Tailscale
             </button>
           </div>
@@ -398,7 +398,7 @@ export function PairingChoiceView({
           <p className="mt-1 flex-1 text-xs text-ink-faint">
             Works anywhere, nothing to install. End-to-end encrypted: Nekko Cloud only passes along messages it can’t read.
           </p>
-          <button className="btn btn-primary mt-3 self-start py-1.5 text-xs" onClick={onCloud} disabled={busy}>
+          <button className="btn btn-primary mt-3 self-start py-1 text-xs" onClick={onCloud} disabled={busy}>
             {busy ? 'Connecting…' : 'Use Nekko Cloud'}
           </button>
         </div>
@@ -411,8 +411,8 @@ export function PairingChoiceView({
       <details className="text-xs text-ink-faint">
         <summary className="cursor-pointer">Use your own relay</summary>
         <div className="mt-2 flex gap-2">
-          <input className="input py-1.5 text-sm" placeholder="wss://relay.example.com" value={relayUrl} onChange={(e) => onRelayUrl(e.target.value)} />
-          <button className="btn btn-outline py-1.5" onClick={onOwnRelay} disabled={busy || !relayUrl.trim()}>
+          <input className="input py-1 text-sm" placeholder="wss://relay.example.com" value={relayUrl} onChange={(e) => onRelayUrl(e.target.value)} />
+          <button className="btn btn-outline py-1" onClick={onOwnRelay} disabled={busy || !relayUrl.trim()}>
             Connect
           </button>
         </div>
@@ -560,9 +560,9 @@ export function LocalRelayView({
               private addresses (192.168.x.x, 10.x.x.x, 172.16.x.x to 172.31.x.x), never the internet. Pair again after changing this.
             </p>
             {relay.running && !!relay.lanUrls?.length && (
-              <div className="mt-1 flex flex-wrap gap-1.5">
+              <div className="mt-1 flex flex-wrap gap-2">
                 {relay.lanUrls.map((u) => (
-                  <code key={u} className="rounded px-1.5 py-0.5 font-mono text-2xs" style={{ background: 'var(--surface-2)' }}>
+                  <code key={u} className="rounded px-2 py-0.5 font-mono text-2xs" style={{ background: 'var(--surface-2)' }}>
                     {u}
                   </code>
                 ))}
@@ -801,11 +801,11 @@ export function PhoneAccessView({
                     <span className="ml-2 text-xs font-normal text-ink-faint">Older app: update it on the phone</span>
                   )}
                 </span>
-                <label className="flex items-center gap-1.5 text-ink-soft">
+                <label className="flex items-center gap-2 text-ink-soft">
                   Read
                   <Toggle value={access.read} onChange={(v) => onSet(d.id, { read: v })} disabled={busyId === d.id} label={`Read from ${d.name}`} />
                 </label>
-                <label className="flex items-center gap-1.5 text-ink-soft">
+                <label className="flex items-center gap-2 text-ink-soft">
                   Change
                   <Toggle value={access.change} onChange={(v) => onSet(d.id, { change: v })} disabled={busyId === d.id} label={`Change from ${d.name}`} />
                 </label>
@@ -872,7 +872,7 @@ export function PhoneChangesSwitch() {
  */
 export function RemoteStoppedBanner({ stoppedBy, time }: { stoppedBy: { name?: string | null; at: number }; time?: (at: number) => string }) {
   return (
-    <p data-shot="remote-stopped" role="status" className="mt-2 rounded border px-2 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--warning)' }}>
+    <p data-shot="remote-stopped" role="status" className="mt-2 rounded border px-2 py-1 text-xs text-ink-soft" style={{ borderColor: 'var(--warning)' }}>
       {remoteStoppedBanner(stoppedBy, time)}
     </p>
   );

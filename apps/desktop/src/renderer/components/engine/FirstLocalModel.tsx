@@ -330,7 +330,7 @@ function Progress({ group }: { group: DownloadGroup }) {
       >
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--accent)' }} />
       </div>
-      <p className="mt-1.5 text-xs text-ink-faint">
+      <p className="mt-1 text-xs text-ink-faint">
         {formatBytes(group.receivedBytes)}
         {group.totalBytes ? ` of ${formatBytes(group.totalBytes)}` : ''}
         {left ? ` · about ${left}` : ''}

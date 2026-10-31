@@ -91,7 +91,7 @@ export function ZoomFrame({ srcDoc, title }: { srcDoc: string; title: string }) 
         className="absolute inset-0 h-full w-full border-0 bg-transparent"
         style={{ pointerEvents: 'none', transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, transformOrigin: 'center center' }}
       />
-      <span className="pointer-events-none absolute bottom-2 right-3 rounded-md bg-black/50 px-1.5 py-0.5 font-mono text-2xs text-white" aria-live="polite">{Math.round(view.z * 100)}%</span>
+      <span className="pointer-events-none absolute bottom-2 right-3 rounded-md bg-black/50 px-2 py-0.5 font-mono text-2xs text-white" aria-live="polite">{Math.round(view.z * 100)}%</span>
     </div>
   );
 }
@@ -160,7 +160,7 @@ export function MermaidDiagram({ code }: { code: string }) {
   const copy = () => {
     navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); });
   };
-  const toolbarButton = 'rounded-md border border-line px-1.5 py-0.5 text-2xs text-ink-faint hover:text-ink';
+  const toolbarButton = 'rounded-md border border-line px-2 py-0.5 text-2xs text-ink-faint hover:text-ink';
   return <div className="group/diagram relative my-2 rounded-xl p-3 diagram-canvas diagram-card" data-mermaid-diagram>
     {error ? <p role="status" className="text-xs text-ink-soft">{error}</p> : svg
       ? <>

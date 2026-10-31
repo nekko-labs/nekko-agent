@@ -598,7 +598,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       data-agent-panel
       data-orientation={orientation}
     >
-      <div className={horizontal ? 'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-line px-1.5 py-2' : 'flex items-center justify-between px-3 py-2.5'} data-agent-panel-header>
+      <div className={horizontal ? 'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-line px-2 py-2' : 'flex items-center justify-between px-3 py-2'} data-agent-panel-header>
         {/* A column panel keeps show/hide and orientation at its left and the
             + at its right; a row panel stacks all three in its left strip. */}
         {!horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
@@ -606,7 +606,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           {horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
           <button
             ref={viewButtonRef}
-            className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${viewMenu ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
+            className={`agent-panel-view btn btn-ghost px-2 py-1 ${viewMenu ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
             title="View options: group, sort and show"
             aria-label="Agent panel view options"
             aria-haspopup="menu"
@@ -619,7 +619,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           </button>
           <HoverTip label={`Search chats (${SHORTCUTS.searchChats.label})`}><span className="inline-flex"><button
             ref={finderButtonRef}
-            className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
+            className={`agent-panel-view btn btn-ghost px-2 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
             aria-label="Search chats"
             aria-haspopup="dialog"
             aria-expanded={finderOpen}
@@ -637,7 +637,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           )}
           <button
             ref={newMenuButtonRef}
-            className={`agent-panel-plus btn btn-ghost px-1.5 py-1 ${newMenuOpen ? 'is-open' : ''}`}
+            className={`agent-panel-plus btn btn-ghost px-2 py-1 ${newMenuOpen ? 'is-open' : ''}`}
             title="New agent"
             aria-label="New agent"
             aria-haspopup="menu"
@@ -668,7 +668,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           )}
         </div>
       </div>
-      <div ref={listRef} className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
+      <div ref={listRef} className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
         {groups.map((b) => {
           const { items, done } = b;
           const byProject = view.groupBy === 'project' && !utilityGroups.includes(b);
@@ -690,7 +690,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               onDrop={byProject ? (e) => { e.preventDefault(); e.stopPropagation(); dropOnBucket(b); } : undefined}
             >
               {!b.bare && <div
-                className="agent-panel-group-heading group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
+                className="agent-panel-group-heading group flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-surface-2"
                 draggable={byProject && !!b.ws}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setViewMenu({ x: e.clientX, y: e.clientY }); }}
                 onDragStart={byProject && b.ws ? (e) => {
@@ -718,7 +718,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   ><path d="M9 6l6 6-6 6" /></svg>
                   <span className="agent-panel-group-label truncate font-semibold uppercase tracking-wider">{b.name}</span>
                   {isCollapsed && (items.length > 0 || completedGroup) && (
-                    <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-1.5 text-2xs tabular-nums text-ink-faint">
+                    <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
                     </span>
                   )}
@@ -741,7 +741,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
-                    <p className="px-3.5 py-1 text-2xs text-ink-faint">No active agents</p>
+                    <p className="px-4 py-1 text-2xs text-ink-faint">No active agents</p>
                   )}
                   {items.map((entry) => {
                     const { w, s } = entry;
@@ -858,7 +858,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     >
       {viewMenu && <AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-        <div className="select-text break-all px-2.5 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
+        <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
           <ContextAction onClick={() => void runAction('complete',menu.ids)}>Mark as completed</ContextAction>
@@ -960,7 +960,7 @@ function CompletedRow({
       onClick={onOpen}
       onContextMenu={onContextMenu}
       data-completed-row={s.id}
-      className={`flex w-full items-center gap-1.5 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
+      className={`flex w-full items-center gap-2 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
       title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nKept until you delete it`}
     >
       <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">

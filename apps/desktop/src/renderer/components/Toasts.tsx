@@ -16,7 +16,7 @@ export function Toasts() {
           className="fade-in card pointer-events-auto flex items-start gap-3 p-3 shadow-(--shadow-float)"
           onClick={() => dismissToast(t.id)}
         >
-          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: COLOR[t.kind] }} />
+          <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: COLOR[t.kind] }} />
           <span className="text-sm leading-snug">{t.message}</span>
         </div>
       ))}

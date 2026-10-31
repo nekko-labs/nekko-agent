@@ -70,7 +70,7 @@ export function turnStatsTitle(stats: TurnStats): string {
 export function DoneRow({ done, stats, names }: { done: boolean; stats?: TurnStats; names?: TurnStatsNames }) {
   if (!done) return stats ? <TurnStatsLine stats={stats} names={names} /> : null;
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-[30px] gap-y-0.5 text-2xs text-ink-faint" data-done-row>
+    <div className="mt-1 flex flex-wrap items-center gap-x-8 gap-y-0.5 text-2xs text-ink-faint" data-done-row>
       <span className="flex shrink-0 items-center gap-1"><CheckIcon className="h-3 w-3" />Done.</span>
       {stats && <TurnStatsLine stats={stats} names={names} inline />}
     </div>
@@ -85,7 +85,7 @@ export function DoneRow({ done, stats, names }: { done: boolean; stats?: TurnSta
 export function TurnStatsLine({ stats, names, inline = false }: { stats: TurnStats; names?: TurnStatsNames; inline?: boolean }) {
   return (
     // `inline`: sits right-aligned in the reply's Done row (see DoneRow).
-    <div className={`${inline ? 'ml-auto justify-end' : 'mt-1'} flex min-w-0 flex-wrap items-center gap-x-1.5 text-2xs text-ink-faint`} data-turn-stats title={turnStatsTitle(stats)}>
+    <div className={`${inline ? 'ml-auto justify-end' : 'mt-1'} flex min-w-0 flex-wrap items-center gap-x-2 text-2xs text-ink-faint`} data-turn-stats title={turnStatsTitle(stats)}>
       {turnStatsParts(stats, names).map((p, i) => <span key={i}>{i > 0 && '· '}{p}</span>)}
     </div>
   );

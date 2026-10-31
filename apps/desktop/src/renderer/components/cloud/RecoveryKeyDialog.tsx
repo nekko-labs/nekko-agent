@@ -48,8 +48,8 @@ export function RecoveryKeyDialog({ recoveryKey, email, onDone }: { recoveryKey:
               {groups.map((g, i) => <span key={i}>{g}</span>)}
             </div>
             <div className="mt-3 flex gap-2">
-              <button className="btn btn-outline flex-1 py-1.5! text-xs!" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button>
-              <button className="btn btn-outline flex-1 py-1.5! text-xs!" onClick={() => void saveKit(recoveryKey, email)} data-testid="recovery-kit">Save recovery kit</button>
+              <button className="btn btn-outline flex-1 py-1! text-xs!" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button>
+              <button className="btn btn-outline flex-1 py-1! text-xs!" onClick={() => void saveKit(recoveryKey, email)} data-testid="recovery-kit">Save recovery kit</button>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-ink-faint">Keep it somewhere other than this computer: a password manager, or the printed kit with your important papers. Anyone with this key and your sign-in can read your synced chats.</p>
             <label className="mt-4 flex items-center gap-2 text-sm">

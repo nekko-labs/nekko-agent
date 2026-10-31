@@ -378,9 +378,9 @@ export function UpdateBanner() {
           <p className="mt-1 text-2xs text-ink-faint">
             Periodically checks GitHub for new versions. <span className="italic">Note: connects to the internet.</span>
           </p>
-          <div className="mt-2.5 flex justify-end gap-2">
-            <button className="btn btn-ghost px-2.5 py-1 text-xs" onClick={declineAuto}>No thanks</button>
-            <button className="btn btn-primary px-2.5 py-1 text-xs" onClick={enableAuto} disabled={busy}>
+          <div className="mt-2 flex justify-end gap-2">
+            <button className="btn btn-ghost px-3 py-1 text-xs" onClick={declineAuto}>No thanks</button>
+            <button className="btn btn-primary px-3 py-1 text-xs" onClick={enableAuto} disabled={busy}>
               {busy ? 'Checking…' : 'Yes, check'}
             </button>
           </div>
@@ -401,9 +401,9 @@ export function UpdateBanner() {
               <p className="mt-1 text-2xs text-ink-faint">Downloading… {update.percent ?? 0}%</p>
             </div>
           ) : (
-            <div className="mt-2.5 flex items-center justify-between">
+            <div className="mt-2 flex items-center justify-between">
               <button className="text-xs text-accent hover:underline" onClick={openNotes}>What's new</button>
-              <button className="btn btn-primary px-2.5 py-1 text-xs" onClick={doUpdate} disabled={busy}>Refresh now</button>
+              <button className="btn btn-primary px-3 py-1 text-xs" onClick={doUpdate} disabled={busy}>Refresh now</button>
             </div>
           )}
         </div>

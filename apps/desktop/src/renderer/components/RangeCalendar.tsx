@@ -34,7 +34,7 @@ export function RangeCalendar({ value, onChange, now = Date.now() }: {
 
   return (
     <div className="chat-finder-calendar select-none p-2" data-finder-calendar onMouseLeave={() => setHover(start)}>
-      <div className="mb-1.5 flex items-center justify-between">
+      <div className="mb-1 flex items-center justify-between">
         <button type="button" className="grid h-6 w-6 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" aria-label="Previous month" onClick={() => step(-1)}>
           <ChevronIcon className="h-3.5 w-3.5 rotate-180" />
         </button>

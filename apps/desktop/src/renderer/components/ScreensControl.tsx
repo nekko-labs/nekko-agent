@@ -167,7 +167,7 @@ export function ScreensMenu({ state, open, busy = false, rootRef, onHover, onTog
   // Fit the row: the widest screen is drawn 96px wide, the rest to scale.
   const scale = 96 / Math.max(1, ...state.displays.map((d) => d.bounds.width));
   return <div className="screens-control" ref={rootRef} onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} onFocus={() => onHover?.(true)}>
-    <button type="button" className="btn btn-outline gap-1.5 py-1 text-xs" aria-haspopup="dialog" aria-expanded={open}
+    <button type="button" className="btn btn-outline gap-2 py-1 text-xs" aria-haspopup="dialog" aria-expanded={open}
       aria-label={state.displays.length < 2 && state.spaces ? `Desktops: ${state.spaces.desktops.filter((d) => d.enabled).length} of ${state.spaces.desktops.length} on` : `Screens: ${on} of ${state.displays.length} on`} title="Screens" data-screens-button onClick={onToggleOpen}>
       <MultiMonitorIcon className="h-4 w-4" />{state.displays.length > 1
         ? <span className="tabular-nums">{on}/{state.displays.length}</span>

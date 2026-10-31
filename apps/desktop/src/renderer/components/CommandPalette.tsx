@@ -137,7 +137,7 @@ export function CommandPalette() {
       <div id={listId} role="listbox" aria-label="Commands" className="max-h-80 overflow-y-auto py-1">
         {filtered.length === 0 && <div className="px-4 py-3 text-sm text-ink-faint">No matching commands or settings.</div>}
         {filtered.map((item, i) => {
-          const row = `flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm ${i === active ? 'bg-surface-2' : ''}`;
+          const row = `flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm ${i === active ? 'bg-surface-2' : ''}`;
           if ('command' in item) {
             const c = item.command;
             return (

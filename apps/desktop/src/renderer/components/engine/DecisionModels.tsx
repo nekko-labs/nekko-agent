@@ -249,7 +249,7 @@ function FolderModel({ model, status, busy, act }: {
   const loaded = !!status?.local.loaded && !!status.local.dir && status.local.dir.replace(/[\/]+$/, '').toLowerCase() === model.dir.replace(/[\/]+$/, '').toLowerCase();
   const [precision, setPrecision] = useState<DecisionPrecision>(model.precisions[0]);
   return (
-    <div className="mt-2 rounded-md border border-line px-2.5 py-2">
+    <div className="mt-2 rounded-md border border-line px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{model.name}</span>
         <span className="min-w-0 truncate text-ink-faint" title={model.dir}>{model.dir}</span>
@@ -260,7 +260,7 @@ function FolderModel({ model, status, busy, act }: {
           Running {status.local.precision} on {status.local.ep}{status.local.loadMs ? `, loaded in ${(status.local.loadMs / 1000).toFixed(1)} s` : ''}
         </p>
       )}
-      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+      <div className="mt-1 flex flex-wrap items-center gap-2">
         <select className="input w-auto py-1 text-xs" aria-label="Precision" value={precision} onChange={(e) => setPrecision(e.target.value as DecisionPrecision)} disabled={loaded}>
           {model.precisions.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>

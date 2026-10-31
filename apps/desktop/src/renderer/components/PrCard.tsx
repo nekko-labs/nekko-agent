@@ -109,9 +109,9 @@ export function PrActionCard({ url, info, sessionId, onDismiss, checksInPlan = f
     } catch (error) { useStore.getState().pushToast('error', (error as Error).message); }
     finally { setBusy(null); }
   };
-  const actionClass = 'rounded-md px-1.5 py-0.5 text-2xs font-medium hover:bg-surface-2 disabled:opacity-50';
+  const actionClass = 'rounded-md px-2 py-0.5 text-2xs font-medium hover:bg-surface-2 disabled:opacity-50';
   return (
-    <div className="pr-deck-card rounded-lg border border-line px-2.5 py-1.5" data-pr-actions={url}>
+    <div className="pr-deck-card rounded-lg border border-line px-3 py-1" data-pr-actions={url}>
       <div className="pr-action-layout">
       <div className="pr-action-content min-w-0 flex-1">
         <div className="pr-action-heading flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -249,7 +249,7 @@ export function PrPane({ url }: { url: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-xs">
         <span className="shrink-0 text-green-400">⑂</span>
         <span className="truncate font-semibold">{label}</span>
         {loaded && (
@@ -282,7 +282,7 @@ function PrFileDiff({ file }: { file: PrDiff['files'][number] }) {
   const name = file.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || file.path;
   return (
     <div className="border-b border-line">
-      <button className="sticky top-0 z-10 flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs" style={{ background: 'var(--surface-2)' }} onClick={() => setOpen((o) => !o)}>
+      <button className="sticky top-0 z-10 flex w-full items-center gap-2 px-3 py-1 text-left text-xs" style={{ background: 'var(--surface-2)' }} onClick={() => setOpen((o) => !o)}>
         <span className="w-2 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
         <span className="truncate font-medium" title={file.path}>{name}</span>
         {file.status !== 'modified' && <span className="chip text-2xs uppercase">{file.status}</span>}

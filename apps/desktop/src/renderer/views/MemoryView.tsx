@@ -48,12 +48,12 @@ export function MemoryView() {
       <aside className="flex w-72 flex-col border-r border-line">
         <div className="flex items-center justify-between p-4">
           {!hasAppChrome && <h1 className="view-title">Memory</h1>}
-          <button className="btn btn-primary ml-auto px-2.5 py-1.5" onClick={() => setEditing(blank())}><PlusIcon /></button>
+          <button className="btn btn-primary ml-auto px-3 py-1" onClick={() => setEditing(blank())}><PlusIcon /></button>
         </div>
         <div className="px-3">
           <div className="flex rounded-xl p-1" style={{ background: 'var(--surface-2)' }}>
             {(['global', 'workspace'] as MemoryScope[]).map((s) => (
-              <button key={s} onClick={() => setScope(s)} className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${scope === s ? 'bg-surface' : 'text-ink-faint'}`}>
+              <button key={s} onClick={() => setScope(s)} className={`flex-1 rounded-lg py-1 text-xs font-medium ${scope === s ? 'bg-surface' : 'text-ink-faint'}`}>
                 {s}
               </button>
             ))}

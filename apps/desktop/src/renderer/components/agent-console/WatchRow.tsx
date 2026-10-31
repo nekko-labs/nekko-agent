@@ -38,7 +38,7 @@ export function WatchClockChip({ call, result }: { call: ToolCall; result?: Tool
   const clock = watchClock(parsed, view, now);
   if (!clock) return null;
   return (
-    <span className={`shrink-0 rounded border px-1.5 py-0.5 text-2xs font-normal tabular-nums ${TONE[clock.tone]}`} title={clock.title} aria-label={clock.title} data-watch-clock={clock.tone}>
+    <span className={`shrink-0 rounded border px-2 py-0.5 text-2xs font-normal tabular-nums ${TONE[clock.tone]}`} title={clock.title} aria-label={clock.title} data-watch-clock={clock.tone}>
       {clock.text}
     </span>
   );
@@ -60,7 +60,7 @@ export function WatchDetail({ call, result }: { call: ToolCall; result?: ToolRes
   const parsed = parseWatchCall(call, result);
   const pr = prLabel(parsed.url);
   return (
-    <div className="space-y-1.5 py-1">
+    <div className="space-y-1 py-1">
       {pr && parsed.url && <div className="text-ink-soft">Watching <a className="underline" href={parsed.url} target="_blank" rel="noreferrer">{pr.full}</a></div>}
       {parsed.prompt && <>
         <div className="text-ink-soft">When it fires</div>
@@ -82,14 +82,14 @@ export function WatchWakeRow({ content, createdAt }: { content: string; createdA
   const then = thenSummary(wake.prompt);
   return (
     <div className="fade-in font-mono text-xs" data-watch-wake>
-      <button className="flex w-full items-center gap-1.5 py-0.5 text-left text-ink-faint hover:text-ink-soft" onClick={() => setOpen((o) => !o)} aria-expanded={open} title="Automated watch wake-up, not a message from you">
+      <button className="flex w-full items-center gap-2 py-0.5 text-left text-ink-faint hover:text-ink-soft" onClick={() => setOpen((o) => !o)} aria-expanded={open} title="Automated watch wake-up, not a message from you">
         <span className="w-3 shrink-0 text-2xs">{open ? '▾' : '▸'}</span>
         <WatchIcon />
         <span className="min-w-0 truncate font-medium text-ink-soft">Watch triggered · {wake.trigger}{wake.detail ? ` (${wake.detail})` : ''}</span>
         {createdAt > 0 && <span className="ml-auto shrink-0 text-2xs tabular-nums" title={fmtDateTime(createdAt)}>{fmtTime(createdAt)}</span>}
       </button>
-      <WatchThen text={then} className="pl-[38px]" />
-      {open && <pre className="ml-[18px] mt-1 max-h-72 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-faint">{content}</pre>}
+      <WatchThen text={then} className="pl-10" />
+      {open && <pre className="ml-5 mt-1 max-h-72 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-faint">{content}</pre>}
     </div>
   );
 }

@@ -103,7 +103,7 @@ export function ProviderLimitsDock({ standalone = false }: { standalone?: boolea
         aria-expanded={open}
         title={open ? 'Collapse provider capacity' : 'Show capacity across every provider'}
       >
-        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Capacity
           <span className="chip text-2xs">{rows.length}</span>
@@ -122,7 +122,7 @@ export function ProviderLimitsDock({ standalone = false }: { standalone?: boolea
       </button>
 
       {open && (
-        <div className="mt-2.5 space-y-2">
+        <div className="mt-2 space-y-2">
           {rows.map(({ provider, limits, answered: settled }) => (
             <ProviderRow key={provider.id} provider={provider} email={accountEmailOf(provider, accountEmails)} limits={limits} answered={settled} />
           ))}
@@ -186,7 +186,7 @@ function ProviderRow({
 
   return (
     <div>
-      <div className="flex items-baseline gap-1.5">
+      <div className="flex items-baseline gap-2">
         <span className="min-w-0 flex-1 truncate font-medium text-ink-soft" title={email ? `${provider.label} · ${email}` : provider.label}>
           {provider.label}
           {email && <span className="font-normal text-ink-faint" data-account-email> · {email}</span>}
@@ -206,7 +206,7 @@ function ProviderRow({
           {windows.map((w) => {
             const tone = toneFor(w.status, w.usedPercent);
             return (
-              <div key={w.id} className="flex items-center gap-1.5">
+              <div key={w.id} className="flex items-center gap-2">
                 <span className="w-20 shrink-0 truncate text-2xs text-ink-faint" title={w.label}>
                   {w.label}
                 </span>

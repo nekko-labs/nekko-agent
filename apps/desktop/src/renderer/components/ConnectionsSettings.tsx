@@ -142,7 +142,7 @@ export function ConnectionsSettings({ settings, update }: {
         </div>
       ))}
       <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
-        <button className="btn btn-outline py-1.5 text-xs" onClick={() => void clear()}>Clear connection logs</button>
+        <button className="btn btn-outline py-1 text-xs" onClick={() => void clear()}>Clear connection logs</button>
         <span className="text-2xs text-ink-faint">Kept in logs/connections.log, at most about 6 MB.</span>
       </div>
     </section>

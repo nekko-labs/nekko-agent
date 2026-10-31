@@ -189,11 +189,11 @@ export function PromptAnalyzer({
   };
 
   const details = (
-    <div className="space-y-2 p-2.5 text-xs">
+    <div className="space-y-2 p-3 text-xs">
       {/* What this prompt will reference — mentioned projects + their context. */}
       {refCount > 0 && (
-        <div className="space-y-1.5">
-          <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <div className="space-y-1">
+          <p className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
             <FolderIcon className="h-3 w-3" /> Will reference
           </p>
           {mentionedIds.map((id) => {
@@ -201,9 +201,9 @@ export function PromptAnalyzer({
             if (!entry) return null;
             return (
               <div key={id} className="rounded-lg border border-line p-2" style={{ background: 'var(--surface-2)' }}>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <span
-                    className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-2xs font-medium"
+                    className="inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-2xs font-medium"
                     style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
                   >
                     <FolderIcon className="h-3 w-3" />{baseName(entry.folder.path) || entry.folder.name}
@@ -212,11 +212,11 @@ export function PromptAnalyzer({
                 </div>
                 {entry.active ? (
                   entry.refs.length > 0 ? (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
+                    <div className="mt-1 flex flex-wrap gap-1">
                       {entry.refs.map((r, i) => (
                         <span
                           key={i}
-                          className="inline-flex items-center gap-1 rounded-full border border-line px-1.5 py-0.5 text-2xs text-ink-soft"
+                          className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-2xs text-ink-soft"
                           title={REF_META[r.kind].label}
                         >
                           <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: REF_META[r.kind].color }} />
@@ -299,7 +299,7 @@ export function PromptAnalyzer({
       {a.findings.length > 0 ? (
         <ul className="space-y-1">
           {[...a.findings].sort((x, y) => SEV_ORDER[x.severity] - SEV_ORDER[y.severity]).map((f, i) => (
-            <li key={i} className="flex items-start gap-1.5">
+            <li key={i} className="flex items-start gap-2">
               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: SEVERITY_COLOR[f.severity] }} />
               <span className="text-ink-soft">{f.message}</span>
             </li>
@@ -358,7 +358,7 @@ export function PromptAnalyzer({
         </button>
         {open && anchor && createPortal(
           <div ref={popRef} role="dialog" aria-label="Prompt suggestions" className="card fixed z-[100] max-h-[60vh] w-[480px] max-w-[calc(100vw-16px)] overflow-y-auto shadow-(--shadow-float)" style={{ left: anchor.left, bottom: anchor.bottom, background: 'var(--paper)' }}>
-            <div className="flex items-center gap-2 border-b border-line px-2.5 py-1.5 text-2xs text-ink-soft">
+            <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-2xs text-ink-soft">
               <GradeBadge grade={a.grade} />
               <span>{present}/{a.parts.length} parts</span>
               {refCount > 0 && <span className="flex items-center gap-1 text-accent"><FolderIcon className="h-3 w-3" />{refCount}</span>}
@@ -376,7 +376,7 @@ export function PromptAnalyzer({
     <div className={`collapse-wrap ${active ? '' : 'collapsed'}`} aria-hidden={!active}>
       <div className="min-h-0 overflow-hidden">
         <div className="mx-auto mb-2 w-full max-w-3xl">
-      <div className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1 text-2xs" style={{ background: 'var(--surface-2)' }}>
+      <div className="flex items-center gap-2 rounded-lg border border-line px-3 py-1 text-2xs" style={{ background: 'var(--surface-2)' }}>
         <GradeBadge grade={a.grade} />
         <button onClick={() => setOpen((o) => !o)} className="flex flex-1 items-center gap-2 text-left text-ink-soft">
           <span>{present}/{a.parts.length} parts</span>

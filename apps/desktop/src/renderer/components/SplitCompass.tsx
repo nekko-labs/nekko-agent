@@ -192,7 +192,7 @@ export function SplitCompass({
       {open && createPortal(
         <div
           ref={panel}
-          className="card fixed z-50 p-2.5 shadow-(--shadow-float)"
+          className="card fixed z-50 p-3 shadow-(--shadow-float)"
           // Opaque, unlike the cards that sit on a page: this one floats over a
           // conversation, and a translucent panel would read the chat's text
           // straight through the compass.
@@ -212,7 +212,7 @@ export function SplitCompass({
             </>
           ) : (
             <>
-              <div className="mb-1.5 flex items-center gap-1 px-0.5">
+              <div className="mb-1 flex items-center gap-1 px-0.5">
                 <button
                   className="rounded-sm p-0.5 text-ink-faint hover:text-ink"
                   title="Pick a different side"
@@ -226,7 +226,7 @@ export function SplitCompass({
               {offered.map(({ kind: k, label, hint, Icon }) => (
                 <button
                   key={k}
-                  className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface-2"
+                  className="flex w-full items-start gap-2 rounded-lg px-2 py-1 text-left hover:bg-surface-2"
                   onClick={() => {
                     onSplit(dir, k);
                     close();

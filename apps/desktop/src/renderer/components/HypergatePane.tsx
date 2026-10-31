@@ -54,7 +54,7 @@ export function HypergatePane({ url }: { url: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1">
         <ShieldIcon className="h-3.5 w-3.5 text-accent" />
         <span className="text-xs font-medium">Hypergate</span>
         {hypergate && (

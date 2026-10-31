@@ -10,7 +10,7 @@ import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js
 
 function StepMark({ status, paused }: { status: PlanStep['status']; paused: boolean }) {
   const label = status === 'active' ? (paused ? 'Paused' : 'Working') : status === 'done' ? 'Done' : status === 'skipped' ? 'Skipped' : 'Pending';
-  return <span className="mt-[3px] grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={label} title={label}>
+  return <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={label} title={label}>
     {status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
       <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: status === 'active' ? 'var(--accent)' : 'var(--ink-faint)' }}>
         {status === 'active' ? (paused ? <path d="M8 5v14M16 5v14" /> : <path d="M12 3v3m6.36-.36-2.12 2.12M21 12h-3m.36 6.36-2.12-2.12M12 21v-3m-6.36.36 2.12-2.12M3 12h3m-.36-6.36 2.12 2.12" />) : <>

@@ -76,7 +76,7 @@ export function ArtifactsView() {
           <span className="ml-auto text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
         </div>
         <div className="space-y-2 px-3 pb-2">
-          <input className="input rounded-lg px-2.5 py-1.5 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter artifacts" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter artifacts" value={query} onChange={(e) => setQuery(e.target.value)} />
           <label className="flex items-center gap-2 text-2xs text-ink-faint">
             <input type="checkbox" checked={includeCompleted} onChange={(e) => setIncludeCompleted(e.target.checked)} /> Include completed chats
           </label>
@@ -91,13 +91,13 @@ export function ArtifactsView() {
             <section key={kind.id} className="mb-2" data-artifact-kind={kind.id} aria-label={kind.label}>
               <h2 className="flex items-center gap-2 px-2 pb-1 pt-2 text-xs font-semibold text-ink">
                 {kind.label}
-                <span className="rounded-full bg-surface-2 px-1.5 text-2xs font-normal tabular-nums text-ink-faint">{items.length}</span>
+                <span className="rounded-full bg-surface-2 px-2 text-2xs font-normal tabular-nums text-ink-faint">{items.length}</span>
               </h2>
               {items.map((e) => {
                 const active = selected?.path === e.path;
                 return (
                   <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
-                    <button type="button" className="flex w-full min-w-0 items-start gap-2.5 px-2 py-1.5 text-left" onClick={() => setSelected(e)} title={e.path}>
+                    <button type="button" className="flex w-full min-w-0 items-start gap-3 px-2 py-1 text-left" onClick={() => setSelected(e)} title={e.path}>
                       <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-2xs font-semibold uppercase text-ink-faint" aria-hidden>
                         {e.filename.split('.').pop()?.slice(0, 4)}
                       </span>
@@ -117,15 +117,15 @@ export function ArtifactsView() {
       <section className="flex min-w-0 flex-1 flex-col">
         {selected ? (
           <>
-            <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{selected.title}</p>
                 <p className="truncate font-mono text-2xs text-ink-faint" title={selected.path}>{selected.path}</p>
               </div>
-              <button type="button" className="btn btn-primary gap-1.5 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Focused view`}>
+              <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Focused view`}>
                 <FocusLayoutIcon className="h-3.5 w-3.5" /> Open chat
               </button>
-              <button type="button" className="btn btn-outline gap-1.5 py-1 text-xs" onClick={() => window.nekko.openPath(selected.path)} title="Open with the system's default app">
+              <button type="button" className="btn btn-outline gap-2 py-1 text-xs" onClick={() => window.nekko.openPath(selected.path)} title="Open with the system's default app">
                 <ExternalIcon className="h-3.5 w-3.5" /> Open file
               </button>
             </div>

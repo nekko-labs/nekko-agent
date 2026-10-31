@@ -71,7 +71,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
             </div>
             <button type="button" className="btn btn-primary shrink-0" onClick={copy} data-testid="feedback-copy">{copied ? 'Copied' : 'Copy prompt'}</button>
           </div>
-          <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-md border border-line px-2 py-1.5 font-mono text-2xs text-ink-faint" aria-label="Prompt that will be copied">{prompt}</pre>
+          <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded-md border border-line px-2 py-1 font-mono text-2xs text-ink-faint" aria-label="Prompt that will be copied">{prompt}</pre>
         </section>
 
         <section className="flex flex-col gap-2 rounded-lg border border-line p-3" aria-labelledby="feedback-note">
@@ -92,7 +92,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                 onChange={e => setNote(e.target.value)}
                 data-testid="feedback-text"
               />
-              <label className="flex items-start gap-2.5">
+              <label className="flex items-start gap-3">
                 <Toggle value={includeInfo} onChange={setIncludeInfo} label="Include app info" />
                 <span className="text-xs">
                   <span className="font-medium text-ink">Include app info</span>

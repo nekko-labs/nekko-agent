@@ -85,7 +85,7 @@ export function UpgradeNudges({
   if (!rows.length) return null;
   return (
     <div
-      className="mb-3 rounded-xl border p-3.5"
+      className="mb-3 rounded-xl border p-4"
       style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, var(--line))', background: 'color-mix(in srgb, var(--accent) 7%, transparent)' }}
       role="status"
       data-upgrade-nudges
@@ -96,7 +96,7 @@ export function UpgradeNudges({
           Not now
         </button>
       </div>
-      <div className="mt-1.5 space-y-1.5">
+      <div className="mt-1 space-y-1">
         {rows.map(({ n, t }) => {
           const p = t.pick!;
           const state = queued[t.task];
@@ -157,14 +157,14 @@ export function RecommendationList({
           const have = isDownloaded(p, models);
           const state = queued[t.task];
           return (
-            <div key={t.task} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5" data-recommendation={t.task}>
+            <div key={t.task} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-recommendation={t.task}>
               <div className="w-[118px] shrink-0 text-xs text-ink-faint">{t.label}</div>
               <div className="min-w-[180px] flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium">{p.name}</span>
                   <span className="chip" title={`${p.repo}: ${p.files.join(', ')}`}>{p.quant}</span>
                   <span
-                    className="rounded-full px-1.5 py-0.5 text-2xs"
+                    className="rounded-full px-2 py-0.5 text-2xs"
                     style={{
                       background: `color-mix(in srgb, ${p.fit === 'fits' ? 'var(--success)' : 'var(--warning, #d1a054)'} 16%, transparent)`,
                       color: p.fit === 'fits' ? 'var(--success)' : 'var(--warning, #d1a054)',

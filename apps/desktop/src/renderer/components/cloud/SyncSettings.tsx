@@ -81,7 +81,7 @@ export function SyncSettings() {
       {phase === 'needs-plan' && (
         <div className="sync-row">
           <p className="text-sm text-ink-soft">Sync is part of Nekko Cloud Pro and Team. Your chats stay on this computer until then.</p>
-          <button className="btn btn-primary shrink-0 py-1.5! text-xs!" onClick={() => void window.nekko.openPath(PLANS_URL)}>See plans</button>
+          <button className="btn btn-primary shrink-0 py-1! text-xs!" onClick={() => void window.nekko.openPath(PLANS_URL)}>See plans</button>
         </div>
       )}
 
@@ -163,12 +163,12 @@ function JoinOptions({ busy, act }: { busy: boolean; act: (label: string, work: 
         <div className="rounded-xl border border-line p-3">
           <div className="text-sm font-medium">Use my recovery key</div>
           <textarea className="input mt-2 h-16 w-full resize-none font-mono text-xs" placeholder="XXXXX-XXXXX-…" value={key} onChange={(e) => setKey(e.target.value)} spellCheck={false} aria-label="Recovery key" data-testid="sync-restore-key" />
-          <button className="btn btn-primary mt-2 w-full py-1.5! text-xs!" disabled={busy || key.replace(/[\s-]/g, '').length < 55} onClick={() => void act('restore', () => window.nekko.syncRestore(key))} data-testid="sync-restore">Unlock</button>
+          <button className="btn btn-primary mt-2 w-full py-1! text-xs!" disabled={busy || key.replace(/[\s-]/g, '').length < 55} onClick={() => void act('restore', () => window.nekko.syncRestore(key))} data-testid="sync-restore">Unlock</button>
         </div>
         <div className="rounded-xl border border-line p-3">
           <div className="text-sm font-medium">Approve from another device</div>
           <p className="mt-2 text-xs text-ink-faint">We'll show a code here. Approve this computer on a device that already syncs, after checking the code matches.</p>
-          <button className="btn btn-outline mt-2 w-full py-1.5! text-xs!" disabled={busy} onClick={() => void act('join', () => window.nekko.syncRequestJoin())} data-testid="sync-request-join">Ask to join</button>
+          <button className="btn btn-outline mt-2 w-full py-1! text-xs!" disabled={busy} onClick={() => void act('join', () => window.nekko.syncRequestJoin())} data-testid="sync-request-join">Ask to join</button>
         </div>
       </div>
     </div>
@@ -184,9 +184,9 @@ function Devices({ devices, pending, busy, act }: { devices: SyncDevice[]; pendi
       {pending.length > 0 && (
         <p className="mt-2 text-xs text-ink-soft">A device is waiting to join. Approve it only if it's yours: type the code its screen shows.</p>
       )}
-      <ul className="mt-2 space-y-1.5" data-testid="sync-devices">
+      <ul className="mt-2 space-y-1" data-testid="sync-devices">
         {live.filter((d) => d.trusted || d.thisDevice || d.askedToJoin).map((d) => (
-          <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-surface-2">
+          <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-2 py-1 hover:bg-surface-2">
             <div className="min-w-0">
               <div className="truncate text-sm text-ink">{d.label ?? 'Device'}{d.thisDevice && <span className="ml-2 text-2xs text-ink-faint">this computer</span>}</div>
               <div className="font-mono text-2xs tracking-wider text-ink-faint">{d.fingerprint}</div>

@@ -97,7 +97,7 @@ const UNSAMPLED = "Waiting for this Mac's first reading.";
 /** A Mac without VM support is never sampled: its error says why, where waiting would never end. */
 const Unsampled = ({ error }: { error: string | null }) => <span className="text-xs text-ink-faint">{error ?? UNSAMPLED}</span>;
 
-const Val = ({ children }: { children: React.ReactNode }) => <span className="ml-2.5 whitespace-nowrap font-mono text-xs text-ink-soft">{children}</span>;
+const Val = ({ children }: { children: React.ReactNode }) => <span className="ml-3 whitespace-nowrap font-mono text-xs text-ink-soft">{children}</span>;
 
 const PRIORITIES: Priority[] = ['doNotDisturb', 'balanced', 'runnerFirst'];
 const KEEP_AWAKE: KeepAwake[] = ['systemDefault', 'whileActive', 'always'];
@@ -124,11 +124,11 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
   const jobChoices = MAX_JOB_CHOICES.includes(draft.maxJobMinutes) ? MAX_JOB_CHOICES : [...MAX_JOB_CHOICES, draft.maxJobMinutes];
 
   return (
-    <div className="flex flex-col gap-3.5 p-5">
+    <div className="flex flex-col gap-4 p-5">
       <h2 className="text-base font-semibold text-ink">Runner settings · This Mac</h2>
 
       <Row label="Runner">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <Toggle value={enabled} disabled={toggling} onChange={onEnabled} label="Runner on" />
           <span className="text-xs text-ink-faint">{enabled ? 'On. Turning off stops and deletes any running VM.' : 'Off.'}</span>
         </div>
@@ -213,12 +213,12 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
       </Row>
       <Row label="Disk" hint="images and clones">
         <div className="flex flex-wrap items-center gap-3 text-sm text-ink">
-          <label className="flex items-center gap-1.5">
+          <label className="flex items-center gap-2">
             Image budget
             <input type="number" className="input w-24" min={50} max={4000} value={draft.diskBudgetGb} onChange={(e) => set('diskBudgetGb', Number(e.target.value))} />
             GB
           </label>
-          <label className="flex items-center gap-1.5">
+          <label className="flex items-center gap-2">
             Keep free
             <input type="number" className="input w-20" min={10} max={1000} value={draft.diskFloorGb} onChange={(e) => set('diskFloorGb', Number(e.target.value))} />
             GB
@@ -226,7 +226,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
         </div>
       </Row>
       <Row label="Only when">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Check label="On power" checked={draft.onlyOnPower} onChange={(v) => set('onlyOnPower', v)} />
           <Check label="Trusted networks" checked={draft.trustedNetworksOnly} onChange={(v) => set('trustedNetworksOnly', v)} />
           <Check label="Never on hotspots" checked={draft.neverOnHotspot} onChange={(v) => set('neverOnHotspot', v)} />
@@ -244,7 +244,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
           ))}
         </ul>
         {trustNetwork(draft, host) !== draft && (
-          <button type="button" className="btn btn-outline mt-1.5 py-1! text-xs" onClick={() => onDraft(trustNetwork(draft, host))}>Trust this network</button>
+          <button type="button" className="btn btn-outline mt-1 py-1! text-xs" onClick={() => onDraft(trustNetwork(draft, host))}>Trust this network</button>
         )}
       </Row>
       <Row label="Safety">
@@ -255,7 +255,7 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
       </Row>
 
       {/* Sticky: the sheet is taller than a laptop window, and Save must stay in reach. */}
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center gap-2 border-t bg-surface px-5 pt-3.5 pb-5" style={{ borderColor: 'var(--line)' }}>
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center gap-2 border-t bg-surface px-5 pt-3 pb-5" style={{ borderColor: 'var(--line)' }}>
         <button type="button" className="btn btn-outline text-[var(--danger)]" disabled={saving} onClick={onRemove}>Remove runner</button>
         <button type="button" className="btn btn-outline ml-auto" onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-primary" disabled={saving} onClick={onSave}>{saving ? 'Saving…' : 'Save'}</button>

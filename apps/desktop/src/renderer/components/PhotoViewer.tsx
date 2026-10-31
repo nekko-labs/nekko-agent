@@ -40,7 +40,7 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
   }, [many, go]);
 
   const caption = item.alt || (item.url ? imageHost(item.url) : 'Image');
-  const pill = 'flex min-h-9 items-center gap-1.5 rounded-full bg-surface px-3.5 py-1.5 text-sm font-medium text-ink shadow-(--shadow-float) hover:bg-surface-2 disabled:opacity-50';
+  const pill = 'flex min-h-9 items-center gap-2 rounded-full bg-surface px-4 py-1 text-sm font-medium text-ink shadow-(--shadow-float) hover:bg-surface-2 disabled:opacity-50';
 
   return (
     <Modal title={many ? `Photo ${index + 1} of ${items.length}: ${caption}` : caption} onClose={onClose} scrim="rgba(0,0,0,0.78)" overlayClassName="p-4" zIndex={55}>

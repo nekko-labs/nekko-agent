@@ -138,7 +138,7 @@ export function ModelDetail({
             <p className="mt-1 font-mono text-xs text-ink-faint">{model.id}</p>
             {model.summary && <p className="mt-2 max-w-2xl text-sm text-ink-soft">{model.summary}</p>}
 
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-2">
               {model.tags.map((t) => (
                 <span key={t} className="chip">
                   {t}
@@ -167,7 +167,7 @@ export function ModelDetail({
                 const fit = memory ? downloadFitVerdict(q.sizeBytes, memory.budgetBytes) : 'unknown';
                 const isPick = recommended?.label === q.label;
                 return (
-                  <div key={q.label} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-xs">
+                  <div key={q.label} className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
                     <span className="w-24 shrink-0 font-mono font-medium">{q.label}</span>
                     <span className="w-20 shrink-0 tabular-nums text-ink-faint">
                       {q.sizeBytes ? formatBytes(q.sizeBytes) : 'size unknown'}
@@ -175,7 +175,7 @@ export function ModelDetail({
                     <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">{q.note ?? ''}</span>
                     {isPick && (
                       <span
-                        className="shrink-0 rounded-full px-1.5 py-0.5 text-2xs"
+                        className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
                         style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
                         title="The build we suggest for most people"
                       >
@@ -184,7 +184,7 @@ export function ModelDetail({
                     )}
                     {fit !== 'unknown' && !have && (
                       <span
-                        className="shrink-0 rounded-full px-1.5 py-0.5 text-2xs"
+                        className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
                         style={{
                           background: `color-mix(in srgb, ${fit === 'fits' ? 'var(--success)' : fit === 'tight' ? 'var(--warning, #d1a054)' : 'var(--danger)'} 16%, transparent)`,
                           color: fit === 'fits' ? 'var(--success)' : fit === 'tight' ? 'var(--warning, #d1a054)' : 'var(--danger)',
@@ -232,14 +232,14 @@ export function ModelDetail({
             {(model.hfTags?.length ?? 0) > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {model.hfTags!.slice(0, 24).map((t) => (
-                  <span key={t} className="rounded-md px-1.5 py-0.5 font-mono text-2xs text-ink-faint" style={{ background: 'var(--surface-2)' }}>
+                  <span key={t} className="rounded-md px-2 py-0.5 font-mono text-2xs text-ink-faint" style={{ background: 'var(--surface-2)' }}>
                     {t}
                   </span>
                 ))}
               </div>
             )}
             <a
-              className="mt-2 inline-flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink"
+              className="mt-2 inline-flex items-center gap-2 text-xs text-ink-faint hover:text-ink"
               href={`https://huggingface.co/${model.id}`}
               target="_blank"
               rel="noreferrer noopener"
@@ -271,7 +271,7 @@ export function ModelDetail({
 
 function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--surface-2)' }} title={hint}>
+    <div className="rounded-xl px-3 py-2" style={{ background: 'var(--surface-2)' }} title={hint}>
       <p className="text-2xs uppercase tracking-wide text-ink-faint">{label}</p>
       <p className="mt-0.5 text-base font-semibold tabular-nums">{value}</p>
     </div>
@@ -305,7 +305,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 function Markdown({ source }: { source: string }) {
   const blocks = useMemo(() => parseBlocks(source), [source]);
   return (
-    <div className="space-y-2.5 text-sm leading-relaxed text-ink-soft">
+    <div className="space-y-2 text-sm leading-relaxed text-ink-soft">
       {blocks.map((b, i) => {
         if (b.kind === 'code') {
           return (
@@ -321,7 +321,7 @@ function Markdown({ source }: { source: string }) {
         if (b.kind === 'heading') {
           const size = b.level <= 1 ? 'text-base' : b.level === 2 ? 'text-base' : 'text-sm';
           return (
-            <p key={i} className={`${size} pt-1.5 font-semibold text-ink`}>
+            <p key={i} className={`${size} pt-1 font-semibold text-ink`}>
               <Inline text={b.text} />
             </p>
           );

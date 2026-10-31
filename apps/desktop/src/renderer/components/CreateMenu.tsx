@@ -53,7 +53,7 @@ export function CreateMenu({ onCreate, anchorRef }: { onCreate: (kind: CreateKin
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', key); };
   }, [open]);
   return <>
-    <button ref={anchor} type="button" className="btn btn-ghost agent-panel-plus px-1.5 py-1" aria-label="Create new" aria-haspopup="dialog" aria-expanded={open} data-wall-create-toggle onMouseEnter={show} onMouseLeave={leave} onClick={show} onKeyDown={e => { if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); requestAnimationFrame(() => pop.current?.querySelector('button')?.focus()); } }}><PlusIcon className="h-[22px] w-[22px]" /></button>
+    <button ref={anchor} type="button" className="btn btn-ghost agent-panel-plus px-2 py-1" aria-label="Create new" aria-haspopup="dialog" aria-expanded={open} data-wall-create-toggle onMouseEnter={show} onMouseLeave={leave} onClick={show} onKeyDown={e => { if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); requestAnimationFrame(() => pop.current?.querySelector('button')?.focus()); } }}><PlusIcon className="h-[22px] w-[22px]" /></button>
     {open && createPortal(<div ref={pop} role="dialog" aria-label="Create new" data-wall-create-menu className="create-menu card fixed z-[1000] w-max p-1 shadow-(--shadow-float)" style={pos} onMouseEnter={cancel} onMouseLeave={leave} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) close(); }}><CreateMenuRows onCreate={kind => { close(); onCreate(kind); }} /></div>, document.body)}
   </>;
 }

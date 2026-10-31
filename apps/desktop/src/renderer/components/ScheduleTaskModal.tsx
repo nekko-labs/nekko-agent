@@ -86,7 +86,7 @@ export function ScheduleTaskModal({
         {KIND_OPTS.map((o) => (
           <button
             key={o.k}
-            className={`rounded-xl border p-2.5 text-left text-xs transition-colors ${kind === o.k ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2'}`}
+            className={`rounded-xl border p-3 text-left text-xs transition-colors ${kind === o.k ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2'}`}
             onClick={() => setKind(o.k)}
           >
             <div className="text-base">{o.icon}</div>
@@ -127,8 +127,8 @@ export function ScheduleTaskModal({
         <div className="mt-3">
           <label className="block text-2xs font-medium text-ink-faint">Keep alive</label>
           <div className="mt-1 flex gap-2">
-            <button className={`flex-1 rounded-lg border py-1.5 text-xs ${keepAlive === 'forever' ? 'border-accent bg-accent-soft' : 'border-line'}`} onClick={() => setKeepAlive('forever')}>Forever</button>
-            <button className={`flex-1 rounded-lg border py-1.5 text-xs ${keepAlive === 'until' ? 'border-accent bg-accent-soft' : 'border-line'}`} onClick={() => setKeepAlive('until')}>Until a condition</button>
+            <button className={`flex-1 rounded-lg border py-1 text-xs ${keepAlive === 'forever' ? 'border-accent bg-accent-soft' : 'border-line'}`} onClick={() => setKeepAlive('forever')}>Forever</button>
+            <button className={`flex-1 rounded-lg border py-1 text-xs ${keepAlive === 'until' ? 'border-accent bg-accent-soft' : 'border-line'}`} onClick={() => setKeepAlive('until')}>Until a condition</button>
           </div>
           {keepAlive === 'until' && (
             <input className="input mt-2 text-xs" placeholder="Stop when… (e.g. all tests pass)" value={condition} onChange={(e) => setCondition(e.target.value)} />
@@ -151,8 +151,8 @@ export function ScheduleTaskModal({
 
       {blocked && <div className="mt-3"><ClaudeReasonLine message={blocked} /></div>}
       <div className="mt-4 flex justify-end gap-2">
-        <button className="btn btn-ghost py-1.5 text-xs" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary py-1.5 text-xs" disabled={!valid} onClick={create}>Create task</button>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary py-1 text-xs" disabled={!valid} onClick={create}>Create task</button>
       </div>
     </Modal>
   );

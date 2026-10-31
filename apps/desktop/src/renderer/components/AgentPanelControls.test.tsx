@@ -62,7 +62,7 @@ describe('wall chrome fixes', () => {
     expect(cssRule(styles, '.wall-composer.panel').overflow).toBe('visible');
     expect(cssRule(styles, '.wall-composer-side[data-edge="left"]').left).toBe('-14px');
     expect(cssRule(styles, '.wall-composer-side[data-edge="right"]').right).toBe('-14px');
-    expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe(cssValue('calc(-1 * var(--wall-gap))'));
+    expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe(cssValue('calc(-1 * var(--pane-gap))'));
   });
   it('reserves snap-to-grid space so revealing it never shifts the controls beside it', () => {
     const hidden = cssRule(styles, '.wall-auto-arrange');

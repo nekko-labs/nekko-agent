@@ -58,7 +58,7 @@ export function AddressField({
 
   if (editing) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <input
           className="input flex-1 py-1 font-mono text-2xs"
           value={value}
@@ -93,7 +93,7 @@ export function AddressField({
     <div className="flex items-center gap-1">
       <code className="flex-1 truncate font-mono text-2xs text-ink-faint">{provider.baseUrl}</code>
       <button
-        className="btn btn-ghost px-1.5 py-1"
+        className="btn btn-ghost px-2 py-1"
         onClick={copy}
         title={copied ? 'Copied' : 'Copy this address'}
         aria-label="Copy address"
@@ -107,7 +107,7 @@ export function AddressField({
         )}
       </button>
       <button
-        className="btn btn-ghost px-1.5 py-1"
+        className="btn btn-ghost px-2 py-1"
         onClick={() => setEditing(true)}
         title="Change this address"
         aria-label="Edit address"

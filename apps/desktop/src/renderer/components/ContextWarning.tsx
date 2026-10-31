@@ -133,7 +133,7 @@ export function ContextWarning({
       role={running ? 'status' : 'alert'}
       aria-live="polite"
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-3">
         <WarningIcon className={`mt-0.5 h-4 w-4 shrink-0 ${isCritical ? 'text-(--danger)' : 'text-ink-faint'}`} />
         <div className="min-w-0 flex-1">
           <p className="font-medium text-ink">{running ? 'Compacting this chat' : 'Context window is getting full'}</p>
@@ -165,7 +165,7 @@ export function ContextWarning({
               <p className="mt-1 text-2xs tabular-nums text-ink-faint">{steps.label}</p>
             </div>
           )}
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             {running ? (
               <>
                 {progress.target !== 'new' && (

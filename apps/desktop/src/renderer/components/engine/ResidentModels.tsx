@@ -104,12 +104,12 @@ export function ResidentModels({
       </div>
 
       {resident.length === 0 && loadingRows.length === 0 ? (
-        <p className="mt-1.5 text-xs text-ink-faint">
+        <p className="mt-1 text-xs text-ink-faint">
           Load a model below, or let one load itself when a request arrives
           {settings.jitLoad ? '' : ' (load-on-demand is off)'}.
         </p>
       ) : (
-        <div className="mt-2 space-y-1.5">
+        <div className="mt-2 space-y-1">
           {loadingRows.map((l) => (
             <LoadingRow key={l.id} load={l} name={byId.get(l.id)?.name ?? l.id} elapsedMs={now - l.startedAt} />
           ))}
@@ -128,9 +128,9 @@ export function ResidentModels({
                   else rowRefs.current.delete(r.id);
                 }}
               >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-2.5 py-2 text-xs" style={{ borderColor: 'var(--line)' }}>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--line)' }}>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--success)' }} />
                     <span className="truncate font-medium">{model?.name ?? r.id}</span>
                     {model?.modality && model.modality !== 'chat' && (
@@ -148,7 +148,7 @@ export function ResidentModels({
                       .join(' · ')}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 items-center gap-2">
                   {/* Where the weights live is the first thing to know about a
                       running model: all-GPU is fast, partly CPU much less so. */}
                   {r.loadedOn && (
@@ -236,8 +236,8 @@ function formatAge(ms: number): string {
 function LoadingRow({ load, name, elapsedMs }: { load: LoadingModel; name: string; elapsedMs: number }) {
   const pct = load.progress === undefined ? null : Math.round(load.progress * 100);
   return (
-    <div className="rounded-lg border px-2.5 py-2 text-xs" style={{ borderColor: 'var(--line)' }}>
-      <div className="flex items-center gap-1.5">
+    <div className="rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--line)' }}>
+      <div className="flex items-center gap-2">
         <span
           className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
           style={{ background: 'var(--accent)' }}
@@ -249,7 +249,7 @@ function LoadingRow({ load, name, elapsedMs }: { load: LoadingModel; name: strin
       </div>
       {load.phase === 'loading' && (
         <div
-          className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full"
+          className="mt-1 h-1.5 w-full overflow-hidden rounded-full"
           style={{ background: 'color-mix(in srgb, var(--ink-faint) 15%, transparent)' }}
           role="progressbar"
           aria-valuenow={pct ?? undefined}

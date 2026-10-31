@@ -84,7 +84,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
       </PaneMetadata>
       {paused && (
         <div
-          className="mb-2 flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs"
+          className="mb-2 flex items-center gap-2 rounded-lg border px-3 py-1 text-xs"
           style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
           role="status"
         >
@@ -103,8 +103,8 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
             const st = taskState(t, running, now);
             const ran = runPolicyNote(t.lastRunLowPriority, t.lastRunWaitedMs);
             return (
-              <div key={t.id} className="group px-4 py-2.5" data-task-row={t.id}>
-                <div className="flex items-center gap-2.5">
+              <div key={t.id} className="group px-4 py-2" data-task-row={t.id}>
+                <div className="flex items-center gap-3">
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm" style={{ background: 'var(--surface-2)' }} title={meta.label}>{meta.icon}</span>
                   <button
                     className="min-w-0 truncate text-left text-sm font-medium enabled:hover:text-accent"
@@ -116,7 +116,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
                   </button>
                   <span className="shrink-0 text-2xs text-ink-faint">{taskCadence(t)}</span>
                   <span
-                    className="ml-auto flex shrink-0 items-center gap-1.5 tabular-nums text-xs font-medium"
+                    className="ml-auto flex shrink-0 items-center gap-2 tabular-nums text-xs font-medium"
                     style={{ color: st.color }}
                     data-task-state
                     title={t.waitingSince ? `Due ${relTime(now - t.waitingSince)}. It runs once nobody is using this computer, or after 2 hours. Run now starts it at once.` : undefined}
@@ -136,7 +136,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
                     <button className="rounded-sm p-1 text-ink-faint hover:text-red-400" title="Delete automation" onClick={() => window.nekko.deleteTask(t.id)}><TrashIcon className="h-3.5 w-3.5" /></button>
                   </span>
                 </div>
-                <div className="mt-0.5 flex items-baseline gap-2 pl-[34px] text-xs text-ink-faint">
+                <div className="mt-0.5 flex items-baseline gap-2 pl-9 text-xs text-ink-faint">
                   {t.runCount > 0 && <span className="shrink-0 tabular-nums">{t.runCount} run{t.runCount === 1 ? '' : 's'}{t.lastRunAt ? ` · last ${relTime(now - t.lastRunAt)}` : ''}{ran ? ` · ${ran}` : ''}</span>}
                   {t.lastResult && <span className="min-w-0 truncate text-ink-soft" title={t.lastResult}>{t.lastResult}</span>}
                 </div>

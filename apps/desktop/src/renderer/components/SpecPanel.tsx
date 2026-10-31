@@ -111,7 +111,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
 
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between">
+      <div className="mb-1 flex items-center justify-between">
         <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Spec-driven dev</span>
         {docs && docs.some((d) => d.exists) && (
           <button
@@ -164,15 +164,15 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
           {/* Artifact rows. The name is always a link: a doc that exists opens
               in the file pane, and one that doesn't says so rather than being a
               dead control you can't tell apart from a live one. */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {(docs ?? methodology.docs.map((d) => ({ ...d, path: '', exists: false, content: '' }))).map((d) => (
               <div
                 key={d.id}
-                className={`rounded-lg border px-2.5 py-2 ${d.exists ? 'border-accent/40 bg-accent/5' : 'border-line'}`}
+                className={`rounded-lg border px-3 py-2 ${d.exists ? 'border-accent/40 bg-accent/5' : 'border-line'}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <button
-                    className="group flex min-w-0 items-center gap-1.5 text-left"
+                    className="group flex min-w-0 items-center gap-2 text-left"
                     onClick={() => (d.exists ? open(d.path) : build(d.id))}
                     disabled={!d.exists && !!busy}
                     title={d.exists ? `Open ${d.path}` : `Not created yet — click to write ${d.filename} from this chat`}
@@ -218,7 +218,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
           {tasks.length > 0 && (
             <div className="mt-3">
               <button
-                className="mb-1.5 flex w-full items-center justify-between text-2xs font-semibold uppercase tracking-wide text-ink-faint"
+                className="mb-1 flex w-full items-center justify-between text-2xs font-semibold uppercase tracking-wide text-ink-faint"
                 onClick={() => setShowTasks((v) => !v)}
               >
                 <span>Tasks · {doneCount}/{tasks.length}</span>
@@ -235,7 +235,7 @@ function HostSpecPanel({ sessionId, session }: { sessionId: string; session: Ses
                   {tasks.map((t) => (
                     <label
                       key={t.line}
-                      className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2"
+                      className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1 hover:bg-surface-2"
                     >
                       <input
                         type="checkbox"
@@ -348,19 +348,19 @@ function GuidelineDocs({ workspacePath, onOpen }: { workspacePath?: string; onOp
 
   return (
     <div className="mt-3">
-      <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Create missing instructions</p>
-      <div className="space-y-1.5">
+      <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Create missing instructions</p>
+      <div className="space-y-1">
         {rows.map((g) => {
           const exists = present?.has(g.filename) ?? false;
           const path = join(g.filename);
           return (
             <div
               key={g.filename}
-              className={`rounded-lg border px-2.5 py-2 ${exists ? 'border-accent/40 bg-accent/5' : 'border-line'}`}
+              className={`rounded-lg border px-3 py-2 ${exists ? 'border-accent/40 bg-accent/5' : 'border-line'}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <button
-                  className="group flex min-w-0 items-center gap-1.5 text-left"
+                  className="group flex min-w-0 items-center gap-2 text-left"
                   onClick={() => (exists ? onOpen(path) : create(g))}
                   disabled={!exists && !!busy}
                   title={exists ? `Open ${path}` : `Not created yet — click to start ${g.filename}`}

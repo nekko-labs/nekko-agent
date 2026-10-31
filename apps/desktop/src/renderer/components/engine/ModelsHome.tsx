@@ -95,7 +95,7 @@ export function ModelsHome({
             const smallest = f.local.slice().sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
             const sizes = f.catalog.flatMap(m => m.quants.map(q => q.sizeBytes ?? 0)).filter(Boolean);
             const fit = gpuGuidance(smallest?.sizeBytes ?? (sizes.length ? Math.min(...sizes) : undefined), memory, smallest);
-            return <button key={f.key} className="flex w-full items-start gap-2 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2" style={{ background: selected?.key === f.key ? 'var(--accent-soft)' : undefined }} aria-pressed={selected?.key === f.key} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
+            return <button key={f.key} className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-2" style={{ background: selected?.key === f.key ? 'var(--accent-soft)' : undefined }} aria-pressed={selected?.key === f.key} onClick={() => { setSelectedKey(f.key); setRepoId(null); }}>
               <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium">{f.name}</p><p className="mt-0.5 text-2xs text-ink-faint">{f.local.length ? `${f.local.length} downloaded · ` : ''}{f.catalog.length} source{f.catalog.length === 1 ? '' : 's'}</p><p className="mt-1 text-2xs text-ink-soft" title={smallest ? 'Planner result for the smallest downloaded variant' : 'Estimate from file size, not a measured context limit'}>{fit}{!smallest && memory?.kind !== 'ram' && fit !== 'GPU fit unknown' ? ' (estimated)' : ''}</p></div>
               {f.local.length > 0 && <span className="shrink-0 text-success" aria-label="Downloaded"><CheckIcon className="h-4 w-4" /></span>}
             </button>;

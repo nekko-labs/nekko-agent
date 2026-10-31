@@ -77,7 +77,7 @@ const Field = ({ label, hint, children }: { label: string; hint?: React.ReactNod
 
 const Choice = ({ name, checked, onChange, title, description }: { name: string; checked: boolean; onChange(): void; title: string; description?: string }) => (
   <label
-    className="flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5"
+    className="flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2"
     style={{ borderColor: checked ? 'var(--accent)' : 'var(--line)', background: checked ? 'var(--accent-soft)' : 'var(--surface)' }}
   >
     <input type="radio" name={name} className="mt-0.5" checked={checked} onChange={onChange} />
@@ -103,9 +103,9 @@ export function ConnectBody({
   const label = form.label.trim() || DEFAULT_RUNNER_LABEL;
   const scope = form.target.trim() || (form.kind === 'repo' ? 'This repo' : 'This org');
   return (
-    <div className="flex flex-col gap-3.5 p-5">
+    <div className="flex flex-col gap-4 p-5">
       <h2 className="text-base font-semibold text-ink">Connect GitHub</h2>
-      <ol className="flex flex-wrap gap-1.5 text-xs">
+      <ol className="flex flex-wrap gap-2 text-xs">
         {STEPS.map((s, i) => {
           const n = (i + 1) as ConnectStep;
           return (

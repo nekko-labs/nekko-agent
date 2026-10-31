@@ -18,7 +18,7 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
     {watches.map(w => {
       const clock = watchClock({ action: 'create', kind: w.kind, prompt: '' }, w, now);
       return <details key={w.id} className="min-w-0 max-w-full rounded-lg border border-line px-2 py-1">
-        <summary className="flex cursor-pointer flex-wrap items-center gap-1.5" title={clock?.title}>
+        <summary className="flex cursor-pointer flex-wrap items-center gap-2" title={clock?.title}>
           <WatchIcon />{owner && <span className="max-w-40 truncate" title={owner}>{owner} ·</span>}<span>{w.kind === 'pr' ? 'PR watcher' : 'Timer watcher'}</span>
           <span>{clock?.text ?? 'Status unavailable'}</span>
         </summary>

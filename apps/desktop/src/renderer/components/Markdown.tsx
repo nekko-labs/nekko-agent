@@ -170,7 +170,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
       <button
         onClick={copy}
         title="Copy code"
-        className="absolute right-2 top-2 rounded-md border border-line px-1.5 py-0.5 text-2xs text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+        className="absolute right-2 top-2 rounded-md border border-line px-2 py-0.5 text-2xs text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
         style={{ background: 'var(--surface)' }}
       >
         {copied ? '✓ copied' : 'Copy'}
@@ -191,9 +191,9 @@ const TASK_RE = /^\[([ xX])\]\s+(.*)$/;
 
 /** Heading typography for document mode, by level. */
 const DOC_HEADING: Record<number, string> = {
-  1: 'mt-6 mb-3 border-b border-line pb-1.5 text-xl font-semibold leading-tight tracking-tight',
+  1: 'mt-6 mb-3 border-b border-line pb-1 text-xl font-semibold leading-tight tracking-tight',
   2: 'mt-6 mb-2 text-xl font-semibold leading-snug',
-  3: 'mt-5 mb-1.5 text-base font-semibold',
+  3: 'mt-5 mb-1 text-base font-semibold',
   4: 'mt-4 mb-1 text-sm font-semibold',
   5: 'mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-ink-soft',
   6: 'mt-3 mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint',
@@ -268,10 +268,10 @@ function renderList(items: ListItem[], key: string, ctx: Ctx, depth = 0): React.
     nodes.push(
       <li key={`${key}-${i}`} className={task ? 'list-none' : undefined}>
         {task ? (
-          <span className="flex items-start gap-1.5">
+          <span className="flex items-start gap-2">
             <span
               aria-hidden
-              className="mt-[3px] shrink-0 text-2xs"
+              className="mt-1 shrink-0 text-2xs"
               style={{ color: task[1] === ' ' ? 'var(--ink-faint)' : 'var(--success)' }}
             >
               {task[1] === ' ' ? '☐' : '☑'}
@@ -318,7 +318,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
             <thead>
               <tr>
                 {header.map((h, k) => (
-                  <th key={k} className="border-b border-line px-2.5 py-1.5 text-left font-semibold">{inline(h, ctx)}</th>
+                  <th key={k} className="border-b border-line px-3 py-1 text-left font-semibold">{inline(h, ctx)}</th>
                 ))}
               </tr>
             </thead>
@@ -326,7 +326,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
               {body.map((row, r) => (
                 <tr key={r}>
                   {header.map((_, c) => (
-                    <td key={c} className="border-b border-line px-2.5 py-1.5 align-top text-ink-soft">{inline(row[c] ?? '', ctx)}</td>
+                    <td key={c} className="border-b border-line px-3 py-1 align-top text-ink-soft">{inline(row[c] ?? '', ctx)}</td>
                   ))}
                 </tr>
               ))}
@@ -378,7 +378,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
       out.push(
         <blockquote
           key={`${key}-q${i}`}
-          className={ctx.doc ? 'my-3 border-l-2 border-accent/40 pl-3 text-ink-soft' : 'my-1 border-l-2 border-line pl-2.5 text-ink-soft'}
+          className={ctx.doc ? 'my-3 border-l-2 border-accent/40 pl-3 text-ink-soft' : 'my-1 border-l-2 border-line pl-3 text-ink-soft'}
         >
           {renderBlocks(quoted.join('\n'), `${key}-q${i}i`, ctx)}
         </blockquote>,
@@ -417,7 +417,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
     }
     out.push(
       ctx.doc
-        ? <p key={`${key}-p${i}`} className="my-2.5">{inline(para.join(' '), ctx)}</p>
+        ? <p key={`${key}-p${i}`} className="my-2">{inline(para.join(' '), ctx)}</p>
         : <p key={`${key}-p${i}`}>{lineBreaks(para, ctx)}</p>,
     );
     i = j;

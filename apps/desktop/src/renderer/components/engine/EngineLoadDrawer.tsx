@@ -238,13 +238,13 @@ export function EngineLoadDrawer({
           <BoltIcon />
           Use recommended settings
         </button>
-        <p className="mt-1.5 text-center text-xs text-ink-faint">
+        <p className="mt-1 text-center text-xs text-ink-faint">
           Picks the fastest setup that fits this model on this machine. GPU first, always.
         </p>
         {applied && rec && (
-          <div className="mt-2 rounded-lg border px-3 py-2.5" style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)', background: 'var(--accent-soft)' }}>
+          <div className="mt-2 rounded-lg border px-3 py-2" style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)', background: 'var(--accent-soft)' }}>
             <p className="text-xs font-medium">What this chose</p>
-            <div className="mt-1.5 space-y-1.5">
+            <div className="mt-1 space-y-1">
               {rec.why.map((w) => (
                 <div key={w.field} className="flex gap-3 text-xs">
                   <span className="w-32 shrink-0 text-ink-faint">{w.field}</span>
@@ -433,7 +433,7 @@ export function EngineLoadDrawer({
       </div>
 
       {(onToggleAutoload || (model.modality === 'vision' && !model.hasProjector && onFetchCompanions)) && (
-        <div className="mt-3 space-y-2 rounded-lg border px-3 py-2.5" style={{ borderColor: 'var(--line)' }}>
+        <div className="mt-3 space-y-2 rounded-lg border px-3 py-2" style={{ borderColor: 'var(--line)' }}>
           {onToggleAutoload && (
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -470,13 +470,13 @@ export function EngineLoadDrawer({
         </p>
       )}
       <div className={`${unsaved || stale ? 'mt-2' : 'mt-4'} flex flex-wrap items-center gap-2`}>
-        <button className="btn btn-primary py-1.5 text-xs" onClick={load} disabled={loading} data-load>
+        <button className="btn btn-primary py-1 text-xs" onClick={load} disabled={loading} data-load>
           {loading ? 'Loading…' : model.loaded ? 'Reload with these settings' : 'Load model'}
         </button>
-        <button className="btn btn-outline py-1.5 text-xs" onClick={saveDefault} title="Use these settings every time this model loads">
+        <button className="btn btn-outline py-1 text-xs" onClick={saveDefault} title="Use these settings every time this model loads">
           Save as default
         </button>
-        <button className="btn btn-ghost py-1.5 text-xs" onClick={onClose}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onClose}>
           Close
         </button>
       </div>
@@ -517,7 +517,7 @@ function VerdictChip({ plan }: { plan: PlacementPlan }) {
   const v = VERDICTS[plan.verdict];
   return (
     <span
-      className="whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs"
+      className="whitespace-nowrap rounded-full px-3 py-0.5 text-xs"
       style={{ color: v.color, border: `1px solid color-mix(in srgb, ${v.color} 45%, transparent)` }}
       data-verdict={plan.verdict}
     >
@@ -544,7 +544,7 @@ function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
   if (!plan) return <div className="mt-3 h-24 animate-pulse rounded-lg bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)]" />;
   if (plan.verdict === 'unknown') {
     return (
-      <p className="mt-3 rounded-lg border px-3 py-2.5 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+      <p className="mt-3 rounded-lg border px-3 py-2 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
         This file does not describe its layers, so we cannot say how much memory it needs. Load it and we will measure it.
       </p>
     );
@@ -627,7 +627,7 @@ function expectation(plan: PlacementPlan): string {
 
 function Legend({ color, text }: { color: string; text: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-2">
       <span className="h-2 w-2 rounded-sm" style={{ background: color }} />
       {text}
     </span>
@@ -635,7 +635,7 @@ function Legend({ color, text }: { color: string; text: string }) {
 }
 
 function RecommendedTag() {
-  return <span className="ml-1.5 text-2xs font-normal" style={{ color: 'var(--accent)' }}>Recommended</span>;
+  return <span className="ml-2 text-2xs font-normal" style={{ color: 'var(--accent)' }}>Recommended</span>;
 }
 
 function BoltIcon() {
@@ -728,7 +728,7 @@ function SegTabs<T extends string>({
       {options.map((o) => (
         <button
           key={o.id}
-          className="min-h-[32px] rounded-full px-3.5 disabled:opacity-40"
+          className="min-h-[32px] rounded-full px-4 disabled:opacity-40"
           disabled={o.disabled}
           title={o.title}
           aria-pressed={value === o.id}

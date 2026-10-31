@@ -314,7 +314,7 @@ export function AddProvider({
                   ? 'Sign in with your ChatGPT Plus, Pro, or Business account to run on your existing plan, with no API usage fees.'
                   : 'Approving in the browser creates a key on your OpenRouter account and saves it here — no copy-pasting. Or paste a key below instead.'}
             </p>
-            <div className="mt-2.5">
+            <div className="mt-2">
               <SubscriptionSignIn oauthProvider={oauthProvider} onConnected={connectSubscription} />
             </div>
             {kind === 'chatgpt' && (
@@ -363,7 +363,7 @@ export function AddProvider({
       <div className="mt-4 flex items-center justify-between gap-2">
         <div className="min-w-0 text-xs">
           {result && (
-            <span style={{ color: result.ok ? 'var(--success)' : 'var(--danger)' }} className="inline-flex items-center gap-1.5">
+            <span style={{ color: result.ok ? 'var(--success)' : 'var(--danger)' }} className="inline-flex items-center gap-2">
               {result.ok && <CheckIcon className="h-3.5 w-3.5" />}
               {result.ok ? 'Connected' : result.message}
             </span>

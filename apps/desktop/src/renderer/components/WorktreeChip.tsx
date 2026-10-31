@@ -78,7 +78,7 @@ export function WorktreeChip({ session, git, disabled, onChange }: {
   };
   return <>
     <button ref={anchor} type="button" aria-label="Git checkout options" aria-haspopup="dialog" aria-expanded={open}
-      className="inline-flex min-w-0 items-center gap-1 rounded-sm px-1.5 py-px"
+      className="inline-flex min-w-0 items-center gap-1 rounded-sm px-2 py-px"
       style={{ background: 'color-mix(in srgb, var(--accent-2) 13%, transparent)', color: 'var(--accent-2)' }}
       onMouseEnter={enter} onMouseLeave={leave} onFocus={enter} onBlur={leave} onClick={enter}>
       {isolated ? <WorktreeIcon className="h-3 w-3 shrink-0" /> : <BranchIcon className="h-3 w-3 shrink-0" />}

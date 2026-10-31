@@ -78,7 +78,7 @@ export function MessagingChannels() {
 
       <div className="mt-3 space-y-2">
         <input
-          className="input py-1.5 text-xs"
+          className="input py-1 text-xs"
           type="password"
           placeholder="Bot token from @BotFather"
           aria-label="Telegram bot token"
@@ -87,7 +87,7 @@ export function MessagingChannels() {
           disabled={saving}
         />
         <input
-          className="input py-1.5 text-xs"
+          className="input py-1 text-xs"
           placeholder="Allowed chat ids, comma separated (message the bot, then check getUpdates)"
           aria-label="Allowed Telegram chat ids"
           value={chatIds}
@@ -96,14 +96,14 @@ export function MessagingChannels() {
         />
         <div className="flex flex-row-reverse items-center gap-2">
           <button
-            className="btn btn-primary py-1.5 text-xs"
+            className="btn btn-primary py-1 text-xs"
             disabled={saving || !token.trim() || !chatIds.trim()}
             onClick={() => void save({ enabled: true })}
           >
             {saving ? 'Saving…' : cfg.enabled ? 'Save' : 'Enable'}
           </button>
           {cfg.enabled && (
-            <button className="btn btn-ghost py-1.5 text-xs" disabled={saving} onClick={() => void save({ enabled: false })}>
+            <button className="btn btn-ghost py-1 text-xs" disabled={saving} onClick={() => void save({ enabled: false })}>
               Disable
             </button>
           )}

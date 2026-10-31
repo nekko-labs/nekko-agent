@@ -38,7 +38,7 @@ function InfoHint({ text }: { text: string }) {
         i
       </span>
       <span
-        className="pointer-events-none absolute left-0 top-5 z-50 hidden w-56 rounded-xl border border-line p-2.5 text-2xs font-normal normal-case leading-snug tracking-normal text-ink-soft shadow-(--shadow-float) group-focus-within/info:block group-hover/info:block"
+        className="pointer-events-none absolute left-0 top-5 z-50 hidden w-56 rounded-xl border border-line p-3 text-2xs font-normal normal-case leading-snug tracking-normal text-ink-soft shadow-(--shadow-float) group-focus-within/info:block group-hover/info:block"
         style={{ background: 'var(--surface)' }}
       >
         {text}
@@ -343,14 +343,14 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct > 85 ? 'var(--danger)' : 'var(--accent)' }} />
             </div>
-            <p className="mt-1.5 text-2xs text-ink-faint">
+            <p className="mt-1 text-2xs text-ink-faint">
               {Math.round(pct)}% of the {windowTokens.toLocaleString()}-token window · {draftTokens > 0 ? 'includes what you’re typing.' : 'updates as you type.'}
             </p>
           </div>
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
             <Section title="System prompt" info="Standing instructions, user profile, and the server-side per-turn wrapper.">
-              <button className="btn btn-outline w-full py-1.5 text-xs" onClick={() => {
+              <button className="btn btn-outline w-full py-1 text-xs" onClick={() => {
                 useStore.getState().setView('settings');
                 const locate = () => {
                   const section = document.getElementById('customization');
@@ -375,7 +375,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
                   </span>
                   <span className="shrink-0 text-2xs font-medium text-accent">{skillTokens.toLocaleString()} tok</span>
                 </div>
-                <p className="mt-1.5 text-2xs leading-snug text-ink-soft">{activeSkill.description}</p>
+                <p className="mt-1 text-2xs leading-snug text-ink-soft">{activeSkill.description}</p>
                 <p className="mt-1 text-2xs text-ink-faint">Added to your message when you send. Not typed into the box.</p>
               </div>
             )}
@@ -391,7 +391,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
                       <span className="shrink-0 text-ink-faint">{n.toLocaleString()} tok</span>
                     </div>
                   ))}
-                  <div className="mt-1 flex items-center gap-2 border-t border-line pt-1.5 text-xs font-medium">
+                  <div className="mt-1 flex items-center gap-2 border-t border-line pt-1 text-xs font-medium">
                     <span className="min-w-0 flex-1 text-ink">Total</span>
                     <span className="shrink-0 text-ink">{total.toLocaleString()} tok</span>
                   </div>
@@ -494,9 +494,9 @@ function FolderAccordion({
       className={`group overflow-hidden rounded-lg border ${primary ? 'border-accent/40' : 'border-line'} ${included ? '' : 'opacity-50'}`}
       style={primary ? { background: 'color-mix(in srgb, var(--accent) 5%, transparent)' } : undefined}
     >
-      <div className="flex items-center gap-1 px-1.5 py-1.5">
+      <div className="flex items-center gap-1 px-2 py-1">
         <button
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
           onClick={onToggleExpanded}
           aria-expanded={expanded}
           title={expanded ? 'Collapse files' : 'Browse files'}
@@ -560,8 +560,8 @@ function SectionHeader({
   title: string; info?: string; onAdd?: () => void; addLabel?: string;
 }) {
   return (
-    <div className="flex items-center justify-between px-4 pb-1.5 pt-3">
-      <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+    <div className="flex items-center justify-between px-4 pb-1 pt-3">
+      <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
         {title}
         {info && <InfoHint text={info} />}
       </span>
@@ -589,8 +589,8 @@ function Section({
 }) {
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
           {title}
           {info && <InfoHint text={info} />}
         </span>
@@ -630,14 +630,14 @@ function Row({
 }) {
   return (
     <div
-      className={`group flex items-center gap-2 rounded-lg border px-2 py-1.5 ${
+      className={`group flex items-center gap-2 rounded-lg border px-2 py-1 ${
         active ? 'border-accent/40 bg-accent/5' : 'border-line'
       } ${onClick ? 'cursor-pointer hover:bg-surface-2' : ''} ${included === false ? 'opacity-40' : ''}`}
       onClick={onClick}
     >
       <span className={active ? 'text-accent' : 'text-ink-faint'}>{icon}</span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium">{title}</span>
           {badge && (badgeAction ? (
             <button

@@ -16,7 +16,7 @@ export function WallLayoutSettings({ settings, update }: { settings: AppSettings
   const change = (patch: Partial<WallLayout>) => update(wallLayoutPatch(settings, patch, storage));
   return <div className="mt-3 border-t border-line pt-3">
     <label className="flex items-center justify-between gap-3 text-sm" htmlFor="wall-layout-setting">Wall layout
-      <select id="wall-layout-setting" className="input max-w-[180px] py-1.5" value={layout.mode} onChange={(e) => change({ mode: e.target.value as WallLayout['mode'] })}>
+      <select id="wall-layout-setting" className="input max-w-[180px] py-1" value={layout.mode} onChange={(e) => change({ mode: e.target.value as WallLayout['mode'] })}>
         <option value="focus">Focused</option>
         <option value="grid">Dynamic</option>
       </select>
@@ -29,7 +29,7 @@ export function WallLayoutSettings({ settings, update }: { settings: AppSettings
     <div className="mt-3 flex flex-wrap items-center gap-4" aria-disabled={!layout.fixedGrid} style={layout.fixedGrid ? undefined : { opacity: 0.5 }}>
       {(['rows', 'cols'] as const).map((key) => <label key={key} className="flex items-center gap-2 text-sm" htmlFor={`wall-grid-${key}`}>
         {key === 'rows' ? 'Grid rows' : 'Grid columns'}
-        <select id={`wall-grid-${key}`} className="input w-16 py-1.5" disabled={!layout.fixedGrid} value={layout[key]} onChange={(e) => change({ [key]: Number(e.target.value) })}>
+        <select id={`wall-grid-${key}`} className="input w-16 py-1" disabled={!layout.fixedGrid} value={layout[key]} onChange={(e) => change({ [key]: Number(e.target.value) })}>
           {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       </label>)}

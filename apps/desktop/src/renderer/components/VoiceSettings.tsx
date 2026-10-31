@@ -41,7 +41,7 @@ export function VoiceSettings({ compact = false }: { compact?: boolean }) {
     <p className="mt-1 text-xs text-ink-faint">Speech models run on this computer; audio is never sent anywhere. Pick the one dictation uses.</p>
     <button type="button" className="mt-1 text-xs text-(--accent) hover:underline" onClick={() => setIntro(true)}>Watch how voice works</button>
     {intro && <Suspense fallback={null}><VoiceIntro onClose={() => setIntro(false)} /></Suspense>}
-    <ul className="mt-3 space-y-1.5" aria-label="Speech engines">
+    <ul className="mt-3 space-y-1" aria-label="Speech engines">
       {rows.map(row => <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-line px-3 py-2">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium">{row.name}{row.active && <span className="ml-2 rounded-full px-2 py-0.5 text-2xs" style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}>In use</span>}</p>

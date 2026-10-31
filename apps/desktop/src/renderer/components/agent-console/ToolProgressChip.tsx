@@ -16,7 +16,7 @@ export function ToolProgressChip({ since }: { since: number }) {
   const explanation = `No progress reported for ${minutes} minute${minutes === 1 ? '' : 's'}. The tool is still running and may be working normally; this is not a hang diagnosis.`;
   return (
     <span
-      className="shrink-0 rounded border border-line px-1.5 py-0.5 text-2xs font-normal tabular-nums text-ink-faint"
+      className="shrink-0 rounded border border-line px-2 py-0.5 text-2xs font-normal tabular-nums text-ink-faint"
       aria-label={explanation}
       title={explanation}
     >

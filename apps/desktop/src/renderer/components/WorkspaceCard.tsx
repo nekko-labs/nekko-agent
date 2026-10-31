@@ -259,7 +259,7 @@ function WorkspaceCardImpl({
          findable without reading a word; a terminal's stays neutral. */
       /* A card waiting on you (a question, or stopped on an error) takes the
          active card's highlight too, so it is findable at a glance. */
-      className={`agent-chip group w-full cursor-pointer rounded-xl border px-2.5 py-1.5 text-left transition-colors duration-150 ${
+      className={`agent-chip group w-full cursor-pointer rounded-xl border px-3 py-1 text-left transition-colors duration-150 ${
         isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'bg-surface hover:bg-surface-2'
       }`}
       style={{
@@ -272,7 +272,7 @@ function WorkspaceCardImpl({
       data-agent-active={isActive || undefined}
       title={title}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
         <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
           {title}

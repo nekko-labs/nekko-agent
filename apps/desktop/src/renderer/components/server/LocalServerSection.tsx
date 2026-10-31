@@ -103,7 +103,7 @@ export function LocalServerSection() {
                 color="var(--accent-2)"
               />
               <label
-                className="flex items-center gap-1.5 text-xs text-ink-soft"
+                className="flex items-center gap-2 text-xs text-ink-soft"
                 title="Bring the agent server up when the app opens"
               >
                 Start Server on Nekko Launch
@@ -155,7 +155,7 @@ export function LocalServerSection() {
             stays as short as the question most people arrive with. */}
         <details className="mt-4 border-t border-line pt-4">
           <summary className="cursor-pointer text-xs font-medium">Agent server settings</summary>
-          <div className="mt-3 flex flex-wrap gap-1.5 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
+          <div className="mt-3 flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
             <TabButton active={tab === 'server'} onClick={() => setTab('server')}>Server</TabButton>
             <TabButton active={tab === 'cli'} onClick={() => setTab('cli')}>CLI</TabButton>
             <TabButton active={tab === 'mcp'} onClick={() => setTab('mcp')}>MCP</TabButton>
@@ -298,7 +298,7 @@ function ServerTab({
           this app wrote.
         </p>
         <button
-          className="mt-1.5 text-xs text-ink-faint hover:text-ink"
+          className="mt-1 text-xs text-ink-faint hover:text-ink"
           onClick={async () => {
             if (!window.confirm('Roll the token? Anything you configured by hand with the old one stops working.')) return;
             await window.nekko.apiServerNewToken();
@@ -313,14 +313,14 @@ function ServerTab({
 
       <div className="flex flex-wrap items-center gap-2">
         <button
-          className="btn btn-primary py-1.5 text-xs"
+          className="btn btn-primary py-1 text-xs"
           onClick={() => onSave(draft)}
           disabled={!dirty || busy || !!refusal}
         >
           {busy ? 'Saving…' : 'Save'}
         </button>
         {dirty && (
-          <button className="btn btn-ghost py-1.5 text-xs" onClick={() => setDraft(status.settings)}>
+          <button className="btn btn-ghost py-1 text-xs" onClick={() => setDraft(status.settings)}>
             Discard
           </button>
         )}
@@ -399,7 +399,7 @@ function CliTab({ running }: { running: boolean }) {
       {cli === null ? (
         <p className="text-xs text-ink-faint">Checking the command…</p>
       ) : bundled ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border p-2.5" style={{ borderColor: 'var(--line)' }}>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
           <TerminalIcon className="h-4 w-4 shrink-0 text-ink-faint" />
           <span className="font-mono text-xs">nekko-agent</span>
           {cli.installed && cli.onPath ? (
@@ -505,7 +505,7 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
         {tools?.map((t) => (
           <div
             key={t.id}
-            className="flex flex-wrap items-center gap-2 rounded-xl border p-2.5"
+            className="flex flex-wrap items-center gap-2 rounded-xl border p-3"
             style={{ borderColor: 'var(--line)' }}
           >
             <TerminalIcon className="h-4 w-4 shrink-0 text-ink-faint" />
@@ -571,7 +571,7 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
 function Step({ n, label, children }: { n: number; label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink-soft">
+      <p className="mb-1 flex items-center gap-2 text-xs font-medium text-ink-soft">
         <span
           className="grid h-4 w-4 place-items-center rounded-full text-2xs tabular-nums"
           style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
@@ -596,7 +596,7 @@ function Command({ value, copyValue }: { value: string; copyValue?: string }) {
   return (
     <div className="group relative">
       <pre
-        className="max-h-56 overflow-auto rounded-lg p-2.5 pr-9 font-mono text-2xs leading-relaxed"
+        className="max-h-56 overflow-auto rounded-lg p-3 pr-9 font-mono text-2xs leading-relaxed"
         style={{ background: 'var(--surface-2)' }}
       >
         {value}
@@ -636,7 +636,7 @@ function CopyPill({ value, title, compact = false }: { value: string; title: str
   }, [copied]);
   return (
     <button
-      className={`inline-flex items-center gap-1.5 rounded-full border ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} font-mono text-2xs text-ink-faint hover:text-ink`}
+      className={`inline-flex items-center gap-2 rounded-full border ${compact ? 'px-2 py-0.5' : 'px-2 py-1'} font-mono text-2xs text-ink-faint hover:text-ink`}
       style={{ borderColor: 'var(--line)' }}
       title={title}
       onClick={async () => {
@@ -663,7 +663,7 @@ function CopyPill({ value, title, compact = false }: { value: string; title: str
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
-      className="rounded-full px-2.5 py-1 text-xs"
+      className="rounded-full px-3 py-1 text-xs"
       style={
         active
           ? { background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }

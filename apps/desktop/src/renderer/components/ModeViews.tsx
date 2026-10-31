@@ -52,7 +52,7 @@ export function ModeToggle() {
   return (
     <button
       type="button"
-      className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-2xs font-medium ${expert ? 'text-accent' : ''}`}
+      className={`btn btn-ghost shrink-0 gap-1 px-2 py-1 text-2xs font-medium ${expert ? 'text-accent' : ''}`}
       onClick={() => setExpert(!expert)}
       aria-pressed={expert}
       title={expert ? 'Expert: the hardware and loaded models are shown. Click for Simple.' : 'Simple. Click for Expert, which adds the hardware and loaded models.'}
@@ -160,7 +160,7 @@ export function ExpertMonitor() {
   const loaded = useLoadedCount();
   const { open, setOpen, anchor, pop, style } = usePopover(360, 560);
   return (
-    <div className="shrink-0 border-b border-line px-3 py-1.5" data-expert-monitor>
+    <div className="shrink-0 border-b border-line px-3 py-1" data-expert-monitor>
       <button
         ref={anchor}
         type="button"

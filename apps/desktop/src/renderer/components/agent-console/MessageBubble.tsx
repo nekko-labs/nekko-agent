@@ -71,14 +71,14 @@ export const MessageBubble = memo(function MessageBubble({
         <div className="w-full max-w-[85%]">
           {/* The pictures ride along with the edit: Save & send re-sends them. */}
           {message.images?.length ? (
-            <div className="mb-1.5 flex flex-wrap justify-end gap-1.5" title="These images are sent again with your edit">
+            <div className="mb-1 flex flex-wrap justify-end gap-2" title="These images are sent again with your edit">
               {message.images.map((image, i) => (
                 <img key={`${image.slice(0, 24)}-${i}`} src={image} alt={`Attached image ${i + 1}`} className="h-12 w-12 rounded-md object-cover" />
               ))}
             </div>
           ) : null}
           <textarea className="input max-h-48 min-h-[60px] resize-none text-sm" value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} />
-          <div className="mt-1.5 flex justify-end gap-2">
+          <div className="mt-1 flex justify-end gap-2">
             <button className="btn btn-ghost py-1 text-xs" onClick={() => { setEditing(false); setDraft(displayText); }}>Cancel</button>
             <button className="btn btn-primary py-1 text-xs" onClick={() => { setEditing(false); onResend?.(message.id, draft); }}>Save &amp; send</button>
           </div>
@@ -130,7 +130,7 @@ export const MessageBubble = memo(function MessageBubble({
           </span>
         )}
         {isUser && message.videos?.length ? (
-          <div className="mb-2 flex flex-wrap gap-1.5">
+          <div className="mb-2 flex flex-wrap gap-2">
             {message.videos.map((video, i) => (
               <video
                 key={`${video.slice(0, 24)}-${i}`}
@@ -145,7 +145,7 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         ) : null}
         {isUser && message.images?.length ? (
-          <div className="mb-2 flex flex-wrap gap-1.5">
+          <div className="mb-2 flex flex-wrap gap-2">
             {message.images.map((image, i) => (
               <img
                 key={`${image.slice(0, 24)}-${i}`}
@@ -168,7 +168,7 @@ export const MessageBubble = memo(function MessageBubble({
         {message.toolCalls?.map((c) => <ToolCard key={c.id} call={c} />)}
         {!isUser && !entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
         {(displayText && message.content || (isUser && (message.images?.length || message.videos?.length))) && (
-          <div className={`mt-1.5 flex items-center gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${isUser ? 'justify-end' : ''}`}>
+          <div className={`mt-1 flex items-center gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${isUser ? 'justify-end' : ''}`}>
             {isUser && message.createdAt > 0 && (
               <span className="text-ink-faint/70" title={fmtDateTime(message.createdAt)}>{fmtTime(message.createdAt)}</span>
             )}
@@ -228,7 +228,7 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu }
   const g = message.generated;
   const model = g?.modelId.split('/').pop();
   return (
-    <div className={`${entering ? 'fade-in ' : ''}flex flex-col items-start gap-1.5`}>
+    <div className={`${entering ? 'fade-in ' : ''}flex flex-col items-start gap-2`}>
       {message.images!.map((image, i) => (
         <img
           key={`${message.id}-${i}`}

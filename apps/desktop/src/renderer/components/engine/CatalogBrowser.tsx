@@ -83,7 +83,7 @@ export function CatalogBrowser({
         />
       )}
       {mlx && (
-        <div role="radiogroup" aria-label="Model format" className="mt-1.5 inline-flex rounded-lg border border-line p-0.5">
+        <div role="radiogroup" aria-label="Model format" className="mt-1 inline-flex rounded-lg border border-line p-0.5">
           {(['gguf', 'mlx'] as const).map((f) => (
             <button
               key={f}
@@ -98,7 +98,7 @@ export function CatalogBrowser({
           ))}
         </div>
       )}
-      <p className="mt-1.5 text-2xs text-ink-faint">
+      <p className="mt-1 text-2xs text-ink-faint">
         {format === 'mlx'
           ? `${value ? 'Searching' : 'The most downloaded'} MLX checkpoints on Hugging Face (mostly mlx-community conversions). Each one is a folder, downloaded whole.`
           : value
@@ -114,20 +114,20 @@ export function CatalogBrowser({
         </p>
       )}
 
-      <div className="mt-2 space-y-1.5">
+      <div className="mt-2 space-y-1">
         {(models ?? []).map((m) => {
           const fit = fitFor(m, memory);
           const chip = fit ? FIT_CHIP[fit] : undefined;
           return (
             <button
               key={m.id}
-              className="catalog-row flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left"
+              className="catalog-row flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left"
               style={{ background: 'var(--surface-2)' }}
               onClick={() => onOpen(m.id)}
               title={`Open ${m.name}`}
             >
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate text-xs font-medium">{m.name}</span>
                   {m.parameterSize && (
                     <span className="chip" title={`${m.parameterSize} parameters — bigger knows more, but needs more memory`}>
@@ -136,7 +136,7 @@ export function CatalogBrowser({
                   )}
                   {m.recommended && (
                     <span
-                      className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-2xs"
+                      className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-2xs"
                       style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
                       title="Our pick for most people"
                     >
@@ -145,7 +145,7 @@ export function CatalogBrowser({
                   )}
                   {chip && (
                     <span
-                      className="rounded-full px-1.5 py-0.5 text-2xs"
+                      className="rounded-full px-2 py-0.5 text-2xs"
                       style={{ background: `color-mix(in srgb, ${chip.color} 16%, transparent)`, color: chip.color }}
                       title="Whether the smallest build fits in this machine's memory"
                     >

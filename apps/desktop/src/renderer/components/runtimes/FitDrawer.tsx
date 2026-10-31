@@ -142,7 +142,7 @@ export function FitDrawer({
         ))}
 
       {plan && plan.suggestions.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap gap-2">
           {plan.suggestions.map((s) => (
             <button
               key={s.label}
@@ -168,11 +168,11 @@ export function FitDrawer({
 
       <div className="mt-3 flex items-center gap-2">
         {capabilities.canLoad && (
-          <button className="btn btn-primary py-1.5 text-xs" onClick={load} disabled={loading}>
+          <button className="btn btn-primary py-1 text-xs" onClick={load} disabled={loading}>
             {loading ? 'Loading…' : facts.loaded ? 'Reload with these settings' : 'Load model'}
           </button>
         )}
-        <button className="btn btn-ghost py-1.5 text-xs" onClick={onClose}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onClose}>
           Close
         </button>
         {plan?.verdict === 'wont-load' && capabilities.canLoad && (

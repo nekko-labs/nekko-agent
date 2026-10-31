@@ -43,7 +43,7 @@ function TreeFolder({ entry, depth, onOpen }: { entry: DirEntry; depth: number; 
     <>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1.5 rounded-sm py-0.5 pr-2 text-left text-xs text-ink-soft hover:bg-surface-2"
+        className="flex w-full items-center gap-2 rounded-sm py-0.5 pr-2 text-left text-xs text-ink-soft hover:bg-surface-2"
         style={{ paddingLeft: 8 + depth * 12 }}
       >
         <span className="w-2 shrink-0 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
@@ -60,7 +60,7 @@ function TreeFile({ entry, depth, onOpen }: { entry: DirEntry; depth: number; on
     <button
       onClick={() => onOpen(entry.path)}
       title={entry.name}
-      className="flex w-full items-center gap-1.5 rounded-sm py-0.5 pr-2 text-left text-xs text-ink-soft hover:bg-surface-2"
+      className="flex w-full items-center gap-2 rounded-sm py-0.5 pr-2 text-left text-xs text-ink-soft hover:bg-surface-2"
       style={{ paddingLeft: 8 + depth * 12 + 10 }}
     >
       <FileTypeIcon name={entry.name} size={14} />

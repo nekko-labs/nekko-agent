@@ -304,7 +304,7 @@ export function WorkflowsView() {
               Pause all automations
               <Toggle value={paused} onChange={(v) => void togglePaused(v)} label="Pause all automations" />
             </label>
-            <button className="btn btn-primary py-1.5!" onClick={() => setPicking(true)}>
+            <button className="btn btn-primary py-1!" onClick={() => setPicking(true)}>
               <PlusIcon className="h-3.5 w-3.5" /> New workflow
             </button>
           </div>
@@ -330,7 +330,7 @@ export function WorkflowsView() {
 
           <details className="mt-2 rounded-xl border px-3 py-2 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }} open={workflows.length === 0}>
             <summary className="cursor-pointer font-medium text-ink-faint">How workflows work</summary>
-            <dl className="mt-2 space-y-1.5">
+            <dl className="mt-2 space-y-1">
               <div className="flex gap-2">
                 <dt className="w-32 shrink-0 font-medium">Automation</dt>
                 <dd className="text-ink-faint">
@@ -472,7 +472,7 @@ export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRu
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mt-4">
-      <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">{label}</p>
+      <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">{label}</p>
       {children}
     </div>
   );
@@ -520,7 +520,7 @@ function WorkflowGroupBlock({
         <span className="font-mono text-2xs text-ink-faint">{workflows.length}</span>
       </button>
       {open && (
-        <div className="mt-1 space-y-1.5">
+        <div className="mt-1 space-y-1">
           {shown.map((wf) => (
             <WorkflowRow
               key={`${label}-${wf.id}`}
@@ -571,7 +571,7 @@ function WorkflowRow({
 
   return (
     <div className="card overflow-hidden" data-workflow-row={wf.id}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3.5 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
         <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onExpand} aria-expanded={expanded}>
           <span className="w-3 shrink-0 text-2xs text-ink-faint">{expanded ? '▾' : '▸'}</span>
           <StatusDot color={tone?.color ?? STATUS.neutral} pulse={!!live} title={tone?.label ?? 'never run'} />
@@ -592,7 +592,7 @@ function WorkflowRow({
           )}
         </span>
 
-        <span className="flex shrink-0 items-center gap-1.5 text-2xs text-ink-faint">
+        <span className="flex shrink-0 items-center gap-2 text-2xs text-ink-faint">
           {!live && last && isRunnerRun(last) && <Badge tone="info" title="Fired by an external event">runner</Badge>}
           {!live && wf.waitingSince && (
             <span data-workflow-waiting>
@@ -629,11 +629,11 @@ function WorkflowRow({
             </button>
           )}
           <button className="btn btn-ghost py-1! text-xs" onClick={onEdit}>Edit</button>
-          <button className="btn btn-ghost px-1.5! py-1! text-xs text-ink-faint" title={wf.enabled ? 'Disable' : 'Enable'} onClick={onToggle}>
+          <button className="btn btn-ghost px-2! py-1! text-xs text-ink-faint" title={wf.enabled ? 'Disable' : 'Enable'} onClick={onToggle}>
             {wf.enabled ? '◉' : '○'}
           </button>
-          <button className="btn btn-ghost px-1.5! py-1! text-xs text-ink-faint" title="Duplicate" onClick={onDuplicate}>⧉</button>
-          <button className="btn btn-ghost px-1.5! py-1! text-xs text-danger" title="Delete" onClick={onDelete}>✕</button>
+          <button className="btn btn-ghost px-2! py-1! text-xs text-ink-faint" title="Duplicate" onClick={onDuplicate}>⧉</button>
+          <button className="btn btn-ghost px-2! py-1! text-xs text-danger" title="Delete" onClick={onDelete}>✕</button>
         </span>
       </div>
 
@@ -653,7 +653,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
   const transcript = (sessionId?: string) =>
     sessionId && (
       <button
-        className="btn btn-ghost shrink-0 px-1.5! py-0.5! text-2xs text-ink-soft"
+        className="btn btn-ghost shrink-0 px-2! py-0.5! text-2xs text-ink-soft"
         title="Open this step's transcript"
         onClick={() => { openChat(sessionId); setView('command'); }}
       >
@@ -662,10 +662,10 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
     );
 
   return (
-    <div className="border-t border-line bg-(--surface-2) px-3.5 py-3">
+    <div className="border-t border-line bg-(--surface-2) px-4 py-3">
       {wf.description && <p className="text-xs text-ink-soft">{wf.description}</p>}
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {wf.triggers.map((t) => (
           <Badge
             key={t.id}
@@ -685,7 +685,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
       </div>
 
       <div className="mt-3">
-        <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
           {shownRun ? `Steps · ${STATUS_TONE[shownRun.status].label} run` : 'Steps'}
         </p>
         <WorkflowCanvas steps={wf.steps} run={shownRun} />
@@ -694,13 +694,13 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
       {shownRun && (
         <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_220px]">
           <div>
-            <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+            <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
               This run · {STATUS_TONE[shownRun.status].label}
               {shownRun.status !== 'running' && ` in ${formatDuration(runDurationMs(shownRun))}`} · {relative(shownRun.startedAt)}
               {runPolicyNote(shownRun.lowPriority, shownRun.waitedMs) && ` · ${runPolicyNote(shownRun.lowPriority, shownRun.waitedMs)}`}
             </p>
             {outcome.failed && (
-              <div className="mb-2 rounded-lg border px-2.5 py-2" style={{ borderColor: STATUS.danger }} data-run-failure>
+              <div className="mb-2 rounded-lg border px-3 py-2" style={{ borderColor: STATUS.danger }} data-run-failure>
                 <div className="flex items-start gap-2">
                   <span className="min-w-0 flex-1 text-xs">
                     <span className="font-semibold" style={{ color: STATUS.danger }}>Failed at "{outcome.failed.name}"</span>
@@ -715,7 +715,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
               </div>
             )}
             {outcome.result && (
-              <div className="mb-2 rounded-lg border border-line bg-(--surface) px-2.5 py-2" data-run-result>
+              <div className="mb-2 rounded-lg border border-line bg-(--surface) px-3 py-2" data-run-result>
                 <div className="flex items-start gap-2">
                   <span className="min-w-0 flex-1">
                     <span className="block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Result</span>
@@ -726,7 +726,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
               </div>
             )}
             {shownRun.message && shownRun.message !== outcome.failed?.text && (
-              <p className="mb-1.5 text-xs" style={{ color: shownRun.status === 'failure' ? STATUS.danger : 'var(--ink-soft)' }}>
+              <p className="mb-1 text-xs" style={{ color: shownRun.status === 'failure' ? STATUS.danger : 'var(--ink-soft)' }}>
                 {shownRun.message}
               </p>
             )}
@@ -736,11 +736,11 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
                 const t = STATUS_TONE[entry.status === 'skipped' ? 'cancelled' : entry.status === 'pending' ? 'queued' : entry.status];
                 return (
                   <div key={`${entry.stepId}-${i}`} className="flex items-start gap-2 text-xs">
-                    <StatusDot color={t.color} pulse={entry.status === 'running'} className="mt-1.5" />
+                    <StatusDot color={t.color} pulse={entry.status === 'running'} className="mt-1" />
                     <span className="min-w-0 flex-1">
                       <span className="font-medium">{step?.name ?? entry.stepId}</span>
                       {entry.attempt > 1 && <span className="ml-1 font-mono text-2xs text-ink-faint">attempt {entry.attempt}</span>}
-                      {step && <span className="ml-1.5 text-ink-faint">{stepSummary(step)}</span>}
+                      {step && <span className="ml-2 text-ink-faint">{stepSummary(step)}</span>}
                       {entry.error && <span className="block text-2xs" style={{ color: STATUS.danger }}>{entry.error}</span>}
                       {entry.output && !entry.error && (
                         <span className="mt-0.5 block max-h-16 overflow-y-auto whitespace-pre-wrap font-mono text-2xs text-ink-faint">
@@ -757,7 +757,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
           </div>
 
           <div>
-            <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">History</p>
+            <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">History</p>
             <div className="space-y-0.5">
               {runs.slice(0, 10).map((r) => {
                 const failedAt = runOutcome(r, wf.steps).failed?.name;

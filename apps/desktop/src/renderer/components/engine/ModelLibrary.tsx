@@ -243,7 +243,7 @@ export function ModelLibrary({
             onChange={(e) => setImportPath(e.target.value)}
             spellCheck={false}
           />
-          <button className="btn btn-outline py-1.5 text-xs" onClick={runImport} disabled={!importPath.trim()}>
+          <button className="btn btn-outline py-1 text-xs" onClick={runImport} disabled={!importPath.trim()}>
             Add
           </button>
         </div>
@@ -275,7 +275,7 @@ export function ModelLibrary({
       )}
 
       {models.length === 0 ? (
-        <p className="mt-3 rounded-xl border border-dashed px-4 py-3.5 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+        <p className="mt-3 rounded-xl border border-dashed px-4 py-3 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
           Nothing here yet. Download one of the picks for this machine above or a model from the list, open{' '}
           <strong>Folders</strong> to point at a folder another app already fills, or add a GGUF you have.
         </p>
@@ -290,7 +290,7 @@ export function ModelLibrary({
               {groups.length > 1 && (
                 <p className="px-1 pb-1 pt-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">{loc}</p>
               )}
-              <div className="space-y-1.5">{ms.map(renderRow)}</div>
+              <div className="space-y-1">{ms.map(renderRow)}</div>
             </div>
           ))}
         </div>
@@ -308,7 +308,7 @@ export function ModelLibrary({
     return (
       <div key={m.id}>
         <div
-          className="flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-2 text-xs"
+          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
           style={{
             background: 'var(--surface-2)',
             opacity: unsupported ? 0.85 : 1,
@@ -316,7 +316,7 @@ export function ModelLibrary({
           }}
         >
           <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <CheckIcon className="h-3 w-3 shrink-0 text-success" />
               <span className="min-w-0 max-w-full truncate font-medium">{m.name}</span>
               <span className="text-2xs text-ink-faint">{gpuGuidance(m.sizeBytes, undefined, m)}</span>
@@ -341,7 +341,7 @@ export function ModelLibrary({
                       )}
                       {m.loaded && (
                         <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-2xs text-white"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-2xs text-white"
                           style={{ background: 'var(--success)' }}
                         >
                           <CheckIcon className="h-2.5 w-2.5" /> in memory
@@ -396,7 +396,7 @@ export function ModelLibrary({
                     </p>
                   </div>
 
-                  <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                     {m.loaded && live?.loadedOn && (
                       <span className="text-2xs text-ink-faint" title={placementTitle(live)}>
                         {placementLabel(live)}
@@ -438,7 +438,7 @@ export function ModelLibrary({
                       </button>
                     ) : (
                       <button
-                        className="rounded-full px-2.5 py-1 text-2xs text-white disabled:opacity-50"
+                        className="rounded-full px-3 py-1 text-2xs text-white disabled:opacity-50"
                         style={{ background: 'var(--accent)' }}
                         title={canLoad ? `Load ${m.name} into memory` : 'Download the engine first'}
                         disabled={busy === m.id || (!canLoad && m.modality !== 'image')}
@@ -451,13 +451,13 @@ export function ModelLibrary({
                       // The file belongs to whichever app downloaded it. Saying so
                       // beats a delete button that refuses after the click.
                       <span
-                        className="px-1.5 text-2xs text-ink-faint"
+                        className="px-2 text-2xs text-ink-faint"
                         title={`Delete this in ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'the app that downloaded it'}`}
                       >
                         borrowed
                       </span>
                     ) : (
-                      <button className="btn btn-ghost px-1.5 py-1" title="Delete this model" onClick={() => void remove(m)}>
+                      <button className="btn btn-ghost px-2 py-1" title="Delete this model" onClick={() => void remove(m)}>
                         <TrashIcon className="h-3.5 w-3.5" />
                       </button>
                     )}
@@ -465,13 +465,13 @@ export function ModelLibrary({
                 </div>
 
                 {unsupported && (
-                  <p className="mt-1 flex items-start gap-1.5 px-2.5 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-1 flex items-start gap-2 px-3 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     {unsupported}
                   </p>
                 )}
                 {missingProjector && !unsupported && (
-                  <p className="mt-1 flex flex-wrap items-center gap-1.5 px-2.5 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 px-3 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
                     <WarningIcon className="h-3 w-3 shrink-0" />
                     Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.
                     <button
@@ -484,7 +484,7 @@ export function ModelLibrary({
                   </p>
                 )}
                 {m.lastLoadError && !m.loaded && (
-                  <p className="mt-1 flex flex-wrap items-start gap-1.5 px-2.5 text-2xs" style={{ color: 'var(--danger, var(--warning, #d1a054))' }}>
+                  <p className="mt-1 flex flex-wrap items-start gap-2 px-3 text-2xs" style={{ color: 'var(--danger, var(--warning, #d1a054))' }}>
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     <span>Last load failed: {m.lastLoadError}</span>
                     {missingProjector && (

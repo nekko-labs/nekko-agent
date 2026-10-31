@@ -35,7 +35,7 @@ export function ChatArtifacts({ artifacts, sessionId }: { artifacts: ChatArtifac
       : HTML_EXT.test(artifact.path)
       ? <HtmlRenderingCard key={artifact.path} artifact={artifact} sessionId={sessionId} />
       : <button key={artifact.path} type="button" disabled={sandbox}
-      className="artifact-card group flex w-full min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-left disabled:opacity-50"
+      className="artifact-card group flex w-full min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left disabled:opacity-50"
       title={sandbox ? 'Host file previews are unavailable in Sandbox' : `Open ${artifact.path}`}
       onClick={() => useStore.getState().openFilePane(artifact.path, sessionId)}>
       <span className="artifact-card-chip flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-2xs font-semibold uppercase" aria-hidden>{artifact.filename.split('.').at(-1)}</span>
@@ -112,10 +112,10 @@ export function HtmlRenderingCard({ artifact, sessionId }: { artifact: ChatArtif
           style={{ width: THUMB_VIEWPORT.width, height: THUMB_VIEWPORT.height, transformOrigin: '0 0', pointerEvents: 'none' }} />
         : <span className="flex h-full items-center justify-center px-4 text-center text-xs text-ink-soft">{note}</span>}
     </div>
-    <div className="flex min-w-0 items-center gap-3 px-3 py-2.5">
+    <div className="flex min-w-0 items-center gap-3 px-3 py-2">
       <span className="artifact-card-chip flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-2xs font-semibold uppercase" aria-hidden>{artifact.filename.split('.').at(-1)}</span>
       <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-ink">{artifact.title}</span><span className="block truncate text-2xs text-ink-soft">{artifact.filename}</span></span>
-      <span className="flex shrink-0 items-center gap-1.5">
+      <span className="flex shrink-0 items-center gap-2">
         {bridge && <button type="button" className="artifact-card-action rounded-md border px-2 py-1 text-xs disabled:opacity-50" disabled={sandbox || !source}
           title={source ? 'Open an interactive preview in its own isolated window' : 'Available once the page has loaded'} onClick={() => { void interactive(); }}>Interactive</button>}
         <button type="button" className="artifact-card-action rounded-md border px-2 py-1 text-xs disabled:opacity-50" disabled={sandbox}
@@ -136,7 +136,7 @@ export function LivePreviewCard({ artifact }: { artifact: ChatArtifact }) {
   const href = safeHref(live.url);
   if (!href) return null;
   return <a href={href} target="_blank" rel="noreferrer"
-    className="artifact-card group flex w-full min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-left no-underline"
+    className="artifact-card group flex w-full min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left no-underline"
     title={`Open ${live.url} in your browser`} data-live-preview>
     <span className="artifact-card-chip flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" aria-hidden>
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M8 21h8M12 18v3" /><circle cx="12" cy="11" r="2.5" fill="currentColor" stroke="none" /></svg>

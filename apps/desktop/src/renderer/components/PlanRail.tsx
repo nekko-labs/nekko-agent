@@ -52,7 +52,7 @@ export function PlanRail({ sessionId, session, onMinimize }: {
 
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden border-l border-line" style={{ background: 'transparent' }} aria-label="Plan and sub-agents">
-      <header className="flex shrink-0 items-center gap-1.5 border-b border-line px-3 py-2">
+      <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
         <ControlPanelIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
         <span className="min-w-0 flex-1 truncate text-2xs font-semibold uppercase tracking-wide text-ink-faint">Agent Monitor</span>
         {/* Minimizing hides the panel and brings back the chat area's floating
@@ -63,14 +63,14 @@ export function PlanRail({ sessionId, session, onMinimize }: {
         <MonitorArtifacts key={sessionId} sessionId={sessionId} artifacts={artifacts} hydrated={!!session && session.id === sessionId && Array.isArray(session.messages)} />
         <MonitorProject sessionId={sessionId} projectPath={basePath} />
         <section>
-          <div className="mb-1.5 flex items-center gap-1.5">
+          <div className="mb-1 flex items-center gap-2">
             <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Sub-agents</span>
             {activeChildren.length > 0 && <span className="text-2xs tabular-nums text-ink-faint">{activeChildren.length}</span>}
           </div>
           {activeChildren.length === 0 ? <p className="px-0.5 text-2xs leading-snug text-ink-faint">{spawnAllowed ? 'No sub-agents working right now.' : 'Delegation is off. Enable it in Settings → Orchestration.'}</p> : (
             <div className="space-y-0.5">{activeChildren.map((c) => {
               const a = childActivity(c, !!getLiveRun(c.id));
-              return <button key={c.id} className="flex w-full items-start gap-1.5 rounded-lg px-1 py-1 text-left hover:bg-surface-2" onClick={() => openChatPane(c.id)} title={`Open ${c.title}`}>
+              return <button key={c.id} className="flex w-full items-start gap-2 rounded-lg px-1 py-1 text-left hover:bg-surface-2" onClick={() => openChatPane(c.id)} title={`Open ${c.title}`}>
                 <RobotIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
                 <span className="min-w-0 flex-1"><span className="block truncate text-xs text-ink-soft">{c.title}</span>
                   <span className="block truncate text-2xs text-ink-faint">{activitySentence(a)}</span>
@@ -80,11 +80,11 @@ export function PlanRail({ sessionId, session, onMinimize }: {
           )}
         </section>
         {queued.length > 0 && <section>
-          <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">After this · {queued.length}</div>
+          <div className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">After this · {queued.length}</div>
           {queued.map((q, i) => {
             const payload = queueItemPayload(q);
             const label = queueLabel(q);
-            return <div key={i} className="flex items-start gap-1.5 px-1 py-0.5"><ChatIcon className="mt-0.5 h-3 w-3 shrink-0 text-ink-faint" /><span className="min-w-0 flex-1 truncate text-2xs text-ink-faint" title={label}>{label}</span>{payload.skill && <span className="text-2xs text-ink-faint">/{payload.skill.name}</span>}{!!payload.images?.length && <span className="text-2xs text-ink-faint">{payload.images.length} img</span>}</div>;
+            return <div key={i} className="flex items-start gap-2 px-1 py-0.5"><ChatIcon className="mt-0.5 h-3 w-3 shrink-0 text-ink-faint" /><span className="min-w-0 flex-1 truncate text-2xs text-ink-faint" title={label}>{label}</span>{payload.skill && <span className="text-2xs text-ink-faint">/{payload.skill.name}</span>}{!!payload.images?.length && <span className="text-2xs text-ink-faint">{payload.images.length} img</span>}</div>;
           })}
         </section>}
       </div>

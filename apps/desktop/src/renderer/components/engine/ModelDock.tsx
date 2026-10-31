@@ -90,7 +90,7 @@ export function ModelDock() {
         aria-expanded={open}
         title={open ? 'Collapse model settings' : 'Show the loaded models and their settings'}
       >
-        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Model settings
           {rows.length > 0 && <span className="chip text-2xs">{rows.length} loaded</span>}
@@ -105,7 +105,7 @@ export function ModelDock() {
       </button>
 
       {open && (
-        <div className="mt-2.5 space-y-2">
+        <div className="mt-2 space-y-2">
           {status.running && rows.length === 0 && (
             <p className="text-2xs leading-snug text-ink-faint">
               Nothing is in memory yet. Models load on the Models tab, or on their own when a request arrives.
@@ -242,7 +242,7 @@ function DockRow({
   return (
     <div className="rounded-lg border border-line">
       <button
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+        className="flex w-full items-center gap-2 px-3 py-1 text-left"
         onClick={onToggleExpand}
         aria-expanded={expanded}
         title={expanded ? 'Fold the settings away' : `Adjust and reload ${model.name}`}
@@ -267,7 +267,7 @@ function DockRow({
       </button>
 
       {/* Where it sits and what it holds, at a glance. */}
-      <p className="px-2.5 pb-1.5 text-2xs tabular-nums text-ink-faint">
+      <p className="px-3 pb-1 text-2xs tabular-nums text-ink-faint">
         {[
           formatBytes(resident.vramBytes ?? resident.sizeBytes ?? 0),
           resident.contextLength ? `${formatTokens(resident.contextLength)} context` : undefined,
@@ -284,7 +284,7 @@ function DockRow({
       </p>
 
       {expanded && (
-        <div className="space-y-2 border-t border-line px-2.5 py-2.5">
+        <div className="space-y-2 border-t border-line px-3 py-2">
           {/* Unloading is a property of the row, not of the edit, so it sits
               in the corner rather than beside the reload it has nothing to do with. */}
           <div className="flex items-center justify-between gap-2">

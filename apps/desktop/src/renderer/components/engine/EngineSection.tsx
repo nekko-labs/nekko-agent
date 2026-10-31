@@ -177,7 +177,7 @@ export function EngineSection({
             color="var(--accent)"
           />
           <label
-            className="flex items-center gap-1.5 text-xs text-ink-soft"
+            className="flex items-center gap-2 text-xs text-ink-soft"
             title="Bring the engine up when the app opens"
           >
             Start Server on Nekko Launch
@@ -224,7 +224,7 @@ export function EngineSection({
               >
                 <p className="min-w-0 flex-1 text-xs">{install.problem.message}</p>
                 <button
-                  className="btn btn-primary py-1.5 text-xs"
+                  className="btn btn-primary py-1 text-xs"
                   onClick={() => void reinstall(install.problem?.repairBuildId, 'Repairing the engine. Models will use your graphics card once it finishes.')}
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
@@ -237,7 +237,7 @@ export function EngineSection({
               <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
                 <p className="min-w-0 flex-1 text-xs text-ink-soft">{install.upgrade.message}</p>
                 <button
-                  className="btn py-1.5 text-xs"
+                  className="btn py-1 text-xs"
                   onClick={() => void reinstall(install.upgrade?.buildId, 'Downloading the CUDA engine. Nekko switches to it once it finishes.')}
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
@@ -283,7 +283,7 @@ export function EngineSection({
         <h2 className="text-base font-semibold">Models</h2>
         <p className="mt-0.5 text-xs text-ink-faint">Find, download and run models from one library.</p>
         <div className="card mt-3 min-w-0 p-4 sm:p-5">
-        <div className="flex flex-wrap gap-1.5 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
+        <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
           <TabButton active={tab === 'models'} onClick={() => setTab('models')}>
             Models{models.length > 0 ? ` (${models.length})` : ''}
           </TabButton>
@@ -337,7 +337,7 @@ function TabButton({
 }) {
   return (
     <button
-      className="rounded-full px-2.5 py-1 text-xs"
+      className="rounded-full px-3 py-1 text-xs"
       style={
         active
           ? { background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }
@@ -360,7 +360,7 @@ function AddressPill({ address }: { address: string }) {
   }, [copied]);
   return (
     <button
-      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-mono text-2xs text-ink-faint hover:text-ink"
+      className="inline-flex items-center gap-2 rounded-full border px-2 py-1 font-mono text-2xs text-ink-faint hover:text-ink"
       style={{ borderColor: 'var(--line)' }}
       title="Copy the address other tools should point at"
       onClick={async () => {

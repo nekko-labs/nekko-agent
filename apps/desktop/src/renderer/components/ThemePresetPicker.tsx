@@ -87,7 +87,7 @@ export function ThemePresetPicker({
           if (group.experimental) return FAMILIES.length ? (
             <div key="experimental">
               <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Experimental</span>
-              <div className="mt-1.5 grid grid-cols-4 gap-2" role="group" aria-label="Experimental">
+              <div className="mt-1 grid grid-cols-4 gap-2" role="group" aria-label="Experimental">
                 {FAMILIES.map((family) => {
                   const active = family.presets.some((p) => p.id === activeId);
                   const open = openFamily === family.id;
@@ -100,7 +100,7 @@ export function ThemePresetPicker({
                       aria-expanded={open}
                       aria-controls={`theme-family-${family.id}`}
                       data-theme-family={family.id}
-                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-2xs font-medium transition-colors ${
+                      className={`flex flex-col items-center gap-2 rounded-xl border p-2 text-2xs font-medium transition-colors ${
                         active ? 'border-accent bg-accent-soft' : open ? 'border-ink-faint bg-surface-2' : 'border-line bg-surface hover:bg-surface-2'
                       }`}
                     >
@@ -118,7 +118,7 @@ export function ThemePresetPicker({
               {FAMILIES.filter((f) => f.id === openFamily).map((family) => (
                 <div key={family.id} id={`theme-family-${family.id}`} className="mt-2 rounded-xl border border-line bg-surface-2 p-2">
                   <span className="text-2xs text-ink-faint">{family.label} versions</span>
-                  <div className={`mt-1.5 grid gap-2 ${family.presets.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`} role="radiogroup" aria-label={`${family.label} versions`}>
+                  <div className={`mt-1 grid gap-2 ${family.presets.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`} role="radiogroup" aria-label={`${family.label} versions`}>
                     {family.presets.map((preset) => {
                       const active = activeId === preset.id;
                       return (
@@ -149,7 +149,7 @@ export function ThemePresetPicker({
               <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">
                 {group.fun ? 'Fun!' : tr(group.titleKey)}
               </span>
-              <div className="mt-1.5 grid grid-cols-4 gap-2" role="radiogroup" aria-label={group.fun ? 'Fun!' : tr(group.titleKey)}>
+              <div className="mt-1 grid grid-cols-4 gap-2" role="radiogroup" aria-label={group.fun ? 'Fun!' : tr(group.titleKey)}>
                 {presets.map((preset) => {
                   const active = activeId === preset.id;
                   const gradient = slicedSwatch(preset.swatch);
@@ -160,7 +160,7 @@ export function ThemePresetPicker({
                       title={preset.label}
                       role="radio"
                       aria-checked={active}
-                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 text-2xs font-medium transition-colors ${
+                      className={`flex flex-col items-center gap-2 rounded-xl border p-2 text-2xs font-medium transition-colors ${
                         active ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-surface-2'
                       }`}
                     >
@@ -183,7 +183,7 @@ export function ThemePresetPicker({
         <button
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex w-full items-center gap-2.5 p-2.5 text-left"
+          className="flex w-full items-center gap-3 p-3 text-left"
         >
           <span
             className="h-8 w-8 shrink-0 rounded-full border border-line"
@@ -222,7 +222,7 @@ export function ThemePresetPicker({
                       role="radio"
                       aria-checked={on}
                       onClick={() => setEditing(which)}
-                      className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-2xs font-medium transition-colors ${
+                      className={`flex items-center gap-2 rounded-lg border px-2 py-1 text-2xs font-medium transition-colors ${
                         on ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2'
                       }`}
                     >

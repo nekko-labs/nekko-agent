@@ -26,7 +26,7 @@
 .agent-window-picker button {
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   background: var(--surface);
   color: var(--ink);
   cursor: pointer;
@@ -37,10 +37,10 @@
 .agent-window-picker button:focus-visible, .agent-window-picker input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .agent-window-picker button:disabled { cursor: not-allowed; opacity: .6; }
 .agent-window-picker__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
-.agent-window-picker__header p { margin-top: 5px; }
+.agent-window-picker__header p { margin-top: 4px; }
 .agent-window-picker .agent-window-picker__back { margin-bottom: 16px; }
 .agent-window-picker__options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.agent-window-picker .agent-window-picker__option { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; }
+.agent-window-picker .agent-window-picker__option { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px; }
 .agent-window-picker__option span, .agent-window-picker__list span { color: var(--ink-soft); font-size: var(--text-xs); line-height: 1.5; overflow-wrap: anywhere; }
 .agent-window-picker__cat { width: 72px; height: 72px; color: var(--accent); flex-shrink: 0; }
 .agent-window-picker__columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
@@ -50,7 +50,7 @@
    height, defeating the nested flex list's scrolling and covering Create chat. */
 .agent-window-picker__models > div { height: 100%; overflow: hidden; }
 .agent-window-picker__models [role="listbox"] { min-height: 0; overflow-y: auto; }
-.agent-window-picker__models button { border: 0; padding: 6px 10px; border-radius: 8px; }
+.agent-window-picker__models button { border: 0; padding: 4px 12px; border-radius: 8px; }
 .agent-window-picker__models button:disabled { opacity: .6; }
 /* The picker's generic button colour beat the list's own selected accent, so a
    chosen model looked exactly like every other row. */
@@ -64,7 +64,7 @@
 .agent-window-picker > [role="status"] { margin-top: 16px; }
 .agent-window-picker__sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* New chat: three numbered steps and one Start, with defaults already chosen. */
-.agent-window-picker__steps { display: flex; flex-direction: column; gap: 14px; }
+.agent-window-picker__steps { display: flex; flex-direction: column; gap: 16px; }
 .agent-window-picker__step { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .agent-window-picker__step h3, .agent-window-picker__existing summary { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); font-weight: 650; }
 .agent-window-picker__step-num { display: inline-grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: var(--text-2xs); font-weight: 700; }
@@ -75,8 +75,8 @@
 .agent-window-picker__summary-action { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .agent-window-picker__steps .agent-window-picker__models { height: 260px; flex-basis: 260px; }
 .agent-window-picker__step .effort-slider { align-self: flex-start; border-left-width: 1px; border-radius: 8px; }
-.agent-window-picker__folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
-.agent-window-picker .agent-window-picker__folders button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.agent-window-picker__folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.agent-window-picker .agent-window-picker__folders button { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
 .agent-window-picker .agent-window-picker__folders button[aria-checked="true"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .agent-window-picker__check { display: inline-grid; place-items: center; width: 16px; height: 16px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 4px; }
 .agent-window-picker__check[data-on] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink, var(--surface)); }
@@ -84,13 +84,13 @@
 .agent-window-picker__folder-text strong { font-size: var(--text-sm); }
 .agent-window-picker__folder-text span { overflow: hidden; color: var(--ink-faint); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap; }
 .agent-window-picker__badge { flex-shrink: 0; color: var(--accent); font-size: var(--text-2xs); font-weight: 600; }
-.agent-window-picker__badge--default { padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); }
+.agent-window-picker__badge--default { padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); }
 /* Save or clear the checked folders as what every new agent starts with. */
 .agent-window-picker__default-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-height: 20px; font-size: var(--text-xs); }
 .agent-window-picker .agent-window-picker__link { border: 0; padding: 0; background: none; color: var(--accent); font-size: var(--text-xs); font-weight: 600; }
 .agent-window-picker .agent-window-picker__link:hover:not(:disabled) { background: none; text-decoration: underline; }
 .agent-window-picker .agent-window-picker__link--quiet { color: var(--ink-faint); font-weight: 500; }
-.agent-window-picker__default-note { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-soft); }
+.agent-window-picker__default-note { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-soft); }
 .agent-window-picker__existing summary { cursor: pointer; list-style: none; }
 .agent-window-picker__existing summary::-webkit-details-marker { display: none; }
 .agent-window-picker__existing summary::after { content: ''; width: 7px; height: 7px; margin-left: 2px; border-right: 1.5px solid var(--ink-faint); border-bottom: 1.5px solid var(--ink-faint); transform: rotate(-45deg); transition: transform 120ms ease; }
@@ -98,7 +98,7 @@
 .agent-window-picker__existing summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 .agent-window-picker__optional { color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 500; }
 .agent-window-picker__existing .agent-window-picker__list { max-height: 220px; }
-.agent-window-picker__steps > .agent-window-picker__primary { align-self: stretch; padding: 11px 12px; font-weight: 650; }
+.agent-window-picker__steps > .agent-window-picker__primary { align-self: stretch; padding: 12px 12px; font-weight: 650; }
 @media (prefers-reduced-motion: reduce) { .agent-window-picker__existing summary::after { transition: none; } }
 @container (max-width: 540px) {
   .agent-window-picker__options:not(.agent-window-picker__categories), .agent-window-picker__columns { grid-template-columns: minmax(0, 1fr); }

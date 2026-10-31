@@ -238,7 +238,7 @@ function AgentToolCard({
         </div>
         {!tool.installed && tool.detected && (
           <div className="flex shrink-0 items-center gap-2">
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-soft">
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-soft">
               <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`Add Nekko Agent to ${tool.label}`} />
               Add
             </label>
@@ -313,7 +313,7 @@ function ManualSnippet({ id }: { id: AgentToolId }) {
       <p className="text-2xs text-ink-faint">
         Add this to <span className="font-mono">{snippet.target}</span>:
       </p>
-      <pre className="mt-1.5 overflow-x-auto text-2xs leading-relaxed">{snippet.snippet}</pre>
+      <pre className="mt-1 overflow-x-auto text-2xs leading-relaxed">{snippet.snippet}</pre>
       <button className="btn btn-outline mt-2 px-2 py-1 text-2xs" onClick={() => void copy()}>
         <CopyIcon className="mr-1 inline h-3 w-3" />
         {copied ? 'Copied' : 'Copy config'}

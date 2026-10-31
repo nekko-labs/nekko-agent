@@ -182,7 +182,7 @@ function PrOverflow({ prs }: { prs: PrInfo[] }) {
 export function SessionPrLinks({ prs }: { prs: PrInfo[] }) {
   if (!prs.length) return null;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5">
+    <span className="inline-flex shrink-0 items-center gap-2">
       {prs.length > MAX_INLINE_PRS ? <PrOverflow prs={prs} /> : prs.map((pr) => <PrLink key={pr.url} pr={pr} />)}
     </span>
   );

@@ -30,7 +30,7 @@ export function SubagentOpenButton({ call }: { call: ToolCall }) {
   const children = useContext(SubagentParentContext);
   const child = delegationChild(call, children);
   if (!child) return null;
-  return <button type="button" className="shrink-0 rounded px-1.5 text-2xs text-accent hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-(--ring)" aria-label={`Open subagent: ${child.title}`} title={`Open ${child.title}`} onClick={() => {
+  return <button type="button" className="shrink-0 rounded px-2 text-2xs text-accent hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-(--ring)" aria-label={`Open subagent: ${child.title}`} title={`Open ${child.title}`} onClick={() => {
     const store = useStore.getState();
     store.openChatPane(child.id);
   }}>Open ↗</button>;
@@ -74,7 +74,7 @@ export function SubagentModelChip({ call }: { call: ToolCall }) {
   if (!model) return null;
   const why = model.source === 'child' ? 'from the child chat' : model.source === 'requested' ? 'requested by the delegation call' : 'inherited from this chat';
   return (
-    <span className="max-w-[40%] shrink-0 truncate rounded border border-line px-1.5 py-0.5 text-2xs font-normal text-ink-faint" title={`Model: ${model.id} (${why})`} data-subagent-model>
+    <span className="max-w-[40%] shrink-0 truncate rounded border border-line px-2 py-0.5 text-2xs font-normal text-ink-faint" title={`Model: ${model.id} (${why})`} data-subagent-model>
       {shortModelName(model.id)}
     </span>
   );

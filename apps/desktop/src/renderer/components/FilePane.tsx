@@ -290,7 +290,7 @@ function HostFilePane({ path }: { path: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-xs">
         <FileTypeIcon name={name} size={15} />
         <span className="font-medium">{name}</span>
         {comments.length > 0 && (
@@ -377,7 +377,7 @@ function HostFilePane({ path }: { path: string }) {
                 return (
                   <div
                     key={ln}
-                    className={`group/g relative cursor-pointer pr-1.5 font-mono text-2xs ${isActive ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+                    className={`group/g relative cursor-pointer pr-2 font-mono text-2xs ${isActive ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
                     style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}
                     onClick={() => setActiveLine(ln)}
                     title={has ? 'View comment' : 'Comment on this line'}
@@ -468,7 +468,7 @@ function SaveState({
   if (saving) return <span className="text-2xs text-ink-faint">Saving…</span>;
   if (dirty) {
     return (
-      <span className="flex items-center gap-1.5 text-2xs text-ink-faint" title={autoSave ? 'Saves shortly after you stop typing' : 'Unsaved changes (Ctrl+S)'}>
+      <span className="flex items-center gap-2 text-2xs text-ink-faint" title={autoSave ? 'Saves shortly after you stop typing' : 'Unsaved changes (Ctrl+S)'}>
         <span className="h-1.5 w-1.5 rounded-full bg-accent" />
         {autoSave ? 'Saving shortly' : 'Unsaved'}
       </span>
@@ -500,14 +500,14 @@ function CommentDock({
   const act = (action: 'save' | 'prompt' | 'run') => { onAdd(text, action); setText(''); };
   return (
     <div className="max-h-[45%] shrink-0 overflow-y-auto border-t border-line px-3 py-2" style={{ background: 'var(--surface-2)' }}>
-      <div className="mb-1.5 flex items-center gap-2 text-xs">
+      <div className="mb-1 flex items-center gap-2 text-xs">
         <span className="font-semibold text-accent">Line {line}</span>
         <code className="min-w-0 flex-1 truncate font-mono text-2xs text-ink-faint">{lineText.trim() || '(empty line)'}</code>
         <button className="rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Close" onClick={onClose}><CloseIcon className="h-3.5 w-3.5" /></button>
       </div>
 
       {comments.map((c) => (
-        <div key={c.id} className="mb-1.5 rounded-lg border border-line p-2" style={{ background: 'var(--paper)' }}>
+        <div key={c.id} className="mb-1 rounded-lg border border-line p-2" style={{ background: 'var(--paper)' }}>
           <p className="whitespace-pre-wrap text-xs">{c.comment}</p>
           <div className="mt-1 flex items-center gap-3 text-2xs text-ink-faint">
             <button className="hover:text-accent" onClick={() => onResend(c, false)} title="Queue into the composer">Add to prompt</button>
@@ -526,7 +526,7 @@ function CommentDock({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); act('prompt'); } }}
       />
-      <div className="mt-1.5 flex items-center justify-end gap-2 text-xs">
+      <div className="mt-1 flex items-center justify-end gap-2 text-xs">
         <button className="btn btn-ghost py-1" disabled={!text.trim()} onClick={() => act('save')} title="Save as a note (no agent)">Save</button>
         <button className="btn btn-outline py-1" disabled={!text.trim()} onClick={() => act('prompt')}>Add to prompt</button>
         <button className="btn btn-primary py-1" disabled={!text.trim()} onClick={() => act('run')}>Run now</button>

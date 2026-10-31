@@ -191,7 +191,7 @@ export function SubscriptionSignIn({
         {session.mode === 'manual' && (
           <div className="flex gap-2">
             <input
-              className="input py-1.5 text-xs"
+              className="input py-1 text-xs"
               aria-label="Paste the sign-in code"
               placeholder={oauthProvider === 'chatgpt' ? 'Paste the redirect URL (or code)' : 'Paste the code (code#state)'}
               value={pasted}
@@ -200,7 +200,7 @@ export function SubscriptionSignIn({
               disabled={finishing}
               autoFocus
             />
-            <button className="btn btn-primary py-1.5 text-xs" onClick={() => void finish()} disabled={finishing || !pasted.trim()}>
+            <button className="btn btn-primary py-1 text-xs" onClick={() => void finish()} disabled={finishing || !pasted.trim()}>
               {finishing ? 'Signing in…' : 'Complete sign-in'}
             </button>
           </div>
@@ -217,7 +217,7 @@ export function SubscriptionSignIn({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <button className="btn btn-primary" onClick={() => void begin()} disabled={phase.kind === 'starting'}>
         {phase.kind === 'starting' ? 'Opening…' : signInLabel}
       </button>

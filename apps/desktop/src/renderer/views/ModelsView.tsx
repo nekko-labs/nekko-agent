@@ -195,7 +195,7 @@ function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | nu
     (a, b) => windowOrder.indexOf(a.scope) - windowOrder.indexOf(b.scope) || b.usedPercent - a.usedPercent,
   );
   return (
-    <div className="mt-3 space-y-1.5 border-t border-line pt-3">
+    <div className="mt-3 space-y-1 border-t border-line pt-3">
       <div className="flex items-center justify-between text-2xs text-ink-faint">
         <span title={`Live read from ${subName}`}>Plan: {limits.planType ?? '—'}</span>
         <span>Credits: {limits.creditsBalance === undefined ? 'Unlimited' : formatUSD(limits.creditsBalance)}</span>
@@ -269,20 +269,20 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
       </p>
       <div className="flex gap-2">
         <input
-          className="input py-1.5 text-xs"
+          className="input py-1 text-xs"
           type="password"
           aria-label="Anthropic API key"
           placeholder="sk-ant-…"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
         />
-        <button className="btn btn-primary py-1.5 text-xs" disabled={saving || !apiKey.trim()} onClick={() => void useKey()}>
+        <button className="btn btn-primary py-1 text-xs" disabled={saving || !apiKey.trim()} onClick={() => void useKey()}>
           {saving ? 'Checking…' : 'Use this key'}
         </button>
       </div>
       {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-xs" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use my subscription instead</button>
+        <button className="btn btn-outline py-1 text-xs" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use my subscription instead</button>
         <ClaudeWhyLink label="What works with a Claude plan?" />
       </div>
     </div>
@@ -628,10 +628,10 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-xs" onClick={test}>Test connection</button>
+        <button className="btn btn-outline py-1 text-xs" onClick={test}>Test connection</button>
         {conn.state === 'fail' && <span className="text-xs" style={{ color: 'var(--danger)' }}>{conn.message}</span>}
         {conn.state === 'fail' && !subscription && reconnectOAuth && (
-          <button className="btn btn-outline py-1.5 text-xs" onClick={() => setReconnecting((v) => !v)}>
+          <button className="btn btn-outline py-1 text-xs" onClick={() => setReconnecting((v) => !v)}>
             Reconnect
           </button>
         )}
@@ -661,9 +661,9 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
           {sub === null ? (
             <span className="text-ink-faint">Checking sign-in…</span>
           ) : sub.connected ? (
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex min-w-0 items-center gap-1.5 text-ink-soft">
+                <span className="inline-flex min-w-0 items-center gap-2 text-ink-soft">
                   <CheckIcon className="h-3.5 w-3.5 shrink-0 text-success" />
                   <span className="truncate">
                     Signed in with {subName}{provider.accountId ? ` · ${provider.accountId}` : ''}
@@ -733,9 +733,9 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
 
       {isOllama && (
         <div className="mt-3 flex gap-2">
-          <input className="input py-1.5 text-xs" placeholder="pull a model, e.g. llama3.2" value={pullName} onChange={(e) => setPullName(e.target.value)} />
+          <input className="input py-1 text-xs" placeholder="pull a model, e.g. llama3.2" value={pullName} onChange={(e) => setPullName(e.target.value)} />
           <button
-            className="btn btn-outline py-1.5 text-xs"
+            className="btn btn-outline py-1 text-xs"
             onClick={async () => { setConn({ state: 'testing', message: 'pulling…' }); const r = await window.nekko.pullModel(provider.id, pullName); setConn({ state: r.ok ? 'ok' : 'fail', message: r.message }); load(); }}
           >
             Pull
@@ -752,7 +752,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
 
       {filtering && (
         <input
-          className="input mt-2 rounded-lg px-2.5 py-1 text-xs"
+          className="input mt-2 rounded-lg px-3 py-1 text-xs"
           placeholder="Filter models…"
           aria-label="Filter models"
           value={query}
@@ -771,12 +771,12 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
         ))}
         {models.length > 0 && listedModels.length === 0 && <p className="text-xs text-ink-faint">No models match.</p>}
         {defaultMenu && <ContextMenu x={defaultMenu.x} y={defaultMenu.y} onClose={() => setDefaultMenu(null)}><ContextAction onClick={() => { void window.nekko.updateSettings({defaultProviderId:provider.id,defaultModelId:defaultMenu.id}).then(() => useStore.getState().refreshSettings()).catch(e => pushToast("error",String(e))); setDefaultMenu(null); }}>Set as default</ContextAction></ContextMenu>}
-        {defaultId && !models.some(m => m.id === defaultId) && <div aria-disabled="true" className="rounded-lg px-2 py-1.5 text-xs text-ink-faint">{defaultId} <span className="text-2xs">Default · unavailable</span></div>}
+        {defaultId && !models.some(m => m.id === defaultId) && <div aria-disabled="true" className="rounded-lg px-2 py-1 text-xs text-ink-faint">{defaultId} <span className="text-2xs">Default · unavailable</span></div>}
         {listedModels.map((m) => {
           const price = formatModelPriceLabel({ modelId: m.id, auth: provider.auth, isLocal: local, pricing: modelPricing(m) });
           return (
-            <div key={m.id} onContextMenu={(e) => { e.preventDefault(); setDefaultMenu({x:e.clientX,y:e.clientY,id:m.id}); }} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-xs" style={{ background: 'var(--surface-2)' }}>
-              <div className="flex min-w-0 items-center gap-1.5">
+            <div key={m.id} onContextMenu={(e) => { e.preventDefault(); setDefaultMenu({x:e.clientX,y:e.clientY,id:m.id}); }} className="flex items-center justify-between rounded-lg px-2 py-1 text-xs" style={{ background: 'var(--surface-2)' }}>
+              <div className="flex min-w-0 items-center gap-2">
                 <button
                 title={isFavorite(`${provider.id}::${m.id}`) ? 'Unfavorite' : 'Favorite (pin to top of the model picker)'}
                 className={isFavorite(`${provider.id}::${m.id}`) ? 'text-accent' : 'text-ink-faint hover:text-ink'}

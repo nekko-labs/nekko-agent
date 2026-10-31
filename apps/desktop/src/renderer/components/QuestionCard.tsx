@@ -190,7 +190,7 @@ export function QuestionCard({
       tabIndex={-1}
       onKeyDown={onKeyDown}
     >
-      <div className="mb-2 flex items-center gap-1.5">
+      <div className="mb-2 flex items-center gap-2">
         <PixelQuestionIcon className="h-4 w-4 shrink-0" />
         <span className="text-2xs font-semibold uppercase tracking-wide" style={{ color: hue }}>
           Before I start
@@ -232,7 +232,7 @@ export function QuestionCard({
       {/* Keyed on the question so each step animates in as its own thing rather
           than the text swapping underneath the same box. */}
       <div key={q.id} className="fade-in">
-        <div className="mb-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+        <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="chip shrink-0 text-2xs uppercase tracking-wide">{q.header}</span>
           <span className={`${compact ? 'text-xs' : tone === 'attention' ? 'text-sm font-semibold' : 'text-xs'} font-medium text-ink`}>{q.question}</span>
           <span className="text-2xs text-ink-soft">{q.multiSelect ? 'pick any' : 'pick one'}</span>
@@ -249,7 +249,7 @@ export function QuestionCard({
             return (
               <button
                 key={o.label}
-                className="flex w-full items-start gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors"
+                className="flex w-full items-start gap-2 rounded-lg border px-3 py-1 text-left transition-colors"
                 style={{
                   borderColor: on ? 'var(--accent)' : here ? 'color-mix(in srgb, var(--accent) 40%, var(--line))' : 'var(--line)',
                   background: on
@@ -285,7 +285,7 @@ export function QuestionCard({
 
           {!otherShown ? (
             <button
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-2.5 py-1.5 text-left text-xs text-ink-soft transition-colors hover:text-ink"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-1 text-left text-xs text-ink-soft transition-colors hover:text-ink"
               style={{
                 borderColor: cursor >= q.options.length ? 'color-mix(in srgb, var(--accent) 40%, var(--line))' : 'var(--line)',
                 background: cursor >= q.options.length ? 'color-mix(in srgb, white 8%, var(--surface-2))' : 'color-mix(in srgb, white 4%, var(--surface-2))',
@@ -309,14 +309,14 @@ export function QuestionCard({
         </div>
       </div>
 
-      <div className="mt-2.5 flex items-center gap-2">
+      <div className="mt-2 flex items-center gap-2">
         {index > 0 && (
           <button className="btn btn-ghost px-2 py-1 text-xs" onClick={() => setStep(index - 1)}>
             Back
           </button>
         )}
         <button
-          className={`btn px-2.5 py-1 text-xs ${hasAnswer ? 'btn-primary' : 'btn-outline'}`}
+          className={`btn px-3 py-1 text-xs ${hasAnswer ? 'btn-primary' : 'btn-outline'}`}
           onClick={goNext}
           title={
             last && !complete ? 'Anything left blank goes back as unanswered' : undefined

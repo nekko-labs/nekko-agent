@@ -74,17 +74,17 @@ export function EngineInstallCard({
                 </option>
               ))}
             </select>
-            <p className="mt-1.5 text-xs text-ink-faint">
+            <p className="mt-1 text-xs text-ink-faint">
               {install.available.find((b) => b.id === buildId)?.requires ?? install.recommended.requires}
             </p>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button className="btn btn-primary py-1.5 text-xs" onClick={start} disabled={busy}>
+            <button className="btn btn-primary py-1 text-xs" onClick={start} disabled={busy}>
               <DownloadIcon className="mr-1 inline h-3.5 w-3.5" />
               {busy ? 'Downloading…' : 'Download the engine'}
             </button>
-            <button className="btn btn-ghost py-1.5 text-xs" onClick={() => setShowOther((v) => !v)}>
+            <button className="btn btn-ghost py-1 text-xs" onClick={() => setShowOther((v) => !v)}>
               I already have llama.cpp
             </button>
           </div>
@@ -113,11 +113,11 @@ export function EngineInstallCard({
               placeholder="/usr/local/bin/llama-server"
               spellCheck={false}
             />
-            <button className="btn btn-outline py-1.5 text-xs" onClick={useOwn} disabled={!ownPath.trim()}>
+            <button className="btn btn-outline py-1 text-xs" onClick={useOwn} disabled={!ownPath.trim()}>
               Use it
             </button>
           </div>
-          <p className="mt-1.5 text-2xs text-ink-faint">
+          <p className="mt-1 text-2xs text-ink-faint">
             A binary you point at is yours: Nekko Agent runs it but never updates or removes it.
           </p>
         </div>

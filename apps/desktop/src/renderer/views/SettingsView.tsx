@@ -201,7 +201,7 @@ export function SettingsView() {
                     <p className="text-2xs text-ink-faint">{tr('settings.languageHint')}</p>
                   </div>
                   <select
-                    className="input max-w-[180px] py-1.5"
+                    className="input max-w-[180px] py-1"
                     value={settings.language ?? ''}
                     onChange={(e) => update({ language: e.target.value || undefined })}
                   >
@@ -218,7 +218,7 @@ export function SettingsView() {
                   </div>
                   <select
                     id="chat-pane-action"
-                    className="input max-w-[180px] py-1.5"
+                    className="input max-w-[180px] py-1"
                     value={settings.chatPaneAction ?? 'complete'}
                     onChange={(e) => update({ chatPaneAction: e.target.value === 'delete' ? 'delete' : 'complete' })}
                   >
@@ -233,7 +233,7 @@ export function SettingsView() {
                   </div>
                   <select
                     id="auto-complete-after"
-                    className="input max-w-[180px] py-1.5"
+                    className="input max-w-[180px] py-1"
                     value={autoCompleteDays(settings.autoCompleteAfterDays)}
                     onChange={(e) => update({ autoCompleteAfterDays: Number(e.target.value) })}
                   >
@@ -255,7 +255,7 @@ export function SettingsView() {
                     <span className="text-sm">Setup wizard</span>
                     <p className="text-2xs text-ink-faint">Reopen the first-run walkthrough (theme, providers, integrations).</p>
                   </div>
-                  <button className="btn btn-outline shrink-0 py-1.5 text-xs" onClick={() => void replaySetup()}>
+                  <button className="btn btn-outline shrink-0 py-1 text-xs" onClick={() => void replaySetup()}>
                     Replay setup
                   </button>
                 </div>
@@ -520,7 +520,7 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
         </div>
         <input
           type="number"
-          className="input max-w-[110px] py-1.5 tabular-nums"
+          className="input max-w-[110px] py-1 tabular-nums"
           min={MAX_OUTPUT_TOKENS_RANGE.min}
           max={MAX_OUTPUT_TOKENS_RANGE.max}
           step={256}
@@ -540,10 +540,10 @@ function AgentLoopSection({ settings, update }: { settings: AppSettings; update:
             of risky commands never time out.
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <input
             type="number"
-            className="input max-w-[90px] py-1.5 tabular-nums"
+            className="input max-w-[90px] py-1 tabular-nums"
             min={0}
             max={1440}
             step={5}
@@ -626,7 +626,7 @@ function TerminalSection({ settings, update }: { settings: AppSettings; update: 
       <div className="flex items-center gap-2"><h2 className="font-semibold">Terminal</h2></div>
       <label className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
         <span className="text-sm">Default shell</span>
-        <select className="input max-w-[180px] py-1.5" aria-label="Default shell" value={settings.defaultShellPath ?? ''} onChange={(e) => update({ defaultShellPath: e.target.value || undefined })}>
+        <select className="input max-w-[180px] py-1" aria-label="Default shell" value={settings.defaultShellPath ?? ''} onChange={(e) => update({ defaultShellPath: e.target.value || undefined })}>
           <option value="">Auto-detect</option>
           {settings.defaultShellPath && !shells.some((shell) => shell.path === settings.defaultShellPath) && <option value={settings.defaultShellPath}>{settings.defaultShellPath} (unavailable)</option>}
           {shells.map((shell) => <option key={shell.id} value={shell.path}>{shell.label}</option>)}
@@ -641,7 +641,7 @@ function TerminalSection({ settings, update }: { settings: AppSettings; update: 
           </p>
         </div>
         <select
-          className="input max-w-[180px] py-1.5"
+          className="input max-w-[180px] py-1"
           aria-label="Terminal renderer"
           value={settings.terminal?.renderer ?? 'xterm'}
           onChange={(e) => update({ terminal: { ...settings.terminal, renderer: e.target.value as TerminalRenderer } })}
@@ -694,8 +694,8 @@ function BackupSection({ settings, onSettings }: { settings: AppSettings; onSett
       <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">Backup &amp; restore</h2></div>
       <p className="mt-1 text-xs text-ink-faint">Export your configuration (providers, guardrails, prompts, MCP servers…) to a JSON file, or restore it on another machine.</p>
       <div className="mt-3 flex gap-2">
-        <button className="btn btn-outline py-1.5 text-xs" onClick={exportSettings}>Export settings</button>
-        <button className="btn btn-outline py-1.5 text-xs" onClick={importSettings}>Import settings…</button>
+        <button className="btn btn-outline py-1 text-xs" onClick={exportSettings}>Export settings</button>
+        <button className="btn btn-outline py-1 text-xs" onClick={importSettings}>Import settings…</button>
       </div>
     </section>
   );
@@ -752,15 +752,15 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
       <div className="mt-3 flex min-h-[36px] flex-wrap items-center justify-between gap-2">
         <span className="text-sm">Delete chats</span>
         <div className="flex flex-wrap gap-2">
-          <button className="btn btn-outline py-1.5 text-xs" disabled={busy} onClick={() => clear('today', "today's chats")}>Today</button>
-          <button className="btn btn-outline py-1.5 text-xs" disabled={busy} onClick={() => clear('month', "this month's chats")}>This month</button>
-          <button className="btn btn-outline py-1.5 text-xs" disabled={busy} onClick={() => clear('all', 'all chats')}>All chats</button>
+          <button className="btn btn-outline py-1 text-xs" disabled={busy} onClick={() => clear('today', "today's chats")}>Today</button>
+          <button className="btn btn-outline py-1 text-xs" disabled={busy} onClick={() => clear('month', "this month's chats")}>This month</button>
+          <button className="btn btn-outline py-1 text-xs" disabled={busy} onClick={() => clear('all', 'all chats')}>All chats</button>
         </div>
       </div>
 
       <div className="mt-2 flex min-h-[36px] items-center justify-between gap-2">
         <span className="text-sm">Reset settings to defaults</span>
-        <button className="btn btn-outline py-1.5 text-xs" disabled={busy} onClick={reset}>Reset configs</button>
+        <button className="btn btn-outline py-1 text-xs" disabled={busy} onClick={reset}>Reset configs</button>
       </div>
 
       <div className="mt-2 flex min-h-[36px] items-center justify-between gap-2">
@@ -769,7 +769,7 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
           <p className="text-2xs text-ink-faint">Chats, settings, memory, and usage analytics.</p>
         </div>
         <button
-          className="btn py-1.5 text-xs text-white!"
+          className="btn py-1 text-xs text-white!"
           style={{ background: 'var(--danger)' }}
           disabled={busy}
           onClick={wipe}
@@ -1038,7 +1038,7 @@ function GitManagementSection({ settings, update }: { settings: AppSettings; upd
           <button className="btn btn-outline py-1 text-xs" onClick={refresh}>Refresh</button>
         </div>
         <p className="mt-0.5 text-2xs text-ink-faint">Worktrees are kept when a chat is completed or deleted. Removing one frees the folder: Git refuses if it has uncommitted changes, and its branch is deleted only once merged.</p>
-        <div className="mt-2 space-y-1.5">
+        <div className="mt-2 space-y-1">
           {worktrees === null && <p className="text-xs text-ink-faint">Loading...</p>}
           {worktrees?.length === 0 && <p className="text-xs text-ink-faint">No chat worktrees.</p>}
           {worktrees?.map((w) => {
@@ -1079,7 +1079,7 @@ function CustomizationSection({ settings, update }: { settings: AppSettings; upd
         </label>
       ))}
       <p className="mt-2 text-2xs text-ink-faint">Edits save when you leave a field. An empty wrapper disables the extra per-turn instructions.</p>
-      <button className="btn btn-outline mt-3 py-1.5 text-xs" onClick={() => update({ turnWrapper: DEFAULT_TURN_WRAPPER })}>Reset wrapper to recommended points</button>
+      <button className="btn btn-outline mt-3 py-1 text-xs" onClick={() => update({ turnWrapper: DEFAULT_TURN_WRAPPER })}>Reset wrapper to recommended points</button>
     </section>
   );
 }
@@ -1196,7 +1196,7 @@ function GuardrailsSection({
             onChange={(e) => setDraft(e.target.value)}
             spellCheck={false}
           />
-          {error && <p className="mt-1.5 text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
+          {error && <p className="mt-1 text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
           <div className="mt-2 flex justify-end gap-2">
             <button className="btn btn-ghost" onClick={() => setJsonMode(false)}>Cancel</button>
             <button className="btn btn-primary" onClick={apply}>Apply</button>
@@ -1321,32 +1321,32 @@ function UpdatesSection({ settings, update }: { settings: AppSettings; update: (
         <Toggle aria-label="Skills catalog" on={checks.skills} onChange={(v) => void setCheck('skills', v)} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-xs" onClick={() => void runCatalogChecks()} disabled={catalogState === 'checking'}>
+        <button className="btn btn-outline py-1 text-xs" onClick={() => void runCatalogChecks()} disabled={catalogState === 'checking'}>
           {catalogState === 'checking' ? 'Refreshing…' : 'Refresh catalogs now'}
         </button>
         {catalogState === 'done' && <span className="text-xs text-ink-faint" role="status">Model lists and skills checked.</span>}
         {catalogState === 'failed' && <span className="text-xs text-danger" role="status">Refresh failed; try again.</span>}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-xs" onClick={() => void updater.check(true)} disabled={stage === 'checking' || stage === 'downloading' || stage === 'installing'}>
+        <button className="btn btn-outline py-1 text-xs" onClick={() => void updater.check(true)} disabled={stage === 'checking' || stage === 'downloading' || stage === 'installing'}>
           {stage === 'checking' ? 'Checking…' : 'Check now'}
         </button>
         {stage === 'available' && (isWeb ? (
-          <button className="btn btn-primary py-1.5 text-xs" onClick={() => void updater.install()}>Refresh now</button>
+          <button className="btn btn-primary py-1 text-xs" onClick={() => void updater.install()}>Refresh now</button>
         ) : (
           <>
-            <button className="btn btn-primary py-1.5 text-xs" onClick={() => void updater.downloadAndInstall()}>Download &amp; install</button>
-            <button className="btn btn-outline py-1.5 text-xs" onClick={() => void updater.downloadOnly()}>Download only</button>
-            <button className="btn btn-ghost py-1.5 text-xs" onClick={updater.skip}>Skip</button>
+            <button className="btn btn-primary py-1 text-xs" onClick={() => void updater.downloadAndInstall()}>Download &amp; install</button>
+            <button className="btn btn-outline py-1 text-xs" onClick={() => void updater.downloadOnly()}>Download only</button>
+            <button className="btn btn-ghost py-1 text-xs" onClick={updater.skip}>Skip</button>
           </>
         ))}
         {stage === 'downloaded' && (
           <>
-            <button className="btn btn-primary py-1.5 text-xs" onClick={() => void updater.install()}>Install &amp; restart</button>
-            <button className="btn btn-ghost py-1.5 text-xs" onClick={updater.skip}>Skip</button>
+            <button className="btn btn-primary py-1 text-xs" onClick={() => void updater.install()}>Install &amp; restart</button>
+            <button className="btn btn-ghost py-1 text-xs" onClick={updater.skip}>Skip</button>
           </>
         )}
-        {stage === 'failed' && <button className="btn btn-outline py-1.5 text-xs" onClick={() => void updater.retry()}>Retry</button>}
+        {stage === 'failed' && <button className="btn btn-outline py-1 text-xs" onClick={() => void updater.retry()}>Retry</button>}
         {statusText && <span className={`text-xs ${stage === 'failed' ? 'text-danger' : 'text-ink-faint'}`} role="status" aria-live="polite">{statusText}</span>}
       </div>
       {(stage === 'downloading' || stage === 'installing') && (
