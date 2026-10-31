@@ -20,8 +20,16 @@ beforeAll(async () => {
   jwks = { keys: [{ ...(await exportJWK(pair.publicKey)), kid: "k1", alg: "ES256" }] };
 });
 
+/** Supabase Auth's user records, by subject, as `GET /auth/v1/user` would answer. */
+let authUsers: Map<string, { id: string; email: string; email_confirmed_at: string | null }>;
+const fetchUser = async (token: string) => {
+  const sub = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).sub as string;
+  return authUsers.get(sub) ?? null;
+};
+
 let db: Db;
 beforeEach(async () => {
+  authUsers = new Map();
   db = pgliteDb(new PGlite());
   await migrate(db, undefined, { lock: false });
 });
@@ -31,7 +39,7 @@ function app(signIn = true) {
   return buildServer({
     db,
     allowedOrigins: [],
-    signIn: signIn ? { supabaseUrl: URL_, supabaseAnonKey: "anon-public", verify: supabaseVerifier({ url: URL_, jwks }) } : undefined,
+    signIn: signIn ? { supabaseUrl: URL_, supabaseAnonKey: "anon-public", verify: supabaseVerifier({ url: URL_, jwks, fetchUser }) } : undefined,
   });
 }
 
@@ -103,8 +111,17 @@ describe("sign-in with Supabase", () => {
     // A password sign-up with email confirmation off would carry no proof of the address.
     const unproven = await signIn(a, { amr: [{ method: "password" }], user_metadata: { email_verified: false } });
     expect(unproven.statusCode).toBe(409);
+    // user_metadata is the user's to write: it proves nothing.
+    authUsers.set("auth-user-1", { id: "auth-user-1", email: "ada@example.com", email_confirmed_at: null });
+    const claimed = await signIn(a, { amr: [{ method: "password" }], user_metadata: { email_verified: true } });
+    expect(claimed.statusCode).toBe(409);
     expect((await db.query("select auth_subject from users", [])).rows).toEqual([{ auth_subject: null }]);
-    const oauth = await signIn(a, { amr: [{ method: "oauth" }], user_metadata: { email_verified: true } });
+    // A record for another address does not prove this one.
+    authUsers.set("auth-user-1", { id: "auth-user-1", email: "other@example.com", email_confirmed_at: "2026-10-01T00:00:00Z" });
+    expect((await signIn(a, { amr: [{ method: "oauth" }] })).statusCode).toBe(409);
+    // Supabase Auth confirmed the address (here, an OAuth provider's verified email).
+    authUsers.set("auth-user-1", { id: "auth-user-1", email: "ada@example.com", email_confirmed_at: "2026-10-01T00:00:00Z" });
+    const oauth = await signIn(a, { amr: [{ method: "oauth" }] });
     expect(oauth.json().account).toMatchObject({ plan: "pro" });
   });
 
@@ -138,7 +155,7 @@ describe("sign-in with Supabase", () => {
 
   it("verifies legacy HS256 projects with the JWT secret", async () => {
     const secret = "legacy-project-jwt-secret-at-least-32-chars";
-    const verify = supabaseVerifier({ url: URL_, jwtSecret: secret });
+    const verify = supabaseVerifier({ url: URL_, jwtSecret: secret, fetchUser: async () => null });
     const token = await new SignJWT({ sub: "u", email: "a@b.co", role: "authenticated" })
       .setProtectedHeader({ alg: "HS256" }).setIssuer(ISSUER).setAudience("authenticated").setExpirationTime("1h")
       .sign(new TextEncoder().encode(secret));
@@ -149,7 +166,7 @@ describe("sign-in with Supabase", () => {
   it("limits sign-ins tighter than account reads", async () => {
     const a = buildServer({
       db, allowedOrigins: [], authRateLimit: { max: 2, windowMs: 60_000 },
-      signIn: { supabaseUrl: URL_, supabaseAnonKey: "anon-public", verify: supabaseVerifier({ url: URL_, jwks }) },
+      signIn: { supabaseUrl: URL_, supabaseAnonKey: "anon-public", verify: supabaseVerifier({ url: URL_, jwks, fetchUser }) },
     });
     const token = (await signIn(a)).json().token;
     expect((await signIn(a)).statusCode).toBe(201);
