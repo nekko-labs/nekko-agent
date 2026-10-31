@@ -139,7 +139,7 @@ public struct RelayConfig: Sendable {
     public var routes: [String] { [relayUrl] + alternates }
 
     /// `<relay>/relay?role=client&room=…&key=…`, where `key` is `E2E.relayAuth`
-    /// of the pairing secret, never the secret itself (decision 0035).
+    /// of the pairing secret, never the secret itself (decision 0036).
     public var dialURL: URL? { dialURL(for: relayUrl) }
 
     /// The same, for one of the relay's other addresses.

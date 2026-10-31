@@ -23,7 +23,7 @@ public enum E2E {
     public static let ivBytes = 12
     static let tagBytes = 16
 
-    /// PROTOCOL CONSTANT: the label of the room credential the relay checks (decision 0035).
+    /// PROTOCOL CONSTANT: the label of the room credential the relay checks (decision 0036).
     public static let relayAuthLabel = "nekko-relay-auth:"
     /// How a stored pairing reaches the relay: 2 is `relayAuth`. Older stored pairings must pair again.
     public static let pairingVersion = 2

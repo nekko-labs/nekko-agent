@@ -442,7 +442,7 @@ class RelayClient(
             route = routes.routeToDial(now())
             early = routes.fallbackExists
         }
-        // The relay checks a credential derived from the secret, never the secret (decision 0035).
+        // The relay checks a credential derived from the secret, never the secret (decision 0036).
         val url = "${route.trimEnd('/')}/relay?role=client" +
             "&room=${enc(config.room)}&key=${enc(E2E.relayAuth(config.key, config.room))}"
         setStatus(RelayStatus(RelayState.CONNECTING, detail, route = route))

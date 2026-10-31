@@ -23,7 +23,7 @@ export async function deriveKey(secret: string, salt: string): Promise<CryptoKey
 /**
  * The room credential presented to the relay as `key=`: hex of HMAC-SHA256
  * keyed with the pairing secret over `"nekko-relay-auth:" + room` (decision
- * 0035). One-way, so the relay can check both ends hold the same pairing
+ * 0036). One-way, so the relay can check both ends hold the same pairing
  * without ever seeing the secret the E2E key derives from.
  */
 export async function relayAuth(secret: string, room: string): Promise<string> {
@@ -34,7 +34,7 @@ export async function relayAuth(secret: string, room: string): Promise<string> {
   return Array.from(sig, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** How saved pairings reach the relay: 2 is `relayAuth` (decision 0035). Older saved pairings must pair again. */
+/** How saved pairings reach the relay: 2 is `relayAuth` (decision 0036). Older saved pairings must pair again. */
 export const RELAY_PAIRING_VERSION = 2;
 
 /** Encrypt a JSON-serializable value → a base64 string (iv ‖ ciphertext). */

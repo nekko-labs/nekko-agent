@@ -94,7 +94,7 @@ struct ComputerSecret: Codable, Equatable {
     var keyHex: String
     /// The one-time code, until the computer has welcomed this phone once.
     var pair: String?
-    /// `E2E.pairingVersion` when saved; `nil` from an older app, which must pair again (decision 0035).
+    /// `E2E.pairingVersion` when saved; `nil` from an older app, which must pair again (decision 0036).
     var v: Int?
 }
 
@@ -696,7 +696,7 @@ public final class ComputersStore {
         connectionLog.record(.connecting)
         clearComputerState()
         if (secret.v ?? 1) < E2E.pairingVersion {
-            // Paired before the computer replaced its pairing secret (decision 0035): it no longer
+            // Paired before the computer replaced its pairing secret (decision 0036): it no longer
             // answers on this pairing, so ask for a fresh QR instead of dialing.
             conn = .denied
             denied = .badKey

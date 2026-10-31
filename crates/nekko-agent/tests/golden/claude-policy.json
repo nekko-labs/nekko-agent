@@ -88,8 +88,7 @@
     "reason": "context_note_needs_api_key"
    },
    "usage_limits": {
-    "state": "awaiting_approval",
-    "reason": "usage_in_claude_code"
+    "state": "enabled"
    },
    "cost_estimate": {
     "state": "unsupported",

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
 
 /// How the stored pairing reaches the relay: 2 is a room credential derived
-/// from the secret (decision 0035). Anything else is replaced at start.
+/// from the secret (decision 0036). Anything else is replaced at start.
 const PAIRING_VERSION: u64 = 2;
 
 /// Validates a device's HELLO, answering with the sealed reply.
@@ -115,7 +115,7 @@ impl RemoteService {
     }
 
     /// A room and secret from before relay credentials were derived
-    /// (decision 0035) were sent to the relay as they are: replace them, keeping
+    /// (decision 0036) were sent to the relay as they are: replace them, keeping
     /// the paired devices, so phones pair again with a secret the relay never
     /// saw. `None` when the pairing is already current or there is none.
     fn upgraded_pairing(&self, cfg: &JsObj) -> Option<JsObj> {

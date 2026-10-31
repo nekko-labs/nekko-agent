@@ -959,6 +959,31 @@ impl ModelServer {
         }
     }
 
+    /// Unload every model not answering a request, kept resident or not
+    /// (`releaseIdle`): the person asked for the memory back, because the
+    /// computer ran short. A model mid-reply stays.
+    pub async fn release_idle(&self) -> Value {
+        self.sync().await;
+        let idle: Vec<(String, f64)> = {
+            let s = self.state.lock().unwrap();
+            s.children
+                .iter()
+                .filter(|(_, c)| c.active_requests == 0.0)
+                .map(|(k, c)| (k.clone(), c.size_bytes))
+                .collect()
+        };
+        let busy = self.state.lock().unwrap().children.len() - idle.len();
+        let mut freed = 0.0;
+        let mut unloaded = Vec::new();
+        for (id, size) in idle {
+            if self.unload(&id).await["ok"] == true {
+                freed += size;
+                unloaded.push(id);
+            }
+        }
+        json!({ "ok": true, "unloaded": unloaded, "freedBytes": freed, "busy": busy })
+    }
+
     /// Change a resident model's idle TTL without a reload (`setResidentTtl`).
     pub fn set_resident_ttl(&self, id: &str, ttl: Option<&Value>) -> Value {
         let mut s = self.state.lock().unwrap();

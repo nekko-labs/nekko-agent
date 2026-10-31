@@ -43,7 +43,7 @@ data class ComputerSecret(
     val keyHex: String,
     /** Present until the computer welcomes us once. */
     val pair: String? = null,
-    /** [com.nekko.protocol.E2E.PAIRING_VERSION] when saved; older pairings must pair again (decision 0035). */
+    /** [com.nekko.protocol.E2E.PAIRING_VERSION] when saved; older pairings must pair again (decision 0036). */
     val version: Int = com.nekko.protocol.E2E.PAIRING_VERSION,
 ) {
     /** Never print the secret. */

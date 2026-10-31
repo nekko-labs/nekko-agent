@@ -2,7 +2,8 @@
 //! the monitor meters' `gpu:stats` and `system:stats`, the offline-stack
 //! advisor's `machine:readiness`, and the hardware profile and model
 //! recommendations with their upgrade nudges (`machine:profile`,
-//! `machine:recommendations`, `machine:dismissNudge`). The TS host
+//! `machine:recommendations`, `machine:dismissNudge`), and low memory for the
+//! tray's prompt (`memory:state`, `memory:closeApp`). The TS host
 //! keeps its own probes for the engine's build choice and for running without
 //! a daemon.
 
@@ -24,6 +25,8 @@ pub const CHANNELS: &[&str] = &[
     "machine:profile",
     "machine:recommendations",
     "machine:dismissNudge",
+    "memory:state",
+    "memory:closeApp",
 ];
 
 /// The picks for this machine now, and the machine they are for.
@@ -66,6 +69,25 @@ pub async fn route(
                 Some(v) => nekko_js::display(v),
             };
             Ok(machine.readiness(&language).await)
+        }
+        // `memory:state({ detail }?)`: the process list is read when memory is
+        // short, or when asked.
+        "memory:state" => {
+            let detail = args.first().and_then(|o| o.get("detail")).and_then(Value::as_bool).unwrap_or(false);
+            let state = tokio::task::spawn_blocking(move || nekko_machine::memory::state(detail))
+                .await
+                .map_err(|e| e.to_string())?;
+            serde_json::to_value(state).map_err(|e| e.to_string())
+        }
+        "memory:closeApp" => {
+            let name = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
+            let asked = tokio::task::spawn_blocking(move || nekko_machine::memory::close_app(&name))
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(match asked {
+                Ok(n) => json!({ "ok": true, "processes": n }),
+                Err(message) => json!({ "ok": false, "message": message }),
+            })
         }
         "machine:profile" => serde_json::to_value(machine.profile(refresh(args)).await).map_err(|e| e.to_string()),
         "machine:recommendations" => {

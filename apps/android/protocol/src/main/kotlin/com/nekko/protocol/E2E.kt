@@ -28,7 +28,7 @@ object E2E {
     const val IV_BYTES = 12
     private const val TAG_BITS = 128
 
-    /** PROTOCOL CONSTANT: the label of the room credential the relay checks (decision 0035). */
+    /** PROTOCOL CONSTANT: the label of the room credential the relay checks (decision 0036). */
     const val RELAY_AUTH_LABEL = "nekko-relay-auth:"
 
     /** How a stored pairing reaches the relay: 2 is [relayAuth]. Older stored pairings must pair again. */

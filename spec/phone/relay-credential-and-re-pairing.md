@@ -5,7 +5,7 @@ area: phone
 
 # Relay credential and re-pairing
 
-`[implemented 2026-11-01; Rust, TS and Android unit tests pass, plus the daemon's end-to-end relay test; Swift tests run in CI only; not yet run on a device against the managed relay]` Decision record: [docs/decisions/0035](../../docs/decisions/0035-the-relay-sees-a-derived-room-credential-never-the-pairing-secret.md).
+`[implemented 2026-11-01; Rust, TS and Android unit tests pass, plus the daemon's end-to-end relay test; Swift tests run in CI only; not yet run on a device against the managed relay]` Decision record: [docs/decisions/0036](../../docs/decisions/0036-the-relay-sees-a-derived-room-credential-never-the-pairing-secret.md).
 
 ## User intent
 

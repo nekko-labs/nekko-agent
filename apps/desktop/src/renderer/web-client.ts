@@ -108,7 +108,7 @@ function makeWebClient(): NekkoApi {
     try {
       const saved = JSON.parse(localStorage.getItem('nekko_relay') || 'null');
       if (saved?.relay && saved?.room && saved?.key && saved.v !== RELAY_PAIRING_VERSION) {
-        // Saved before the computer replaced its pairing secret (decision 0035): pair again.
+        // Saved before the computer replaced its pairing secret (decision 0036): pair again.
         localStorage.removeItem('nekko_relay');
         sessionStorage.setItem('nekko_relay_denied', 'pair-again');
         alert('Nekko Agent changed how devices connect. Pair this device again from Settings → Remote access on your computer.');
@@ -186,7 +186,7 @@ function makeWebClient(): NekkoApi {
         dispatchEvent(frame.channel, frame.payload);
       }
     };
-    // The relay checks a credential derived from the secret, never the secret (decision 0035).
+    // The relay checks a credential derived from the secret, never the secret (decision 0036).
     const authP = relayAuth(key, room);
     const connect = async () => {
       welcomed = false;

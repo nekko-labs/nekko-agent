@@ -210,7 +210,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
       const code = q.room;
       const role = q.role; // 'agent' | 'client'
       // The room credential both ends derive from their pairing secret
-      // (relayAuth, decision 0035). The relay never receives the secret itself,
+      // (relayAuth, decision 0036). The relay never receives the secret itself,
       // so it can match the two ends without being able to derive the E2E key.
       const key = q.key;
       if (!code || !key || (role !== 'agent' && role !== 'client')) {

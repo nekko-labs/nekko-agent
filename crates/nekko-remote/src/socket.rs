@@ -82,7 +82,7 @@ pub struct RelayAgent {
 
 /// The agent's URL: `<relay>/relay?role=agent&room=..&key=..[&access=..]`,
 /// where `key` is [`e2e::relay_auth`] of the pairing secret, never the
-/// secret itself (decision 0035).
+/// secret itself (decision 0036).
 pub fn agent_url(relay_url: &str, room: &str, secret: &str, access: Option<&str>) -> String {
     let base = relay_url.strip_suffix('/').unwrap_or(relay_url);
     let key = e2e::relay_auth(secret, room);

@@ -343,7 +343,7 @@ final class StoreTests: XCTestCase {
         s.disconnect()
     }
 
-    /// A pairing saved by an older app predates the derived relay credential (decision 0035):
+    /// A pairing saved by an older app predates the derived relay credential (decision 0036):
     /// the computer has replaced its secret, so the phone asks for a fresh QR instead of dialing.
     func testAPairingFromBeforeDerivedRelayCredentialsAsksToPairAgain() async throws {
         let s = makeStore()

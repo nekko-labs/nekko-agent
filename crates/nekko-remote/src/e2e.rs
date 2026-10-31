@@ -2,7 +2,7 @@
 //! pairing secret with the room as salt, and AES-256-GCM frames as base64 of
 //! `iv || ciphertext || tag`. The relay only ever sees these blobs, and a
 //! room credential derived from the secret under its own label
-//! ([`relay_auth`], decision 0035), never the secret itself.
+//! ([`relay_auth`], decision 0036), never the secret itself.
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};

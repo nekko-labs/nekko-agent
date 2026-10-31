@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-01
 ---
 
-# 0035. The relay sees a derived room credential, never the pairing secret
+# 0036. The relay sees a derived room credential, never the pairing secret
 
 ## Context
 
