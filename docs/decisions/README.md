@@ -42,3 +42,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0031](0031-a-user-with-anthropics-approval-can-turn-on-the-plan-features.md) | A user with Anthropic's own approval can turn on the Claude plan's gated features, behind a warning | accepted |
 | [0032](0032-three-layers-and-the-nekko-package.md) | Customizations, mods and custom layouts as three layers in one open `.nekko` zip format; customizations sync through encrypted sync | accepted |
 | [0033](0033-mods-may-run-agent-tools-behind-a-permission.md) | Mods may run agent tools behind `tools:run`, the tool policy (Ask by default) and picked folders | accepted |
+| [0034](0034-android-permits-cleartext-and-refuses-public-ws-in-the-app.md) | Permit cleartext app-wide on Android and refuse public `ws://` in the app, as on the iPhone | accepted |

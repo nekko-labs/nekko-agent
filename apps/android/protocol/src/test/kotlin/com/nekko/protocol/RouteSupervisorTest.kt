@@ -141,5 +141,11 @@ class RouteSupervisorTest {
         assertEquals("http://studio.tail1234.ts.net:4400/healthz", HealthProber.healthUrl("ws://studio.tail1234.ts.net:4400/"))
         assertEquals("https://relay.example.com/healthz", HealthProber.healthUrl(" WSS://relay.example.com"))
         assertNull(HealthProber.healthUrl("http://relay.example.com"))
+        assertEquals("http://192.168.1.20:4400/healthz", HealthProber.healthUrl("ws://192.168.1.20:4400"))
+    }
+
+    @Test fun `no plain http health check goes to the open internet`() {
+        assertNull(HealthProber.healthUrl("ws://relay.example.com:4400"))
+        assertNull(HealthProber.healthUrl("WS://8.8.8.8:4400"))
     }
 }

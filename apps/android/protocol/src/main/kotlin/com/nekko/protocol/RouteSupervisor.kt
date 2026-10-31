@@ -183,7 +183,8 @@ fun interface RouteProber {
 /**
  * Asks the relay's `/healthz` over HTTP(S) at the same address
  * (`ws://h:p` → `http://h:p/healthz`). Nothing about the room, the device or
- * the computer is sent. Same network security rules as the socket.
+ * the computer is sent. Same rule as the socket: never plain HTTP to the open
+ * internet.
  */
 class HealthProber(private val client: OkHttpClient = OkHttpClient()) : RouteProber {
     override suspend fun reachable(relayUrl: String, timeoutMs: Long): Boolean {
@@ -196,6 +197,7 @@ class HealthProber(private val client: OkHttpClient = OkHttpClient()) : RoutePro
 
     companion object {
         fun healthUrl(relayUrl: String): String? {
+            if (RelayRoute.publicCleartext(relayUrl)) return null
             val s = relayUrl.trim().trimEnd('/')
             val lower = s.lowercase()
             val http = when {
