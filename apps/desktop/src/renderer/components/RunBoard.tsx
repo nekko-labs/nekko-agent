@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { LogSurface, StatTile } from './primitives/index.js';
 import { STATUS } from '../tokens.js';
+import { joinPath, runArtifactTarget } from '../runArtifactTarget.js';
 
 /**
  * Shared building blocks for the Training dashboard (and the goal runs listed
@@ -90,21 +91,11 @@ const ARTIFACT_META: Record<ArtifactKind, { icon: string; label: string }> = {
   other: { icon: '📦', label: 'Artifact' },
 };
 
-function isAbsolutePath(p: string): boolean {
-  return /^(?:[a-zA-Z]:[\\/]|\/|\\\\)/.test(p);
-}
-
-/** Resolve an artifact path (relative to the workspace, or already absolute). */
-function joinPath(base: string | undefined, rel: string): string {
-  if (!base || isAbsolutePath(rel)) return rel;
-  const sep = base.includes('\\') ? '\\' : '/';
-  return `${base.replace(/[\\/]+$/, '')}${sep}${rel.replace(/^[\\/]+/, '')}`;
-}
-
 /**
  * The Artifacts card: exactly what the run produced (the trained model + its
- * harness files), where each lives, and how to use it. Every path opens in the
- * OS file manager, and the run's output folder is one click away, so a finished
+ * harness files), where each lives, and how to use it. A document opens in its
+ * app; anything else opens the run's output folder (runArtifactTarget), which is
+ * also one click away, so a finished
  * run answers "what did I get, and where is it?" at a glance.
  */
 export function ArtifactsCard({ run }: { run: TrainingRun }) {
@@ -112,7 +103,7 @@ export function ArtifactsCard({ run }: { run: TrainingRun }) {
   const wsPath = settings?.workspaces?.find((w) => w.id === run.workspaceId)?.path ?? settings?.workspaces?.[0]?.path;
   const outDir = runOutputDir(run);
   const artifacts = run.artifacts ?? [];
-  const open = (rel: string) => void window.nekko.openPath(joinPath(wsPath, rel));
+  const open = (path: string) => void window.nekko.openPath(path);
   return (
     <div className="card px-3.5 py-3">
       <div className="flex items-center justify-between gap-2">
@@ -121,7 +112,7 @@ export function ArtifactsCard({ run }: { run: TrainingRun }) {
         </div>
         <button
           className="font-mono text-[10.5px] text-(--accent) hover:underline"
-          onClick={() => open(outDir)}
+          onClick={() => open(joinPath(wsPath, outDir))}
           title={joinPath(wsPath, outDir)}
         >
           Open output folder →
@@ -136,14 +127,15 @@ export function ArtifactsCard({ run }: { run: TrainingRun }) {
         <ul className="mt-2 space-y-1.5">
           {artifacts.map((a) => {
             const m = ARTIFACT_META[a.kind] ?? ARTIFACT_META.other;
+            const target = runArtifactTarget(wsPath, a.path, outDir);
             return (
               <li key={a.id} className="flex items-start gap-2">
                 <span className="mt-px text-[13px] leading-5" title={m.label}>{m.icon}</span>
                 <div className="min-w-0 flex-1">
                   <button
                     className="block max-w-full truncate text-left text-[12.5px] font-medium hover:text-(--accent)"
-                    onClick={() => open(a.path)}
-                    title={`Open ${joinPath(wsPath, a.path)}`}
+                    onClick={() => open(target.path)}
+                    title={target.opensFile ? `Open ${target.path}` : `Show in ${target.path}`}
                   >
                     {a.title}
                   </button>
