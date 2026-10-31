@@ -7,7 +7,7 @@ struct ChatStatusFixture: View {
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
     @State private var feedback = false
-    @StateObject private var pull = PawPull()
+    @State private var pull = PawPull()
     var body: some View {
         NavigationStack {
             List {
