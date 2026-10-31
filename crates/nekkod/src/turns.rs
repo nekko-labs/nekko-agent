@@ -587,7 +587,9 @@ impl Turns {
             .unwrap_or_else(nekko_tools::default_guardrails);
         let allow = || json!({ "behavior": "allow", "updatedInput": input });
         match crate::harness::decide(&mode, &tool, &input, &rules, &entry.roots) {
-            crate::harness::Decision::Allow => Some(allow()),
+            crate::harness::Decision::Allow => {
+                Some(json!({ "behavior": "allow", "updatedInput": crate::harness::auto_run_input(&tool, &input) }))
+            }
             crate::harness::Decision::Deny(message) => Some(deny(&message)),
             crate::harness::Decision::Ask { reason, severity } => {
                 let id = str_at(prompt, "tool_use_id")
