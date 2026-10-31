@@ -1480,7 +1480,7 @@ export function ClaudePlanFeaturesSection({ settings, update }: { settings: AppS
       <h2 id="claude-plan-features-heading" className="font-semibold">Claude plan features</h2>
       <p className="mt-1 text-[12px] text-ink-faint">
         On a Claude plan (Pro, Max or Team) through Claude Code, Nekko keeps these off: scheduled tasks, workflows and auto-continue,
-        Nekko's own tools inside a Claude chat, the project note Nekko adds to a chat, and your plan's usage limits.
+        Nekko's own tools inside a Claude chat, and the project note Nekko adds to a chat.
         With an Anthropic API key or a cloud account they are always on.
       </p>
       <div role="note" id="claude-plan-features-warning" className="mt-3 rounded-lg border border-warning bg-warning-soft p-3 text-[12px]" data-settings-claude-plan-warning>
