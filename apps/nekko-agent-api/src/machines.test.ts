@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { issueToken } from "./auth.js";
 import type { Db } from "./db.js";
 import { FlyDriver, MemoryDriver } from "./fly.js";
-import { DEFAULT_SCOPE, MACHINE_LIMIT, egressHosts, parseScope } from "./machines.js";
+import { DEFAULT_SCOPE, MACHINE_LIMIT, egressHosts, parseScope, sweepMachineHours } from "./machines.js";
 import { migrate } from "./migrate.js";
 import { buildServer } from "./server.js";
 import { pgliteDb } from "./test-db.js";
@@ -106,6 +106,80 @@ describe("machines", () => {
     expect((await call(a, pro.token, "GET", `/v1/machines/${id}`)).statusCode).toBe(404);
     expect((await call(a, pro.token, "GET", "/v1/machines")).json().machines).toHaveLength(0);
     expect([...driver.machines.values()][0].state).toBe("gone");
+  });
+
+  describe("plan hours per account per month", () => {
+    /** Pretend the machine has been running for `hours`. */
+    const ranFor = (id: string, hours: number) =>
+      db.query(`update cloud_machines set started_at = now() - make_interval(secs => $2::double precision) where id = $1`, [id, hours * 3600]);
+    const month = async (userId: string) =>
+      Number((await db.query<{ s: string }>("select coalesce(sum(seconds), 0)::text as s from machine_usage where user_id = $1", [userId])).rows[0].s) / 3600;
+
+    it("counts a machine that stopped itself, seen on refresh", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 10);
+      await driver.stop([...driver.machines.keys()][0]);
+      expect((await call(a, pro.token, "GET", `/v1/machines/${id}`)).json().machine.state).toBe("stopped");
+      expect(await month(pro.id)).toBeCloseTo(10, 1);
+    });
+
+    it("counts the time before a restart, and refuses a start past the plan's hours", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 30);
+      expect((await call(a, pro.token, "POST", `/v1/machines/${id}/start`)).statusCode).toBe(200);
+      expect(await month(pro.id)).toBeCloseTo(30, 1);
+      await ranFor(id, 15);
+      expect((await call(a, pro.token, "POST", `/v1/machines/${id}/start`)).statusCode).toBe(402);
+      expect(await month(pro.id)).toBeCloseTo(45, 1);
+    });
+
+    it("keeps a deleted machine's hours, so delete and create does not reset them", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 41);
+      expect((await call(a, pro.token, "DELETE", `/v1/machines/${id}`)).statusCode).toBe(204);
+      expect(await month(pro.id)).toBeCloseTo(41, 1);
+      const again = await call(a, pro.token, "POST", "/v1/machines", {});
+      expect(again.statusCode).toBe(402);
+      expect(again.json().error).toBe("hours-used");
+      expect((await call(a, pro.token, "GET", "/v1/machines")).json().hoursUsed).toBeCloseTo(41, 0);
+    });
+
+    it("counts every machine of the account together", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const one = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      const two = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(one, 25);
+      await ranFor(two, 25);
+      expect((await call(a, pro.token, "POST", "/v1/machines", {})).statusCode).toBe(402);
+      await call(a, pro.token, "POST", `/v1/machines/${one}/stop`);
+      expect((await call(a, pro.token, "POST", `/v1/machines/${one}/start`)).statusCode).toBe(402);
+    });
+
+    it("the sweep counts running machines and stops an account's machines past its hours", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const light = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      const ok = (await call(a, light.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 50);
+      await ranFor(ok, 2);
+      expect(await sweepMachineHours(db, driver)).toBe(1);
+      expect([...driver.machines.values()].map((m) => m.state)).toEqual(["stopped", "running"]);
+      expect((await call(a, pro.token, "GET", `/v1/machines/${id}`)).json().machine.state).toBe("stopped");
+      expect((await call(a, light.token, "GET", `/v1/machines/${ok}`)).json().machine.state).toBe("running");
+      expect(await month(pro.id)).toBeCloseTo(50, 1);
+      expect(await month(light.id)).toBeCloseTo(2, 1);
+      // A second sweep adds only the seconds since the first.
+      await sweepMachineHours(db, driver);
+      expect(await month(light.id)).toBeCloseTo(2, 1);
+    });
   });
 
   it("lets the relay admit only a live machine's access token", async () => {
