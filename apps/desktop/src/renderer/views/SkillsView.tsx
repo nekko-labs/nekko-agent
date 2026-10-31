@@ -214,6 +214,45 @@ function LibraryTab() {
           {shown.map((cat) => {
             const items = matching.filter((s) => s.category === cat);
             if (items.length === 0) return null;
+            if (cat === 'Imported') {
+              // Group imported skills by the tool whose folder they came from
+              // (Claude Code, Codex, Gemini CLI, .agents) so a newly installed
+              // skill like Cloudflare's security-audit shows under its tool.
+              const byTool = new Map<SkillOrigin['tool'], SkillDef[]>();
+              for (const s of items) {
+                const tool = s.origin?.tool ?? 'agents';
+                const list = byTool.get(tool) ?? [];
+                list.push(s);
+                byTool.set(tool, list);
+              }
+              return (
+                <section key={cat} className="mt-6">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">Installed on this machine</p>
+                    <p className="text-[11px] text-ink-faint">Read from the folders of coding tools you have installed. Nekko Agent never edits these files.</p>
+                  </div>
+                  {[...byTool.entries()].map(([tool, toolItems]) => (
+                    <div key={tool} className="mt-3" data-origin-tool={tool}>
+                      <p className="pb-1.5 text-[12px] font-medium text-ink-soft">
+                        {ORIGIN_TOOL_LABEL[tool]}
+                        <span className="ml-1.5 text-[11px] text-ink-faint">· {toolItems.length}</span>
+                      </p>
+                      <div data-skill-grid className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
+                        {toolItems.map((s) => (
+                          <SkillCard
+                            key={s.id}
+                            skill={s}
+                            installed={installedIds.has(s.id)}
+                            selected={selected?.id === s.id}
+                            onOpen={() => setSelectedId(selected?.id === s.id ? null : s.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              );
+            }
             return (
               <section key={cat} className="mt-6">
                 <p className="pb-2 text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">{cat}</p>
