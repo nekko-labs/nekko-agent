@@ -48,3 +48,14 @@ Issue: [#1317](https://github.com/nekko-labs/nekko-agent/issues/1317).
 - **Change plan is gone**, with its prompt. Telling the agent to change course is an ordinary message (or Ctrl+Enter to steer a running reply).
 
 Verification: `planStepLinks.test.ts` (placement by time, first-step fallback, task-link parsing), `PlanRail.test.tsx` (folded line, kind, pass, sub-agent count and per-step chips), `plan-step-kind.test.ts` and the `nekko-turn` Rust test (kinds and passes). Hidden, off-screen Electron captures (`wall-composers-sandbox.cjs`) check the folded line, the sub-agent count, the Linear chip, the tuck behind the composer, and the open plan's per-step chips. Not checked in a packaged build.
+
+## Claude Agent chats (implemented 2026-10-31)
+
+Issue: [#1401](https://github.com/nekko-labs/nekko-agent/issues/1401).
+
+- **Intent.** A Claude Agent chat (Claude Code, on a plan or a key) showed no plan sheet: the sheet fills from Nekko's `update_plan`, which Claude Code doesn't have. It plans with its own tools, which showed only as tool calls.
+- **Behavior.** The harness reads Claude Code's own plan calls from its stream-json, and nekkod keeps the chat's `agentPlan` in step with them, so the same sheet shows. `TodoWrite` replaces the whole plan (its list is the full plan each time). `TaskCreate` adds a step (`task_<id>`, the id from its result, the description's first line as the note), and `TaskUpdate` changes or removes it (`pending`/`in_progress`/`completed` read as pending/active/done; `deleted` drops it). Only calls that succeeded count, and only the main thread's: a sub-agent's plan is its own. Each change is saved with the call's checkpoint and announced with `session_meta`.
+- **Policy.** Display only and on for every auth, Claude plan included: Nekko adds no tool, prompt or flag to Claude Code (see [Claude policy](../product/claude-policy.md)).
+- **Not covered.** Step chips (PRs, files, sub-agents) are placed by replaying `update_plan` calls, so on a Claude Agent chat the steps carry no chips yet. Loop kinds and verification reports have no Claude Code counterpart.
+
+Verification: `nekko-harness` unit tests (`plan.rs`, and the mapper only handing up a successful main-thread call) and `claude_codes_own_plan_is_the_chats_plan` in nekkod's daemon tests (a fake Claude Code's `TaskCreate`/`TaskUpdate` end up as the saved plan). Not checked against a live Claude Code turn or on screen.
