@@ -93,6 +93,24 @@ Threads worth an article, with the entries that tell each story:
   real avoidable work without mistaking it for resolution of the user-facing
   performance problem.
 
+## 2026-11
+
+### Renderer motion: composited new-chat drift, ref-driven wall divider (2026-11-01)
+Area: renderer
+Result: improvement
+Conditions: Windows 11 desktop (32 threads), Local Web UI from this branch against a scratch data dir and the perf mock provider, headless Playwright Chromium 1243 over CDP with vsync on and focus emulated, 1440x900. Before is the same harness on the parent branch (`ui/design-readability`). New chat: Focused layout, one fresh chat, 5 s idle trace (`devtools.timeline`), two runs each. Divider: one wall divider dragged 180 px in 30 pointer moves 16 ms apart, `Performance.getMetrics` deltas and React commits counted through a stub devtools hook, one run each.
+
+| Metric | Before | After |
+|---|---|---|
+| New chat, 5 s idle: Paint events | 54, 86 | 12, 12 |
+| New chat, 5 s idle: UpdateLayoutTree events | 1209, 1208 | 27, 30 |
+| Divider drag: LayoutCount | 240 | 79 |
+| Divider drag: RecalcStyleCount | 272 | 152 |
+| Divider drag: React commits | 113 | 83 |
+| Tooltip on the neighbouring icon after one has shown | 358 ms, faded | 4 ms, no fade |
+
+Why: the new-chat colour drift animated three registered custom properties (a style recalc and a repaint of the pane every frame, under a 22-24 px backdrop blur); it is now three static layers crossfaded by opacity, with the blur at 12 px. The wall divider wrote React state per pointer move; it now writes the windows' boxes directly at most once a frame and commits once on release. Most remaining commits during a drag come from components inside the resized windows reacting to their new size. Source: the motion PR for #1411.
+
 ## 2026-10
 
 ### A full GPU offload puts the output layer on the GPU too (2026-10-28)
