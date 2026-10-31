@@ -3,6 +3,7 @@ import type { PlanStep, PlanStepKind, PrInfo, Session } from '@nekko-agent/share
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
+import { sheetPlan } from '../claudeAgentPlan.js';
 import { useStore } from '../store.js';
 import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
@@ -141,10 +142,12 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   initiallyOpen?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(!initiallyOpen);
-  const plan = session?.agentPlan;
   const messages = session?.messages;
   const sessions = useStore((s) => s.sessions);
+  const providers = useStore((s) => s.providers);
   useLiveRunsVersion();
+  const working = streaming || !!getLiveRun(sessionId) || !!session?.activeRun;
+  const plan = useMemo(() => sheetPlan(session, providers, working), [session, providers, working]);
   const childSessions = useMemo(() => (sessions ?? []).filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
   const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions), [messages, plan, basePath, childSessions]);
   if (!plan?.length) return null;

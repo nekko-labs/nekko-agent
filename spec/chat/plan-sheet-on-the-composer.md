@@ -59,3 +59,12 @@ Issue: [#1401](https://github.com/nekko-labs/nekko-agent/issues/1401).
 - **Not covered.** Step chips (PRs, files, sub-agents) are placed by replaying `update_plan` calls, so on a Claude Agent chat the steps carry no chips yet. Loop kinds and verification reports have no Claude Code counterpart.
 
 Verification: `nekko-harness` unit tests (`plan.rs`, and the mapper only handing up a successful main-thread call) and `claude_codes_own_plan_is_the_chats_plan` in nekkod's daemon tests (a fake Claude Code's `TaskCreate`/`TaskUpdate` end up as the saved plan). Not checked against a live Claude Code turn or on screen.
+
+## Claude Agent chats without a plan of their own, and their PRs (implemented 2026-11-01)
+
+- **Intent.** Even when Claude Code writes no plan, the sheet should say what it was asked to do and where the work landed (its PRs).
+- **Turn plan.** A Claude Agent chat with no `agentPlan` shows one step per request it sent Claude Code ("Ask Claude Code: <first line>"), the last 8, with the newest active while Claude Code works and the rest done (`claudeAgentPlan.ts`, built in the renderer, never saved). Claude Code's own plan replaces it as soon as it writes one. Other chats are unchanged: no plan, no sheet. With the sheet showing, the PR card leaves CI to it, as it does for any plan.
+- **Chips.** A PR, file or task link lands on the turn it came from. On Claude Code's own plan, the step it had in progress (`TodoWrite`'s `in_progress` item, or a `TaskUpdate` to `in_progress`, matched by title) is the step being worked.
+- **PRs Claude Code opens.** `collectSessionPrUrls` now accepts Claude Code's `Bash` tool as well as Nekko's `bash`, and sets a heredoc body aside before its checks, since Claude Code passes `--body` as `"$(cat <<'EOF' ... EOF)"`. A batch around it (`&&`, `;`, `|`) is still refused. This also fixes the PR card and the "1 pull request" row on Claude Agent chats, which never saw those PRs before.
+
+Verification: `claudeAgentPlan.test.ts`, `planStepLinks.test.ts` (turn steps, `TodoWrite`, `TaskCreate`/`TaskUpdate`), `packages/shared/src/pr.test.ts` (Claude Code's heredoc create, chained commands refused). Hidden, off-screen Electron captures (`claude-agent-plan-sandbox.cjs`) check that the sheet shows on a Claude Agent chat, the running turn is the folded line, and the PR chip sits on the turn that opened it. Not checked against a live Claude Code turn.

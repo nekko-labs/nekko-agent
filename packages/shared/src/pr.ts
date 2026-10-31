@@ -139,6 +139,12 @@ export function parsePrUrl(url: string): { owner: string; repo: string; number: 
   return { owner: m[1], repo: m[2], number: Number(m[3]) };
 }
 
+/**
+ * A heredoc's opening marker through its closing delimiter line, and the line
+ * break before a `)` that closes the `$(cat <<EOF ...)` it sits in.
+ */
+const HEREDOC_BODY_RE = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1\r?\n[\s\S]*?\r?\n[ \t]*\2[ \t]*(?:\r?\n[ \t]*(?=\))|(?=\r?\n|$))/g;
+
 /** Only successful PR-creation tool results attach PRs to this chat. */
 export function collectSessionPrUrls(messages: Array<{
   role?: string; content?: string;
@@ -150,8 +156,11 @@ export function collectSessionPrUrls(messages: Array<{
   for (const m of messages) {
     const result = m.toolResult;
     const call = result?.toolCallId ? calls.get(result.toolCallId) : undefined;
-    if (!call || result?.isError || call.name !== 'bash') continue;
-    const command = String(call.input?.command ?? '').trim();
+    // Nekko's `bash`, or Claude Code's own `Bash` in a Claude Agent chat.
+    if (!call || result?.isError || (call.name !== 'bash' && call.name !== 'Bash')) continue;
+    // A heredoc body (how Claude Code passes `--body`) is the command's text,
+    // not more commands: it is set aside before the checks below.
+    const command = String(call.input?.command ?? '').replace(HEREDOC_BODY_RE, '<<HEREDOC').trim();
     // Do not classify strings embedded in scripts, quoted fixtures, or shell
     // batches as creation. Fail closed when output provenance is ambiguous.
     if (!command.startsWith('gh ') || /[\r\n;&|`]/.test(command)) continue;
