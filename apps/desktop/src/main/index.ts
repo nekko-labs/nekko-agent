@@ -43,23 +43,14 @@ const notificationSessions = new Map<number, string | null>();
 /** Each window's view on screen, so a workflow run notice stays quiet on the Workflows view. */
 const notificationViews = new Map<number, string | null>();
 
-/** Holds windows and notices while a full-screen app (a game) is in front (foregroundGuard.ts). */
+/** Holds native notices while an exclusive-fullscreen game is in front (foregroundGuard.ts). */
 let foreground: ForegroundGuard | undefined;
 
-/** Run `fn`, which brings a window forward, once no full-screen app is in front. */
-function whenFree(fn: () => void): void {
-  if (foreground) void foreground.whenFree(fn);
-  else fn();
-}
-
-/** Restore, show and focus `win`, unless it has gone in the meantime. */
+/** Restore, show and focus `win`. */
 function raise(win: BrowserWindow): void {
-  whenFree(() => {
-    if (win.isDestroyed()) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-  });
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
 }
 
 function showWindow(): void {
@@ -155,8 +146,8 @@ function deliverLink(url: string): void {
     if (!win) createWindow();
     return;
   }
-  win.webContents.send(IpcEvents.deepLink, url);
   raise(win);
+  win.webContents.send(IpcEvents.deepLink, url);
 }
 
 /**
@@ -336,14 +327,13 @@ function createWindow(): void {
 
   mainWindow = win;
   win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
-  win.on('ready-to-show', () => whenFree(() => {
-    if (win.isDestroyed()) return;
+  win.on('ready-to-show', () => {
     if (maximized) win.maximize();
     win.show();
     // Without focus, Windows may leave a window opened from a terminal behind
     // others, flashing in the taskbar instead of coming to the front.
     win.focus();
-  }));
+  });
   const closeIntent = createCloseIntent();
   if (process.platform === 'win32') {
     win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));

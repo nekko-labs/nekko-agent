@@ -1,8 +1,7 @@
 //! Whether a full-screen app is in front (`activity:fullscreen`), so the
-//! desktop app neither raises a window nor shows a notice over a game, a
-//! presentation or a full-screen video. A window that takes the foreground
-//! from an exclusive-fullscreen game knocks it out of exclusive mode, and the
-//! game stays slower until it restarts.
+//! desktop app holds its notices over an exclusive-fullscreen game. Only that
+//! state is quiet: borderless apps, full-screen video and presentation mode
+//! are reported but left to Windows' own notification rules.
 //!
 //! - Windows: `SHQueryUserNotificationState`, the shell's own answer to "may I
 //!   interrupt now?" (what Windows uses to hold back its own toasts).
@@ -11,7 +10,7 @@
 /// What the shell says about interrupting the user now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Foreground {
-    /// Nothing full-screen: notices and windows may come forward.
+    /// Nothing full-screen.
     Free,
     /// A Direct3D app in exclusive fullscreen (most games).
     D3dFullscreen,
@@ -22,9 +21,9 @@ pub enum Foreground {
 }
 
 impl Foreground {
-    /// Whether to hold notices back and leave the foreground alone.
+    /// Whether to hold notices back: an exclusive-fullscreen game only.
     pub fn quiet(self) -> bool {
-        self != Foreground::Free
+        self == Foreground::D3dFullscreen
     }
 
     /// The name sent over the wire.
@@ -78,7 +77,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_full_screen_states_are_quiet() {
+    fn only_exclusive_fullscreen_is_quiet() {
         assert_eq!(from_quns(3), Foreground::D3dFullscreen);
         assert_eq!(from_quns(2), Foreground::Busy);
         assert_eq!(from_quns(4), Foreground::Presentation);
@@ -86,6 +85,8 @@ mod tests {
         for free in [1, 5, 6, 7, 0, -1] {
             assert!(!from_quns(free).quiet(), "{free}");
         }
-        assert!(from_quns(3).quiet() && from_quns(2).quiet() && from_quns(4).quiet());
+        assert!(from_quns(3).quiet());
+        // Borderless apps, video and presentation mode: reported, not held.
+        assert!(!from_quns(2).quiet() && !from_quns(4).quiet());
     }
 }
