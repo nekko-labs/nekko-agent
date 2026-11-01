@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from '../src/renderer/store';
 import { WorkflowsView } from '../src/renderer/views/WorkflowsView';
-import { DEFAULT_RUNNER_SETTINGS, type AuditLine, type HostView, type RunnerView } from '@nekko-agent/shared';
+import { DEFAULT_RUNNER_SETTINGS, IDLE_GITHUB_SETUP, type AuditLine, type GithubAccounts, type GithubSetupView, type HostView, type RunnerView } from '@nekko-agent/shared';
 import '../src/renderer/styles.css';
 
 // Synthetic RunnerViews only. This fixture never connects to a host, daemon or GitHub.
@@ -43,16 +43,47 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'off-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   'settings-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   unavailable: async () => { throw new Error('unknown channel runner:list'); },
+  'connect-step-1': async () => [],
   'connect-step-3': async () => [],
+  'github-account': async () => [],
+  'github-account-no-gh': async () => [],
+  'github-free-org': async () => [],
+  'github-waiting': async () => [],
+  'github-confirm': async () => [],
+  'github-confirm-public': async () => [],
+  'github-mode': async () => [],
+  'github-fork': async () => [],
   settings: async () => [view({ limit: 'memory', available: 1 })],
   'settings-bottom': async () => [view({ limit: 'memory', available: 1 })],
   'settings-unsampled': async () => [view({ host: unsampled, state: 'waiting', reasons: ['hostStateUnknown'] })],
+};
+
+const signedIn: GithubAccounts = { login: 'ermish', accounts: [
+  { login: 'nekko-labs', kind: 'org', canGroup: true },
+  { login: 'free-org', kind: 'org', canGroup: false },
+  { login: 'ermish', kind: 'user', canGroup: null },
+] };
+const app = (over: Partial<GithubSetupView>): GithubSetupView => ({
+  ...IDLE_GITHUB_SETUP, step: 'confirm', owner: 'nekko-labs', kind: 'org', slug: 'nekko-runner-nekko-labs-3fa9', appId: 1048576, installationId: 58210934,
+  repos: [{ name: 'nekko-labs/nekko-agent', private: true }, { name: 'nekko-labs/nekko-site', private: true }, { name: 'nekko-labs/models', private: true }], ...over,
+});
+const publicApp = app({ repos: [{ name: 'nekko-labs/nekko-agent', private: false }, { name: 'nekko-labs/nekko-site', private: true }] });
+const github: Record<string, GithubSetupView> = {
+  'github-waiting': app({ step: 'install', repos: [], installationId: null }),
+  'github-confirm': app({}),
+  'github-mode': app({}),
+  'github-confirm-public': publicApp,
+  'github-fork': publicApp,
 };
 
 let scene = 'first-visit';
 const settings = { providers: [], workspaceFolders: [], workspaces: [], monitors: {}, theme: 'dark', experimental: {}, agent: {}, ui: {}, connectors: [] };
 const bridge: any = {
   listRunners: () => scenes[scene](),
+  githubAccounts: async () => (scene === 'github-account-no-gh' ? { login: null, accounts: [] } : signedIn),
+  githubStatus: async () => github[scene] ?? IDLE_GITHUB_SETUP,
+  connectRunner: async () => view({ state: 'off' }, { enabled: false }),
+  setForkApproval: async () => ({ done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions' }),
   listWorkflows: async () => ({ workflows: [], runs: [] }),
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
 };

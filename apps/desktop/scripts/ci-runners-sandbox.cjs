@@ -47,6 +47,8 @@ app.whenReady().then(async () => {
     await run(`document.documentElement.dataset.theme=${js(theme)}`);
     await click(byText('[aria-label=Section] button', 'CI runners')); await sleep(700);
   };
+  const connect = async () => { await click(byText('button', 'Connect GitHub')); await sleep(400); };
+  const manual = async () => { await click(byText('[role=dialog] button', 'Use an app I already have')); await sleep(200); };
   const scenes = {
     'first-visit': async () => {},
     running: async () => {},
@@ -55,8 +57,9 @@ app.whenReady().then(async () => {
     'off-no-vm-support': async () => {},
     'settings-no-vm-support': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     unavailable: async () => {},
+    'connect-step-1': async () => { await connect(); await manual(); },
     'connect-step-3': async () => {
-      await click(byText('button', 'Connect GitHub')); await sleep(300);
+      await connect(); await manual();
       await type(field('App ID'), '1048576');
       await type(field('Installation ID'), '58210934');
       await type(field('Private key'), '-----BEGIN RSA PRIVATE KEY-----\nfixture\n-----END RSA PRIVATE KEY-----');
@@ -64,6 +67,19 @@ app.whenReady().then(async () => {
       await type(field('Repo'), 'nekko-labs/nekko-agent');
       await click(`document.querySelector('[role=dialog] input[type=checkbox]')`); await sleep(100);
       await click(byText('[role=dialog] button', 'Next')); await sleep(400);
+    },
+    'github-account': async () => { await connect(); },
+    'github-account-no-gh': async () => { await connect(); },
+    'github-free-org': async () => { await connect(); await click(`[...document.querySelectorAll('[role=dialog] label')].find(l=>l.textContent.includes('free-org'))`); await sleep(200); },
+    'github-waiting': async () => { await connect(); },
+    'github-confirm': async () => { await connect(); },
+    'github-mode': async () => { await connect(); await click(byText('[role=dialog] button', 'Continue')); await sleep(200); },
+    'github-confirm-public': async () => { await connect(); },
+    'github-fork': async () => {
+      await connect();
+      await click(`[...document.querySelectorAll('[role=dialog] label')].find(l=>l.textContent.includes('Require approval'))`); await sleep(100);
+      await click(byText('[role=dialog] button', 'Continue')); await sleep(200);
+      await click(byText('[role=dialog] button', 'Start runner')); await sleep(400);
     },
     settings: async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     // The sheet is taller than the window: the same sheet scrolled to its end shows Max job time.
@@ -82,7 +98,16 @@ app.whenReady().then(async () => {
     'off-no-vm-support': [['off runner shows the daemon error', "document.querySelector('[role=alert]')?.textContent.includes('VM support unavailable') && document.body.innerText.includes('Unavailable')"]],
     'settings-no-vm-support': [['the sheet says why instead of waiting', "document.querySelector('[role=dialog]').innerText.includes('VM support unavailable') && !document.body.innerText.includes('first reading')"]],
     unavailable: [['one plain sentence', "document.body.innerText.includes('They need a Mac with Apple silicon') && !document.body.innerText.includes('unknown channel') && !document.querySelector('[data-runner-card]')"]],
+    'connect-step-1': [['manual step 1 fields', "document.querySelector('[role=dialog]').innerText.includes('Installation ID')"]],
     'connect-step-3': [['connect step 3 with public callout', "document.querySelector('[aria-current=step]')?.textContent.includes('How this Mac helps') && document.body.innerText.includes('may be public')"]],
+    'github-account': [['accounts from gh', "['nekko-labs','Organization','Your account','Another account','Continue on GitHub','Use an app I already have'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"]],
+    'github-account-no-gh': [['one text box', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('GitHub account or org')&&!d.includes('Another account')})()"]],
+    'github-free-org': [['single repo offer', "document.querySelector('[role=dialog]').innerText.includes('Connect one repo on GitHub')"]],
+    'github-waiting': [['waiting on GitHub', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('Finish on GitHub')&&d.includes('Open GitHub again')&&d.includes('Done')&&d.includes('Waiting')})()"]],
+    'github-confirm': [['repos ticked', "document.querySelectorAll('[role=dialog] input[type=checkbox]:checked').length===3"]],
+    'github-mode': [['mode last', "document.querySelector('[role=dialog]').innerText.includes('Start runner')"]],
+    'github-confirm-public': [['public repo blocks Continue', "(()=>{const b=[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Continue');return document.querySelector('[role=dialog]').innerText.includes('Public repo.')&&b.disabled})()"]],
+    'github-fork': [['fork step keeps the runner off', "document.querySelector('[role=dialog]').innerText.includes('the runner stays off')"]],
     settings: [['exact mode labels present', "[\"Do not disturb: Only run when I'm idle\",'Balanced: in the background','Runner first','System default','While a runner is active','Always','Let jobs use the internet directly while a VPN is on'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"],
       ['recommendation shown', "document.body.innerText.includes('Recommended: 20 GB for this Mac')"]],
     'settings-bottom': [['Max job time and Save in view', "(()=>{const v=e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight};const m=[...document.querySelectorAll('[role=dialog] p')].find(e=>e.textContent==='Max job time');const s=[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Save');return !!m&&!!s&&v(m)&&v(s)})()"]],

@@ -21,6 +21,12 @@ pub struct GithubLink {
     pub repos: Vec<String>,
     #[serde(default)]
     pub allow_public: bool,
+    /// The app's URL name, known when Nekko created the app; lets a later connect reuse it.
+    #[serde(default)]
+    pub slug: Option<String>,
+    /// A public repo's approval for outside contributors is unsettled, so the runner must stay off.
+    #[serde(default)]
+    pub fork_approval_open: bool,
 }
 
 /// The GitLab project (repo scope) or group (org scope) a runner registers with.
@@ -39,7 +45,7 @@ pub struct GitlabLink {
     pub protected_only: bool,
 }
 
-fn yes() -> bool {
+pub(super) fn yes() -> bool {
     true
 }
 
@@ -251,6 +257,8 @@ mod tests {
                 group_id: None,
                 repos: vec![],
                 allow_public: false,
+                slug: None,
+                fork_approval_open: false,
             }),
             image: None,
         }

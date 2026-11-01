@@ -21,6 +21,17 @@ Fast switching between local models through residency tiers (Hot, Warm in RAM, S
 - [ ] **MS3, SSD staging** for libraries on slow or removable storage.
 - [ ] **MS4, Learn and extend.** Usage patterns, slot save/restore, Ollama and LM Studio preload, MCP `preload` hint.
 
+## Two-step CI runner setup (#1467, added 2026-11-01)
+
+A new user connects GitHub with two clicks on github.com, then one click builds the VM image and turns the runner on. Spec: [spec/automation/ci-runners.md](spec/automation/ci-runners.md).
+
+- [ ] **T225, Connect GitHub with clicks.** Built 2026-11-01. Check S1 passed the same day with a scratch script on real GitHub: the localhost redirect, the code exchange (PKCS#1 key), the install redirect with its id, and listing installations as the app. A sign-in during Create loses the form, and GitHub then shows an empty one; **Open GitHub again** recovers. GitHub has no API to delete an app. Pending: the same flow through the daemon and keychain, in the final check.
+  - Done 2026-11-01: manifest and callback core. `runner/github_setup.rs` (the app's name, manifest, create and install URLs, the self-posting page, the conversion parser that refuses a non-PKCS#1 key and never repeats it). Tests in `github_setup_tests.rs`.
+  - Done 2026-11-01: the setup session. `GithubSetup` (loopback listener on `oauth.rs`'s pattern, one-use `/start`, constant-time `state`, key and `runners/pending-app.json` stored before the redirect, a poll of `GET /app/installations` that needs no redirect, resume at Install, never a second app, 1 hour limit). `GithubLink.slug`, `ConnectRequest.enabled`. Channels live in `github_setup::CHANNELS` beside `runner::CHANNELS`.
+  - Done 2026-11-01: fork approval. `runner:setForkApproval`: the repo's app with an installation token, `gh` for an org, otherwise the settings link.
+  - Done 2026-11-01: the sheet. `ConnectRunnerSheet.tsx` (account, waiting, confirm, the mode step stays last until T227, the fork step, the manual path unchanged behind **Use an app I already have**), `GithubLink.fork_approval_open` so the daemon refuses to start a public runner before approval is settled, shared types and helpers, ipc, preload, web client, `ci-runners-sandbox.cjs` scenes, spec and docs.
+  - Pending: S1. If GitHub refuses localhost, point the manifest at a static page on nekkoagent.com that passes the code to localhost in the browser.
+
 ## Per-chat watching Nekko and resolved Claude model (added 2026-10-31)
 
 Nekko used to sit in the app's bottom-left corner as one global mascot. Philip asked for her to live inside each agent window at the top-right (~80% along the top edge) and to watch the composer as the user types; the single `mascotEnabled` setting still hides them all at once. In the same session he asked that a Claude subscription chat stop reading as the generic "Opus" alias once Claude Code reports which version it resolved to. Both ride under the existing H-group's `claude-code` plumbing (`claudeCodeContext.model`).
