@@ -431,6 +431,8 @@ final class RelayIntegrationTests: XCTestCase {
         var cfg = RelayConfig(relayUrl: link.relayUrl, room: env.room, key: env.key, keyBytes: env.keyBytes, deviceId: device,
                               deviceName: "iOS itest")
         cfg.alternates = link.alts
+        // The enrolled phone proves its device key in every HELLO (#1444), on each route.
+        cfg.helloSigner = Self.signers.signer(for: device)
         cfg.requestTimeout = 30
         var rules = RouteRules()
         rules.openTimeout = 3
