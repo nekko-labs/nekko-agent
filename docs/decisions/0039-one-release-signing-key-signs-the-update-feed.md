@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-01
 ---
 
-# 0038. One release signing key signs the update feed and the Claude policy override
+# 0039. One release signing key signs the update feed and the Claude policy override
 
 ## Context
 

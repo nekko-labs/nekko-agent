@@ -95,6 +95,19 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### Completed chats and the model library page at 50 rows (2026-11-02)
+Area: renderer
+Result: improvement
+Conditions: Windows 11 desktop, the real App bundled against a stub bridge (the layout-evidence fixture) with 400 completed chats, and `ModelLibrary` alone with 400 text models, in headless Playwright Chromium 1243 at 1280x800. One run each; before is `main` at the branch point (issue #1478).
+
+| Metric | Before | After |
+|---|---|---|
+| Completed group open: elements inside it | 2808 | 359 |
+| Completed group open: buttons inside it | 401 | 52 |
+| Model library: model rows mounted | 400 | 50 |
+
+Why: both lists rendered every row (the Completed group even while folded, since its rows sit in a collapsing wrapper); they now render a page of 50 and a "Show more" button. Render time was not measured separately: the harness's fixed waits dominate its wall-clock numbers.
+
 ### Website: pixel wave pauses past the hero, no blur over it (2026-11-01)
 Area: website
 Result: improvement

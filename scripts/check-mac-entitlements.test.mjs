@@ -85,6 +85,17 @@ test('codesign_error_fails_the_check', () => {
   assert.equal(r.stderr.trim(), `codesign could not read ${join(f.bin, 'nekkod')}.`);
 });
 
+test('the_unsigned_guest_scripts_beside_nekko_vm_are_skipped', () => {
+  const f = fixture();
+  f.set('nekko-vm', 'ents');
+  mkdirSync(join(f.bin, 'runner-image'));
+  writeFileSync(join(f.bin, 'runner-image', 'provision.sh'), '');
+  f.set('provision.sh', 'fail', '');
+  const r = f.run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), 'virtualization entitlement: nekko-vm only (5 binaries checked)');
+});
+
 test('symlinked_nekko_vm_fails', () => {
   const f = fixture();
   f.set('nekko-vm', 'ents');

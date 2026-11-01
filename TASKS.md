@@ -19,7 +19,8 @@ Fast switching between local models through residency tiers (Hot, Warm in RAM, S
 - [ ] **MS2, Schedule-aware preload.** Forecast from scheduled tasks, workflow steps, active sessions and role models; lead time from persisted load times; eviction by score; reasons; Up next strip.
 - [ ] **MS2-1, Share the machine with heavy programs.** Other processes' VRAM (NVML, DXGI `QueryVideoMemoryInfo`, Metal working set), a full-screen app in front (`activity:fullscreen`), the top RAM holder: no speculative preloads or staging, a smaller Warm budget and idle Hot models demoted while a game or other heavy app runs; re-plan when it closes; say so in the monitor chip.
 - [ ] **MS3, SSD staging** for libraries on slow or removable storage.
-- [ ] **MS4, Learn and extend.** Usage patterns, slot save/restore, Ollama and LM Studio preload, MCP `preload` hint.
+- [ ] **MS4, Learn and extend.** Usage patterns (MS4-1), slot save/restore, Ollama and LM Studio preload, MCP `preload` hint.
+- [ ] **MS4-1, Learn from past use with decayed counters, no trained model** (#1462 section 6). Per model: time-of-week counts (168 hourly slots), "after A comes B" transition counts, and a reuse-gap histogram, all exponentially decayed and updated in O(1) per use, stored as a small JSON file in the data dir. Strongest signal per model becomes P(use within horizon) for the planner score; explicit signals (schedules, workflow steps, sessions) always win. Ski-rental spin-down until a model has enough reuse-gap samples, then an adaptive TTL. Seed from `usage.jsonl` on first run; log each forecast's outcome (hit rate, wasted preloads); daily idle replay of two weeks over a small grid of half-life, threshold and horizon; pause habit-based preloads when the hit rate drops. Done when replay on a seeded history beats LRU with the fixed idle TTL on hit rate without raising wasted preloads past the budget.
 
 ## Two-step CI runner setup (#1467, added 2026-11-01)
 
@@ -1668,6 +1669,11 @@ A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner,
   - Done 2026-10-25: spec, decision 0022 notes and the guest image requirements.
   - Pending: one real GitLab job end to end, with the guest image (T214 or Layer E).
   - Pending: a GitLab connect sheet in the desktop UI.
+- [ ] **T226** The image builder: one action builds the runner image from Apple's restore image and this Mac's Xcode, with no Tart and no terminal. Added: 2026-11-01. Issue #1467. [Decision 0038](docs/decisions/0038-image-builder-reaches-a-build-vm-over-ssh.md).
+  - Done 2026-11-01: `nekko-vm` gains `restore-image`, `install` and first-boot options on `run`, taken from the spike without its shared folder. `NetConfig.forward` loses its feature gate: `job_net_config` is the job path and `HelperVm::start_build`, off the `Vm` trait, is the only place that sets it. `xcode_source`, `tar_rename_arg`. The guest scripts stage in `runner-image/` beside `nekko-vm`, and `check-mac-entitlements.sh` skips that folder.
+  - Done 2026-11-01: the job. `runner/image.rs`: `BuildHost` (faked in `image_tests.rs`), `RealBuildHost`, `build.json`, the first-boot checkpoint, the gates between stages, a limit on every guest command, and `runner:imageStatus`, `imageBuild`, `imageResume`, `imageCancel` with the `runner:imageChanged` push. The supervisor holds the Mac awake while `building` is set. Shared types and the preload and web-client wiring for layer 3 (T227).
+  - Done 2026-11-01: a real build on an M1 Max, macOS 27.0.1, through `runner:imageBuild` with the dev helper on an isolated data dir and the restore image already there: Install 4 min 28 s, Xcode 20 min 36 s, Lockdown 1 min 4 s, Test 16 s, Finish 5 s, image 54 GB. A first run was quit during the Xcode copy and resumed from the checkpoint; another was cancelled during Install; a real download started at about 85 MB/s and was cancelled.
+  - Pending: `release.yml` and `installers.yml` must build with Xcode 27, or `nekko-vm` has no first boot and Check refuses (`stage-daemon.mjs` warns). Not confirmed: `macos-latest`'s SDK. A job on a builder-made image through the supervisor, and a whole macOS-only build, are also not yet run.
 
 ### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
 

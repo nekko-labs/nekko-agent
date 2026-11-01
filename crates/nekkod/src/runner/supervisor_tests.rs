@@ -1060,6 +1060,45 @@ fn runners_rig(h: H) -> Rig {
     Rig { runners, dir, vm, log, vault }
 }
 
+#[tokio::test(start_paused = true)]
+async fn an_image_build_holds_the_mac_awake_with_no_runner() {
+    let mut h = harness(vec![]);
+    let building = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    h.sup.set_building(building.clone());
+    h.tick_for(5).await;
+    assert_eq!(h.awake.lock().unwrap().last(), Some(&true));
+    building.store(false, std::sync::atomic::Ordering::SeqCst);
+    h.tick_for(5).await;
+    assert_eq!(h.awake.lock().unwrap().last(), Some(&false));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_finished_build_turns_its_runner_on_in_the_chosen_mode() {
+    let Rig { runners, dir, .. } = runners_rig(harness(vec![]));
+    runners.route("runner:setEnabled", &[json!("r1"), json!(false)]).await.unwrap();
+    runners.enable_after_build("r1", Priority::Balanced).await.unwrap();
+    let saved = crate::runner::store::Store::new(dir.path()).load();
+    assert!(saved[0].config.settings.enabled);
+    assert_eq!(saved[0].config.settings.priority, Priority::Balanced);
+    // Removed during the build: nothing to turn on, and no error.
+    runners.enable_after_build("gone", Priority::Balanced).await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_finished_build_leaves_a_public_runner_off_until_fork_approval_is_settled() {
+    let Rig { runners, dir, .. } = runners_rig(harness(vec![]));
+    runners.route("runner:setEnabled", &[json!("r1"), json!(false)]).await.unwrap();
+    let store = crate::runner::store::Store::new(dir.path());
+    let mut records = store.load();
+    let Link::Github(g) = &mut records[0].link else { panic!("a GitHub record") };
+    g.fork_approval_open = true;
+    store.save(&records).unwrap();
+    runners.enable_after_build("r1", Priority::Balanced).await.unwrap();
+    let saved = store.load();
+    assert!(!saved[0].config.settings.enabled);
+    assert_eq!(saved[0].config.settings.priority, Priority::Balanced);
+}
+
 /// Lets paused time run, a second at a time, until `f` holds.
 async fn wait_for(what: &str, f: impl Fn() -> bool) {
     for _ in 0..600 {

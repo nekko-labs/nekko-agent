@@ -9,6 +9,8 @@
 // watched with the app in the background (keep-alive, local notifications);
 // "long run" does the same for 90 s.
 // Prompts containing "ask me" call `ask_user` with one two-option question.
+// Prompts containing "make a plan" call `update_plan` with a four-step plan
+// (one done, one active), for the phone's plan sheet.
 // Prompts containing "write a note" call `write_file` for `nekko-itest-note.txt`,
 // so the phone's read-only Changes view has a real edit to show.
 // Prompts containing "show previews" stream the text of the file named by
@@ -47,6 +49,18 @@ createServer((req, res) => {
     } else if (last?.role === 'user' && /ask me/i.test(userText)) {
       const args = { questions: [{ header: 'Target', question: 'Which platform should I build first?', options: ['iOS', 'Android'] }] };
       res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_ask', type: 'function', function: { name: 'ask_user', arguments: '' } }] }));
+      res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }));
+      res.write(chunk({}, 'tool_calls'));
+    } else if (last?.role === 'user' && /make a plan/i.test(userText)) {
+      const args = {
+        steps: [
+          { title: 'Read the composer code', status: 'done', kind: 'explore', note: 'Found the message box' },
+          { title: 'Draw the plan sheet', status: 'active', kind: 'build', note: 'Tucked behind the composer' },
+          { title: 'Check it on the phone', status: 'pending', kind: 'verify' },
+          { title: 'Open a pull request', status: 'pending', kind: 'ship' },
+        ],
+      };
+      res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_plan', type: 'function', function: { name: 'update_plan', arguments: '' } }] }));
       res.write(chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }));
       res.write(chunk({}, 'tool_calls'));
     } else if (last?.role === 'user' && /write a note/i.test(userText)) {

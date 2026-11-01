@@ -241,6 +241,15 @@ jobs:
             -only-testing:NekkoNativeUITests/LiveRelayTests/testSimpleAndExpertModes || { failed=1; stack_logs modes; }
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+          # The plan sheet behind the composer, folded and open (#1474).
+          ready
+          ../../apps/ios/scripts/itest-stack.sh /tmp/stack-plan.env
+          . /tmp/stack-plan.env
+          TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" \
+            xcodebuild "${COMMON[@]}" -resultBundlePath evidence/plan.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/LiveRelayTests/testPlanSheetBehindTheComposer || { failed=1; stack_logs plan; }
+          kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           # The deep link from the computer's QR (Camera → nekko-agent-pair:) pairs through the confirmation sheet.
           ready
           xcrun simctl ui "$DEVICE" appearance light

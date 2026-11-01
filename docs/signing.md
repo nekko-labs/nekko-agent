@@ -53,7 +53,7 @@ in `crates/nekko-native/src/release_key.rs`, which both verifiers read. Its
 private half is the `NEKKO_RELEASE_SIGNING_KEY` **repository** secret (not an
 organization secret: only this repo's release workflow signs with it), plus
 one offline copy. Decision:
-[0038](decisions/0038-one-release-signing-key-signs-the-update-feed.md).
+[0039](decisions/0039-one-release-signing-key-signs-the-update-feed.md).
 
 **Today the constant is the all-zero placeholder.** Until it is replaced, the
 release workflow's "Sign the update feed" step warns and publishes the feed
@@ -168,6 +168,10 @@ process could then boot a VM.
   then signs `nekko-vm` again with its own file and reseals the app.
 - **Staging:** `stage-daemon.mjs` builds `nekko-vm` with `xcrun swiftc` and
   stages it beside nekkod. On Apple silicon a packaged build fails if it cannot.
+  The image builder's guest scripts go beside it in `runner-image/`. They are
+  text, so they are never signed, and `check-mac-entitlements.sh` skips that folder.
+  Building with the macOS 27 SDK is what gives `nekko-vm` first-boot support, so
+  `release.yml` and `installers.yml` build macOS on the `xcode-27` runner.
 
 `scripts/check-mac-entitlements.sh <app>` reads the entitlements of the app,
 every helper app under `Contents/Frameworks` and every file under
