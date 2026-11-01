@@ -464,6 +464,11 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             }
             "runner:githubStatus" => Ok(json!(setup.status().await)),
             "runner:githubCancel" => Ok(json!(setup.cancel())),
+            "runner:setForkApproval" => {
+                let id = arg["runnerId"].as_str().ok_or(NO_RUNNER)?;
+                let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+                Ok(json!(setup.fork_approval(&rec).await?))
+            }
             _ => Err(format!("unknown channel {channel}")),
         }
     }

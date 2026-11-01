@@ -41,6 +41,8 @@ const MAX_NAME: usize = 34;
 const WAIT: Duration = Duration::from_secs(3600);
 const POLL_EVERY: Duration = Duration::from_secs(3);
 const GH_LIMIT: Duration = Duration::from_secs(10);
+const FORK_APPROVAL: &str = "actions/permissions/fork-pr-contributor-approval";
+const APPROVE_ALL: &str = "all_external_contributors";
 const BAD_CONVERSION: &str = "GitHub's answer about the new app was not readable.";
 const WAITED: &str = "Setup waited an hour for GitHub and stopped. Start again to carry on.";
 const APP_GONE: &str = "That app no longer exists on GitHub. Start again to create a new one.";
@@ -213,6 +215,12 @@ impl Session {
             Kind::Org => Owner::Org(name),
         })
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub struct ForkApproval {
+    pub done: bool,
+    pub url: String,
 }
 
 enum Poll {
@@ -723,6 +731,31 @@ impl<H: Http + 'static> GithubSetup<H> {
             self.spawn_poll(id, c.app_id, owner);
         }
         (StatusCode::SEE_OTHER, [(header::LOCATION, install_url(&c.slug))]).into_response()
+    }
+
+    /// Makes GitHub hold every outside contributor's jobs for approval. A repo's app can set this
+    /// itself; an org's app is kept off org Administration, so `gh` does. `done: false` is not an
+    /// error: the sheet links to `url`, and the runner stays off until the owner has set it.
+    pub async fn fork_approval(&self, r: &RunnerRecord) -> Result<ForkApproval, String> {
+        let link = r.github().ok_or("Only GitHub runners have this setting.")?;
+        Ok(match &r.config.scope {
+            Scope::Repo { owner, repo } => {
+                let path = format!("/repos/{owner}/{repo}/{FORK_APPROVAL}");
+                let body = json!({ "approval_policy": APPROVE_ALL });
+                let done = match self.gh.installation_token(link).await {
+                    Ok(token) => matches!(self.gh.api("PUT", &path, &token, Some(body)).await, Ok((s, _)) if ok(s)),
+                    Err(_) => false,
+                };
+                ForkApproval { done, url: format!("{GITHUB}/{owner}/{repo}/settings/actions") }
+            }
+            Scope::Org { org } => {
+                let path = format!("orgs/{org}/{FORK_APPROVAL}");
+                let field = format!("approval_policy={APPROVE_ALL}");
+                let args = ["api", "-X", "PUT", &path, "-f", &field];
+                let done = output(&self.gh_path, &args, GH_LIMIT).await.is_some();
+                ForkApproval { done, url: format!("{GITHUB}/organizations/{org}/settings/actions") }
+            }
+        })
     }
 
     async fn gh_json(&self, path: &str) -> Option<Value> {

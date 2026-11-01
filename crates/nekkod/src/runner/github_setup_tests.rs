@@ -695,3 +695,59 @@ esac"#;
         ] })
     );
 }
+
+fn repo_runner() -> RunnerRecord {
+    RunnerRecord {
+        config: RunnerConfig { scope: Scope::Repo { owner: "acme".into(), repo: "app".into() }, ..saved(None).config },
+        link: Link::Github(GithubLink { group_id: None, ..saved(None).github().unwrap().clone() }),
+        image: None,
+    }
+}
+
+#[tokio::test]
+async fn repo_fork_approval_uses_the_installation_token_and_the_exact_body() {
+    let t = rig(vec![inst_token(), (204, Value::Null)]);
+    FileVault::new(t.secrets.clone()).set(&key_name(7), PEM).unwrap();
+    let got = t.setup.fork_approval(&repo_runner()).await.unwrap();
+    assert_eq!(got, ForkApproval { done: true, url: "https://github.com/acme/app/settings/actions".into() });
+    let call = t.http.last();
+    assert_eq!(
+        format!("{} {}", call.method, call.url),
+        "PUT https://api.github.com/repos/acme/app/actions/permissions/fork-pr-contributor-approval"
+    );
+    assert!(call.headers.iter().any(|(k, v)| k == "Authorization" && v == "Bearer ghs_inst"), "{call:?}");
+    assert_eq!(t.http.body(1), json!({ "approval_policy": "all_external_contributors" }));
+}
+
+#[tokio::test]
+async fn repo_fork_approval_that_github_refuses_gives_the_settings_link() {
+    let t = rig(vec![inst_token(), (403, json!({ "message": "Resource not accessible by integration" }))]);
+    FileVault::new(t.secrets.clone()).set(&key_name(7), PEM).unwrap();
+    let got = t.setup.fork_approval(&repo_runner()).await.unwrap();
+    assert_eq!(got, ForkApproval { done: false, url: "https://github.com/acme/app/settings/actions".into() });
+}
+
+#[tokio::test]
+async fn repo_fork_approval_with_no_key_gives_the_settings_link() {
+    let t = rig(vec![]);
+    assert!(!t.setup.fork_approval(&repo_runner()).await.unwrap().done);
+}
+
+#[tokio::test]
+async fn org_fork_approval_goes_through_gh() {
+    let t = with_gh(rig(vec![]), "exit 0");
+    let got = t.setup.fork_approval(&saved(None)).await.unwrap();
+    assert_eq!(got, ForkApproval { done: true, url: "https://github.com/organizations/acme/settings/actions".into() });
+    assert_eq!(
+        std::fs::read_to_string(t.dir.path().join("gh.log")).unwrap().trim(),
+        "api -X PUT orgs/acme/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors"
+    );
+    assert!(t.http.urls().is_empty(), "never the app: it holds no org Administration");
+}
+
+#[tokio::test]
+async fn org_fork_approval_with_gh_missing_gives_the_settings_link() {
+    let t = rig(vec![]);
+    let got = t.setup.fork_approval(&saved(None)).await.unwrap();
+    assert_eq!(got, ForkApproval { done: false, url: "https://github.com/organizations/acme/settings/actions".into() });
+}
