@@ -365,15 +365,37 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 /* ---------- Zones ---------- */
 /* A zone is a slim name bar over its window. The bar is the zone's handle:
-   drag it to move the zone, right-click it to close the zone. */
+   drag it to move the zone, right-click it to recolour or close the zone. */
+/* Each zone has a colour: a squircle before its name, and a bar on the cards
+   of the agents it shows. Mid tones, none of them the accent, so a zone's
+   colour never reads as the selection; they hold on light and dark themes. */
+:root {
+  --zone-tint-0: #2fae86;
+  --zone-tint-1: #e0952a;
+  --zone-tint-2: #e2704a;
+  --zone-tint-3: #4b98e0;
+  --zone-tint-4: #d25f93;
+  --zone-tint-5: #79a83a;
+}
 .command-wall-window[data-zone] { flex-direction: column; gap: 4px; }
 .command-wall-window[data-zone] > .panel { flex: 1 1 0; }
 .wall-zone-header {
-  flex: 0 0 16px; display: flex; align-items: center; gap: 8px; padding: 0 8px;
+  flex: 0 0 16px; display: flex; align-items: center; gap: 6px; padding: 0 8px;
   border-radius: 6px; cursor: grab; user-select: none;
   color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 500; letter-spacing: .02em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; overflow: hidden;
 }
+.wall-zone-swatch { flex: none; width: 8px; height: 8px; border-radius: 3px; }
+.wall-zone-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The header menu's row of colours, the zone's own one ringed. */
+.wall-zone-tints { display: flex; gap: 8px; padding: 4px 12px 8px; }
+.wall-zone-tint { width: 16px; height: 16px; border-radius: 5px; cursor: pointer; transition: transform 100ms var(--ease-out); }
+.wall-zone-tint[aria-checked='true'] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--ink-soft); }
+.wall-zone-tint:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wall-zone-tint:active { transform: scale(.92); }
+@media (prefers-reduced-motion: reduce) { .wall-zone-tint { transition: none; } }
+/* An agent card's zone bar: on its left edge, short of the corners. */
+.agent-chip-zone { position: absolute; left: 3px; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; pointer-events: none; }
 @media (hover: hover) {
   .wall-zone-header:hover { background: var(--surface-2); color: var(--ink-soft); }
 }
