@@ -661,7 +661,8 @@ final class LiveRelayTests: XCTestCase {
     /// `GET <NEKKO_ITEST_RELAY_CTL>/stop` or `/start` (apps/ios/scripts/relay-ctl.mjs): kill or restart the relay.
     private func relay(_ ctl: String, _ action: String) {
         let done = expectation(description: "relay \(action)")
-        var status = 0
+        // Written once by the callback, read after the wait below has seen it fulfilled.
+        nonisolated(unsafe) var status = 0
         URLSession.shared.dataTask(with: URL(string: "\(ctl)/\(action)")!) { _, response, _ in
             status = (response as? HTTPURLResponse)?.statusCode ?? 0
             done.fulfill()

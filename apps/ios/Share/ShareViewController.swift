@@ -60,20 +60,21 @@ final class ShareViewController: UIViewController {
     /// casting whatever `loadItem` returns.
     private static func text(from provider: NSItemProvider) async -> String? {
         if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
-           let url = await read(NSURL.self, provider, { ($0 as URL).absoluteString }) {
+           let url = await read(NSURL.self, provider, { ($0 as? NSURL).map { ($0 as URL).absoluteString } }) {
             return url
         }
-        if let s = await read(NSString.self, provider, { $0 as String }) { return s }
-        return await read(NSAttributedString.self, provider, { $0.string })
+        if let s = await read(NSString.self, provider, { ($0 as? NSString).map { $0 as String } }) { return s }
+        return await read(NSAttributedString.self, provider, { ($0 as? NSAttributedString)?.string })
     }
 
     /// One object of `type` from `provider`, turned into a Sendable value inside the callback.
-    private static func read<T: NSItemProviderReading>(_ type: T.Type, _ provider: NSItemProvider,
-                                                      _ convert: @escaping @Sendable (T) -> String?) async -> String? {
+    /// Not generic: the class is only named to the provider, so no metatype crosses into the callback.
+    private static func read(_ type: NSItemProviderReading.Type, _ provider: NSItemProvider,
+                             _ convert: @escaping @Sendable (any NSItemProviderReading) -> String?) async -> String? {
         guard provider.canLoadObject(ofClass: type) else { return nil }
         return await withCheckedContinuation { (done: CheckedContinuation<String?, Never>) in
             _ = provider.loadObject(ofClass: type) { value, _ in
-                done.resume(returning: (value as? T).flatMap(convert))
+                done.resume(returning: value.flatMap(convert))
             }
         }
     }
