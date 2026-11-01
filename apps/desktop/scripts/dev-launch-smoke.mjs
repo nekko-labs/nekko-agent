@@ -82,7 +82,6 @@ const fs=require('node:fs'),path=require('node:path');
 app.setAsDefaultProtocolClient=()=>false;
 require(${JSON.stringify(resolve('out/main/index.js'))});
 const trace=m=>{try{fs.appendFileSync(path.join(process.env.NEKKO_DATA_DIR,'quit-trace.txt'),Date.now()+' '+m+'\\n');}catch{}};
-process.on('SIGTERM',()=>trace('SIGTERM'));
 for(const e of ['before-quit','will-quit','quit','window-all-closed'])app.on(e,()=>trace(e));
 let checking=false;
 const timer=setInterval(async()=>{
