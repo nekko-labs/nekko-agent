@@ -6,6 +6,17 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## iOS and Android in step (added 2026-11-02)
+
+Philip asked that the two phone apps carry the same features, with an OS feature's counterpart built on the other phone where one exists. Spec: [iOS and Android stay in step](spec/phone/ios-and-android-stay-in-step.md); decision [0040](docs/decisions/0040-ios-and-android-stay-in-step.md). Prefix **PP**. Gaps already tracked elsewhere: AN-6, AN-28, T201a.
+
+- [ ] **PP-1, Wear OS glance.** The Apple Watch glance (IO-16) on Wear OS.
+- [ ] **PP-2, Nekko Cloud machines on Android.** The iPhone's Cloud screens (`CloudViews.swift`).
+- [ ] **PP-3, Plan sheet on Android.** The composer's plan sheet (`PlanSheet.swift`).
+- [ ] **PP-4, Voice mode on Android.** The iPhone's voice mode (`VoiceRunner.swift`), beyond dictation.
+- [ ] **PP-5, Spooky icon on Android.** The October icon, through a launcher activity alias.
+- [ ] **PP-6, Full parity audit.** Compare the two apps feature by feature and add what the first pass missed, including anything Android has that the iPhone lacks.
+
 ## Model scheduler (#1462, added 2026-11-01)
 
 Fast switching between local models through residency tiers (Hot, Warm in RAM, Staged on a fast SSD, Cold), and preloading from what is coming next (scheduled tasks, workflow steps, active agents). Design and acceptance criteria in [#1462](https://github.com/nekko-labs/nekko-agent/issues/1462); Phase 0 results in [the report](reports/model-switching-phase0-2026-11-01.md). Prefix **MS**.
