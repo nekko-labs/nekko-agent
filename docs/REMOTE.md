@@ -82,6 +82,12 @@ both need the update; an older app cannot connect to an updated computer.
 > runs (GPU, GPU + CPU, CPU), its context size and memory, and **Unload**; models still loading;
 > how much of the memory for models they take; and this chat's context. The monitor is read every
 > few seconds only while Expert mode is on and a chat is open.
+> **The agent's plan** (iPhone): as on the desktop, the agent's plan sits behind the top of the
+> message box. Folded, it shows the step being worked (its kind, such as Build or Verify, and
+> *2 of 4*) and chips for it: sub-agents, its check, the PR it opened with its CI, and the task it
+> is for. Tap it to see every step; tap a finished step to see its note and chips. A Claude Agent
+> chat shows Claude Code's own plan, or the work loop of your latest request.
+>
 > In a chat on the iPhone, what the agent does reads as it does on the desktop: each tool step is
 > one quiet line (a mark, the command or file, a chevron when there is output), and adjacent steps
 > with one purpose fold into one row that says the goal (*Read the project's guidance*, *Looked
