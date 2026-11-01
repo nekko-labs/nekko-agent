@@ -451,7 +451,7 @@ export function ChatControls({
   const showMode = only !== 'privacy';
   const showPrivacy = only !== 'mode';
   return (
-    <div ref={ref} className={only ? 'flex min-w-0 items-center gap-1 text-xs' : 'flex w-full min-w-0 flex-wrap items-center gap-2 text-xs'}>
+    <div ref={ref} className={only ? 'flex min-w-0 items-center gap-1 text-xs' : 'flex w-full min-w-0 items-center gap-2 overflow-hidden text-xs'}>
       {!only && leading}
       {/* An image chat runs no agent: no tool policy, tools or MCP to set. */}
       {session.chatType !== 'image' && showMode && (<>

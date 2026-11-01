@@ -1,5 +1,5 @@
 /** Two text rows plus the editor's vertical padding. */
-export const WALL_EDITOR_MIN_HEIGHT = 64;
+export const WALL_EDITOR_MIN_HEIGHT = 52;
 
 /** Saved shell height is a preference, not a ceiling on the draft. */
 export function wallEditorHeight({ content, chrome, extra, preferred, viewport }: {

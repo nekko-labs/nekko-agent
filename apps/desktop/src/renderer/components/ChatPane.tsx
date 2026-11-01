@@ -142,7 +142,7 @@ const PLAN_RAIL_MIN_PANE = PLAN_RAIL_WIDTH * 2;
  * Unset means "grow with what's typed", which is where every composer starts.
  */
 const COMPOSER_H_KEY = 'nekko.composer.height';
-const COMPOSER_MIN_H = 64;
+const COMPOSER_MIN_H = 52;
 /** Drag distance (px) within which the composer snaps to its default or full size. */
 const COMPOSER_SNAP = 24;
 /** The conversation keeps at least this much of the pane, however tall the composer. */
@@ -2782,8 +2782,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
             {showControls && !header && !wallWindow && (<>
             {/* Chat-wide switches live at the top of the input surface; the
-                model and its effort sit in the bottom bar beside Send. */}
-            <div className="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1">
+                model and its effort sit in the bottom bar beside Send.
+                One row, never wraps: a longer mode or model label must not
+                nudge the editor's height. Items that overflow clip. */}
+            <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-line px-2 py-1">
               <div className="min-w-0 shrink">
               <ChatControls
                 session={session}
@@ -2844,7 +2846,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             </div>
             </>)}
             {showControls && imageMode && session && (
-              <div className="flex min-w-0 flex-wrap items-center gap-1 border-b border-line px-2 py-1">
+              <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-line px-2 py-1">
                 <ImageModeControls session={session} onChange={setSession} busy={streaming} />
               </div>
             )}
@@ -3075,7 +3077,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                   <MarkdownEditor
                     ref={composerRef}
-                    className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[64px] py-3'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
+                    className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[52px] py-2'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
                     placeholder={imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter steers the running reply)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
@@ -3295,7 +3297,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
-          {!imageMode && surface !== 'composer' && !wallWindow && <div className="flex flex-wrap items-center gap-2">
+          {!imageMode && surface !== 'composer' && !wallWindow && <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                   <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />
                   {modelControls}
                   <>
