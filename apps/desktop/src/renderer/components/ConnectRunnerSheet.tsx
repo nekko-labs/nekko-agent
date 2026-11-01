@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_RUNNER_LABEL,
   IDLE_GITHUB_SETUP,
@@ -339,6 +339,8 @@ export function ConfirmStep({
   const one = servesOneRepo(status);
   const anyPublic = publicPicks(status, picks.repos).length > 0;
   const label = picks.label.trim() || DEFAULT_RUNNER_LABEL;
+  // Without `gh` a Free org is only found out here. Its app has no repo Administration, so the way out is a new one.
+  const stuck = status.kind === 'org' && status.owner && status.slug && error?.includes('runner groups');
   return (
     <div className="flex flex-col gap-3 p-5">
       <Heading>GitHub is connected</Heading>
@@ -380,36 +382,10 @@ export function ConfirmStep({
         )
         : <TextLink onClick={() => setAdvanced(true)}>Advanced: runner label</TextLink>}
       <Alert error={error} />
-      <div className="flex justify-end gap-2">
-        <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
-        <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !picks.repos.length || (anyPublic && !picks.allowPublic)} onClick={onContinue}>Continue</button>
-      </div>
-    </div>
-  );
-}
-
-/** Last for now: layer 3 moves the mode to the Mac setup sheet. */
-export function ModeStep({
-  status, priority, error, busy, onPriority, onBack, onSubmit,
-}: {
-  status: GithubSetupView;
-  priority: Priority;
-  error: string | null;
-  busy: boolean;
-  onPriority(p: Priority): void;
-  onBack(): void;
-  onSubmit(): void;
-}) {
-  // Without `gh` a Free org is only found out here. Its app has no repo Administration, so the way out is a new one.
-  const stuck = status.kind === 'org' && status.owner && status.slug && error?.includes('runner groups');
-  return (
-    <div className="flex flex-col gap-3 p-5">
-      <ModeChoices priority={priority} onPriority={onPriority} />
-      <Alert error={error} />
       {stuck && <TextLink onClick={() => void window.nekko.openPath(githubAppSettingsUrl(status.owner!, status.slug!))}>Delete the app on GitHub</TextLink>}
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn btn-outline" disabled={busy} onClick={onBack}>Back</button>
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={onSubmit}>{busy ? 'Starting…' : 'Start runner'}</button>
+        <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
+        <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !picks.repos.length || (anyPublic && !picks.allowPublic)} onClick={onContinue}>Continue to Mac setup</button>
       </div>
     </div>
   );
@@ -426,27 +402,28 @@ export function ForkStep({ url, busy, onOpen, onLeaveOff, onConfirmed }: { url: 
       <TextLink onClick={() => onOpen(url)}>Open Actions settings <ExternalIcon className="inline h-2.5 w-2.5" /></TextLink>
       <div className="flex justify-end gap-2">
         <button type="button" className="btn btn-outline" disabled={busy} onClick={onLeaveOff}>Leave it off</button>
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={onConfirmed}>It is on, start the runner</button>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={onConfirmed}>It is on, continue to Mac setup</button>
       </div>
     </div>
   );
 }
 
-export interface SetupDeps extends ConnectDeps {
-  setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
+export interface SetupDeps {
+  connectRunner(req: ConnectRequest): Promise<RunnerView>;
   setForkApproval(req: { runnerId: string; confirmed?: boolean }): Promise<ForkApproval>;
+  pushToast(kind: 'error' | 'success' | 'info', message: string): void;
 }
 export type PendingApproval = ForkApproval & { runnerId: string };
 
 /**
- * Confirm: connect with the stored key, apply the mode, then settle fork approval.
- * A public repo's runner connects off and turns on only once GitHub holds outside
- * contributors, so it can never take a job first. Once connected, a failure only toasts.
+ * Confirm: connect off with the stored key, then settle a public repo's fork
+ * approval, all before Mac setup. Only a finished setup turns the runner on, so
+ * it can never take a job first. Once connected, a failure only toasts: the
+ * daemon keeps the runner off until approval is settled.
  */
 export async function submitSetup(
   status: GithubSetupView,
   picks: SetupPicks,
-  priority: Priority,
   deps: SetupDeps,
 ): Promise<{ error: string } | { view: RunnerView; approval: PendingApproval | null }> {
   const req = toSetupRequest(status, picks);
@@ -458,39 +435,30 @@ export async function submitSetup(
   } catch (e) {
     return { error: said(e) };
   }
+  if (!req.allowPublic) return { view, approval: null };
   const runnerId = view.config.id;
   try {
-    if (priority !== 'doNotDisturb') view = await deps.updateRunner(runnerId, { priority });
-  } catch (e) {
-    deps.pushToast('error', `Connected, but could not set the mode: ${said(e)}`);
-  }
-  if (req.enabled !== false) return { view, approval: null };
-  try {
     const approval = await deps.setForkApproval({ runnerId });
-    if (!approval.done) return { view, approval: { ...approval, runnerId } };
-    return { view: await deps.setRunnerEnabled(runnerId, true), approval: null };
+    return { view, approval: approval.done ? null : { ...approval, runnerId } };
   } catch (e) {
     deps.pushToast('error', `Connected, but the runner stays off: ${said(e)}`);
     return { view, approval: null };
   }
 }
 
-/** The owner says approval is on: settle that with the daemon first, or it keeps the runner off. */
-export async function confirmFork(runnerId: string, deps: Pick<SetupDeps, 'setForkApproval' | 'setRunnerEnabled'>): Promise<RunnerView> {
-  await deps.setForkApproval({ runnerId, confirmed: true });
-  return deps.setRunnerEnabled(runnerId, true);
-}
+/** The owner says approval is on. Settling it is all this does: Mac setup turns the runner on. */
+export const confirmFork = (runnerId: string, deps: Pick<SetupDeps, 'setForkApproval'>) => deps.setForkApproval({ runnerId, confirmed: true });
 
-export type SheetScreen = 'manual' | 'account' | 'waiting' | 'confirm' | 'mode' | 'fork';
+export type SheetScreen = 'manual' | 'account' | 'waiting' | 'confirm' | 'fork';
 
-/** Which screen shows. The daemon owns the setup; this sheet only owns the manual path and the last two steps. */
-export function sheetScreen({ status, manual, moding, submitting, approval }: { status: GithubSetupView; manual: boolean; moding: boolean; submitting: boolean; approval: PendingApproval | null }): SheetScreen {
+/** Which screen shows. The daemon owns the setup; this sheet only owns the manual path and the fork step. */
+export function sheetScreen({ status, manual, submitting, approval }: { status: GithubSetupView; manual: boolean; submitting: boolean; approval: PendingApproval | null }): SheetScreen {
   if (approval) return 'fork';
-  // A connect ends the daemon's setup before this sheet has finished with the mode and fork approval.
-  if (submitting) return 'mode';
+  // A connect ends the daemon's setup before fork approval is settled.
+  if (submitting) return 'confirm';
   if (manual) return 'manual';
   if (status.step === 'create' || status.step === 'install') return 'waiting';
-  if (status.step === 'confirm') return moding ? 'mode' : 'confirm';
+  if (status.step === 'confirm') return 'confirm';
   return 'account';
 }
 
@@ -498,7 +466,8 @@ const NO_ACCOUNTS: GithubAccounts = { login: null, accounts: [] };
 const TYPED: AccountChoice = { login: '', kind: 'org', canGroup: null, typed: true };
 
 /** The Connect GitHub sheet. The pasted key lives only in this sheet's form, and only until it closes or connects. */
-export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStoredFor }: { onClose(): void; onConnected(): void; beginReply(): (v: RunnerView) => void; keyStoredFor: (appId: number) => boolean }) {
+/** `onConnected` gets the new runner's id when it goes on to Mac setup; the manual path starts its runner itself. */
+export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStoredFor }: { onClose(): void; onConnected(runnerId?: string): void; beginReply(): (v: RunnerView) => void; keyStoredFor: (appId: number) => boolean }) {
   const pushToast = useStore((s) => s.pushToast);
   const [form, setForm] = useState(emptyConnectForm);
   const [step, setStep] = useState<ConnectStep>(1);
@@ -509,8 +478,6 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   const [accounts, setAccounts] = useState<GithubAccounts>(NO_ACCOUNTS);
   const [choice, setChoice] = useState<AccountChoice>(TYPED);
   const [picks, setPicks] = useState<SetupPicks>({ repos: [], allowPublic: false, label: '' });
-  const [priority, setPriority] = useState<Priority>('doNotDisturb');
-  const [moding, setModing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
 
@@ -532,7 +499,6 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
 
   useEffect(() => {
     if (status.step === 'confirm') setPicks((p) => ({ ...p, repos: defaultRepoPicks(status) }));
-    else setModing(false);
   }, [status]);
 
   const close = () => {
@@ -552,15 +518,13 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
     setBusy(false);
   };
   const again = () => void start({ owner: status.owner ?? '', kind: status.kind ?? 'org', repoAdmin: status.repoAdmin });
-  const startRunner = async () => {
+  const confirm = async () => {
     if (busy) return;
     setBusy(true);
     setSubmitting(true);
     setError(null);
     const reply = beginReply();
-    const res = await submitSetup(status, picks, priority, {
-      connectRunner: window.nekko.connectRunner, updateRunner: window.nekko.updateRunner, setRunnerEnabled: window.nekko.setRunnerEnabled, setForkApproval: window.nekko.setForkApproval, pushToast,
-    });
+    const res = await submitSetup(status, picks, { connectRunner: window.nekko.connectRunner, setForkApproval: window.nekko.setForkApproval, pushToast });
     setBusy(false);
     setSubmitting(false);
     if ('error' in res) {
@@ -569,19 +533,18 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
     }
     reply(res.view);
     if (res.approval) setApproval(res.approval);
-    else onConnected();
+    else onConnected(res.view.config.id);
   };
   const approved = async () => {
     if (!approval) return;
     setBusy(true);
-    const reply = beginReply();
     try {
-      reply(await confirmFork(approval.runnerId, window.nekko));
+      await confirmFork(approval.runnerId, window.nekko);
+      onConnected(approval.runnerId);
     } catch (e) {
-      pushToast('error', `Could not start the runner: ${e instanceof Error ? e.message : String(e)}`);
+      pushToast('error', `Could not save that: ${e instanceof Error ? e.message : String(e)}`);
     }
     setBusy(false);
-    onConnected();
   };
   const submit = async () => {
     if (busy) return;
@@ -600,7 +563,10 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
     onConnected();
   };
 
-  const screen = sheetScreen({ status, manual, moding, submitting, approval });
+  const screen = sheetScreen({ status, manual, submitting, approval });
+  // A connect ends the daemon's setup, and with it the repos on screen, while fork approval settles.
+  const held = useRef(status);
+  if (!submitting) held.current = status;
   return (
     <Modal title="Connect GitHub" onClose={close} overlayClassName="p-4" className="card w-[560px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
       {screen === 'manual' && (
@@ -633,7 +599,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
       {screen === 'waiting' && <WaitingStep status={status} busy={busy} onCancel={() => void window.nekko.githubCancel()} onOpen={again} />}
       {screen === 'confirm' && (
         <ConfirmStep
-          status={status}
+          status={held.current}
           picks={picks}
           error={error}
           busy={busy}
@@ -644,13 +610,12 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
           }}
           onAllowPublic={(allowPublic) => setPicks((p) => ({ ...p, allowPublic }))}
           onLabel={(label) => setPicks((p) => ({ ...p, label }))}
-          onContinue={() => { setError(null); setModing(true); }}
+          onContinue={() => void confirm()}
           onRecheck={again}
           onCancel={() => void window.nekko.githubCancel()}
         />
       )}
-      {screen === 'mode' && <ModeStep status={status} priority={priority} error={error} busy={busy} onPriority={setPriority} onBack={() => { setError(null); setModing(false); }} onSubmit={() => void startRunner()} />}
-      {screen === 'fork' && approval && <ForkStep url={approval.url} busy={busy} onOpen={open} onLeaveOff={onConnected} onConfirmed={() => void approved()} />}
+      {screen === 'fork' && approval && <ForkStep url={approval.url} busy={busy} onOpen={open} onLeaveOff={close} onConfirmed={() => void approved()} />}
     </Modal>
   );
 }

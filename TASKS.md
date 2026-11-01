@@ -32,6 +32,12 @@ A new user connects GitHub with two clicks on github.com, then one click builds 
   - Done 2026-11-01: fork approval. `runner:setForkApproval`: the repo's app with an installation token, `gh` for an org, otherwise the settings link.
   - Done 2026-11-01: the sheet. `ConnectRunnerSheet.tsx` (account, waiting, confirm, the mode step stays last until T227, the fork step, the manual path unchanged behind **Use an app I already have**), `GithubLink.fork_approval_open` so the daemon refuses to start a public runner before approval is settled, shared types and helpers, ipc, preload, web client, `ci-runners-sandbox.cjs` scenes, spec and docs.
   - Pending: S1. If GitHub refuses localhost, point the manifest at a static page on nekkoagent.com that passes the code to localhost in the browser.
+- [ ] **T227, The two-step setup screens.** Added: 2026-11-01. Built 2026-11-01 on top of T225 and T226; every screen seen in the hidden sandbox with a stand-in daemon, and the seeded composer in the real App. Pending: the final check on a clean data dir, first visit to a real job on `ermish/nekko-runner-spike`.
+  - Done 2026-11-01: `runnerWorkflowPrompt`, `RunnerView.repos`, and the stage helpers (`imageStageRows`, `imageFraction`, `imageLine`) in `packages/shared/src/runners.ts`.
+  - Done 2026-11-01: `runner:imagePlan`, because the sheet has to know this Mac's Xcode and free space before a build starts. Not in the plan.
+  - Done 2026-11-01: `RunnerStepArt.tsx`, `MacSetupSheet.tsx`, `RunnerReady.tsx`, `MoonIcon`, `YinYangIcon`, the two-step first visit, the card's setup row and **Connect to a workflow**, **Rebuild image** in settings. The fork step moves before Mac setup and the mode step moves into it. The settings sheet keeps its text buttons for the mode, so the icons stay on the setup sheet.
+  - Done 2026-11-01: a repeat connect turns a runner off only for an open fork approval, or Confirm's `enabled: false` would have stopped a working runner.
+  - Done 2026-11-01: `ci-runners-sandbox.cjs` scenes for every screen, the burst as stepped frames plus reduced motion, and `ci-runners-workflow-sandbox.cjs` for the composer in the real App.
 
 ## Per-chat watching Nekko and resolved Claude model (added 2026-10-31)
 

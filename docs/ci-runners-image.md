@@ -49,7 +49,7 @@ removes the Tart guest agent it runs through, and disables the admin `tart exec`
 the files on APFS, so the copy is instant and takes no extra space until one side changes.
 After copying you can `tart delete nekko-golden`.
 
-The runner card shows `No VM image yet.` until `runners/images/default/` holds all three files.
+The runner card offers **Set up this Mac** until `runners/images/default/` holds all three files.
 
 ## From Apple's restore image
 

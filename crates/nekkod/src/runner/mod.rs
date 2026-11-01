@@ -632,8 +632,9 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     self.vault.delete(&new);
                 }
                 let before = secret_key(old);
-                // A public repo waiting on fork approval must not come up running.
-                old.config.settings.enabled &= rec.config.settings.enabled;
+                // A public repo waiting on fork approval must not come up running. Confirm
+                // always connects off, for a new runner's sake; a working one stays on.
+                old.config.settings.enabled &= !rec.github().is_some_and(|g| g.fork_approval_open);
                 old.link = rec.link;
                 old.config.label = rec.config.label;
                 let nets = &mut old.config.settings.trusted_networks;

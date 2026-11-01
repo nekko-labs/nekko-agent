@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import {
+  NO_IMAGE_ERROR,
   STATE_LABELS,
   auditText,
+  imageBusy,
+  imageFraction,
+  imageLine,
   networkText,
   reasonText,
   runnerSubtitle,
@@ -9,11 +13,13 @@ import {
   scopeName,
   slotLines,
   todayText,
+  type ImageView,
   type RunnerState,
   type RunnerView,
 } from '@nekko-agent/shared';
 import { Badge, StatusDot, Toggle } from './primitives/index.js';
 import type { StatusTone } from '../tokens.js';
+import { connectToWorkflow } from './RunnerReady.js';
 import { GearIcon } from '../icons.js';
 import { useStore } from '../store.js';
 
@@ -26,14 +32,39 @@ const hhmm = (ts: number) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+/** Where the image stands: the same stage and bar as the setup sheet, so the sheet is optional. */
+function ImageRow({ image, onSetup }: { image: ImageView; onSetup?(): void }) {
+  const fraction = imageFraction(image);
+  const busy = imageBusy(image);
+  const action = busy ? 'Details' : image.canResume ? 'Resume setup' : 'Set up this Mac';
+  return (
+    <div className="mt-3 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--line)', background: 'var(--paper)' }}>
+      <div className="flex items-center gap-3">
+        <p role={image.state === 'failed' ? 'alert' : undefined} className="min-w-0 flex-1 text-xs text-ink-soft">
+          {busy ? imageLine(image) : image.canResume ? 'Setup paused. Finished stages are kept.' : 'One click, then it builds your job VM by itself.'}
+        </p>
+        <button className={`btn py-1! text-xs ${busy ? 'btn-outline' : 'btn-primary'}`} onClick={onSetup}>{action}</button>
+      </div>
+      {fraction !== null && (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
+          <div className="h-full rounded-full" style={{ width: `${fraction * 100}%`, background: 'var(--accent)' }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** One connected runner (mockup 3): state, slots, the Mac's facts and recent jobs. */
 /**
  * `beginReply` is called as a request starts and returns where its answer goes,
  * so the section can drop an answer a newer push has already overtaken.
  */
-export function RunnerCard({ view, now, onSettings, beginReply }: { view: RunnerView; now: number; onSettings(): void; beginReply(): (v: RunnerView) => void }) {
+export function RunnerCard({ view: given, now, image = null, onSettings, onSetup, beginReply }: { view: RunnerView; now: number; image?: ImageView | null; onSettings(): void; onSetup?(): void; beginReply(): (v: RunnerView) => void }) {
   const [busy, setBusy] = useState(false);
   const pushToast = useStore((s) => s.pushToast);
+  const settingUp = image !== null && (image.state !== 'ready' || image.canResume);
+  // Setup is the answer to "No VM image yet", so the runner is waiting for it, not failing.
+  const view: RunnerView = settingUp && given.error === NO_IMAGE_ERROR ? { ...given, state: 'waiting', error: null } : given;
   const { config, state, host, today } = view;
   const sampled = host.ramMb > 0;
   const power = host.onBattery === null ? 'Unknown' : host.onBattery ? `On battery, ${Math.round(host.batteryPct ?? 0)}%` : 'On AC';
@@ -80,6 +111,7 @@ export function RunnerCard({ view, now, onSettings, beginReply }: { view: Runner
           {view.error}
         </p>
       )}
+      {image && settingUp && <ImageRow image={image} onSetup={onSetup} />}
 
       {(state === 'waiting' || state === 'draining') && view.reasons.length > 0 && (
         <ul className="mt-3 space-y-0.5 text-xs text-ink-soft">
@@ -121,6 +153,12 @@ export function RunnerCard({ view, now, onSettings, beginReply }: { view: Runner
             </li>
           ))}
         </ul>
+      )}
+
+      {image !== null && !settingUp && (
+        <div className="mt-3 flex justify-end">
+          <button className="btn btn-outline py-1! text-xs" onClick={() => void connectToWorkflow(view)}>Connect to a workflow</button>
+        </div>
       )}
     </div>
   );

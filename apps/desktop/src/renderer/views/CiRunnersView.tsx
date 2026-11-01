@@ -1,34 +1,49 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PRIORITY_LABELS, type RunnerView } from '@nekko-agent/shared';
-import { Badge, EmptyHint } from '../components/primitives/index.js';
+import type { ImageView, RunnerView } from '@nekko-agent/shared';
+import { EmptyHint } from '../components/primitives/index.js';
 import { RunnerCard } from '../components/RunnerCard.js';
 import { ConnectRunnerSheet } from '../components/ConnectRunnerSheet.js';
 import { RunnerSettingsSheet } from '../components/RunnerSettingsSheet.js';
-import { LaptopIcon, PlugIcon, ShieldIcon } from '../icons.js';
+import { MacSetupSheet } from '../components/MacSetupSheet.js';
+import { connectToWorkflow } from '../components/RunnerReady.js';
+import { GithubStepArt, MacStepArt } from '../components/RunnerStepArt.js';
+import { CheckIcon, PlugIcon } from '../icons.js';
 import { hasAppChrome } from '../chrome.js';
 
 export type RunnersState = { kind: 'loading' } | { kind: 'unavailable'; message: string } | { kind: 'ready'; views: RunnerView[] };
 
-/** Mockup 1: the CI runners section before any runner is connected. */
-export function CiRunnersFirstVisit({ onConnect }: { onConnect(): void }) {
+const StepPanel = ({ step, art, title, blurb, next, children }: { step: number; art: React.ReactNode; title: string; blurb: string; next?: boolean; children: React.ReactNode }) => (
+  <article className={`runner-step${next ? ' next' : ''}`}>
+    <div className="art">{art}</div>
+    <div className="body">
+      <span className="eyebrow">{`STEP ${step}`}</span>
+      <b>{title}</b>
+      <p>{blurb}</p>
+      {children}
+    </div>
+  </article>
+);
+
+/**
+ * Frame 1: both steps are visible from the start. `connected` is step 1 done, so
+ * step 2 lights up; a stopped build offers to pick up where it left off.
+ */
+export function CiRunnersFirstVisit({ connected = false, canResume = false, onConnect, onSetup }: { connected?: boolean; canResume?: boolean; onConnect(): void; onSetup?(): void }) {
   return (
-    <div className="mt-4 rounded-xl border border-dashed px-4 py-6 text-center" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
-      <div className="mx-auto mb-2 grid h-13 w-13 place-items-center rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
-        <LaptopIcon className="h-6.5 w-6.5" />
-      </div>
-      <h2 className="mb-1 text-xl font-semibold">Use this Mac as a CI runner</h2>
-      <p className="mx-auto mb-3 max-w-130 text-sm text-ink-soft">
-        Run your GitHub Actions jobs here, each in a throwaway VM that is deleted afterward. Your own work comes first.
-      </p>
-      <button className="btn btn-primary" onClick={onConnect}>
-        <PlugIcon className="h-4 w-4" /> Connect GitHub
-      </button>
-      <div className="mt-3 flex flex-wrap justify-center gap-2">
-        <Badge tone="success"><ShieldIcon className="h-3 w-3" />VM per job</Badge>
-        <Badge>1 macOS slot</Badge>
-        <Badge>{PRIORITY_LABELS.doNotDisturb}</Badge>
-        <Badge>Only on power</Badge>
-        <Badge>Private repos unless you allow public</Badge>
+    <div className="mx-auto mt-4 flex max-w-170 flex-col gap-2.5 rounded-[14px] border p-4" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
+      <h2 className="text-[15.5px] font-semibold">Use this Mac as a CI runner</h2>
+      <p className="text-[13.5px] text-ink-soft">Run your GitHub Actions jobs here, each in a throwaway VM that is deleted afterward. Your own work comes first.</p>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(230px,100%),1fr))] gap-3.5">
+        <StepPanel step={1} art={<GithubStepArt />} title="Connect GitHub" blurb="Two clicks on GitHub. Nothing to copy." next={connected}>
+          {connected
+            ? <span className="mt-auto flex items-center gap-1.5 text-[13px] font-medium text-[var(--success)]"><CheckIcon className="h-3.5 w-3.5" />Connected</span>
+            : <button className="btn btn-primary mt-auto self-start" onClick={onConnect}>Connect GitHub</button>}
+        </StepPanel>
+        <StepPanel step={2} art={<MacStepArt />} title="Set up this Mac" blurb="One click, then it builds your job VM by itself." next={!connected}>
+          {connected
+            ? <button className="btn btn-primary mt-auto self-start" onClick={onSetup}>{canResume ? 'Resume setup' : 'Set up this Mac'}</button>
+            : <button className="btn btn-outline mt-auto self-start" disabled>After step 1</button>}
+        </StepPanel>
       </div>
     </div>
   );
@@ -37,7 +52,7 @@ export function CiRunnersFirstVisit({ onConnect }: { onConnect(): void }) {
 /** The section body for each load state; pure so tests can render it without effects. */
 export function runnersBody(
   state: RunnersState,
-  { now, onConnect, onSettings, beginReply }: { now: number; onConnect(): void; onSettings(id: string): void; beginReply(): (v: RunnerView) => void },
+  { now, image = null, onConnect, onSettings, onSetup, beginReply }: { now: number; image?: ImageView | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; beginReply(): (v: RunnerView) => void },
 ): React.ReactNode {
   if (state.kind === 'loading') return null;
   if (state.kind === 'unavailable') {
@@ -48,9 +63,15 @@ export function runnersBody(
     return <EmptyHint className="mt-4">{text}</EmptyHint>;
   }
   if (!state.views.length) return <CiRunnersFirstVisit onConnect={onConnect} />;
-  return state.views.map((v) => (
-    <RunnerCard key={v.config.id} view={v} now={now} onSettings={() => onSettings(v.config.id)} beginReply={beginReply} />
-  ));
+  const first = state.views[0].config.id;
+  return (
+    <>
+      {image?.state === 'none' && <CiRunnersFirstVisit connected canResume={image.canResume} onConnect={onConnect} onSetup={() => onSetup?.(first)} />}
+      {state.views.map((v) => (
+        <RunnerCard key={v.config.id} view={v} now={now} image={image} onSettings={() => onSettings(v.config.id)} onSetup={() => onSetup?.(v.config.id)} beginReply={beginReply} />
+      ))}
+    </>
+  );
 }
 
 /** Applies a `listRunners` result (the first, or a retry after "unavailable"): a push that already arrived is newer, so it wins. */
@@ -81,6 +102,8 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
   const [clock, setClock] = useState(now);
   const [connecting, setConnecting] = useState(false);
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
+  const [setup, setSetup] = useState<{ id: string; rebuild: boolean } | null>(null);
+  const [image, setImage] = useState<ImageView | null>(null);
 
   const pushes = useRef(0);
   useEffect(() => {
@@ -107,6 +130,17 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
     };
   }, []);
 
+  // Rejects on a daemon with no builder: the card then keeps its error line.
+  useEffect(() => {
+    let live = true;
+    void window.nekko.imageStatus().then((v) => { if (live) setImage((cur) => cur ?? v); }, () => {});
+    const off = window.nekko.onImageChanged(setImage);
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+
   const running = state.kind === 'ready' && state.views.some((v) => v.slots.some((s) => s.state === 'running'));
   useEffect(() => {
     if (!running) return;
@@ -123,6 +157,7 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
   const hasRunners = state.kind === 'ready' && state.views.length > 0;
   // A removed runner's push drops it from the list, which closes its sheet.
   const settingsView = state.kind === 'ready' ? state.views.find((v) => v.config.id === settingsFor) : undefined;
+  const setupView = state.kind === 'ready' ? state.views.find((v) => v.config.id === setup?.id) : undefined;
 
   return (
     <div className="min-w-0 flex-1 overflow-y-auto p-4">
@@ -136,13 +171,46 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
             </button>
           )}
         </div>
-        {runnersBody(state, { now: clock, onConnect: () => setConnecting(true), onSettings: setSettingsFor, beginReply })}
+        {runnersBody(state, { now: clock, image, onConnect: () => setConnecting(true), onSettings: setSettingsFor, onSetup: (id) => setSetup({ id, rebuild: false }), beginReply })}
       </div>
       {connecting && (
         // shortcut: views do not carry the GitHub app id yet, so connect always asks for the key; pass a real lookup once they do.
-        <ConnectRunnerSheet onClose={() => setConnecting(false)} onConnected={() => setConnecting(false)} beginReply={beginReply} keyStoredFor={() => false} />
+        <ConnectRunnerSheet
+          onClose={() => setConnecting(false)}
+          onConnected={(id) => {
+            setConnecting(false);
+            if (id) setSetup({ id, rebuild: false });
+          }}
+          beginReply={beginReply}
+          keyStoredFor={() => false}
+        />
       )}
-      {settingsView && <RunnerSettingsSheet view={settingsView} onClose={() => setSettingsFor(null)} beginReply={beginReply} />}
+      {settingsView && (
+        <RunnerSettingsSheet
+          view={settingsView}
+          image={image}
+          onClose={() => setSettingsFor(null)}
+          onRebuild={() => {
+            setSettingsFor(null);
+            setSetup({ id: settingsView.config.id, rebuild: true });
+          }}
+          beginReply={beginReply}
+        />
+      )}
+      {setup && (
+        <MacSetupSheet
+          runnerId={setup.id}
+          view={setupView}
+          image={image}
+          rebuild={setup.rebuild}
+          onClose={() => setSetup(null)}
+          onWorkflow={() => {
+            setSetup(null);
+            if (setupView) void connectToWorkflow(setupView);
+          }}
+          beginReply={beginReply}
+        />
+      )}
     </div>
   );
 }
