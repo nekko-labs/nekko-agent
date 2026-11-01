@@ -81,6 +81,9 @@ const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
 app.setAsDefaultProtocolClient=()=>false;
 require(${JSON.stringify(resolve('out/main/index.js'))});
+const trace=m=>{try{fs.appendFileSync(path.join(process.env.NEKKO_DATA_DIR,'quit-trace.txt'),Date.now()+' '+m+'\\n');}catch{}};
+process.on('SIGTERM',()=>trace('SIGTERM'));
+for(const e of ['before-quit','will-quit','quit','window-all-closed'])app.on(e,()=>trace(e));
 let checking=false;
 const timer=setInterval(async()=>{
  if(checking)return;checking=true;
@@ -109,7 +112,17 @@ const timer=setInterval(async()=>{
   writeFileSync(join(out, 'native-full-renderer.png'), readFileSync(join(seeded.dir, 'native-full.png')));
   if (spawnSync('/usr/sbin/screencapture', ['-x', join(out, 'native-full-window.png')]).status !== 0) throw Error('Full native screenshot unavailable');
   child.kill('SIGTERM');
-  await waitFor(() => { try { process.kill(fullState.pid, 0); return false; } catch { return true; } }, 'full app shutdown');
+  try {
+    await waitFor(() => { try { process.kill(fullState.pid, 0); return false; } catch { return true; } }, 'full app shutdown');
+  } catch (error) {
+    // Launched through `open`, the app's own output goes nowhere: show where its quit stopped.
+    const trace = join(seeded.dir, 'quit-trace.txt');
+    console.error('Quit trace:\n' + (existsSync(trace) ? readFileSync(trace, 'utf8') : '(none)'));
+    console.error(spawnSync('/bin/ps', ['-axo', 'pid,ppid,stat,etime,command'], { encoding: 'utf8' }).stdout.split('\n').filter(l => /Nekko|nekkod|Electron/.test(l)).join('\n'));
+    spawnSync('/usr/bin/sample', [String(fullState.pid), '3', '-mayDie', '-file', join(out, 'full-app-sample.txt')]);
+    if (existsSync(join(out, 'full-app-sample.txt'))) console.error(readFileSync(join(out, 'full-app-sample.txt'), 'utf8').split('\n').slice(0, 120).join('\n'));
+    throw error;
+  }
   await waitFor(() => child.exitCode !== null, 'full wrapper shutdown'); child = null;
   writeFileSync(join(out, 'result.json'), JSON.stringify({ signedIdentity: true, sharedRuntimeUnchanged: true, isolatedProfile: true, restart: true, shutdown: true, fullRenderer: true }, null, 2));
 } finally { child?.kill('SIGTERM'); }
