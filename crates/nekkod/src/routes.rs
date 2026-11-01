@@ -522,6 +522,11 @@ impl Table {
         // Elsewhere runner:* falls through to the unknown-channel reply.
         #[cfg(unix)]
         t.add(crate::runner::CHANNELS, handler!(|ctx, channel, args| ctx.runners.route(channel, &args).await));
+        #[cfg(unix)]
+        t.add(
+            crate::runner::image::CHANNELS,
+            handler!(|ctx, channel, args| ctx.runners.image_route(channel, &args).await),
+        );
         t.add(crate::telemetry::CHANNELS, handler!(|ctx, channel, args| crate::telemetry::route(channel, &args).await));
         t.add(
             crate::connections::CHANNELS,

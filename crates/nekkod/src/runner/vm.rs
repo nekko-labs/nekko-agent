@@ -171,7 +171,7 @@ impl HelperVm {
     }
 
     /// `helper <args>` within `limit`, its stdout as one JSON value.
-    async fn call(&self, args: &[&std::ffi::OsStr], limit: Duration) -> Result<Value, String> {
+    pub(super) async fn call(&self, args: &[&std::ffi::OsStr], limit: Duration) -> Result<Value, String> {
         let mut cmd = tokio::process::Command::new(&self.helper);
         cmd.args(args);
         let out = output_within(cmd, limit, "nekko-vm").await?;
