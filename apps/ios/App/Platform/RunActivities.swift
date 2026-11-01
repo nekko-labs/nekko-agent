@@ -1,5 +1,8 @@
-import ActivityKit
+// Activity is meant to be updated and ended from any task, but ActivityKit does not
+// mark it Sendable yet.
+@preconcurrency import ActivityKit
 import Foundation
+import os
 import NekkoKit
 import NekkoProtocol
 
@@ -72,7 +75,7 @@ final class RunActivities {
     /// How long a run the events saw counts as working with no word from
     /// `activity` (a reconnect empties it until the next event).
     static let quietRun: TimeInterval = 30 * 60
-    private let request: (NekkoCardAttributes, LiveCardState) -> CardActivity?
+    private let request: @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity?
 
     var level: () -> LiveLevel = { .none }
     /// The card's push token for the relay, nil once the card is gone.
@@ -81,7 +84,7 @@ final class RunActivities {
     var source: () -> Source? = { nil }
 
     /// `adoptLeftover`: carry on with a card an earlier launch left up.
-    init(request: @escaping (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
+    init(request: @escaping @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
         self.request = request
         if adoptLeftover, let leftover = SystemCard.leftover() {
             card = leftover
@@ -314,7 +317,9 @@ final class RunActivities {
     }
 }
 
-/// The card in ActivityKit.
+/// The card in ActivityKit. Its two observers (push tokens, pushed content)
+/// end with it: in `end()`, and in `deinit` for a card replaced without one.
+@MainActor
 final class SystemCard: CardActivity {
     private let activity: ActivityKit.Activity<NekkoCardAttributes>
     private(set) var state: LiveCardState
@@ -323,15 +328,14 @@ final class SystemCard: CardActivity {
     var id: String { activity.id }
     var onPushToken: ((String) -> Void)? {
         didSet {
-            tokens?.cancel()
             let a = activity
-            tokens = Task { [weak self] in
+            observers.set("tokens", Task { [weak self] in
                 for await token in a.pushTokenUpdates { self?.onPushToken?(hex(token)) }
-            }
+            })
         }
     }
-    private var tokens: Task<Void, Never>?
-    private var pushes: Task<Void, Never>?
+    /// The token and content observers, cancellable from `deinit` too.
+    private let observers = TaskBag()
     /// The last call to ActivityKit; each one waits for it so they arrive in order.
     private var last: Task<Void, Never>?
 
@@ -339,13 +343,15 @@ final class SystemCard: CardActivity {
         self.activity = activity
         self.state = state
         let a = activity
-        pushes = Task { [weak self] in
+        observers.set("pushes", Task { [weak self] in
             for await content in a.contentUpdates {
                 guard let self, let kept = Self.keepingVoice(pushed: content.state, local: self.state) else { continue }
                 self.update(kept)
             }
-        }
+        })
     }
+
+    deinit { observers.cancelAll() }
 
     /// A pushed card says listening false and heard "" (the computer can't know): while the
     /// mic listens, the push's chats with this phone's listening and heard. Nil when nothing to put back.
@@ -364,7 +370,7 @@ final class SystemCard: CardActivity {
     }
 
     func end() {
-        pushes?.cancel()
+        observers.cancelAll()
         send { await $0.end(nil, dismissalPolicy: .immediate) }
     }
 
@@ -464,5 +470,26 @@ final class TalkRunner {
         guard listening else { return }
         cancelled = true
         discard()
+    }
+}
+
+/// Tasks cancelled together, from any context (a `deinit` included): a lock
+/// around the handles, so it is checked `Sendable`.
+final class TaskBag: Sendable {
+    private let tasks = OSAllocatedUnfairLock<[String: Task<Void, Never>]>(initialState: [:])
+
+    /// Keeps `task` under `key`, cancelling the one it replaces.
+    func set(_ key: String, _ task: Task<Void, Never>) {
+        tasks.withLock { all in
+            all[key]?.cancel()
+            all[key] = task
+        }
+    }
+
+    func cancelAll() {
+        tasks.withLock { all in
+            for task in all.values { task.cancel() }
+            all = [:]
+        }
     }
 }

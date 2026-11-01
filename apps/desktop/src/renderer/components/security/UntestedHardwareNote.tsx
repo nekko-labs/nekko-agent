@@ -8,7 +8,7 @@ import { SECURITY_KEY_UNTESTED_NOTE, UNTESTED_HARDWARE_ISSUES_URL, splitUntested
 export function UntestedHardwareNote({ note = SECURITY_KEY_UNTESTED_NOTE, className = '' }: { note?: string; className?: string }) {
   const { before, link, after } = splitUntestedNote(note);
   return (
-    <p className={`text-[11px] text-ink-faint ${className}`} data-untested-note>
+    <p className={`text-2xs text-ink-faint ${className}`} data-untested-note>
       {before}
       {link && (
         <a className="underline" href={UNTESTED_HARDWARE_ISSUES_URL} target="_blank" rel="noreferrer">

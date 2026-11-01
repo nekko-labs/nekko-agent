@@ -20,6 +20,8 @@ tasks.test {
     // The cross-language and live-relay checks are opt-in (see README); pass
     // their switches through so `NEKKO_ITEST=1 ./gradlew :protocol:test` works.
     environment("NEKKO_REPO_ROOT", rootDir.resolve("../..").canonicalPath)
+    // LiveCardTest reads the card rules' shared fixture in place: a change there reruns the tests.
+    inputs.file(rootDir.resolve("../../packages/shared/fixtures/live-card.json")).withPropertyName("liveCardFixture")
     listOf("NEKKO_ITEST", "NEKKO_E2E_OUT").forEach { key ->
         System.getenv(key)?.let { environment(key, it) }
     }

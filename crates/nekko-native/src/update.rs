@@ -561,6 +561,21 @@ fn wait_for_pid(pid: Option<u32>) -> String {
     }
 }
 
+/// macOS: before the swap, when the running app is signed by a Developer ID
+/// team, the new bundle must pass a strict `codesign` check against a
+/// requirement anchored to Apple naming that same team. Otherwise the staged
+/// copy is removed, the running app is reopened unchanged, and the script
+/// fails. A running app with no team (a local or ad-hoc build) skips the check.
+fn mac_verify_snippet(bundle: &str, staging: &str) -> String {
+    format!(
+        "team=$(/usr/bin/codesign -dv {bundle} 2>&1 | sed -n 's/^TeamIdentifier=//p')\n\
+         if [ -n \"$team\" ] && [ \"$team\" != \"not set\" ]; then\n\
+         \x20 if ! /usr/bin/codesign --verify --deep --strict \
+         -R=\"anchor apple generic and certificate leaf[subject.OU] = \\\"$team\\\"\" \"$new_app\"; then\n\
+         \x20   rm -rf {staging}\n\x20   /usr/bin/open -n {bundle}\n\x20   exit 1\n\x20 fi\nfi\n"
+    )
+}
+
 /// How to install `downloaded` over the running app.
 pub fn install_plan(
     platform: Platform,
@@ -597,10 +612,11 @@ pub fn install_plan(
             let script = format!(
                 "set -e\n{wait}rm -rf {s}\nmkdir -p {s}\n/usr/bin/ditto -x -k {z} {s}\n\
                  new_app=$(find {s} -mindepth 1 -maxdepth 1 -type d -name '*.app' | head -n 1)\n\
-                 test -n \"$new_app\"\nrm -rf {old}\nmv {b} {old}\n\
+                 test -n \"$new_app\"\n{verify}rm -rf {old}\nmv {b} {old}\n\
                  if mv \"$new_app\" {b}; then rm -rf {old}; else mv {old} {b}; exit 1; fi\n\
                  rm -rf {s}\n/usr/bin/open -n {b}\n",
                 wait = wait_for_pid(installed.app_pid),
+                verify = mac_verify_snippet(&b, &s),
             );
             Ok(InstallPlan::Script { script })
         }
@@ -653,6 +669,48 @@ pub fn verify_publisher(file: &Path, publishers: &[String]) -> Result<(), String
     if publishers.is_empty() || !cfg!(windows) {
         return Ok(());
     }
+    let data = authenticode(file)?;
+    if data.get("Status").and_then(Value::as_i64) == Some(0) {
+        let subject = data.pointer("/SignerCertificate/Subject").and_then(Value::as_str).unwrap_or("");
+        if publishers.iter().any(|p| dn_matches(p, subject)) {
+            return Ok(());
+        }
+    }
+    Err(format!("New version is not signed by the application owner: publisherNames: {}", publishers.join(" | ")))
+}
+
+/// Windows: when the running app is itself validly Authenticode-signed, the
+/// installer must be validly signed with the same certificate subject. This
+/// holds whether or not `app-update.yml` names publishers; an unsigned
+/// running app (a local build) skips it.
+pub fn verify_same_signer(file: &Path, running_exe: &Path) -> Result<(), String> {
+    if !cfg!(windows) {
+        return Ok(());
+    }
+    // Nothing to compare against when the running executable is not a file
+    // whose signature can be read (a development run).
+    if !running_exe.is_file() {
+        return Ok(());
+    }
+    let Ok(running) = authenticode(running_exe) else { return Ok(()) };
+    if running.get("Status").and_then(Value::as_i64) != Some(0) {
+        return Ok(());
+    }
+    same_signer(&running, &authenticode(file)?)
+}
+
+/// The installer's signature is valid and its signer subject is the running app's.
+pub fn same_signer(running: &Value, installer: &Value) -> Result<(), String> {
+    let subject = |v: &Value| v.pointer("/SignerCertificate/Subject").and_then(Value::as_str).map(str::to_string);
+    let valid = installer.get("Status").and_then(Value::as_i64) == Some(0);
+    match (subject(running), subject(installer)) {
+        (Some(a), Some(b)) if valid && !a.is_empty() && a == b => Ok(()),
+        _ => Err("New version is not signed by the same publisher as the installed app".into()),
+    }
+}
+
+/// `Get-AuthenticodeSignature` for one file, as JSON.
+fn authenticode(file: &Path) -> Result<Value, String> {
     let literal = file.to_string_lossy().replace('\'', "''");
     let mut cmd = std::process::Command::new("powershell.exe");
     cmd.args([
@@ -670,15 +728,7 @@ pub fn verify_publisher(file: &Path, publishers: &[String]) -> Result<(), String
         cmd.creation_flags(0x0800_0000);
     }
     let out = cmd.output().map_err(|e| format!("Cannot verify the installer's signature: {e}"))?;
-    let data: Value =
-        serde_json::from_slice(&out.stdout).map_err(|e| format!("Cannot verify the installer's signature: {e}"))?;
-    if data.get("Status").and_then(Value::as_i64) == Some(0) {
-        let subject = data.pointer("/SignerCertificate/Subject").and_then(Value::as_str).unwrap_or("");
-        if publishers.iter().any(|p| dn_matches(p, subject)) {
-            return Ok(());
-        }
-    }
-    Err(format!("New version is not signed by the application owner: publisherNames: {}", publishers.join(" | ")))
+    serde_json::from_slice(&out.stdout).map_err(|e| format!("Cannot verify the installer's signature: {e}"))
 }
 
 /// `parseDn` comparison: every key of a full DN must match; a bare name is the CN.
@@ -800,6 +850,23 @@ mod tests {
         assert!(script.contains("find '/c/p/update.staging' -mindepth 1 -maxdepth 1 -type d -name '*.app'"));
         assert!(script.contains("if mv \"$new_app\" '/Applications/NekkoAgent.app'; then"));
         assert!(script.ends_with("/usr/bin/open -n '/Applications/NekkoAgent.app'\n"));
+        // The new bundle is checked against the running app's team before the swap.
+        let check = script.find("/usr/bin/codesign --verify --deep --strict").unwrap();
+        assert!(script.contains("/usr/bin/codesign -dv '/Applications/NekkoAgent.app'"));
+        assert!(script.contains("anchor apple generic and certificate leaf[subject.OU]"));
+        assert!(check < script.find("mv '/Applications/NekkoAgent.app'").unwrap());
+    }
+
+    #[test]
+    fn an_installer_must_share_the_running_app_signer() {
+        let signed =
+            |subject: &str, status: i64| json!({ "Status": status, "SignerCertificate": { "Subject": subject } });
+        let ours = signed("CN=Nekko Labs, O=Nekko Labs, C=JP", 0);
+        assert!(same_signer(&ours, &signed("CN=Nekko Labs, O=Nekko Labs, C=JP", 0)).is_ok());
+        assert!(same_signer(&ours, &signed("CN=Someone Else", 0)).is_err());
+        assert!(same_signer(&ours, &signed("CN=Nekko Labs, O=Nekko Labs, C=JP", 1)).is_err());
+        assert!(same_signer(&ours, &json!({ "Status": 2, "SignerCertificate": null })).is_err());
+        assert!(same_signer(&json!({ "Status": 0, "SignerCertificate": { "Subject": "" } }), &signed("", 0)).is_err());
     }
 
     #[cfg(target_os = "macos")]

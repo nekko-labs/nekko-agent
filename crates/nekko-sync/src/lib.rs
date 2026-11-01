@@ -34,6 +34,9 @@
 //!   public key (the iPhone's lives in the Secure Enclave), authenticated by
 //!   the sending device's key, so a device takes a keyring only from a device
 //!   it already trusts.
+//! - [`epoch_proof`]: a one-way value derived from an epoch's keyring that a
+//!   device shows Nekko Cloud to prove it holds that epoch (the server keeps
+//!   only its hash and can derive no key from it).
 //! - [`JoinCode`], [`wrap_for_join`] / [`unwrap_join`]: approving a new
 //!   device with a one-time code the user types, which checks the new
 //!   device's key on the approver and the approver on the new device.
@@ -58,7 +61,10 @@ pub use b64::{decode as b64_decode, encode as b64_encode};
 pub use donation::{DONATION_VERSION, Donation, seal_donation, seal_donation_with};
 pub use join::{JoinCode, unwrap_join, wrap_for_join, wrap_for_join_with};
 pub use pad::{frame, padme, unframe};
-pub use record::{Keyring, OBJECT_ID_LEN, object_id, open_record, record_aad, seal_record, seal_record_with};
+pub use record::{
+    EPOCH_PROOF_LABEL, Keyring, OBJECT_ID_LEN, epoch_proof, object_id, open_record, record_aad, seal_record,
+    seal_record_with,
+};
 pub use recovery::{RecoveryKey, open_recovery, seal_recovery, seal_recovery_with};
 pub use wrap::{
     DeviceKey, PUBLIC_KEY_LEN, Recipient, fingerprint, open_sealed, seal_to, seal_to_with, unwrap_keyring,

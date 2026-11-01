@@ -4,6 +4,12 @@ import NekkoProtocol
 
 @MainActor
 final class PreviewLoaderTests: XCTestCase {
+    /// How many loads run at once, and the most that ever did.
+    @MainActor final class Gauge {
+        var running = 0
+        var peak = 0
+    }
+
     final class Calls: @unchecked Sendable {
         var requests: [PreviewRequest] = []
     }
@@ -87,22 +93,21 @@ final class PreviewLoaderTests: XCTestCase {
 
     func testThumbnailSlotsLimitConcurrentLoads() async {
         let loader = PreviewLoader(read: { _ in .null }, thumbnailSlots: 2)
-        var running = 0
-        var peak = 0
-        await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<5 {
-                group.addTask { @MainActor in
-                    await loader.withThumbnailSlot {
-                        running += 1
-                        peak = max(peak, running)
-                        await Task.yield()
-                        try? await Task.sleep(nanoseconds: 5_000_000)
-                        running -= 1
-                    }
+        let gauge = Gauge()
+        // Five main-actor tasks at once, awaited together.
+        let loads = (0..<5).map { _ in
+            Task {
+                await loader.withThumbnailSlot {
+                    gauge.running += 1
+                    gauge.peak = max(gauge.peak, gauge.running)
+                    await Task.yield()
+                    try? await Task.sleep(nanoseconds: 5_000_000)
+                    gauge.running -= 1
                 }
             }
         }
-        XCTAssertEqual(peak, 2)
-        XCTAssertEqual(running, 0)
+        for load in loads { await load.value }
+        XCTAssertEqual(gauge.peak, 2)
+        XCTAssertEqual(gauge.running, 0)
     }
 }

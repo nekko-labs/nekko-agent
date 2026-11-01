@@ -31,7 +31,7 @@ export function ViewersBadge({ viewers }: { viewers: readonly TerminalViewer[] }
     <span
       role="status"
       title={`Watching this terminal remotely: ${names}`}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-2xs font-medium text-accent"
       data-testid="terminal-viewers-badge"
     >
       <svg aria-hidden="true" width="10" height="12" viewBox="0 0 10 14" fill="none" stroke="currentColor" strokeWidth="1.4">

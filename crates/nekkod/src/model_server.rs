@@ -3,8 +3,10 @@
 //! `engine:settings`, `engine:residentTtl` and `engine:generateImage`, the
 //! router's questions about models it does not have running, and for the
 //! runtime control plane, `engine:start`, `engine:stop`, `engine:load`,
-//! `engine:unload`, `engine:resident`, `engine:running` and
-//! `engine:loadedIds`.
+//! `engine:unload`, `engine:resident`, `engine:running`,
+//! `engine:loadedIds`, and for the low-memory prompt, `engine:memory` (what
+//! the loaded models hold) and `engine:unloadAll` ("Shut down Nekko's local
+//! models").
 
 use crate::installs::Installs;
 use crate::library::{Library, engine_settings};
@@ -29,6 +31,8 @@ pub const CHANNELS: &[&str] = &[
     "engine:resident",
     "engine:running",
     "engine:loadedIds",
+    "engine:unloadAll",
+    "engine:memory",
 ];
 
 /// The daemon's own processes and router, as the policy drives them.
@@ -209,6 +213,7 @@ pub struct Server {
     library: Arc<Library>,
     installs: Arc<Installs>,
     machine: Arc<nekko_machine::Machine>,
+    engine: Arc<crate::engine::Engine>,
     client: reqwest::Client,
 }
 
@@ -229,8 +234,8 @@ impl Server {
             machine: machine.clone(),
             flags: Arc::default(),
         });
-        let model = ModelServer::new(env, Arc::new(Processes(engine)), true);
-        Arc::new(Self { model, library, installs, machine, client: reqwest::Client::new() })
+        let model = ModelServer::new(env, Arc::new(Processes(engine.clone())), true);
+        Arc::new(Self { model, library, installs, machine, engine, client: reqwest::Client::new() })
     }
 
     /// Loading is the moment a user expects the engine up, so it starts it (`load`).
@@ -345,6 +350,18 @@ impl Server {
             "engine:resident" => json!(self.model.resident()),
             "engine:running" => json!(self.model.is_running()),
             "engine:loadedIds" => json!(self.model.loaded_ids()),
+            "engine:unloadAll" => self.model.unload_all().await,
+            // What shutting the models down would free: their processes and
+            // everything under them, and how many are mid-reply.
+            "engine:memory" => {
+                let children = self.engine.supervisor.list();
+                let busy = children.iter().filter(|c| c.active_requests > 0).count();
+                let pids: Vec<u32> = children.iter().map(|c| c.pid).collect();
+                let bytes = tokio::task::spawn_blocking(move || nekko_machine::memory::tree_bytes(&pids))
+                    .await
+                    .map_err(|e| e.to_string())?;
+                json!({ "models": children.len(), "busy": busy, "bytes": bytes })
+            }
             other => return Err(format!("{other} is not a model-server channel")),
         })
     }

@@ -9,8 +9,10 @@ export interface SupabaseIdentity {
   subject: string;
   email: string;
   /**
-   * The email was proven: Supabase marked it verified, or this session was
-   * signed in with a code or link sent to it. Only a verified email can claim
+   * The email was proven: this session was signed in with a code or link sent
+   * to it, or Supabase Auth's own record of the user says the address is
+   * confirmed (`email_confirmed_at`). Never from `user_metadata`, which the
+   * user can write. Only a verified email can claim
    * an existing account (a beta signup's) or move an account to a new address.
    */
   emailVerified: boolean;
@@ -31,6 +33,32 @@ export interface SupabaseConfig {
   jwtSecret?: string;
   /** Tests: a fixed key set instead of the project's JWKS endpoint. */
   jwks?: { keys: unknown[] };
+  /** The project's public anon / publishable key, sent with the user lookup. */
+  anonKey?: string;
+  /** Tests: the auth user lookup (`GET /auth/v1/user` with the session). */
+  fetchUser?: (token: string) => Promise<AuthUser | null>;
+}
+
+/** The fields of Supabase Auth's user record that matter here. */
+export interface AuthUser {
+  id?: string;
+  email?: string | null;
+  email_confirmed_at?: string | null;
+}
+
+/** Supabase Auth's record of the session's user, or null when it can't be read. */
+function authUserFetcher(base: string, anonKey: string | undefined): (token: string) => Promise<AuthUser | null> {
+  return async (token) => {
+    try {
+      const res = await fetch(`${base}/auth/v1/user`, {
+        headers: { authorization: `Bearer ${token}`, ...(anonKey ? { apikey: anonKey } : {}) },
+        signal: AbortSignal.timeout(10_000),
+      });
+      return res.ok ? ((await res.json()) as AuthUser) : null;
+    } catch {
+      return null;
+    }
+  };
 }
 
 /**
@@ -47,6 +75,7 @@ export function supabaseVerifier(cfg: SupabaseConfig): VerifyAccessToken {
       ? createLocalJWKSet(cfg.jwks as never)
       : createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`), { cacheMaxAge: 10 * 60 * 1000 });
   const algorithms = cfg.jwtSecret ? ["HS256"] : ["ES256", "RS256"];
+  const fetchUser = cfg.fetchUser ?? authUserFetcher(base, cfg.anonKey);
 
   return async (token) => {
     let payload: JWTPayload & { email?: unknown; is_anonymous?: unknown; role?: unknown; user_metadata?: unknown; amr?: unknown };
@@ -59,9 +88,14 @@ export function supabaseVerifier(cfg: SupabaseConfig): VerifyAccessToken {
     if (!payload.sub || payload.is_anonymous === true || payload.role !== "authenticated" || !email) {
       throw new InvalidSession("Sign in with an email address or a linked account.");
     }
-    const meta = (payload.user_metadata ?? {}) as { email_verified?: unknown };
     const amr = Array.isArray(payload.amr) ? payload.amr : [];
     const byEmail = amr.some((m) => ["otp", "magiclink"].includes((m as { method?: unknown })?.method as string));
-    return { subject: payload.sub, email, emailVerified: meta.email_verified === true || byEmail };
+    if (byEmail) return { subject: payload.sub, email, emailVerified: true };
+    // Otherwise ask Supabase Auth whether it confirmed the address (an OAuth
+    // provider's verified email, or a confirmed sign-up).
+    const user = await fetchUser(token);
+    const confirmed = !!user && user.id === payload.sub && !!user.email_confirmed_at
+      && typeof user.email === "string" && user.email.trim().toLowerCase() === email.toLowerCase();
+    return { subject: payload.sub, email, emailVerified: confirmed };
   };
 }

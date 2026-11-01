@@ -3,6 +3,7 @@ import type { PlanStep, PlanStepKind, PrInfo, Session } from '@nekko-agent/share
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
+import { sheetPlan } from '../claudeAgentPlan.js';
 import { useStore } from '../store.js';
 import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
@@ -10,7 +11,7 @@ import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js
 
 function StepMark({ status, paused }: { status: PlanStep['status']; paused: boolean }) {
   const label = status === 'active' ? (paused ? 'Paused' : 'Working') : status === 'done' ? 'Done' : status === 'skipped' ? 'Skipped' : 'Pending';
-  return <span className="mt-[3px] grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={label} title={label}>
+  return <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={label} title={label}>
     {status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
       <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: status === 'active' ? 'var(--accent)' : 'var(--ink-faint)' }}>
         {status === 'active' ? (paused ? <path d="M8 5v14M16 5v14" /> : <path d="M12 3v3m6.36-.36-2.12 2.12M21 12h-3m.36 6.36-2.12-2.12M12 21v-3m-6.36.36 2.12-2.12M3 12h3m-.36-6.36 2.12 2.12" />) : <>
@@ -141,10 +142,12 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   initiallyOpen?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(!initiallyOpen);
-  const plan = session?.agentPlan;
   const messages = session?.messages;
   const sessions = useStore((s) => s.sessions);
+  const providers = useStore((s) => s.providers);
   useLiveRunsVersion();
+  const working = streaming || !!getLiveRun(sessionId) || !!session?.activeRun;
+  const plan = useMemo(() => sheetPlan(session, providers, working), [session, providers, working]);
   const childSessions = useMemo(() => (sessions ?? []).filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
   const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions), [messages, plan, basePath, childSessions]);
   if (!plan?.length) return null;
@@ -191,7 +194,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
           <Kind kind={current.kind} current={current.status === 'active'} />
           <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
           <Pass step={current} />
-          <span className="shrink-0 tabular-nums text-[11px] text-ink-faint">{position} of {plan.length}</span>
+          <span className="shrink-0 tabular-nums text-2xs text-ink-faint">{position} of {plan.length}</span>
           <span aria-hidden className="ctl-caret">▴</span>
         </span>
       </button>
@@ -225,7 +228,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
               <Pass step={step} />
             </p>
             {(detail || chips) && <div className="plan-sheet-more" data-plan-more><div>
-              {detail && <p className="truncate text-[11.5px] text-ink-faint" title={detail}>{detail}</p>}
+              {detail && <p className="truncate text-xs text-ink-faint" title={detail}>{detail}</p>}
               {chips && <div className="plan-sheet-chips">
                 {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
                 {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}

@@ -32,8 +32,12 @@ app.whenReady().then(async () => {
     await run('window.integration.reset()');
     // Reset remounts cold ChatPanes. Hidden macOS rendering can finish loading
     // later than a fixed sleep; wait for the controls the next step needs.
+    // That is the Mode button, not any .ctl-menu: the model chip renders as
+    // soon as the composer mounts ("No model · No provider"), while Mode
+    // waits for the chat session to load. Waiting on the chip let the next
+    // step race the session load, and lose it on the macOS runner (#1458).
     for (let attempt = 0; attempt < 50; attempt++) {
-      if (await run("!!document.querySelector('[data-wall-composer] .ctl-menu')")) return;
+      if (await run("!!document.querySelector('[data-wall-composer] [data-chat-mode-button]')")) return;
       await sleep(100);
     }
     throw Error('Reset did not finish mounting shared composer controls');

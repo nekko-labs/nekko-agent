@@ -119,6 +119,8 @@ class ComputersRepository(
     private val outboxConnectMs: Long = 20_000,
     /** Signs Change actions (AN-32): the Keystore key in the app, a software key in tests, none where unset. */
     private val changeSigner: ChangeSigner? = null,
+    /** Signs every relay HELLO (decision 0036): the Keystore device key in the app, none in tests. */
+    private val helloSigner: com.nekko.protocol.HelloSigner? = null,
     /** Which relay routes this phone may dial ([com.nekko.android.connection.RoutePolicy] in the app). */
     private val routeAllowed: (String) -> Boolean = { true },
     /** Each computer's drafts and outbox on disk ([OfflineFileStore] in the app); memory only when null. */
@@ -221,6 +223,7 @@ class ComputersRepository(
                                 platform = "android",
                                 handshakeTimeoutMs = helloTimeoutMs,
                                 routeAllowed = routeAllowed,
+                                helloSigner = helloSigner,
                             ),
                             computer.name,
                         )
@@ -460,6 +463,13 @@ class ComputersRepository(
             )
         }
         liveList = false
+        if (secret.version < E2E.PAIRING_VERSION) {
+            // Paired before the computer replaced its pairing secret (decision 0036): it no longer
+            // answers on this pairing, so say so and ask for a fresh QR instead of dialing.
+            logStatus(RelayState.DENIED, denied = DenyReason.BAD_KEY)
+            _state.update { it.copy(conn = RelayState.DENIED, denied = DenyReason.BAD_KEY) }
+            return@withLock
+        }
         // Opening the app away from the computer: the list as it was, marked as saved.
         chatListCache?.load(id)?.let { saved ->
             _state.update { it.copy(summaries = saved.summaries, workspaces = saved.folders, savedListAt = saved.savedAt) }
@@ -475,6 +485,7 @@ class ComputersRepository(
             platform = "android",
             alts = computer.alts,
             routeAllowed = routeAllowed,
+            helloSigner = helloSigner,
         )
         // Refusals read with the computer's current name (it can be renamed while connected).
         val c = PlainRefusals(remotes.create(config, scope)) {
@@ -652,6 +663,7 @@ class ComputersRepository(
                 deviceId = p.deviceId,
                 deviceName = deviceName(),
                 platform = "android",
+                helloSigner = helloSigner,
             )
             val r = remotes.create(config, scope)
             val done = try {

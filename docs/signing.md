@@ -17,6 +17,22 @@ worked.
 | Windows | Authenticode via Azure Artifact Signing | ✅ secret-gated | Azure identity validation + the secrets below |
 | Linux | none (AppImage/deb are unsigned) | n/a | n/a |
 
+## How the app checks an update before installing it
+
+Besides the SHA-512 from the release feed, the in-app updater checks the
+publisher of what it is about to install against the app that is running, so
+the check does not depend on `publisherName` in `app-update.yml`:
+
+- **macOS:** when the running app is signed by a Developer ID team, the new
+  bundle must pass `codesign --verify --deep --strict` against a requirement
+  anchored to Apple that names the same team, before it replaces the app. If
+  it does not, the update is dropped and the running app is reopened.
+- **Windows:** when the running app is validly Authenticode-signed, the
+  installer must be validly signed with the same certificate subject (and,
+  when `publisherName` is set, by one of those names, as before).
+- A local or unsigned build skips these checks, since it has no publisher to
+  compare against.
+
 ## macOS
 
 Nekko Agent is packaged by electron-builder, which does the signing, hardened

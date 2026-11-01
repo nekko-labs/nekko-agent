@@ -50,6 +50,29 @@ fn registry() -> (tempfile::TempDir, Arc<RemoteService>) {
     (dir, svc)
 }
 
+/// A HELLO from a current phone app, signed with that device's test key for room "r".
+fn hello(id: &str, extra: Value) -> Value {
+    let k = SigningKey::from_slice(&[id.len() as u8 + 40; 32]).unwrap();
+    let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
+    let sig: Signature = k.sign(nekko_remote::hello::hello_text(id, "r", "c").as_bytes());
+    let mut h = json!({
+        "type": "hello", "deviceId": id, "protocol": 5, "challenge": "c",
+        "helloKey": b64(k.verifying_key().to_encoded_point(false).as_bytes()), "sig": b64(&sig.to_bytes()),
+    });
+    for (k, v) in extra.as_object().unwrap() {
+        h[k] = v.clone();
+    }
+    h
+}
+
+/// The device's HELLO key as if it had enrolled with one.
+fn enroll_key(dir: &tempfile::TempDir, id: &str) {
+    let key = hello(id, json!({}))["helloKey"].clone();
+    let mut keys = serde_json::Map::new();
+    keys.insert(id.to_string(), key);
+    std::fs::write(dir.path().join("remote-hello-keys.json"), Value::Object(keys).to_string()).unwrap();
+}
+
 fn saved(dir: &tempfile::TempDir) -> Value {
     serde_json::from_str(&std::fs::read_to_string(dir.path().join("remote.json")).unwrap()).unwrap()
 }
@@ -92,7 +115,8 @@ fn the_change_key_is_trusted_on_first_use_until_the_phone_pairs_again() {
     assert_eq!(svc.device("phone-1").unwrap().key.as_deref(), Some("KEY-A"));
     // A known phone saying hello again keeps its key and switches.
     svc.route("remote:setAccess", &[json!("phone-1"), json!({ "change": false })]).unwrap();
-    let welcome = svc.verify(&json!({ "type": "hello", "deviceId": "phone-1" }));
+    enroll_key(&dir, "phone-1");
+    let welcome = svc.verify(&hello("phone-1", json!({})));
     assert_eq!(welcome["device"]["changeKey"], "KEY-A");
     assert_eq!(welcome["device"]["access"]["change"], false);
     // Revoked: nothing.
@@ -101,7 +125,7 @@ fn the_change_key_is_trusted_on_first_use_until_the_phone_pairs_again() {
     assert_eq!(svc.register_key("phone-1", "KEY-B"), Err("device-unknown"));
     // Paired again with the owner's fresh code: a new record, no key, everything on.
     let code = svc.pair()["code"].as_str().unwrap().to_string();
-    let welcome = svc.verify(&json!({ "type": "hello", "deviceId": "phone-1", "pair": code, "platform": "ios" }));
+    let welcome = svc.verify(&hello("phone-1", json!({ "pair": code, "platform": "ios" })));
     assert_eq!(welcome["type"], "welcome");
     let d = svc.device("phone-1").unwrap();
     assert_eq!((d.access, d.key), (DeviceAccess { read: true, change: true }, None));
@@ -265,4 +289,22 @@ fn stopping_from_the_phone_turns_remote_off_and_says_who() {
     svc.route("remote:enable", &[json!("wss://relay.example")]).unwrap();
     assert!(saved(&dir).get("stoppedBy").is_none());
     assert!(svc.route("remote:status", &[]).unwrap().get("stoppedBy").is_none());
+}
+
+#[test]
+fn a_pairing_from_before_derived_relay_credentials_is_replaced_at_start() {
+    let (dir, svc, said) = recorded();
+    let cfg = saved(&dir);
+    assert_ne!(cfg["secret"], json!("s"), "a fresh secret");
+    assert_ne!(cfg["room"], json!("r"), "a fresh room");
+    assert_eq!(cfg["pairing"], json!(2));
+    assert_eq!(cfg["devices"][0]["id"], "phone-1", "paired devices are kept");
+    assert_eq!(*said.lock().unwrap(), ["connect"]);
+    // Once current, a restart keeps it.
+    drop(svc);
+    let random: Random = Arc::new(|b: &mut [u8]| b.fill(9));
+    let again = RemoteService::new(dir.path(), random, Arc::new(|| NOW), Box::new(NoLink));
+    again.start_if_enabled();
+    assert_eq!(saved(&dir)["secret"], cfg["secret"]);
+    assert_eq!(saved(&dir)["room"], cfg["room"]);
 }

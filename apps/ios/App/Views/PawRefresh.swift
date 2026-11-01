@@ -4,20 +4,20 @@ import UIKit
 extension View {
     /// Pull to refresh with Nekko in place of the system spinner: a "!" over a shocked
     /// cat, a quick grab and pull of the spinner, and a smile once the reload is done.
-    func pawRefreshable(action: @escaping @Sendable () async -> Void) -> some View {
+    func pawRefreshable(action: @escaping @MainActor () async -> Void) -> some View {
         modifier(OwnedPawRefresh(action: action))
     }
 
     /// The same, played by the screen's toolbar mascot (`RootMascot(pull:)`) rather than
     /// a cat of its own inside the refresh control.
-    func pawRefreshable(_ pull: PawPull, action: @escaping @Sendable () async -> Void) -> some View {
+    func pawRefreshable(_ pull: PawPull, action: @escaping @MainActor () async -> Void) -> some View {
         modifier(PawRefreshModifier(pull: pull, action: action))
     }
 }
 
 private struct OwnedPawRefresh: ViewModifier {
-    let action: @Sendable () async -> Void
-    @StateObject private var pull = PawPull()
+    let action: @MainActor () async -> Void
+    @State private var pull = PawPull()
 
     func body(content: Content) -> some View {
         content.pawRefreshable(pull, action: action)
@@ -26,7 +26,7 @@ private struct OwnedPawRefresh: ViewModifier {
 
 private struct PawRefreshModifier: ViewModifier {
     let pull: PawPull
-    let action: @Sendable () async -> Void
+    let action: @MainActor () async -> Void
 
     func body(content: Content) -> some View {
         content
@@ -106,15 +106,18 @@ struct PawPose: Equatable {
 }
 
 /// The scroll view's pull and refresh state, fed by the probe.
-final class PawPull: ObservableObject {
-    @Published var progress: CGFloat = 0
-    @Published var refreshStart: Date?
-    @Published var endStart: Date?
-    @Published var smiling = false
+@MainActor
+@Observable
+final class PawPull {
+    var progress: CGFloat = 0
+    var refreshStart: Date?
+    var endStart: Date?
+    var smiling = false
     /// A toolbar mascot is on screen and does the grabbing.
-    @Published var mascot = false
-    var reduceMotion = false
-    var ink = Color.secondary
+    var mascot = false
+    /// Set by the view each render; reading it redraws nothing.
+    @ObservationIgnored var reduceMotion = false
+    @ObservationIgnored var ink = Color.secondary
 
     var animating: Bool { refreshStart != nil || endStart != nil }
     var shocked: Bool { refreshStart != nil && !smiling }
@@ -183,7 +186,7 @@ enum PawArt {
 /// own, its paw and the spinner, in a 120 x 44 box at 1.4x. With a toolbar mascot,
 /// nothing: the mascot draws the spinner beside itself.
 struct PawRefreshArt: View {
-    @ObservedObject var pull: PawPull
+    var pull: PawPull
 
     var body: some View {
         TimelineView(.animation(paused: !pull.animating || pull.reduceMotion)) { timeline in
@@ -221,7 +224,7 @@ struct PawRefreshArt: View {
 /// The toolbar mascot's spinner, paw and "!", drawn behind the cat (so the arm comes
 /// out from under its cheek) in a canvas hanging from just above its top centre.
 struct MascotPawLayer: View {
-    @ObservedObject var pull: PawPull
+    var pull: PawPull
     static let size = CGSize(width: 160, height: 120)
     /// Room above the mascot for the "!".
     static let lift: CGFloat = 14
@@ -284,7 +287,10 @@ final class PawProbeView: UIView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    deinit { host?.view.removeFromSuperview() }
+    deinit {
+        // A deinit isn't on the main actor; the hosted view is taken down there.
+        if let host { Task { @MainActor in host.view.removeFromSuperview() } }
+    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
@@ -310,8 +316,9 @@ final class PawProbeView: UIView {
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         control.addSubview(host.view)
         self.host = host
+        // UIKit changes the offset, and so reports it, on the main thread.
         observation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] scroll, _ in
-            self?.update(scroll)
+            MainActor.assumeIsolated { self?.update(scroll) }
         }
     }
 

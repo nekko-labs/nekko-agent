@@ -1,4 +1,5 @@
 import NekkoProtocol
+import Observation
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -12,6 +13,8 @@ final class ShareViewController: UIViewController {
     static let appGroup = "group.dev.nekkolabs.nekkoagent"
 
     private let model = ShareModel()
+    /// Reading what was shared: "Don't keep" cancels it, so a slow read can't offer the text after all.
+    private var loading: Task<Void, Never>?
     private lazy var inbox = ShareInbox(defaults: UserDefaults(suiteName: Self.appGroup) ?? .standard)
 
     override func viewDidLoad() {
@@ -20,6 +23,7 @@ final class ShareViewController: UIViewController {
             model: model,
             done: { [weak self] in self?.extensionContext?.completeRequest(returningItems: nil) },
             discard: { [weak self] in
+                self?.loading?.cancel()
                 self?.inbox.clear()
                 self?.extensionContext?.cancelRequest(withError: CocoaError(.userCancelled))
             }))
@@ -28,7 +32,7 @@ final class ShareViewController: UIViewController {
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(host.view)
         host.didMove(toParent: self)
-        Task { await load() }
+        loading = Task { await load() }
     }
 
     private func load() async {
@@ -38,15 +42,11 @@ final class ShareViewController: UIViewController {
             // Safari sends the page title with the link.
             subject = subject ?? item.attributedTitle?.string ?? item.attributedContentText?.string
             for provider in item.attachments ?? [] where text == nil {
-                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
-                   let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL {
-                    text = url.absoluteString
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
-                          let s = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String {
-                    text = s
-                }
+                text = await Self.text(from: provider)
             }
         }
+        // "Don't keep" was tapped while this read: nothing is offered.
+        guard !Task.isCancelled else { return }
         guard let prompt = SharedText.from(text: text, subject: subject) else {
             model.state = .nothing
             return
@@ -54,16 +54,41 @@ final class ShareViewController: UIViewController {
         inbox.offer(prompt)
         model.state = .saved(prompt)
     }
+
+    /// A link, else text: plain, or rich (an app that shares an attributed string
+    /// or text as data), through the item provider's typed objects rather than
+    /// casting whatever `loadItem` returns.
+    private static func text(from provider: NSItemProvider) async -> String? {
+        if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
+           let url = await read(NSURL.self, provider, { ($0 as? NSURL).map { ($0 as URL).absoluteString } }) {
+            return url
+        }
+        if let s = await read(NSString.self, provider, { ($0 as? NSString).map { $0 as String } }) { return s }
+        return await read(NSAttributedString.self, provider, { ($0 as? NSAttributedString)?.string })
+    }
+
+    /// One object of `type` from `provider`, turned into a Sendable value inside the callback.
+    /// Not generic: the class is only named to the provider, so no metatype crosses into the callback.
+    private static func read(_ type: NSItemProviderReading.Type, _ provider: NSItemProvider,
+                             _ convert: @escaping @Sendable (any NSItemProviderReading) -> String?) async -> String? {
+        guard provider.canLoadObject(ofClass: type) else { return nil }
+        return await withCheckedContinuation { (done: CheckedContinuation<String?, Never>) in
+            _ = provider.loadObject(ofClass: type) { value, _ in
+                done.resume(returning: value.flatMap(convert))
+            }
+        }
+    }
 }
 
 @MainActor
-final class ShareModel: ObservableObject {
+@Observable
+final class ShareModel {
     enum State: Equatable { case loading, saved(String), nothing }
-    @Published var state: State = .loading
+    var state: State = .loading
 }
 
 struct ShareView: View {
-    @ObservedObject var model: ShareModel
+    let model: ShareModel
     var done: () -> Void
     var discard: () -> Void
 

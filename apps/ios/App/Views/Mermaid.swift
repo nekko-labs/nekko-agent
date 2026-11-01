@@ -93,12 +93,16 @@ struct MermaidBlock: View {
         guard decision == .draw, width > 0 else { return }
         let w = MermaidRules.drawWidth(Double(width))
         let renderer = MermaidRenderer.shared
-        if let hit = renderer.cached(source: source, dark: dark, width: w, scale: scale) {
+        // A drawing in memory shows in the same frame; one on disk is read off the main actor.
+        if let hit = renderer.remembered(source: source, dark: dark, width: w, scale: scale) {
             phase = .drawn(hit)
             return
         }
         phase = .waiting
-        switch await renderer.draw(source: source, dark: dark, width: w, scale: scale) {
+        let result = await renderer.draw(source: source, dark: dark, width: w, scale: scale)
+        // Scrolled away (or the key changed): leave the phase to the next draw.
+        guard !Task.isCancelled else { return }
+        switch result {
         case .success(let d): phase = .drawn(d)
         case .failure(let f): phase = .failed(f.message)
         }
@@ -224,7 +228,7 @@ struct LockedSVGView: UIViewRepresentable {
 final class MermaidRenderer {
     static let shared = MermaidRenderer()
 
-    struct Drawing {
+    struct Drawing: Sendable {
         let image: UIImage
         let svg: String
     }
@@ -233,11 +237,14 @@ final class MermaidRenderer {
         case parse(String)
         case tooLarge
         case unavailable(String)
+        /// The diagram left the screen before its turn came.
+        case cancelled
 
         var message: String {
             switch self {
             case .parse(let m): return m
             case .tooLarge: return "Too large to draw on the phone"
+            case .cancelled: return "Not drawn"
             case .unavailable(let m): return "The diagram couldn’t be drawn: \(m)"
             }
         }
@@ -268,7 +275,7 @@ final class MermaidRenderer {
         init(_ drawing: Drawing) { self.drawing = drawing }
     }
 
-    private static let folder: URL = {
+    nonisolated private static let folder: URL = {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let url = caches.appendingPathComponent("mermaid", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -279,29 +286,43 @@ final class MermaidRenderer {
         MermaidRules.cacheKey(source: source, dark: dark, width: width, version: Self.version) + "@\(Int(scale))x"
     }
 
-    /// A drawing already made, from memory or disk.
-    func cached(source: String, dark: Bool, width: Int, scale: CGFloat) -> Drawing? {
+    /// A drawing already made and still in memory: no disk, safe on the main actor while scrolling.
+    func remembered(source: String, dark: Bool, width: Int, scale: CGFloat) -> Drawing? {
+        memory.object(forKey: key(source, dark, width, scale) as NSString)?.drawing
+    }
+
+    /// A drawing already made, from memory or else from disk (read and decoded off the main actor).
+    func cached(source: String, dark: Bool, width: Int, scale: CGFloat) async -> Drawing? {
         let k = key(source, dark, width, scale)
         if let hit = memory.object(forKey: k as NSString) { return hit.drawing }
-        let png = Self.folder.appendingPathComponent(k + ".png"), svg = Self.folder.appendingPathComponent(k + ".svg")
-        guard let data = try? Data(contentsOf: png), let image = UIImage(data: data, scale: scale),
-              let text = try? String(contentsOf: svg, encoding: .utf8) else { return nil }
-        let d = Drawing(image: image, svg: text)
+        guard let d = await Self.readDisk(k, scale: scale) else { return nil }
         memory.setObject(CachedDrawing(d), forKey: k as NSString)
         return d
     }
 
-    /// Draw a diagram, after any already in the queue.
+    /// Nonisolated and async, so it runs on the concurrent pool, not the main actor.
+    private nonisolated static func readDisk(_ k: String, scale: CGFloat) async -> Drawing? {
+        let png = folder.appendingPathComponent(k + ".png"), svg = folder.appendingPathComponent(k + ".svg")
+        guard let data = try? Data(contentsOf: png), let image = UIImage(data: data, scale: scale),
+              let text = try? String(contentsOf: svg, encoding: .utf8) else { return nil }
+        return Drawing(image: image, svg: text)
+    }
+
+    /// Draw a diagram, after any already in the queue. Cancelling the caller (the
+    /// diagram scrolled away) drops its job before it renders, so the queue only
+    /// draws what is still wanted.
     func draw(source: String, dark: Bool, width: Int, scale: CGFloat) async -> Result<Drawing, Failure> {
-        if let hit = cached(source: source, dark: dark, width: width, scale: scale) { return .success(hit) }
+        if let hit = await cached(source: source, dark: dark, width: width, scale: scale) { return .success(hit) }
         let previous = tail
         let job = Task { @MainActor () -> Result<Drawing, Failure> in
             await previous?.value
-            if let hit = self.cached(source: source, dark: dark, width: width, scale: scale) { return .success(hit) }
+            if Task.isCancelled { return .failure(.cancelled) }
+            if let hit = await self.cached(source: source, dark: dark, width: width, scale: scale) { return .success(hit) }
+            if Task.isCancelled { return .failure(.cancelled) }
             return await self.render(source: source, dark: dark, width: width, scale: scale)
         }
         tail = Task { _ = await job.value }
-        return await job.value
+        return await withTaskCancellationHandler { await job.value } onCancel: { job.cancel() }
     }
 
     private struct TimedOut: Error {}
@@ -310,14 +331,15 @@ final class MermaidRenderer {
         let started = Date()
         do {
             let web = try await webView()
-            let value: Any = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Any, Error>) in
+            // Only strings come back from the page; they cross as a Sendable dictionary, not `Any`.
+            let out: [String: String]? = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[String: String]?, Error>) in
                 var finished = false
                 web.callAsyncJavaScript("return await window.nekkoRender(source, dark, width, scale)",
                                         arguments: ["source": source, "dark": dark, "width": width, "scale": Double(scale)],
                                         in: nil, in: .page) { result in
                     guard !finished else { return }
                     finished = true
-                    cont.resume(with: result)
+                    cont.resume(with: result.map { ($0 as? [String: Any])?.compactMapValues { $0 as? String } })
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + MermaidRules.timeout) {
                     guard !finished else { return }
@@ -325,9 +347,9 @@ final class MermaidRenderer {
                     cont.resume(throwing: TimedOut())
                 }
             }
-            guard let out = value as? [String: Any] else { return .failure(.unavailable("no result")) }
-            if let error = out["error"] as? String { return .failure(.parse(error)) }
-            guard let png = out["png"] as? String, let svg = out["svg"] as? String,
+            guard let out else { return .failure(.unavailable("no result")) }
+            if let error = out["error"] { return .failure(.parse(error)) }
+            guard let png = out["png"], let svg = out["svg"],
                   let comma = png.firstIndex(of: ","), let data = Data(base64Encoded: String(png[png.index(after: comma)...])),
                   let image = UIImage(data: data, scale: scale) else { return .failure(.unavailable("no image")) }
             let drawing = Drawing(image: image, svg: svg)
@@ -477,7 +499,7 @@ final class MermaidRenderer {
         var loaded: ((Result<Void, Error>) -> Void)?
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+                     decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
             if allowNext && action.request.url?.absoluteString == "about:blank" {
                 allowNext = false
                 decisionHandler(.allow)

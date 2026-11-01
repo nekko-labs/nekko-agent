@@ -389,26 +389,22 @@ struct CodeBlock: View {
 /// every token re-renders the whole reply; without this each finished paragraph
 /// went through `AttributedString(markdown:)` again on every token.
 enum InlineMarkdown {
-    private final class Box {
+    private final class Box: Sendable {
         let value: AttributedString?
         init(_ value: AttributedString?) { self.value = value }
     }
 
-    private static let cache: NSCache<NSString, Box> = {
-        let c = NSCache<NSString, Box>()
-        c.countLimit = 800
-        return c
-    }()
+    private static let cache = SharedCache<Box>(countLimit: 800)
 
     private static let options = AttributedString.MarkdownParsingOptions(
         interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
 
     static func attributed(_ s: String) -> AttributedString? {
-        let key = s as NSString
-        if let hit = cache.object(forKey: key) { return hit.value }
+        let key = s
+        if let hit = cache[key] { return hit.value }
         // Paths Markdown can't read as URLs (`C:\x\y.html`, spaces) become `file:` links first.
         let value = try? AttributedString(markdown: ChatLinks.linkable(s), options: options)
-        cache.setObject(Box(value), forKey: key)
+        cache[key] = Box(value)
         return value
     }
 

@@ -59,6 +59,7 @@
     "esbuild@0.28.1": true,
     "electron-winstaller@5.4.0": true,
     "esbuild@0.28.2": true,
-    "esbuild@0.25.12": true
+    "esbuild@0.25.12": true,
+    "fsevents": false
   }
 }

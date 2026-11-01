@@ -4,8 +4,9 @@ import XCTest
 /// The chat's Markdown on the phone (MD-2), on the Debug-only fixture screen
 /// (`-uiTestMarkdownLab`): the real `BlockView` drawing a reply and the user's
 /// own message, with no computer paired.
+@MainActor
 final class MarkdownTests: XCTestCase {
-    override func setUp() {
+    override func setUp() async throws {
         continueAfterFailure = false
     }
 

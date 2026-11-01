@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { CatalogModel, EngineMemory } from '@nekko-agent/shared';
 import { downloadFitVerdict } from '@nekko-agent/shared';
 import { CheckIcon, ChevronIcon } from '../../icons.js';
-import { formatBytes } from '../runtimes/verdict.js';
+import { formatBytes, formatCount } from '../runtimes/verdict.js';
 
 /**
  * Finding a model to run.
@@ -75,7 +75,7 @@ export function CatalogBrowser({
     <div>
       {!hideSearch && (
         <input
-          className="input w-full text-[12.5px]"
+          className="input w-full text-xs"
           placeholder="Search Hugging Face for a model, e.g. qwen coder"
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -83,7 +83,7 @@ export function CatalogBrowser({
         />
       )}
       {mlx && (
-        <div role="radiogroup" aria-label="Model format" className="mt-1.5 inline-flex rounded-lg border border-line p-0.5">
+        <div role="radiogroup" aria-label="Model format" className="mt-1 inline-flex rounded-lg border border-line p-0.5">
           {(['gguf', 'mlx'] as const).map((f) => (
             <button
               key={f}
@@ -91,14 +91,14 @@ export function CatalogBrowser({
               aria-checked={format === f}
               onClick={() => setFormat(f)}
               title={f === 'gguf' ? 'llama.cpp models' : 'MLX checkpoints, fastest on Apple Silicon'}
-              className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${format === f ? 'bg-surface-2 text-ink' : 'text-ink-faint hover:text-ink'}`}
+              className={`rounded-md px-2 py-0.5 text-2xs font-medium ${format === f ? 'bg-surface-2 text-ink' : 'text-ink-faint hover:text-ink'}`}
             >
               {f === 'gguf' ? 'GGUF' : 'MLX'}
             </button>
           ))}
         </div>
       )}
-      <p className="mt-1.5 text-[11px] text-ink-faint">
+      <p className="mt-1 text-2xs text-ink-faint">
         {format === 'mlx'
           ? `${value ? 'Searching' : 'The most downloaded'} MLX checkpoints on Hugging Face (mostly mlx-community conversions). Each one is a folder, downloaded whole.`
           : value
@@ -106,29 +106,29 @@ export function CatalogBrowser({
           : 'A short starter list — the search above finds anything else. Open a model for its card, its builds and its sizes.'}
       </p>
 
-      {loading && <p className="mt-3 text-[12px] text-ink-faint">Looking…</p>}
+      {loading && <p className="mt-3 text-xs text-ink-faint">Looking…</p>}
 
       {!loading && models?.length === 0 && (
-        <p className="mt-3 text-[12px] text-ink-faint">
+        <p className="mt-3 text-xs text-ink-faint">
           Nothing matched. Try a shorter search, or the publisher's name.
         </p>
       )}
 
-      <div className="mt-2 space-y-1.5">
+      <div className="mt-2 space-y-1">
         {(models ?? []).map((m) => {
           const fit = fitFor(m, memory);
           const chip = fit ? FIT_CHIP[fit] : undefined;
           return (
             <button
               key={m.id}
-              className="catalog-row flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left"
+              className="catalog-row flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left"
               style={{ background: 'var(--surface-2)' }}
               onClick={() => onOpen(m.id)}
               title={`Open ${m.name}`}
             >
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="truncate text-[12.5px] font-medium">{m.name}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate text-xs font-medium">{m.name}</span>
                   {m.parameterSize && (
                     <span className="chip" title={`${m.parameterSize} parameters — bigger knows more, but needs more memory`}>
                       {m.parameterSize}
@@ -136,7 +136,7 @@ export function CatalogBrowser({
                   )}
                   {m.recommended && (
                     <span
-                      className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px]"
+                      className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-2xs"
                       style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
                       title="Our pick for most people"
                     >
@@ -145,7 +145,7 @@ export function CatalogBrowser({
                   )}
                   {chip && (
                     <span
-                      className="rounded-full px-1.5 py-0.5 text-[10px]"
+                      className="rounded-full px-2 py-0.5 text-2xs"
                       style={{ background: `color-mix(in srgb, ${chip.color} 16%, transparent)`, color: chip.color }}
                       title="Whether the smallest build fits in this machine's memory"
                     >
@@ -153,17 +153,17 @@ export function CatalogBrowser({
                     </span>
                   )}
                   {m.tags.slice(0, 3).map((t) => (
-                    <span key={t} className="text-[10px] text-ink-faint">
+                    <span key={t} className="text-2xs text-ink-faint">
                       {t}
                     </span>
                   ))}
                   {m.gated && (
-                    <span className="text-[10px]" style={{ color: 'var(--warning, #d1a054)' }} title="This repository needs accepted terms or a token">
+                    <span className="text-2xs" style={{ color: 'var(--warning, #d1a054)' }} title="This repository needs accepted terms or a token">
                       gated
                     </span>
                   )}
                 </div>
-                <p className="truncate text-[11px] text-ink-faint">
+                <p className="truncate text-2xs text-ink-faint">
                   {m.summary ??
                     [
                       m.owner,
@@ -199,8 +199,4 @@ function smallest(m: CatalogModel): string | null {
   return sizes.length ? `from ${formatBytes(Math.min(...sizes))}` : null;
 }
 
-function compact(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
-  return String(n);
-}
+const compact = formatCount;

@@ -15,6 +15,7 @@ import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
 import { matchesModelQuery } from '../components/agent-console/modelPickerInteractions.js';
 import { MODEL_FILTER_THRESHOLD, modelListProblem } from './modelListProblem.js';
+import { MiddleTruncate } from '../components/primitives/MiddleTruncate.js';
 
 const isLocal = (k: ProviderKind) => isLocalProvider(k);
 
@@ -119,11 +120,11 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
             <ProviderMark kind={p.kind} />
             <span>{p.label}</span>
           </a>)}
-          {!visible.length && <span className="text-[13px] text-ink-faint">{localOnly ? 'Connect a local server' : 'Add your first provider'}</span>}
+          {!visible.length && <span className="text-sm text-ink-faint">{localOnly ? 'Connect a local server' : 'Add your first provider'}</span>}
         </div>
         <div ref={shortcutsRef}><ProviderShortcuts localOnly={localOnly} onAdd={openAdd} moreExpanded={adding && !addKind} /></div>
       </div>
-      {localOnly && <button className="btn btn-outline mb-4 text-[12px]" onClick={discover} disabled={discovering}>
+      {localOnly && <button className="btn btn-outline mb-4 text-xs" onClick={discover} disabled={discovering}>
         {discovering ? 'Scanning…' : 'Discover local servers'}
       </button>}
       {adding && <div ref={setupRef} className="mb-5" data-provider-setup={addKind ?? 'any'}>
@@ -195,17 +196,17 @@ function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | nu
     (a, b) => windowOrder.indexOf(a.scope) - windowOrder.indexOf(b.scope) || b.usedPercent - a.usedPercent,
   );
   return (
-    <div className="mt-3 space-y-1.5 border-t border-line pt-3">
-      <div className="flex items-center justify-between text-[11px] text-ink-faint">
+    <div className="mt-3 space-y-1 border-t border-line pt-3">
+      <div className="flex items-center justify-between text-2xs text-ink-faint">
         <span title={`Live read from ${subName}`}>Plan: {limits.planType ?? '—'}</span>
         <span>Credits: {limits.creditsBalance === undefined ? 'Unlimited' : formatUSD(limits.creditsBalance)}</span>
       </div>
       {sorted.length === 0 ? (
-        <p className="text-[11px] text-ink-faint">No usage windows reported yet.</p>
+        <p className="text-2xs text-ink-faint">No usage windows reported yet.</p>
       ) : (
         <div className="space-y-1">
           {sorted.map((w) => (
-            <div key={w.id} className="flex items-center gap-2 text-[11px]">
+            <div key={w.id} className="flex items-center gap-2 text-2xs">
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ background: LIMIT_STATUS_COLOR[w.status] }}
@@ -220,7 +221,7 @@ function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | nu
           ))}
         </div>
       )}
-      <p className="text-[10px] text-ink-faint">Live reads from {subName}; not a bill.</p>
+      <p className="text-2xs text-ink-faint">Live reads from {subName}; not a bill.</p>
     </div>
   );
 }
@@ -262,27 +263,27 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
     }
   };
   return (
-    <div className="mt-3 space-y-2 rounded-xl border p-3 text-[12px]" style={{ borderColor: 'var(--line)' }}>
+    <div className="mt-3 space-y-2 rounded-xl border p-3 text-xs" style={{ borderColor: 'var(--line)' }}>
       <p className="text-ink-soft">
         Nekko Agent no longer signs in to Claude plans, so this card is turned off and its saved Claude sign-in was deleted.
         Add an Anthropic API key to keep using it, billed per token to your Anthropic account, or keep using your plan through the Subscription option, which runs your installed Claude Code.
       </p>
       <div className="flex gap-2">
         <input
-          className="input py-1.5 text-[12px]"
+          className="input py-1 text-xs"
           type="password"
           aria-label="Anthropic API key"
           placeholder="sk-ant-…"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
         />
-        <button className="btn btn-primary py-1.5 text-[12px]" disabled={saving || !apiKey.trim()} onClick={() => void useKey()}>
+        <button className="btn btn-primary py-1 text-xs" disabled={saving || !apiKey.trim()} onClick={() => void useKey()}>
           {saving ? 'Checking…' : 'Use this key'}
         </button>
       </div>
       {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use my subscription instead</button>
+        <button className="btn btn-outline py-1 text-xs" onClick={() => useStore.getState().openAddProvider('claude-code')}>Use my subscription instead</button>
         <ClaudeWhyLink label="What works with a Claude plan?" />
       </div>
     </div>
@@ -557,7 +558,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
             {provider.discovered && <span className="chip">discovered</span>}
           </div>
           {isClaudeKind(provider.kind) && <ClaudeSource provider={provider} />}
-          {(!local || !enabled) && provider.baseUrl && <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{provider.baseUrl}</p>}
+          {(!local || !enabled) && provider.baseUrl && <p className="mt-0.5 font-mono text-2xs text-ink-faint">{provider.baseUrl}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
         <Toggle
@@ -599,7 +600,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
     return (
       <div className="card p-5">
         {header}
-        <p className="mt-3 text-[12px] text-ink-faint">
+        <p className="mt-3 text-xs text-ink-faint">
           Disabled. Nekko Agent won't check, list, or start this provider, and it is hidden from model pickers. Turn it on to use it again.
         </p>
       </div>
@@ -628,10 +629,10 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button className="btn btn-outline py-1.5 text-[12px]" onClick={test}>Test connection</button>
-        {conn.state === 'fail' && <span className="text-[12px]" style={{ color: 'var(--danger)' }}>{conn.message}</span>}
+        <button className="btn btn-outline py-1 text-xs" onClick={test}>Test connection</button>
+        {conn.state === 'fail' && <span className="text-xs" style={{ color: 'var(--danger)' }}>{conn.message}</span>}
         {conn.state === 'fail' && !subscription && reconnectOAuth && (
-          <button className="btn btn-outline py-1.5 text-[12px]" onClick={() => setReconnecting((v) => !v)}>
+          <button className="btn btn-outline py-1 text-xs" onClick={() => setReconnecting((v) => !v)}>
             Reconnect
           </button>
         )}
@@ -640,7 +641,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
       {/* The failing-card fix path: sign in with the subscription (or mint a
           new OpenRouter key) and the credential on this card resets in place. */}
       {reconnecting && !subscription && reconnectOAuth && (
-        <div className="mt-3 rounded-xl border p-3 text-[12px]" style={{ borderColor: 'var(--line)' }}>
+        <div className="mt-3 rounded-xl border p-3 text-xs" style={{ borderColor: 'var(--line)' }}>
           <div className="space-y-2">
             <p className="text-ink-faint">
               {provider.kind === 'openrouter'
@@ -657,13 +658,13 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
       )}
 
       {subscription && (
-        <div className="mt-3 rounded-xl border p-3 text-[12px]" style={{ borderColor: 'var(--line)' }}>
+        <div className="mt-3 rounded-xl border p-3 text-xs" style={{ borderColor: 'var(--line)' }}>
           {sub === null ? (
             <span className="text-ink-faint">Checking sign-in…</span>
           ) : sub.connected ? (
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex min-w-0 items-center gap-1.5 text-ink-soft">
+                <span className="inline-flex min-w-0 items-center gap-2 text-ink-soft">
                   <CheckIcon className="h-3.5 w-3.5 shrink-0 text-success" />
                   <span className="truncate">
                     Signed in with {subName}{provider.accountId ? ` · ${provider.accountId}` : ''}
@@ -698,10 +699,10 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
                 </div>
               )}
               {provider.kind === 'chatgpt' && (
-                <label className="mt-2 block text-[12px] font-medium text-ink-soft">
+                <label className="mt-2 block text-xs font-medium text-ink-soft">
                   Custom model id (optional)
                   <input
-                    className="input mt-1 text-[12px]"
+                    className="input mt-1 text-xs"
                     value={customModel}
                     onChange={(e) => setCustomModel(e.target.value)}
                     onBlur={(e) => void saveCustomModel(e.target.value)}
@@ -733,9 +734,9 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
 
       {isOllama && (
         <div className="mt-3 flex gap-2">
-          <input className="input py-1.5 text-[12px]" placeholder="pull a model, e.g. llama3.2" value={pullName} onChange={(e) => setPullName(e.target.value)} />
+          <input className="input py-1 text-xs" placeholder="pull a model, e.g. llama3.2" value={pullName} onChange={(e) => setPullName(e.target.value)} />
           <button
-            className="btn btn-outline py-1.5 text-[12px]"
+            className="btn btn-outline py-1 text-xs"
             onClick={async () => { setConn({ state: 'testing', message: 'pulling…' }); const r = await window.nekko.pullModel(provider.id, pullName); setConn({ state: r.ok ? 'ok' : 'fail', message: r.message }); load(); }}
           >
             Pull
@@ -744,7 +745,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
       )}
 
       {local && (
-        <div className="mt-3 flex items-center justify-between text-[11px] text-ink-faint">
+        <div className="mt-3 flex items-center justify-between text-2xs text-ink-faint">
           <span>{models.length} model{models.length === 1 ? '' : 's'}{anyLoaded ? ` · ${models.filter((m) => m.loaded).length} loaded` : ''}</span>
           <button className="hover:text-ink" onClick={load} title="Refresh loaded state">↻ Refresh</button>
         </div>
@@ -752,7 +753,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
 
       {filtering && (
         <input
-          className="input mt-2 rounded-lg px-2.5 py-1 text-[12px]"
+          className="input mt-2 rounded-lg px-3 py-1 text-xs"
           placeholder="Filter models…"
           aria-label="Filter models"
           value={query}
@@ -762,21 +763,21 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
 
       <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
         {models.length === 0 && (problem ? (
-          <div className="flex items-start justify-between gap-2 text-[12px]" role="alert">
+          <div className="flex items-start justify-between gap-2 text-xs" role="alert">
             <p className="min-w-0 break-words" style={{ color: 'var(--danger)' }}>{problem}</p>
-            <button className="btn btn-outline shrink-0 px-2 py-0.5 text-[11px]" onClick={retry}>Retry</button>
+            <button className="btn btn-outline shrink-0 px-2 py-0.5 text-2xs" onClick={retry}>Retry</button>
           </div>
         ) : (
-          <p className="text-[12px] text-ink-faint">No models found.</p>
+          <p className="text-xs text-ink-faint">No models found.</p>
         ))}
-        {models.length > 0 && listedModels.length === 0 && <p className="text-[12px] text-ink-faint">No models match.</p>}
+        {models.length > 0 && listedModels.length === 0 && <p className="text-xs text-ink-faint">No models match.</p>}
         {defaultMenu && <ContextMenu x={defaultMenu.x} y={defaultMenu.y} onClose={() => setDefaultMenu(null)}><ContextAction onClick={() => { void window.nekko.updateSettings({defaultProviderId:provider.id,defaultModelId:defaultMenu.id}).then(() => useStore.getState().refreshSettings()).catch(e => pushToast("error",String(e))); setDefaultMenu(null); }}>Set as default</ContextAction></ContextMenu>}
-        {defaultId && !models.some(m => m.id === defaultId) && <div aria-disabled="true" className="rounded-lg px-2 py-1.5 text-[12px] text-ink-faint">{defaultId} <span className="text-[10px]">Default · unavailable</span></div>}
+        {defaultId && !models.some(m => m.id === defaultId) && <div aria-disabled="true" className="flex min-w-0 items-baseline gap-1 rounded-lg px-2 py-1 text-xs text-ink-faint"><MiddleTruncate text={defaultId} tail={20} /> <span className="shrink-0 text-2xs">Default · unavailable</span></div>}
         {listedModels.map((m) => {
           const price = formatModelPriceLabel({ modelId: m.id, auth: provider.auth, isLocal: local, pricing: modelPricing(m) });
           return (
-            <div key={m.id} onContextMenu={(e) => { e.preventDefault(); setDefaultMenu({x:e.clientX,y:e.clientY,id:m.id}); }} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-[12.5px]" style={{ background: 'var(--surface-2)' }}>
-              <div className="flex min-w-0 items-center gap-1.5">
+            <div key={m.id} onContextMenu={(e) => { e.preventDefault(); setDefaultMenu({x:e.clientX,y:e.clientY,id:m.id}); }} className="flex items-center justify-between rounded-lg px-2 py-1 text-xs" style={{ background: 'var(--surface-2)' }}>
+              <div className="flex min-w-0 items-center gap-2">
                 <button
                 title={isFavorite(`${provider.id}::${m.id}`) ? 'Unfavorite' : 'Favorite (pin to top of the model picker)'}
                 className={isFavorite(`${provider.id}::${m.id}`) ? 'text-accent' : 'text-ink-faint hover:text-ink'}
@@ -784,16 +785,16 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
               >
                 <StarIcon className="h-3.5 w-3.5" filled={isFavorite(`${provider.id}::${m.id}`)} />
               </button>
-              <span className="truncate font-mono">{m.name}</span>{m.id === defaultId && <span className="text-[10px] text-accent">Default</span>}
+              <MiddleTruncate text={m.name} tail={20} className="font-mono" />{m.id === defaultId && <span className="shrink-0 text-2xs text-accent">Default</span>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {price && (
-                <span className="max-w-[160px] truncate text-[10px] text-ink-faint" title="Estimated list price per 1M tokens">{price}</span>
+                <span className="max-w-[160px] truncate text-2xs text-ink-faint" title="Estimated list price per 1M tokens">{price}</span>
               )}
               {m.vramBytes ? (
-                <span className="text-[10px] text-ink-faint" title="VRAM used while loaded">{(m.vramBytes / 1e9).toFixed(1)} GB VRAM</span>
+                <span className="text-2xs text-ink-faint" title="VRAM used while loaded">{(m.vramBytes / 1e9).toFixed(1)} GB VRAM</span>
               ) : m.sizeBytes ? (
-                <span className="text-[10px] text-ink-faint" title="Size on disk">{(m.sizeBytes / 1e9).toFixed(1)} GB</span>
+                <span className="text-2xs text-ink-faint" title="Size on disk">{(m.sizeBytes / 1e9).toFixed(1)} GB</span>
               ) : null}
               {canManage ? (
                 m.loaded ? (

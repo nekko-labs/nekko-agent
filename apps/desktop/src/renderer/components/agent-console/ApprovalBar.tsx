@@ -71,7 +71,7 @@ export function ApprovalBar({ approval, onDecide }: { approval: PendingApproval;
 
   const color =
     approval.severity === 'high' ? 'var(--danger)' : approval.severity === 'medium' ? 'var(--warning)' : 'var(--ink-faint)';
-  const buttonClass = 'btn h-7 px-3! py-0! text-[12px]! disabled:opacity-50';
+  const buttonClass = 'btn h-7 px-3! py-0! text-xs! disabled:opacity-50';
   return (
     <div
       className="slide-up border-t border-line px-5 py-3"
@@ -85,14 +85,14 @@ export function ApprovalBar({ approval, onDecide }: { approval: PendingApproval;
         <ShieldIcon className="h-5 w-5" />
         <div className="min-w-0 flex-1 basis-64">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[13px] font-semibold">Approval required</span>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium text-white" style={{ background: color }}>{approval.severity}</span>
-            <span className="text-[12px] text-ink-faint">{approval.reason}</span>
+            <span className="text-sm font-semibold">Approval required</span>
+            <span className="rounded-full px-2 py-0.5 text-2xs font-medium text-white" style={{ background: color }}>{approval.severity}</span>
+            <span className="text-xs text-ink-faint">{approval.reason}</span>
           </div>
           <code
             ref={codeRef}
             id={codeId}
-            className={`mt-0.5 block font-mono text-[12px] text-ink-soft ${expanded ? 'max-h-40 overflow-y-auto whitespace-pre-wrap break-all' : 'truncate'}`}
+            className={`mt-0.5 block font-mono text-xs text-ink-soft ${expanded ? 'max-h-40 overflow-y-auto whitespace-pre-wrap break-all' : 'truncate'}`}
             title={commandText}
           >
             {commandText}
@@ -100,7 +100,7 @@ export function ApprovalBar({ approval, onDecide }: { approval: PendingApproval;
           {showToggle && (
             <button
               type="button"
-              className="mt-1 rounded-sm text-[11px] font-medium text-ink-faint underline decoration-dotted outline-hidden hover:text-ink-soft hover:decoration-solid focus-visible:ring-2 focus-visible:ring-(--ring)"
+              className="mt-1 rounded-sm text-2xs font-medium text-ink-faint underline decoration-dotted outline-hidden hover:text-ink-soft hover:decoration-solid focus-visible:ring-2 focus-visible:ring-(--ring)"
               onClick={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
               aria-controls={codeId}
@@ -117,7 +117,7 @@ export function ApprovalBar({ approval, onDecide }: { approval: PendingApproval;
         </div>
 
       </div>
-      {error && <p role="alert" className="mx-auto mt-2 max-w-5xl text-[12px] text-(--danger)">{error}</p>}
+      {error && <p role="alert" className="mx-auto mt-2 max-w-5xl text-xs text-(--danger)">{error}</p>}
     </div>
   );
 }

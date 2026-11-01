@@ -54,6 +54,7 @@ async fn signed_out_end_to_end() {
         permission_prompt_tool: None,
         add_dirs: Vec::new(),
         config_dir: None,
+        env: Vec::new(),
     })
     .expect("spawn");
     let (cancel, steering) = (Cancel::default(), Steering::default());

@@ -40,13 +40,13 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
   }, [many, go]);
 
   const caption = item.alt || (item.url ? imageHost(item.url) : 'Image');
-  const pill = 'flex min-h-9 items-center gap-1.5 rounded-full bg-surface px-3.5 py-1.5 text-[13px] font-medium text-ink shadow-lg hover:bg-surface-2 disabled:opacity-50';
+  const pill = 'flex min-h-9 items-center gap-2 rounded-full bg-surface px-4 py-1 text-sm font-medium text-ink shadow-(--shadow-float) hover:bg-surface-2 disabled:opacity-50';
 
   return (
     <Modal title={many ? `Photo ${index + 1} of ${items.length}: ${caption}` : caption} onClose={onClose} scrim="rgba(0,0,0,0.78)" overlayClassName="p-4" zIndex={55}>
-      <div className="flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] flex-col items-center gap-3" data-photo-viewer onClick={onClose}>
+      <div className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] flex-col items-center gap-3" data-photo-viewer onClick={onClose}>
         <div className="flex w-full items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <span className="min-w-0 flex-1 truncate text-[13px] text-white/90" title={item.url ?? caption}>
+          <span className="min-w-0 flex-1 truncate text-sm text-white/90" title={item.url ?? caption}>
             {many && <span className="mr-2 tabular-nums text-white/60">{index + 1} / {items.length}</span>}
             {caption}
             {item.url && item.alt && <span className="ml-2 text-white/55">{imageHost(item.url)}</span>}
@@ -57,7 +57,7 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
           <button className={pill} aria-label="Close image" onClick={onClose}><CloseIcon className="h-4 w-4" /> Close</button>
         </div>
         <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
-          {many && <button className="absolute left-0 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-surface/90 text-xl text-ink shadow-lg hover:bg-surface-2" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); go(-1); }}>‹</button>}
+          {many && <button className="absolute left-0 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-surface/90 text-xl text-ink shadow-(--shadow-float) hover:bg-surface-2" aria-label="Previous photo" onClick={(e) => { e.stopPropagation(); go(-1); }}>‹</button>}
           {src ? (
             <img
               key={src}
@@ -70,7 +70,7 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
               title="Right-click to copy or save"
             />
           ) : (
-            <div className="flex flex-col items-center gap-3 rounded-xl bg-surface p-6 text-center text-sm text-ink-soft shadow-lg" onClick={(e) => e.stopPropagation()} role="status">
+            <div className="flex flex-col items-center gap-3 rounded-xl bg-surface p-6 text-center text-sm text-ink-soft shadow-(--shadow-float)" onClick={(e) => e.stopPropagation()} role="status">
               {state.status === 'error' ? <>
                 <span>Couldn't load the image from {imageHost(item.url ?? '')}.</span>
                 <span className="text-xs text-ink-faint">{state.message}</span>
@@ -81,7 +81,7 @@ export function PhotoViewer({ items, index: start, trusted, onClose, onMenu, onC
               </> : <span>Loading image…</span>}
             </div>
           )}
-          {many && <button className="absolute right-0 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-surface/90 text-xl text-ink shadow-lg hover:bg-surface-2" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); go(1); }}>›</button>}
+          {many && <button className="absolute right-0 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-surface/90 text-xl text-ink shadow-(--shadow-float) hover:bg-surface-2" aria-label="Next photo" onClick={(e) => { e.stopPropagation(); go(1); }}>›</button>}
         </div>
       </div>
     </Modal>

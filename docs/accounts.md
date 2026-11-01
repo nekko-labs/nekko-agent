@@ -56,7 +56,7 @@ CLAUDE_CONFIG_DIR=~/.claude-work claude
 
 **What Nekko does and does not touch.** Nekko starts Claude Code with `CLAUDE_CONFIG_DIR` set to the account's folder, and asks `claude auth status` whether it is signed in, and as whom (email, organization and plan, which the CLI prints itself). It never opens the folder, never reads or copies the login inside it, never sets a token, and never changes the Claude Code binary. The folder name comes only from the account name (`a-z`, `0-9` and `-`), never from a path you type.
 
-**Usage.** Claude Code shows each account's plan usage itself (`/usage`). Nekko shows none for a Claude plan, because Anthropic has no approved way for another app to read it.
+**Usage.** Nekko shows a Claude plan's usage limits (the current session and the week) as that account's own Claude Code reports them while it works, or when you run `/usage` in the chat. Nekko never asks Anthropic for them with your login, so they are only as fresh as Claude Code's last report.
 
 ## What Anthropic allows
 
@@ -67,6 +67,7 @@ Anthropic's rules for Claude Code ([Legal and compliance](https://code.claude.co
 | What you want to do | Allowed? | Notes |
 | --- | --- | --- |
 | Use your own Claude plan through the Subscription option | Yes | You sign in inside Claude Code with `/login`; Nekko never sees the login. |
+| See Claude Code’s own plan on the chat’s plan sheet | Yes | Nekko reads the to-do list Claude Code prints (its `TodoWrite` and task calls) and shows it; nothing is added to Claude Code. |
 | Keep a work and a personal Claude account, each for its own work | Yes | Each is a separate subscription account with its own login. |
 | Teammates each using their own account | Yes | Each person signs in to their own Claude Code, in their own Nekko. |
 | Any number of API keys or cloud accounts | Yes | Billed to whoever owns each key or account. Every Nekko feature works on them. |

@@ -21,6 +21,7 @@ import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
 import { usePanelPresence } from '../usePanelPresence.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
+import { EASE_OUT } from '../easing.js';
 
 const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
 
@@ -117,10 +118,12 @@ export function MonitorsDock(props: MonitorsDockProps) {
     node.animate([
       { transform: `translate(${dx}px, ${dy}px) scale(1.02)`, boxShadow: '0 14px 30px -14px rgb(0 0 0 / .5)' },
       { transform: 'none', boxShadow: '0 0 0 0 rgb(0 0 0 / 0)' },
-    ], { duration: 280, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    ], { duration: 280, easing: EASE_OUT });
   }, [lift]);
   const [width, setWidth] = useState(DEFAULT_DOCK_WIDTH);
-  const drag = useRef<{ x: number; width: number } | null>(null);
+  // A width drag measures its room once and writes --dock-width straight onto
+  // the dock; state takes the final width on release.
+  const drag = useRef<{ x: number; width: number; room: number; last?: number } | null>(null);
   const size = (value: number) => { const next = Math.max(260, Math.min(600, value)); setWidth(Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next); };
   const [collapsing, setCollapsing] = useState<MonitorKey | null>(null);
   const dockRef = useRef<HTMLElement>(null);
@@ -202,9 +205,15 @@ export function MonitorsDock(props: MonitorsDockProps) {
     {collapsed}
     <aside data-panel-open={dock.show} inert={!dock.show} aria-hidden={!dock.show} ref={dockRef} className="monitors-dock" style={{ '--dock-width': `${width}px` } as React.CSSProperties} data-dock-side={dock.side} aria-label="Monitors">
       {(dock.side === 'left' || dock.side === 'right') && <div className="monitors-dock__resize" role="separator" tabIndex={0} aria-label="Resize monitors" aria-orientation="vertical" aria-valuemin={260} aria-valuemax={600} aria-valuenow={width} title="Drag to resize monitors; double-click to reset"
-        onPointerDown={(e) => { drag.current = { x: e.clientX, width }; e.currentTarget.setPointerCapture(e.pointerId); }}
-        onPointerMove={(e) => { if (drag.current) size(Math.min((e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240, drag.current.width + (e.clientX - drag.current.x) * (dock.side === 'left' ? 1 : -1))); }}
-        onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => setWidth(DEFAULT_DOCK_WIDTH)}
+        onPointerDown={(e) => { drag.current = { x: e.clientX, width, room: (e.currentTarget.parentElement?.parentElement?.clientWidth ?? 1000) - 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
+        onPointerMove={(e) => {
+          const d = drag.current;
+          if (!d) return;
+          const next = Math.max(260, Math.min(600, Math.min(d.room, d.width + (e.clientX - d.x) * (dock.side === 'left' ? 1 : -1))));
+          d.last = Math.abs(next - DEFAULT_DOCK_WIDTH) <= 20 ? DEFAULT_DOCK_WIDTH : next;
+          dockRef.current?.style.setProperty('--dock-width', `${d.last}px`);
+        }}
+        onPointerUp={() => { const last = drag.current?.last; drag.current = null; if (last != null) setWidth(last); }} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => setWidth(DEFAULT_DOCK_WIDTH)}
         onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setWidth(DEFAULT_DOCK_WIDTH); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); size(width + (e.key === 'ArrowRight' ? 24 : -24) * (dock.side === 'left' ? 1 : -1)); } }}>
         {/* The agent list's grip: a thin line that shows on hover and focus. */}
         <span aria-hidden className="pane-grip monitors-dock__grip" />
@@ -325,7 +334,8 @@ function LandingZone({ open, height }: { open: boolean; height: number }) {
 function ResizableMonitorBody({ label, children }: { label: string; children: React.ReactNode }) {
   const content = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ y: number; height: number } | null>(null);
+  // Dragging writes the height straight onto the viewport and commits once on release.
+  const drag = useRef<{ y: number; height: number; last?: number } | null>(null);
   const [natural, setNatural] = useState(420);
   const [requested, setRequested] = useState<number | null>(null);
   useEffect(() => {
@@ -344,8 +354,13 @@ function ResizableMonitorBody({ label, children }: { label: string; children: Re
     <div ref={viewport} className="monitors-dock__body" style={{ height }}><div ref={content}>{children}</div></div>
     <div className="monitors-dock__monitor-resize" role="separator" tabIndex={0} aria-label={`Resize ${label} monitor height`} aria-orientation="horizontal" aria-valuemin={min} aria-valuemax={natural} aria-valuenow={height} title="Drag to resize; double-click to fit content"
       onPointerDown={(e) => { drag.current = { y: e.clientY, height: viewport.current?.clientHeight ?? height }; e.currentTarget.setPointerCapture(e.pointerId); }}
-      onPointerMove={(e) => { if (drag.current) resize(drag.current.height + e.clientY - drag.current.y); }}
-      onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => setRequested(natural)}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d) return;
+        d.last = Math.max(min, Math.min(natural, d.height + e.clientY - d.y));
+        if (viewport.current) viewport.current.style.height = `${d.last}px`;
+      }}
+      onPointerUp={() => { const last = drag.current?.last; drag.current = null; if (last != null) resize(last); }} onPointerCancel={() => { drag.current = null; }} onDoubleClick={() => setRequested(natural)}
       onKeyDown={(e) => { if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) { e.preventDefault(); resize(e.key === 'Home' ? min : e.key === 'End' ? natural : height + (e.key === 'ArrowDown' ? 24 : -24)); } }} />
   </>;
 }
@@ -447,7 +462,7 @@ export function DockSignIn({ provider, onSignedIn }: { provider: ProviderConfig;
   };
   return <div className="monitors-dock__signin" data-dock-signin>
     {!open
-      ? <button type="button" className="btn btn-primary py-1 text-[12px]" onClick={() => { setError(null); setOpen(true); }}>Sign in again</button>
+      ? <button type="button" className="btn btn-primary py-1 text-xs" onClick={() => { setError(null); setOpen(true); }}>Sign in again</button>
       : <>
           <SubscriptionSignIn oauthProvider={oauth} label={`Sign in with ${name}`} onConnected={connected} />
           <button type="button" className="monitors-dock__text-button" onClick={() => setOpen(false)}>Cancel</button>

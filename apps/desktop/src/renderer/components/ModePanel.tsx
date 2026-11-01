@@ -352,7 +352,7 @@ export function ModePanel({
 
   return (<>
     <div ref={(el) => { panel.current = el; if (typeof panelRef === 'function') panelRef(el); else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }}
-      style={style} className="mode-panel card fixed z-[100] shadow-lg" role="dialog" aria-label="Mode" data-mode-panel onKeyDown={onKeyDown}>
+      style={style} className="mode-panel card fixed z-[100] shadow-(--shadow-float)" role="dialog" aria-label="Mode" data-mode-panel onKeyDown={onKeyDown}>
       <div className="mode-rail" role="radiogroup" aria-label="Saved modes">
         <p className="mode-sec">Saved modes</p>
         {modes.map((m) => {
@@ -489,7 +489,7 @@ export function ModePanel({
     </div>
 
     {fly && !narrow && createPortal(
-      <div className="mode-fly card fixed z-[101] shadow-lg" style={flyStyle} role="dialog" aria-label={FLY_TITLE[fly][0]} data-mode-panel onKeyDown={onKeyDown}>
+      <div className="mode-fly card fixed z-[101] shadow-(--shadow-float)" style={flyStyle} role="dialog" aria-label={FLY_TITLE[fly][0]} data-mode-panel onKeyDown={onKeyDown}>
         <p className="mode-fly-h">{FLY_TITLE[fly][1]} {FLY_TITLE[fly][0]}</p>
         <div className="mode-fly-body">{flyBody(fly)}</div>
       </div>,

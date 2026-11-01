@@ -172,7 +172,7 @@ export function SubscriptionSignIn({
     const { session } = phase;
     return (
       <div className="space-y-2">
-        <p className="text-[12px] text-ink-faint">
+        <p className="text-xs text-ink-faint">
           {session.mode === 'loopback'
             ? oauthProvider === 'openrouter'
               ? 'Approve the key request in the browser tab that opened; the key lands here automatically.'
@@ -181,9 +181,9 @@ export function SubscriptionSignIn({
               ? 'Your browser could not reach back to the app, so sign-in finishes manually: after you authorize, the tab lands on a page that cannot connect. Copy that tab\'s whole address (it carries your sign-in code) and paste it below.'
               : 'Your browser could not reach back to the app, so sign-in finishes manually: after you authorize, copy the code the page shows and paste it below.'}
         </p>
-        {consentNote && <p className="text-[11.5px] text-ink-faint">{consentNote}</p>}
+        {consentNote && <p className="text-xs text-ink-faint">{consentNote}</p>}
         <button
-          className="inline-flex items-center gap-1 text-[12px] text-accent hover:underline"
+          className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
           onClick={() => void window.nekko.openPath(session.authUrl).catch(() => {})}
         >
           <ExternalIcon className="h-3 w-3" /> Reopen the sign-in page
@@ -191,7 +191,7 @@ export function SubscriptionSignIn({
         {session.mode === 'manual' && (
           <div className="flex gap-2">
             <input
-              className="input py-1.5 text-[12px]"
+              className="input py-1 text-xs"
               aria-label="Paste the sign-in code"
               placeholder={oauthProvider === 'chatgpt' ? 'Paste the redirect URL (or code)' : 'Paste the code (code#state)'}
               value={pasted}
@@ -200,13 +200,13 @@ export function SubscriptionSignIn({
               disabled={finishing}
               autoFocus
             />
-            <button className="btn btn-primary py-1.5 text-[12px]" onClick={() => void finish()} disabled={finishing || !pasted.trim()}>
+            <button className="btn btn-primary py-1 text-xs" onClick={() => void finish()} disabled={finishing || !pasted.trim()}>
               {finishing ? 'Signing in…' : 'Complete sign-in'}
             </button>
           </div>
         )}
         <button
-          className="btn btn-ghost py-1 text-[12px]"
+          className="btn btn-ghost py-1 text-xs"
           onClick={() => void cancel()}
           disabled={finishing}
         >
@@ -217,18 +217,18 @@ export function SubscriptionSignIn({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <button className="btn btn-primary" onClick={() => void begin()} disabled={phase.kind === 'starting'}>
         {phase.kind === 'starting' ? 'Opening…' : signInLabel}
       </button>
       {phase.kind === 'error' && (
-        <p className="text-[12px]" style={{ color: 'var(--danger)' }}>
+        <p className="text-xs" style={{ color: 'var(--danger)' }}>
           {phase.message}
         </p>
       )}
-      {consentNote && <p className="text-[11.5px] text-ink-faint">{consentNote}</p>}
+      {consentNote && <p className="text-xs text-ink-faint">{consentNote}</p>}
       {cliName && (
-        <p className="text-[11.5px] text-ink-faint">
+        <p className="text-xs text-ink-faint">
           Already signed in to {cliName}?{' '}
           <button className="text-accent hover:underline" onClick={() => void importCli()} disabled={importing}>
             {importing ? 'Importing…' : 'Import that sign-in'}

@@ -23,7 +23,7 @@ describe('a composer in every wall window (#1317)', () => {
     expect(bar.slice(foot)).toContain('data-chat-mode-button');
     // Model and folder no longer repeat in a footer under the composer, and no strip sits above the editor.
     expect(html).not.toContain('data-agent-footer-controls');
-    expect(html).not.toContain('class="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1.5"');
+    expect(html).not.toContain('class="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1"');
     expect(html).toContain('wall-send');
     expect(html).not.toContain('send-avatar');
   });

@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class PurposeGroupsTests: XCTestCase {
     func testGroupsRevealCallsAndKeepFailuresVisible() {
         let app = XCUIApplication()
