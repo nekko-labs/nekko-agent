@@ -174,17 +174,17 @@ struct ChatView: View {
                 }
                 .animation(.smooth(duration: 0.2), value: !atBottom && chat.running)
             }
-            .safeAreaInset(edge: .bottom) {
-                if flex == nil { bottomBar(chat) }
-            }
             .frame(height: flex.map { CGFloat($0.top) })
           if let flex {
               // Nothing sits on the hinge.
               Color.clear.frame(height: CGFloat(flex.gap)).accessibilityHidden(true)
               ScrollView { bottomBar(chat) }
                   .scrollBounceBehavior(.basedOnSize)
-                  .background(.bar)
                   .accessibilityIdentifier("chat.flexLower")
+          } else {
+              // Below the transcript rather than over it: it has no background to hide what scrolls behind.
+              // Its own height: a VStack's even share collapsed the answer field to nothing above the keyboard.
+              bottomBar(chat).fixedSize(horizontal: false, vertical: true)
           }
          }
         }
@@ -301,7 +301,6 @@ struct ChatView: View {
             Composer(chat: chat, openTerminals: { showTerminals = true })
         }
         .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
-        .background(.bar)
     }
 
     /// Tabletop: where the hinge cuts this chat, when the pane host passes one and it falls inside.
@@ -581,14 +580,14 @@ struct ApprovalCard: View {
             }
             HStack {
                 Button(role: .destructive) { decide(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
-                    .buttonStyle(.bordered).tint(palette.inkSoft)
+                    .buttonStyle(.bordered).tint(palette.inkSoft).buttonBorderShape(.roundedRectangle(radius: 8))
                 // Drawn rather than .borderedProminent, which the audit reports as clipping its label.
                 Button { decide(true) } label: {
                     Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Allow").font(.body.weight(.semibold)) } }
                         .foregroundStyle(palette.onAccent)
                         .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 12))
-                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
             }
@@ -597,7 +596,7 @@ struct ApprovalCard: View {
         }
         .padding(14)
         // A card, because it needs you; tinted by its risk rather than outlined.
-        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.09))) }
+        .background { RoundedRectangle(cornerRadius: 12).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.09))) }
         // The haptic comes from AppModel, per the user's vibration setting; VoiceOver gets told here.
         .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
     }
@@ -650,8 +649,11 @@ struct QuestionCard: View {
                         picked[q.id] = s
                     }
                     if picked[q.id]?.contains(askOtherLabel) == true {
-                        TextField("Your answer", text: Binding(get: { notes[q.id] ?? "" }, set: { notes[q.id] = $0 }), axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
+                        TextField("Your answer", text: Binding(get: { notes[q.id] ?? "" }, set: { notes[q.id] = $0 }),
+                                  prompt: Text("Your answer").foregroundStyle(palette.inkFaint), axis: .vertical)
+                            .font(.subheadline).foregroundStyle(palette.ink)
+                            .padding(.horizontal, 12).padding(.vertical, 12)
+                            .background(palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }
@@ -659,15 +661,19 @@ struct QuestionCard: View {
                 Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
             }
             Button(action: send) {
-                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer") } }
-                    .frame(maxWidth: .infinity).foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
+                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer").font(.body.weight(.semibold)) } }
+                    .foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(ready ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
             }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.plain)
                 .disabled(!ready || busy)
         }
         .padding(14)
-        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(palette.accent.opacity(0.07))) }
+        // The message box's own surface and edge, so the two read as one panel.
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
     }
 
     private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
@@ -706,9 +712,9 @@ struct FlowOptions: View {
                     Text(o)
                 }
                 .font(.footnote).padding(.horizontal, 14).frame(minHeight: 44)
-                .background(on ? palette.accent : palette.surface2, in: Capsule())
+                .background(on ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                 .foregroundStyle(on ? palette.onAccent : palette.ink)
-                .contentShape(Capsule())
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(on ? .isSelected : [])
@@ -947,7 +953,7 @@ struct Composer: View {
                         Button { send() } label: {
                             Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
                                 .padding(.horizontal, 12).frame(minHeight: 36)
-                                .background(canSend ? palette.accent : palette.surface2, in: Capsule())
+                                .background(canSend ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                                 .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
                                 .frame(minHeight: 44).contentShape(Rectangle())
                         }
@@ -968,8 +974,8 @@ struct Composer: View {
                 .padding(.horizontal, 4).padding(.bottom, 2)
             }
             .frame(maxWidth: .infinity)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
             // The chat's model and effort, and its context window: in Simple and Expert alike.
             HStack(spacing: 0) {
                 ModelEffortButton(chat: chat)
