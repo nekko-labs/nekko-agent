@@ -54,7 +54,7 @@ describe('wall composer sizing', () => {
     expect(size({ content: 4000 })).toBe(370);
     expect(size({ content: 4000, viewport: 1600 })).toBe(400);
     expect(size({ content: 4000, viewport: 400 })).toBe(120);
-    expect(size({ content: 4000, chrome: 500, viewport: 400 })).toBe(64);
+    expect(size({ content: 4000, chrome: 500, viewport: 400 })).toBe(52);
     expect(size({ preferred: 4000 })).toBe(370);
   });
   it('releases the previous height to measure deletion and restores scroll position', () => {

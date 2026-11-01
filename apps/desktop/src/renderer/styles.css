@@ -3343,10 +3343,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-composer [data-chat-surface="composer"] > section { flex: 0 0 auto; min-height: 0; overflow: visible; }
 .wall-composer [data-chat-surface="composer"] .composer-section { display: flex; flex: 0 0 auto; min-height: 0; padding: 0; }
 .wall-composer .composer-column, .wall-composer .composer { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; }
-/* COMPOSER_TWO_LINES: two 20px lines of text-sm plus py-3. */
-.wall-composer .composer-editor-wrap > [contenteditable] { flex: 0 0 auto; min-height: 64px; max-height: none; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; }
+/* COMPOSER_TWO_LINES: two 20px lines of text-sm plus py-2. */
+.wall-composer .composer-editor-wrap > [contenteditable] { flex: 0 0 auto; min-height: 52px; max-height: none; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; }
 .wall-composer .composer-editing-body { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; }
-.wall-composer .composer-editor-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 64px; }
+.wall-composer .composer-editor-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 52px; }
 .wall-composer .composer > :not(.composer-editing-body), .wall-composer .composer-editing-body > :not(.composer-editor-wrap) { flex-shrink: 0; }
 .wall-layout-segments button { display: inline-flex; align-items: center; gap: 8px; }
 
