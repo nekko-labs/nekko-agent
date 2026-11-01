@@ -94,6 +94,8 @@ struct ComputerSecret: Codable, Equatable {
     var keyHex: String
     /// The one-time code, until the computer has welcomed this phone once.
     var pair: String?
+    /// `E2E.pairingVersion` when saved; `nil` from an older app, which must pair again (decision 0036).
+    var v: Int?
 }
 
 public struct ModelGroup: Equatable, Sendable, Identifiable {
@@ -612,7 +614,7 @@ public final class ComputersStore {
         // Re-scanning a computer we already know keeps its id and name.
         let existing = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
         let id = existing?.id ?? newId()
-        saveSecret(id, ComputerSecret(room: link.room, key: link.key, keyHex: keyHex, pair: link.pair))
+        saveSecret(id, ComputerSecret(room: link.room, key: link.key, keyHex: keyHex, pair: link.pair, v: E2E.pairingVersion))
         if existing == nil {
             computers.append(Computer(id: id, name: defaultComputerName, relayUrl: link.relayUrl, pairedAt: now(), alts: link.alts))
             saveIndex()
@@ -693,6 +695,14 @@ public final class ComputersStore {
         route = nil
         connectionLog.record(.connecting)
         clearComputerState()
+        if (secret.v ?? 1) < E2E.pairingVersion {
+            // Paired before the computer replaced its pairing secret (decision 0036): it no longer
+            // answers on this pairing, so ask for a fresh QR instead of dialing.
+            conn = .denied
+            denied = .badKey
+            connectionLog.record(.denied, denied: .badKey)
+            return
+        }
         // Opening the app away from the computer: show the list as it was, marked as saved.
         if let saved = chatListCache?.load(id) {
             summaries = saved.summaries

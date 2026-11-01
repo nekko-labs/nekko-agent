@@ -138,7 +138,8 @@ public struct RelayConfig: Sendable {
     /// Every address of the relay, the paired one first.
     public var routes: [String] { [relayUrl] + alternates }
 
-    /// `<relay>/relay?role=client&room=…&key=…`
+    /// `<relay>/relay?role=client&room=…&key=…`, where `key` is `E2E.relayAuth`
+    /// of the pairing secret, never the secret itself (decision 0036).
     public var dialURL: URL? { dialURL(for: relayUrl) }
 
     /// The same, for one of the relay's other addresses.
@@ -147,7 +148,7 @@ public struct RelayConfig: Sendable {
         while base.hasSuffix("/") { base.removeLast() }
         guard var c = URLComponents(string: base + "/relay") else { return nil }
         c.queryItems = [URLQueryItem(name: "role", value: "client"), URLQueryItem(name: "room", value: room),
-                        URLQueryItem(name: "key", value: key)]
+                        URLQueryItem(name: "key", value: E2E.relayAuth(secret: key, room: room))]
         // URLComponents leaves `+` alone in queries; the relay reads it as a space.
         c.percentEncodedQuery = c.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         return c.url

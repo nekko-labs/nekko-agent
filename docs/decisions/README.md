@@ -44,3 +44,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0033](0033-mods-may-run-agent-tools-behind-a-permission.md) | Mods may run agent tools behind `tools:run`, the tool policy (Ask by default) and picked folders | accepted |
 | [0034](0034-android-permits-cleartext-and-refuses-public-ws-in-the-app.md) | Permit cleartext app-wide on Android and refuse public `ws://` in the app, as on the iPhone | accepted |
 | [0035](0035-plan-usage-on-for-claude-plans-from-claude-codes-own-output.md) | A Claude plan shows its usage limits, read only from what the user's own Claude Code printed | accepted |
+| [0036](0036-the-relay-sees-a-derived-room-credential-never-the-pairing-secret.md) | The relay sees a room credential derived from the pairing secret, never the secret; older pairings are replaced and phones pair again | accepted |

@@ -23,6 +23,19 @@ public enum E2E {
     public static let ivBytes = 12
     static let tagBytes = 16
 
+    /// PROTOCOL CONSTANT: the label of the room credential the relay checks (decision 0036).
+    public static let relayAuthLabel = "nekko-relay-auth:"
+    /// How a stored pairing reaches the relay: 2 is `relayAuth`. Older stored pairings must pair again.
+    public static let pairingVersion = 2
+
+    /// The `key=` presented to the relay: hex of HMAC-SHA256 keyed with the
+    /// pairing secret over `"nekko-relay-auth:" + room`. One-way, so the relay
+    /// never sees the secret `deriveKey` starts from.
+    public static func relayAuth(secret: String, room: String) -> String {
+        let mac = HMAC<SHA256>.authenticationCode(for: Data((relayAuthLabel + room).utf8), using: SymmetricKey(data: Data(secret.utf8)))
+        return toHex(Data(mac))
+    }
+
     public enum Failure: Error, Equatable {
         case badKey, badIV, frameTooShort, notBase64, notUTF8
     }

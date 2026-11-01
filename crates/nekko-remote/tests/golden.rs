@@ -74,6 +74,13 @@ fn keys_and_sealed_frames_match_webcrypto() {
     let key = e2e::derive_key(s(&g["secret"]), s(&g["room"]));
     let hex: String = key.raw().iter().map(|b| format!("{b:02x}")).collect();
     assert_eq!(hex, s(&g["key"]));
+    // What the relay sees: derived under its own label, so neither the
+    // secret nor the E2E key.
+    let auth = e2e::relay_auth(s(&g["secret"]), s(&g["room"]));
+    assert_eq!(auth, s(&g["relayAuth"]));
+    assert_ne!(auth, s(&g["secret"]));
+    assert_ne!(auth, hex);
+    assert_ne!(auth, e2e::relay_auth(s(&g["secret"]), "another-room"));
     let frames = g["frames"].as_array().unwrap();
     assert!(frames.len() >= 10);
     for f in frames {

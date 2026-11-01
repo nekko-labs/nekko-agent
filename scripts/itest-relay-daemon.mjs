@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:f
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { deriveKey, seal, open } from '@nekko-agent/shared';
+import { deriveKey, relayAuth, seal, open } from '@nekko-agent/shared';
 import { killTree, treeOptions } from './itest-procs.mjs';
 
 const exe = process.platform === 'win32' ? 'nekkod.exe' : 'nekkod';
@@ -99,6 +99,8 @@ try {
   const { room, key } = await api('remote:pairing');
   const grant = await api('remote:pair');
   const e2eKey = await deriveKey(key, room);
+  // The relay checks a credential derived from the secret, never the secret (decision 0036).
+  const auth = await relayAuth(key, room);
   let online = false;
   for (let i = 0; i < 40 && !online; i++) {
     online = (await api('remote:status'))?.online === true;
@@ -107,7 +109,7 @@ try {
   check('the daemon agent is online at the relay', online);
 
   async function device({ deviceId, name, pair, legacy = false }) {
-    const ws = new WebSocket(`${RELAY_URL}/relay?role=client&room=${room}&key=${key}`);
+    const ws = new WebSocket(`${RELAY_URL}/relay?role=client&room=${room}&key=${auth}`);
     const pending = new Map();
     const events = [];
     const sent = [];

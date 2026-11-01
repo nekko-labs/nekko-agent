@@ -1,5 +1,5 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
-import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, relayAuth, RELAY_PAIRING_VERSION, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
@@ -98,7 +98,7 @@ function makeWebClient(): NekkoApi {
   let pairCode: string | null = p.get('pair');
   if (relayUrl && room && key) {
     // Persist creds and scrub them from the address bar/history right away.
-    localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key }));
+    localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, v: RELAY_PAIRING_VERSION }));
     try {
       history.replaceState(null, '', location.pathname);
     } catch {
@@ -107,7 +107,12 @@ function makeWebClient(): NekkoApi {
   } else {
     try {
       const saved = JSON.parse(localStorage.getItem('nekko_relay') || 'null');
-      if (saved?.relay && saved?.room && saved?.key) {
+      if (saved?.relay && saved?.room && saved?.key && saved.v !== RELAY_PAIRING_VERSION) {
+        // Saved before the computer replaced its pairing secret (decision 0036): pair again.
+        localStorage.removeItem('nekko_relay');
+        sessionStorage.setItem('nekko_relay_denied', 'pair-again');
+        alert('Nekko Agent changed how devices connect. Pair this device again from Settings → Remote access on your computer.');
+      } else if (saved?.relay && saved?.room && saved?.key) {
         relayUrl = saved.relay;
         room = saved.room;
         key = saved.key;
@@ -170,7 +175,7 @@ function makeWebClient(): NekkoApi {
         pairCode = null; // enrollment done; never resend the code
         sessionStorage.removeItem('nekko_relay_denied');
         // Drop a stored one-time code so it never leaks or gets replayed.
-        localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key }));
+        localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, v: RELAY_PAIRING_VERSION }));
       } else if (frame.type === 'denied') {
         onDenied(String(frame.reason || 'denied'));
       } else if (frame.type === 'res' && pending.has(frame.id)) {
@@ -181,9 +186,12 @@ function makeWebClient(): NekkoApi {
         dispatchEvent(frame.channel, frame.payload);
       }
     };
-    const connect = () => {
+    // The relay checks a credential derived from the secret, never the secret (decision 0036).
+    const authP = relayAuth(key, room);
+    const connect = async () => {
       welcomed = false;
-      relay = new WebSocket(`${relayUrl.replace(/\/$/, '')}/relay?role=client&room=${encodeURIComponent(room)}&key=${encodeURIComponent(key)}`);
+      const auth = await authP;
+      relay = new WebSocket(`${relayUrl.replace(/\/$/, '')}/relay?role=client&room=${encodeURIComponent(room)}&key=${encodeURIComponent(auth)}`);
       relay.onopen = () => {
         void sendSealed({ type: 'hello', deviceId, name: deviceName, platform, ...(pairCode ? { pair: pairCode } : {}) });
       };
@@ -208,10 +216,12 @@ function makeWebClient(): NekkoApi {
       relay.onclose = (ev) => {
         welcomed = false;
         if (ev.code === 4001) return; // kicked (revoked) → don't reconnect-loop
-        setTimeout(connect, 1000);
+        // The computer holds another pairing secret (it replaced it): pair again.
+        if (ev.code === 1008 && /bad pairing key/i.test(ev.reason)) return onDenied('pair-again');
+        setTimeout(() => void connect(), 1000);
       };
     };
-    connect();
+    void connect();
     const ready = () =>
       new Promise<void>((res, rej) => {
         if (welcomed) return res();

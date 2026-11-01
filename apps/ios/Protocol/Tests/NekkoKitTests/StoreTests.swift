@@ -343,6 +343,27 @@ final class StoreTests: XCTestCase {
         s.disconnect()
     }
 
+    /// A pairing saved by an older app predates the derived relay credential (decision 0036):
+    /// the computer has replaced its secret, so the phone asks for a fresh QR instead of dialing.
+    func testAPairingFromBeforeDerivedRelayCredentialsAsksToPairAgain() async throws {
+        let s = makeStore()
+        s.load()
+        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let saved = try XCTUnwrap(secure.get(ComputersStore.secretKey(id)))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(saved.utf8)) as? [String: Any])
+        XCTAssertEqual(object["v"] as? Int, E2E.pairingVersion)
+        object.removeValue(forKey: "v")
+        secure.set(ComputersStore.secretKey(id), String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self))
+
+        let before = connections.count
+        let again = makeStore()
+        again.load()
+        await settle()
+        XCTAssertEqual(connections.count, before, "no connection on the old pairing")
+        XCTAssertEqual(again.conn, .denied)
+        XCTAssertEqual(again.denied, .badKey)
+    }
+
     func testDenialAndForget() async throws {
         let s = makeStore()
         s.load()
