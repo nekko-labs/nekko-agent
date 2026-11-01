@@ -23,7 +23,7 @@ pub mod updates;
 pub mod vm;
 
 use github::{ConnectRequest, GitHub, SecKeySigner};
-use github_setup::GithubSetup;
+use github_setup::{ForkApproval, GithubSetup};
 use gitlab::{GitLab, GitlabConnectRequest};
 use keychain::{key_name, runner_vault, token_key};
 use nekko_cloud::vault::Vault;
@@ -47,6 +47,7 @@ pub const CHANNELS: &[&str] = &["runner:list", "runner:connect", "runner:update"
 /// Pushed with `RunnerView[]` whenever the views change.
 pub const EVENT: &str = "runner:changed";
 const NO_RUNNER: &str = "No runner with that id.";
+const FORK_APPROVAL_OPEN: &str = "This public repo doesn't hold outside contributors for approval yet. Turn that on in its Actions settings on GitHub, then choose Connect GitHub to finish.";
 /// How often the router is asked for its public address, and how often the gateway is checked for a change.
 const WAN_EVERY: Duration = Duration::from_secs(300);
 const GATEWAY_EVERY: Duration = Duration::from_secs(30);
@@ -97,6 +98,14 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
 
 fn now_secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// A public repo's runner cannot take a job until GitHub holds outside contributors for approval.
+fn may_enable(r: &RunnerRecord, enabling: bool) -> Result<(), String> {
+    if enabling && r.github().is_some_and(|g| g.fork_approval_open) {
+        return Err(FORK_APPROVAL_OPEN.into());
+    }
+    Ok(())
 }
 
 /// The `nekko-vm` helper beside the executable, or the sentence the UI shows.
@@ -194,8 +203,9 @@ impl Runners {
         let gitlab = || GitLab::new(Net::default(), vault.clone(), now_secs);
         let provider = ByLink { github: github.clone(), gitlab: gitlab() };
         let sup = Supervisor::new(dir.clone(), sense, vm, provider, Box::new(awake::Caffeinate::default()), host_name);
-        let gh_path = std::env::var("NEKKO_GH_PATH").unwrap_or_else(|_| "gh".into());
-        let setup = GithubSetup::new(github.clone(), &dir, hub.clone(), gh_path);
+        let gh =
+            github_setup::gh_path(std::env::var("NEKKO_GH_PATH").ok(), &["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]);
+        let setup = GithubSetup::new(github.clone(), &dir, hub.clone(), gh);
         let connectors = Connectors { github, gitlab: gitlab(), setup };
         let me = Runners::new(&dir, sup, Some(connectors), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
         if helper.is_ok() {
@@ -436,11 +446,14 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                 }
                 let next: RunnerSettings =
                     serde_json::from_value(cur).map_err(|e| format!("Those settings are not valid: {e}"))?;
+                may_enable(&records[i], next.enabled)?;
                 records[i].config.settings = next.sanitized();
                 self.commit(records, Some(&id)).await
             }
             "runner:setEnabled" => {
-                records[i].config.settings.enabled = arg(1).as_bool().ok_or("Enabled must be true or false.")?;
+                let enabled = arg(1).as_bool().ok_or("Enabled must be true or false.")?;
+                may_enable(&records[i], enabled)?;
+                records[i].config.settings.enabled = enabled;
                 self.commit(records, Some(&id)).await
             }
             "runner:remove" => {
@@ -455,7 +468,21 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
 
     /// The click-through GitHub connect. Confirming it is an ordinary `runner:connect`.
     async fn github_setup(&self, channel: &str, arg: Value) -> Result<Value, String> {
-        let setup = &self.connectors.as_ref().ok_or("Connecting is not available here.")?.setup;
+        let setup = self.connectors.as_ref().map(|c| &c.setup).ok_or("Connecting is not available here.");
+        if channel == "runner:setForkApproval" {
+            let id = arg["runnerId"].as_str().ok_or(NO_RUNNER)?;
+            let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+            // `confirmed`: the owner says they set it themselves, after following the link.
+            let approval = match arg["confirmed"].as_bool() {
+                Some(true) => ForkApproval { done: true, url: String::new() },
+                _ => setup?.fork_approval(&rec).await?,
+            };
+            if approval.done {
+                self.settle_fork_approval(id).await?;
+            }
+            return Ok(json!(approval));
+        }
+        let setup = setup?;
         match channel {
             "runner:githubAccounts" => Ok(setup.accounts().await),
             "runner:githubStart" => {
@@ -464,13 +491,17 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             }
             "runner:githubStatus" => Ok(json!(setup.status().await)),
             "runner:githubCancel" => Ok(json!(setup.cancel())),
-            "runner:setForkApproval" => {
-                let id = arg["runnerId"].as_str().ok_or(NO_RUNNER)?;
-                let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
-                Ok(json!(setup.fork_approval(&rec).await?))
-            }
             _ => Err(format!("unknown channel {channel}")),
         }
+    }
+
+    async fn settle_fork_approval(&self, id: &str) -> Result<(), String> {
+        let _g = self.edit.lock().await;
+        let mut records = self.store.load();
+        if let Some(Link::Github(g)) = records.iter_mut().find(|r| r.config.id == id).map(|r| &mut r.link) {
+            g.fork_approval_open = false;
+        }
+        self.commit(records, Some(id)).await.map(|_| ())
     }
 
     /// Checks and saves a new runner. The provider's checks hold no lock.

@@ -8,7 +8,7 @@ vi.mock('./primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { AccountStep, ConfirmStep, ConnectBody, ForkStep, ModeStep, WaitingStep, emptyConnectForm, sheetScreen, stepError, submitConnect, submitSetup, type AccountChoice } from './ConnectRunnerSheet.js';
+import { AccountStep, ConfirmStep, ConnectBody, ForkStep, ModeStep, WaitingStep, confirmFork, emptyConnectForm, sheetScreen, stepError, submitConnect, submitSetup, type AccountChoice } from './ConnectRunnerSheet.js';
 
 const PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----';
 const form = (over: Partial<ConnectForm> = {}): ConnectForm => ({
@@ -122,7 +122,7 @@ const accounts: GithubAccounts = { login: 'ermish', accounts: [
 const account = (over: Partial<GithubAccounts> = {}, choice: AccountChoice = { login: 'nekko-labs', kind: 'org', canGroup: true }) =>
   renderToStaticMarkup(<AccountStep accounts={{ ...accounts, ...over }} choice={choice} error={null} busy={false} onChoice={() => {}} onContinue={() => {}} onManual={() => {}} />);
 const confirm = (status: GithubSetupView, picked: string[], allowPublic = false) =>
-  renderToStaticMarkup(<ConfirmStep status={status} picks={{ repos: picked, allowPublic, label: '' }} error={null} busy={false} onTick={() => {}} onAllowPublic={() => {}} onLabel={() => {}} onContinue={() => {}} onRecheck={() => {}} />);
+  renderToStaticMarkup(<ConfirmStep status={status} picks={{ repos: picked, allowPublic, label: '' }} error={null} busy={false} onTick={() => {}} onAllowPublic={() => {}} onLabel={() => {}} onContinue={() => {}} onRecheck={() => {}} onCancel={() => {}} />);
 /** The named button's opening tag. */
 const button = (html: string, name: string) => html.match(new RegExp(`<button[^>]*>(?:(?!</button>).)*${name}`))?.[0] ?? '';
 
@@ -148,6 +148,16 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     expect(account()).not.toContain('Connect one repo on GitHub');
   });
 
+  it('an_org_whose_plan_cannot_be_seen_can_still_ask_for_one_repo', () => {
+    const offer = 'On the Free plan? Connect one repo instead';
+    expect(account({ login: null, accounts: [] }, { login: 'acme', kind: 'org', canGroup: null, typed: true })).toContain(offer);
+    expect(account({}, { login: 'hidden-plan', kind: 'org', canGroup: null })).toContain(offer);
+    expect(account({ login: null, accounts: [] }, { login: '', kind: 'org', canGroup: null, typed: true })).not.toContain(offer);
+    expect(account({}, { login: 'ermish', kind: 'user', canGroup: null })).not.toContain(offer);
+    expect(account()).not.toContain(offer);
+    expect(account({}, { login: 'free-org', kind: 'org', canGroup: false })).not.toContain(offer);
+  });
+
   it('waiting_step_shows_where_the_setup_is', () => {
     const wait = (step: 'create' | 'install') => renderToStaticMarkup(<WaitingStep status={setup({ step })} busy={false} onCancel={() => {}} onOpen={() => {}} />);
     for (const s of ['Finish on GitHub', 'Create the app', 'Choose repos and click Install', 'This updates by itself.', 'Cancel', 'Open GitHub again']) expect(wait('install')).toContain(s);
@@ -160,6 +170,7 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     for (const s of ['GitHub is connected', 'This Mac will serve these repos:', 'nekko-labs/app', 'nekko-labs/site', 'Private', 'Add repos on GitHub', 'Advanced: runner label']) expect(html).toContain(s);
     expect(html.match(/type="checkbox"/g)).toHaveLength(2);
     expect(button(html, 'Continue')).not.toContain('disabled=""');
+    expect(button(html, 'Cancel')).not.toBe('');
   });
 
   it('a_personal_account_picks_one_repo_by_radio', () => {
@@ -234,7 +245,7 @@ describe('ConnectRunnerSheet GitHub steps', () => {
   });
 
   it('the_screen_follows_the_daemon_and_the_manual_link', () => {
-    const screen = (over: Partial<Parameters<typeof sheetScreen>[0]>) => sheetScreen({ status: IDLE_GITHUB_SETUP, manual: false, moding: false, approval: null, ...over });
+    const screen = (over: Partial<Parameters<typeof sheetScreen>[0]>) => sheetScreen({ status: IDLE_GITHUB_SETUP, manual: false, moding: false, submitting: false, approval: null, ...over });
     expect(screen({})).toBe('account');
     expect(screen({ manual: true })).toBe('manual');
     expect(screen({ manual: true, status: setup({ step: 'install' }) })).toBe('manual');
@@ -243,6 +254,8 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     expect(screen({ status: setup() })).toBe('confirm');
     expect(screen({ status: setup(), moding: true })).toBe('mode');
     expect(screen({ status: setup({ step: 'failed', error: 'x' }) })).toBe('account');
+    // Connecting ends the daemon's setup, while the sheet still sets the mode and fork approval.
+    expect(screen({ submitting: true })).toBe('mode');
     // Connecting ends the daemon's setup; the fork step must outlive that.
     expect(screen({ approval: { done: false, url: 'u', runnerId: 'r1' } })).toBe('fork');
   });
@@ -293,6 +306,18 @@ describe('ConnectRunnerSheet GitHub steps', () => {
       const d = deps({ connectRunner: () => Promise.reject(new Error('This org cannot create runner groups.')) });
       expect(await submitSetup(setup(), { repos: ['nekko-labs/app'], allowPublic: false, label: '' }, 'doNotDisturb', d)).toEqual({ error: 'This org cannot create runner groups.' });
     });
+  });
+
+  it('saying_approval_is_on_settles_it_before_starting_the_runner', async () => {
+    const calls: string[] = [];
+    const deps = {
+      setForkApproval: vi.fn(async () => { calls.push('settle'); return { done: true, url: '' }; }),
+      setRunnerEnabled: vi.fn(async () => { calls.push('enable'); return view; }),
+    };
+    expect(await confirmFork('r1', deps)).toBe(view);
+    expect(deps.setForkApproval).toHaveBeenCalledWith({ runnerId: 'r1', confirmed: true });
+    expect(deps.setRunnerEnabled).toHaveBeenCalledWith('r1', true);
+    expect(calls).toEqual(['settle', 'enable']);
   });
 
   it('no_em_dash_in_the_new_steps', () => {

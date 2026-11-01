@@ -284,6 +284,9 @@ export function AccountStep({
           {free ? 'Connect one repo on GitHub' : 'Continue on GitHub'}
         </button>
       </div>
+      {choice.kind === 'org' && choice.canGroup === null && choice.login && (
+        <TextLink onClick={() => onContinue(true)}>On the Free plan? Connect one repo instead</TextLink>
+      )}
       <TextLink onClick={onManual}>Use an app I already have</TextLink>
     </div>
   );
@@ -318,7 +321,7 @@ export function WaitingStep({ status, busy, onCancel, onOpen }: { status: Github
 
 /** Frame 4: repos come from GitHub, so nothing is typed. */
 export function ConfirmStep({
-  status, picks, error, busy, onTick, onAllowPublic, onLabel, onContinue, onRecheck,
+  status, picks, error, busy, onTick, onAllowPublic, onLabel, onContinue, onRecheck, onCancel,
 }: {
   status: GithubSetupView;
   picks: SetupPicks;
@@ -329,6 +332,7 @@ export function ConfirmStep({
   onLabel(label: string): void;
   onContinue(): void;
   onRecheck(): void;
+  onCancel(): void;
 }) {
   const [advanced, setAdvanced] = useState(false);
   const one = servesOneRepo(status);
@@ -375,7 +379,8 @@ export function ConfirmStep({
         )
         : <TextLink onClick={() => setAdvanced(true)}>Advanced: runner label</TextLink>}
       <Alert error={error} />
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !picks.repos.length || (anyPublic && !picks.allowPublic)} onClick={onContinue}>Continue</button>
       </div>
     </div>
@@ -428,7 +433,7 @@ export function ForkStep({ url, busy, onOpen, onLeaveOff, onConfirmed }: { url: 
 
 export interface SetupDeps extends ConnectDeps {
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
-  setForkApproval(req: { runnerId: string }): Promise<ForkApproval>;
+  setForkApproval(req: { runnerId: string; confirmed?: boolean }): Promise<ForkApproval>;
 }
 export type PendingApproval = ForkApproval & { runnerId: string };
 
@@ -469,11 +474,19 @@ export async function submitSetup(
   }
 }
 
+/** The owner says approval is on: settle that with the daemon first, or it keeps the runner off. */
+export async function confirmFork(runnerId: string, deps: Pick<SetupDeps, 'setForkApproval' | 'setRunnerEnabled'>): Promise<RunnerView> {
+  await deps.setForkApproval({ runnerId, confirmed: true });
+  return deps.setRunnerEnabled(runnerId, true);
+}
+
 export type SheetScreen = 'manual' | 'account' | 'waiting' | 'confirm' | 'mode' | 'fork';
 
 /** Which screen shows. The daemon owns the setup; this sheet only owns the manual path and the last two steps. */
-export function sheetScreen({ status, manual, moding, approval }: { status: GithubSetupView; manual: boolean; moding: boolean; approval: PendingApproval | null }): SheetScreen {
+export function sheetScreen({ status, manual, moding, submitting, approval }: { status: GithubSetupView; manual: boolean; moding: boolean; submitting: boolean; approval: PendingApproval | null }): SheetScreen {
   if (approval) return 'fork';
+  // A connect ends the daemon's setup before this sheet has finished with the mode and fork approval.
+  if (submitting) return 'mode';
   if (manual) return 'manual';
   if (status.step === 'create' || status.step === 'install') return 'waiting';
   if (status.step === 'confirm') return moding ? 'mode' : 'confirm';
@@ -497,6 +510,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   const [picks, setPicks] = useState<SetupPicks>({ repos: [], allowPublic: false, label: '' });
   const [priority, setPriority] = useState<Priority>('doNotDisturb');
   const [moding, setModing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
 
   // Rejects on a daemon that predates this: the sheet then stays on the account step, and the manual path still works.
@@ -540,12 +554,14 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   const startRunner = async () => {
     if (busy) return;
     setBusy(true);
+    setSubmitting(true);
     setError(null);
     const reply = beginReply();
     const res = await submitSetup(status, picks, priority, {
       connectRunner: window.nekko.connectRunner, updateRunner: window.nekko.updateRunner, setRunnerEnabled: window.nekko.setRunnerEnabled, setForkApproval: window.nekko.setForkApproval, pushToast,
     });
     setBusy(false);
+    setSubmitting(false);
     if ('error' in res) {
       setError(res.error);
       return;
@@ -559,7 +575,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
     setBusy(true);
     const reply = beginReply();
     try {
-      reply(await window.nekko.setRunnerEnabled(approval.runnerId, true));
+      reply(await confirmFork(approval.runnerId, window.nekko));
     } catch (e) {
       pushToast('error', `Could not start the runner: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -583,7 +599,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
     onConnected();
   };
 
-  const screen = sheetScreen({ status, manual, moding, approval });
+  const screen = sheetScreen({ status, manual, moding, submitting, approval });
   return (
     <Modal title="Connect GitHub" onClose={close} overlayClassName="p-4" className="card w-[560px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
       {screen === 'manual' && (
@@ -629,6 +645,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
           onLabel={(label) => setPicks((p) => ({ ...p, label }))}
           onContinue={() => { setError(null); setModing(true); }}
           onRecheck={again}
+          onCancel={() => void window.nekko.githubCancel()}
         />
       )}
       {screen === 'mode' && <ModeStep status={status} priority={priority} error={error} busy={busy} onPriority={setPriority} onBack={() => { setError(null); setModing(false); }} onSubmit={() => void startRunner()} />}

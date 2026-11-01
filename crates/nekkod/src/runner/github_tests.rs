@@ -76,6 +76,7 @@ fn repo_record() -> RunnerRecord {
             repos: vec!["o/r".into()],
             allow_public: false,
             slug: None,
+            fork_approval_open: false,
         }),
         image: None,
     }
@@ -331,6 +332,7 @@ async fn connect_stores_the_key_only_after_github_accepts_it() {
             repos: vec!["o/r".into()],
             allow_public: false,
             slug: None,
+            fork_approval_open: false,
         }
     );
     assert!(!rec.config.id.is_empty());
@@ -343,7 +345,25 @@ async fn connect_can_leave_a_new_runner_off() {
         false,
     );
     let req = ConnectRequest { enabled: false, ..repo_request(false) };
-    assert!(!t.gh.connect(req, None).await.unwrap().config.settings.enabled);
+    let rec = t.gh.connect(req, None).await.unwrap();
+    assert!(!rec.config.settings.enabled);
+    assert!(!rec.github().unwrap().fork_approval_open, "a private repo has nothing to settle");
+}
+
+#[tokio::test]
+async fn a_public_runner_left_off_stays_held_until_approval_is_settled() {
+    let t = rig(
+        vec![token(), (200, json!({ "account": { "login": "O" } })), (200, json!({ "id": 11, "private": false }))],
+        false,
+    );
+    let req = ConnectRequest { enabled: false, ..repo_request(true) };
+    assert!(t.gh.connect(req, None).await.unwrap().github().unwrap().fork_approval_open);
+    // The manual path has no approval step, so it holds nothing back.
+    let t = rig(
+        vec![token(), (200, json!({ "account": { "login": "O" } })), (200, json!({ "id": 11, "private": false }))],
+        false,
+    );
+    assert!(!t.gh.connect(repo_request(true), None).await.unwrap().github().unwrap().fork_approval_open);
 }
 
 #[tokio::test]

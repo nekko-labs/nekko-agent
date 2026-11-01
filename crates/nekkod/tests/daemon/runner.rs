@@ -134,6 +134,35 @@ async fn github_setup_channels_serve_the_local_page() {
 
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
+async fn fork_approval_set_through_gh_releases_a_held_runner() {
+    use std::os::unix::fs::PermissionsExt;
+    let data = tempfile::tempdir().unwrap();
+    let runners = data.path().join("runners");
+    std::fs::create_dir_all(&runners).unwrap();
+    let record = json!([{
+        "id": "r1",
+        "scope": { "kind": "org", "org": "acme" },
+        "label": "nekko-cloud-mac",
+        "settings": { "enabled": false },
+        "github": { "appId": 424242, "installationId": 9, "groupId": 3, "repos": ["acme/a"], "allowPublic": true, "forkApprovalOpen": true },
+    }]);
+    std::fs::write(runners.join("runners.json"), record.to_string()).unwrap();
+    let gh = data.path().join("fake-gh");
+    std::fs::write(&gh, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let d = start_with_env(data.path(), json!({}), &[("NEKKO_GH_PATH", gh.to_str())]);
+
+    let (status, _) = post(d.port, "runner:setEnabled", json!(["r1", true]), Some(TOKEN)).await;
+    assert!(status >= 400, "held until approval is settled");
+    let (status, approval) = post(d.port, "runner:setForkApproval", json!([{ "runnerId": "r1" }]), Some(TOKEN)).await;
+    assert_eq!((status, approval["done"].as_bool()), (200, Some(true)), "{approval}");
+    let (status, on) = post(d.port, "runner:setEnabled", json!(["r1", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{on}");
+    assert_eq!(on["config"]["settings"]["enabled"], true);
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
 async fn gitlab_record_lists_and_removes() {
     let data = tempfile::tempdir().unwrap();
     let runners = data.path().join("runners");

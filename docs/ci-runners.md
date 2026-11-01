@@ -69,13 +69,15 @@ in this Mac's keychain and never shown.
 outside contributors**. The runner starts off, and turns on once GitHub holds outside contributors'
 jobs for your approval. Nekko sets that for you: a repo's app can, and for an org it uses `gh` when
 that is signed in with enough access. Otherwise the sheet links to the setting, and the runner stays
-off until you say it is on. See [Use it in a workflow](#use-it-in-a-workflow) for what else a public
+off until you confirm it is on. If you leave it off, turning it on from the runner card is refused
+until you have: choose **Connect GitHub** again to finish. See [Use it in a workflow](#use-it-in-a-workflow) for what else a public
 repo needs.
 
 **A Free org.** An org on GitHub's Free plan cannot limit a runner with runner groups, so Nekko
 offers one repo instead, and that app gets repository Administration. Without `gh`, Nekko can't see
-the plan: Confirm stops with the reason and a link to delete the app. Delete it, connect again and
-choose one repo.
+the plan, so choose **On the Free plan? Connect one repo instead** on the first screen. If you don't,
+Confirm stops with the reason and a link to delete the app. Delete it, connect again and choose that
+link.
 
 ## Use an app you already have
 

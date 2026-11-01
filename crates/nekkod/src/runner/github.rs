@@ -439,6 +439,7 @@ impl<H: Http> GitHub<H> {
                 repos,
                 allow_public: req.allow_public,
                 slug: None,
+                fork_approval_open: req.allow_public && !req.enabled,
             }),
             image: None,
         })

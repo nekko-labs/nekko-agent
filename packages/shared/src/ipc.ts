@@ -1101,7 +1101,8 @@ export interface NekkoApi {
   githubStatus(): Promise<GithubSetupView>;
   /** Stops waiting. The app and its key stay, so the next start resumes. */
   githubCancel(): Promise<GithubSetupView>;
-  setForkApproval(req: { runnerId: string }): Promise<ForkApproval>;
+  /** `confirmed`: the owner set it themselves, so GitHub is not asked. Either way, `done` lets the runner start. */
+  setForkApproval(req: { runnerId: string; confirmed?: boolean }): Promise<ForkApproval>;
 
   listConnectors(): Promise<ConnectorConfig[]>;
   connectConnector(kind: ConnectorKind, token: string, settings?: Record<string, string>): Promise<ConnectorConfig[]>;

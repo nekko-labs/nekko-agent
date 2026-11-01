@@ -62,6 +62,7 @@ fn record(id: &str, priority: Priority, slots: u8) -> RunnerRecord {
             repos: vec![],
             allow_public: false,
             slug: None,
+            fork_approval_open: false,
         }),
         image: None,
     }
@@ -1151,6 +1152,31 @@ async fn reconnecting_with_the_runner_held_off_turns_it_off() {
     again.config.settings.enabled = true;
     runners.save_connected(again, None).await.unwrap();
     assert!(!crate::runner::store::Store::new(dir.path()).load()[0].config.settings.enabled);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_open_fork_approval_holds_the_runner_off_until_it_is_settled() {
+    let Rig { runners, .. } = runners_rig(harness(vec![]));
+    let mut held = record("r2", Priority::RunnerFirst, 1);
+    held.config.scope = Scope::Repo { owner: "o".into(), repo: "public".into() };
+    held.config.settings.enabled = false;
+    held.link = Link::Github(GithubLink { fork_approval_open: true, ..held.github().unwrap().clone() });
+    runners.save_connected(held, None).await.unwrap();
+
+    let id = serde_json::json!("r2");
+    let on = serde_json::json!(true);
+    let err = runners.route("runner:setEnabled", &[id.clone(), on.clone()]).await.unwrap_err();
+    assert!(err.contains("Connect GitHub"), "{err}");
+    let patch = serde_json::json!({ "enabled": true });
+    assert!(runners.route("runner:update", &[id.clone(), patch]).await.is_err());
+    // Anything else about the runner can still change.
+    let tweak = serde_json::json!({ "maxJobMinutes": 60 });
+    assert!(runners.route("runner:update", &[id.clone(), tweak]).await.is_ok());
+
+    let said = serde_json::json!({ "runnerId": "r2", "confirmed": true });
+    runners.route("runner:setForkApproval", &[said]).await.unwrap();
+    let view = runners.route("runner:setEnabled", &[id, on]).await.unwrap();
+    assert_eq!(view["config"]["settings"]["enabled"], true);
 }
 
 /// A 16 GB Mac: room for exactly one 8 GB VM, and the VM's own memory shows as used.

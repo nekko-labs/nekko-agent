@@ -241,6 +241,7 @@ fn saved(slug: Option<&str>) -> RunnerRecord {
             repos: vec!["acme/app".into()],
             allow_public: false,
             slug: slug.map(str::to_string),
+            fork_approval_open: false,
         }),
         image: None,
     }
@@ -373,7 +374,8 @@ async fn a_pending_app_without_its_key_is_not_resumed() {
     FileVault::new(t.secrets.clone()).delete(&key_name(7));
     assert_eq!(t.setup.status().await.step, Step::Idle);
     assert!(url_of(&t.start().await).contains("/start?t="));
-    assert!(!t.dir.path().join("pending-app.json").exists());
+    // A locked keychain reads as no key too, so the record of the app stays.
+    assert!(t.dir.path().join("pending-app.json").exists());
 }
 
 #[tokio::test]
@@ -551,12 +553,50 @@ async fn a_conversion_error_never_contains_the_code_or_pem() {
 async fn a_deleted_app_is_forgotten_so_the_next_start_can_create_one() {
     let t = rig(vec![(401, json!({ "message": "Integration not found" }))]);
     t.seed_pending("acme");
-    assert_eq!(t.start().await["url"], Value::Null);
-    let v = t.setup.view();
-    assert_eq!(v.step, Step::Failed);
-    assert!(v.error.unwrap().contains("Start again"));
+    assert!(url_of(&t.start().await).contains("/start?t="));
+    assert_eq!(t.setup.view().step, Step::Create);
     assert!(!t.dir.path().join("pending-app.json").exists());
     assert_eq!(t.key(7), None);
+}
+
+#[tokio::test]
+async fn a_404_for_the_app_counts_as_deleted() {
+    let t = rig(vec![(404, json!({ "message": "Not Found" }))]);
+    t.seed_pending("acme");
+    assert!(url_of(&t.start().await).contains("/start?t="));
+    assert!(!t.dir.path().join("pending-app.json").exists());
+}
+
+#[tokio::test]
+async fn a_saved_runners_deleted_app_makes_way_for_a_new_one() {
+    let t = rig(vec![(401, json!({ "message": "Integration not found" }))]);
+    FileVault::new(t.secrets.clone()).set(&key_name(7), PEM).unwrap();
+    let req = StartRequest { owner: "acme".into(), kind: Kind::Org, repo_admin: false };
+    let started = t.setup.start(req, &[saved(Some("nekko-runner-acme"))]).await.unwrap();
+    assert!(url_of(&started).contains("/start?t="), "{started}");
+    assert_eq!(t.setup.view().error, None);
+    assert_eq!(t.key(7).as_deref(), Some(PEM), "the saved runner still holds that key");
+}
+
+#[tokio::test]
+async fn a_manual_runner_does_not_hide_a_reusable_app() {
+    let t = rig(vec![installed(), inst_token(), repos()]);
+    FileVault::new(t.secrets.clone()).set(&key_name(7), PEM).unwrap();
+    let req = StartRequest { owner: "acme".into(), kind: Kind::Org, repo_admin: false };
+    let records = [saved(None), saved(Some("nekko-runner-acme"))];
+    assert_eq!(t.setup.start(req, &records).await.unwrap()["url"], Value::Null);
+    assert_eq!(t.setup.view().step, Step::Confirm);
+}
+
+#[test]
+fn gh_is_found_where_a_dock_launch_cannot_see_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().join("gh");
+    std::fs::write(&real, "").unwrap();
+    let (real, missing) = (real.to_str().unwrap(), "/nonexistent/gh");
+    assert_eq!(gh_path(None, &[missing, real]), real);
+    assert_eq!(gh_path(None, &[missing]), "gh");
+    assert_eq!(gh_path(Some("/custom/gh".into()), &[real]), "/custom/gh");
 }
 
 #[tokio::test]

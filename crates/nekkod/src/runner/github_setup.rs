@@ -243,6 +243,12 @@ pub struct GithubSetup<H: Http> {
     op: tokio::sync::Mutex<()>,
 }
 
+/// Where `gh` is. An app started from the Dock gets a bare PATH, which misses Homebrew's.
+pub fn gh_path(env: Option<String>, candidates: &[&str]) -> String {
+    env.or_else(|| candidates.iter().find(|p| Path::new(p).is_file()).map(|p| p.to_string()))
+        .unwrap_or_else(|| "gh".into())
+}
+
 fn random_hex(bytes: usize) -> Result<String, String> {
     let mut b = vec![0u8; bytes];
     getrandom::fill(&mut b).map_err(|e| format!("Could not make a random value: {e}"))?;
@@ -351,14 +357,9 @@ impl<H: Http + 'static> GithubSetup<H> {
         self.gh.vault().get(&key_name(app_id)).is_some()
     }
 
-    /// The pending app, if it can still be used; without its key it never can.
+    /// The pending app, if its key can be read. The file stays when it cannot: a locked keychain reads as no key.
     fn usable_pending(&self) -> Option<PendingApp> {
-        let app = self.read_pending()?;
-        if self.has_key(app.app_id) {
-            return Some(app);
-        }
-        let _ = std::fs::remove_file(&self.pending);
-        None
+        self.read_pending().filter(|app| self.has_key(app.app_id))
     }
 
     fn write_pending(&self, app: &PendingApp) -> std::io::Result<()> {
@@ -376,25 +377,33 @@ impl<H: Http + 'static> GithubSetup<H> {
     /// An app this owner already has: pending, or saved with a runner and its slug.
     fn saved_app(&self, req: &StartRequest, records: &[RunnerRecord]) -> Option<PendingApp> {
         let pending = self.usable_pending().filter(|p| p.owner.eq_ignore_ascii_case(&req.owner));
-        pending
-            .or_else(|| {
-                records.iter().find_map(|r| {
-                    let link = r.github()?;
-                    let (owner, org_runner) = match &r.config.scope {
-                        Scope::Repo { owner, .. } => (owner, false),
-                        Scope::Org { org } => (org, true),
-                    };
-                    let reusable = owner.eq_ignore_ascii_case(&req.owner) && self.has_key(link.app_id);
-                    reusable.then(|| PendingApp {
-                        app_id: link.app_id,
-                        slug: link.slug.clone().unwrap_or_default(),
-                        owner: owner.clone(),
-                        kind: if org_runner { Kind::Org } else { req.kind },
-                        repo_admin: !org_runner && req.kind == Kind::Org,
-                    })
+        pending.or_else(|| {
+            records.iter().find_map(|r| {
+                let link = r.github()?;
+                let slug = link.slug.clone()?;
+                let (owner, org_runner) = match &r.config.scope {
+                    Scope::Repo { owner, .. } => (owner, false),
+                    Scope::Org { org } => (org, true),
+                };
+                let reusable = owner.eq_ignore_ascii_case(&req.owner) && self.has_key(link.app_id);
+                reusable.then(|| PendingApp {
+                    app_id: link.app_id,
+                    slug,
+                    owner: owner.clone(),
+                    kind: if org_runner { Kind::Org } else { req.kind },
+                    repo_admin: !org_runner && req.kind == Kind::Org,
                 })
             })
-            .filter(|app| !app.slug.is_empty())
+        })
+    }
+
+    /// GitHub no longer has the app. A pending one goes with it; a saved runner keeps what it holds.
+    fn app_gone(&self, app_id: u64) -> Poll {
+        if self.read_pending().is_some_and(|p| p.app_id == app_id) {
+            let _ = std::fs::remove_file(&self.pending);
+            self.gh.vault().delete(&key_name(app_id));
+        }
+        Poll::Stop(APP_GONE.to_string())
     }
 
     /// Whether the app is installed on `owner` yet, and with which repos.
@@ -406,18 +415,14 @@ impl<H: Http + 'static> GithubSetup<H> {
         let Ok((status, list)) = self.gh.api("GET", "/app/installations?per_page=100", &jwt, None).await else {
             return Poll::Waiting;
         };
+        // shortcut: `Response` carries no error code, so a deleted app is recognized by GitHub's
+        // message ("Integration not found"); any other 401 (a skewed clock) must not lose the app.
+        let named_gone = list["message"].as_str().is_some_and(|m| m.to_ascii_lowercase().contains("not found"));
+        if status == 404 || (status == 401 && named_gone) {
+            return self.app_gone(app_id);
+        }
         if status == 401 {
-            // shortcut: `Response` carries no error code, so a deleted app is recognized by GitHub's
-            // message ("Integration not found"); any other 401 (a skewed clock) must not lose the app.
-            let gone = list["message"].as_str().is_some_and(|m| m.to_ascii_lowercase().contains("not found"));
-            if !gone {
-                return Poll::Stop(super::github::REVOKED.to_string());
-            }
-            if self.read_pending().is_some_and(|p| p.app_id == app_id) {
-                let _ = std::fs::remove_file(&self.pending);
-                self.gh.vault().delete(&key_name(app_id));
-            }
-            return Poll::Stop(APP_GONE.to_string());
+            return Poll::Stop(super::github::REVOKED.to_string());
         }
         if !ok(status) {
             return Poll::Waiting;
@@ -601,10 +606,14 @@ impl<H: Http + 'static> GithubSetup<H> {
         if let Some(url) = self.current(&req) {
             return Ok(json!({ "url": url }));
         }
-        let url = match self.saved_app(&req, records) {
-            Some(app) => self.resume(app).await,
-            None => Some(self.create(req).await?),
+        let Some(app) = self.saved_app(&req, records) else {
+            return Ok(json!({ "url": self.create(req).await? }));
         };
+        let url = self.resume(app).await;
+        // Deleted on GitHub: a saved runner would find the same app every time, so make a new one.
+        if self.view().error.as_deref() == Some(APP_GONE) {
+            return Ok(json!({ "url": self.create(req).await? }));
+        }
         Ok(json!({ "url": url }))
     }
 
