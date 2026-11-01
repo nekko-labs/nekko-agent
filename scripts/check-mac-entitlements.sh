@@ -4,8 +4,9 @@
 # Only Contents/Resources/bin/nekko-vm may carry com.apple.security.virtualization
 # (apps/desktop/scripts/sign-mac.cjs signs it with crates/nekkod/vm/nekko-vm.entitlements).
 # Reads the entitlements of the app, every helper app under Contents/Frameworks and
-# every file under Contents/Resources/bin. A file codesign cannot read fails the
-# check: an unreadable signature is never a pass. See docs/signing.md.
+# every file under Contents/Resources/bin, except bin/runner-image, which holds only
+# guest scripts (text, so never signed). A file codesign cannot read fails the check:
+# an unreadable signature is never a pass. See docs/signing.md.
 set -euo pipefail
 
 app="${1:-}"
@@ -43,7 +44,7 @@ while IFS= read -r -d '' path; do
 done < <(
   printf '%s\0' "$app"
   find "$app/Contents/Frameworks" -name '*.app' -type d -prune -print0 2>/dev/null || true
-  find "$app/Contents/Resources/bin" -type f -print0
+  find "$app/Contents/Resources/bin" -path '*/bin/runner-image' -prune -o -type f -print0
 )
 
 # find -type f skips a symlink, so a symlinked nekko-vm would never be read.

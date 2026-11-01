@@ -8,8 +8,10 @@ use super::lan;
 use super::net::{self, NetConfig};
 use nekko_runner::HostNets;
 use serde_json::Value;
+use std::ffi::OsString;
 use std::future::Future;
 use std::io;
+use std::net::{SocketAddr, TcpListener};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
@@ -28,6 +30,48 @@ pub struct RunSpec {
     pub cpus: u8,
     pub memory_mb: u32,
     pub seed: PathBuf,
+}
+
+/// One image-build VM (decision 0038): never a job. The only way to give a VM a
+/// path in from the host, through [`HelperVm::start_build`].
+#[derive(Debug)]
+pub struct BuildSpec {
+    pub bundle: PathBuf,
+    pub cpus: u8,
+    pub memory_mb: u32,
+    /// The admin to create at first boot, and the file holding its password
+    /// (the helper deletes it). macOS 27 hosts and guests only.
+    pub first_boot: Option<(String, PathBuf)>,
+    /// Forwarded to the guest's port 22.
+    pub ssh_port_listener: TcpListener,
+}
+
+/// A job VM's network: the filtered NAT and nothing else (decision 0022).
+pub fn job_net_config(dns_upstream: Vec<SocketAddr>) -> NetConfig {
+    NetConfig { dns_upstream, ..Default::default() }
+}
+
+/// The `*.app` around `xcode-select -p`; `None` for the Command Line Tools.
+pub fn xcode_source(developer_dir: &str) -> Option<PathBuf> {
+    Path::new(developer_dir.trim()).ancestors().find(|p| p.extension().is_some_and(|e| e == "app")).map(PathBuf::from)
+}
+
+/// The `tar -s` value that lands `app` as `Xcode.app`, for a beta or a renamed
+/// Xcode; `None` when it already has that name. `provision.sh` and every
+/// workflow expect `/Applications/Xcode.app`.
+pub fn tar_rename_arg(app: &Path) -> Option<String> {
+    let name = app.file_name()?.to_str()?;
+    if name == "Xcode.app" {
+        return None;
+    }
+    let mut escaped = String::new();
+    for c in name.chars() {
+        if r".[]*^$\/".contains(c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    Some(format!("/^{escaped}/Xcode.app/"))
 }
 
 /// Why a VM stopped: the helper's `reason`. A helper that exits without a
@@ -134,11 +178,109 @@ impl HelperVm {
         let text = String::from_utf8_lossy(&out.stdout);
         serde_json::from_str(text.trim()).map_err(|_| format!("nekko-vm said: {}", text.trim()))
     }
+
+    /// An image-build VM, with `spec`'s listener forwarded to the guest's SSH.
+    /// Inherent on purpose: code generic over [`Vm`], which is all job code, cannot reach it.
+    pub async fn start_build(&self, spec: BuildSpec) -> Result<RunHandle, String> {
+        let mut args = run_args(&spec.bundle, spec.cpus, spec.memory_mb);
+        if let Some((user, password_file)) = spec.first_boot {
+            args.extend([
+                "--first-boot-user".into(),
+                user.into(),
+                "--first-boot-password-file".into(),
+                password_file.into(),
+            ]);
+        }
+        let cfg = NetConfig {
+            dns_upstream: self.dns().await?,
+            forward: Some((spec.ssh_port_listener, 22)),
+            ..Default::default()
+        };
+        self.boot(args, cfg).await
+    }
+
+    /// The resolvers for the NAT, read for the physical interface.
+    async fn dns(&self) -> Result<Vec<SocketAddr>, String> {
+        let physical = self.egress.read().ok().and_then(|e| e.as_ref()?.physical.as_ref().map(|p| p.1));
+        let index = physical.ok_or("no physical network interface; the job VM would have no network")?;
+        // Unreadable resolvers fall back to FALLBACK_DNS, so a failure here is not fatal.
+        let mut scutil = tokio::process::Command::new("scutil");
+        scutil.arg("--dns");
+        let scutil = output_within(scutil, self.scutil_timeout, "scutil")
+            .await
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default();
+        let host = self.host.read().map_err(|_| "the host networks are unreadable")?;
+        Ok(lan::dns_upstreams(&scutil, index, &host))
+    }
+
+    /// Spawns `nekko-vm <args>` with the NAT on fd 3 and waits for `started`.
+    /// Everything fallible happens before the helper exists, so no early
+    /// return leaves a VM running.
+    async fn boot(&self, args: Vec<OsString>, cfg: NetConfig) -> Result<RunHandle, String> {
+        let err = |e: io::Error| format!("cannot make the VM's network socket: {e}");
+        let (vm_end, nat_end) = std::os::unix::net::UnixDatagram::pair().map_err(err)?;
+        net::widen_buffers(&vm_end).map_err(err)?;
+        nat_end.set_nonblocking(true).map_err(err)?;
+        let nat_end = tokio::net::UnixDatagram::from_std(nat_end).map_err(err)?;
+
+        let vm_fd = vm_end.as_raw_fd();
+        let mut cmd = std::process::Command::new(&self.helper);
+        cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+        // SAFETY: only async-signal-safe calls between fork and exec.
+        unsafe {
+            cmd.pre_exec(move || {
+                // dup2 clears close-on-exec on the copy; if the fd is already 3, clear it by hand.
+                let rc = if vm_fd == 3 { libc::fcntl(3, libc::F_SETFD, 0) } else { libc::dup2(vm_fd, 3) };
+                if rc < 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
+            });
+        }
+        let mut child = tokio::process::Command::from(cmd)
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| format!("cannot run nekko-vm: {e}"))?;
+        drop(vm_end);
+        let Some(out) = child.stdout.take() else {
+            let _ = child.kill().await;
+            return Err("nekko-vm has no output".into());
+        };
+        let mut lines = BufReader::new(out).lines();
+        let started = tokio::time::timeout(self.start_timeout, async {
+            while let Ok(Some(line)) = lines.next_line().await {
+                match event(&line) {
+                    Some(Event::Started) => return Ok(()),
+                    Some(Event::Stopped(why)) => return Err(format!("the VM did not start: {why:?}")),
+                    None => {}
+                }
+            }
+            Err("nekko-vm exited before the VM started".to_owned())
+        })
+        .await
+        .unwrap_or_else(|_| Err(format!("the VM did not start within {} s", self.start_timeout.as_secs())));
+        if let Err(e) = started {
+            let _ = child.kill().await;
+            return Err(e);
+        }
+
+        let (done_tx, done_rx) = oneshot::channel();
+        let (stop_tx, stop_rx) = mpsc::unbounded_channel();
+        let nat = net::serve(nat_end, self.host.clone(), self.egress.clone(), cfg);
+        tokio::spawn(supervise(child, lines, nat, stop_rx, self.stop_grace, done_tx));
+        Ok(RunHandle::new(done_rx, stop_tx))
+    }
+}
+
+/// `nekko-vm run`'s common flags. fd 3 is the NAT socket `HelperVm::boot` hands over.
+fn run_args(bundle: &Path, cpus: u8, memory_mb: u32) -> Vec<OsString> {
+    let mut args: Vec<OsString> = vec!["run".into(), "--bundle".into(), bundle.into()];
+    args.extend(["--cpus".into(), cpus.to_string().into(), "--memory-mb".into(), memory_mb.to_string().into()]);
+    args.extend(["--net-fd".into(), "3".into()]);
+    args
 }
 
 /// Runs `cmd` to completion within `limit`. On a timeout the child is killed
 /// and reaped before the error returns, so nothing is left running.
-async fn output_within(
+pub(super) async fn output_within(
     mut cmd: tokio::process::Command,
     limit: Duration,
     what: &str,
@@ -239,79 +381,9 @@ impl Vm for HelperVm {
     }
 
     async fn start(&self, spec: RunSpec) -> Result<RunHandle, String> {
-        // Everything fallible happens before the helper exists, so no early
-        // return leaves a VM running.
-        let physical = self.egress.read().ok().and_then(|e| e.as_ref()?.physical.as_ref().map(|p| p.1));
-        let index = physical.ok_or("no physical network interface; the job VM would have no network")?;
-        // Unreadable resolvers fall back to FALLBACK_DNS, so a failure here is not fatal.
-        let mut scutil = tokio::process::Command::new("scutil");
-        scutil.arg("--dns");
-        let scutil = output_within(scutil, self.scutil_timeout, "scutil")
-            .await
-            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-            .unwrap_or_default();
-        let dns_upstream = {
-            let host = self.host.read().map_err(|_| "the host networks are unreadable")?;
-            lan::dns_upstreams(&scutil, index, &host)
-        };
-        let cfg = NetConfig { dns_upstream, ..Default::default() };
-        let err = |e: io::Error| format!("cannot make the VM's network socket: {e}");
-        let (vm_end, nat_end) = std::os::unix::net::UnixDatagram::pair().map_err(err)?;
-        net::widen_buffers(&vm_end).map_err(err)?;
-        nat_end.set_nonblocking(true).map_err(err)?;
-        let nat_end = tokio::net::UnixDatagram::from_std(nat_end).map_err(err)?;
-
-        let vm_fd = vm_end.as_raw_fd();
-        let mut cmd = std::process::Command::new(&self.helper);
-        cmd.arg("run")
-            .arg("--bundle")
-            .arg(&spec.bundle)
-            .args(["--cpus", &spec.cpus.to_string(), "--memory-mb", &spec.memory_mb.to_string(), "--net-fd", "3"])
-            .arg("--seed")
-            .arg(&spec.seed)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null());
-        // SAFETY: only async-signal-safe calls between fork and exec.
-        unsafe {
-            cmd.pre_exec(move || {
-                // dup2 clears close-on-exec on the copy; if the fd is already 3, clear it by hand.
-                let rc = if vm_fd == 3 { libc::fcntl(3, libc::F_SETFD, 0) } else { libc::dup2(vm_fd, 3) };
-                if rc < 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
-            });
-        }
-        let mut child = tokio::process::Command::from(cmd)
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| format!("cannot run nekko-vm: {e}"))?;
-        drop(vm_end);
-        let Some(out) = child.stdout.take() else {
-            let _ = child.kill().await;
-            return Err("nekko-vm has no output".into());
-        };
-        let mut lines = BufReader::new(out).lines();
-        let started = tokio::time::timeout(self.start_timeout, async {
-            while let Ok(Some(line)) = lines.next_line().await {
-                match event(&line) {
-                    Some(Event::Started) => return Ok(()),
-                    Some(Event::Stopped(why)) => return Err(format!("the VM did not start: {why:?}")),
-                    None => {}
-                }
-            }
-            Err("nekko-vm exited before the VM started".to_owned())
-        })
-        .await
-        .unwrap_or_else(|_| Err(format!("the VM did not start within {} s", self.start_timeout.as_secs())));
-        if let Err(e) = started {
-            let _ = child.kill().await;
-            return Err(e);
-        }
-
-        let (done_tx, done_rx) = oneshot::channel();
-        let (stop_tx, stop_rx) = mpsc::unbounded_channel();
-        let nat = net::serve(nat_end, self.host.clone(), self.egress.clone(), cfg);
-        tokio::spawn(supervise(child, lines, nat, stop_rx, self.stop_grace, done_tx));
-        Ok(RunHandle::new(done_rx, stop_tx))
+        let mut args = run_args(&spec.bundle, spec.cpus, spec.memory_mb);
+        args.extend(["--seed".into(), spec.seed.into()]);
+        self.boot(args, job_net_config(self.dns().await?)).await
     }
 
     async fn count_vms(&self) -> Result<u8, String> {

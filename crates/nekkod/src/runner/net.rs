@@ -92,10 +92,10 @@ pub struct NetConfig {
     /// NAT probes every [`TCP_KEEP_ALIVE`], so a live idle guest keeps its
     /// connection; a gone or half-open one (a SYN never completed) does not.
     pub tcp_timeout: Duration,
-    /// Spike and tests only, never in the shipped daemon (decision 0022: no
-    /// host-to-guest path): each connection accepted on this listener is
-    /// forwarded to the guest's port, from a smoltcp client socket.
-    #[cfg(any(test, feature = "spike"))]
+    /// Image builds only (decision 0038): each connection accepted on this
+    /// listener is forwarded to the guest's port, from a smoltcp client socket.
+    /// Job VMs never set it (decision 0022: no host-to-guest path), see
+    /// [`super::vm::job_net_config`].
     pub forward: Option<(std::net::TcpListener, u16)>,
 }
 
@@ -106,7 +106,6 @@ impl Default for NetConfig {
             dns_upstream: vec![],
             connect_timeout: Duration::from_secs(15),
             tcp_timeout: Duration::from_secs(60),
-            #[cfg(any(test, feature = "spike"))]
             forward: None,
         }
     }
@@ -184,7 +183,6 @@ pub async fn serve_with<C: Connector>(
 ) -> io::Result<()> {
     widen_buffers(&sock)?;
     let mut nat = Nat::new(host, cfg, Arc::new(connector));
-    #[cfg(any(test, feature = "spike"))]
     nat.start_forward()?;
     let wake = nat.wake.clone();
     let mut buf = vec![0u8; 64 * 1024];
@@ -309,7 +307,6 @@ impl<C> Drop for Nat<C> {
         for flow in self.flows.values() {
             flow.task.abort();
         }
-        #[cfg(any(test, feature = "spike"))]
         if let Some(f) = &self.forward {
             f.task.abort();
         }
@@ -333,12 +330,10 @@ struct Nat<C> {
     /// DHCP leases the one guest address to the first client MAC seen.
     lease_mac: Option<EthernetAddress>,
     last_sweep: std::time::Instant,
-    #[cfg(any(test, feature = "spike"))]
     forward: Option<Forward>,
 }
 
-/// The spike's host-to-guest port forward (see [`NetConfig::forward`]).
-#[cfg(any(test, feature = "spike"))]
+/// The image build's host-to-guest port forward (see [`NetConfig::forward`]).
 struct Forward {
     accepted: mpsc::Receiver<TcpStream>,
     guest_port: u16,
@@ -377,7 +372,6 @@ impl<C: Connector> Nat<C> {
             guest_mac: None,
             lease_mac: None,
             last_sweep: std::time::Instant::now(),
-            #[cfg(any(test, feature = "spike"))]
             forward: None,
         }
     }
@@ -575,7 +569,6 @@ impl<C: Connector> Nat<C> {
         self.flows.insert(key, Flow { kind: Kind::Tcp(flow), task, last: std::time::Instant::now() });
     }
 
-    #[cfg(any(test, feature = "spike"))]
     fn start_forward(&mut self) -> io::Result<()> {
         let Some((listener, guest_port)) = self.cfg.forward.take() else { return Ok(()) };
         listener.set_nonblocking(true)?;
@@ -595,7 +588,6 @@ impl<C: Connector> Nat<C> {
     }
 
     /// Opens a smoltcp client socket to the guest for each accepted host connection.
-    #[cfg(any(test, feature = "spike"))]
     fn accept_forwards(&mut self) {
         let Some(f) = &mut self.forward else { return };
         let mut streams = vec![];
@@ -629,7 +621,6 @@ impl<C: Connector> Nat<C> {
     /// Moves bytes between smoltcp sockets and host tasks, delivers UDP
     /// replies, and ends finished or idle flows.
     fn pump(&mut self) {
-        #[cfg(any(test, feature = "spike"))]
         self.accept_forwards();
         let mut done = vec![];
         for (key, flow) in &mut self.flows {

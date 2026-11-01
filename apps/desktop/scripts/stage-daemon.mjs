@@ -75,6 +75,13 @@ function stageVmHelper(dirs) {
     }
   }
   for (const dir of dirs.slice(1)) copyFileSync(out, join(dir, 'nekko-vm'));
+  // The guest scripts the image builder uploads (crates/nekkod/src/runner/image.rs).
+  for (const dir of dirs) {
+    mkdirSync(join(dir, 'runner-image'), { recursive: true });
+    for (const name of ['provision.sh', 'nekko-runner-boot.sh', 'dev.nekkolabs.runner-boot.plist']) {
+      copyFileSync(join(repo, 'scripts', 'runner-image', name), join(dir, 'runner-image', name));
+    }
+  }
   console.log(`staged nekko-vm -> ${dirs.join(', ')}`);
   return true;
 }

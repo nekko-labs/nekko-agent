@@ -253,3 +253,107 @@ fn nofile_target_values() {
     assert_eq!(nofile_target(256, 4096), 4096);
     assert_eq!(nofile_target(20_000, u64::MAX), 20_000);
 }
+
+#[test]
+fn the_job_network_never_has_a_forward() {
+    assert!(job_net_config(vec![]).forward.is_none());
+    let dns: std::net::SocketAddr = "10.0.0.1:53".parse().unwrap();
+    assert_eq!(job_net_config(vec![dns]).dns_upstream, vec![dns]);
+}
+
+#[test]
+fn xcode_source_is_the_enclosing_app() {
+    assert_eq!(
+        xcode_source("/Applications/Xcode-beta.app/Contents/Developer"),
+        Some(PathBuf::from("/Applications/Xcode-beta.app"))
+    );
+    assert_eq!(
+        xcode_source("/Applications/Xcode.app/Contents/Developer\n"),
+        Some(PathBuf::from("/Applications/Xcode.app"))
+    );
+    assert_eq!(xcode_source("/Library/Developer/CommandLineTools"), None);
+    assert_eq!(xcode_source(""), None);
+}
+
+#[test]
+fn tar_rename_lands_any_app_as_xcode_app() {
+    assert_eq!(tar_rename_arg(Path::new("/Applications/Xcode.app")), None);
+    assert_eq!(tar_rename_arg(Path::new("/Applications/Xcode-beta.app")).unwrap(), r"/^Xcode-beta\.app/Xcode.app/");
+    assert_eq!(tar_rename_arg(Path::new("/Applications/Xcode 27.2.app")).unwrap(), r"/^Xcode 27\.2\.app/Xcode.app/");
+}
+
+/// `tar_rename_arg` against the real tar: the path, a hard link's target, and nothing else moves.
+#[test]
+fn tar_rename_works_with_the_real_tar() {
+    use std::process::Command;
+    let dir = tempfile::tempdir().unwrap();
+    let app = dir.path().join("Xcode-beta.app");
+    std::fs::create_dir_all(app.join("Contents")).unwrap();
+    std::fs::write(app.join("Contents/a"), "x").unwrap();
+    std::fs::hard_link(app.join("Contents/a"), app.join("Contents/b")).unwrap();
+    std::os::unix::fs::symlink("a", app.join("Contents/link")).unwrap();
+    let out = dir.path().join("out");
+    std::fs::create_dir(&out).unwrap();
+    let tar = dir.path().join("t.tar");
+    let made = Command::new("tar")
+        .arg("-C")
+        .arg(dir.path())
+        .args(["-s", &tar_rename_arg(&app).unwrap(), "-cf"])
+        .arg(&tar)
+        .arg("Xcode-beta.app")
+        .status()
+        .unwrap();
+    assert!(made.success());
+    assert!(Command::new("tar").arg("-C").arg(&out).arg("-xpf").arg(&tar).status().unwrap().success());
+    let landed = out.join("Xcode.app/Contents");
+    assert_eq!(std::fs::read_to_string(landed.join("a")).unwrap(), "x");
+    assert_eq!(std::fs::read_to_string(landed.join("b")).unwrap(), "x");
+    assert_eq!(std::fs::read_link(landed.join("link")).unwrap(), PathBuf::from("a"));
+}
+
+/// Decision 0022: nothing on the job path can ask for a forward or first-boot options.
+#[test]
+fn the_job_path_has_no_first_boot_and_no_forward() {
+    let src = include_str!("vm.rs");
+    let job = src.split("async fn start(&self, spec: RunSpec)").nth(1).unwrap();
+    let job = job.split("async fn count_vms").next().unwrap();
+    assert!(job.contains("job_net_config("), "start uses the job network");
+    for banned in ["--first-boot", "forward", "NetConfig {", "BuildSpec"] {
+        assert!(!job.contains(banned), "HelperVm::start must not mention {banned}");
+    }
+    let spec = src.split("pub struct RunSpec").nth(1).unwrap().split('}').next().unwrap();
+    assert!(!spec.contains("first_boot") && !spec.contains("forward") && !spec.contains("ssh"));
+    // The one place a forward is set.
+    assert_eq!(src.matches("forward: Some(").count(), 1);
+    assert!(src.split("pub async fn start_build").nth(1).unwrap().contains("forward: Some("));
+}
+
+#[tokio::test]
+async fn start_build_passes_first_boot_flags_and_no_seed() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path().display();
+    let h = helper(
+        dir.path(),
+        &format!("printf '%s\\n' \"$@\" > '{d}/args'\necho '{{\"event\":\"started\"}}'\nexec sleep 30"),
+    );
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let bundle = dir.path().join("b");
+    let pw = dir.path().join("pw");
+    let spec = BuildSpec {
+        bundle: bundle.clone(),
+        cpus: 4,
+        memory_mb: 8192,
+        first_boot: Some(("nekko-build".into(), pw.clone())),
+        ssh_port_listener: listener,
+    };
+    let handle = vm(h, true).start_build(spec).await.unwrap();
+    let args = std::fs::read_to_string(dir.path().join("args")).unwrap();
+    let want = format!(
+        "run\n--bundle\n{}\n--cpus\n4\n--memory-mb\n8192\n--net-fd\n3\n--first-boot-user\nnekko-build\n--first-boot-password-file\n{}\n",
+        bundle.display(),
+        pw.display()
+    );
+    assert_eq!(args, want);
+    handle.kill();
+    let _ = tokio::time::timeout(Duration::from_secs(2), handle.done).await.unwrap();
+}
