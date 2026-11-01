@@ -2479,15 +2479,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {/* The new-chat colour drift: three static palettes crossfaded by
             opacity alone, so the compositor does it without a repaint. */}
         {cleanStart && [1, 2, 3].map((n) => <div key={n} className="clean-start-tint" data-n={n} aria-hidden="true" />)}
-        {/* The per-chat Nekko watches this composer's caret; wall windows and
-            the lone composer surface already carry their own picker and don't
-            need another cat on top of the transcript. */}
-        {surface === 'full' && !cleanStart && <ChatMascot
-          enabled={settings?.mascotEnabled ?? true}
-          working={streaming || hasLive}
-          wizardHat={settings?.themePreset === 'autumn'}
-          paneRef={paneRef}
-        />}
         {/* One bar per window. Inside a workspace these ride in the frame's
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
@@ -2738,6 +2729,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             )}
 
             <div className="composer relative">
+            {/* The per-chat Nekko peeks over the composer's left end and watches
+                its caret; wall windows and the lone composer surface already
+                carry their own picker, and a new chat has the greeting cat. */}
+            {surface === 'full' && !cleanStart && <ChatMascot
+              enabled={settings?.mascotEnabled ?? true}
+              working={streaming || hasLive}
+              wizardHat={settings?.themePreset === 'autumn'}
+            />}
             {compact && !wallWindow && (
               <div className="composer-summary">
                 <button

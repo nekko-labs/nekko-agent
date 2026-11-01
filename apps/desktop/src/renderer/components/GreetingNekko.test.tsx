@@ -40,3 +40,23 @@ describe('Greeting Nekko', () => {
     expect(markup).not.toMatch(/href=|tabindex=|<image|<animate/);
   });
 });
+
+describe('Per-chat Nekko', () => {
+  it('peeks over the composer with the greeting art, its hat, and the visibility toggle', async () => {
+    const { ChatMascot } = await import('./ChatMascot.js');
+    const markup = renderToStaticMarkup(<ChatMascot enabled working={false} wizardHat />);
+    expect(markup).toContain('class="chat-mascot"');
+    expect(markup).toContain('data-chat-mascot="idle"');
+    expect(markup).toContain('data-part="peek-paws"');
+    expect(markup).toContain('data-nekko-look="true"');
+    expect(markup).toContain('orange-wizard-hat');
+    expect(renderToStaticMarkup(<ChatMascot enabled working={false} wizardHat={false} />)).not.toContain('orange-wizard-hat');
+    expect(renderToStaticMarkup(<ChatMascot enabled={false} working={false} wizardHat={false} />)).toBe('');
+  });
+
+  it('sits on the composer top-left with its chin on the edge, the plan sheet beside it', () => {
+    const css = stylesheet('styles.css');
+    expect(cssRule(css, '.chat-mascot')).toMatchObject({ position: 'absolute', left: '4px', top: '-62.5px', width: '80px', height: '75px' });
+    expect(cssRule(css, '.composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock')).toMatchObject({ 'margin-left': 'max(8%,92px)' });
+  });
+});
