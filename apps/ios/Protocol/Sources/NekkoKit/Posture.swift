@@ -76,7 +76,7 @@ extension Posture {
 
     /// Where the hinge comes from: nothing today. When Apple ships a fold API the
     /// app sets this to read it; tests and the faked-hinge launch argument set it too.
-    nonisolated(unsafe) public static var hingeSource: @Sendable () -> PostureHinge? = { nil }
+    @MainActor public static var hingeSource: () -> PostureHinge? = { nil }
 
     /// The posture for these inputs (pure; the same rules as `Posture.kt`).
     public static func from(_ input: PostureInput) -> Posture {
@@ -89,7 +89,7 @@ extension Posture {
     }
 
     /// `from(_:)` with the hinge read from `hingeSource`.
-    public static func current(horizontal: PostureSizeClass, vertical: PostureSizeClass, size: CGSize) -> Posture {
+    @MainActor public static func current(horizontal: PostureSizeClass, vertical: PostureSizeClass, size: CGSize) -> Posture {
         from(PostureInput(horizontal: horizontal, vertical: vertical, size: size, hinge: hingeSource()))
     }
 }

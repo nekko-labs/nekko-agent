@@ -93,6 +93,37 @@ Threads worth an article, with the entries that tell each story:
   real avoidable work without mistaking it for resolution of the user-facing
   performance problem.
 
+## 2026-11
+
+### Website: pixel wave pauses past the hero, no blur over it (2026-11-01)
+Area: website
+Result: improvement
+Conditions: Windows 11 desktop, the marketing site served by `scripts/serve-website.mjs`, headless Playwright Chromium 1243 over CDP with vsync on and focus emulated, 1440x900, Colourful look. 3 s idle traces (`devtools.timeline`), one run each; before is `main` at the branch point.
+
+| Metric | Before | After |
+|---|---|---|
+| Idle at the top: script (FunctionCall) ms | 335 | 341 |
+| Idle scrolled to 60% of the page: script (FunctionCall) ms | 335 | 0 |
+| Idle scrolled: Paint events | 0 | 0 |
+
+Why: the dot-matrix wave redrew at 20 fps for as long as the tab was visible; it now stops when the hero leaves the viewport and holds its last frame. At the top nothing changed, as intended. The frosted panels over the canvas became solid; their re-blur cost lands in the compositor and was not separately measured. Source: the website PR for #1410 / #1411.
+
+### Renderer motion: composited new-chat drift, ref-driven wall divider (2026-11-01)
+Area: renderer
+Result: improvement
+Conditions: Windows 11 desktop (32 threads), Local Web UI from this branch against a scratch data dir and the perf mock provider, headless Playwright Chromium 1243 over CDP with vsync on and focus emulated, 1440x900. Before is the same harness on the parent branch (`ui/design-readability`). New chat: Focused layout, one fresh chat, 5 s idle trace (`devtools.timeline`), two runs each. Divider: one wall divider dragged 180 px in 30 pointer moves 16 ms apart, `Performance.getMetrics` deltas and React commits counted through a stub devtools hook, one run each.
+
+| Metric | Before | After |
+|---|---|---|
+| New chat, 5 s idle: Paint events | 54, 86 | 12, 12 |
+| New chat, 5 s idle: UpdateLayoutTree events | 1209, 1208 | 27, 30 |
+| Divider drag: LayoutCount | 240 | 79 |
+| Divider drag: RecalcStyleCount | 272 | 152 |
+| Divider drag: React commits | 113 | 83 |
+| Tooltip on the neighbouring icon after one has shown | 358 ms, faded | 4 ms, no fade |
+
+Why: the new-chat colour drift animated three registered custom properties (a style recalc and a repaint of the pane every frame, under a 22-24 px backdrop blur); it is now three static layers crossfaded by opacity, with the blur at 12 px. The wall divider wrote React state per pointer move; it now writes the windows' boxes directly at most once a frame and commits once on release. Most remaining commits during a drag come from components inside the resized windows reacting to their new size. Source: the motion PR for #1411.
+
 ## 2026-10
 
 ### A full GPU offload puts the output layer on the GPU too (2026-10-28)
@@ -1102,6 +1133,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- iPhone chat streaming and outbox confirmation (2026-11-01, #1412): each streamed token used to recount every live block's characters for the context gauge, merge the whole saved transcript with the live turn twice per render (the list and the follow-scroll `onChange`), and regroup every row by purpose. Now `ChatModel` keeps a running character count and a stored merged transcript whose last block a token patches in place; the view keeps its rows and replaces only the last; the scroll follows a revision counter. The outbox re-read the whole chat (`session:get`) every 0.5 s for up to 45 s after each send; it now re-reads on the computer's first event for the chat, on the send's answer, or on a 0.5/1/2/4 s backoff, and `sendWaiting` no longer polls every 50 ms. Not measured: per-token main-actor time on a long transcript and `session:get` calls per send, before and after. An Instruments Time Profiler run of a long reply in a 500-message chat, and a count of `session:get` per outbox send in the itest, would settle it.
 - nekkod router table (2026-10-28, #1335): `routes::route()` looked a channel up by walking a match of about 90 arms, many of them a linear `contains` over a channel list; it is now one `HashMap` lookup in a table built at startup. Done for structure (no `.expect("checked")`, no channel registered twice), not measured: per-call routing time before and after is unknown. A microbenchmark of `route()` for a late channel (`session:get`) on both revisions would settle it.
 - Quiet beside full-screen games (2026-10-28): before, measured 2026-10-18 on a Core Ultra 9 285H / RTX 5070 Ti laptop with the dev build idle and Overwatch running: 93 new processes in 60 s from nekkod (`where.exe` about every 6 s, `nvidia-smi.exe` about every 6-12 s, each with a conhost; `nvidia-smi` about 96 ms wall / 62 ms CPU, `where` about 60 ms / 38 ms), and Overwatch at 60-90 FPS (normally 200-300) after Nekko took the foreground until a game restart. After: the tray's poll no longer runs `engine:status`, PATH lookups no longer spawn, hidden pages stop asking, and windows and notices wait while a full-screen app is in front. Neither the process count nor the game's FPS has been measured after the change. Repeat the 60 s process count with the same idle app and an FPS run with a turn finishing mid-game.
 - CI scoped to what a change touches (2026-10-24): before, measured on #1023 (two Swift UI test files with `ci:macos`, CI run 40133900216, CodeQL run 40133900149): `daemon (macos-latest)` 274 s, `capture (macos-latest)` 289 s, `build` 147 s, CodeQL Rust 281 s, JS/TS 102 s, Python 42 s, Actions 43 s, Swift 799 s. After: per the scope rules and their tests, the same change runs only CodeQL Swift of these; no CI run of a native-only PR under the new rules has been measured yet. Update with that run's numbers.

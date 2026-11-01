@@ -874,6 +874,13 @@ export const useStore = create<UiState>((set, get) => ({
 
     if (presetId) root.setAttribute('data-preset', presetId);
     else root.removeAttribute('data-preset');
+    // A phone's status bar (and an installed PWA's title bar) takes the app's
+    // own paper, light or dark, whichever theme is on rather than the OS's.
+    const metas = typeof document.querySelectorAll === 'function' ? document.querySelectorAll('meta[name="theme-color"]') : [];
+    if (metas.length && typeof getComputedStyle === 'function') {
+      const paper = getComputedStyle(root).getPropertyValue('--paper').trim();
+      if (paper) metas.forEach((m) => { m.setAttribute('content', paper); m.removeAttribute('media'); });
+    }
     if (get().resolvedPreset !== presetId) set({ resolvedPreset: presetId });
 
     // Picking System saved its own old accents; only colours the user changed

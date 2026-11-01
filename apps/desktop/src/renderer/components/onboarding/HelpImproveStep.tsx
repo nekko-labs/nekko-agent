@@ -31,15 +31,15 @@ export function HelpImproveStep({
   return (
     <div className="w-full">
       <h1 className="text-center text-2xl font-semibold tracking-tight">Help improve Nekko Agent?</h1>
-      <p className="mx-auto mt-2 max-w-md text-center text-[13px] text-ink-soft">
+      <p className="mx-auto mt-2 max-w-md text-center text-sm text-ink-soft">
         Optional. Anonymous reports of which features get used and what breaks help us fix bugs and decide what to build.
       </p>
       <div className="mt-5 rounded-xl border p-4" style={{ borderColor: 'var(--line)' }}>
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[14px] font-semibold">Send anonymous usage and crash reports</span>
+          <span className="text-sm font-semibold">Send anonymous usage and crash reports</span>
           <Toggle label="Send anonymous usage and crash reports" value={on} onChange={setOn} />
         </div>
-        <ul className="mt-3 list-disc space-y-1 pl-5 text-[12px] text-ink-soft">
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-ink-soft">
           {TELEMETRY_PROMISES.map((p) => <li key={p}>{p}</li>)}
         </ul>
       </div>

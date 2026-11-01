@@ -125,6 +125,10 @@
         <receiver
             android:name=".connection.DenyReceiver"
             android:exported="false" />
+        <!-- The Lock Screen card's Allow, Stop and Next (connection/CardReceiver.kt). -->
+        <receiver
+            android:name=".connection.CardReceiver"
+            android:exported="false" />
         <!-- "Needs you" Home Screen widget: counts only (widget/StatusSnapshot.kt). -->
         <receiver
             android:name=".widget.StatusWidget"

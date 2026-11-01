@@ -82,6 +82,22 @@ app.whenReady().then(async () => {
       check('the enabled card names the connection Tailscale', await run(`document.querySelector('section.card').textContent.includes('Connected through:Tailscale')`));
       await capture('enabled-dark-420');
     }
+    // Left on Nekko Cloud while it is down: say so, and Change goes back to the choice.
+    for (const width of [900, 420]) {
+      await open(width, 900);
+      await run(`document.documentElement.dataset.theme='dark'`);
+      await run(`window.confirm = () => true; integration.show('cloud-gone')`);
+      await sleep(900);
+      await capture(`cloud-gone-dark-${width}`);
+      if (!base) {
+        const text = await run(`document.querySelector('section.card').textContent`);
+        check(`the card says phones can't reach this computer through Nekko Cloud (${width})`, text.includes('Nekko Cloud isn’t running yet'));
+        await run(`document.querySelector('[data-shot="cloud-gone"] button').click()`);
+        await sleep(900);
+        check(`Change turns remote access off and offers the choice again (${width})`, JSON.stringify(await run('[...integration.calls]')) === '["remote:disable"]' && (await field()).includes('Use Tailscale'));
+        await capture(`cloud-gone-changed-dark-${width}`);
+      }
+    }
     check('the renderer requested nothing from the web', blocked.length === 0);
     report.success = !report.errors.length && (base || report.checks.every((c) => c.passed));
   } catch (error) {

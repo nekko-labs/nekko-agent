@@ -22,7 +22,7 @@ export function ModelDownloadButton({ modelId, quant, prepare, onResult }: {
     } finally { locked.current = false; setPreparing(false); }
   };
   return <div className="shrink-0">
-    <button className="rounded-full px-2.5 py-1 text-[11px] text-white disabled:opacity-60" style={{ background: 'var(--accent)' }} disabled={preparing || download.active} onClick={() => void start()}>
+    <button className="rounded-full px-3 py-1 text-2xs text-white disabled:opacity-60" style={{ background: 'var(--accent)' }} disabled={preparing || download.active} onClick={() => void start()}>
       <DownloadIcon className="mr-1 inline h-3 w-3" />{preparing || download.active ? 'Downloading…' : 'Download'}
     </button>
     {(preparing || download.active) && <DownloadProgress group={download.group} />}

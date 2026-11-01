@@ -30,7 +30,7 @@ export function DoneStep({ onFinish }: { onFinish: (after?: () => void) => void 
   return (
     <div className="w-full">
       <h1 className="text-center text-2xl font-semibold tracking-tight">You're set</h1>
-      <p className="mx-auto mt-2 max-w-md text-center text-[14px] leading-relaxed text-ink-soft">
+      <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-ink-soft">
         Here are three things to try first. Pick one to jump right in, or hit Finish.
       </p>
       <div className="mt-6 grid gap-2">
@@ -41,8 +41,8 @@ export function DoneStep({ onFinish }: { onFinish: (after?: () => void) => void 
             onClick={() => onFinish(item.action)}
           >
             <span className="min-w-0">
-              <span className="block text-[13px] font-medium">{item.title}</span>
-              <span className="mt-0.5 block text-[12px] text-ink-faint">{item.desc}</span>
+              <span className="block text-sm font-medium">{item.title}</span>
+              <span className="mt-0.5 block text-xs text-ink-faint">{item.desc}</span>
             </span>
             <span className="shrink-0 text-accent" aria-hidden="true">
               →

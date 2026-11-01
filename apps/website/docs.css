@@ -85,7 +85,9 @@ a { color: var(--accent-2); }
   border: 1px solid var(--line); border-radius: 10px;
   font: inherit; font-size: 14px; cursor: pointer;
 }
-.search:hover { border-color: var(--line-2); color: var(--ink-2); }
+@media (hover: hover) {
+  .search:hover { border-color: var(--line-2); color: var(--ink-2); }
+}
 .search span { flex: 1; text-align: left; }
 kbd {
   font-family: var(--mono); font-size: 11px; color: var(--muted);
@@ -93,12 +95,16 @@ kbd {
 }
 .top-links { display: flex; align-items: center; gap: 18px; }
 .top-links a { color: var(--muted); text-decoration: none; font-size: 14px; }
-.top-links a:hover { color: var(--ink); }
+@media (hover: hover) {
+  .top-links a:hover { color: var(--ink); }
+}
 .top-links .download {
   color: var(--on-accent); background: linear-gradient(115deg, var(--accent) 10%, var(--accent-2) 90%);
   padding: 7px 16px; border-radius: 99px; font-weight: 600;
 }
-.top-links .download:hover { color: var(--on-accent); filter: brightness(1.06); }
+@media (hover: hover) {
+  .top-links .download:hover { color: var(--on-accent); filter: brightness(1.06); }
+}
 
 /* ---- three columns ---- */
 .shell {
@@ -122,7 +128,9 @@ kbd {
   display: block; padding: 5px 10px; border-radius: 7px;
   color: var(--muted); text-decoration: none; font-size: 14.5px; line-height: 1.4;
 }
-.sidebar a:hover { color: var(--ink); background: var(--bg-2); }
+@media (hover: hover) {
+  .sidebar a:hover { color: var(--ink); background: var(--bg-2); }
+}
 .sidebar a[aria-current='page'] { color: var(--ink); background: var(--bg-3); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); }
 
 main { min-width: 0; padding: 40px 56px 96px; }
@@ -139,7 +147,9 @@ main { min-width: 0; padding: 40px 56px 96px; }
   color: var(--muted); text-decoration: none; font-size: 13.5px; line-height: 1.4;
 }
 .toc .d3 a { padding-left: 24px; font-size: 13px; }
-.toc a:hover { color: var(--ink); }
+@media (hover: hover) {
+  .toc a:hover { color: var(--ink); }
+}
 .toc a.active { color: var(--accent-2); border-left-color: var(--accent); }
 
 /* ---- article ---- */
@@ -153,7 +163,9 @@ main { min-width: 0; padding: 40px 56px 96px; }
 }
 .page-tools { display: flex; gap: 16px; margin: 18px 0 32px; font-size: 13px; }
 .page-tools a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--line-2); }
-.page-tools a:hover { color: var(--ink); }
+@media (hover: hover) {
+  .page-tools a:hover { color: var(--ink); }
+}
 
 .prose h2 {
   font-size: 26px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.2; color: var(--ink);
@@ -167,7 +179,10 @@ main { min-width: 0; padding: 40px 56px 96px; }
   position: absolute; left: -1.1em; width: 1em; text-align: center;
   color: var(--muted); text-decoration: none; opacity: 0; font-weight: 500;
 }
-.prose :is(h2, h3, h4):hover .anchor, .anchor:focus { opacity: 1; }
+.anchor:focus { opacity: 1; }
+@media (hover: hover) {
+  .prose :is(h2, h3, h4):hover .anchor { opacity: 1; }
+}
 
 .prose p, .prose ul, .prose ol, .prose blockquote, .prose .code, .prose .table-wrap, .prose img { margin: 0 0 18px; }
 .prose ul, .prose ol { padding-left: 24px; }
@@ -176,7 +191,9 @@ main { min-width: 0; padding: 40px 56px 96px; }
 .prose li::marker { color: var(--accent); }
 .prose strong { color: var(--ink); font-weight: 650; }
 .prose a { text-underline-offset: 3px; text-decoration-color: rgba(91, 78, 167, 0.4); }
-.prose a:hover { text-decoration-color: var(--accent-2); }
+@media (hover: hover) {
+  .prose a:hover { text-decoration-color: var(--accent-2); }
+}
 .prose hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
 /* Section rules in the source would double the rule every h2 already has. */
 .prose hr:has(+ h2) { display: none; }
@@ -206,7 +223,9 @@ main { min-width: 0; padding: 40px 56px 96px; }
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px;
   padding: 3px 9px; cursor: pointer; opacity: 0.85;
 }
-.copy:hover { color: var(--ink); opacity: 1; }
+@media (hover: hover) {
+  .copy:hover { color: var(--ink); opacity: 1; }
+}
 .copy.done { color: var(--accent-2); }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
@@ -223,7 +242,9 @@ main { min-width: 0; padding: 40px 56px 96px; }
   padding: 14px 18px; border: 1px solid var(--line); border-radius: 12px;
   color: var(--ink); text-decoration: none; font-weight: 600;
 }
-.pager a:hover { border-color: var(--accent); background: var(--bg-2); }
+@media (hover: hover) {
+  .pager a:hover { border-color: var(--accent); background: var(--bg-2); }
+}
 .pager span { font-size: 12px; font-weight: 500; color: var(--muted); }
 .pager .next { text-align: right; grid-column: 2; }
 
@@ -244,7 +265,10 @@ main { min-width: 0; padding: 40px 56px 96px; }
 .esc { font: 500 11px var(--mono); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; cursor: pointer; }
 .results { list-style: none; overflow-y: auto; max-height: calc(70vh - 60px); padding: 6px; }
 .results a { display: block; padding: 10px 12px; border-radius: 9px; text-decoration: none; color: var(--ink-2); }
-.results a[aria-selected='true'], .results a:hover { background: var(--bg-3); }
+.results a[aria-selected='true'] { background: var(--bg-3); }
+@media (hover: hover) {
+  .results a:hover { background: var(--bg-3); }
+}
 .results .where { display: block; font-size: 12px; color: var(--muted); }
 .results .what { display: block; color: var(--ink); font-weight: 600; }
 .results .snip { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

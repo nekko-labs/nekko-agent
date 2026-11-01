@@ -128,12 +128,12 @@ export function ContextWarning({
 
   return (
     <div
-      className={`fade-in mx-auto w-full max-w-3xl rounded-xl border px-4 py-3 text-[12px] ${isCritical ? 'border-(--danger)/30' : 'border-line'}`}
+      className={`fade-in mx-auto w-full max-w-3xl rounded-xl border px-4 py-3 text-xs ${isCritical ? 'border-(--danger)/30' : 'border-line'}`}
       style={{ background: isCritical ? 'color-mix(in srgb, var(--danger) 6%, transparent)' : 'var(--surface-2)' }}
       role={running ? 'status' : 'alert'}
       aria-live="polite"
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-3">
         <WarningIcon className={`mt-0.5 h-4 w-4 shrink-0 ${isCritical ? 'text-(--danger)' : 'text-ink-faint'}`} />
         <div className="min-w-0 flex-1">
           <p className="font-medium text-ink">{running ? 'Compacting this chat' : 'Context window is getting full'}</p>
@@ -158,47 +158,47 @@ export function ContextWarning({
               >
                 {/* A sliver while nothing has finished, so a started run never looks idle. */}
                 <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
-                  style={{ width: `${Math.max(4, steps.fraction * 100)}%` }}
+                  className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-200 ease-(--ease-out)"
+                  style={{ transform: `scaleX(${Math.max(0.04, steps.fraction)})` }}
                 />
               </div>
-              <p className="mt-1 text-[11px] tabular-nums text-ink-faint">{steps.label}</p>
+              <p className="mt-1 text-2xs tabular-nums text-ink-faint">{steps.label}</p>
             </div>
           )}
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             {running ? (
               <>
                 {progress.target !== 'new' && (
                   <button
-                    className="btn btn-primary h-7 px-3 text-[11px]"
+                    className="btn btn-primary h-7 px-3 text-2xs"
                     onClick={() => void compact(true)}
                     title="Finish the summary, then start a new chat from it and leave this chat as it is"
                   >
                     Send summary to new chat
                   </button>
                 )}
-                <button className="btn btn-outline h-7 px-3 text-[11px]" onClick={stop} title="Stop summarizing and keep the conversation as it is">
+                <button className="btn btn-outline h-7 px-3 text-2xs" onClick={stop} title="Stop summarizing and keep the conversation as it is">
                   Stop compacting
                 </button>
               </>
             ) : (
               <>
                 <button
-                  className="btn btn-primary h-7 px-3 text-[11px]"
+                  className="btn btn-primary h-7 px-3 text-2xs"
                   onClick={() => void compact(false)}
                   title="Summarize the older turns and keep going in this chat"
                 >
                   {failed ? 'Retry compaction' : 'Compact now'}
                 </button>
                 <button
-                  className="btn btn-outline h-7 px-3 text-[11px]"
+                  className="btn btn-outline h-7 px-3 text-2xs"
                   onClick={() => void compact(true)}
                   title="Summarize this conversation into a new chat and leave this one as it is"
                 >
                   Send summary to new chat
                 </button>
                 <button
-                  className="btn btn-outline h-7 px-3 text-[11px]"
+                  className="btn btn-outline h-7 px-3 text-2xs"
                   onClick={openBlankChat}
                   title="Open a blank chat with the same workspace, provider, and model"
                 >

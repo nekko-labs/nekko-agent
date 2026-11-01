@@ -6,6 +6,7 @@ import XCTest
 /// it. Each step is a screenshot attachment (the PR's visual evidence).
 ///
 /// Opt-in: the CI passes `TEST_RUNNER_NEKKO_ITEST_LINK`; without it this skips.
+@MainActor
 final class LiveRelayTests: XCTestCase {
     /// How long a step the computer drives may take to reach the phone: a
     /// reply from the fake model, an approval or question card, a tool step,
@@ -660,7 +661,8 @@ final class LiveRelayTests: XCTestCase {
     /// `GET <NEKKO_ITEST_RELAY_CTL>/stop` or `/start` (apps/ios/scripts/relay-ctl.mjs): kill or restart the relay.
     private func relay(_ ctl: String, _ action: String) {
         let done = expectation(description: "relay \(action)")
-        var status = 0
+        // Written once by the callback, read after the wait below has seen it fulfilled.
+        nonisolated(unsafe) var status = 0
         URLSession.shared.dataTask(with: URL(string: "\(ctl)/\(action)")!) { _, response, _ in
             status = (response as? HTTPURLResponse)?.statusCode ?? 0
             done.fulfill()

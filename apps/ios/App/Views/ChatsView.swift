@@ -28,7 +28,7 @@ struct ChatsView: View {
     @State private var confirmDelete: SessionSummary?
     @State private var actionError: String?
     /// Pull to refresh, played by the toolbar mascot.
-    @StateObject private var pull = PawPull()
+    @State private var pull = PawPull()
 
     var body: some View {
         Group {

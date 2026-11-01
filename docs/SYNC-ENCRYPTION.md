@@ -60,7 +60,7 @@ Off unless you turn it on, and turning it off changes no feature. When it is on:
 | If someone… | They get |
 | --- | --- |
 | Copies Nekko Cloud's database | Ciphertext, padded sizes, opaque ids, device public keys, account emails and plans |
-| Signs in to your account (gets an emailed code) | Your email and plan, the device list, and the power to delete what's synced. Not your chats: without a device your other devices trust, nothing they accept comes from them, and Nekko Cloud refuses key, device and data changes from a sign-in that holds no keys |
+| Signs in to your account (gets an emailed code) | Your email and plan, the device list, and the power to delete what's synced. Not your chats: without a device your other devices trust, nothing they accept comes from them, and Nekko Cloud refuses key, device and data changes from a sign-in that hasn't proved it holds the current epoch's keyring |
 | Runs a malicious Nekko Cloud | The same, plus the ability to withhold or delete records and to refuse service. It can't read, forge or relabel records, roll a device back to a revision it has seen, or get a key of its own trusted. See the limits below |
 | Steals an unlocked device | That device's synced chats, until you revoke it from another device; then nothing new |
 | Learns your recovery key | Everything synced, so keep it like a password manager's emergency kit |
@@ -125,15 +125,16 @@ All sync routes take `Authorization: Bearer nk_…`. Writes answer `402 {"error"
 
 | Route | What it does |
 | --- | --- |
-"Holds the keys" below means the token is bound to a device that has a wrap of the current epoch. Nekko Cloud checks it to stop someone who can only sign in; the devices' own checks are what stop a malicious server.
+"Holds the keys" below means the token is bound to a live device that has a wrap of the current epoch, **and** the token has shown the epoch proof for it. The epoch proof is `HKDF-SHA256(ikm = the 64-byte keyring, salt = empty, info = "nekko-sync-epoch-proof/v1\n" ‖ keyId)`, 32 bytes (`epoch_proof` in `crates/nekko-sync`, `SyncCrypto.epochProof` on the iPhone, held to the same bytes by the shared vectors). Only a holder of the keyring can compute it; Nekko Cloud keeps only its SHA-256 per epoch, compares in constant time, and can derive no key from it. The device that starts an epoch sends it with the keyring, a device that restored with the recovery key sends it with its own wrap, and any other device sends it once per sign-in and epoch to `POST /v1/sync/keyrings/:keyId/proof`. A wrap row or a registered public key alone never counts, so a sign-in that holds no keys can't change keys, devices or data. Nekko Cloud checks this to stop someone who can only sign in; the devices' own checks are what stop a malicious server.
 
 | Route | What it does |
 | --- | --- |
 | `GET /v1/sync/state` | Plan, whether it can write, this device, the current key epoch, devices (with any join tag), storage used |
 | `POST /v1/sync/devices` `{publicKey, label, joinTag?}` | Register this device's public key; the token becomes this device's. The same key again binds a new sign-in's token to it |
-| `DELETE /v1/sync/devices/:id` | Revoke a device: its tokens and wraps go; then rotate. Holds the keys, or removes itself |
-| `PUT /v1/sync/keyrings/:keyId` `{recoveryWrap, wraps[]}` | Start key epoch `keyId` (must be the next one). The first from a registered device wrapping to itself; later ones only from a device holding the keys |
-| `PUT /v1/sync/keyrings/:keyId/wraps/:deviceId` `{wrap}` | Add a wrap to the current epoch: for an approved device (holds the keys), or to itself after a restore. Never over an existing wrap |
+| `DELETE /v1/sync/devices/:id` | Revoke a device: its tokens and wraps go; then rotate. Holds the keys, or removes itself while it has no wrap of the current epoch (still waiting to join) |
+| `PUT /v1/sync/keyrings/:keyId` `{recoveryWrap, proof, wraps[]}` | Start key epoch `keyId` (must be the next one), storing the hash of its epoch proof; the calling token holds the keys of the new epoch. The first from a registered device wrapping to itself; later ones only from a device holding the keys |
+| `PUT /v1/sync/keyrings/:keyId/wraps/:deviceId` `{wrap, proof?}` | Add a wrap to the current epoch: for an approved device (holds the keys), or to itself after a restore with the epoch's proof (which then counts the token as holding the keys). Never over an existing wrap |
+| `POST /v1/sync/keyrings/:keyId/proof` `{proof}` | Show the current epoch's proof: `204` and the token holds the keys (with its device's wrap); `403 bad-proof` on a mismatch, `409` for an older epoch |
 | `GET /v1/sync/keyrings/:keyId` | The recovery wrap, and this device's wrap |
 | `POST /v1/sync/push` `{objects[]}` | Up to 200 sealed revisions; per object `ok`, `conflict` or `stale-key`. Holds the keys |
 | `GET /v1/sync/pull?since=&limit=` | Changes after a sequence number, oldest first |

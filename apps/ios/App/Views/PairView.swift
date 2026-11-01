@@ -1,4 +1,6 @@
-import AVFoundation
+// The capture session is started and stopped on its own serial queue, as Apple
+// recommends, but AVFoundation does not mark it Sendable yet.
+@preconcurrency import AVFoundation
 import NekkoKit
 import NekkoProtocol
 import SwiftUI
@@ -276,7 +278,8 @@ struct ConfirmPairSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        // Large too: at accessibility text sizes the confirmation does not fit in half the screen.
+        .presentationDetents([.medium, .large])
     }
 }
 
@@ -304,6 +307,9 @@ struct QRScanner: UIViewControllerRepresentable {
     final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
         var onCode: ((String) -> Void)?
         private let session = AVCaptureSession()
+        /// One serial queue for starting and stopping: on a concurrent queue a quick
+        /// open and close could stop before it started, leaving the camera on.
+        private let sessionQueue = DispatchQueue(label: "nekko.capture")
         private var preview: AVCaptureVideoPreviewLayer?
         private var lastCode: String?
         private var lastAt = Date.distantPast
@@ -333,13 +339,13 @@ struct QRScanner: UIViewControllerRepresentable {
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
             let s = session
-            DispatchQueue.global(qos: .userInitiated).async { if !s.isRunning { s.startRunning() } }
+            sessionQueue.async { if !s.isRunning { s.startRunning() } }
         }
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
             let s = session
-            DispatchQueue.global(qos: .userInitiated).async { s.stopRunning() }
+            sessionQueue.async { if s.isRunning { s.stopRunning() } }
         }
 
         nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {

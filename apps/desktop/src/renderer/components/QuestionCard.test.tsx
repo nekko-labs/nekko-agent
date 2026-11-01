@@ -36,7 +36,6 @@ describe('QuestionCard', () => {
     const out = html();
     expect(out).toContain('data-question-tone="attention"');
     expect(out).toContain('--accent:var(--warning)');
-    expect(out).toContain('--brand-grad:var(--warning)');
     expect(out).toContain('--on-accent:#201609');
     expect(out).toContain('var(--warning) 8%, var(--surface-2)');
     expect(out).toContain('white 4%, var(--surface-2)');

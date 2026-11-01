@@ -457,7 +457,13 @@ impl Table {
             }),
         );
         t.add(&["provider:complete"], handler!(|ctx, channel, args| crate::sideband::complete(arg(&args, 0)).await));
-        t.add(crate::accounts::CHANNELS, handler!(|ctx, channel, args| ctx.accounts.route(channel, &args).await));
+        t.add(
+            crate::accounts::CHANNELS,
+            handler!(|ctx, channel, args| match crate::claude_policy::limits_key_provider(channel, &args) {
+                Some(id) => crate::claude_policy::plan_usage_limits(ctx, id).await,
+                None => ctx.accounts.route(channel, &args).await,
+            }),
+        );
         t.add(
             crate::decisions::CHANNELS,
             handler!(|ctx, channel, args| {

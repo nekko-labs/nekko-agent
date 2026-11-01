@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { deriveKey, seal, open } from '@nekko-agent/shared';
+import { deriveKey, relayAuth, seal, open } from '@nekko-agent/shared';
 
 const args = process.argv.slice(2);
 const relayArg = args.find((a) => a.startsWith('--relay='));
@@ -68,10 +68,12 @@ for (let i = 0; i < 40 && !pairCode; i++) await sleep(200);
 check('agent boot printed a pairing code', !!pairCode, pairCode ?? 'none');
 
 const e2eKey = await deriveKey(PAIR_KEY, ROOM);
+// The relay checks a credential derived from the secret, never the secret (decision 0036).
+const RELAY_AUTH = await relayAuth(PAIR_KEY, ROOM);
 
 /** Minimal v2 device client: connects, hellos, then makes sealed req calls. */
 async function device({ deviceId, name, pair }) {
-  const ws = new WebSocket(`${RELAY_URL.replace(/\/$/, '')}/relay?role=client&room=${ROOM}&key=${PAIR_KEY}`);
+  const ws = new WebSocket(`${RELAY_URL.replace(/\/$/, '')}/relay?role=client&room=${ROOM}&key=${RELAY_AUTH}`);
   const pending = new Map();
   let nextId = 1;
   let hello = null;

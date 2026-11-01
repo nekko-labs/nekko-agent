@@ -6,7 +6,7 @@ import { DiffusionInstallCard } from './DiffusionInstallCard.js';
 import { useStore } from '../../store.js';
 import { Badge } from '../primitives/index.js';
 import { CheckIcon, ChevronIcon, ExternalIcon } from '../../icons.js';
-import { formatBytes } from '../runtimes/verdict.js';
+import { formatBytes, formatCount } from '../runtimes/verdict.js';
 import { gpuGuidance } from './modelFamilies.js';
 
 /**
@@ -99,24 +99,24 @@ export function ModelDetail({
 
   return (
     <div className={embedded ? 'min-w-0 pt-2' : 'mx-auto max-w-4xl px-8 py-8'}>
-      {!embedded && <button className="text-[12px] text-ink-faint hover:text-ink" onClick={onBack}>
+      {!embedded && <button className="text-xs text-ink-faint hover:text-ink" onClick={onBack}>
         <ChevronIcon className="mr-1 inline h-3 w-3 rotate-180" />
         Back to models
       </button>}
 
-      {state === 'loading' && <p className="mt-6 text-[13px] text-ink-faint">Reading the model page…</p>}
+      {state === 'loading' && <p className="mt-6 text-sm text-ink-faint">Reading the model page…</p>}
 
       {state === 'missing' && (
         <div className="card mt-4 p-5">
-          <h1 className="text-lg font-semibold">{modelId}</h1>
-          <p className="mt-1 text-[13px] text-ink-faint">
+          <h1 className="text-xl font-semibold">{modelId}</h1>
+          <p className="mt-1 text-sm text-ink-faint">
             Hugging Face has nothing to show for this repository. It may have been renamed or made private, or the
             search that found it may be out of date.
           </p>
         </div>
       )}
 
-      {recommendRuntime && <div className="mt-4 border-b border-line pb-4"><p className="text-[13px]">This is an image model. Install the optional image generation runtime to generate here, or press Download again to get only the model.</p><DiffusionInstallCard install={imageInstall} onChanged={() => void refreshImageRuntime()} /></div>}
+      {recommendRuntime && <div className="mt-4 border-b border-line pb-4"><p className="text-sm">This is an image model. Install the optional image generation runtime to generate here, or press Download again to get only the model.</p><DiffusionInstallCard install={imageInstall} onChanged={() => void refreshImageRuntime()} /></div>}
 
       {model && (
         <>
@@ -135,10 +135,10 @@ export function ModelDetail({
                 </Badge>
               )}
             </div>
-            <p className="mt-1 font-mono text-[12px] text-ink-faint">{model.id}</p>
-            {model.summary && <p className="mt-2 max-w-2xl text-[13.5px] text-ink-soft">{model.summary}</p>}
+            <p className="mt-1 font-mono text-xs text-ink-faint">{model.id}</p>
+            {model.summary && <p className="mt-2 max-w-2xl text-sm text-ink-soft">{model.summary}</p>}
 
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-2">
               {model.tags.map((t) => (
                 <span key={t} className="chip">
                   {t}
@@ -155,8 +155,8 @@ export function ModelDetail({
           </section>
 
           <section className="mt-5">
-            <h2 className="text-[15px] font-semibold">Variants</h2>
-            <p className="mt-0.5 text-[12px] text-ink-faint">
+            <h2 className="text-base font-semibold">Variants</h2>
+            <p className="mt-0.5 text-xs text-ink-faint">
               Same model, compressed differently. Lower numbers are smaller files that need less memory and answer a
               little worse; higher numbers keep more of the model and cost disk and RAM. <strong>Q4_K_M</strong> is the
               usual choice{recommended ? ', marked below' : ''}.
@@ -167,15 +167,15 @@ export function ModelDetail({
                 const fit = memory ? downloadFitVerdict(q.sizeBytes, memory.budgetBytes) : 'unknown';
                 const isPick = recommended?.label === q.label;
                 return (
-                  <div key={q.label} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-[12.5px]">
+                  <div key={q.label} className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
                     <span className="w-24 shrink-0 font-mono font-medium">{q.label}</span>
                     <span className="w-20 shrink-0 tabular-nums text-ink-faint">
                       {q.sizeBytes ? formatBytes(q.sizeBytes) : 'size unknown'}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-faint">{q.note ?? ''}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">{q.note ?? ''}</span>
                     {isPick && (
                       <span
-                        className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px]"
+                        className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
                         style={{ background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }}
                         title="The build we suggest for most people"
                       >
@@ -184,7 +184,7 @@ export function ModelDetail({
                     )}
                     {fit !== 'unknown' && !have && (
                       <span
-                        className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px]"
+                        className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
                         style={{
                           background: `color-mix(in srgb, ${fit === 'fits' ? 'var(--success)' : fit === 'tight' ? 'var(--warning, #d1a054)' : 'var(--danger)'} 16%, transparent)`,
                           color: fit === 'fits' ? 'var(--success)' : fit === 'tight' ? 'var(--warning, #d1a054)' : 'var(--danger)',
@@ -217,8 +217,8 @@ export function ModelDetail({
           </section>
 
           <section className="mt-5">
-            <h2 className="text-[15px] font-semibold">Details</h2>
-            <dl className="card mt-2 grid grid-cols-1 gap-x-6 gap-y-2 p-4 text-[12.5px] sm:grid-cols-2">
+            <h2 className="text-base font-semibold">Details</h2>
+            <dl className="card mt-2 grid grid-cols-1 gap-x-6 gap-y-2 p-4 text-xs sm:grid-cols-2">
               <Row label="Published by" value={model.owner} />
               <Row label="License" value={model.license ?? 'not declared'} />
               <Row label="Task" value={model.pipelineTag ?? '—'} />
@@ -232,14 +232,14 @@ export function ModelDetail({
             {(model.hfTags?.length ?? 0) > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {model.hfTags!.slice(0, 24).map((t) => (
-                  <span key={t} className="rounded-md px-1.5 py-0.5 font-mono text-[10px] text-ink-faint" style={{ background: 'var(--surface-2)' }}>
+                  <span key={t} className="rounded-md px-2 py-0.5 font-mono text-2xs text-ink-faint" style={{ background: 'var(--surface-2)' }}>
                     {t}
                   </span>
                 ))}
               </div>
             )}
             <a
-              className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-ink-faint hover:text-ink"
+              className="mt-2 inline-flex items-center gap-2 text-xs text-ink-faint hover:text-ink"
               href={`https://huggingface.co/${model.id}`}
               target="_blank"
               rel="noreferrer noopener"
@@ -249,17 +249,17 @@ export function ModelDetail({
           </section>
 
           <section className="mt-5">
-            <h2 className="text-[15px] font-semibold">Model card</h2>
-            <p className="mt-0.5 text-[12px] text-ink-faint">Written by the publisher, shown as they wrote it.</p>
+            <h2 className="text-base font-semibold">Model card</h2>
+            <p className="mt-0.5 text-xs text-ink-faint">Written by the publisher, shown as they wrote it.</p>
             <div className="card mt-2 p-5">
               {model.readmeError ? (
-                <p className="text-[12.5px]" style={{ color: 'var(--warning)' }}>
+                <p className="text-xs" style={{ color: 'var(--warning)' }}>
                   {model.readmeError}
                 </p>
               ) : model.readme ? (
                 <Markdown source={model.readme} />
               ) : (
-                <p className="text-[12.5px] text-ink-faint">This repository has no model card.</p>
+                <p className="text-xs text-ink-faint">This repository has no model card.</p>
               )}
             </div>
           </section>
@@ -271,9 +271,9 @@ export function ModelDetail({
 
 function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--surface-2)' }} title={hint}>
-      <p className="text-[10.5px] uppercase tracking-wide text-ink-faint">{label}</p>
-      <p className="mt-0.5 text-[17px] font-semibold tabular-nums">{value}</p>
+    <div className="rounded-xl px-3 py-2" style={{ background: 'var(--surface-2)' }} title={hint}>
+      <p className="text-xs text-ink-soft">{label}</p>
+      <p className="mt-0.5 text-base font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -282,7 +282,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="shrink-0 text-ink-faint">{label}</dt>
-      <dd className={`min-w-0 truncate text-right ${mono ? 'font-mono text-[11.5px]' : ''}`} title={value}>
+      <dd className={`min-w-0 truncate text-right ${mono ? 'font-mono text-xs' : ''}`} title={value}>
         {value}
       </dd>
     </div>
@@ -305,13 +305,13 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 function Markdown({ source }: { source: string }) {
   const blocks = useMemo(() => parseBlocks(source), [source]);
   return (
-    <div className="space-y-2.5 text-[13px] leading-relaxed text-ink-soft">
+    <div className="space-y-2 text-sm leading-relaxed text-ink-soft">
       {blocks.map((b, i) => {
         if (b.kind === 'code') {
           return (
             <pre
               key={i}
-              className="max-h-80 overflow-auto rounded-lg p-3 font-mono text-[11.5px] leading-relaxed"
+              className="max-h-80 overflow-auto rounded-lg p-3 font-mono text-xs leading-relaxed"
               style={{ background: 'var(--surface-2)' }}
             >
               {b.text}
@@ -319,9 +319,9 @@ function Markdown({ source }: { source: string }) {
           );
         }
         if (b.kind === 'heading') {
-          const size = b.level <= 1 ? 'text-[17px]' : b.level === 2 ? 'text-[15px]' : 'text-[13.5px]';
+          const size = b.level <= 1 ? 'text-base' : b.level === 2 ? 'text-base' : 'text-sm';
           return (
-            <p key={i} className={`${size} pt-1.5 font-semibold text-ink`}>
+            <p key={i} className={`${size} pt-1 font-semibold text-ink`}>
               <Inline text={b.text} />
             </p>
           );
@@ -340,7 +340,7 @@ function Markdown({ source }: { source: string }) {
         if (b.kind === 'table') {
           return (
             <div key={i} className="overflow-x-auto">
-              <table className="w-full text-[11.5px]">
+              <table className="w-full text-xs">
                 <thead>
                   <tr>
                     {b.head.map((cell, n) => (
@@ -484,7 +484,7 @@ function Inline({ text }: { text: string }) {
       {parts.map((p, i) => {
         if (p.startsWith('`') && p.endsWith('`') && p.length > 2) {
           return (
-            <code key={i} className="rounded px-1 py-0.5 font-mono text-[11.5px]" style={{ background: 'var(--surface-2)' }}>
+            <code key={i} className="rounded px-1 py-0.5 font-mono text-xs" style={{ background: 'var(--surface-2)' }}>
               {p.slice(1, -1)}
             </code>
           );
@@ -515,11 +515,7 @@ function Inline({ text }: { text: string }) {
   );
 }
 
-function compact(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
-  return String(n);
-}
+const compact = formatCount;
 
 /** "3 months ago", for the is-this-maintained question. */
 function ago(ms: number): string {

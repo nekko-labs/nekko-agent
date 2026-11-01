@@ -135,7 +135,7 @@ export const ComposerHighlight = forwardRef<HTMLDivElement, { text: string }>(fu
     <div
       ref={ref}
       aria-hidden
-      className="pointer-events-none absolute inset-0 overflow-hidden px-3.5 pt-3 text-sm [scrollbar-gutter:stable]"
+      className="pointer-events-none absolute inset-0 overflow-hidden px-4 pt-3 text-sm [scrollbar-gutter:stable]"
     >
       {/* A trailing newline keeps the last empty line's height honest, matching
           the line the textarea always leaves open under the caret. */}

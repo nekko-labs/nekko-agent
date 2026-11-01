@@ -21,7 +21,7 @@ Some people have Anthropic's permission of their own, for example through an agr
 
 Only turn it on if Anthropic has approved it for you in writing. Anthropic's terms don't allow third-party apps to use these features on a Claude plan without approval, and Anthropic can limit or suspend an account that breaks them, without notice. Nekko can't check whether you have approval, so it is your decision and your responsibility.
 
-What it turns on: scheduled tasks, workflows and auto-continue, Nekko's own tools inside a Claude chat, the project note Nekko adds to a chat, and your plan's usage limits as Claude Code reports them. What it never turns on: cost estimates and model routing, which a plan can't support, and anything while Nekko hasn't yet read how Claude Code is signed in.
+What it turns on: scheduled tasks, workflows and auto-continue, Nekko's own tools inside a Claude chat, and the project note Nekko adds to a chat. Your plan's usage limits, as Claude Code reports them, are on for every plan without it. What it never turns on: cost estimates and model routing, which a plan can't support, and anything while Nekko hasn't yet read how Claude Code is signed in.
 
 You can add more than one Claude account, subscription or API. See [Accounts and switching](accounts.md) for how, and for what Anthropic's terms allow with several Claude accounts.
 

@@ -122,43 +122,43 @@ export function DesignBoardView() {
   if (!wsId) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <div className="grid h-14 w-14 place-items-center rounded-2xl text-3xl" style={{ background: 'var(--accent-soft)' }}>🎨</div>
-        <h2 className="text-lg font-semibold">Design</h2>
-        <p className="max-w-sm text-[13px] text-ink-faint">Add a project folder first (from a chat's <b>+</b> menu). Then sketch or describe a design here and watch it become a working prototype.</p>
+        <div className="grid h-14 w-14 place-items-center rounded-2xl text-2xl" style={{ background: 'var(--accent-soft)' }}>🎨</div>
+        <h2 className="text-xl font-semibold">Design</h2>
+        <p className="max-w-sm text-sm text-ink-faint">Add a project folder first (from a chat's <b>+</b> menu). Then sketch or describe a design here and watch it become a working prototype.</p>
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+      <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
         {!hasAppChrome && <h1 className="view-title">Design</h1>}
         {workspaces.length > 1 && (
-          <select className="input py-1 text-[12px]" value={wsId} onChange={(e) => setActiveProject(e.target.value)}>
+          <select className="input py-1 text-xs" value={wsId} onChange={(e) => setActiveProject(e.target.value)}>
             {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
         )}
         {updating && (
-          <button className="chip flex items-center gap-1.5 text-[11px] text-accent" onClick={goToAgent} title="An agent is updating your app, open its chat">
+          <button className="chip flex items-center gap-2 text-2xs text-accent" onClick={goToAgent} title="An agent is updating your app, open its chat">
             <span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Updating… open agent
           </button>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <label className="hidden items-center gap-1.5 text-[11px] text-ink-faint sm:flex">
+          <label className="hidden items-center gap-2 text-2xs text-ink-faint sm:flex">
             Zoom
             <input type="range" min={0.5} max={1.5} step={0.1} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
           </label>
-          <button className="btn btn-ghost px-2 py-1 text-[12px]" title="Reload all previews" onClick={() => setReloadNonce((x) => x + 1)}>↻</button>
-          <button className="btn btn-outline px-2.5 py-1 text-[12px]" onClick={() => setMode('live')}><PlusIcon className="h-3.5 w-3.5" /> Live page</button>
-          <button className="btn btn-outline px-2.5 py-1 text-[12px]" onClick={() => setMode('sketch')}>✏️ Sketch</button>
-          <button className="btn btn-primary px-2.5 py-1 text-[12px]" onClick={() => setMode('prompt')}>✨ Generate</button>
+          <button className="btn btn-ghost px-2 py-1 text-xs" title="Reload all previews" onClick={() => setReloadNonce((x) => x + 1)}>↻</button>
+          <button className="btn btn-outline px-3 py-1 text-xs" onClick={() => setMode('live')}><PlusIcon className="h-3.5 w-3.5" /> Live page</button>
+          <button className="btn btn-outline px-3 py-1 text-xs" onClick={() => setMode('sketch')}>✏️ Sketch</button>
+          <button className="btn btn-primary px-3 py-1 text-xs" onClick={() => setMode('prompt')}>✨ Generate</button>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 flex-1 overflow-auto p-5" style={{ background: 'var(--surface-2)' }}>
           {genError && (
-            <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-400/40 bg-red-400/10 px-3 py-2 text-[12.5px] text-red-300">
+            <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-400/40 bg-red-400/10 px-3 py-2 text-xs text-red-300">
               <span>{genError}</span>
               <button className="shrink-0 text-red-300 hover:text-red-200" onClick={() => setGenError(null)}>✕</button>
             </div>
@@ -227,26 +227,26 @@ function EmptyBoard({ onSketch, onPrompt, onLive }: { onSketch: () => void; onPr
   return (
     <div className="mx-auto mt-10 max-w-3xl">
       <h2 className="text-center text-xl font-bold tracking-tight">Design something</h2>
-      <p className="mx-auto mt-1.5 max-w-md text-center text-[13px] text-ink-faint">
+      <p className="mx-auto mt-1 max-w-md text-center text-sm text-ink-faint">
         Two ways in. Both end as a working HTML prototype in your workspace that you (or an agent) can keep iterating on.
       </p>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <button className="card group p-5 text-left transition hover:border-(--accent)" onClick={onSketch}>
           <div className="grid h-11 w-11 place-items-center rounded-xl text-2xl" style={{ background: 'var(--accent-soft)' }}>✏️</div>
-          <div className="mt-3 text-[14.5px] font-semibold">Draw it</div>
-          <p className="mt-1 text-[12.5px] leading-snug text-ink-faint">
+          <div className="mt-3 text-sm font-semibold">Draw it</div>
+          <p className="mt-1 text-xs leading-snug text-ink-faint">
             Sketch boxes, arrows, and labels with a finger, mouse, or Apple Pencil. Your rough drawing becomes a real code prototype.
           </p>
         </button>
         <button className="card group p-5 text-left transition hover:border-(--accent)" onClick={onPrompt}>
           <div className="grid h-11 w-11 place-items-center rounded-xl text-2xl" style={{ background: 'var(--accent-soft)' }}>✨</div>
-          <div className="mt-3 text-[14.5px] font-semibold">Describe it</div>
-          <p className="mt-1 text-[12.5px] leading-snug text-ink-faint">
+          <div className="mt-3 text-sm font-semibold">Describe it</div>
+          <p className="mt-1 text-xs leading-snug text-ink-faint">
             Write what you want and watch a design pop up. Refine it with follow-up prompts until it's right.
           </p>
         </button>
       </div>
-      <p className="mt-5 text-center text-[12px] text-ink-faint">
+      <p className="mt-5 text-center text-xs text-ink-faint">
         or <button className="text-accent hover:underline" onClick={onLive}>add a live page</button> from your running app to review it here
       </p>
     </div>
@@ -261,14 +261,14 @@ function BusyCard({ label, zoom }: { label: string; zoom: number }) {
     <div className="card overflow-hidden p-0" style={{ width: W }}>
       <div className="relative animate-pulse" style={{ height: H, background: 'var(--surface-2)' }}>
         <div className="absolute inset-0 grid place-items-center">
-          <div className="flex items-center gap-2 text-[12px] text-ink-faint">
+          <div className="flex items-center gap-2 text-xs text-ink-faint">
             <span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Designing…
           </div>
         </div>
       </div>
-      <div className="border-t border-line px-2.5 py-1.5">
-        <div className="truncate text-[12.5px] font-medium">{label}</div>
-        <div className="truncate text-[10.5px] text-ink-faint">generating</div>
+      <div className="border-t border-line px-3 py-1">
+        <div className="truncate text-xs font-medium">{label}</div>
+        <div className="truncate text-2xs text-ink-faint">generating</div>
       </div>
     </div>
   );
@@ -306,14 +306,14 @@ function PageCard({
         <div className="absolute inset-0" />
         {busy && (
           <div className="absolute inset-0 grid place-items-center bg-black/30">
-            <span className="flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium text-white">
+            <span className="flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-2xs font-medium text-white">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> refining…
             </span>
           </div>
         )}
         {updating && !concept && (
           <button
-            className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white shadow-sm"
+            className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium text-white shadow-(--shadow-sm)"
             style={{ background: 'var(--accent)' }}
             onClick={(e) => { e.stopPropagation(); onUpdatingClick(); }}
             title="An agent is updating your app, open its chat"
@@ -322,14 +322,14 @@ function PageCard({
           </button>
         )}
       </div>
-      <div className="flex items-center gap-2 border-t border-line px-2.5 py-1.5">
+      <div className="flex items-center gap-2 border-t border-line px-3 py-1">
         <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
-          <div className="truncate text-[12.5px] font-medium">{page.label}</div>
-          <div className="truncate text-[10.5px] text-ink-faint">
+          <div className="truncate text-xs font-medium">{page.label}</div>
+          <div className="truncate text-2xs text-ink-faint">
             {concept ? `${page.origin === 'sketch' ? '✏️ from a sketch' : '✨ from a prompt'}` : page.url}
           </div>
         </button>
-        {page.notes.length > 0 && <span className="chip text-[10px]" title={`${page.notes.length} note(s)`}>📌 {page.notes.length}</span>}
+        {page.notes.length > 0 && <span className="chip text-2xs" title={`${page.notes.length} note(s)`}>📌 {page.notes.length}</span>}
       </div>
     </div>
   );
@@ -341,15 +341,15 @@ function AddPageForm({ onAdd, onCancel }: { onAdd: (label: string, url: string) 
   const [url, setUrl] = useState('http://localhost:3000');
   return (
     <div className="card mb-5 max-w-lg p-3">
-      <div className="mb-2 text-[12px] font-semibold">Add a live page</div>
+      <div className="mb-2 text-xs font-semibold">Add a live page</div>
       <div className="flex flex-col gap-2">
-        <input className="input text-[12.5px]" placeholder="Label (e.g. Home)" value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
-        <input className="input font-mono text-[12px]" placeholder="http://localhost:3000/path" value={url} onChange={(e) => setUrl(e.target.value)}
+        <input className="input text-xs" placeholder="Label (e.g. Home)" value={label} onChange={(e) => setLabel(e.target.value)} autoFocus />
+        <input className="input font-mono text-xs" placeholder="http://localhost:3000/path" value={url} onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') onAdd(label, url); }} />
       </div>
       <div className="mt-2 flex justify-end gap-2">
-        <button className="btn btn-ghost py-1 text-[12px]" onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary py-1 text-[12px]" disabled={!url.trim()} onClick={() => onAdd(label, url)}>Add</button>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary py-1 text-xs" disabled={!url.trim()} onClick={() => onAdd(label, url)}>Add</button>
       </div>
     </div>
   );
@@ -467,9 +467,9 @@ function SketchStudio({ onCancel, onGenerate }: { onCancel: () => void; onGenera
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
-        <span id={titleId} className="text-[13px] font-semibold">✏️ Sketch a design</span>
-        <span className="hidden text-[11px] text-ink-faint md:inline">boxes + labels are enough, the model fills in the design</span>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        <span id={titleId} className="text-sm font-semibold">✏️ Sketch a design</span>
+        <span className="hidden text-2xs text-ink-faint md:inline">boxes + labels are enough, the model fills in the design</span>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {SKETCH_COLORS.map((c) => (
             <button
               key={c}
@@ -491,16 +491,16 @@ function SketchStudio({ onCancel, onGenerate }: { onCancel: () => void; onGenera
             </button>
           ))}
           <span className="mx-1 h-5 w-px bg-(--line)" />
-          <button className={`btn px-2 py-1 text-[12px] ${erasing ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setErasing((v) => !v)}>Eraser</button>
-          <button className="btn btn-ghost px-2 py-1 text-[12px]" disabled={!strokeCount} onClick={undo}>Undo</button>
-          <button className="btn btn-ghost px-2 py-1 text-[12px]" disabled={!strokeCount} onClick={clear}>Clear</button>
+          <button className={`btn px-2 py-1 text-xs ${erasing ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setErasing((v) => !v)}>Eraser</button>
+          <button className="btn btn-ghost px-2 py-1 text-xs" disabled={!strokeCount} onClick={undo}>Undo</button>
+          <button className="btn btn-ghost px-2 py-1 text-xs" disabled={!strokeCount} onClick={clear}>Clear</button>
         </div>
       </div>
 
       <div ref={wrapRef} className="min-h-0 flex-1 p-3" style={{ background: 'var(--surface-2)' }}>
         <canvas
           ref={canvasRef}
-          className="h-full w-full rounded-xl shadow-xs"
+          className="h-full w-full rounded-xl"
           style={{ background: '#ffffff', touchAction: 'none', cursor: 'crosshair' }}
           onPointerDown={down}
           onPointerMove={move}
@@ -511,13 +511,13 @@ function SketchStudio({ onCancel, onGenerate }: { onCancel: () => void; onGenera
 
       <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2">
         <input
-          className="input min-w-0 flex-1 text-[12.5px]"
+          className="input min-w-0 flex-1 text-xs"
           placeholder='Optional notes for the model: "mobile app, dark theme", "the big box is a video player"…'
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
-        <button className="btn btn-ghost py-1.5 text-[12.5px]" onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary py-1.5 text-[12.5px]" disabled={!strokeCount} onClick={generate}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary py-1 text-xs" disabled={!strokeCount} onClick={generate}>
           Generate prototype →
         </button>
       </div>
@@ -547,29 +547,29 @@ function PromptStudio({ onCancel, onGenerate }: { onCancel: () => void; onGenera
       overlayClassName="p-4"
       className="card w-full max-w-xl p-5"
     >
-      <h2 id={titleId} className="text-lg font-bold tracking-tight">✨ Describe it. Watch it appear.</h2>
-      <p className="mt-1 text-[12.5px] text-ink-faint">
+      <h2 id={titleId} className="text-xl font-bold tracking-tight">✨ Describe it. Watch it appear.</h2>
+      <p className="mt-1 text-xs text-ink-faint">
         One prompt in, a working design out. Refine it afterwards with follow-ups, you're the designer, the model just drafts fast.
       </p>
       <textarea
-        className="input mt-3 min-h-[88px] w-full resize-y text-[13px]"
+        className="input mt-3 min-h-[88px] w-full resize-y text-sm"
         placeholder="What should it be? Audience, vibe, key sections…"
         value={prompt}
         autoFocus
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && prompt.trim()) onGenerate(prompt.trim(), label.trim() || undefined); }}
       />
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-2">
         {PROMPT_IDEAS.map((idea) => (
-          <button key={idea} className="chip max-w-full truncate text-[11px] hover:text-ink" onClick={() => setPrompt(idea)}>
+          <button key={idea} className="chip max-w-full truncate text-2xs hover:text-ink" onClick={() => setPrompt(idea)}>
             {idea}
           </button>
         ))}
       </div>
       <div className="mt-3 flex items-center gap-2">
-        <input className="input flex-1 text-[12px]" placeholder="Card label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} />
-        <button className="btn btn-ghost py-1.5 text-[12.5px]" onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary py-1.5 text-[12.5px]" disabled={!prompt.trim()} onClick={() => onGenerate(prompt.trim(), label.trim() || undefined)}>
+        <input className="input flex-1 text-xs" placeholder="Card label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <button className="btn btn-ghost py-1 text-xs" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary py-1 text-xs" disabled={!prompt.trim()} onClick={() => onGenerate(prompt.trim(), label.trim() || undefined)}>
           Generate →
         </button>
       </div>
@@ -607,8 +607,8 @@ function PageSheet({
     <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-l border-line" style={{ background: 'var(--paper)' }}>
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold">{page.label}</div>
-          <div className="truncate text-[10.5px] text-ink-faint">{concept ? (page.origin === 'sketch' ? 'concept · from a sketch' : 'concept · from a prompt') : page.url}</div>
+          <div className="truncate text-sm font-semibold">{page.label}</div>
+          <div className="truncate text-2xs text-ink-faint">{concept ? (page.origin === 'sketch' ? 'concept · from a sketch' : 'concept · from a prompt') : page.url}</div>
         </div>
         {concept && onOpenFile && (
           <button className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Open the prototype file" onClick={onOpenFile}><ExternalIcon className="h-3.5 w-3.5" /></button>
@@ -621,7 +621,7 @@ function PageSheet({
       </div>
 
       {concept && <ArtifactPreview source={page.html ?? ''} title={page.label} />}
-      {concept && (page.revisions?.length ?? 0) > 0 && <details className="p-3 text-[12px]">
+      {concept && (page.revisions?.length ?? 0) > 0 && <details className="p-3 text-xs">
         <summary>Previous versions ({page.revisions?.length})</summary>
         {page.revisions?.map((revision) => <button key={revision.id} className="chip chip-action my-1 block" onClick={() => { if (window.confirm('Restore this version? The current design will be kept in history.')) void onRestore(revision.html); }}>
           Restore · {new Date(revision.createdAt).toLocaleString()}
@@ -630,18 +630,18 @@ function PageSheet({
       <div className="px-3 py-3">
         {concept && (
           <>
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Refine</div>
-            {page.prompt && <p className="mb-1.5 line-clamp-2 text-[11px] italic text-ink-faint">"{page.prompt}"</p>}
+            <div className="mb-1 text-xs font-medium text-ink-soft">Refine</div>
+            {page.prompt && <p className="mb-1 line-clamp-2 text-2xs italic text-ink-faint">"{page.prompt}"</p>}
             <textarea
-              className="input min-h-[52px] w-full resize-none text-[12.5px]"
+              className="input min-h-[52px] w-full resize-none text-xs"
               rows={2}
               placeholder='"Make the hero darker", "add a pricing section", "more whitespace"…'
               value={refineText}
               onChange={(e) => setRefineText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) refine(); }}
             />
-            <div className="mt-1.5 flex justify-end">
-              <button className="btn btn-primary py-1 text-[12px]" disabled={!refineText.trim() || refining} onClick={refine}>
+            <div className="mt-1 flex justify-end">
+              <button className="btn btn-primary py-1 text-xs" disabled={!refineText.trim() || refining} onClick={refine}>
                 {refining ? 'Refining…' : 'Refine design'}
               </button>
             </div>
@@ -650,28 +650,28 @@ function PageSheet({
         )}
 
         {/* Notes, persistent */}
-        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Notes</div>
-        {page.notes.length === 0 && <p className="mb-2 text-[12px] text-ink-faint">No notes yet, pin design intent that sticks with this page.</p>}
+        <div className="mb-1 text-xs font-medium text-ink-soft">Notes</div>
+        {page.notes.length === 0 && <p className="mb-2 text-xs text-ink-faint">No notes yet, pin design intent that sticks with this page.</p>}
         {page.notes.map((n) => (
-          <div key={n.id} className="mb-1.5 flex items-start gap-2 rounded-lg border border-line p-2">
-            <p className="min-w-0 flex-1 whitespace-pre-wrap text-[12.5px]">{n.text}</p>
-            <button className="shrink-0 text-[10.5px] text-ink-faint hover:text-ink" onClick={() => onResolveNote(n.id)} title="Remove note">✕</button>
+          <div key={n.id} className="mb-1 flex items-start gap-2 rounded-lg border border-line p-2">
+            <p className="min-w-0 flex-1 whitespace-pre-wrap text-xs">{n.text}</p>
+            <button className="shrink-0 text-2xs text-ink-faint hover:text-ink" onClick={() => onResolveNote(n.id)} title="Remove note">✕</button>
           </div>
         ))}
-        <div className="mt-1 flex gap-1.5">
-          <input ref={noteRef} className="input flex-1 text-[12px]" placeholder="Pin a note…" value={note}
+        <div className="mt-1 flex gap-2">
+          <input ref={noteRef} className="input flex-1 text-xs" placeholder="Pin a note…" value={note}
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && note.trim()) { onAddNote(note); setNote(''); } }} />
-          <button className="btn btn-outline px-2 py-1 text-[12px]" disabled={!note.trim()} onClick={() => { onAddNote(note); setNote(''); noteRef.current?.focus(); }}>Pin</button>
+          <button className="btn btn-outline px-2 py-1 text-xs" disabled={!note.trim()} onClick={() => { onAddNote(note); setNote(''); noteRef.current?.focus(); }}>Pin</button>
         </div>
 
         {/* Comment, routes to the agent */}
-        <div className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Comment for the agent</div>
-        <textarea className="input min-h-[60px] resize-none text-[12.5px]" rows={3} placeholder="Describe a change to this page…"
+        <div className="mb-1 mt-4 text-xs font-medium text-ink-soft">Comment for the agent</div>
+        <textarea className="input min-h-[60px] resize-none text-xs" rows={3} placeholder="Describe a change to this page…"
           value={comment} onChange={(e) => setComment(e.target.value)} />
-        <div className="mt-1.5 flex justify-end gap-2">
-          <button className="btn btn-outline py-1 text-[12px]" disabled={!comment.trim()} onClick={() => { onComment(comment, false); setComment(''); }}>Add to prompt</button>
-          <button className="btn btn-primary py-1 text-[12px]" disabled={!comment.trim()} onClick={() => { onComment(comment, true); setComment(''); }}>Run now</button>
+        <div className="mt-1 flex justify-end gap-2">
+          <button className="btn btn-outline py-1 text-xs" disabled={!comment.trim()} onClick={() => { onComment(comment, false); setComment(''); }}>Add to prompt</button>
+          <button className="btn btn-primary py-1 text-xs" disabled={!comment.trim()} onClick={() => { onComment(comment, true); setComment(''); }}>Run now</button>
         </div>
       </div>
     </aside>

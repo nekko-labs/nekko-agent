@@ -21,7 +21,7 @@ export function ReasoningBlock({ text, live, duration, stateKey = 'thought-open'
       <div className="msg-ai mt-2" data-chat-thought data-folded={!open || undefined}>
         <button className="flex items-center gap-2 text-left text-ink-faint hover:text-ink-soft" onClick={() => setOpen(!open)} aria-expanded={open}>
           <ThoughtIcon className="h-4 w-4 shrink-0" />
-          <span className="text-[13px]">{label}</span>
+          <span className="text-sm">{label}</span>
         </button>
         {open && <div className="mt-1 min-w-0 pl-6" data-chat-search-text><Markdown text={text} /></div>}
       </div>

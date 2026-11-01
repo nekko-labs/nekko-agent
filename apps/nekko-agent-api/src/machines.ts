@@ -20,7 +20,10 @@ import type { MachineDriver } from "./fly.js";
 export const MACHINE_PLANS: ReadonlySet<Plan> = new Set(["pro", "team"]);
 /** Machines per account, running or stopped. */
 export const MACHINE_LIMIT = 3;
-/** Machine hours per month per plan. Metered by the machine's reported uptime. */
+/**
+ * Machine hours per month per plan, per account: every machine's running time
+ * in the calendar month (UTC), deleted machines included (`machine_usage`).
+ */
 export const MACHINE_HOURS: Record<Plan, number> = { free: 0, pro: 40, team: 200 };
 export const REGIONS = new Set(["nrt", "sin", "iad", "sjc", "lhr", "fra", "syd"]);
 const REPO = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
@@ -84,6 +87,73 @@ function newPairCode(): string {
   // 32 symbols, so the top five bits of each byte pick one uniformly.
   const bytes = randomBytes(8);
   return [...bytes].map((b) => ALPHABET[b >> 3]).join("");
+}
+
+const MONTH = "date_trunc('month', now() at time zone 'utc')::date";
+
+/**
+ * Accrue a machine's running time since `started_at` into its own total and
+ * its account's month, in one statement. `running` says whether it keeps
+ * running (the clock restarts now) or has stopped (the clock is cleared).
+ */
+export async function accrue(db: Db, machineId: string, running: boolean): Promise<void> {
+  await db.query(
+    `with prev as (
+       select id, user_id, started_at, greatest(coalesce(extract(epoch from now() - started_at), 0), 0)::bigint as secs
+       from cloud_machines where id = $1 for update
+     ),
+     upd as (
+       update cloud_machines c
+       set seconds_used = c.seconds_used + prev.secs,
+           started_at = case when $2::boolean then now() else null end,
+           updated_at = now()
+       from prev where c.id = prev.id
+       returning c.id
+     )
+     insert into machine_usage (user_id, period, seconds)
+     select user_id, ${MONTH}, secs from prev where started_at is not null
+     on conflict (user_id, period) do update set seconds = machine_usage.seconds + excluded.seconds`,
+    [machineId, running],
+  );
+}
+
+/** Seconds the account's machines ran this month: what was accrued, plus what is running now. */
+export async function secondsThisMonth(db: Db, userId: string): Promise<number> {
+  const { rows } = await db.query<{ s: string }>(
+    `select (
+       coalesce((select seconds from machine_usage where user_id = $1 and period = ${MONTH}), 0)
+       + coalesce((select sum(greatest(extract(epoch from now() - started_at), 0))::bigint from cloud_machines
+                   where user_id = $1 and started_at is not null and deleted_at is null), 0)
+     )::text as s`,
+    [userId],
+  );
+  return Number(rows[0]?.s ?? 0);
+}
+
+const hoursLeft = async (db: Db, caller: Caller) => MACHINE_HOURS[caller.plan] * 3600 - (await secondsThisMonth(db, caller.userId));
+
+/**
+ * The periodic sweep: accrue every running machine's time, and stop the
+ * machines of accounts that have used their month's hours. Returns how many
+ * it stopped.
+ */
+export async function sweepMachineHours(db: Db, driver: MachineDriver): Promise<number> {
+  const { rows: running } = await db.query<{ id: string }>("select id from cloud_machines where started_at is not null and deleted_at is null");
+  for (const m of running) await accrue(db, m.id, true);
+  const { rows: over } = await db.query<{ id: string; provider_ref: string | null }>(
+    `select c.id, c.provider_ref from cloud_machines c
+     join users u on u.id = c.user_id
+     left join machine_usage mu on mu.user_id = c.user_id and mu.period = ${MONTH}
+     where c.started_at is not null and c.deleted_at is null
+       and coalesce(mu.seconds, 0) >= (case u.plan when 'team' then $1::bigint when 'pro' then $2::bigint else 0 end)`,
+    [MACHINE_HOURS.team * 3600, MACHINE_HOURS.pro * 3600],
+  );
+  for (const m of over) {
+    if (m.provider_ref) await driver.stop(m.provider_ref).catch(() => {});
+    await accrue(db, m.id, false);
+    await db.query("update cloud_machines set state = 'stopped', updated_at = now() where id = $1", [m.id]);
+  }
+  return over.length;
 }
 
 interface MachineRow {
@@ -155,7 +225,8 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
     const caller = await guard(req, reply, false);
     if (!caller) return;
     const { rows } = await db.query<MachineRow>(`select ${COLUMNS} from cloud_machines where user_id = $1 and deleted_at is null order by created_at`, [caller.userId]);
-    return { machines: rows.map((m) => wire(m, caller.plan)), relayUrl: opts.relayUrl, hoursIncluded: MACHINE_HOURS[caller.plan] };
+    const hoursUsed = Math.round(((await secondsThisMonth(db, caller.userId)) / 3600) * 10) / 10;
+    return { machines: rows.map((m) => wire(m, caller.plan)), relayUrl: opts.relayUrl, hoursIncluded: MACHINE_HOURS[caller.plan], hoursUsed };
   });
 
   app.post("/v1/machines", async (req, reply) => {
@@ -173,6 +244,7 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
     }
     const { rows: count } = await db.query<{ n: string }>("select count(*) as n from cloud_machines where user_id = $1 and deleted_at is null", [caller.userId]);
     if (Number(count[0].n) >= MACHINE_LIMIT) return reply.code(409).send({ error: "machine-limit", limit: MACHINE_LIMIT });
+    if ((await hoursLeft(db, caller)) <= 0) return reply.code(402).send({ error: "hours-used", hoursIncluded: MACHINE_HOURS[caller.plan] });
 
     // Minted here, handed out once: the key to the machine's environment and the phone's link; only its hash stays.
     const room = newRoom();
@@ -224,8 +296,13 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
       // The provider's word wins over ours: a machine that stopped itself when idle reads as stopped.
       const live = await opts.driver.state(m.provider_ref).catch(() => null);
       if (live && live !== "gone" && live !== m.state) {
-        await db.query("update cloud_machines set state = $1, updated_at = now() where id = $2", [live, m.id]);
-        m.state = live;
+        // Time counts up to the moment we see it stop, and from the moment we see it run.
+        if (live === "stopped") await accrue(db, m.id, false);
+        const { rows } = await db.query<MachineRow>(
+          `update cloud_machines set state = $1, started_at = case when $1 = 'running' then coalesce(started_at, now()) else started_at end, updated_at = now() where id = $2 returning ${COLUMNS}`,
+          [live, m.id],
+        );
+        return { machine: wire(rows[0], caller.plan) };
       }
     }
     return { machine: wire(m, caller.plan) };
@@ -252,10 +329,8 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
     const m = await mine(caller, (req.params as { id: string }).id);
     if (!m) return reply.code(404).send({ error: "not-found" });
     if (m.provider_ref) await opts.driver.stop(m.provider_ref);
-    const { rows } = await db.query<MachineRow>(
-      `update cloud_machines set state = 'stopped', seconds_used = seconds_used + coalesce(extract(epoch from now() - started_at), 0)::bigint, started_at = null, updated_at = now() where id = $1 returning ${COLUMNS}`,
-      [m.id],
-    );
+    await accrue(db, m.id, false);
+    const { rows } = await db.query<MachineRow>(`update cloud_machines set state = 'stopped', updated_at = now() where id = $1 returning ${COLUMNS}`, [m.id]);
     return { machine: wire(rows[0], caller.plan) };
   });
 
@@ -264,7 +339,9 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
     if (!caller) return;
     const m = await mine(caller, (req.params as { id: string }).id);
     if (!m) return reply.code(404).send({ error: "not-found" });
-    if (Number(m.seconds_used) / 3600 >= MACHINE_HOURS[caller.plan]) return reply.code(402).send({ error: "hours-used", hoursIncluded: MACHINE_HOURS[caller.plan] });
+    // A start while it runs (or after it stopped itself) first counts the time so far.
+    if (m.started_at) await accrue(db, m.id, false);
+    if ((await hoursLeft(db, caller)) <= 0) return reply.code(402).send({ error: "hours-used", hoursIncluded: MACHINE_HOURS[caller.plan] });
     if (m.provider_ref) await opts.driver.start(m.provider_ref);
     const { rows } = await db.query<MachineRow>(`update cloud_machines set state = 'running', started_at = now(), last_used_at = now(), updated_at = now() where id = $1 returning ${COLUMNS}`, [m.id]);
     return { machine: wire(rows[0], caller.plan) };
@@ -276,7 +353,8 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
     const m = await mine(caller, (req.params as { id: string }).id);
     if (!m) return reply.code(404).send({ error: "not-found" });
     if (m.provider_ref) await opts.driver.destroy(m.provider_ref).catch(() => {});
-    // The row stays for the hours it used; its relay access and room die with it.
+    // The row stays, and its hours stay in the account's month; its relay access and room die with it.
+    await accrue(db, m.id, false);
     await db.query("update cloud_machines set state = 'deleted', deleted_at = now(), updated_at = now(), relay_access_hash = $2 where id = $1", [m.id, sha256(`deleted:${m.id}:${b64(8)}`)]);
     return reply.code(204).send();
   });

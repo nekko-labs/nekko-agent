@@ -40,7 +40,7 @@ export function ResourceQueueSection() {
   };
   return <section className="card mt-7 space-y-3 p-5">
     <h2 className="font-semibold">Resource queue <span className="chip">Developer experimental</span></h2>
-    <p className="text-[12px] text-ink-faint">Outbound only. Manually claim a prompt job, review it in a new agent tab, then submit its result. Submission is not verified success or GitHub approval. Keep this page mounted while a lease is running; restarting the app loses this experimental assignment.</p>
+    <p className="text-xs text-ink-faint">Outbound only. Manually claim a prompt job, review it in a new agent tab, then submit its result. Submission is not verified success or GitHub approval. Keep this page mounted while a lease is running; restarting the app loses this experimental assignment.</p>
     <div className="flex flex-wrap gap-2">
       <input className="input min-w-64" aria-label="Coordinator URL" placeholder="https://your-coordinator.fly.dev" value={url} onChange={(e) => setUrl(e.target.value)} />
       <input className="input" type="password" autoComplete="off" aria-label="Client credential" placeholder="Admin-issued client credential" value={token} onChange={(e) => setToken(e.target.value)} />

@@ -22,7 +22,8 @@ final class RelayIntegrationTests: XCTestCase {
     }
 
     /// The phone testB enrolled, so later tests reconnect without a (single-use) code.
-    static var enrolled: String?
+    /// XCTest runs this case's tests one after another, in order, so nothing races on it.
+    nonisolated(unsafe) static var enrolled: String?
 
     static let env: Env? = {
         let e = ProcessInfo.processInfo.environment
@@ -31,10 +32,26 @@ final class RelayIntegrationTests: XCTestCase {
         return Env(relay: relay, room: room, key: key, pair: pair, keyBytes: E2E.deriveKey(secret: key, room: room))
     }()
 
+    /// One device key per test device, kept across its connections, as the Keychain keeps it.
+    final class Signers: @unchecked Sendable {
+        private let lock = NSLock()
+        private var all: [String: SoftwareHelloSigner] = [:]
+        func signer(for id: String) -> SoftwareHelloSigner {
+            lock.lock()
+            defer { lock.unlock() }
+            if let s = all[id] { return s }
+            let s = SoftwareHelloSigner()
+            all[id] = s
+            return s
+        }
+    }
+    static let signers = Signers()
+
     func client(_ env: Env, pair: String?, deviceId: String = UUID().uuidString.lowercased()) -> (RelayClient, RelayClientTests.Recorder) {
         var cfg = RelayConfig(relayUrl: env.relay, room: env.room, key: env.key, keyBytes: env.keyBytes, deviceId: deviceId,
                               deviceName: "iOS itest", pairCode: pair)
         cfg.requestTimeout = 30
+        cfg.helloSigner = Self.signers.signer(for: deviceId)
         #if os(Linux)
         let transport: WsTransport = SocketTransport() // libcurl there has no WebSockets
         #else
@@ -414,6 +431,8 @@ final class RelayIntegrationTests: XCTestCase {
         var cfg = RelayConfig(relayUrl: link.relayUrl, room: env.room, key: env.key, keyBytes: env.keyBytes, deviceId: device,
                               deviceName: "iOS itest")
         cfg.alternates = link.alts
+        // The enrolled phone proves its device key in every HELLO (#1444), on each route.
+        cfg.helloSigner = Self.signers.signer(for: device)
         cfg.requestTimeout = 30
         var rules = RouteRules()
         rules.openTimeout = 3

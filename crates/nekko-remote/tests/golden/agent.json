@@ -1,7 +1,7 @@
 {
  "secret": "00112233445566778899aabbccddeeff",
  "room": "a1b2c3d4e5f60718",
- "url": "ws://127.0.0.1:4400/relay?role=agent&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&access=tok%20en%2F1",
+ "url": "ws://127.0.0.1:4400/relay?role=agent&room=a1b2c3d4e5f60718&key=7a8260aa4bed6b4bf417c3884bd3e3b7b3c4d4ad2003f1426f91c6f7707de35c&access=tok%20en%2F1",
  "responses": {
   "sessions:summaries": {
    "result": [
@@ -128,7 +128,7 @@
     "relay": "{\"type\":\"c\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"vcTL0tng5+71/AMKEh04kaBHdRX6OYUqAwD0F2R9tkLLNBa/wJjusb/QNwGs2nvAa6I5lkqSGUpaSabO/S6VJkueqVgn1jKz7Pdmc8rLFcr5MAwN+q6JiiA=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"3OPq8fj/Bg0UGyIpXHPF05Gn1aqoFE9Q6ojnUFLzgrEYmSW5Qr49b+fQMhyoGkvj6nXnlSzy9jd6CZslGDfHozhCmiehWpqli5PmM0SZW4xs/mRYh5VzQC+GHdVgqIniIoOfnBtCm/r0XnXi0k6VSL1sEEboIRe2k0LEbEOicsBWIihrauKiKPHfbENwIDJhBtTCi2TI\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"3OPq8fj/Bg0UGyIpXHPF05Gn1aqoFE9Q6ojnUFLzgrEYmSW5Qr49b+fQMhyoGkvj6nXnlSzy9jd6CZslGDfHozhCmiehWpqli5PmM0SZW4xs/mRYh5VzQC+GHdVgqIniIoOfnBtCm/r0XnXi0k6VSL1sEEboIRe2k0LEbEOicsBWIihra+KgtTGYMMBEHWysauemWtPm\\\"}\"}"
    ],
    "connected": [
     "phone-1"
@@ -302,7 +302,7 @@
     "relay": "{\"type\":\"c\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"SE9WXWRrcnmAh46VFSEaZlGA5JuC7qphYBde5pCiQxStLVtmB4SNlCBgAoIOLNpJu5fTFjErBUehBlikr7RjTMI=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"Z251fIOKkZifpq20aSUVseFRpIycriCRv8u5x1jHXeCplwAMPM6BXdByiZtBnbve/0ZvVTGqS2rHm5p5sgi7d08v1xGdWF3huYP6frB89TCadUL6kD0CsNLNydHFMrtSL7wkAXDxxjp5H6FIyevoWcrFAXCfVmHA8hE0bnWCL0O9F1mvM9L3V6bOu6YZA4gol94NSG8q\\\"}\"}"
+    "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"Z251fIOKkZifpq20aSUVseFRpIycriCRv8u5x1jHXeCplwAMPM6BXdByiZtBnbve/0ZvVTGqS2rHm5p5sgi7d08v1xGdWF3huYP6frB89TCadUL6kD0CsNLNydHFMrtSL7wkAXDxxjp5H6FIyevoWcrFAXCfVmHA8hE0bnWCL0O9F1mvMtL1ymaJ5yUtPtbl++1pmdgE\\\"}\"}"
    ],
    "connected": [
     "phone-1",

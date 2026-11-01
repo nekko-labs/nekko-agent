@@ -52,8 +52,8 @@ impl SessionStart {
     }
 }
 
-/// Everything a launch needs. Nothing here touches the environment: the
-/// child gets the user's as it is.
+/// Everything a launch needs. The child gets the user's environment with
+/// only the changes in `env`.
 #[derive(Debug, Clone)]
 pub struct LaunchSpec {
     pub bin: ClaudeBin,
@@ -72,6 +72,8 @@ pub struct LaunchSpec {
     /// `CLAUDE_CONFIG_DIR` for a second Claude Code account; `None` runs on
     /// the user's default login.
     pub config_dir: Option<PathBuf>,
+    /// Environment changes for the child: set a variable, or remove it (`None`).
+    pub env: Vec<(String, Option<String>)>,
 }
 
 /// The command line, without the binary. Always stream-json both ways with
@@ -169,6 +171,12 @@ impl Session {
             .kill_on_drop(true);
         if let Some(dir) = &spec.config_dir {
             cmd.env("CLAUDE_CONFIG_DIR", dir);
+        }
+        for (name, value) in &spec.env {
+            match value {
+                Some(v) => cmd.env(name, v),
+                None => cmd.env_remove(name),
+            };
         }
         let mut child = cmd.spawn()?;
         let pid = child.id();
@@ -379,6 +387,7 @@ mod tests {
             permission_prompt_tool: Some("mcp__nekko_bridge__approve".into()),
             add_dirs: vec!["D:/other".into()],
             config_dir: None,
+            env: Vec::new(),
         }
     }
 

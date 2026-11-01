@@ -587,7 +587,9 @@ impl Turns {
             .unwrap_or_else(nekko_tools::default_guardrails);
         let allow = || json!({ "behavior": "allow", "updatedInput": input });
         match crate::harness::decide(&mode, &tool, &input, &rules, &entry.roots) {
-            crate::harness::Decision::Allow => Some(allow()),
+            crate::harness::Decision::Allow => {
+                Some(json!({ "behavior": "allow", "updatedInput": crate::harness::auto_run_input(&tool, &input) }))
+            }
             crate::harness::Decision::Deny(message) => Some(deny(&message)),
             crate::harness::Decision::Ask { reason, severity } => {
                 let id = str_at(prompt, "tool_use_id")
@@ -1336,9 +1338,14 @@ impl Turns {
         };
 
         // One turn per chat at a time: the slot stays taken until the end.
-        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && wanted.matches(&s.spec));
+        // A wake-up reads the child that woke, whatever it was launched with:
+        // its work is already running, and a change of model, mode or folders
+        // applies at the next message (#1408).
+        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && (wake || wanted.matches(&s.spec)));
         if wake && !reuse {
-            // The child that woke is gone or out of date: nothing to read.
+            // The child that woke is gone: drop it, or its unread line would
+            // wake the chat again at once.
+            slot.session = None;
             return;
         }
         if !reuse {
@@ -1393,6 +1400,17 @@ impl Turns {
             }
             Mapped::PlanUsage(event) => {
                 self.harness.note_plan_usage(str_at(provider, "id").unwrap_or_default(), &event)
+            }
+            Mapped::Plan(call) => {
+                let mut s = lock(session);
+                let Some(plan) = claude_code_plan(s.get("agentPlan"), call, nekko_js::now_ms()) else { return };
+                if let Some(obj) = s.as_object_mut() {
+                    obj.insert("agentPlan".into(), Value::Array(plan));
+                    obj.insert("updatedAt".into(), json!(nekko_js::now_ms()));
+                }
+                drop(s);
+                // After the call's checkpoint, which saves the plan with it.
+                shared.emit(json!({ "type": "session_meta", "sessionId": session_id }));
             }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
@@ -1478,6 +1496,27 @@ impl Turns {
             summary["stop"] = json!("connectivity");
         }
         summary
+    }
+}
+
+/// A Claude Agent chat's `agentPlan` after Claude Code changed its own plan
+/// (nekko_harness::PlanCall), through the same rules as `update_plan`;
+/// `None` when nothing changed.
+fn claude_code_plan(current: Option<&Value>, call: nekko_harness::PlanCall, now: u64) -> Option<Vec<Value>> {
+    use nekko_harness::PlanCall;
+    let (current, steps) = match call {
+        // A new list from Claude Code is the whole plan: nothing carries over.
+        PlanCall::Replace(steps) => (None, steps),
+        PlanCall::Upsert(step) => (current, vec![step]),
+        PlanCall::Remove(id) => {
+            let plan = current?.as_array()?;
+            let kept: Vec<Value> = plan.iter().filter(|s| str_at(s, "id") != Some(id.as_str())).cloned().collect();
+            return (kept.len() != plan.len()).then_some(kept);
+        }
+    };
+    match turn::apply_plan_update(current, &json!({ "steps": steps }), now) {
+        turn::PlanOutcome::Applied { plan, .. } => Some(plan),
+        _ => None,
     }
 }
 
@@ -2902,6 +2941,32 @@ mod tests {
             claude_code_context(Some(&before), stopped, Some("claude-sonnet-5-5".into()), Some("sonnet".into())),
             json!({ "used": 52_000, "model": "claude-sonnet-5-5", "modelId": "sonnet" })
         );
+    }
+
+    #[test]
+    fn claude_codes_own_plan_becomes_the_chats() {
+        use nekko_harness::PlanCall;
+        let titles = |plan: &[Value]| -> Vec<(String, String)> {
+            plan.iter().map(|s| (s["title"].as_str().unwrap().into(), s["status"].as_str().unwrap().into())).collect()
+        };
+        let pair = |t: &str, s: &str| (t.to_string(), s.to_string());
+        // TaskCreate, then TaskUpdate by its id.
+        let a = json!({ "id": "task_1", "title": "Read", "status": "pending" });
+        let plan = claude_code_plan(None, PlanCall::Upsert(a), 1).unwrap();
+        let b = json!({ "id": "task_2", "title": "Fix", "status": "pending" });
+        let plan = claude_code_plan(Some(&json!(plan)), PlanCall::Upsert(b), 2).unwrap();
+        let start = json!({ "id": "task_1", "status": "active" });
+        let plan = claude_code_plan(Some(&json!(plan)), PlanCall::Upsert(start), 3).unwrap();
+        assert_eq!(titles(&plan), [pair("Read", "active"), pair("Fix", "pending")]);
+        let plan = claude_code_plan(Some(&json!(plan)), PlanCall::Remove("task_2".into()), 4).unwrap();
+        assert_eq!(titles(&plan), [pair("Read", "active")]);
+        assert_eq!(claude_code_plan(Some(&json!(plan)), PlanCall::Remove("task_9".into()), 5), None);
+        // An update for a task the plan never had changes nothing.
+        assert_eq!(claude_code_plan(None, PlanCall::Upsert(json!({ "id": "task_9", "status": "done" })), 5), None);
+        // TodoWrite's list replaces the plan, finished steps and all.
+        let todos = vec![json!({ "id": "todo_1", "title": "New", "status": "active" })];
+        let plan = claude_code_plan(Some(&json!(plan)), PlanCall::Replace(todos), 6).unwrap();
+        assert_eq!(titles(&plan), [pair("New", "active")]);
     }
 
     #[test]

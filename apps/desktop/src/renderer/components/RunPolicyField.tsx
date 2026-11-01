@@ -25,11 +25,11 @@ export function RunPolicyField({
   const shown = value ?? fallback;
   return (
     <label className="block">
-      <span className={compact ? 'block text-[11px] font-medium text-ink-faint' : 'mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-faint'}>
+      <span className={compact ? 'block text-2xs font-medium text-ink-faint' : 'mb-1 block text-xs font-medium text-ink-soft'}>
         When it runs
       </span>
       <select
-        className={compact ? 'input mt-1 w-full text-[12.5px]' : 'input w-full'}
+        className={compact ? 'input mt-1 w-full text-xs' : 'input w-full'}
         data-run-policy
         value={value ?? ''}
         onChange={(e) => onChange((e.target.value || undefined) as AutomationRunPolicy | undefined)}
@@ -37,7 +37,7 @@ export function RunPolicyField({
         <option value="">Default: {runPolicyLabel(fallback)}</option>
         {RUN_POLICY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
       </select>
-      <span className="mt-1 block text-[11px] text-ink-faint" data-run-policy-hint>
+      <span className="mt-1 block text-2xs text-ink-faint" data-run-policy-hint>
         {RUN_POLICY_OPTIONS.find((o) => o.id === shown)?.hint}
         {!value && !settings?.automationRunPolicy && (local ? ' Its model runs on this computer.' : ' Its model does not run on this computer.')}
         {' '}{note}

@@ -294,13 +294,13 @@ export function AddProvider({
         )}
         {showFields && <>
         <details className="col-span-2">
-          <summary className="cursor-pointer text-[12px] text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : ' — server address and name'}</summary>
+          <summary className="cursor-pointer text-xs text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : ' — server address and name'}</summary>
           <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="text-[12px] font-medium text-ink-soft">
+        <label className="text-xs font-medium text-ink-soft">
           Label
           <input className="input mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={PROVIDER_DEFAULTS[kind].label} />
         </label>
-        <label className="text-[12px] font-medium text-ink-soft">
+        <label className="text-xs font-medium text-ink-soft">
           Base URL
           <input className="input mt-1" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
         </label>
@@ -308,26 +308,26 @@ export function AddProvider({
         </details>
         {oauthProvider && (
           <div className="col-span-2 rounded-xl border p-4" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>
-            <p className="text-[13px] font-medium">
+            <p className="text-sm font-medium">
               {oauthProvider === 'openrouter'
                 ? 'Connect with OpenRouter sign-in'
                 : `Use your ${oauthProvider === 'claude' ? 'Claude' : 'ChatGPT'} subscription`}
             </p>
-            <p className="mt-0.5 text-[12px] text-ink-faint">
+            <p className="mt-0.5 text-xs text-ink-faint">
               {oauthProvider === 'claude'
                 ? 'Sign in with your Claude account.'
                 : oauthProvider === 'chatgpt'
                   ? 'Sign in with your ChatGPT Plus, Pro, or Business account to run on your existing plan, with no API usage fees.'
                   : 'Approving in the browser creates a key on your OpenRouter account and saves it here — no copy-pasting. Or paste a key below instead.'}
             </p>
-            <div className="mt-2.5">
+            <div className="mt-2">
               <SubscriptionSignIn oauthProvider={oauthProvider} onConnected={connectSubscription} />
             </div>
             {kind === 'chatgpt' && (
-              <label className="mt-3 block text-[12px] font-medium text-ink-soft">
+              <label className="mt-3 block text-xs font-medium text-ink-soft">
                 Custom model id (optional)
                 <input
-                  className="input mt-1 text-[12px]"
+                  className="input mt-1 text-xs"
                   value={customModelId}
                   onChange={(e) => setCustomModelId(e.target.value)}
                   placeholder="Override the curated list, e.g. gpt-5-codex"
@@ -337,16 +337,16 @@ export function AddProvider({
           </div>
         )}
         {(PROVIDER_DEFAULTS[kind].needsKey || optionalKey) && (!keyBehindSignIn || useApiKey) && (
-          <label className="col-span-2 text-[12px] font-medium text-ink-soft">
+          <label className="col-span-2 text-xs font-medium text-ink-soft">
             API key{optionalKey && !PROVIDER_DEFAULTS[kind].needsKey ? ' (optional)' : ''}
             <input className="input mt-1" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…" />
           </label>
         )}
         {kind === 'anthropic' && (!keyBehindSignIn || useApiKey) && (
-          <label className="col-span-2 text-[12px] font-medium text-ink-soft">
+          <label className="col-span-2 text-xs font-medium text-ink-soft">
             Workspace ID (optional)
             <input
-              className="input mt-1 text-[12px]"
+              className="input mt-1 text-xs"
               value={workspaceId}
               onChange={(e) => setWorkspaceId(e.target.value)}
               placeholder="wrkspc_…"
@@ -358,7 +358,7 @@ export function AddProvider({
         )}
         {keyBehindSignIn && (
           <button
-            className="col-span-2 justify-self-start text-[12px] text-ink-faint hover:text-ink"
+            className="col-span-2 justify-self-start text-xs text-ink-faint hover:text-ink"
             onClick={() => setUseApiKey((v) => !v)}
           >
             {useApiKey ? 'Back to subscription sign-in' : 'Use an API key instead (billed per token)'}
@@ -367,9 +367,9 @@ export function AddProvider({
         </>}
       </div>
       <div className="mt-4 flex items-center justify-between gap-2">
-        <div className="min-w-0 text-[12px]">
+        <div className="min-w-0 text-xs">
           {result && (
-            <span style={{ color: result.ok ? 'var(--success)' : 'var(--danger)' }} className="inline-flex items-center gap-1.5">
+            <span style={{ color: result.ok ? 'var(--success)' : 'var(--danger)' }} className="inline-flex items-center gap-2">
               {result.ok && <CheckIcon className="h-3.5 w-3.5" />}
               {result.ok ? 'Connected' : result.message}
             </span>

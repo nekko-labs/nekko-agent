@@ -121,6 +121,14 @@ export const IpcChannels = {
   /** Background automations on a local model, and how many are paused for the user. */
   backgroundState: 'background:state',
   machineDismissNudge: 'machine:dismissNudge',
+  /** Whether memory is low, which app holds the most, and what Nekko holds (the tray's low-memory prompt). */
+  memoryState: 'memory:state',
+  /** Ask an app to close as a person would, so it can still ask to save. Never Nekko's own or the system's. */
+  memoryCloseApp: 'memory:closeApp',
+  /** Shut down every loaded local model, mid-reply or kept resident: the low-memory prompt's "Shut down Nekko's local models". */
+  engineUnloadAll: 'engine:unloadAll',
+  /** The loaded local models, how many are replying, and what their processes hold: what shutting them down frees. */
+  engineMemory: 'engine:memory',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */

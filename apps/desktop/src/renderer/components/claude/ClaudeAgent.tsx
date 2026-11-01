@@ -145,13 +145,13 @@ export function ClaudePlanSheet() {
   return (
     <Modal title={CLAUDE_PLAN_SHEET.title} labelledBy={titleId} onClose={close} overlayClassName="p-4" className="card claude-sheet w-full max-w-2xl p-5">
       <div className="flex items-start justify-between gap-3">
-        <h2 id={titleId} className="text-[16px] font-semibold">{CLAUDE_PLAN_SHEET.title}</h2>
+        <h2 id={titleId} className="text-base font-semibold">{CLAUDE_PLAN_SHEET.title}</h2>
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" onClick={close} aria-label="Close">
           <CloseIcon className="h-4 w-4" />
         </button>
       </div>
       {CLAUDE_PLAN_SHEET.paragraphs.map((p) => (
-        <p key={p} className="mt-3 text-[13px] leading-relaxed text-ink-soft">{p}</p>
+        <p key={p} className="mt-3 text-sm leading-relaxed text-ink-soft">{p}</p>
       ))}
       <div className="mt-4">
         <ClaudeComparison />

@@ -1,4 +1,6 @@
-import BackgroundTasks
+// BGTask may be completed from any thread, but BackgroundTasks doesn't mark it
+// Sendable yet: the task is handed to the main actor to complete it there.
+@preconcurrency import BackgroundTasks
 import Foundation
 
 /// While prompts wait in the outbox and the app is in the background, iOS may

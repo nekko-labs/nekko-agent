@@ -19,6 +19,17 @@ public struct URLSessionTransport: WsTransport {
         }
         return URLSessionConnection(url: url, handlers: handlers, pingInterval: pingInterval)
     }
+
+    /// The close reason for a failed socket. A name that doesn't resolve gets
+    /// `RelayStatus.hostNotFound` whatever the phone's language, so the app can
+    /// say the paired address is gone instead of "Connecting…" forever.
+    static func reason(_ error: Error) -> String {
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain, ns.code == NSURLErrorCannotFindHost || ns.code == NSURLErrorDNSLookupFailed {
+            return RelayStatus.hostNotFound
+        }
+        return error.localizedDescription
+    }
 }
 
 final class URLSessionConnection: NSObject, WsConnection, URLSessionWebSocketDelegate, @unchecked Sendable {
@@ -31,6 +42,8 @@ final class URLSessionConnection: NSObject, WsConnection, URLSessionWebSocketDel
     private var open = false
     private var closed = false
     private var pingTimer: DispatchSourceTimer?
+    /// A ping was sent and its pong hasn't come back yet (under `lock`).
+    private var pingOutstanding = false
 
     init(url: URL, handlers: WsHandlers, pingInterval: TimeInterval) {
         self.url = url
@@ -94,7 +107,7 @@ final class URLSessionConnection: NSObject, WsConnection, URLSessionWebSocketDel
             case .failure(let e):
                 // A clean close arrives through didCloseWith first; this is a lost path.
                 let code = t.closeCode == .invalid ? 1006 : t.closeCode.rawValue
-                let reason = t.closeReason.flatMap { String(data: $0, encoding: .utf8) } ?? e.localizedDescription
+                let reason = t.closeReason.flatMap { String(data: $0, encoding: .utf8) } ?? URLSessionTransport.reason(e)
                 self.finish(code, reason)
             }
         }
@@ -105,8 +118,20 @@ final class URLSessionConnection: NSObject, WsConnection, URLSessionWebSocketDel
         timer.schedule(deadline: .now() + pingInterval, repeating: pingInterval)
         timer.setEventHandler { [weak self] in
             guard let me = self else { return }
+            // A ping still unanswered a whole interval later is a dead path (a black-holed
+            // route never fails sendPing until the TCP timeout): close, and the client reconnects.
+            let unanswered: Bool = me.lock.withLock {
+                let previous = me.pingOutstanding
+                me.pingOutstanding = true
+                return previous
+            }
+            if unanswered {
+                me.finish(1006, "No answer to a ping")
+                return
+            }
             t.sendPing { error in
-                if let error { me.finish(1006, error.localizedDescription) }
+                if let error { me.finish(1006, error.localizedDescription); return }
+                me.lock.withLock { me.pingOutstanding = false }
             }
         }
         lock.lock()
@@ -149,6 +174,6 @@ final class URLSessionConnection: NSObject, WsConnection, URLSessionWebSocketDel
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        finish(1006, error?.localizedDescription ?? "connection closed")
+        finish(1006, error.map(URLSessionTransport.reason) ?? "connection closed")
     }
 }

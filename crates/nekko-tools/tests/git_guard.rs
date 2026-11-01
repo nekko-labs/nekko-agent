@@ -109,7 +109,12 @@ async fn auto_run_git_gets_the_hardened_environment() {
         let r = call(&ctx, "bash", json!({ "command": command })).await;
         assert!(!r.is_error, "{command}: {}", r.output);
         let (ran, env) = rec.0.lock().unwrap().pop().unwrap();
-        assert_eq!(ran, command);
+        let expected = if hardened {
+            nekko_tools::gitguard::harden_git_command(command, nekko_tools::Dialect::host())
+        } else {
+            command.to_string()
+        };
+        assert_eq!(ran, expected);
         let has = |k: &str, v: &str| env.iter().any(|(n, x)| n == k && x.as_deref() == Some(v));
         let fsmonitor_off =
             env.iter().any(|(n, v)| n.starts_with("GIT_CONFIG_KEY_") && v.as_deref() == Some("core.fsmonitor"))
@@ -150,5 +155,44 @@ async fn a_planted_fsmonitor_does_not_run_on_auto_run_git_status() {
     assert!(!r.is_error, "{}", r.output);
     assert!(asked.lock().unwrap().is_empty(), "git status is read-only: no prompt");
     assert!(!marker.exists(), "the planted fsmonitor ran");
+    let _ = std::fs::remove_dir_all(ws);
+}
+
+/// End to end with the real shell and git: a bare repository in the workspace
+/// whose config names an external diff program; an auto-run `git diff` from
+/// inside it must not run that program.
+#[tokio::test]
+async fn a_bare_repository_diff_driver_does_not_run_on_auto_run_git_diff() {
+    let has_git = std::process::Command::new("git").arg("--version").output().is_ok_and(|o| o.status.success());
+    if !has_git {
+        eprintln!("git not installed; skipped");
+        return;
+    }
+    let ws = temp("bare");
+    let marker = ws.join("ran");
+    let script = ws.join("ext.sh");
+    let marker_path = marker.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    std::fs::write(&script, format!("#!/bin/sh\necho ran > '{marker_path}'\n")).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let repo = ws.join("repo");
+    for d in ["objects", "refs/heads"] {
+        std::fs::create_dir_all(repo.join(d)).unwrap();
+    }
+    let script_path = script.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    std::fs::write(repo.join("config"), format!("[core]\n\tbare = true\n[diff]\n\texternal = '{script_path}'\n"))
+        .unwrap();
+    std::fs::write(repo.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    std::fs::write(ws.join("a.txt"), "a\n").unwrap();
+    std::fs::write(ws.join("b.txt"), "b\n").unwrap();
+
+    let (ctx, asked) = context(&ws, ChatMode::Guardrails, false);
+    let r = call(&ctx, "bash", json!({ "command": "git -C repo diff --no-index ../a.txt ../b.txt" })).await;
+    assert!(asked.lock().unwrap().is_empty(), "git diff is read-only: no prompt");
+    assert!(r.output.contains("-a") && r.output.contains("+b"), "{}", r.output);
+    assert!(!marker.exists(), "the configured external diff ran");
     let _ = std::fs::remove_dir_all(ws);
 }

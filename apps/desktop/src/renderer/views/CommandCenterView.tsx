@@ -32,6 +32,7 @@ import {
   minimizeFinishedReply,
   DEFAULT_ASPECT,
   openWallPane,
+  agentZoneTints,
   loadWallState,
   nextAgent,
   reconcileWall,
@@ -425,6 +426,8 @@ export function CommandCenterView() {
     setSelected(chat.id);
   }, [focusRequest, listsReady, sessions, setWall]);
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
+  // Zones are drawn everywhere but Focus, so only there do the cards carry no zone colour.
+  const agentTints = useMemo(() => (wall.layout.mode === 'focus' ? undefined : agentZoneTints(wall.root)), [wall.root, wall.layout.mode]);
   const panel = readAgentPanel(wall.agentPanel);
   const agentsPresent = usePanelPresence(panel.show);
   useEffect(() => {
@@ -523,7 +526,7 @@ export function CommandCenterView() {
   }, [wall.layout.mode, completedId, agentsPresent]);
 
   return (
-    <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-[3px] pr-px pt-0">
+    <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-1 pr-px pt-0">
       {showZonesIntro && <Suspense fallback={null}><ZonesIntro onClose={() => setWall((w) => ({ ...w, zonesIntro: true }))} /></Suspense>}
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
@@ -562,6 +565,7 @@ export function CommandCenterView() {
         }
       }} onOpenTerminal={(id) => { setCompletedId(null); void addFromToolbar('terminal', id); }}
         orientation={panel.orientation}
+        zoneTints={agentTints}
         onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))}
         onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">
@@ -661,7 +665,7 @@ export function WallToolbar({
 
   const controls = (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${slot ? 'wall-toolbar-titlebar' : ''}`} data-wall-toolbar>
-      {!hasAppChrome && <h1 className="view-title text-gradient">Agents</h1>}
+      {!hasAppChrome && <h1 className="view-title">Agents</h1>}
       <div className={`ml-auto flex flex-wrap items-center ${slot ? 'gap-2' : 'gap-3'}`}>
 
         {/* Adding to the wall, first in the row: an agent, an image session or a

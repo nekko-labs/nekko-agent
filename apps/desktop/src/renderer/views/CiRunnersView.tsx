@@ -13,17 +13,17 @@ export type RunnersState = { kind: 'loading' } | { kind: 'unavailable'; message:
 export function CiRunnersFirstVisit({ onConnect }: { onConnect(): void }) {
   return (
     <div className="mt-4 rounded-xl border border-dashed px-4 py-6 text-center" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
-      <div className="mx-auto mb-2.5 grid h-13 w-13 place-items-center rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+      <div className="mx-auto mb-2 grid h-13 w-13 place-items-center rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
         <LaptopIcon className="h-6.5 w-6.5" />
       </div>
-      <h2 className="mb-1 text-[18px] font-semibold">Use this Mac as a CI runner</h2>
-      <p className="mx-auto mb-3.5 max-w-130 text-[13.5px] text-ink-soft">
+      <h2 className="mb-1 text-xl font-semibold">Use this Mac as a CI runner</h2>
+      <p className="mx-auto mb-3 max-w-130 text-sm text-ink-soft">
         Run your GitHub Actions jobs here, each in a throwaway VM that is deleted afterward. Your own work comes first.
       </p>
       <button className="btn btn-primary" onClick={onConnect}>
         <PlugIcon className="h-4 w-4" /> Connect GitHub
       </button>
-      <div className="mt-3.5 flex flex-wrap justify-center gap-1.5">
+      <div className="mt-3 flex flex-wrap justify-center gap-2">
         <Badge tone="success"><ShieldIcon className="h-3 w-3" />VM per job</Badge>
         <Badge>1 macOS slot</Badge>
         <Badge>{PRIORITY_LABELS.doNotDisturb}</Badge>
@@ -131,7 +131,7 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
           {!hasAppChrome && <h1 className="view-title">CI runners</h1>}
           {segment}
           {hasRunners && (
-            <button className="btn btn-outline ml-auto py-1.5!" onClick={() => setConnecting(true)}>
+            <button className="btn btn-outline ml-auto py-1!" onClick={() => setConnecting(true)}>
               <PlugIcon className="h-3.5 w-3.5" /> Connect GitHub
             </button>
           )}

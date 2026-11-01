@@ -4,7 +4,7 @@ import Foundation
 /// or tool details, so nothing private sits on a screen anyone can glance at.
 /// The app writes it to the App Group whenever the counts change; the widget
 /// only reads it. Compiled into both the app and the widget extension.
-struct StatusSnapshot: Codable, Equatable {
+struct StatusSnapshot: Codable, Equatable, Sendable {
     var computer: String?
     var online: Bool
     var needsYou: Int

@@ -230,13 +230,16 @@ export interface PhoneDeniedGroup {
  * `PHONE_ALWAYS_DENIED` (SPEC "Full phone access"). Provider keys and other
  * credentials, remote access itself (settings, pairing more devices,
  * revoking, rotating), wiping data or resetting settings, and the desktop's
- * own OAuth sign-in, native dialogs, updater and OS shell.
+ * own OAuth sign-in, native dialogs, updater and OS shell, and closing
+ * another app on the computer to free memory.
  */
 export const PHONE_DENIED_FOREVER: PhoneDeniedGroup = {
   channels: [
     'connector:connect',
     'connector:disconnect',
     'data:wipe',
+    // Closes another app on the computer: only the person at it decides that.
+    'memory:closeApp',
     'providers:importCliAuth',
     'providers:remove',
     'providers:save',
