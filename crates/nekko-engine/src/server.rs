@@ -959,29 +959,27 @@ impl ModelServer {
         }
     }
 
-    /// Unload every model not answering a request, kept resident or not
-    /// (`releaseIdle`): the person asked for the memory back, because the
-    /// computer ran short. A model mid-reply stays.
-    pub async fn release_idle(&self) -> Value {
+    /// Shut down every loaded model, kept resident or mid-reply (`unloadAll`):
+    /// the person asked for the memory back because the computer ran short,
+    /// and was told the agents using them stop. The server keeps listening,
+    /// so the next message loads its model again. `stopped` counts the models
+    /// that were answering a request.
+    pub async fn unload_all(&self) -> Value {
         self.sync().await;
-        let idle: Vec<(String, f64)> = {
+        let loaded: Vec<(String, f64, bool)> = {
             let s = self.state.lock().unwrap();
-            s.children
-                .iter()
-                .filter(|(_, c)| c.active_requests == 0.0)
-                .map(|(k, c)| (k.clone(), c.size_bytes))
-                .collect()
+            s.children.iter().map(|(k, c)| (k.clone(), c.size_bytes, c.active_requests > 0.0)).collect()
         };
-        let busy = self.state.lock().unwrap().children.len() - idle.len();
-        let mut freed = 0.0;
+        let (mut freed, mut stopped) = (0.0, 0);
         let mut unloaded = Vec::new();
-        for (id, size) in idle {
+        for (id, size, busy) in loaded {
             if self.unload(&id).await["ok"] == true {
                 freed += size;
+                stopped += usize::from(busy);
                 unloaded.push(id);
             }
         }
-        json!({ "ok": true, "unloaded": unloaded, "freedBytes": freed, "busy": busy })
+        json!({ "ok": true, "unloaded": unloaded, "freedBytes": freed, "stopped": stopped })
     }
 
     /// Change a resident model's idle TTL without a reload (`setResidentTtl`).

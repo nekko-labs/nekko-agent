@@ -71,7 +71,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
-- [Ask before memory runs out (low-memory prompt)](desktop/low-memory-prompt.md) (4 KB)
+- [Ask before memory runs out (low-memory prompt)](desktop/low-memory-prompt.md) (5 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Customizable UI: customizations, mods and custom layouts](desktop/customizable-ui.md) (6 KB)
 - [Design quality: type scale, readable text, quiet buttons and navigation](desktop/design-quality-type-contrast-and-elevation.md) (4 KB)

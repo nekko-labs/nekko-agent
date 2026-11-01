@@ -25,9 +25,9 @@ function LowMemoryRows({ settings, update }: Props) {
   return <>
     <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
       <div><label htmlFor="desktop-low-memory" className="text-sm">When memory runs low</label>
-        <p className="text-2xs text-ink-faint">Nekko asks above the tray whether to close the app holding the most memory, free Nekko's own (its idle local models), or ignore it. A remembered choice is used without asking.</p></div>
+        <p className="text-2xs text-ink-faint">Nekko asks above the tray whether to close the app holding the most memory, shut down Nekko's local models (agents using them stop), or ignore it. A remembered choice is used without asking.</p></div>
       <select id="desktop-low-memory" className="input max-w-[200px] py-1" value={settings.lowMemoryAction ?? 'ask'} onChange={e => update({ lowMemoryAction: e.target.value === 'release' || e.target.value === 'ignore' ? e.target.value : undefined })}>
-        <option value="ask">Ask me</option><option value="release">Free Nekko's memory</option><option value="ignore">Do nothing</option>
+        <option value="ask">Ask me</option><option value="release">Shut down local models</option><option value="ignore">Do nothing</option>
       </select>
     </div>
     {apps.length > 0 && <div className="mt-2" aria-labelledby="desktop-low-memory-apps">
