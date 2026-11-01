@@ -311,13 +311,13 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
 /// system's own tar (bsdtar on Windows and macOS writes zip from the name).
 fn engine_archive(dir: &std::path::Path) -> (String, &'static str, Vec<u8>) {
     let (build, name, exe) = if cfg!(windows) {
-        ("win-x64-cpu", "llama-b11224-bin-win-cpu-x64.zip", "llama-server.exe")
+        ("win-x64-cpu", "llama-b11873-bin-win-cpu-x64.zip", "llama-server.exe")
     } else if cfg!(target_os = "macos") {
-        ("macos-arm64-metal", "llama-b11224-bin-macos-arm64.tar.gz", "llama-server")
+        ("macos-arm64-metal", "llama-b11873-bin-macos-arm64.tar.gz", "llama-server")
     } else if cfg!(target_arch = "aarch64") {
-        ("linux-arm64-cpu", "llama-b11224-bin-ubuntu-arm64.tar.gz", "llama-server")
+        ("linux-arm64-cpu", "llama-b11873-bin-ubuntu-arm64.tar.gz", "llama-server")
     } else {
-        ("linux-x64-cpu", "llama-b11224-bin-ubuntu-x64.tar.gz", "llama-server")
+        ("linux-x64-cpu", "llama-b11873-bin-ubuntu-x64.tar.gz", "llama-server")
     };
     let src = dir.join("archive-src/build/bin");
     std::fs::create_dir_all(&src).unwrap();
@@ -354,11 +354,11 @@ async fn fake_github(name: &'static str, archive: Vec<u8>) -> u16 {
     let port = listener.local_addr().unwrap().port();
     let digest: String = sha2::Sha256::digest(&archive).iter().map(|b| format!("{b:02x}")).collect();
     let release = json!({
-        "tag_name": "b11224",
+        "tag_name": "b11873",
         "assets": [{ "name": name, "browser_download_url": format!("http://127.0.0.1:{port}/dl/{name}"), "size": archive.len(), "digest": format!("sha256:{digest}") }],
     });
     let app = axum::Router::new()
-        .route("/repos/ggml-org/llama.cpp/releases/tags/b11224", get(move || async move { axum::Json(release) }))
+        .route("/repos/ggml-org/llama.cpp/releases/tags/b11873", get(move || async move { axum::Json(release) }))
         .route(&format!("/dl/{name}"), get(move || async move { archive }));
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -380,12 +380,12 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
     assert_eq!(
         (preview["version"].clone(), preview["files"][0]["name"].clone()),
-        (json!("b11224"), json!(name)),
+        (json!("b11873"), json!(name)),
         "{preview}"
     );
     let (status, started) = post(d.port, "engine:install", json!([build, "llama"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    assert_eq!(started["message"], "Downloading llama.cpp b11224.", "{started}");
+    assert_eq!(started["message"], "Downloading llama.cpp b11873.", "{started}");
     let job =
         job_until(d.port, started["jobId"].as_str().unwrap(), |j| j["state"] == "done" || j["state"] == "failed").await;
     assert_eq!(job["state"], "done", "{job}");
@@ -395,7 +395,7 @@ async fn installs_and_removes_the_engine_itself() {
     assert!(!data.join("engine").join(&build).join(name).exists(), "the archive is gone once unpacked");
     let record: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("engine/engine.json")).unwrap()).unwrap();
-    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b11224")));
+    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b11873")));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -405,7 +405,7 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, detected) = post(d.port, "engine:detect", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(
         (detected["source"].clone(), detected["version"].clone()),
-        (json!("managed"), json!("b11224")),
+        (json!("managed"), json!("b11873")),
         "{detected}"
     );
     assert!(

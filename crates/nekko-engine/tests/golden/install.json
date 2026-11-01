@@ -4,7 +4,7 @@
   "releases": {
     "llama": {
       "repo": "ggml-org/llama.cpp",
-      "tag": "b11224"
+      "tag": "b11873"
     },
     "diffusion": {
       "repo": "leejet/stable-diffusion.cpp",
@@ -3121,25 +3121,25 @@
     }
   ],
   "llamaAssets": [
-    "llama-b11224-bin-win-cuda-12.4-x64.zip",
-    "llama-b11224-bin-win-cuda-13.4-x64.zip",
-    "llama-b11224-bin-win-cuda-13.4-arm64.zip",
-    "llama-b11224-bin-win-cuda-9.1-x64.zip",
-    "llama-b11224-bin-win-vulkan-x64.zip",
-    "llama-b11224-bin-win-cpu-x64.zip",
-    "llama-b11224-bin-win-cpu-arm64.zip",
-    "llama-b11224-bin-win-rocm-x64.zip",
-    "llama-b11224-bin-macos-arm64.tar.gz",
-    "llama-b11224-bin-ubuntu-x64.tar.gz",
-    "llama-b11224-bin-ubuntu-arm64.tar.gz",
-    "llama-b11224-bin-ubuntu-vulkan-x64.tar.gz",
-    "llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz",
-    "llama-b11224-bin-ubuntu-rocm-x64.tar.gz",
+    "llama-b11873-bin-win-cuda-12.4-x64.zip",
+    "llama-b11873-bin-win-cuda-13.4-x64.zip",
+    "llama-b11873-bin-win-cuda-13.4-arm64.zip",
+    "llama-b11873-bin-win-cuda-9.1-x64.zip",
+    "llama-b11873-bin-win-vulkan-x64.zip",
+    "llama-b11873-bin-win-cpu-x64.zip",
+    "llama-b11873-bin-win-cpu-arm64.zip",
+    "llama-b11873-bin-win-rocm-x64.zip",
+    "llama-b11873-bin-macos-arm64.tar.gz",
+    "llama-b11873-bin-ubuntu-x64.tar.gz",
+    "llama-b11873-bin-ubuntu-arm64.tar.gz",
+    "llama-b11873-bin-ubuntu-vulkan-x64.tar.gz",
+    "llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz",
+    "llama-b11873-bin-ubuntu-rocm-x64.tar.gz",
     "cudart-llama-bin-win-cuda-12.4-x64.zip",
     "cudart-llama-bin-win-cuda-13.4-x64.zip",
-    "cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz",
+    "cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz",
     "llama-latest.txt",
-    "llama-b11224-xcframework.zip"
+    "llama-b11873-xcframework.zip"
   ],
   "sdAssetNames": [
     "sd-master-929-3f8527a-bin-win-cuda12-x64.zip",
@@ -3155,57 +3155,57 @@
   "assets": [
     {
       "id": "win-x64-cuda",
-      "asset": "llama-b11224-bin-win-cuda-13.4-x64.zip",
+      "asset": "llama-b11873-bin-win-cuda-13.4-x64.zip",
       "companion": "cudart-llama-bin-win-cuda-13.4-x64.zip"
     },
     {
       "id": "win-x64-vulkan",
-      "asset": "llama-b11224-bin-win-vulkan-x64.zip",
+      "asset": "llama-b11873-bin-win-vulkan-x64.zip",
       "companion": null
     },
     {
       "id": "win-x64-rocm",
-      "asset": "llama-b11224-bin-win-rocm-x64.zip",
+      "asset": "llama-b11873-bin-win-rocm-x64.zip",
       "companion": null
     },
     {
       "id": "win-x64-cpu",
-      "asset": "llama-b11224-bin-win-cpu-x64.zip",
+      "asset": "llama-b11873-bin-win-cpu-x64.zip",
       "companion": null
     },
     {
       "id": "win-arm64-cuda",
-      "asset": "llama-b11224-bin-win-cuda-13.4-arm64.zip",
+      "asset": "llama-b11873-bin-win-cuda-13.4-arm64.zip",
       "companion": null
     },
     {
       "id": "win-arm64-cpu",
-      "asset": "llama-b11224-bin-win-cpu-arm64.zip",
+      "asset": "llama-b11873-bin-win-cpu-arm64.zip",
       "companion": null
     },
     {
       "id": "macos-arm64-metal",
-      "asset": "llama-b11224-bin-macos-arm64.tar.gz",
+      "asset": "llama-b11873-bin-macos-arm64.tar.gz",
       "companion": null
     },
     {
       "id": "linux-x64-cuda",
-      "asset": "llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz",
-      "companion": "cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz"
+      "asset": "llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz",
+      "companion": "cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz"
     },
     {
       "id": "linux-x64-rocm",
-      "asset": "llama-b11224-bin-ubuntu-rocm-x64.tar.gz",
+      "asset": "llama-b11873-bin-ubuntu-rocm-x64.tar.gz",
       "companion": null
     },
     {
       "id": "linux-x64-vulkan",
-      "asset": "llama-b11224-bin-ubuntu-vulkan-x64.tar.gz",
+      "asset": "llama-b11873-bin-ubuntu-vulkan-x64.tar.gz",
       "companion": null
     },
     {
       "id": "linux-x64-cpu",
-      "asset": "llama-b11224-bin-ubuntu-x64.tar.gz",
+      "asset": "llama-b11873-bin-ubuntu-x64.tar.gz",
       "companion": null
     },
     {
@@ -3220,7 +3220,7 @@
     },
     {
       "id": "linux-arm64-cpu",
-      "asset": "llama-b11224-bin-ubuntu-arm64.tar.gz",
+      "asset": "llama-b11873-bin-ubuntu-arm64.tar.gz",
       "companion": null
     }
   ],
@@ -3336,11 +3336,11 @@
       "gpu": "nvidia",
       "smi": "8.9, 581.42\n8.6, 581.42\n",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -3348,21 +3348,21 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
       },
       "archives": {
-        "llama-b11224-bin-win-cuda-13.4-x64.zip": [
+        "llama-b11873-bin-win-cuda-13.4-x64.zip": [
           "llama-server.exe",
           "ggml-cuda.dll"
         ],
@@ -3370,11 +3370,11 @@
           "cublas64_13.dll",
           "cudart64_13.dll"
         ],
-        "llama-b11224-bin-win-vulkan-x64.zip": [
+        "llama-b11873-bin-win-vulkan-x64.zip": [
           "build/bin/llama-server.exe",
           "build/bin/ggml-vulkan.dll"
         ],
-        "llama-b11224-bin-win-cpu-x64.zip": [
+        "llama-b11873-bin-win-cpu-x64.zip": [
           "llama-server.exe"
         ]
       },
@@ -3414,11 +3414,11 @@
       ],
       "outs": [
         "{\"available\":[{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},\"reason\":\"No engine installed yet. Nekko Agent can download one, or point it at a llama-server you already have.\"}",
-        "{\"runtime\":\"llama\",\"version\":\"b11224\",\"build\":{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},\"files\":[{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"sizeBytes\":12},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"sizeBytes\":12}],\"sizeBytes\":24}",
-        "{\"runtime\":\"llama\",\"version\":\"b11224\",\"build\":{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},\"files\":[{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"sizeBytes\":14}],\"sizeBytes\":14}",
+        "{\"runtime\":\"llama\",\"version\":\"b11873\",\"build\":{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},\"files\":[{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"sizeBytes\":12},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"sizeBytes\":12}],\"sizeBytes\":24}",
+        "{\"runtime\":\"llama\",\"version\":\"b11873\",\"build\":{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},\"files\":[{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"sizeBytes\":14}],\"sizeBytes\":14}",
         "null",
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11224.\",\"jobId\":\"engine:llama:win-x64-cuda\"},\"job\":{\"id\":\"engine:llama:win-x64-cuda\",\"kind\":\"engine\",\"label\":\"llama.cpp b11224 (cuda)\",\"target\":\"win-x64-cuda\",\"dest\":\"<root>/engine/win-x64-cuda/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"state\":\"done\",\"receivedBytes\":12,\"startedAt\":1700000000000,\"finishedAt\":1700000000000}}",
-        "{\"binPath\":\"<root>/engine/win-x64-cuda/llama-server.exe\",\"source\":\"managed\",\"backend\":\"cuda\",\"version\":\"b11224\",\"installedAt\":1700000000000,\"available\":[{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"}}",
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11873.\",\"jobId\":\"engine:llama:win-x64-cuda\"},\"job\":{\"id\":\"engine:llama:win-x64-cuda\",\"kind\":\"engine\",\"label\":\"llama.cpp b11873 (cuda)\",\"target\":\"win-x64-cuda\",\"dest\":\"<root>/engine/win-x64-cuda/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"state\":\"done\",\"receivedBytes\":12,\"startedAt\":1700000000000,\"finishedAt\":1700000000000}}",
+        "{\"binPath\":\"<root>/engine/win-x64-cuda/llama-server.exe\",\"source\":\"managed\",\"backend\":\"cuda\",\"version\":\"b11873\",\"installedAt\":1700000000000,\"available\":[{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"}}",
         "\"<root>/engine/win-x64-cuda/llama-server.exe\"",
         "{\"ok\":true,\"message\":\"Removed the engine.\"}",
         "{\"available\":[{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},\"reason\":\"No engine installed yet. Nekko Agent can download one, or point it at a llama-server you already have.\"}",
@@ -3426,35 +3426,35 @@
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip",
+          "url": "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip",
           "headers": {}
         },
         {
@@ -3479,7 +3479,7 @@
         [
           "tar",
           "-xf",
-          "<root>/engine/win-x64-cuda/llama-b11224-bin-win-cuda-13.4-x64.zip",
+          "<root>/engine/win-x64-cuda/llama-b11873-bin-win-cuda-13.4-x64.zip",
           "-C",
           "<root>/engine/win-x64-cuda"
         ],
@@ -3512,11 +3512,11 @@
       "gpu": "nvidia",
       "smi": "6.1, 581.42",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -3524,21 +3524,21 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
       },
       "archives": {
-        "llama-b11224-bin-win-cuda-13.4-x64.zip": [
+        "llama-b11873-bin-win-cuda-13.4-x64.zip": [
           "llama-server.exe",
           "ggml-cuda.dll"
         ],
@@ -3546,11 +3546,11 @@
           "cublas64_13.dll",
           "cudart64_13.dll"
         ],
-        "llama-b11224-bin-win-vulkan-x64.zip": [
+        "llama-b11873-bin-win-vulkan-x64.zip": [
           "build/bin/llama-server.exe",
           "build/bin/ggml-vulkan.dll"
         ],
-        "llama-b11224-bin-win-cpu-x64.zip": [
+        "llama-b11873-bin-win-cpu-x64.zip": [
           "llama-server.exe"
         ]
       },
@@ -3567,19 +3567,19 @@
       ],
       "outs": [
         "{\"available\":[{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along. This GPU is older than the GTX 16 / RTX 20 series, so the CUDA build cannot run on it; Vulkan can.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},\"reason\":\"No engine installed yet. Nekko Agent can download one, or point it at a llama-server you already have.\"}",
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11224.\",\"jobId\":\"engine:llama:win-x64-vulkan\"},\"job\":{\"id\":\"engine:llama:win-x64-vulkan\",\"kind\":\"engine\",\"label\":\"llama.cpp b11224 (vulkan)\",\"target\":\"win-x64-vulkan\",\"dest\":\"<root>/engine/win-x64-vulkan/llama-b11224-bin-win-vulkan-x64.zip\",\"state\":\"done\",\"receivedBytes\":14,\"startedAt\":1700000000000,\"finishedAt\":1700000000000}}",
-        "{\"binPath\":\"<root>/engine/win-x64-vulkan/build/bin/llama-server.exe\",\"source\":\"managed\",\"backend\":\"vulkan\",\"version\":\"b11224\",\"installedAt\":1700000000000,\"available\":[{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along. This GPU is older than the GTX 16 / RTX 20 series, so the CUDA build cannot run on it; Vulkan can.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"}}"
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11873.\",\"jobId\":\"engine:llama:win-x64-vulkan\"},\"job\":{\"id\":\"engine:llama:win-x64-vulkan\",\"kind\":\"engine\",\"label\":\"llama.cpp b11873 (vulkan)\",\"target\":\"win-x64-vulkan\",\"dest\":\"<root>/engine/win-x64-vulkan/llama-b11873-bin-win-vulkan-x64.zip\",\"state\":\"done\",\"receivedBytes\":14,\"startedAt\":1700000000000,\"finishedAt\":1700000000000}}",
+        "{\"binPath\":\"<root>/engine/win-x64-vulkan/build/bin/llama-server.exe\",\"source\":\"managed\",\"backend\":\"vulkan\",\"version\":\"b11873\",\"installedAt\":1700000000000,\"available\":[{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along. This GPU is older than the GTX 16 / RTX 20 series, so the CUDA build cannot run on it; Vulkan can.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"}}"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip",
+          "url": "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip",
           "headers": {}
         }
       ],
@@ -3600,7 +3600,7 @@
         [
           "tar",
           "-xf",
-          "<root>/engine/win-x64-vulkan/llama-b11224-bin-win-vulkan-x64.zip",
+          "<root>/engine/win-x64-vulkan/llama-b11873-bin-win-vulkan-x64.zip",
           "-C",
           "<root>/engine/win-x64-vulkan"
         ]
@@ -3609,9 +3609,9 @@
         "stop"
       ],
       "left": [
-        "engine/engine.json={\n  \"binPath\": \"<root>/engine/win-x64-vulkan/build/bin/llama-server.exe\",\n  \"backend\": \"vulkan\",\n  \"buildId\": \"win-x64-vulkan\",\n  \"version\": \"b11224\",\n  \"installedAt\": 1700000000000\n}",
-        "engine/win-x64-vulkan/build/bin/ggml-vulkan.dll=from llama-b11224-bin-win-vulkan-x64.zip",
-        "engine/win-x64-vulkan/build/bin/llama-server.exe=from llama-b11224-bin-win-vulkan-x64.zip"
+        "engine/engine.json={\n  \"binPath\": \"<root>/engine/win-x64-vulkan/build/bin/llama-server.exe\",\n  \"backend\": \"vulkan\",\n  \"buildId\": \"win-x64-vulkan\",\n  \"version\": \"b11873\",\n  \"installedAt\": 1700000000000\n}",
+        "engine/win-x64-vulkan/build/bin/ggml-vulkan.dll=from llama-b11873-bin-win-vulkan-x64.zip",
+        "engine/win-x64-vulkan/build/bin/llama-server.exe=from llama-b11873-bin-win-vulkan-x64.zip"
       ]
     },
     {
@@ -3625,14 +3625,14 @@
         "engine/win-x64-cuda/llama-server.exe": "x",
         "engine/win-x64-cuda/ggml-cuda.dll": "x",
         "engine/win-x64-vulkan/llama-server.exe": "x",
-        "engine/engine.json": "{\"binPath\":\"<root>/engine/win-x64-cuda/llama-server.exe\",\"backend\":\"cuda\",\"buildId\":\"win-x64-cuda\",\"version\":\"b11224\",\"installedAt\":5}"
+        "engine/engine.json": "{\"binPath\":\"<root>/engine/win-x64-cuda/llama-server.exe\",\"backend\":\"cuda\",\"buildId\":\"win-x64-cuda\",\"version\":\"b11873\",\"installedAt\":5}"
       },
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -3640,15 +3640,15 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
@@ -3659,7 +3659,7 @@
         }
       ],
       "outs": [
-        "{\"binPath\":\"<root>/engine/win-x64-cuda/llama-server.exe\",\"source\":\"managed\",\"backend\":\"cuda\",\"version\":\"b11224\",\"installedAt\":5,\"problem\":{\"message\":\"The NVIDIA engine is missing its GPU libraries, so models are running on the processor and replies will be very slow or never arrive. Repair it to use your graphics card.\",\"repairBuildId\":\"win-x64-cuda\"},\"available\":[{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"}}"
+        "{\"binPath\":\"<root>/engine/win-x64-cuda/llama-server.exe\",\"source\":\"managed\",\"backend\":\"cuda\",\"version\":\"b11873\",\"installedAt\":5,\"problem\":{\"message\":\"The NVIDIA engine is missing its GPU libraries, so models are running on the processor and replies will be very slow or never arrive. Repair it to use your graphics card.\",\"repairBuildId\":\"win-x64-cuda\"},\"available\":[{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"}}"
       ],
       "requests": [],
       "runs": [
@@ -3671,7 +3671,7 @@
       ],
       "stops": [],
       "left": [
-        "engine/engine.json={\n  \"binPath\": \"<root>/engine/win-x64-cuda/llama-server.exe\",\n  \"backend\": \"cuda\",\n  \"buildId\": \"win-x64-cuda\",\n  \"version\": \"b11224\",\n  \"installedAt\": 5\n}",
+        "engine/engine.json={\n  \"binPath\": \"<root>/engine/win-x64-cuda/llama-server.exe\",\n  \"backend\": \"cuda\",\n  \"buildId\": \"win-x64-cuda\",\n  \"version\": \"b11873\",\n  \"installedAt\": 5\n}",
         "engine/win-x64-cuda/ggml-cuda.dll=x",
         "engine/win-x64-cuda/llama-server.exe=x",
         "engine/win-x64-vulkan/llama-server.exe=x"
@@ -3689,11 +3689,11 @@
         "engine/engine.json": "{\"binPath\":\"<root>/engine/win-x64-vulkan/llama-server.exe\",\"backend\":\"vulkan\",\"buildId\":\"win-x64-vulkan\",\"installedAt\":5}"
       },
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -3701,15 +3701,15 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
@@ -3751,11 +3751,11 @@
       "external": "<root>/mine/llama-server.exe",
       "versionOut": "version: 4567 (abcdef0)\nbuilt with MSVC",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -3763,15 +3763,15 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
@@ -3815,11 +3815,11 @@
       },
       "versionOut": "ggml_cuda_init: found 1 device\nversion: 7021 (b7021)\nbuilt with gcc for x86_64",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -3827,15 +3827,15 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
@@ -3886,7 +3886,7 @@
         "llama-server": "<root>/missing/llama-server.exe"
       },
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": "throw"
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": "throw"
       },
       "ops": [
         {
@@ -3910,14 +3910,14 @@
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
@@ -3952,11 +3952,11 @@
       "arch": "x64",
       "gpu": "none",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -3964,15 +3964,15 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
@@ -3995,7 +3995,7 @@
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
@@ -4022,9 +4022,9 @@
       "arch": "arm64",
       "gpu": "none",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b1\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":1},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b1\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":1},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         }
       },
       "ops": [
@@ -4041,14 +4041,14 @@
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
@@ -4066,9 +4066,9 @@
       "arch": "arm64",
       "gpu": "nvidia",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-13.4-arm64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-arm64.zip\",\"size\":1},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":1},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-13.4-arm64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-arm64.zip\",\"size\":1},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":1},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         }
       },
       "ops": [
@@ -4087,26 +4087,26 @@
       ],
       "outs": [
         "{\"res\":{\"ok\":false,\"message\":\"The release is missing required runtime libraries.\"}}",
-        "{\"res\":{\"ok\":false,\"message\":\"The b11224 release has no cpu build for this machine.\"}}",
+        "{\"res\":{\"ok\":false,\"message\":\"The b11873 release has no cpu build for this machine.\"}}",
         "null"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
@@ -4140,7 +4140,7 @@
       "arch": "x64",
       "gpu": "none",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 503,
           "body": "down"
         }
@@ -4155,7 +4155,7 @@
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
@@ -4174,11 +4174,11 @@
       "gpu": "none",
       "adapters": "other",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -4186,21 +4186,21 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "tampered"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
       },
       "archives": {
-        "llama-b11224-bin-win-cuda-13.4-x64.zip": [
+        "llama-b11873-bin-win-cuda-13.4-x64.zip": [
           "llama-server.exe",
           "ggml-cuda.dll"
         ],
@@ -4208,11 +4208,11 @@
           "cublas64_13.dll",
           "cudart64_13.dll"
         ],
-        "llama-b11224-bin-win-vulkan-x64.zip": [
+        "llama-b11873-bin-win-vulkan-x64.zip": [
           "build/bin/llama-server.exe",
           "build/bin/ggml-vulkan.dll"
         ],
-        "llama-b11224-bin-win-cpu-x64.zip": [
+        "llama-b11873-bin-win-cpu-x64.zip": [
           "llama-server.exe"
         ]
       },
@@ -4226,19 +4226,19 @@
         }
       ],
       "outs": [
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11224.\",\"jobId\":\"engine:llama:win-x64-vulkan\"},\"job\":{\"id\":\"engine:llama:win-x64-vulkan\",\"kind\":\"engine\",\"label\":\"llama.cpp b11224 (vulkan)\",\"target\":\"win-x64-vulkan\",\"dest\":\"<root>/engine/win-x64-vulkan/llama-b11224-bin-win-vulkan-x64.zip\",\"state\":\"failed\",\"receivedBytes\":8,\"startedAt\":1700000000000,\"message\":\"The downloaded runtime checksum does not match its release.\",\"finishedAt\":1700000000000}}",
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11873.\",\"jobId\":\"engine:llama:win-x64-vulkan\"},\"job\":{\"id\":\"engine:llama:win-x64-vulkan\",\"kind\":\"engine\",\"label\":\"llama.cpp b11873 (vulkan)\",\"target\":\"win-x64-vulkan\",\"dest\":\"<root>/engine/win-x64-vulkan/llama-b11873-bin-win-vulkan-x64.zip\",\"state\":\"failed\",\"receivedBytes\":8,\"startedAt\":1700000000000,\"message\":\"The downloaded runtime checksum does not match its release.\",\"finishedAt\":1700000000000}}",
         "{\"available\":[{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"bin-win-vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"bin-win-cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-llama\"},{\"id\":\"win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"bin-win-rocm\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"bin-win-cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},\"reason\":\"No engine installed yet. Nekko Agent can download one, or point it at a llama-server you already have.\"}"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip",
+          "url": "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip",
           "headers": {}
         }
       ],
@@ -4262,11 +4262,11 @@
       "arch": "x64",
       "gpu": "none",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -4274,15 +4274,15 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
@@ -4293,18 +4293,18 @@
         }
       ],
       "outs": [
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11224.\",\"jobId\":\"engine:llama:win-x64-cpu\"},\"job\":{\"id\":\"engine:llama:win-x64-cpu\",\"kind\":\"engine\",\"label\":\"llama.cpp b11224 (cpu)\",\"target\":\"win-x64-cpu\",\"dest\":\"<root>/engine/win-x64-cpu/llama-b11224-bin-win-cpu-x64.zip\",\"state\":\"failed\",\"receivedBytes\":11,\"startedAt\":1700000000000,\"message\":\"Couldn't unpack the engine: no archive tool available (tried tar, unzip, PowerShell)\",\"finishedAt\":1700000000000}}"
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11873.\",\"jobId\":\"engine:llama:win-x64-cpu\"},\"job\":{\"id\":\"engine:llama:win-x64-cpu\",\"kind\":\"engine\",\"label\":\"llama.cpp b11873 (cpu)\",\"target\":\"win-x64-cpu\",\"dest\":\"<root>/engine/win-x64-cpu/llama-b11873-bin-win-cpu-x64.zip\",\"state\":\"failed\",\"receivedBytes\":11,\"startedAt\":1700000000000,\"message\":\"Couldn't unpack the engine: no archive tool available (tried tar, unzip, PowerShell)\",\"finishedAt\":1700000000000}}"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/llama-b11224-bin-win-cpu-x64.zip",
+          "url": "https://dl.test/llama-b11873-bin-win-cpu-x64.zip",
           "headers": {}
         }
       ],
@@ -4312,7 +4312,7 @@
         [
           "tar",
           "-xf",
-          "<root>/engine/win-x64-cpu/llama-b11224-bin-win-cpu-x64.zip",
+          "<root>/engine/win-x64-cpu/llama-b11873-bin-win-cpu-x64.zip",
           "-C",
           "<root>/engine/win-x64-cpu"
         ],
@@ -4320,7 +4320,7 @@
           "unzip",
           "-o",
           "-q",
-          "<root>/engine/win-x64-cpu/llama-b11224-bin-win-cpu-x64.zip",
+          "<root>/engine/win-x64-cpu/llama-b11873-bin-win-cpu-x64.zip",
           "-d",
           "<root>/engine/win-x64-cpu"
         ],
@@ -4328,7 +4328,7 @@
           "powershell",
           "-NoProfile",
           "-Command",
-          "Expand-Archive -LiteralPath '<root>/engine/win-x64-cpu/llama-b11224-bin-win-cpu-x64.zip' -DestinationPath '<root>/engine/win-x64-cpu' -Force"
+          "Expand-Archive -LiteralPath '<root>/engine/win-x64-cpu/llama-b11873-bin-win-cpu-x64.zip' -DestinationPath '<root>/engine/win-x64-cpu' -Force"
         ]
       ],
       "stops": [
@@ -4343,11 +4343,11 @@
       "arch": "x64",
       "gpu": "none",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -4355,21 +4355,21 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
       },
       "archives": {
-        "llama-b11224-bin-win-cpu-x64.zip": [
+        "llama-b11873-bin-win-cpu-x64.zip": [
           "README.md",
           "deep/a/b/c/d/llama-server.exe"
         ]
@@ -4380,18 +4380,18 @@
         }
       ],
       "outs": [
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11224.\",\"jobId\":\"engine:llama:win-x64-cpu\"},\"job\":{\"id\":\"engine:llama:win-x64-cpu\",\"kind\":\"engine\",\"label\":\"llama.cpp b11224 (cpu)\",\"target\":\"win-x64-cpu\",\"dest\":\"<root>/engine/win-x64-cpu/llama-b11224-bin-win-cpu-x64.zip\",\"state\":\"failed\",\"receivedBytes\":11,\"startedAt\":1700000000000,\"message\":\"The archive did not contain llama-server.\",\"finishedAt\":1700000000000}}"
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11873.\",\"jobId\":\"engine:llama:win-x64-cpu\"},\"job\":{\"id\":\"engine:llama:win-x64-cpu\",\"kind\":\"engine\",\"label\":\"llama.cpp b11873 (cpu)\",\"target\":\"win-x64-cpu\",\"dest\":\"<root>/engine/win-x64-cpu/llama-b11873-bin-win-cpu-x64.zip\",\"state\":\"failed\",\"receivedBytes\":11,\"startedAt\":1700000000000,\"message\":\"The archive did not contain llama-server.\",\"finishedAt\":1700000000000}}"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/llama-b11224-bin-win-cpu-x64.zip",
+          "url": "https://dl.test/llama-b11873-bin-win-cpu-x64.zip",
           "headers": {}
         }
       ],
@@ -4399,7 +4399,7 @@
         [
           "tar",
           "-xf",
-          "<root>/engine/win-x64-cpu/llama-b11224-bin-win-cpu-x64.zip",
+          "<root>/engine/win-x64-cpu/llama-b11873-bin-win-cpu-x64.zip",
           "-C",
           "<root>/engine/win-x64-cpu"
         ]
@@ -4408,8 +4408,8 @@
         "stop"
       ],
       "left": [
-        "engine/win-x64-cpu/README.md=from llama-b11224-bin-win-cpu-x64.zip",
-        "engine/win-x64-cpu/deep/a/b/c/d/llama-server.exe=from llama-b11224-bin-win-cpu-x64.zip"
+        "engine/win-x64-cpu/README.md=from llama-b11873-bin-win-cpu-x64.zip",
+        "engine/win-x64-cpu/deep/a/b/c/d/llama-server.exe=from llama-b11873-bin-win-cpu-x64.zip"
       ]
     },
     {
@@ -4420,11 +4420,11 @@
       "gpu": "nvidia",
       "smi": "8.9, 581.0",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -4432,21 +4432,21 @@
           "status": 200,
           "body": "swapped"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
       },
       "archives": {
-        "llama-b11224-bin-win-cuda-13.4-x64.zip": [
+        "llama-b11873-bin-win-cuda-13.4-x64.zip": [
           "llama-server.exe",
           "ggml-cuda.dll"
         ],
@@ -4454,11 +4454,11 @@
           "cublas64_13.dll",
           "cudart64_13.dll"
         ],
-        "llama-b11224-bin-win-vulkan-x64.zip": [
+        "llama-b11873-bin-win-vulkan-x64.zip": [
           "build/bin/llama-server.exe",
           "build/bin/ggml-vulkan.dll"
         ],
-        "llama-b11224-bin-win-cpu-x64.zip": [
+        "llama-b11873-bin-win-cpu-x64.zip": [
           "llama-server.exe"
         ]
       },
@@ -4468,18 +4468,18 @@
         }
       ],
       "outs": [
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11224.\",\"jobId\":\"engine:llama:win-x64-cuda\"},\"job\":{\"id\":\"engine:llama:win-x64-cuda\",\"kind\":\"engine\",\"label\":\"llama.cpp b11224 (cuda)\",\"target\":\"win-x64-cuda\",\"dest\":\"<root>/engine/win-x64-cuda/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"state\":\"failed\",\"receivedBytes\":12,\"startedAt\":1700000000000,\"message\":\"Couldn't unpack the engine: Runtime-library checksum verification failed.\",\"finishedAt\":1700000000000}}"
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11873.\",\"jobId\":\"engine:llama:win-x64-cuda\"},\"job\":{\"id\":\"engine:llama:win-x64-cuda\",\"kind\":\"engine\",\"label\":\"llama.cpp b11873 (cuda)\",\"target\":\"win-x64-cuda\",\"dest\":\"<root>/engine/win-x64-cuda/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"state\":\"failed\",\"receivedBytes\":12,\"startedAt\":1700000000000,\"message\":\"Couldn't unpack the engine: Runtime-library checksum verification failed.\",\"finishedAt\":1700000000000}}"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip",
+          "url": "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip",
           "headers": {}
         },
         {
@@ -4496,7 +4496,7 @@
         [
           "tar",
           "-xf",
-          "<root>/engine/win-x64-cuda/llama-b11224-bin-win-cuda-13.4-x64.zip",
+          "<root>/engine/win-x64-cuda/llama-b11873-bin-win-cuda-13.4-x64.zip",
           "-C",
           "<root>/engine/win-x64-cuda"
         ]
@@ -4506,8 +4506,8 @@
       ],
       "left": [
         "engine/win-x64-cuda/cudart-llama-bin-win-cuda-13.4-x64.zip=swapped",
-        "engine/win-x64-cuda/ggml-cuda.dll=from llama-b11224-bin-win-cuda-13.4-x64.zip",
-        "engine/win-x64-cuda/llama-server.exe=from llama-b11224-bin-win-cuda-13.4-x64.zip"
+        "engine/win-x64-cuda/ggml-cuda.dll=from llama-b11873-bin-win-cuda-13.4-x64.zip",
+        "engine/win-x64-cuda/llama-server.exe=from llama-b11873-bin-win-cuda-13.4-x64.zip"
       ]
     },
     {
@@ -4518,11 +4518,11 @@
       "gpu": "nvidia",
       "smi": "8.9, 581.0",
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -4530,21 +4530,21 @@
           "status": 404,
           "body": "gone"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
       },
       "archives": {
-        "llama-b11224-bin-win-cuda-13.4-x64.zip": [
+        "llama-b11873-bin-win-cuda-13.4-x64.zip": [
           "llama-server.exe",
           "ggml-cuda.dll"
         ],
@@ -4552,11 +4552,11 @@
           "cublas64_13.dll",
           "cudart64_13.dll"
         ],
-        "llama-b11224-bin-win-vulkan-x64.zip": [
+        "llama-b11873-bin-win-vulkan-x64.zip": [
           "build/bin/llama-server.exe",
           "build/bin/ggml-vulkan.dll"
         ],
-        "llama-b11224-bin-win-cpu-x64.zip": [
+        "llama-b11873-bin-win-cpu-x64.zip": [
           "llama-server.exe"
         ]
       },
@@ -4566,18 +4566,18 @@
         }
       ],
       "outs": [
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11224.\",\"jobId\":\"engine:llama:win-x64-cuda\"},\"job\":{\"id\":\"engine:llama:win-x64-cuda\",\"kind\":\"engine\",\"label\":\"llama.cpp b11224 (cuda)\",\"target\":\"win-x64-cuda\",\"dest\":\"<root>/engine/win-x64-cuda/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"state\":\"failed\",\"receivedBytes\":12,\"startedAt\":1700000000000,\"message\":\"Couldn't unpack the engine: companion download failed (HTTP 404)\",\"finishedAt\":1700000000000}}"
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading llama.cpp b11873.\",\"jobId\":\"engine:llama:win-x64-cuda\"},\"job\":{\"id\":\"engine:llama:win-x64-cuda\",\"kind\":\"engine\",\"label\":\"llama.cpp b11873 (cuda)\",\"target\":\"win-x64-cuda\",\"dest\":\"<root>/engine/win-x64-cuda/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"state\":\"failed\",\"receivedBytes\":12,\"startedAt\":1700000000000,\"message\":\"Couldn't unpack the engine: companion download failed (HTTP 404)\",\"finishedAt\":1700000000000}}"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224",
+          "url": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip",
+          "url": "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip",
           "headers": {}
         },
         {
@@ -4594,7 +4594,7 @@
         [
           "tar",
           "-xf",
-          "<root>/engine/win-x64-cuda/llama-b11224-bin-win-cuda-13.4-x64.zip",
+          "<root>/engine/win-x64-cuda/llama-b11873-bin-win-cuda-13.4-x64.zip",
           "-C",
           "<root>/engine/win-x64-cuda"
         ]
@@ -4603,8 +4603,8 @@
         "stop"
       ],
       "left": [
-        "engine/win-x64-cuda/ggml-cuda.dll=from llama-b11224-bin-win-cuda-13.4-x64.zip",
-        "engine/win-x64-cuda/llama-server.exe=from llama-b11224-bin-win-cuda-13.4-x64.zip"
+        "engine/win-x64-cuda/ggml-cuda.dll=from llama-b11873-bin-win-cuda-13.4-x64.zip",
+        "engine/win-x64-cuda/llama-server.exe=from llama-b11873-bin-win-cuda-13.4-x64.zip"
       ]
     },
     {
@@ -4619,11 +4619,11 @@
         "engine/engine.json": "{\"binPath\":\"<root>/outside/llama-server\",\"backend\":\"cpu\",\"buildId\":\"linux-x64-cpu\",\"installedAt\":1}"
       },
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -4631,15 +4631,15 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }
@@ -4671,11 +4671,11 @@
         "engine/engine.json": "{\"binPath\":\"<root>/engine/Bad_ID/llama-server\",\"backend\":\"cpu\",\"buildId\":\"Bad_ID\",\"installedAt\":1}"
       },
       "http": {
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11224": {
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11873": {
           "status": 200,
-          "body": "{\"tag_name\":\"b11224\",\"assets\":[{\"name\":\"llama-b11224-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11224-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11224-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11224-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11224-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11224-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"b11873\",\"assets\":[{\"name\":\"llama-b11873-bin-win-cuda-12.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-12.4-x64.zip\",\"size\":8},{\"name\":\"llama-b11873-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:7d395b1be41939209f6d5ad2e100e451bf3108a31ad93ea8d2d7cf26ddffcbe5\"},{\"name\":\"cudart-llama-bin-win-cuda-13.4-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-llama-bin-win-cuda-13.4-x64.zip\",\"size\":12,\"digest\":\"sha256:6918121ae1425e450302ebbc22d128edb3d0b131ecb07240b4b61618de15cf3d\"},{\"name\":\"cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/cudart-llama-b11873-bin-ubuntu-cuda-13.4-x64.tar.gz\",\"size\":13},{\"name\":\"llama-b11873-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-vulkan-x64.zip\",\"size\":14,\"digest\":\"sha256:009812131008572ad04ca011a879de5de8a04f23e2c4a8de1ea31e6212efe5b8\"},{\"name\":\"llama-b11873-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-win-cpu-x64.zip\",\"size\":11},{\"name\":\"llama-b11873-bin-ubuntu-x64.tar.gz\",\"browser_download_url\":\"https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz\",\"size\":9},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/llama-b11224-bin-win-cuda-13.4-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cuda-13.4-x64.zip": {
           "status": 200,
           "body": "cuda archive"
         },
@@ -4683,15 +4683,15 @@
           "status": 200,
           "body": "cuda runtime"
         },
-        "https://dl.test/llama-b11224-bin-win-vulkan-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-vulkan-x64.zip": {
           "status": 200,
           "body": "vulkan archive"
         },
-        "https://dl.test/llama-b11224-bin-win-cpu-x64.zip": {
+        "https://dl.test/llama-b11873-bin-win-cpu-x64.zip": {
           "status": 200,
           "body": "cpu archive"
         },
-        "https://dl.test/llama-b11224-bin-ubuntu-x64.tar.gz": {
+        "https://dl.test/llama-b11873-bin-ubuntu-x64.tar.gz": {
           "status": 200,
           "body": "linux cpu"
         }

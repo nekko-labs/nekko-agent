@@ -80,18 +80,18 @@ describe('planStepLinks on a Claude Agent chat', () => {
     expect(planStepLinks(messages, live).get('live_2')?.prs).toEqual([ccPr]);
   });
 
-  it('gives each turn of a turn plan its own PRs', async () => {
-    const { claudeCodeTurnPlan } = await import('./claudeAgentPlan.js');
+  it('puts the PR on the Ship step of an activity plan', async () => {
+    const { claudeCodeActivityPlan } = await import('./claudeAgentPlan.js');
     const messages = [
-      msg({ id: 'a', role: 'user', content: 'Fix the parser' }),
+      msg({ role: 'user', content: 'Fix the parser' }),
+      msg({ toolCalls: [{ id: 'r', name: 'Read', input: { file_path: 'a.ts' } }, { id: 'e', name: 'Edit', input: {} }] }),
       msg({ toolCalls: [create('gh')] }),
       msg({ role: 'tool', toolResult: { toolCallId: 'gh', output: ccPr } }),
-      msg({ id: 'b', role: 'user', content: 'Now the docs' }),
     ];
-    const turns = claudeCodeTurnPlan(messages, true);
-    expect(turns.map(t => [t.title, t.status])).toEqual([['Ask Claude Code: Fix the parser', 'done'], ['Ask Claude Code: Now the docs', 'active']]);
-    const links = planStepLinks(messages, turns);
-    expect(links.get('turn:a')?.prs).toEqual([ccPr]);
-    expect(links.has('turn:b')).toBe(false);
+    const plan = claudeCodeActivityPlan(messages, false)!;
+    expect(plan.map(s => s.id)).toEqual(['phase:sent', 'phase:explore', 'phase:build', 'phase:ship']);
+    const links = planStepLinks(messages, plan);
+    expect(links.get('phase:ship')?.prs).toEqual([ccPr]);
+    expect(links.has('phase:build')).toBe(false);
   });
 });
