@@ -2682,6 +2682,19 @@
    title and every one opens while the pointer or focus is anywhere on the
    sheet, via a 0fr -> 1fr row, kept fast. */
 .plan-sheet-dock { --plan-sheet-bg: color-mix(in srgb, var(--surface-2) 90%, var(--accent)); position: relative; width: 84%; margin: 0 auto -10px; clip-path: inset(-2px -14px 0 -14px); }
+/* The per-chat Nekko peeks over the composer's left end (face behind its top
+   edge, paws over it, as the new-chat greeting does). The art's 25-unit face
+   is 62.5px of its 75px box, so -62.5px puts the composer edge at its chin.
+   With him there, the plan sheet keeps its right inset but starts clear of
+   his ears instead of overlapping them. */
+.chat-mascot { position: absolute; z-index: 2; left: 4px; top: -62.5px; width: 80px; height: 75px; pointer-events: none; user-select: none; }
+.chat-mascot-art { display: block; width: 80px; height: 75px; }
+/* His paws stay down behind the edge until the composer has focus (or on a
+   random occasion), then hop up over it. */
+.chat-mascot .peek-paws-slot { transform: translateY(5px); opacity: 0; transition: transform 160ms var(--ease-out), opacity 120ms var(--ease-out); }
+.chat-mascot .peek-paws-slot[data-shown] { transform: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .chat-mascot .peek-paws-slot { transition: none; } }
+.composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock { width: auto; margin-left: max(8%, 92px); margin-right: 8%; }
 .plan-sheet-dock::before, .plan-sheet-dock::after { content: ''; position: absolute; bottom: 10px; width: 12px; height: 12px; pointer-events: none; }
 .plan-sheet-dock::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
 .plan-sheet-dock::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
