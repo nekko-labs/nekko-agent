@@ -28,8 +28,8 @@ final class WatchModel: NSObject, WCSessionDelegate {
         WCSession.default.activate()
     }
 
-    private func take(_ snapshot: StatusSnapshot?) {
-        guard let s = snapshot else { return }
+    private func take(_ received: StatusSnapshot?) {
+        guard let s = received else { return }
         guard s != snapshot else { return }
         snapshot = s
         // Kept in the App Group so the watch face complication shows the same counts.
