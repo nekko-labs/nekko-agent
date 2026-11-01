@@ -187,6 +187,14 @@ the max job time.
 
 ## Verified on
 
+2026-11-01, on an M1 Max running macOS 27.0.1, Nekko's own build from the daemon's channels with
+the dev helper, guest macOS 27.2, Xcode 27.2 (an App Store Xcode). The whole build took 26 minutes
+with the restore image already on disk: Install 4 min 28 s, Xcode, simulator and Homebrew 20 min
+36 s, Lockdown 1 min 4 s, Test 16 s, Finish 5 s. The image is 54 GB. Quitting the daemon during
+the Xcode copy left no VM or helper running, and a resume on the next launch went back to the
+checkpoint with the password from the keychain, with no reinstall. Cancelling during Install killed the
+helper, removed the build folder and the password, and left the image in place.
+
 2026-10-28, on an M1 Max running macOS 27.0.1, guest Cirrus `macos-tahoe-xcode:27.1` (macOS
 26.6.2, Xcode 27.1), built with Tart 2.41.1 exactly as in [Build it](#build-it).
 
