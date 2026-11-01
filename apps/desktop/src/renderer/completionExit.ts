@@ -1,3 +1,5 @@
+import { EASE_OUT } from './easing.js';
+
 /** The row folds shut toward its left edge. */
 export const ROW_CLOSE_MS = 260;
 /** Then the space it held closes, sliding the rows below it up. */
@@ -35,7 +37,7 @@ export async function completeWithExit(row: HTMLElement | null, complete: () => 
       { clipPath: 'inset(0 0 0 0 round 8px)', opacity: 1 },
       { clipPath: 'inset(0 100% 0 0 round 8px)', opacity: 0.6 },
     ],
-    { duration: ROW_CLOSE_MS, easing: 'cubic-bezier(.55, 0, .8, .25)', fill: 'forwards' },
+    { duration: ROW_CLOSE_MS, easing: EASE_OUT, fill: 'forwards' },
   );
   await settled(close, ROW_CLOSE_MS);
   scatterStardust(rect);
@@ -45,7 +47,7 @@ export async function completeWithExit(row: HTMLElement | null, complete: () => 
       { height: `${rect.height}px`, marginTop: computed.marginTop, marginBottom: computed.marginBottom, overflow: 'hidden' },
       { height: '0px', marginTop: '0px', marginBottom: '0px', overflow: 'hidden' },
     ],
-    { duration: ROW_COLLAPSE_MS, delay: 60, easing: 'cubic-bezier(.3, 0, .2, 1)', fill: 'forwards' },
+    { duration: ROW_COLLAPSE_MS, delay: 60, easing: EASE_OUT, fill: 'forwards' },
   );
   await settled(collapse, ROW_COLLAPSE_MS + 60);
 

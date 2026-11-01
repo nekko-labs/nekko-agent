@@ -204,7 +204,7 @@ export function QuestionCard({
                 return (
                   <button
                     key={item.id}
-                    className="h-1.5 rounded-full transition-all"
+                    className="h-1.5 rounded-full transition-[width,background-color] duration-150"
                     style={{
                       width: here ? 14 : 6,
                       background: here

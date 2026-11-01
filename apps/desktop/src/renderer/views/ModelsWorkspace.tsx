@@ -27,13 +27,19 @@ export function ModelsWorkspace() {
     if (arrived.current) (view === 'modelserver' ? localRef : cloudRef).current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     arrived.current = true;
   }, [view]);
+  // It measures the page, so at most once a frame, not per scroll event.
+  const spyFrame = useRef(0);
   const onScroll = () => {
-    const content = contentRef.current;
-    const cloud = cloudRef.current;
-    if (!content || !cloud) return;
-    const bottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 2;
-    const reached = cloud.getBoundingClientRect().top - content.getBoundingClientRect().top < content.clientHeight / 3;
-    setInView(bottom || reached ? 'cloud' : 'local');
+    if (spyFrame.current) return;
+    spyFrame.current = requestAnimationFrame(() => {
+      spyFrame.current = 0;
+      const content = contentRef.current;
+      const cloud = cloudRef.current;
+      if (!content || !cloud) return;
+      const bottom = content.scrollTop + content.clientHeight >= content.scrollHeight - 2;
+      const reached = cloud.getBoundingClientRect().top - content.getBoundingClientRect().top < content.clientHeight / 3;
+      setInView(bottom || reached ? 'cloud' : 'local');
+    });
   };
   const go = (to: 'local' | 'cloud') => {
     setInView(to);

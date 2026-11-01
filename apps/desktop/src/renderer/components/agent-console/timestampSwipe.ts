@@ -9,11 +9,17 @@ export function attachTimestampSwipe(el: HTMLElement) {
   let pointer: { id: number; x: number; y: number; active: boolean } | undefined;
   let release: ReturnType<typeof setTimeout> | undefined;
   let settle: ReturnType<typeof setTimeout> | undefined;
-  const paint = (px: number) => {
-    el.style.setProperty('--vt-reveal', `${px}px`);
-    el.style.setProperty('--vt-reveal-o', String(px / TIMESTAMP_REVEAL_PX));
+  // The list is found once per gesture. The offset is written straight to its
+  // transform and the times are shown by one class: inherited custom
+  // properties on the scroller made every move restyle every mounted row.
+  let list: HTMLElement | null = null;
+  const paint = (px: number, settling = false) => {
+    list ??= el.querySelector<HTMLElement>('.vt-list');
     // Only while moved: a transform at rest would trap fixed popovers in rows.
-    el.classList.toggle('vt-revealing', px > 0);
+    if (list) list.style.transform = px > 0 || settling ? `translateX(${-px}px)` : '';
+    el.classList.toggle('vt-stamps-on', px >= TIMESTAMP_REVEAL_PX / 2);
+    el.classList.toggle('vt-revealing', px > 0 || settling);
+    if (px === 0 && !settling) list = null;
   };
   const move = (px: number) => {
     clearTimeout(release);
@@ -26,8 +32,7 @@ export function attachTimestampSwipe(el: HTMLElement) {
     clearTimeout(release);
     el.classList.remove('vt-swiping');
     reveal = 0;
-    el.style.setProperty('--vt-reveal', '0px');
-    el.style.setProperty('--vt-reveal-o', '0');
+    paint(0, true);
     settle = setTimeout(() => paint(0), 250);
   };
   const onWheel = (e: WheelEvent) => {

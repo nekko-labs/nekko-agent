@@ -138,10 +138,11 @@ function Meter({ label, value, pct, sub }: { label: string; value: string; pct: 
       </div>
       <div className="mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
         <span
-          className="block h-full rounded-full transition-[width] duration-500"
+          className="block h-full w-full origin-left rounded-full transition-transform duration-200 ease-(--ease-out)"
           // A live-but-idle reading (1% CPU) still gets a visible sliver, so an
           // empty track always means "no data", never "nothing happening".
-          style={{ width: `${Math.min(100, pct)}%`, minWidth: pct > 0 ? 3 : 0, background: loadColor(pct) }}
+          // Scaled, not sized: a width change re-lays the dock out every tick.
+          style={{ transform: `scaleX(${pct > 0 ? Math.max(0.02, Math.min(100, pct) / 100) : 0})`, background: loadColor(pct) }}
         />
       </div>
       {sub && <div className="mt-0.5 text-2xs tabular-nums text-ink-faint">{sub}</div>}
@@ -464,8 +465,8 @@ export function ResourceHud() {
           <span className="flex items-center gap-2">
             <span className="h-1.5 w-10 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
               <span
-                className="block h-full rounded-full transition-[width] duration-500"
-                style={{ width: `${vramPct}%`, background: loadColor(vramPct) }}
+                className="block h-full w-full origin-left rounded-full transition-transform duration-200 ease-(--ease-out)"
+                style={{ transform: `scaleX(${Math.min(100, Math.max(0, vramPct)) / 100})`, background: loadColor(vramPct) }}
               />
             </span>
             {gpu ? `${GB(gpu.usedMB)}/${GB(gpu.totalMB)} GB` : '—'}

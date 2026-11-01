@@ -13,7 +13,7 @@
 /* Windows stop one gap short of a composer docked below them. */
 .wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout { padding-bottom: var(--pane-gap); }
 /* Keep in step with WALL_PUSH_MS and WALL_PUSH_EASE in wallMotion.ts. */
-.command-wall-layout { --wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1); }
+.command-wall-layout { --wall-push-ms: 220ms; --wall-push-ease: cubic-bezier(.23, 1, .32, 1); }
 /* A closing window's last picture folds away here, under the live windows. */
 .command-wall-leaving { position: absolute; inset: 0; pointer-events: none; }
 .command-wall-leaving > .command-wall-window { transition: none; }
@@ -23,8 +23,8 @@
   min-width: 0;
   min-height: 0;
   border-radius: var(--pane-radius);
-  /* Existing windows slide once; sizes settle without a corner-resize tween. */
-  transition: left var(--wall-push-ms) var(--wall-push-ease), top var(--wall-push-ms) var(--wall-push-ease);
+  /* No left/top/width/height transition: a window that moves slides on a
+     transform (wallMotion.ts slideWindow) and sizes settle at once. */
 }
 .command-wall-window > .panel { min-width: 0; min-height: 0; overflow: hidden; }
 /* A Focus window that is not the hero: kept laid out under it, never drawn. */
@@ -116,6 +116,7 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
 .command-wall-layout[data-wall-lifting] .command-wall-window {
   transition-property: left, top, width, height;
   transition-duration: 200ms;
+  transition-timing-function: var(--wall-push-ease);
 }
 .wall-drag-shield { position: fixed; inset: 0; z-index: 9998; cursor: grabbing; }
 body:has(.wall-drag-shield) { user-select: none; }
@@ -127,7 +128,8 @@ body:has(.wall-drag-shield) { user-select: none; }
   box-shadow: var(--shadow-lift);
   transform: rotate(-1.5deg);
 }
-.wall-held-card[data-picking] { transition: left 200ms cubic-bezier(.2, .9, .3, 1.2), top 200ms cubic-bezier(.2, .9, .3, 1.2), width 200ms cubic-bezier(.2, .9, .3, 1.2), height 200ms cubic-bezier(.2, .9, .3, 1.2); }
+/* Picked up on a plain ease-out: an overshoot on a drop reads as wobble. */
+.wall-held-card[data-picking] { transition: left 200ms var(--wall-push-ease), top 200ms var(--wall-push-ease), width 200ms var(--wall-push-ease), height 200ms var(--wall-push-ease); }
 .wall-held-card-strip {
   display: flex; align-items: center; gap: 8px; padding: 4px 8px;
   background: var(--accent-soft); color: var(--ink); font-size: var(--text-xs); font-weight: 500;
@@ -163,9 +165,11 @@ body:has(.wall-drag-shield) { user-select: none; }
 .command-wall-add-fill { height: 100%; }
 .command-wall-add > .command-wall-create { width: 100%; flex: 1; min-width: 0; }
 .command-wall-add-fill > span { pointer-events: none; }
-.command-wall-add { flex-direction: column; gap: 8px; background: var(--accent-soft); border-color: var(--accent); animation: wall-liquid-border 1800ms ease-in-out infinite; overflow: hidden; }
+.command-wall-add { flex-direction: column; gap: 8px; background: var(--accent-soft); border-color: var(--accent); animation: wall-liquid-border 1800ms ease-in-out 1; overflow: hidden; }
 .command-wall-add[data-solid] { animation: none; border-style: solid; border-radius: var(--pane-radius); background: var(--surface); }
 .command-wall-add-fill { display: flex; flex: 1; width: 100%; min-height: inherit; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 12px; }
+/* One wobble as the preview appears, then still: a border-radius loop on a
+   persistent tile repainted it every frame for as long as it stayed. */
 @keyframes wall-liquid-border { 0%, 100% { border-radius: 22px 34px 24px 30px; } 50% { border-radius: 34px 20px 32px 22px; } }
 @media (prefers-reduced-motion: reduce) { .command-wall-add { animation: none; } }
 .command-wall-add-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:14px; background:var(--accent-soft); color:var(--accent); font-size: var(--text-2xl); }
@@ -192,8 +196,8 @@ body:has(.wall-drag-shield) { user-select: none; }
 .wall-focus-agents { display: flex; gap: 8px; flex-shrink: 0; overflow-x: auto; padding: 2px; }
 .wall-focus-agent { display: flex; align-items: center; gap: 8px; max-width: 260px; flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: var(--text-xs); color: var(--ink-soft); }
 .wall-focus-agent[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
-.command-wall-content[data-focus-chat] .command-wall-primary { flex: 1 1 100%; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1); }
-.command-wall-content[data-focus-chat] .command-wall-companions { display: flex; flex: 0 0 0%; width: 0; opacity: 0; overflow: hidden; transform: translateX(100%); transform-origin: left center; border-radius: 28px; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease, transform 360ms cubic-bezier(.22, 1, .36, 1), border-radius 360ms ease; }
+.command-wall-content[data-focus-chat] .command-wall-primary { flex: 1 1 100%; transition: flex-basis 260ms var(--ease-out); }
+.command-wall-content[data-focus-chat] .command-wall-companions { display: flex; flex: 0 0 0%; width: 0; opacity: 0; overflow: hidden; transform: translateX(100%); transform-origin: left center; border-radius: 28px; transition: flex-basis 260ms var(--ease-out), opacity 200ms ease, transform 260ms var(--ease-out); }
 .command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: auto; }
 /* No transition while dragging the column: it would lag the pointer. */
 body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary, body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-companions { transition: none; }
@@ -253,6 +257,8 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   animation: hover-tip-in 120ms ease-out;
 }
 @keyframes hover-tip-in { from { opacity: 0; } to { opacity: 1; } }
+/* In the warm window after another tip, or from the keyboard: no fade. */
+.hover-tip[data-instant] { animation: none; }
 /* Collapsed: the controls hold the panel's corner so the way back is where it was. */
 .agent-panel-collapsed { display: flex; flex-shrink: 0; align-items: flex-start; padding: 4px 2px; }
 .agent-panel-collapsed[data-orientation='horizontal'] { justify-content: flex-start; }
@@ -297,9 +303,9 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 
 /* Keep the drop surface stationary while its contents make room. */
-.agent-panel-group { padding-top: 0; transition: padding-top 140ms cubic-bezier(.2,.8,.2,1); }
+.agent-panel-group { padding-top: 0; transition: padding-top 140ms var(--ease-out); }
 .agent-panel-group[data-group-gap] { padding-top: 36px; }
-.agent-panel-row > .agent-panel-group { position: relative; padding-top: 0; padding-left: 0; transition: padding-left 140ms cubic-bezier(.2,.8,.2,1); }
+.agent-panel-row > .agent-panel-group { position: relative; padding-top: 0; padding-left: 0; transition: padding-left 140ms var(--ease-out); }
 .agent-panel-row > .agent-panel-group[data-group-gap] { padding-left: 48px; }
 @media (prefers-reduced-motion: reduce) {
   .agent-panel-group, .agent-panel-row > .agent-panel-group { transition: none; }
@@ -369,18 +375,16 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .wall-zone-empty-title { color: var(--ink-soft); font-size: var(--text-sm); font-weight: 600; }
 .wall-zone-create { display: flex; flex-direction: column; align-items: stretch; max-width: 100%; margin-top: 4px; }
 .wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; }
-/* Each option leans in on hover and its plus turns a quarter; a press squeezes it and turns the plus on. */
-.wall-zone-empty .wall-zone-option { transition: transform 180ms cubic-bezier(.2, .8, .2, 1), background var(--dur-fast) ease, color var(--dur-fast) ease; }
+/* Hover is colour and opacity only (tens a day); a press answers with a small squeeze. */
+.wall-zone-empty .wall-zone-option { transition: transform 100ms var(--ease-out), background var(--dur-fast) ease, color var(--dur-fast) ease; }
 /* The label takes the slack so every shortcut lines up on the right. */
 .wall-zone-label { flex: 1; padding-right: 16px; text-align: left; }
 .wall-zone-kbd { opacity: .6; transition: opacity 140ms ease; }
 .wall-zone-option:is(:hover, :focus-visible) .wall-zone-kbd { opacity: 1; }
-.wall-zone-plus { opacity: .6; transition: transform 260ms cubic-bezier(.34, 1.56, .64, 1), opacity 140ms ease, color 140ms ease; }
-.wall-zone-empty .wall-zone-option:is(:hover, :focus-visible) { transform: translateX(3px); }
+.wall-zone-plus { opacity: .6; transition: opacity 140ms ease, color 140ms ease; }
 .wall-zone-empty .wall-zone-option.text-accent:is(:hover, :focus-visible, :active) { color: var(--accent); }
-.wall-zone-option:is(:hover, :focus-visible) .wall-zone-plus { opacity: 1; color: var(--accent); transform: rotate(90deg) scale(1.15); }
-.wall-zone-empty .wall-zone-option:active { transform: translateX(3px) scale(.95); transition-duration: 70ms; }
-.wall-zone-option:active .wall-zone-plus { transform: rotate(180deg) scale(.9); transition-duration: 120ms; }
+.wall-zone-option:is(:hover, :focus-visible) .wall-zone-plus { opacity: 1; color: var(--accent); }
+.wall-zone-empty .wall-zone-option:active { transform: scale(.97); }
 @media (prefers-reduced-motion: reduce) { .wall-zone-empty .wall-zone-option, .wall-zone-plus { transition: none; transform: none !important; } }
 .wall-zone-art { position: relative; width: 88px; height: 52px; margin-bottom: 4px; opacity: .55; }
 .wall-zone-art > svg { display: block; }
@@ -410,7 +414,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 .wall-zone-rail[data-side='right'] .wall-zone-add::before { width: 2px; height: min(28px, 40%); }
 .wall-zone-rail[data-side='down'] .wall-zone-add::before { height: 2px; width: min(28px, 40%); }
-.wall-zone-add > svg { stroke-width: 1.75; opacity: 0; transition: opacity 120ms ease, transform 200ms cubic-bezier(.34, 1.56, .64, 1); transform: scale(.6); }
+.wall-zone-add > svg { stroke-width: 1.75; opacity: 0; transition: opacity 120ms ease, transform 160ms var(--wall-push-ease); transform: scale(.8); }
 .wall-zone-rail:hover .wall-zone-add::before { opacity: .55; }
 .wall-zone-add:hover, .wall-zone-add:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
 .wall-zone-add:is(:hover, :focus-visible)::before { opacity: 0 !important; }
@@ -443,7 +447,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .wall-agent-chip > * { width: 100%; }
 .wall-agent-chip[data-landing] {
   transform: none; border-radius: var(--pane-radius); border-width: 2px;
-  transition: left 320ms cubic-bezier(.22, 1, .36, 1), top 320ms cubic-bezier(.22, 1, .36, 1), width 320ms cubic-bezier(.22, 1, .36, 1), height 320ms cubic-bezier(.22, 1, .36, 1), transform 320ms ease, opacity 180ms ease;
+  transition: left 240ms var(--ease-out), top 240ms var(--ease-out), width 240ms var(--ease-out), height 240ms var(--ease-out), transform 240ms var(--ease-out), opacity 180ms ease;
 }
 .wall-agent-chip[data-landing] > * { opacity: 0; transition: opacity 160ms ease; }
 .wall-agent-chip[data-landed] { opacity: 0; }

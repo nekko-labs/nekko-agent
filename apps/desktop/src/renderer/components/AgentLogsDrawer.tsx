@@ -48,9 +48,13 @@ export function AgentLogsDrawer({ sessionId, title, rect, overlay, selected }: {
   const head = HEADS[kind];
   const ref = useRef<HTMLDivElement>(null);
 
-  // Without motion there is no animationend to wait for.
+  // Without motion there is no transitionend to wait for; and a missed one
+  // (a hidden window delivers no frames) must not leave the drawer mounted.
   useEffect(() => {
-    if (closing && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) closed();
+    if (!closing) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { closed(); return; }
+    const timer = window.setTimeout(closed, 400);
+    return () => window.clearTimeout(timer);
   }, [closing, closed]);
 
   return (
@@ -66,7 +70,7 @@ export function AgentLogsDrawer({ sessionId, title, rect, overlay, selected }: {
       data-overlay={overlay || undefined}
       style={overlay ? { left: rect.x, top: rect.y, width: rect.width, height: rect.height } : { left: rect.x - 1, top: rect.y, width: rect.width + 1, height: rect.height }}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }}
-      onAnimationEnd={(e) => { if (e.target === ref.current && closing) closed(); }}
+      onTransitionEnd={(e) => { if (e.target === ref.current && e.propertyName === 'opacity' && closing) closed(); }}
     >
       <div className="agent-logs-drawer-inner">
         <header className="agent-logs-drawer-head">

@@ -252,13 +252,13 @@
 @utility btn {
   @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
   transition:
-    transform 0.12s ease,
-    filter 0.12s ease,
+    transform 160ms var(--ease-out),
     background 0.12s ease,
     color 0.12s ease,
     border-color 0.12s ease;
-  &:active {
-    transform: translateY(0.5px);
+  /* Answer the press itself, not the release: half a pixel was below notice. */
+  &:active:not(:disabled) {
+    transform: scale(0.97);
   }
 }
 
@@ -572,7 +572,7 @@
   --rail-w-open: 198px;
   --rail-row: 40px;
   --rail-gap: 7px;
-  --rail-ease: cubic-bezier(.2, .8, .2, 1);
+  --rail-ease: var(--ease-out);
   --rail-slide: ease-out;
   --rail-open-ms: 180ms;
   --rail-close-ms: 180ms;
@@ -1091,11 +1091,12 @@
       0 12px 24px color-mix(in srgb, var(--shadow-ink) 14%, transparent),
       0 2px 4px color-mix(in srgb, var(--shadow-ink) 6%, transparent);
     --ring: color-mix(in srgb, var(--accent) 35%, transparent);
-    /* Motion vocabulary: one deceleration curve for arrivals and layout change,
-     one spring reserved for the playful nav icons. Durations by consequence:
-     fast feedback, standard state change, slow layout/overlay. */
+    /* Motion vocabulary: one deceleration curve, with no overshoot, for
+     arrivals, layout change and exits alike (easing.ts carries it for
+     Element.animate). No springs on UI chrome. Durations by consequence:
+     fast feedback, standard state change, slow layout/overlay, all under
+     300ms for anything used often. */
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     --dur-fast: 0.12s;
     --dur-med: 0.2s;
     --dur-slow: 0.26s;
@@ -2289,20 +2290,18 @@
   font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
-  opacity: var(--vt-reveal-o, 0);
+  opacity: 0;
   pointer-events: none;
-  transition: opacity 200ms ease;
+  transition: opacity 120ms var(--ease-out);
 }
+.vt-stamps-on [data-vt-stamp]::after { opacity: 1; }
 [data-transcript-scroll] { touch-action: pan-y pinch-zoom; }
 .vt-swiping { user-select: none; }
-.vt-revealing .vt-list {
-  transform: translateX(calc(-1 * var(--vt-reveal, 0px)));
-}
+/* timestampSwipe.ts writes the list's transform directly while it moves. */
 .vt-list {
-  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 220ms var(--ease-out);
 }
-.vt-swiping .vt-list,
-.vt-swiping [data-vt-stamp]::after {
+.vt-swiping .vt-list {
   transition: none;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2554,10 +2553,12 @@
 .composer-question::before, .composer-question::after { content: ''; position: absolute; bottom: 0; width: 16px; height: 16px; pointer-events: none; }
 .composer-question::before { left: -16px; border-radius: 0 0 16px 0; box-shadow: 6px 6px 0 6px var(--surface); }
 .composer-question::after { right: -16px; border-radius: 0 0 0 16px; box-shadow: -6px 6px 0 6px var(--surface); }
-.composer-question.is-open { animation: composer-question-open 220ms ease-out; }
-.composer-question.is-closing { animation: composer-question-close 220ms ease-in forwards; pointer-events: none; }
-@keyframes composer-question-open { from { opacity: 0; transform: scale(.08, 0); } to { opacity: 1; transform: scale(1); } }
-@keyframes composer-question-close { to { opacity: 0; transform: scale(.08, 0); } }
+/* Transitions, not keyframes: an answer arriving mid-open reverses from where
+   the card is instead of snapping. It grows from 96%, never from nothing, so
+   its text keeps its proportions, and it leaves on the same ease-out. */
+.composer-question { transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+@starting-style { .composer-question.is-open { opacity: 0; transform: scale(.96); } }
+.composer-question.is-closing { opacity: 0; transform: scale(.96); pointer-events: none; transition-duration: 160ms; }
 @media (max-width: 640px) { .composer-column { width: 100%; } .composer-question { width: 94%; } }
 /* The agent plan is a sheet tucked behind the composer: narrower than it, a
    touch of accent in its fill instead of a dividing line, and curved shoulders
@@ -2600,7 +2601,7 @@
 .plan-sheet-dot { width: 6px; height: 6px; border-radius: 50%; }
 @media (max-width: 640px) { .plan-sheet-dock { width: 92%; } }
 @media (prefers-reduced-motion: reduce) { .plan-sheet, .plan-sheet-more { animation: none; transition: none; } }
-@media (prefers-reduced-motion: reduce) { .composer-question.is-open, .composer-question.is-closing { animation: none; } .composer-question.is-closing { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .composer-question { transform: none !important; transition: opacity 150ms ease; } }
 
 /* Preserve markdown text while painting a real bullet on the editable surface. */
 .composer-bullet { display: inline-block; position: relative; color: transparent !important; }
@@ -2731,11 +2732,10 @@
 .artifact-live-label { color: color-mix(in srgb, var(--accent) 55%, var(--ink)); }
 a.artifact-card:hover .artifact-card-open { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .artifact-card, .artifact-card-action { transition: none; } }
-.pr-deck-slot { transform-origin: bottom center; animation: pr-deck-pop 240ms ease-out both; }
-.pr-deck-slot[data-closing=true] { pointer-events: none; animation: pr-deck-retract 220ms ease-in both; }
-@keyframes pr-deck-pop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@keyframes pr-deck-retract { to { opacity: 0; transform: translateY(16px) scale(.95); } }
-@media (prefers-reduced-motion: reduce) { .pr-deck-reveal, .pr-deck-chevron { transition: none; } .pr-deck-slot, .pr-deck-slot[data-closing=true] { animation-duration: 1ms; } }
+.pr-deck-slot { transform-origin: bottom center; transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out); }
+@starting-style { .pr-deck-slot { opacity: 0; transform: translateY(12px) scale(.97); } }
+.pr-deck-slot[data-closing=true] { opacity: 0; transform: translateY(12px) scale(.97); pointer-events: none; transition-duration: 180ms; }
+@media (prefers-reduced-motion: reduce) { .pr-deck-reveal, .pr-deck-chevron { transition: none; } .pr-deck-slot { transform: none !important; transition: opacity 150ms ease; } }
 
 /* The wall's one composer and the agent it speaks for. */
 .wall-num {
@@ -2769,11 +2769,15 @@ a.artifact-card:hover .artifact-card-open { color: var(--accent); }
 .agent-logs-drawer {
   --logs-ring: color-mix(in srgb, var(--accent) 35%, var(--line));
   position: absolute; z-index: 25;
-  transition: left 260ms ease, top 260ms ease, width 260ms ease, height 260ms ease;
-  animation: agent-logs-drawer-out 300ms cubic-bezier(.22, 1, .36, 1) both;
+  /* It slides out from behind the window's edge (a clip-path reveal) and is
+     absorbed back on close. Transitions, so toggling it twice reverses from
+     where it is; the exit uses the same ease-out, not an ease-in. */
+  clip-path: inset(0 0 0 0); opacity: 1;
+  transition: clip-path 260ms var(--ease-out), opacity 260ms var(--ease-out), left 260ms ease, top 260ms ease, width 260ms ease, height 260ms ease;
 }
+@starting-style { .agent-logs-drawer { clip-path: inset(0 100% 0 0); opacity: .4; } }
 .agent-logs-drawer[data-selected] { --logs-ring: color-mix(in srgb, var(--accent) 60%, var(--line)); }
-.agent-logs-drawer[data-closing] { animation: agent-logs-drawer-in 220ms cubic-bezier(.55, 0, .75, .2) both; pointer-events: none; }
+.agent-logs-drawer[data-closing] { clip-path: inset(0 100% 0 0); opacity: .4; pointer-events: none; transition-duration: 200ms; }
 .agent-logs-drawer-inner {
   display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden;
   background: var(--win, var(--surface));
@@ -2816,15 +2820,7 @@ a.artifact-card:hover .artifact-card-open { color: var(--accent); }
   bottom: 0;
   background: radial-gradient(circle at 100% calc(100% - 1px), transparent calc(var(--logs-fillet) - 1px), var(--logs-ring) calc(var(--logs-fillet) - 1px), var(--logs-ring) var(--logs-fillet), var(--win, var(--surface)) calc(var(--logs-fillet) + .5px));
 }
-@keyframes agent-logs-drawer-out {
-  from { clip-path: inset(0 100% 0 0); opacity: .4; }
-  to { clip-path: inset(0 0 0 0); opacity: 1; }
-}
-@keyframes agent-logs-drawer-in {
-  from { clip-path: inset(0 0 0 0); opacity: 1; }
-  to { clip-path: inset(0 100% 0 0); opacity: .4; }
-}
-@media (prefers-reduced-motion: reduce) { .agent-logs-drawer, .agent-logs-drawer[data-closing] { animation: none; transition: none; } }
+@media (prefers-reduced-motion: reduce) { .agent-logs-drawer, .agent-logs-drawer[data-closing] { transition: none; } }
 /* The plan panel's toggle: a plan icon floating in the chat area's top-right
    corner, over the transcript (or beside the open panel's heading). */
 .plan-rail-toggle {
@@ -2884,9 +2880,6 @@ div:has(> .plan-rail-toggle) > [data-transcript-scroll] { padding-top: 44px; }
    beam, rocket and glow, just still, so a wall of busy agents left on screen
    behind another app stops costing the GPU. See appActivity.ts. */
 html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inactive] *::after { animation-play-state: paused !important; }
-/* One-shot motion is not a decoration: a wall drawer paused on its first
-   frame is fully clipped, and one paused while closing never unmounts. */
-html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !important; }
 .command-wall-window[data-wall-selected] .wall-num, .wall-composer[data-has-agent] .wall-num { background: var(--accent); color: var(--win); }
 .wall-layout-control { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 /* Reveal by grid track rather than a fixed pixel width: a fixed 38px was
@@ -2910,21 +2903,26 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
    hint (accent mixed well into the line colour), not a full-strength outline. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-selected] > .panel { --panel-ring-color: color-mix(in srgb, var(--accent) 28%, var(--line)) !important; box-shadow: none; }
 /* Focused: a new agent fades in as its prompt view. */
-.command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-hero][data-wall-entering] > .panel { animation: focus-new-agent-in 320ms cubic-bezier(.22, 1, .36, 1) both; }
+.command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-hero][data-wall-entering] > .panel { animation: focus-new-agent-in 240ms var(--ease-out) both; }
 @keyframes focus-new-agent-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
 /* The hero it replaces stays drawn over it, collapses onto the new composer's box
    (CommandWall measures --collapse-inset; the fallback is a centred composer) and dissolves. */
 .command-wall-window[data-wall-parked][data-wall-leaving] { content-visibility: visible; z-index: 3; }
-.command-wall-window[data-wall-leaving] > .panel { animation: focus-collapse-into-composer 380ms cubic-bezier(.4, 0, .2, 1) both; }
+.command-wall-window[data-wall-leaving] > .panel { animation: focus-collapse-into-composer 260ms var(--ease-out) both; }
 @keyframes focus-collapse-into-composer {
   from { clip-path: inset(0 round var(--pane-radius)); opacity: 1; }
   55% { opacity: .9; }
   to { clip-path: inset(var(--collapse-inset, 40% max(24px, calc(50% - 360px)) 40%) round 18px); opacity: 0; }
 }
 /* Focused: after the first send, the centred composer expands into the full
-   chat. The window's chat body grows out of the composer's place. */
-[data-chat-expanding] > section { animation: composer-expand-in 420ms cubic-bezier(.22, 1, .36, 1) both; transform-origin: 50% 70%; }
-@keyframes composer-expand-in { from { opacity: .35; transform: scale(.92, .55); border-radius: 18px; } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+   chat. The chat body is revealed out of the composer's rectangle (a clip-path,
+   the mirror of the collapse above), so its text is never squashed and no
+   radius repaints; 260ms, since the send came from the keyboard. */
+[data-chat-expanding] > section { animation: composer-expand-in 260ms var(--ease-out) both; }
+@keyframes composer-expand-in {
+  from { clip-path: inset(var(--collapse-inset, 40% max(24px, calc(50% - 360px)) 40%) round 18px); opacity: .6; }
+  to { clip-path: inset(0 round var(--pane-radius, 12px)); opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   .command-wall-layout[data-wall-layout='focus'] .command-wall-window[data-wall-entering] > .panel, .command-wall-window[data-wall-leaving] > .panel, [data-chat-expanding] > section { animation: none; }
   .command-wall-window[data-wall-parked][data-wall-leaving] { content-visibility: hidden; }
@@ -2987,7 +2985,7 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 .spaces-demo__dot { fill: var(--line); }
 /* 5s loop: hold on desktop 1, slide to 2, the Nekko window swipes open from the left edge, hold, fade and restart. */
 .spaces-demo__strip { animation: spaces-demo-slide 5s cubic-bezier(.65, 0, .35, 1) infinite; }
-.spaces-demo__nekko { transform-box: fill-box; transform-origin: left center; animation: spaces-demo-open 5s cubic-bezier(.22, 1, .36, 1) infinite; }
+.spaces-demo__nekko { transform-box: fill-box; transform-origin: left center; animation: spaces-demo-open 5s var(--ease-out) infinite; }
 .spaces-demo__dot--one { animation: spaces-demo-dot-one 5s steps(1, end) infinite; }
 .spaces-demo__dot--two { animation: spaces-demo-dot-two 5s steps(1, end) infinite; }
 @keyframes spaces-demo-slide { 0%, 18% { transform: translateX(0); opacity: 1; } 40%, 90% { transform: translateX(-136px); opacity: 1; } 97% { transform: translateX(-136px); opacity: 0; } 100% { transform: translateX(0); opacity: 0; } }
@@ -3327,25 +3325,24 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Focus mode, new chat: one centered composer on a quiet page. The first send
    drops data-clean-start and the window becomes the full chat. */
 [data-clean-start] .clean-start { position: relative; isolation: isolate; align-items: center; padding: 0 24px 12vh; }
-@property --new-chat-top { syntax: '<color>'; inherits: false; initial-value: rgb(7 59 64 / .12); }
-@property --new-chat-mid { syntax: '<color>'; inherits: false; initial-value: rgb(21 78 80 / .10); }
-@property --new-chat-bottom { syntax: '<color>'; inherits: false; initial-value: rgb(179 139 59 / .10); }
-@keyframes new-chat-colors {
-  0%, 100% { --new-chat-top: rgb(7 59 64 / .12); --new-chat-mid: rgb(21 78 80 / .10); --new-chat-bottom: rgb(179 139 59 / .10); }
-  25% { --new-chat-top: rgb(54 43 125 / .12); --new-chat-mid: rgb(98 57 130 / .10); --new-chat-bottom: rgb(173 79 119 / .10); }
-  50% { --new-chat-top: rgb(30 69 126 / .12); --new-chat-mid: rgb(35 105 123 / .10); --new-chat-bottom: rgb(75 145 118 / .10); }
-  75% { --new-chat-top: rgb(116 57 88 / .12); --new-chat-mid: rgb(151 88 68 / .10); --new-chat-bottom: rgb(164 137 76 / .10); }
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-clean-start] .clean-start::before { animation: none !important; }
-}
 /* Translucent prism frost, with a separate static grain layer to dither
-   colour steps. Both stay behind the content and never intercept input. */
+   colour steps. Both stay behind the content and never intercept input. The
+   base palette is static on ::before; the other three are .clean-start-tint
+   layers that crossfade by opacity over 120s. Animating the gradient's colours
+   (registered custom properties) repainted the whole pane every frame, under a
+   backdrop blur that then re-sampled it; opacity is composited. */
 [data-clean-start] .clean-start::before {
   content: ''; position: absolute; inset: 0; z-index: -2; pointer-events: none;
-  background: linear-gradient(to bottom,
-    var(--new-chat-top) 0%, var(--new-chat-mid) 45%, var(--new-chat-bottom) 100%);
-  animation: new-chat-colors 120s ease-in-out infinite;
+  background: linear-gradient(to bottom, rgb(7 59 64 / .12) 0%, rgb(21 78 80 / .10) 45%, rgb(179 139 59 / .10) 100%);
+}
+.clean-start-tint { position: absolute; inset: 0; z-index: -2; pointer-events: none; opacity: 0; animation: new-chat-tint 120s linear infinite; }
+.clean-start-tint[data-n='1'] { background: linear-gradient(to bottom, rgb(54 43 125 / .12) 0%, rgb(98 57 130 / .10) 45%, rgb(173 79 119 / .10) 100%); }
+.clean-start-tint[data-n='2'] { background: linear-gradient(to bottom, rgb(30 69 126 / .12) 0%, rgb(35 105 123 / .10) 45%, rgb(75 145 118 / .10) 100%); animation-delay: -90s; }
+.clean-start-tint[data-n='3'] { background: linear-gradient(to bottom, rgb(116 57 88 / .12) 0%, rgb(151 88 68 / .10) 45%, rgb(164 137 76 / .10) 100%); animation-delay: -60s; }
+/* Each layer fades in over a quarter of the cycle and out over the next. */
+@keyframes new-chat-tint { 0%, 50%, 100% { opacity: 0; } 25% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .clean-start-tint { animation: none; }
 }
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -3362,8 +3359,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
   border-radius: 18px;
   border-color: transparent;
   background: color-mix(in srgb, var(--win, var(--surface)) 58%, transparent);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
   box-shadow:
     0 18px 50px -22px color-mix(in srgb, var(--accent) 45%, transparent),
     0 2px 4px color-mix(in srgb, var(--shadow-ink) 30%, transparent);
@@ -3525,8 +3522,8 @@ html[data-app-inactive] .agent-logs-drawer { animation-play-state: running !impo
 /* Only untouched chats frost the agent window. Transcript windows keep --win. */
 .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel:has([data-clean-start]) {
   background: color-mix(in srgb, var(--win) 38%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(120%);
-  backdrop-filter: blur(24px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
 }
 @media (prefers-reduced-transparency: reduce) {
   .command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel:has([data-clean-start]) {

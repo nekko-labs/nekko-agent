@@ -7,7 +7,7 @@ export function ComposerQuestion({ request, onAnswer }: { request: AskRequest | 
   const [shown, setShown] = useState(request);
   useEffect(() => {
     if (request) { setShown(request); return; }
-    const timer = window.setTimeout(() => setShown(null), 220);
+    const timer = window.setTimeout(() => setShown(null), 180);
     return () => window.clearTimeout(timer);
   }, [request]);
   const current = request ?? shown;

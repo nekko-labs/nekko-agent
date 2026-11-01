@@ -135,11 +135,11 @@ function ProgressBar({ pct, thin }: { pct: number | null; thin?: boolean }) {
       style={{ background: 'color-mix(in srgb, var(--ink-faint) 15%, transparent)' }}
     >
       <div
-        className="h-full rounded-full transition-[width]"
+        className="h-full w-full origin-left rounded-full transition-transform duration-200 ease-(--ease-out)"
         style={{
           // An unknown total still shows motion rather than an empty
-          // bar, which otherwise reads as "stuck".
-          width: pct === null ? '35%' : `${pct}%`,
+          // bar, which otherwise reads as "stuck". A NaN reading counts as unknown.
+          transform: `scaleX(${pct === null || !Number.isFinite(pct) ? 0.35 : Math.max(0, Math.min(100, pct)) / 100})`,
           background: 'var(--accent)',
           opacity: pct === null ? 0.5 : 1,
         }}
