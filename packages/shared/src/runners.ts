@@ -92,6 +92,10 @@ export interface RunnerView {
   error: string | null;
   today: Today;
   host: HostView;
+  /** The repos an org runner serves, from its link; empty when the scope says it all. */
+  repos: string[];
+  /** A public repo's approval for outside contributors is unsettled, so the daemon keeps this runner off. */
+  forkApprovalOpen: boolean;
   /** Newest first. */
   recent: AuditLine[];
 }
@@ -398,6 +402,91 @@ export interface ImageBuildRequest {
   priority: Priority;
 }
 
+/** The daemon's words for a runner with no image, which the card replaces with **Set up this Mac**. */
+export const NO_IMAGE_ERROR = 'No VM image yet.';
+
+/** What setting up this Mac would use, from `runner:imagePlan`. */
+export interface ImagePlan {
+  /** This Mac's Xcode version, or null with no Xcode to copy in. */
+  xcode: string | null;
+  /** Null before the daemon's first reading. */
+  freeGb: number | null;
+  needsGb: number;
+}
+
+export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
+  check: 'Check this Mac',
+  download: 'Download macOS',
+  install: 'Install macOS',
+  xcode: 'Add Xcode and tools',
+  lockdown: 'Lock the VM down',
+  test: 'Test a boot',
+  finish: 'Turn the runner on',
+};
+
+export type StageMark = 'done' | 'now' | 'bad' | 'todo';
+export interface StageRow { stage: ImageStage; label: string; mark: StageMark; note: string }
+
+const gb = (bytes: number) => (bytes / 1e9).toFixed(1);
+
+/** The stage's own progress. A wait keeps the last stage's numbers, so they only count while building. */
+function stageNote(v: ImageView): string {
+  if (v.state === 'failed') return 'Failed';
+  if (v.state === 'waiting') return 'Waiting';
+  if (v.state !== 'building') return 'Paused';
+  if (v.bytes) return `${gb(v.bytes[0])} of ${gb(v.bytes[1])} GB`;
+  if (v.fraction !== null) return `${Math.round(v.fraction * 100)}%`;
+  return v.detail;
+}
+
+/**
+ * One row per stage a person follows; Finish is one rename, so it has none. A wait
+ * names the stage it waits for before the last one is listed as done, so order counts too.
+ */
+export function imageStageRows(v: ImageView): StageRow[] {
+  const at = v.stage === null ? -1 : IMAGE_STAGES.indexOf(v.stage);
+  return IMAGE_STAGES.filter((s) => s !== 'finish').map((stage, i) => {
+    const done = i < at || v.doneStages.includes(stage);
+    const mark: StageMark = stage === v.stage && !done ? (v.state === 'failed' ? 'bad' : 'now') : done ? 'done' : 'todo';
+    return { stage, label: IMAGE_STAGE_LABELS[stage], mark, note: mark === 'now' || mark === 'bad' ? stageNote(v) : '' };
+  });
+}
+
+/** 0 to 1 for the bar, or null when this stage has nothing to measure. */
+export function imageFraction(v: ImageView): number | null {
+  if (v.state !== 'building') return null;
+  if (v.bytes && v.bytes[1] > 0) return Math.min(1, v.bytes[0] / v.bytes[1]);
+  return v.fraction;
+}
+
+/** A build is running or stopped on a failure, so the sheet follows it. */
+export const imageBusy = (v: ImageView) => v.state === 'building' || v.state === 'waiting' || v.state === 'failed';
+
+/** What the runner card says about a build in progress. */
+export function imageLine(v: ImageView): string {
+  if (v.state === 'failed') return `Setup stopped: ${v.error ?? 'Something went wrong.'}`;
+  const stage = v.stage ? IMAGE_STAGE_LABELS[v.stage] : 'Setting up this Mac';
+  if (v.state === 'waiting') return `${stage}: ${v.detail}`;
+  const note = stageNote(v);
+  return note ? `${stage}: ${note}` : stage;
+}
+
+/** The message a new chat starts with. The person reads it and presses Send. */
+export function runnerWorkflowPrompt(v: RunnerView): string {
+  const { scope, label } = v.config;
+  const repos = (v.repos.length ? v.repos : [scopeName(scope)]).map((r) => `\`${r}\``).join(', ');
+  return [
+    'Connect my Mac runner to my GitHub Actions workflows.',
+    '',
+    `Runner label: \`${label}\``,
+    `Repos: ${repos}`,
+    '',
+    "Read the workflows, then ask me which ones should run on this Mac. Offer only jobs that can run on macOS, and warn me about any that run on pull requests from forks. If the repo isn't in this folder, ask me where it is.",
+    '',
+    `Set \`runs-on: [self-hosted, macOS, ARM64, ${label}]\` on the ones I pick, and open a pull request.`,
+  ].join('\n');
+}
+
 export function runnerActivity(views: RunnerView[]): { vms: number; awake: boolean } {
   return { vms: views.reduce((n, v) => n + v.slots.length, 0), awake: views.some((v) => v.awake) };
 }
@@ -480,9 +569,9 @@ export const publicPicks = (v: GithubSetupView, picked: string[]) =>
 export interface SetupPicks { repos: string[]; allowPublic: boolean; label: string }
 
 /**
- * The confirm step as a `runner:connect` request, or the sentence to fix. A
- * runner with a public repo starts off, so it cannot take a job before GitHub
- * holds outside contributors for approval.
+ * The confirm step as a `runner:connect` request, or the sentence to fix. Every
+ * runner connects off, because its mode is chosen on the Mac setup sheet. A public
+ * repo's runner also cannot start until GitHub holds outside contributors for approval.
  */
 export function toSetupRequest(v: GithubSetupView, p: SetupPicks): GithubConnectRequest | { error: string } {
   if (!v.owner || v.appId === null || v.installationId === null) return { error: 'GitHub is not connected yet.' };
@@ -502,10 +591,13 @@ export function toSetupRequest(v: GithubSetupView, p: SetupPicks): GithubConnect
     repos: servesOneRepo(v) ? [] : p.repos,
     allowPublic: anyPublic,
     label,
-    enabled: !anyPublic,
+    enabled: false,
   };
 }
 
 export const githubInstallUrl = (slug: string) => `https://github.com/apps/${slug}/installations/new`;
+/** Where fork approval is set by hand, when Nekko could not ask. */
+export const githubActionsSettingsUrl = (s: Scope) =>
+  (s.kind === 'org' ? `https://github.com/organizations/${s.org}/settings/actions` : `https://github.com/${s.owner}/${s.repo}/settings/actions`);
 /** Where an org's app is deleted, which is the way out when the org turns out to have no runner groups. */
 export const githubAppSettingsUrl = (org: string, slug: string) => `https://github.com/organizations/${org}/settings/apps/${slug}/advanced`;

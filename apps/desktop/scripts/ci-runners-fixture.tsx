@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from '../src/renderer/store';
 import { WorkflowsView } from '../src/renderer/views/WorkflowsView';
-import { DEFAULT_RUNNER_SETTINGS, IDLE_GITHUB_SETUP, type AuditLine, type GithubAccounts, type GithubSetupView, type HostView, type RunnerView } from '@nekko-agent/shared';
+import { DEFAULT_RUNNER_SETTINGS, IDLE_GITHUB_SETUP, type AuditLine, type GithubAccounts, type GithubSetupView, type HostView, type ImagePlan, type ImageView, type RunnerView } from '@nekko-agent/shared';
 import '../src/renderer/styles.css';
 
 // Synthetic RunnerViews only. This fixture never connects to a host, daemon or GitHub.
@@ -23,8 +23,12 @@ const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['conf
     settings: { ...DEFAULT_RUNNER_SETTINGS, enabled: true, macosSlots: 2, trustedNetworks: ['gw:a4:83:e7:1c:22:9f'], ...settings },
   },
   state: 'ready', slots: [], reasons: [], available: 2, limit: null, awake: false, error: null,
-  today: { jobs: 0, seconds: 0 }, host, recent: [], ...over,
+  today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [], ...over,
 });
+const off = (over: Partial<RunnerView> = {}) => view({ state: 'off', reasons: ['off'], ...over }, { enabled: false, macosSlots: 1 });
+// The daemon reports the missing image on a switched-off runner too.
+const offNoImage = () => off({ error: 'No VM image yet.' });
+const noImageYet = () => [view({ state: 'error', error: 'No VM image yet.' }, { macosSlots: 1 })];
 
 const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'first-visit': async () => [],
@@ -51,12 +55,60 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'github-waiting': async () => [],
   'github-confirm': async () => [],
   'github-confirm-public': async () => [],
-  'github-mode': async () => [],
+  'github-handoff': async () => [],
   'github-fork': async () => [],
+  'github-fork-on': async () => [],
+  'github-fork-left-off': async () => [],
+  'first-visit-connected': async () => [offNoImage()],
+  'setup-plan': async () => [offNoImage()],
+  'setup-no-xcode': async () => [offNoImage()],
+  'setup-download': async () => noImageYet(),
+  'setup-install': async () => noImageYet(),
+  'setup-waiting': async () => noImageYet(),
+  'setup-cancel': async () => noImageYet(),
+  'setup-failed': async () => noImageYet(),
+  'setup-refused-macos': async () => noImageYet(),
+  'setup-refused-helper': async () => noImageYet(),
+  'setup-resume': async () => noImageYet(),
+  'setup-rebuild': async () => [view({})],
+  ready: async () => [view({})],
+  'ready-left-off': async () => [off({ forkApprovalOpen: true })],
+  'ready-second-runner': async () => [off()],
+  'rebuild-cancelled': async () => [view({})],
+  'connect-busy': async () => [],
+  'image-retry': async () => [offNoImage()],
+  'card-ready': async () => [view({ today: { jobs: 3, seconds: 41 * 60 } })],
   settings: async () => [view({ limit: 'memory', available: 1 })],
   'settings-bottom': async () => [view({ limit: 'memory', available: 1 })],
   'settings-unsampled': async () => [view({ host: unsampled, state: 'waiting', reasons: ['hostStateUnknown'] })],
 };
+
+const image = (over: Partial<ImageView> = {}): ImageView => ({
+  state: 'none', stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+});
+const READY = image({ state: 'ready', info: { macos: '27.2', xcode: '27.2', actionsRunner: '2.330.0', built: '2026-11-01' } });
+const NONE = image();
+const toXcode: ImageView['doneStages'] = ['check', 'download', 'install'];
+const download = image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] });
+const images: Record<string, ImageView | null> = {
+  // A daemon with no builder: the card keeps its error line.
+  error: null,
+  'first-visit': NONE, 'connect-step-1': NONE, 'connect-step-3': NONE,
+  'github-account': NONE, 'github-account-no-gh': NONE, 'github-free-org': NONE, 'github-waiting': NONE, 'github-confirm': NONE, 'github-confirm-public': NONE,
+  'github-handoff': READY, 'github-fork': NONE, 'github-fork-on': NONE, 'github-fork-left-off': NONE,
+  'first-visit-connected': NONE, 'setup-plan': NONE, 'setup-no-xcode': NONE,
+  'setup-download': download, 'setup-cancel': download,
+  'setup-install': image({ state: 'building', stage: 'install', doneStages: ['check', 'download'], fraction: 0.48 }),
+  'setup-waiting': image({ state: 'waiting', stage: 'install', doneStages: ['check'], detail: 'Waiting for a free VM slot' }),
+  'setup-failed': image({ state: 'failed', stage: 'xcode', doneStages: toXcode, error: 'This Mac has 18 GB free. Free up 42 GB, then try again.', log: 'runner image: Install took 240 s\nCannot copy Xcode: no space left on device', canResume: true }),
+  'setup-refused-macos': image({ state: 'failed', stage: 'check', error: 'Update this Mac to macOS 27 to set it up here.', canResume: true }),
+  'setup-refused-helper': image({ state: 'failed', stage: 'check', error: 'This copy of Nekko cannot build a VM on its own. Update Nekko, or bring your own image.', canResume: true }),
+  'setup-resume': image({ stage: 'xcode', doneStages: toXcode, canResume: true }),
+  'setup-rebuild': READY, ready: download, 'ready-left-off': download, 'ready-second-runner': download, 'card-ready': READY,
+  'rebuild-cancelled': image({ ...download, info: READY.info }), 'connect-busy': NONE, 'image-retry': NONE,
+};
+const plans: Record<string, ImagePlan> = { 'setup-no-xcode': { xcode: null, freeGb: 369.4, needsGb: 110 } };
+const PLAN: ImagePlan = { xcode: '27.2', freeGb: 369.4, needsGb: 110 };
 
 const signedIn: GithubAccounts = { login: 'ermish', accounts: [
   { login: 'nekko-labs', kind: 'org', canGroup: true },
@@ -71,18 +123,35 @@ const publicApp = app({ repos: [{ name: 'nekko-labs/nekko-agent', private: false
 const github: Record<string, GithubSetupView> = {
   'github-waiting': app({ step: 'install', repos: [], installationId: null }),
   'github-confirm': app({}),
-  'github-mode': app({}),
+  'github-handoff': app({}),
+  'connect-busy': app({}),
   'github-confirm-public': publicApp,
   'github-fork': publicApp,
+  'github-fork-on': publicApp,
+  'github-fork-left-off': publicApp,
 };
 
 let scene = 'first-visit';
+let imageChanged: (v: ImageView) => void = () => {};
+let runnersChanged: (v: RunnerView[]) => void = () => {};
+let imageRefused = false;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const settings = { providers: [], workspaceFolders: [], workspaces: [], monitors: {}, theme: 'dark', experimental: {}, agent: {}, ui: {}, connectors: [] };
 const bridge: any = {
   listRunners: () => scenes[scene](),
   githubAccounts: async () => (scene === 'github-account-no-gh' ? { login: null, accounts: [] } : signedIn),
   githubStatus: async () => github[scene] ?? IDLE_GITHUB_SETUP,
-  connectRunner: async () => view({ state: 'off' }, { enabled: false }),
+  connectRunner: async () => { if (scene === 'connect-busy') await sleep(1500); return off(); },
+  setRunnerEnabled: async () => view({}),
+  imageStatus: async () => {
+    // A daemon that is not ready for the first call, as at launch.
+    if (scene === 'image-retry' && !imageRefused) { imageRefused = true; throw new Error('not yet'); }
+    return scene in images ? images[scene] : READY;
+  },
+  cancelImage: async () => { imageChanged(READY); return READY; },
+  imagePlan: async () => plans[scene] ?? PLAN,
+  onImageChanged: (cb: (v: ImageView) => void) => { imageChanged = cb; return () => {}; },
+  onRunnersChanged: (cb: (v: RunnerView[]) => void) => { runnersChanged = cb; return () => {}; },
   setForkApproval: async () => ({ done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions' }),
   listWorkflows: async () => ({ workflows: [], runs: [] }),
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
@@ -97,7 +166,7 @@ function Fixture() {
     useStore.setState({ view: 'workflows', providers: [], models: [], sessions: [], terminals: [], workspaces: [], settings, settingsLoaded: true, installedSkillDefs: [] } as any);
     setEpoch((e) => e + 1);
   };
-  Object.assign(window, { integration: { show } });
+  Object.assign(window, { integration: { show, finishBuild: () => imageChanged(READY), pushRunners: () => runnersChanged([offNoImage()]) } });
   return <div style={{ height: '100vh', overflow: 'auto' }} className="bg-paper" key={epoch} data-scene={scene}><WorkflowsView /></div>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

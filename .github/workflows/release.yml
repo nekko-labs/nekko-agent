@@ -218,6 +218,29 @@ jobs:
           fi
           npm run release -w @nekko-agent/desktop -- ${EXTRA[@]+"${EXTRA[@]}"}
 
+      # Sign the update feed electron-builder just published (latest*.yml) with
+      # the release signing key and upload `<file>.sig` beside each one; the
+      # updater checks it against the key built into the app before trusting
+      # the feed. While that built-in key is the placeholder, a missing secret
+      # only warns; once a real key is built in, it fails the release, as does
+      # a secret that does not match. docs/signing.md, "The release signing key".
+      - name: Sign the update feed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEKKO_RELEASE_SIGNING_KEY: ${{ secrets.NEKKO_RELEASE_SIGNING_KEY }}
+          # "1" only for the bridge release of a key rotation (docs/signing.md).
+          NEKKO_RELEASE_KEY_ROTATION: ${{ vars.NEKKO_RELEASE_KEY_ROTATION }}
+        run: |
+          set -euo pipefail
+          # Not a process substitution: its exit status would be ignored.
+          out=$(node scripts/sign-update-feed.mjs apps/desktop/release)
+          sigs=()
+          if [ -n "$out" ]; then mapfile -t sigs <<<"$out"; fi
+          if [ "${#sigs[@]}" -gt 0 ]; then
+            gh release upload "$GITHUB_REF_NAME" "${sigs[@]}" --clobber
+          fi
+
       # Only nekko-vm may create VMs (apps/desktop/scripts/sign-mac.cjs): it must
       # carry the virtualization entitlement and nothing else in the app may.
       # Signed or not, and a file codesign cannot read fails it. docs/signing.md.

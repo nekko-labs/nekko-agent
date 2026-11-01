@@ -24,7 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
-import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImageView, RunnerSettings, RunnerView } from './runners.js';
+import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -333,6 +333,7 @@ export const IpcChannels = {
   workflowEvent: 'workflow:event',
   /** The CI runner image builder (T226), served by nekkod; never by a phone. */
   runnerImageStatus: 'runner:imageStatus',
+  runnerImagePlan: 'runner:imagePlan',
   runnerImageBuild: 'runner:imageBuild',
   runnerImageResume: 'runner:imageResume',
   runnerImageCancel: 'runner:imageCancel',
@@ -1094,6 +1095,7 @@ export interface NekkoApi {
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
   /** Builds the runner VM image on this Mac. Rejects with a sentence, like the runner calls. */
   imageStatus(): Promise<ImageView>;
+  imagePlan(): Promise<ImagePlan>;
   buildImage(req: ImageBuildRequest): Promise<ImageView>;
   resumeImage(): Promise<ImageView>;
   cancelImage(): Promise<ImageView>;

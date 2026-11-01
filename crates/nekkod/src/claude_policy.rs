@@ -43,14 +43,11 @@ use std::sync::{Arc, Mutex, RwLock};
 /// The release's file name beside its update feed, and the cached copy in the data directory.
 pub const FEED_FILE: &str = "claude-policy.json";
 
-/// The Ed25519 public key `claudePolicy` documents are signed with.
-///
-/// TODO(Philip): replace with the release signing key's public half before
-/// any signed policy ships. Nekko has no release signing key yet (the update
-/// feed is checked by SHA-512 and, on Windows, Authenticode only). While this
-/// is all zeros, every signed override is refused, so the shipped table is the
-/// whole policy.
-pub const RELEASE_POLICY_KEY: [u8; 32] = [0; 32];
+/// The Ed25519 public key `claudePolicy` documents are signed with: the one
+/// release signing key, shared with the update feed
+/// (`nekko_native::release_key`). While it is the all-zero placeholder, every
+/// signed override is refused, so the shipped table is the whole policy.
+pub use nekko_native::release_key::RELEASE_SIGNING_KEY as RELEASE_POLICY_KEY;
 
 /// The setting a user turns on when Anthropic has approved their use of the
 /// plan's approval-gated features (`AppSettings.claudePlanFeaturesApproved`).
@@ -161,7 +158,7 @@ impl ClaudePolicyStore {
 
     /// Check a signed document: key, signature, type, version and rows.
     fn verify(&self, doc: &Value) -> Result<Applied, String> {
-        if self.key == [0; 32] {
+        if nekko_native::release_key::is_placeholder(&self.key) {
             return Err("no Claude policy signing key is configured".into());
         }
         let b64 = base64::engine::general_purpose::STANDARD;

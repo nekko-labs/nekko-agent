@@ -1,0 +1,7 @@
+{
+  "//": "A test key, not the release key: scripts/sign-update-feed.mjs signs this feed, and update.rs verifies the signature (and the Node test reproduces it).",
+  "seed": "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio=",
+  "publicKey": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+  "feed": "version: 1.2.3\nfiles:\n  - url: NekkoAgent-1.2.3-x64.exe\n    sha512: 3q2+7w==\n    size: 1024\npath: NekkoAgent-1.2.3-x64.exe\nsha512: 3q2+7w==\nreleaseDate: '2026-11-01T00:00:00.000Z'\n",
+  "signature": "RXTIztSQRjvkkGeMWEV+G4l7ubetMbNTMmb/8rlME0GcAMedKz07uOowmQAOF6g4I/RGmgxXIjloM9Y+ec7cCg==\n"
+}

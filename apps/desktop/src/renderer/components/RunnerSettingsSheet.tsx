@@ -9,6 +9,7 @@ import {
   recommendationText,
   slotLimitText,
   type HostView,
+  type ImageView,
   type KeepAwake,
   type Priority,
   type RunnerSettings,
@@ -103,14 +104,16 @@ const PRIORITIES: Priority[] = ['doNotDisturb', 'balanced', 'runnerFirst'];
 const KEEP_AWAKE: KeepAwake[] = ['systemDefault', 'whileActive', 'always'];
 
 /** The settings form (mockup 4); pure so tests render it statically. */
-export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove, onCancel, saving, toggling = false }: {
+export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, onSave, onRemove, onCancel, onRebuild, saving, toggling = false }: {
   view: RunnerView;
+  image?: ImageView | null;
   draft: RunnerSettings;
   onDraft(d: RunnerSettings): void;
   onEnabled(v: boolean): void;
   onSave(): void;
   onRemove(): void;
   onCancel?(): void;
+  onRebuild?(): void;
   saving: boolean;
   toggling?: boolean;
 }) {
@@ -253,6 +256,14 @@ export function SettingsBody({ view, draft, onDraft, onEnabled, onSave, onRemove
       <Row label="Max job time">
         <Seg label="Max job time" value={draft.maxJobMinutes} options={jobChoices.map((m) => ({ value: m, label: formatMinutes(m * 60) }))} onChange={(v) => set('maxJobMinutes', v)} />
       </Row>
+      {image?.state === 'ready' && (
+        <Row label="VM image" hint="how macOS, Xcode and runner updates arrive">
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" className="btn btn-outline py-1! text-xs" onClick={onRebuild}>Rebuild image</button>
+            {image.info && <span className="text-xs text-ink-faint">{`macOS ${image.info.macos}${image.info.xcode ? ` · Xcode ${image.info.xcode}` : ''}`}</span>}
+          </div>
+        </Row>
+      )}
 
       {/* Sticky: the sheet is taller than a laptop window, and Save must stay in reach. */}
       <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center gap-2 border-t bg-surface px-5 pt-3 pb-5" style={{ borderColor: 'var(--line)' }}>
@@ -276,7 +287,7 @@ export interface Edits { base: RunnerSettings; draft: RunnerSettings }
 export const editDraft = (edits: Edits | null, view: RunnerView, draft: RunnerSettings): Edits => ({ base: edits?.base ?? view.config.settings, draft });
 
 /** Runner settings for one runner. After Save, the form shows what the daemon kept. */
-export function RunnerSettingsSheet({ view, onClose, beginReply }: { view: RunnerView; onClose(): void; beginReply(): (v: RunnerView) => void }) {
+export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, beginReply }: { view: RunnerView; image?: ImageView | null; onClose(): void; onRebuild?(): void; beginReply(): (v: RunnerView) => void }) {
   const pushToast = useStore((s) => s.pushToast);
   const [edits, setEdits] = useState<Edits | null>(null);
   const draft = shownSettings(view, edits?.draft ?? null);
@@ -318,12 +329,14 @@ export function RunnerSettingsSheet({ view, onClose, beginReply }: { view: Runne
     <Modal title="Runner settings · This Mac" onClose={onClose} overlayClassName="p-4" className="card w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
       <SettingsBody
         view={view}
+        image={image}
         draft={draft}
         onDraft={(d) => setEdits((e) => editDraft(e, view, d))}
         onEnabled={(v) => void setEnabled(v)}
         onSave={() => void save()}
         onRemove={() => void remove()}
         onCancel={onClose}
+        onRebuild={onRebuild}
         saving={saving}
         toggling={toggling}
       />
