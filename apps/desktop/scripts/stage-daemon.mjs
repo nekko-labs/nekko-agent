@@ -74,6 +74,10 @@ function stageVmHelper(dirs) {
       return false;
     }
   }
+  const caps = spawnSync(out, ['capabilities'], { encoding: 'utf8' });
+  if (!caps.stdout?.includes('"firstBoot":true')) {
+    console.warn('nekko-vm was built without the macOS 27 SDK: this build cannot set up a runner image. Build with Xcode 27.');
+  }
   for (const dir of dirs.slice(1)) copyFileSync(out, join(dir, 'nekko-vm'));
   // The guest scripts the image builder uploads (crates/nekkod/src/runner/image.rs).
   for (const dir of dirs) {

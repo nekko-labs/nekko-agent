@@ -72,6 +72,10 @@ head -c 4096 /dev/urandom >"$tmp/not.ipsw"
 out=$("$helper" install --ipsw "$tmp/not.ipsw" --bundle "$tmp/fresh" --disk-gb 1); code=$?
 check "install refuses a file that is no restore image" "[ $code -eq 1 ] && [[ '$out' == '{\"ok\":false,\"error\":'* ]] && [ ! -e '$tmp/fresh' ]"
 
+# capabilities says what this SDK built in
+out=$("$helper" capabilities); code=$?
+check "capabilities reports first boot ($out)" "[ $code -eq 0 ] && [ '$out' = '{\"firstBoot\":true}' ]"
+
 # restore-image asks Apple's catalog, so offline it must still answer in JSON
 out=$("$helper" restore-image); code=$?
 check "restore-image answers in JSON ($out)" \

@@ -156,6 +156,8 @@ struct Rig {
     vault: Arc<MemVault>,
     views: Arc<Mutex<Vec<ImageView>>>,
     building: Arc<AtomicBool>,
+    /// The keep-awake wish at each view that waits.
+    awake_while_waiting: Arc<Mutex<Vec<bool>>>,
 }
 
 impl Rig {
@@ -165,6 +167,7 @@ impl Rig {
             vault: Arc::default(),
             views: Arc::default(),
             building: Arc::default(),
+            awake_while_waiting: Arc::default(),
         }
     }
     fn images(&self) -> PathBuf {
@@ -172,12 +175,18 @@ impl Rig {
     }
     fn job(&self, fake: Fake) -> Arc<ImageJob<Fake>> {
         let views = self.views.clone();
+        let (awake, building) = (self.awake_while_waiting.clone(), self.building.clone());
         let mut job = ImageJob::new(
             self.images(),
             fake,
             self.vault.clone(),
             self.building.clone(),
-            Box::new(move |v: &ImageView| views.lock().unwrap().push(v.clone())),
+            Box::new(move |v: &ImageView| {
+                views.lock().unwrap().push(v.clone());
+                if v.state == ImageState::Waiting {
+                    awake.lock().unwrap().push(building.load(Ordering::SeqCst));
+                }
+            }),
         );
         job.poll = Duration::from_millis(1);
         Arc::new(job)
@@ -348,6 +357,32 @@ async fn lockdown_failure_goes_back_to_the_checkpoint() {
 }
 
 #[tokio::test]
+async fn a_lockdown_hang_still_reads_what_the_guest_logged() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    fail(&job, "lockdown", "The guest did not stop within 15 min.");
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    let v = job.status();
+    assert_eq!(v.error.as_deref(), Some("The guest did not stop within 15 min."));
+    assert!(v.log.unwrap().contains("provision-rc=0"), "the only clue, and a resume deletes that disk");
+    let calls = job.host.calls();
+    let (halt, read) = (calls.iter().position(|c| c == "halt"), calls.iter().position(|c| c == "read_proof"));
+    assert!(halt < read, "the disk is read with the VM down: {calls:?}");
+}
+
+#[tokio::test]
+async fn any_failed_stage_leaves_no_vm_up() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    fail(&job, "shutdown", "The guest did not shut down cleanly.");
+    job.build(request(Kind::MacosOnly)).unwrap();
+    finish(&job).await;
+    assert_eq!(job.status().state, ImageState::Failed);
+    assert!(job.host.called("halt"));
+}
+
+#[tokio::test]
 async fn a_hang_fails_the_stage_and_leaves_the_image_alone() {
     let rig = Rig::new();
     let default = rig.images().join("default");
@@ -416,6 +451,22 @@ async fn two_vms_wait_with_a_reason() {
     let views = rig.views.lock().unwrap();
     assert!(views.iter().any(|v| v.state == ImageState::Waiting && v.detail == "Waiting for a free VM slot"));
     assert_eq!(job.status().state, ImageState::Ready);
+}
+
+#[tokio::test]
+async fn waiting_does_not_hold_the_mac_awake() {
+    let rig = Rig::new();
+    let fake = Fake::default();
+    fake.vms.lock().unwrap().extend([0, 0, 0, 2, 0]);
+    let job = rig.job(fake);
+    fail(&job, "send_xcode", "stop here");
+    job.build(request(Kind::Xcode)).unwrap();
+    while !job.host.called("send_xcode") {
+        assert!(rig.building.load(Ordering::SeqCst) || !rig.awake_while_waiting.lock().unwrap().is_empty());
+        tokio::task::yield_now().await;
+    }
+    finish(&job).await;
+    assert_eq!(*rig.awake_while_waiting.lock().unwrap(), vec![false], "a Mac unplugged mid-build may sleep");
 }
 
 #[test]
@@ -609,6 +660,68 @@ fn the_proof_is_found_on_whichever_volume_holds_it() {
     std::fs::create_dir_all(data.join("usr/local/share")).unwrap();
     std::fs::write(data.join(PROOF_FILE), PROOF).unwrap();
     assert_eq!(proof_on(dir.path()).image.as_deref(), Some(PROOF));
+}
+
+/// A real disk, with `NEKKO_TEST_DISK` naming a stopped bundle that has a proof file.
+#[tokio::test]
+#[ignore]
+async fn a_real_disk_gives_up_its_proof_and_detaches() {
+    let bundle = PathBuf::from(std::env::var("NEKKO_TEST_DISK").unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    let host = fake_helper_host(dir.path(), "exit 0");
+    std::fs::create_dir_all(host.dir()).unwrap();
+    let proof = host.read_proof(&bundle).await.unwrap();
+    serde_json::from_str::<ImageInfo>(&proof.image.unwrap()).unwrap();
+    assert!(proof.log.contains("provision-rc=0"));
+    let left: Vec<_> = std::fs::read_dir(host.dir().join("mnt")).unwrap().flatten().collect();
+    assert!(left.iter().all(|f| std::fs::read_dir(f.path()).unwrap().next().is_none()), "{left:?}");
+}
+
+/// A `RealBuildHost` over a fake `nekko-vm` with `body` as its script, and no network.
+fn fake_helper_host(dir: &Path, body: &str) -> RealBuildHost {
+    use std::os::unix::fs::PermissionsExt;
+    let helper = dir.join("nekko-vm");
+    std::fs::write(&helper, format!("#!/bin/sh\n{body}\n")).unwrap();
+    std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let vm = HelperVm::new(helper, Arc::default(), Arc::default());
+    RealBuildHost::new(Ok(vm), dir.join("images"), Arc::default(), Weak::new())
+}
+
+#[tokio::test]
+async fn a_helper_built_without_the_macos_27_sdk_is_refused_before_any_download() {
+    let dir = tempfile::tempdir().unwrap();
+    let old = fake_helper_host(dir.path(), "echo '{\"firstBoot\":false}'");
+    assert_eq!(old.check_helper().await.unwrap_err(), NO_FIRST_BOOT);
+    assert!(!NO_FIRST_BOOT.contains("Update this Mac"), "the Mac is not at fault");
+    let new = fake_helper_host(dir.path(), "echo '{\"firstBoot\":true}'");
+    new.check_helper().await.unwrap();
+    // An older helper that has no such command at all.
+    let older = fake_helper_host(dir.path(), "echo '{\"ok\":false,\"error\":\"usage\"}'; exit 1");
+    assert_eq!(older.check_helper().await.unwrap_err(), NO_FIRST_BOOT);
+}
+
+#[tokio::test]
+async fn the_first_boot_password_never_outlives_a_failed_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let host = fake_helper_host(dir.path(), "exit 1");
+    std::fs::create_dir_all(host.dir()).unwrap();
+    // No physical interface: the start fails before the helper could read the file.
+    assert!(host.first_boot(&dir.path().join("bundle"), "secret").await.is_err());
+    assert!(!host.dir().join("first-boot-password").exists());
+}
+
+#[test]
+fn a_symlinked_xcode_resolves_to_the_real_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().join("Xcode-27.2.app");
+    std::fs::create_dir_all(real.join("Contents/Developer")).unwrap();
+    let link = dir.path().join("Xcode.app");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let dev = format!("{}/Contents/Developer", link.display());
+    let found = real_app(&dev).unwrap();
+    assert_eq!(found.file_name().unwrap(), "Xcode-27.2.app", "tar would send the link itself");
+    assert_eq!(real_app(&format!("{}/Nope.app/Contents/Developer", dir.path().display())), None);
+    assert_eq!(real_app("/Library/Developer/CommandLineTools"), None);
 }
 
 #[test]

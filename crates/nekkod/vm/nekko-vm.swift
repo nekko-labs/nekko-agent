@@ -13,6 +13,7 @@
 //   restore-image                              {"ok":true,"url","build","version"} | {"ok":false,"error"} (exit 1)
 //   install --ipsw <file> --bundle <dir> --disk-gb N
 //                                              {"progress":0.5} every 5 s, then {"ok":true} | {"ok":false,"error"} (exit 1)
+//   capabilities                               {"firstBoot":true|false}
 //   count-vms                                  {"count":N}
 //   egress                                     {"physical":{"name","index"}|null,"vpnCarriesDefault",
 //                                               "expensive","constrained"} now and on every change
@@ -428,6 +429,19 @@ func startWithFirstBoot(_ vm: VZVirtualMachine, user: String, password: String) 
     finish("error", "Update this Mac to macOS 27 to set it up here.", code: 1)
 }
 
+// MARK: capabilities
+
+/// Whether this binary can do a first boot, which only the macOS 27 SDK allows.
+/// nekkod asks before it spends a 25 GB download finding out.
+func capabilities() -> Never {
+    #if compiler(>=6.4)
+    emit(["firstBoot": true])
+    #else
+    emit(["firstBoot": false])
+    #endif
+    exit(0)
+}
+
 // MARK: restore-image
 
 /// Apple's newest restore image for this Mac. Here, not in nekkod, because the
@@ -518,12 +532,13 @@ func install() -> Never {
 switch args.first {
 case "clone": clone()
 case "run": run()
+case "capabilities": capabilities()
 case "restore-image": restoreImage()
 case "install": install()
 case "count-vms": countVms()
 case "egress": egress()
 case "host": host()
 default:
-    emit(["ok": false, "error": "usage: nekko-vm clone|run|restore-image|install|count-vms|egress|host"])
+    emit(["ok": false, "error": "usage: nekko-vm clone|run|capabilities|restore-image|install|count-vms|egress|host"])
     exit(1)
 }

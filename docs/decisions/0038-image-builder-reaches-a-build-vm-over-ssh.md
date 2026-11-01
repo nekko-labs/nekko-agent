@@ -44,7 +44,7 @@ The forward lives in `NetConfig`, which job code builds through `job_net_config`
 ## Consequences
 
 - First-boot setup needs macOS 27 on the host. Older Macs see "Update this Mac to macOS 27 to set it up here." and keep the [bring your own image](../ci-runners-image.md) guide.
-- `nekko-vm` needs the macOS 27 SDK to carry first-boot support. Built with an older SDK it still builds, and a build stops at first boot with that same sentence.
+- `nekko-vm` needs the macOS 27 SDK to carry first-boot support. Built with an older SDK it still builds, `stage-daemon.mjs` warns, `nekko-vm capabilities` says so, and Check refuses before any download.
 - `tart run` with a window is gone as a debugging aid: the build log and `provision.sh`'s log, read from the stopped disk, replace it.
 - Lockdown still proves itself: `provision.sh` turns SSH off partway, so nothing can be asked afterwards. `nekkod` reads its proof file from the disk read-only, and no proof file fails the build, even after a clean stop.
 - Every guest command has a time limit, because the Gatekeeper stall above produced no output at all.

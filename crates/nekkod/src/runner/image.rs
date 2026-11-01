@@ -47,8 +47,10 @@ const MEMORY_MB: u32 = 8192;
 const IPSW: &str = "restore.ipsw";
 const PROOF_FILE: &str = "usr/local/share/nekko-runner-image.json";
 const PROVISION_LOG: &str = "private/var/log/nekko-provision.log";
+const BOOT_LOG: &str = "private/var/log/nekko-runner-boot.log";
 const UPDATE_MACOS: &str = "Update this Mac to macOS 27 to set it up here.";
 const NO_XCODE: &str = "No Xcode on this Mac. Install Xcode, or choose macOS only.";
+const NO_FIRST_BOOT: &str = "This copy of Nekko cannot build a VM on its own. Update Nekko, or bring your own image.";
 const NO_PASSWORD: &str = "This build's password is gone, so its VM cannot be reached. Cancel setup and start again.";
 // The installer at a fixed commit, as `provision.sh` pins the runner.
 const HOMEBREW_COMMIT: &str = "8c82c081753d4263da0cfe615ef8d9433425f22b";
@@ -498,6 +500,7 @@ impl<H: BuildHost> ImageJob<H> {
                 self.update(|v| *v = rest);
             }
             Err((stage, raw)) => {
+                self.host.halt().await;
                 self.log(&raw);
                 let r = self.host.readings().await;
                 let error = if r.free_gb < r.floor_gb { no_room(r.free_gb) } else { raw };
@@ -545,7 +548,12 @@ impl<H: BuildHost> ImageJob<H> {
     async fn wait_for_host(&self, stage: Stage) {
         loop {
             let r = self.host.readings().await;
-            let Some(why) = waiting_reason(&r, stage) else { return };
+            let Some(why) = waiting_reason(&r, stage) else {
+                self.building.store(true, Ordering::SeqCst);
+                return;
+            };
+            // Nothing runs while it waits, and a Mac unplugged mid-build must be free to sleep.
+            self.building.store(false, Ordering::SeqCst);
             self.update(|v| {
                 v.state = ImageState::Waiting;
                 v.stage = Some(stage);
@@ -621,13 +629,8 @@ impl<H: BuildHost> ImageJob<H> {
                 self.host.clone_bundle(&checkpoint, &bundle).await?;
                 self.detail("Starting the VM");
                 self.host.boot(&bundle, &password).await?;
-                match self.add_tools(b.kind, &password).await {
-                    Ok(()) => self.host.shutdown(&password).await,
-                    Err(e) => {
-                        self.host.halt().await;
-                        Err(e)
-                    }
-                }
+                self.add_tools(b.kind, &password).await?;
+                self.host.shutdown(&password).await
             }
             Stage::Lockdown => {
                 let password = self.password()?;
@@ -636,6 +639,10 @@ impl<H: BuildHost> ImageJob<H> {
                 self.detail("Locking the VM down");
                 if let Err(e) = self.host.lockdown(&password).await {
                     self.host.halt().await;
+                    // The only clue to a hang, and a resume deletes this disk.
+                    if let Ok(proof) = self.host.read_proof(&bundle).await {
+                        self.log(&proof.log);
+                    }
                     return Err(e);
                 }
                 let proof = self.host.read_proof(&bundle).await?;
@@ -651,8 +658,11 @@ impl<H: BuildHost> ImageJob<H> {
             Stage::Finish => {
                 let default = self.images.join("default");
                 self.host.swap(&bundle, &default).await?;
-                std::fs::copy(dir.join("proof.json"), default.join("image.json"))
-                    .map_err(|e| format!("Cannot save image.json: {e}"))?;
+                // Gone only if an earlier Finish got as far as deleting the build folder.
+                if dir.join("proof.json").exists() {
+                    std::fs::copy(dir.join("proof.json"), default.join("image.json"))
+                        .map_err(|e| format!("Cannot save image.json: {e}"))?;
+                }
                 if let Some(id) = &b.runner_id {
                     self.host.enable_runner(id, b.priority).await?;
                 }
@@ -687,20 +697,21 @@ fn quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', r"'\''"))
 }
 
-/// Reads the proof and the provision log from a disk's mounted volumes: the Data
-/// volume holds both, under whichever `mountrandom` folder it landed.
+/// The `*.app` behind `xcode-select -p`, with a symlink (as `xcodes` leaves)
+/// resolved: `tar` would send the link and not the app. `None` if there is no Xcode.
+fn real_app(developer_dir: &str) -> Option<PathBuf> {
+    xcode_source(developer_dir)?.canonicalize().ok().filter(|a| a.is_dir())
+}
+
+/// `file` from whichever of a disk's mounted volumes holds it.
+fn read_on(mounts: &Path, file: &str) -> Option<String> {
+    let mut roots = std::fs::read_dir(mounts).into_iter().flatten().flatten().map(|e| e.path());
+    let raw = roots.find_map(|root| std::fs::read(root.join(file)).ok())?;
+    Some(String::from_utf8_lossy(&raw).into_owned())
+}
+
 fn proof_on(mounts: &Path) -> Proof {
-    let mut proof = Proof::default();
-    for root in std::fs::read_dir(mounts).into_iter().flatten().flatten().map(|e| e.path()) {
-        if proof.image.is_none() {
-            proof.image = std::fs::read(root.join(PROOF_FILE)).ok().map(|r| String::from_utf8_lossy(&r).into_owned());
-        }
-        if proof.log.is_empty() {
-            let log = std::fs::read(root.join(PROVISION_LOG)).unwrap_or_default();
-            proof.log = String::from_utf8_lossy(&log).into_owned();
-        }
-    }
-    proof
+    Proof { image: read_on(mounts, PROOF_FILE), log: read_on(mounts, PROVISION_LOG).unwrap_or_default() }
 }
 
 /// The VM this build has up, and its forwarded SSH port.
@@ -890,7 +901,10 @@ impl RealBuildHost {
             first_boot: boot,
             ssh_port_listener: listener,
         };
-        let handle = vm.start_build(spec).await?;
+        let handle = vm.start_build(spec).await;
+        // The helper deletes it, but a start that failed first never reached the helper.
+        let _ = std::fs::remove_file(self.dir().join("first-boot-password"));
+        let handle = handle?;
         if let Ok(mut up) = self.up.lock() {
             *up = Some(Up { handle, port });
         }
@@ -904,6 +918,55 @@ impl RealBuildHost {
                 return Err(format!("The VM did not answer within {} min.", SSH_UP_LIMIT.as_secs() / 60));
             }
             tokio::time::sleep(Duration::from_secs(3)).await;
+        }
+    }
+
+    /// A helper built with an older SDK has no first boot. Better said here than
+    /// after a 25 GB download.
+    async fn check_helper(&self) -> Result<(), String> {
+        let v = self.vm()?.call(&["capabilities".as_ref()], Duration::from_secs(10)).await;
+        if v.is_ok_and(|v| v["firstBoot"] == true) { Ok(()) } else { Err(NO_FIRST_BOOT.into()) }
+    }
+
+    /// Mounts `bundle`'s disk read-only, in a folder of its own so nothing an
+    /// earlier attempt left mounted can answer, and runs `read` on the folder.
+    /// A disk that will not detach fails the call.
+    async fn with_disk<T>(&self, bundle: &Path, read: impl FnOnce(&Path) -> T) -> Result<T, String> {
+        self.detach_leftovers().await;
+        let mounts = self.dir().join("mnt").join(new_password()?);
+        std::fs::create_dir_all(&mounts).map_err(|e| format!("Cannot make the mount folder: {e}"))?;
+        let mut attach = Command::new("/usr/bin/hdiutil");
+        attach
+            .args(["attach", "-readonly", "-nobrowse", "-noverify", "-noautofsck", "-mountrandom"])
+            .arg(&mounts)
+            .args(["-imagekey", "diskimage-class=CRawDiskImage"])
+            .arg(bundle.join("disk.img"));
+        let out = output_within(attach, minutes(2), "hdiutil").await?;
+        if !out.status.success() {
+            return Err(format!("Cannot open the VM's disk: {}", String::from_utf8_lossy(&out.stderr).trim()));
+        }
+        let text = String::from_utf8_lossy(&out.stdout);
+        let device = text.split_whitespace().next().ok_or("hdiutil named no device")?;
+        let found = read(&mounts);
+        for flags in [&[][..], &["-force"][..]] {
+            let mut detach = Command::new("/usr/bin/hdiutil");
+            detach.arg("detach").args(flags).arg(device);
+            if output_within(detach, minutes(1), "hdiutil").await.is_ok_and(|o| o.status.success()) {
+                let _ = std::fs::remove_dir(&mounts);
+                return Ok(found);
+            }
+        }
+        Err(format!("Cannot close the VM's disk ({device})."))
+    }
+
+    /// An attachment outlives nekkod, so a quit can strand one under `mnt/`,
+    /// where it would block deleting the build folder.
+    async fn detach_leftovers(&self) {
+        let list = |p: PathBuf| std::fs::read_dir(p).into_iter().flatten().flatten().map(|e| e.path());
+        for mount in list(self.dir().join("mnt")).flat_map(list).collect::<Vec<_>>() {
+            let mut detach = Command::new("/usr/bin/hdiutil");
+            detach.args(["detach", "-force"]).arg(mount);
+            let _ = output_within(detach, minutes(1), "hdiutil").await;
         }
     }
 
@@ -936,12 +999,13 @@ impl BuildHost for RealBuildHost {
                 return Err("Install this Mac's security update, then try again.".into());
             }
         }
+        self.check_helper().await?;
         if !self.helper_dir()?.join("runner-image/provision.sh").is_file() {
             return Err("The VM setup scripts are not installed.".into());
         }
         if kind == Kind::Xcode {
             let dev = super::signals::output("/usr/bin/xcode-select", &["-p"], Duration::from_secs(5)).await;
-            dev.as_deref().and_then(xcode_source).filter(|a| a.is_dir()).ok_or(NO_XCODE)?;
+            dev.as_deref().and_then(real_app).ok_or(NO_XCODE)?;
         }
         Ok(())
     }
@@ -1069,7 +1133,7 @@ impl BuildHost for RealBuildHost {
 
     async fn send_xcode(&self, password: &str) -> Result<(), String> {
         let dev = super::signals::output("/usr/bin/xcode-select", &["-p"], Duration::from_secs(5)).await;
-        let app = dev.as_deref().and_then(xcode_source).ok_or(NO_XCODE)?;
+        let app = dev.as_deref().and_then(real_app).ok_or(NO_XCODE)?;
         let (Some(parent), Some(name)) = (app.parent(), app.file_name()) else { return Err(NO_XCODE.into()) };
         let mut args: Vec<OsString> = vec!["-C".into(), parent.into(), "--mac-metadata".into()];
         if let Some(rename) = super::vm::tar_rename_arg(&app) {
@@ -1095,6 +1159,7 @@ impl BuildHost for RealBuildHost {
             up.handle.kill();
             let _ = timeout(Duration::from_secs(10), &mut up.handle.done).await;
         }
+        self.detach_leftovers().await;
     }
 
     async fn lockdown(&self, password: &str) -> Result<(), String> {
@@ -1111,29 +1176,7 @@ impl BuildHost for RealBuildHost {
     }
 
     async fn read_proof(&self, bundle: &Path) -> Result<Proof, String> {
-        let mounts = self.dir().join("mnt");
-        std::fs::create_dir_all(&mounts).map_err(|e| format!("Cannot make the mount folder: {e}"))?;
-        let mut attach = Command::new("/usr/bin/hdiutil");
-        attach
-            .args(["attach", "-readonly", "-nobrowse", "-noverify", "-noautofsck", "-mountrandom"])
-            .arg(&mounts)
-            .args(["-imagekey", "diskimage-class=CRawDiskImage"])
-            .arg(bundle.join("disk.img"));
-        let out = output_within(attach, minutes(2), "hdiutil").await?;
-        if !out.status.success() {
-            return Err(format!("Cannot open the VM's disk: {}", String::from_utf8_lossy(&out.stderr).trim()));
-        }
-        let text = String::from_utf8_lossy(&out.stdout);
-        let device = text.split_whitespace().next().ok_or("hdiutil named no device")?;
-        let proof = proof_on(&mounts);
-        for flags in [&[][..], &["-force"][..]] {
-            let mut detach = Command::new("/usr/bin/hdiutil");
-            detach.arg("detach").args(flags).arg(device);
-            if output_within(detach, minutes(1), "hdiutil").await.is_ok_and(|o| o.status.success()) {
-                break;
-            }
-        }
-        Ok(proof)
+        self.with_disk(bundle, proof_on).await
     }
 
     async fn test_boot(&self, bundle: &Path) -> Result<(), String> {
@@ -1150,6 +1193,12 @@ impl BuildHost for RealBuildHost {
         if stopped.is_err() {
             handle.kill();
             let _ = timeout(Duration::from_secs(10), &mut handle.done).await;
+        }
+        if !matches!(stopped, Ok(Ok(Stopped::Guest))) {
+            let log = self.with_disk(&clone, |m| read_on(m, BOOT_LOG)).await;
+            if let (Ok(Some(log)), Ok(mut file)) = (log, self.log_file()) {
+                let _ = writeln!(file, "{log}");
+            }
         }
         remove_any(&clone).await?;
         remove_any(&seed).await?;
