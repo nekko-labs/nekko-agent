@@ -531,7 +531,7 @@ fn median(xs: impl Iterator<Item = f64>) -> Option<f64> {
     }
     v.sort_by(f64::total_cmp);
     let mid = v.len() / 2;
-    Some(if v.len() % 2 == 0 { (v[mid - 1] + v[mid]) / 2.0 } else { v[mid] })
+    Some(if v.len().is_multiple_of(2) { (v[mid - 1] + v[mid]) / 2.0 } else { v[mid] })
 }
 
 fn markdown(r: &Report) -> String {
