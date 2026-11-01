@@ -22,14 +22,14 @@ struct NekkoCardAttributes: ActivityAttributes, Equatable {
 /// widget extension, where the buttons are drawn but never run.
 @MainActor
 enum IntentRouter {
-    static var approve: (@MainActor (_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
-    static var stop: (@MainActor (_ sessionId: String) async -> Void)?
+    static var approve: (@MainActor @Sendable (_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
+    static var stop: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
     // The card's buttons.
-    static var focus: (@MainActor (_ sessionId: String) async -> Void)?
-    static var nextPage: (@MainActor (_ sessionId: String) async -> Void)?
-    static var dismiss: (@MainActor (_ sessionId: String) async -> Void)?
-    static var talk: (@MainActor (_ sessionId: String) async -> Void)?
-    static var cancelTalk: (@MainActor () async -> Void)?
+    static var focus: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
+    static var nextPage: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
+    static var dismiss: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
+    static var talk: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
+    static var cancelTalk: (@MainActor @Sendable () async -> Void)?
 }
 
 /// Allow or deny the waiting tool call from the Lock Screen or the Dynamic

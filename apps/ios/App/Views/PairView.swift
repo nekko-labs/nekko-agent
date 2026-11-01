@@ -1,4 +1,6 @@
-import AVFoundation
+// The capture session is started and stopped on its own serial queue, as Apple
+// recommends, but AVFoundation does not mark it Sendable yet.
+@preconcurrency import AVFoundation
 import NekkoKit
 import NekkoProtocol
 import SwiftUI

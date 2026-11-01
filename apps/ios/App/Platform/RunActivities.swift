@@ -1,4 +1,6 @@
-import ActivityKit
+// Activity is meant to be updated and ended from any task, but ActivityKit does not
+// mark it Sendable yet.
+@preconcurrency import ActivityKit
 import Foundation
 import os
 import NekkoKit
@@ -73,7 +75,7 @@ final class RunActivities {
     /// How long a run the events saw counts as working with no word from
     /// `activity` (a reconnect empties it until the next event).
     static let quietRun: TimeInterval = 30 * 60
-    private let request: (NekkoCardAttributes, LiveCardState) -> CardActivity?
+    private let request: @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity?
 
     var level: () -> LiveLevel = { .none }
     /// The card's push token for the relay, nil once the card is gone.
@@ -82,7 +84,7 @@ final class RunActivities {
     var source: () -> Source? = { nil }
 
     /// `adoptLeftover`: carry on with a card an earlier launch left up.
-    init(request: @escaping (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
+    init(request: @escaping @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
         self.request = request
         if adoptLeftover, let leftover = SystemCard.leftover() {
             card = leftover
