@@ -85,8 +85,8 @@ export function useComposerGaze(ref: React.RefObject<SVGSVGElement | null>, { re
 const WIZARD_HAT_TRANSFORM = 'translate(16.5 9) scale(0.8) translate(-16.5 -12)';
 
 /** The pixel head peeking over a composer edge, paws hanging over it. */
-export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string; look: { x: number; y: number }; laugh?: boolean; wizardHat?: boolean }>(function PeekNekkoArt(
-  { className, look, laugh = false, wizardHat = false },
+export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string; look: { x: number; y: number }; laugh?: boolean; wizardHat?: boolean; paws?: boolean }>(function PeekNekkoArt(
+  { className, look, laugh = false, wizardHat = false, paws = true },
   ref,
 ) {
   return (
@@ -105,11 +105,13 @@ export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string;
         <rect x="8" y="9" width="17" height="3" fill="#ea580c" stroke="#9a3412" strokeWidth="1" />
         <rect x="16" y="7" width="3" height="2" fill="#fde68a" />
       </g>}
-      <g data-part="peek-paws" transform="translate(0 50) scale(1 -1)">
+      {/* The outer group carries the show/hide motion; the inner one keeps the
+          mirror transform, which a CSS transform would otherwise replace. */}
+      <g className="peek-paws-slot" data-shown={paws || undefined}><g data-part="peek-paws" transform="translate(0 50) scale(1 -1)">
         <path d="M6 24H11V28H6Z M21 24H26V28H21Z" fill="var(--surface)" />
         <path d="M5 23H12V27H11V24H6V27H5Z M20 23H27V27H26V24H21V27H20Z" fill="var(--ink)" />
         <path d="M7.5 24H8V25.5H7.5Z M9 24H9.5V25.5H9Z M22.5 24H23V25.5H22.5Z M24 24H24.5V25.5H24Z" fill="var(--ink)" opacity="0.55" />
-      </g>
+      </g></g>
     </svg>
   );
 });

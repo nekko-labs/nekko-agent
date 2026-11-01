@@ -60,6 +60,17 @@ app.whenReady().then(async () => {
     await check('Nekko sits in the composer', `!!document.querySelector('.composer > .chat-mascot')`);
     await check('Nekko is left of the plan sheet', `(() => { const m = document.querySelector('.chat-mascot svg').getBoundingClientRect(), p = document.querySelector('.plan-sheet-dock').getBoundingClientRect(); return m.left + 70 * m.width / 80 <= p.left - 12; })()`);
     await check('the composer edge meets his chin', `(() => { const m = document.querySelector('.chat-mascot svg').getBoundingClientRect(), c = document.querySelector('.composer').getBoundingClientRect(); return Math.abs(m.top + 62.5 - c.top) < 1.5; })()`);
+    // Unfocused: face only. Focused: the paws come up over the edge.
+    const PAWS = `!!document.querySelector('.chat-mascot .peek-paws-slot[data-shown]')`;
+    // A window without OS focus gets no focus events, so send the ones a
+    // focused window would after each focus change.
+    const ED = `document.querySelector('.composer [contenteditable]')`;
+    await run(`(() => { const e = ${ED}; e.blur(); e.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); })()`); await sleep(400);
+    if (rect) await shot('composer-unfocused', rect);
+    await check('paws hidden while the composer is unfocused', `!(${PAWS})`);
+    await run(`(() => { const e = ${ED}; e.focus(); e.dispatchEvent(new FocusEvent('focusin', { bubbles: true })); })()`); await sleep(400);
+    if (rect) await shot('composer-focused', rect);
+    await check('paws shown while the composer has focus', PAWS);
     report.gaze.push(['rest', (await win.capturePage(undefined, { stayHidden: true }), await sleep(150), await run(GAZE))]);
     // Type a long line: the caret walks right across the composer.
     await run(`document.querySelector('.composer [contenteditable]').focus()`);

@@ -15,6 +15,7 @@ describe('Greeting Nekko', () => {
   it('reuses the pixel peek with paws and no artificial ledge', () => {
     const markup = renderToStaticMarkup(<GreetingNekko />);
     expect(markup).toContain('viewBox="0 0 32 30"');
+    expect(markup).toContain('class="peek-paws-slot" data-shown="true"');
     expect(markup).toContain('shape-rendering="crispEdges"');
     expect(markup).toContain('data-part="peek-paws" transform="translate(0 50) scale(1 -1)"');
     expect(markup).toContain('data-part="peek-face" width="32" height="25" viewBox="0 0 32 25" overflow="hidden"');
@@ -48,6 +49,8 @@ describe('Per-chat Nekko', () => {
     expect(markup).toContain('class="chat-mascot"');
     expect(markup).toContain('data-chat-mascot="idle"');
     expect(markup).toContain('data-part="peek-paws"');
+    // Paws stay down until the composer has focus or a random peek.
+    expect(markup).toContain('class="peek-paws-slot"><g');
     expect(markup).toContain('data-nekko-look="true"');
     expect(markup).toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<ChatMascot enabled working={false} wizardHat={false} />)).not.toContain('orange-wizard-hat');
