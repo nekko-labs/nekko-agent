@@ -86,8 +86,7 @@ impl Signer for SecKeySigner {
 }
 
 /// The DER inside a `BEGIN RSA PRIVATE KEY` PEM; anything else is refused.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn pkcs1_der(pem: &str) -> Result<Vec<u8>, String> {
+pub(super) fn pkcs1_der(pem: &str) -> Result<Vec<u8>, String> {
     let body = pem
         .trim()
         .strip_prefix("-----BEGIN RSA PRIVATE KEY-----")
