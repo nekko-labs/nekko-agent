@@ -163,6 +163,19 @@ impl Native {
         Ok(body)
     }
 
+    /// The body's exact bytes, for checking a signature over them.
+    async fn fetch_bytes(&self, url: &url::Url, accept: &str) -> Result<Vec<u8>, String> {
+        let res = nekko_net::send("updates", self.client.get(url.clone()).header("Accept", accept))
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let body = res.bytes().await.map_err(|e| e.to_string())?;
+        if !status.is_success() {
+            return Err(format!("HttpError: {} \"{url}\"", status.as_u16()));
+        }
+        Ok(body.to_vec())
+    }
+
     /// Find the latest release's feed and the file this machine would download,
     /// and the feed file's URL (the release's other files sit beside it).
     async fn latest(&self) -> Result<(update::UpdateInfo, update::Resolved, url::Url), String> {
@@ -191,14 +204,23 @@ impl Native {
                 (String::new(), base.join(&channel).map_err(|e| e.to_string())?)
             }
         };
-        let text = self.fetch_text(&feed_url, "*/*").await.map_err(|e| {
+        let bytes = self.fetch_bytes(&feed_url, "*/*").await.map_err(|e| {
             if e.contains(" 404 ") {
                 format!("Cannot find {channel} in the latest release artifacts ({feed_url}): {e}")
             } else {
                 e
             }
         })?;
-        let info = update::parse_update_info(&text, &channel)?;
+        // The feed's exact bytes are checked against the release key before
+        // anything in them is read. With the placeholder key there is no
+        // signature to fetch, as before (docs/signing.md).
+        let key = nekko_native::release_key::RELEASE_SIGNING_KEY;
+        if !nekko_native::release_key::is_placeholder(&key) {
+            let sig = self.fetch_bytes(&update::signature_url(&feed_url), "*/*").await.ok();
+            update::verify_feed(&key, &channel, &bytes, sig.as_deref())?;
+        }
+        let text = String::from_utf8_lossy(&bytes);
+        let info = update::parse_update_info(text.trim_start_matches('\u{feff}'), &channel)?;
         let files = update::resolve_files(&feed, &tag, &info)?;
         let file = update::pick_download(&files, self.platform, arch, update::linux_package(&self.installed()))?;
         Ok((info, file, feed_url))

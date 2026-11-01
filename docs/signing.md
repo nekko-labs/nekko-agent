@@ -16,8 +16,18 @@ worked.
 | macOS | Developer ID codesign + notarization | ✅ live since v0.6.0 | nothing |
 | Windows | Authenticode via Azure Artifact Signing | ✅ secret-gated | Azure identity validation + the secrets below |
 | Linux | none (AppImage/deb are unsigned) | n/a | n/a |
+| Update feed (all) | Ed25519 signature beside each `latest*.yml` | ✅ secret-gated | Philip generating the release key ([below](#the-release-signing-key)) |
 
 ## How the app checks an update before installing it
+
+Before anything in the release feed is read, once a real release key is built
+in, the updater fetches `<feed>.sig` beside it (`latest.yml.sig`,
+`latest-mac.yml.sig`, `latest-linux.yml.sig`) and checks it over the feed
+file's exact bytes against the
+[release signing key](#the-release-signing-key). A missing or wrong signature
+refuses the update: the version pill shows the usual update error with the
+reason, and nothing is downloaded. While the built-in key is still the
+all-zero placeholder, no signature is fetched and the feed is read as before.
 
 Besides the SHA-512 from the release feed, the in-app updater checks the
 publisher of what it is about to install against the app that is running, so
@@ -32,6 +42,77 @@ the check does not depend on `publisherName` in `app-update.yml`:
   when `publisherName` is set, by one of those names, as before).
 - A local or unsigned build skips these checks, since it has no publisher to
   compare against.
+
+## The release signing key
+
+One Ed25519 key signs what a release says about itself: the update feed
+(`latest*.yml`, signed into `latest*.yml.sig`) and the
+[Claude policy override](../spec/product/claude-policy.md)
+(`claude-policy.json`). Its public half is the `RELEASE_SIGNING_KEY` constant
+in `crates/nekko-native/src/release_key.rs`, which both verifiers read. Its
+private half is the `NEKKO_RELEASE_SIGNING_KEY` **repository** secret (not an
+organization secret: only this repo's release workflow signs with it), plus
+one offline copy. Decision:
+[0038](decisions/0038-one-release-signing-key-signs-the-update-feed.md).
+
+**Today the constant is the all-zero placeholder.** Until it is replaced, the
+release workflow's "Sign the update feed" step warns and publishes the feed
+unsigned (or signs it anyway, if the secret is set), the updater checks
+nothing, and every Claude policy override is refused.
+
+### Generating it (Philip, once)
+
+1. On a trusted machine, from the repo root, run
+   `node scripts/release-key.mjs`. It writes nothing to disk; it prints the
+   public key as the Rust constant, and the private key (the base64 of the
+   32-byte Ed25519 seed).
+2. Run `gh secret set NEKKO_RELEASE_SIGNING_KEY --repo nekko-labs/nekko-agent`
+   and paste the private key at the prompt (stdin keeps it out of shell
+   history).
+3. Save the private key in the Nekko Labs password manager as "Nekko Agent
+   release signing key", with the date. That is the only other copy. Then
+   clear the terminal.
+4. In a PR, replace the constant in `crates/nekko-native/src/release_key.rs`
+   with the printed one and drop its TODO. To check the secret and the
+   constant match, `node scripts/release-key.mjs public` with the private key
+   in `$NEKKO_RELEASE_SIGNING_KEY` prints the constant again.
+
+From the first release built with that constant, the signing step fails when
+the secret is missing or does not match the constant, so a release the app
+would refuse is never published. Apps from before it check nothing, so the
+first signed release still reaches every install.
+
+### Custody
+
+- The private key never goes into the repo, an issue, a PR, a log or a chat.
+  CI reads it in one place: the release job's "Sign the update feed" step
+  (`scripts/sign-update-feed.mjs`), which only signs `latest*.yml`.
+- GitHub never shows a secret's value again; only repository admins can
+  replace it.
+- The signature says the feed came from our release job. The SHA-512 in the
+  feed still pins the installer, and Authenticode and Developer ID still pin
+  the publisher; the three checks are independent.
+
+### Rotating it
+
+The app trusts exactly one key, and an installed app always reads the
+**latest** release's feed. So a rotation goes through one bridge release:
+
+1. Generate the new pair with `node scripts/release-key.mjs`; keep the old
+   secret in place for now.
+2. **Bridge release:** set the repository variable
+   `NEKKO_RELEASE_KEY_ROTATION=1`, change the constant to the **new** public
+   key, and release. The feed is signed with the **old** key (the variable
+   lets the secret differ from the constant), so every install updates to it.
+3. Once installs have had time to move to the bridge release, set the new
+   private key as `NEKKO_RELEASE_SIGNING_KEY`, delete the variable, and
+   release as normal. From here the feed is signed with the new key.
+4. Replace the password manager entry; keep the old key only until step 3.
+
+An install that skipped the bridge release refuses later feeds and needs one
+manual download from the releases page. If the key leaks, skip the bridge:
+set the new secret and constant in the same release, and tell users of older
+versions to download that release once.
 
 ## macOS
 
@@ -144,6 +225,10 @@ These are **`nekko-labs` organization secrets**, shared with `hypergate` and
 Plus four non-secret **organization variables** (`gh variable set --org`), also
 read by the Windows leg: `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`,
 `AZURE_SIGNING_PROFILE`, `AZURE_SIGNING_PUBLISHER`. See [Windows](#windows).
+
+One more, a **repository** secret rather than an organization one:
+`NEKKO_RELEASE_SIGNING_KEY`, the release signing key that signs the update
+feed. See [The release signing key](#the-release-signing-key).
 
 Certificate: `Developer ID Application: Nekko Labs LLC (3HM5598S99)`.
 

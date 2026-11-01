@@ -8,6 +8,9 @@
 //!   (`/releases/latest`, then `/releases/download/<tag>/<file>`), or from a
 //!   generic base URL; `files` (else the legacy `path` and `sha512`), each
 //!   needing a checksum; spaces in names turned into dashes for GitHub.
+//!   Beyond electron-updater: once a real release key is built in
+//!   (`release_key.rs`), the feed is refused unless `<feed>.sig` verifies
+//!   over its exact bytes (`verify_feed`).
 //! - The file: the installer `.exe` (Windows), the `.zip` (macOS, arm64 files
 //!   first on an arm64 Mac), the `.AppImage` (or the `.deb` when the app was
 //!   installed from one), preferring the one naming this machine's arch.
@@ -318,6 +321,35 @@ pub fn pick_download(
         },
     };
     picked.ok_or_else(|| "No files provided".to_string())
+}
+
+// ---- The feed's signature ----
+
+/// Where a feed file's signature is published: beside it, `<file>.sig` (the
+/// base64 Ed25519 signature over the feed's exact bytes, written by
+/// `scripts/sign-update-feed.mjs` in the release workflow).
+pub fn signature_url(feed_url: &url::Url) -> url::Url {
+    let mut u = feed_url.clone();
+    u.set_path(&format!("{}.sig", feed_url.path()));
+    u
+}
+
+/// Check the feed's bytes against its signature before anything in it is
+/// trusted. `signature` is `None` when the release has no `.sig` for it (or
+/// it could not be fetched). With the placeholder key (no release key yet)
+/// nothing is checked, as before signing existed.
+pub fn verify_feed(key: &[u8; 32], channel_file: &str, feed: &[u8], signature: Option<&[u8]>) -> Result<(), String> {
+    if crate::release_key::is_placeholder(key) {
+        return Ok(());
+    }
+    let Some(signature) = signature else {
+        return Err(format!(
+            "The update feed {channel_file} is not signed ({channel_file}.sig is missing from the release), so the update was refused."
+        ));
+    };
+    crate::release_key::verify_detached(key, feed, signature).map_err(|e| {
+        format!("The update feed {channel_file} did not pass its signature check ({e}), so the update was refused.")
+    })
 }
 
 // ---- Checksums ----
@@ -904,6 +936,83 @@ mod tests {
         assert!(!apps.join("NekkoAgent.app/old").exists());
         assert!(!apps.join("NekkoAgent.app.old").exists());
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    mod feed_signature {
+        use super::*;
+        use ed25519_dalek::{Signer, SigningKey};
+
+        const FEED: &[u8] = b"version: 9.9.9\nfiles:\n  - url: NekkoAgent-9.9.9-x64.exe\n    sha512: abc=\n";
+
+        fn pair() -> (SigningKey, [u8; 32]) {
+            let sk = SigningKey::from_bytes(&[11; 32]);
+            let pk = sk.verifying_key().to_bytes();
+            (sk, pk)
+        }
+
+        fn sig(sk: &SigningKey, bytes: &[u8]) -> Vec<u8> {
+            format!("{}\n", base64::engine::general_purpose::STANDARD.encode(sk.sign(bytes).to_bytes())).into_bytes()
+        }
+
+        #[test]
+        fn a_good_signature_passes() {
+            let (sk, pk) = pair();
+            assert_eq!(verify_feed(&pk, "latest.yml", FEED, Some(&sig(&sk, FEED))), Ok(()));
+        }
+
+        #[test]
+        fn a_bad_signature_is_refused() {
+            let (sk, pk) = pair();
+            // Signed by another key.
+            let other = SigningKey::from_bytes(&[12; 32]);
+            let err = verify_feed(&pk, "latest.yml", FEED, Some(&sig(&other, FEED))).unwrap_err();
+            assert!(err.contains("did not pass its signature check"), "{err}");
+            // A feed changed after signing (a swapped checksum).
+            let mut tampered = FEED.to_vec();
+            let at = tampered.len() - 3;
+            tampered[at] = b'X';
+            assert!(verify_feed(&pk, "latest.yml", &tampered, Some(&sig(&sk, FEED))).is_err());
+            // Not a signature at all.
+            assert!(verify_feed(&pk, "latest.yml", FEED, Some(b"<html>Not Found</html>")).is_err());
+        }
+
+        #[test]
+        fn a_missing_signature_is_refused() {
+            let (_, pk) = pair();
+            let err = verify_feed(&pk, "latest-mac.yml", FEED, None).unwrap_err();
+            assert!(err.contains("latest-mac.yml.sig is missing"), "{err}");
+        }
+
+        #[test]
+        fn the_placeholder_key_checks_nothing() {
+            assert_eq!(verify_feed(&[0; 32], "latest.yml", FEED, None), Ok(()));
+            assert_eq!(verify_feed(&[0; 32], "latest.yml", FEED, Some(b"garbage")), Ok(()));
+        }
+
+        #[test]
+        fn a_feed_signed_by_the_release_script_verifies() {
+            // scripts/sign-update-feed.mjs made this signature (a test key).
+            let v: Value = serde_json::from_str(include_str!("../tests/golden/feed-signature.json")).unwrap();
+            let b64 = base64::engine::general_purpose::STANDARD;
+            let pk: [u8; 32] = b64.decode(v["publicKey"].as_str().unwrap()).unwrap().try_into().unwrap();
+            let seed: [u8; 32] = b64.decode(v["seed"].as_str().unwrap()).unwrap().try_into().unwrap();
+            assert_eq!(SigningKey::from_bytes(&seed).verifying_key().to_bytes(), pk);
+            let feed = v["feed"].as_str().unwrap().as_bytes();
+            let sig = v["signature"].as_str().unwrap().as_bytes();
+            assert_eq!(verify_feed(&pk, "latest.yml", feed, Some(sig)), Ok(()));
+            assert_eq!(parse_update_info(v["feed"].as_str().unwrap(), "latest.yml").unwrap().version, "1.2.3");
+        }
+
+        #[test]
+        fn the_signature_sits_beside_the_feed() {
+            let u = url::Url::parse("https://github.com/o/r/releases/download/v1.2.3/latest-linux.yml").unwrap();
+            assert_eq!(
+                signature_url(&u).as_str(),
+                "https://github.com/o/r/releases/download/v1.2.3/latest-linux.yml.sig"
+            );
+            let q = url::Url::parse("https://cdn.example/feed/latest.yml?token=1").unwrap();
+            assert_eq!(signature_url(&q).as_str(), "https://cdn.example/feed/latest.yml.sig?token=1");
+        }
     }
 
     #[test]
