@@ -367,6 +367,8 @@ public struct Session: Equatable, Sendable {
     public var running = false
     /// The chat's effort (`EffortLevel`); nil follows the computer's setting.
     public var effort: String?
+    /// The plan the agent wrote for this chat (`update_plan`, or Claude Code's own plan calls).
+    public var agentPlan: [PlanStep] = []
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -381,7 +383,8 @@ public struct Session: Equatable, Sendable {
             queued: QueuedPrompt.list(v["queue"]),
             clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
             running: v["activeRun"].map { !$0.isNull } ?? false,
-            effort: v.str("effort"))
+            effort: v.str("effort"),
+            agentPlan: PlanStep.list(v["agentPlan"]))
     }
 }
 
@@ -405,6 +408,10 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public let order: Double?
     public var pinned: Bool
     public let activeWatchCount: Int64
+    /// When the chat was created: where a sub-agent lands on its parent's plan.
+    public var createdAt: Int64?
+    /// A turn is running in it (`activeRun`).
+    public var running = false
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -417,7 +424,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             lastReplyText: v.str("lastReplyText"), firstUserText: v.str("firstUserText"), archived: archivedAt != nil,
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
-            order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0)
+            order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0,
+            createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false)
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.
