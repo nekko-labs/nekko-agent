@@ -283,6 +283,8 @@ fn tar_rename_lands_any_app_as_xcode_app() {
 }
 
 /// `tar_rename_arg` against the real tar: the path, a hard link's target, and nothing else moves.
+// BSD tar's `-s`, which is what the Mac that runs this has.
+#[cfg(target_os = "macos")]
 #[test]
 fn tar_rename_works_with_the_real_tar() {
     use std::process::Command;

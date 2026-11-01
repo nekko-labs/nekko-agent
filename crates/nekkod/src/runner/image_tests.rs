@@ -706,7 +706,8 @@ async fn the_first_boot_password_never_outlives_a_failed_start() {
     let host = fake_helper_host(dir.path(), "exit 1");
     std::fs::create_dir_all(host.dir()).unwrap();
     // No physical interface: the start fails before the helper could read the file.
-    assert!(host.first_boot(&dir.path().join("bundle"), "secret").await.is_err());
+    let password = dir.path().display().to_string();
+    assert!(host.first_boot(&dir.path().join("bundle"), &password).await.is_err());
     assert!(!host.dir().join("first-boot-password").exists());
 }
 
