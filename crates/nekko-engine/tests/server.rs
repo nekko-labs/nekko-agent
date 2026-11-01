@@ -527,6 +527,36 @@ async fn a_model_kept_resident_is_never_unloaded_to_make_room() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn load_times_are_kept_per_model_across_unloads() {
+    let models = json!([sized("a", 2.0), sized("b", 2.0)]);
+    let (fake, server) = residency_rig("load-times", models, json!({}), None);
+    assert!(server.load_times().is_empty());
+    assert_eq!(server.load("a", json!({})).await["ok"], true);
+    assert_eq!(server.unload("a").await["ok"], true);
+    advance(&fake, 5000.0);
+    assert_eq!(server.load("a", json!({})).await["ok"], true);
+    assert_eq!(server.load("b", json!({})).await["ok"], true);
+
+    let times = server.load_times();
+    let a = times["a"].as_array().unwrap();
+    assert_eq!(a.len(), 2, "the unload keeps the first: {a:?}");
+    assert_eq!(a[1]["at"].as_f64().unwrap() - a[0]["at"].as_f64().unwrap(), 5000.0);
+    assert_eq!(a[0]["sizeBytes"].as_f64(), Some(2e9));
+    assert!(
+        a.iter().all(|t| t["spawnMs"].as_f64().unwrap() >= 0.0
+            && t["totalMs"].as_f64().unwrap() >= t["spawnMs"].as_f64().unwrap())
+    );
+    assert_eq!(times["b"].as_array().unwrap().len(), 1);
+
+    // Only the last few are kept.
+    for _ in 0..10 {
+        server.unload("a").await;
+        server.load("a", json!({})).await;
+    }
+    assert_eq!(server.load_times()["a"].as_array().unwrap().len(), 8);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_model_that_needs_the_memory_unloads_idle_ones_first() {
     // 10,000 MB free on the GPU; each small model needs about 3.3 GB, the big one about 21 GB.
     let models = json!([sized("small1", 2.0), sized("small2", 2.0), sized("big", 20.0)]);
