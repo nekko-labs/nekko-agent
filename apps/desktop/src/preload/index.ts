@@ -357,6 +357,7 @@ const api: NekkoApi = {
   listWorkflowSkillDefs: () => inv(IpcChannels.workflowSkillDefs),
   dispatchWorkflowEvent: (event) => inv(IpcChannels.workflowEvent, event),
   imageStatus: () => inv(IpcChannels.runnerImageStatus),
+  imagePlan: () => inv(IpcChannels.runnerImagePlan),
   buildImage: (req) => inv(IpcChannels.runnerImageBuild, req),
   resumeImage: () => inv(IpcChannels.runnerImageResume),
   cancelImage: () => inv(IpcChannels.runnerImageCancel),

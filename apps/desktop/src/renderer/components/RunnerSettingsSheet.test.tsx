@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DEFAULT_RUNNER_SETTINGS, KEEP_AWAKE_LABELS, PRIORITY_LABELS, type HostView, type RunnerSettings, type RunnerView } from '@nekko-agent/shared';
+import { DEFAULT_RUNNER_SETTINGS, KEEP_AWAKE_LABELS, PRIORITY_LABELS, type HostView, type ImageView, type RunnerSettings, type RunnerView } from '@nekko-agent/shared';
 
 vi.mock('./primitives/index.js', async (original) => ({
   ...await original<typeof import('./primitives/index.js')>(),
@@ -16,13 +16,22 @@ const host: HostView = {
 };
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerSettings> = {}): RunnerView => ({
   config: { id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac', settings: { ...DEFAULT_RUNNER_SETTINGS, enabled: true, ...settings } },
-  state: 'ready', slots: [], reasons: [], available: 2, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, host, recent: [], ...over,
+  state: 'ready', slots: [], reasons: [], available: 2, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [], ...over,
 });
-const render = (v: RunnerView, draft = v.config.settings) =>
-  renderToStaticMarkup(<SettingsBody view={v} draft={draft} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} saving={false} />);
+const render = (v: RunnerView, draft = v.config.settings, image: ImageView | null = null) =>
+  renderToStaticMarkup(<SettingsBody view={v} image={image} draft={draft} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} saving={false} />);
 const esc = (s: string) => renderToStaticMarkup(<>{s}</>);
 
 describe('RunnerSettingsSheet', () => {
+  it('rebuild_image_shows_only_with_an_image_at_rest', () => {
+    const image: ImageView = { state: 'ready', stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: { macos: '27.2', xcode: '27.2', actionsRunner: '2.330.0', built: '2026-11-01' }, canResume: false };
+    const html = render(view(), undefined, image);
+    expect(html).toContain('Rebuild image');
+    expect(html).toContain('macOS 27.2 · Xcode 27.2');
+    expect(render(view(), undefined, { ...image, state: 'building' })).not.toContain('Rebuild image');
+    expect(render(view())).not.toContain('Rebuild image');
+  });
+
   it('settings_match_mockup_4', () => {
     const html = render(view({}, { trustedNetworks: ['gw:aa:bb:cc:dd:ee:ff', 'gw:11:22:33:44:55:66'] }));
     for (const s of [

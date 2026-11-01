@@ -827,6 +827,16 @@ async fn views_serialize_camel_case() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn views_carry_the_repos_an_org_runner_serves() {
+    let mut r = record("r1", Priority::Balanced, 1);
+    let Link::Github(g) = &mut r.link else { panic!("a GitHub record") };
+    g.repos = vec!["nekko-labs/app".into(), "nekko-labs/site".into()];
+    let h = harness(vec![r]);
+    let v = serde_json::to_value(h.sup.views()).unwrap();
+    assert_eq!(v[0]["repos"], json!(["nekko-labs/app", "nekko-labs/site"]));
+}
+
+#[tokio::test(start_paused = true)]
 async fn views_carry_host_facts() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
     assert_eq!(h.view().host, HostView::default(), "zeros before the first sample");
@@ -1180,11 +1190,15 @@ async fn reconnecting_a_scope_to_another_app_forgets_the_old_key() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn reconnecting_with_the_runner_held_off_turns_it_off() {
+async fn reconnecting_turns_a_runner_off_only_for_an_open_fork_approval() {
     let Rig { runners, dir, .. } = runners_rig(harness(vec![]));
     let mut again = record("new-id", Priority::RunnerFirst, 1);
     again.config.scope = Scope::Org { org: "ACME".into() };
+    // Confirm connects off so that setup can turn a new runner on. A running one must not stop for it.
     again.config.settings.enabled = false;
+    runners.save_connected(again.clone(), None).await.unwrap();
+    assert!(crate::runner::store::Store::new(dir.path()).load()[0].config.settings.enabled);
+    again.link = Link::Github(GithubLink { fork_approval_open: true, ..again.github().unwrap().clone() });
     runners.save_connected(again.clone(), None).await.unwrap();
     assert!(!crate::runner::store::Store::new(dir.path()).load()[0].config.settings.enabled);
     // Held off stays off: a connect never turns a runner on by itself.
@@ -1200,7 +1214,8 @@ async fn an_open_fork_approval_holds_the_runner_off_until_it_is_settled() {
     held.config.scope = Scope::Repo { owner: "o".into(), repo: "public".into() };
     held.config.settings.enabled = false;
     held.link = Link::Github(GithubLink { fork_approval_open: true, ..held.github().unwrap().clone() });
-    runners.save_connected(held, None).await.unwrap();
+    let view = runners.save_connected(held, None).await.unwrap();
+    assert_eq!(view["forkApprovalOpen"], true);
 
     let id = serde_json::json!("r2");
     let on = serde_json::json!(true);
@@ -1216,6 +1231,7 @@ async fn an_open_fork_approval_holds_the_runner_off_until_it_is_settled() {
     runners.route("runner:setForkApproval", &[said]).await.unwrap();
     let view = runners.route("runner:setEnabled", &[id, on]).await.unwrap();
     assert_eq!(view["config"]["settings"]["enabled"], true);
+    assert_eq!(view["forkApprovalOpen"], false);
 }
 
 /// A 16 GB Mac: room for exactly one 8 GB VM, and the VM's own memory shows as used.

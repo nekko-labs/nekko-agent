@@ -31,8 +31,8 @@ against a stand-in for GitHub, not GitHub itself, so if GitHub refuses the app, 
 - **An Apple silicon Mac.** Windows and Linux show "CI runners aren't available here", and a Mac
   that cannot run VMs shows "VM support unavailable" on the runner card.
 - **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. On macOS 27
-  Nekko builds it from Apple's restore image; on macOS 26 you
-  [bring your own](ci-runners-image.md). Until an image exists, the runner card shows `No VM image yet.`
+  Nekko [builds it](#set-up-this-mac) from Apple's restore image; on macOS 26 you
+  [bring your own](ci-runners-image.md). Until an image exists, the runner card offers **Set up this Mac**.
 - **A build with VM support.** The `nekko-vm` helper needs Apple's virtualization entitlement.
   Development builds sign it themselves, and packaged builds sign it with its own entitlement
   (see [signing](signing.md#the-vm-helpers-entitlement)).
@@ -55,8 +55,8 @@ In **Workflows > CI runners**, choose **Connect GitHub**:
 4. **Confirm.** Choose the repos this Mac serves: up to 20 for an org, one for a personal account,
    because GitHub has no account-wide runners. If you add repos on GitHub, choose **Check again**.
    If an install returns more than 5 repos, none start ticked. **Advanced: runner label** changes
-   the label, which defaults to `nekko-cloud-mac`.
-5. **How this Mac helps.** Pick a mode (below), then **Start runner**.
+   the label, which defaults to `nekko-cloud-mac`. **Continue to Mac setup** saves the connection
+   and goes on to the next step, [Set up this Mac](#set-up-this-mac).
 
 Leaving is safe. The app and its key are kept from the moment GitHub creates it, so if you close
 the sheet, cancel or quit Nekko, **Connect GitHub** picks up at Install with the same app. It does
@@ -70,11 +70,12 @@ The app gets **Actions: Read and write** and **Metadata: Read**. An org's app al
 in this Mac's keychain and never shown.
 
 **A public repo.** The sheet warns you and won't continue until you choose **Require approval for
-outside contributors**. The runner starts off, and turns on once GitHub holds outside contributors'
-jobs for your approval. Nekko sets that for you: a repo's app can, and for an org it uses `gh` when
-that is signed in with enough access. Otherwise the sheet links to the setting, and the runner stays
-off until you confirm it is on. If you leave it off, turning it on from the runner card is refused
-until you have: choose **Connect GitHub** again to finish. See [Use it in a workflow](#use-it-in-a-workflow) for what else a public
+outside contributors**. The runner stays off until GitHub holds outside contributors' jobs for your
+approval. Nekko sets that for you before Mac setup: a repo's app can, and for an org it uses `gh`
+when that is signed in with enough access. Otherwise the sheet links to the setting: choose **It is
+on, continue to Mac setup** once it is. If you choose **Leave it off**, the sheet closes and the
+runner stays off, even after the image is built. Turning it on from the runner card is refused until
+you have set it: choose **Connect GitHub** again to finish. See [Use it in a workflow](#use-it-in-a-workflow) for what else a public
 repo needs.
 
 **A Free org.** An org on GitHub's Free plan cannot limit a runner with runner groups, so Nekko
@@ -82,6 +83,40 @@ offers one repo instead, and that app gets repository Administration. Without `g
 the plan, so choose **On the Free plan? Connect one repo instead** on the first screen. If you don't,
 Confirm stops with the reason and a link to delete the app. Delete it, connect again and choose that
 link.
+
+## Set up this Mac
+
+Jobs need a VM image. The second step builds one here, with no terminal and nothing to paste. It
+needs macOS 27 and 110 GB free. The sheet shows what it will download, what it copies from this
+Mac and how much space it needs. Pick a [mode](#how-this-mac-helps) and choose
+**Download and set up**. If this Mac already has an image, only the mode is asked.
+
+The build takes about 30 minutes plus the download, and runs by itself:
+
+1. **Check this Mac.** If it cannot go on, it says why before anything is downloaded, for example
+   "Update this Mac to macOS 27 to set it up here."
+2. **Download macOS** from Apple.
+3. **Install macOS** into a new VM.
+4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator and Homebrew are added.
+   With no Xcode on this Mac the sheet offers **macOS only**; install Xcode for iOS jobs.
+5. **Lock the VM down.**
+6. **Test a boot.** Then the image goes in and the runner turns on in the mode you chose.
+
+You can close the sheet: the runner card shows the same stage and bar, and **Details** opens the
+sheet again. Quitting Nekko pauses the build, and **Resume setup** picks up where it left off. The
+build holds the Mac awake while it works, and pauses with its reason on screen when there is no free
+VM slot, memory is critical, the Mac is hot, the disk is too full, or, from the install on, the Mac
+is on battery. If a stage fails, **Setup stopped** gives the reason, **Show log** the detail, and
+**Try again** restarts that stage, except that a failed lockdown goes back to before Xcode, because
+it runs once per image. **Cancel setup** deletes the build and leaves an image already in use alone.
+
+When it finishes, **This Mac is ready** offers **Connect to a workflow now**, or see
+[Use it in a workflow](#use-it-in-a-workflow). If the runner is off, the sheet says so instead. A
+runner you connected while the build was running gets its mode then.
+
+**Rebuild image** in the runner's settings runs the same build, which is how macOS, Xcode and runner
+updates arrive. The runner keeps working on the old image until the new one passes its test boot,
+and keeps its mode and its on or off state.
 
 ## Use an app you already have
 
@@ -132,7 +167,13 @@ sheet has three steps:
 
 ## Use it in a workflow
 
-Point a job at the runner with all four labels:
+**Connect to a workflow** on the ready screen or the runner card opens a new chat with the message
+already in the composer: your runner's label and repos, and what to do. Read it and press **Send**.
+The agent reads your workflows, asks which ones should run on this Mac, and opens a pull request
+for the ones you pick. Nothing changes until you pick, and the result is a pull request to review.
+With no model set up, set one up first; the button stays on the runner card.
+
+To do it by hand, point a job at the runner with all four labels:
 
 ```yaml
 jobs:
@@ -164,8 +205,8 @@ your Mac. The VM is the second layer: a job that gets in still only reaches the 
 
 ## How this Mac helps
 
-The mode decides when the runner may take a job. You choose it when you connect and can change
-it any time in the runner's settings.
+The mode decides when the runner may take a job. You choose it when you
+[set up this Mac](#set-up-this-mac) and can change it any time in the runner's settings.
 
 - **Do not disturb: Only run when I'm idle** (default). Only when you're away and plugged in.
   Steps aside the moment you need the Mac.

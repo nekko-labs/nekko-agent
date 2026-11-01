@@ -150,6 +150,22 @@ export const ControlPanelIcon = (p: P) => <S {...p}><rect x="3" y="3" width="18"
 /* Mode panel glyphs: one per setting and per option, so the panel scans by shape. */
 export const CloudIcon = (p: P) => (<S {...p}><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.6 9.1 4.7 4.7 0 0 0 7 18.5z" /></S>);
 export const PhoneIcon = (p: P) => (<S {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2" /><path d="M11 18.5h2" /></S>);
+/** The ready burst's check, on a 16 box because its path is drawn on by dash length. */
+export const ReadyCheckIcon = () => (
+  <svg viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+/** A crescent with a small z: Do not disturb. */
+export const MoonIcon = (p: P) => (
+  <S {...p}><path d="M20 14.6A8.6 8.6 0 1 1 9.4 4a7 7 0 0 0 10.6 10.6z" /><path strokeWidth="1.5" d="M15.5 5.5h3l-3 3.5h3" /></S>
+);
+/** Two halves in balance: Balanced. */
+export const YinYangIcon = (p: P) => (
+  <S {...p}>
+    <circle cx="12" cy="12" r="9.2" />
+    <path fill="currentColor" stroke="none" fillRule="evenodd" d="M12 2.8a9.2 9.2 0 0 1 0 18.4 4.6 4.6 0 0 1 0-9.2 4.6 4.6 0 0 0 0-9.2zM12 15.1a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6z" />
+    <circle cx="12" cy="7.4" r="1.3" fill="currentColor" stroke="none" />
+  </S>
+);
 export const LaptopIcon = (p: P) => (<S {...p}><rect x="4" y="4.5" width="16" height="11" rx="1.5" /><path d="M2 19.5h20" /></S>);
 export const CubeIcon = (p: P) => (<S {...p}><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7zM3.5 7 12 11.5 20.5 7M12 11.5v10" /></S>);
 export const HandIcon = (p: P) => (<S {...p}><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13c0 4.2-2.7 7.5-6.7 7.5-2.4 0-3.9-1.2-5-3L3.4 14.4a1.5 1.5 0 0 1 2.4-1.8L8 15" /></S>);

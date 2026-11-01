@@ -107,7 +107,7 @@ fn now_secs() -> u64 {
 
 /// A public repo's runner cannot take a job until GitHub holds outside contributors for approval.
 fn may_enable(r: &RunnerRecord, enabling: bool) -> Result<(), String> {
-    if enabling && r.github().is_some_and(|g| g.fork_approval_open) {
+    if enabling && r.fork_approval_open() {
         return Err(FORK_APPROVAL_OPEN.into());
     }
     Ok(())
@@ -401,9 +401,13 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     error: None,
                     today: Default::default(),
                     host: Default::default(),
+                    repos: Vec::new(),
+                    fork_approval_open: false,
                     recent: Vec::new(),
                 });
                 v.config = r.config.clone();
+                v.repos = r.repos().to_vec();
+                v.fork_approval_open = r.fork_approval_open();
                 if reset.contains(&r.config.id) {
                     v.error = None;
                 }
@@ -499,7 +503,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let Some(r) = records.iter_mut().find(|r| r.config.id == id) else { return Ok(()) };
         r.config.settings.priority = priority;
         // A public repo's runner stays off until its fork approval is settled.
-        r.config.settings.enabled = !matches!(&r.link, Link::Github(g) if g.fork_approval_open);
+        r.config.settings.enabled = !r.fork_approval_open();
         self.commit(records, Some(id)).await.map(drop)
     }
 
@@ -630,8 +634,9 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     self.vault.delete(&new);
                 }
                 let before = secret_key(old);
-                // A public repo waiting on fork approval must not come up running.
-                old.config.settings.enabled &= rec.config.settings.enabled;
+                // A public repo waiting on fork approval must not come up running. Confirm
+                // always connects off, for a new runner's sake; a working one stays on.
+                old.config.settings.enabled &= !rec.fork_approval_open();
                 old.link = rec.link;
                 old.config.label = rec.config.label;
                 let nets = &mut old.config.settings.trusted_networks;

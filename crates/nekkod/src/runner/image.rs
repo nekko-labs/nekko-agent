@@ -32,7 +32,8 @@ use tokio::process::Command;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-pub const CHANNELS: &[&str] = &["runner:imageStatus", "runner:imageBuild", "runner:imageResume", "runner:imageCancel"];
+pub const CHANNELS: &[&str] =
+    &["runner:imageStatus", "runner:imagePlan", "runner:imageBuild", "runner:imageResume", "runner:imageCancel"];
 /// Pushed with [`ImageView`] whenever it changes.
 pub const EVENT: &str = "runner:imageChanged";
 
@@ -127,6 +128,16 @@ pub struct ImageView {
     pub log: Option<String>,
     pub info: Option<ImageInfo>,
     pub can_resume: bool,
+}
+
+/// What a build would use, for the setup sheet. It changes nothing.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImagePlan {
+    /// The version of the Xcode a build would copy in.
+    pub xcode: Option<String>,
+    pub free_gb: Option<f64>,
+    pub needs_gb: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -984,6 +995,25 @@ impl RealBuildHost {
     }
 }
 
+impl RealBuildHost {
+    /// Finds Xcode the way `preflight` does, so the sheet and the check agree.
+    async fn plan(&self) -> ImagePlan {
+        let dev = super::signals::output("/usr/bin/xcode-select", &["-p"], Duration::from_secs(5)).await;
+        let xcode = match dev.as_deref().and_then(real_app) {
+            Some(app) => {
+                let plist = app.join("Contents/version.plist");
+                let plist = plist.to_string_lossy();
+                let read = ["-extract", "CFBundleShortVersionString", "raw", "-o", "-", &*plist];
+                let version = super::signals::output("/usr/bin/plutil", &read, Duration::from_secs(5)).await;
+                // An unreadable version is still an Xcode to copy.
+                Some(version.unwrap_or_default().trim().to_owned())
+            }
+            None => None,
+        };
+        ImagePlan { xcode, free_gb: self.mac().map(|m| m.free_disk_gb), needs_gb: NEEDS_GB }
+    }
+}
+
 impl BuildHost for RealBuildHost {
     async fn preflight(&self, kind: Kind) -> Result<(), String> {
         self.vm()?;
@@ -1229,6 +1259,7 @@ impl Runners {
     pub async fn image_route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
         let job = self.image.get().ok_or("Setting up this Mac is not available here.")?;
         let view = match channel {
+            "runner:imagePlan" => return Ok(json!(job.host.plan().await)),
             "runner:imageStatus" => job.status(),
             "runner:imageBuild" => {
                 let req = args.first().cloned().unwrap_or(Value::Null);

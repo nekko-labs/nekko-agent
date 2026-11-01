@@ -647,6 +647,7 @@ function makeWebClient(): NekkoApi {
     listWorkflowSkillDefs: () => call(IpcChannels.workflowSkillDefs),
     dispatchWorkflowEvent: (event) => call(IpcChannels.workflowEvent, event),
     imageStatus: () => call(IpcChannels.runnerImageStatus),
+    imagePlan: () => call(IpcChannels.runnerImagePlan),
     buildImage: (req) => call(IpcChannels.runnerImageBuild, req),
     resumeImage: () => call(IpcChannels.runnerImageResume),
     cancelImage: () => call(IpcChannels.runnerImageCancel),
