@@ -2243,6 +2243,13 @@
 .fade-in { animation: fade 0.25s var(--ease-out); }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
+/* Toasts arrive with the fade above and leave with a shorter ease-out the other
+   way (TOAST_EXIT_MS in toastQueue.ts). With OS animations off they just go. */
+.toast-item { animation: fade 0.25s var(--ease-out); }
+.toast-item[data-leaving] { animation: toast-exit 160ms var(--ease-out) forwards; pointer-events: none; }
+@keyframes toast-exit { to { opacity: 0; transform: translateY(4px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .toast-item[data-leaving] { animation: none; opacity: 0; } }
+
 /* Deliberate entrance for high-stakes surfaces (the tool-approval bar): slides
    up from the composer edge so the interruption reads as arriving, not popping. */
 .slide-up { animation: slide-up 0.22s var(--ease-out); }
