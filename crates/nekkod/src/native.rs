@@ -300,9 +300,13 @@ impl Native {
         let plan =
             update::install_plan(self.platform, linux, &installed, &downloaded, file.info.is_admin_rights_required)?;
         let path = downloaded.clone();
-        tokio::task::spawn_blocking(move || update::verify_publisher(&path, &publishers))
-            .await
-            .map_err(|e| e.to_string())??;
+        let running = std::path::PathBuf::from(&installed.exe_path);
+        tokio::task::spawn_blocking(move || {
+            update::verify_publisher(&path, &publishers)?;
+            update::verify_same_signer(&path, &running)
+        })
+        .await
+        .map_err(|e| e.to_string())??;
         let work = downloaded.parent().map(std::path::Path::to_path_buf).unwrap_or_else(std::env::temp_dir);
         update::launch(&plan, &work)?;
         // Main quits through its own path (stopping the engine cleanly); the
