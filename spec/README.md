@@ -71,7 +71,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent board panel design parity (2026-10-06)](desktop/command-center-panel-design-parity.md) (7 KB)
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
-- [Ask before memory runs out (low-memory prompt)](desktop/low-memory-prompt.md) (4 KB)
+- [Ask before memory runs out (low-memory prompt)](desktop/low-memory-prompt.md) (5 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
 - [Customizable UI: customizations, mods and custom layouts](desktop/customizable-ui.md) (6 KB)
 - [Design quality: type scale, readable text, quiet buttons and navigation](desktop/design-quality-type-contrast-and-elevation.md) (4 KB)
@@ -224,7 +224,7 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (10 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (11 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (13 KB)

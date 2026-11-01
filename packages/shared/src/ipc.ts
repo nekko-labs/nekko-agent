@@ -127,6 +127,8 @@ export const IpcChannels = {
   memoryCloseApp: 'memory:closeApp',
   /** Shut down every loaded local model, mid-reply or kept resident: the low-memory prompt's "Shut down Nekko's local models". */
   engineUnloadAll: 'engine:unloadAll',
+  /** The loaded local models, how many are replying, and what their processes hold: what shutting them down frees. */
+  engineMemory: 'engine:memory',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
