@@ -6,7 +6,7 @@
 //! `engine:unload`, `engine:resident`, `engine:running`,
 //! `engine:loadedIds`, and for the low-memory prompt, `engine:memory` (what
 //! the loaded models hold) and `engine:unloadAll` ("Shut down Nekko's local
-//! models").
+//! models"), and for the model scheduler, `engine:loadTimes`.
 
 use crate::installs::Installs;
 use crate::library::{Library, engine_settings};
@@ -33,6 +33,7 @@ pub const CHANNELS: &[&str] = &[
     "engine:loadedIds",
     "engine:unloadAll",
     "engine:memory",
+    "engine:loadTimes",
 ];
 
 /// The daemon's own processes and router, as the policy drives them.
@@ -351,6 +352,7 @@ impl Server {
             "engine:running" => json!(self.model.is_running()),
             "engine:loadedIds" => json!(self.model.loaded_ids()),
             "engine:unloadAll" => self.model.unload_all().await,
+            "engine:loadTimes" => Value::Object(self.model.load_times()),
             // What shutting the models down would free: their processes and
             // everything under them, and how many are mid-reply.
             "engine:memory" => {

@@ -146,6 +146,23 @@ struct State {
     serving: bool,
     started_at: Option<f64>,
     timers: Vec<tokio::task::JoinHandle<()>>,
+    /// Each model's last few successful loads, oldest first. They outlive the
+    /// unload: how long a model takes to come back is what a preload needs.
+    load_times: Vec<(String, Vec<LoadTime>)>,
+}
+
+/// How many loads per model `load_times` keeps.
+const LOAD_TIMES_KEPT: usize = 8;
+
+/// One successful load, timed on the engine clock (ms).
+#[derive(Clone, Debug)]
+struct LoadTime {
+    /// Spawning the server until it answered health: the load itself.
+    spawn_ms: f64,
+    /// From the load leaving the queue, including making room.
+    total_ms: f64,
+    size_bytes: f64,
+    at: f64,
 }
 
 fn upsert<V>(list: &mut Vec<(String, V)>, key: &str, value: V) {
@@ -608,6 +625,7 @@ impl ModelServer {
     }
 
     async fn do_load(&self, id: &str, params: Value) -> Value {
+        let begun = self.env.now();
         let params = if params.is_object() { params } else { json!({}) };
         if let Some(l) = get_mut(&mut self.state.lock().unwrap().loading, id) {
             l.phase = "loading";
@@ -836,7 +854,9 @@ impl ModelServer {
             spec.insert("healthExpect".into(), json!("\"ok\""));
         }
         spec.insert("budgetSecs".into(), json!(LOAD_BUDGET_SECS));
+        let spawned_at = self.env.now();
         let outcome = self.daemon.spawn(Value::Object(spec)).await;
+        let ready_at = self.env.now();
         if outcome.get("status").and_then(Value::as_str) != Some("ready") {
             let log: Vec<String> = outcome
                 .get("log")
@@ -879,10 +899,18 @@ impl ModelServer {
             loaded_on: on,
             active_requests: 0.0,
         };
+        let took =
+            LoadTime { spawn_ms: ready_at - spawned_at, total_ms: ready_at - begun, size_bytes: size, at: ready_at };
         {
             let mut s = self.state.lock().unwrap();
             upsert(&mut s.children, id, child);
             remove(&mut s.errors, id);
+            let mut times = remove(&mut s.load_times, id).unwrap_or_default();
+            times.push(took);
+            if times.len() > LOAD_TIMES_KEPT {
+                times.remove(0);
+            }
+            upsert(&mut s.load_times, id, times);
         }
         self.say(format!("Loaded {id} on port {}.", text(outcome.get("port"))));
         reply(true, format!("Loaded {id}."))
@@ -1051,6 +1079,24 @@ impl ModelServer {
 
     pub fn loaded_ids(&self) -> Vec<String> {
         self.state.lock().unwrap().children.iter().map(|(k, _)| k.clone()).collect()
+    }
+
+    /// Each model's recent load times, oldest first (`engine:loadTimes`), for
+    /// the model scheduler (#1462): `{ id: [{ spawnMs, totalMs, sizeBytes, at }] }`.
+    pub fn load_times(&self) -> Map<String, Value> {
+        let s = self.state.lock().unwrap();
+        s.load_times
+            .iter()
+            .map(|(id, times)| {
+                let list = times
+                    .iter()
+                    .map(|t| {
+                        json!({ "spawnMs": num(t.spawn_ms), "totalMs": num(t.total_ms), "sizeBytes": num(t.size_bytes), "at": num(t.at) })
+                    })
+                    .collect();
+                (id.clone(), Value::Array(list))
+            })
+            .collect()
     }
 
     /// The last load failure of each model (`loadErrorFor`).
