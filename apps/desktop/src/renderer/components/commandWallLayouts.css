@@ -41,13 +41,18 @@
    shows a line on hover, focus and drag. */
 .command-wall-companion-resizer { position: relative; flex: 0 0 6px; margin: 0 -3px; z-index: 2; cursor: col-resize; touch-action: none; }
 .command-wall-companion-resizer::after { content: ''; position: absolute; top: 8px; bottom: 8px; left: 2px; width: 2px; border-radius: 2px; background: transparent; transition: background 120ms ease; }
-.command-wall-companion-resizer:hover::after, .command-wall-companion-resizer:focus-visible::after, body.wall-resizing .command-wall-companion-resizer::after { background: var(--accent); }
+.command-wall-companion-resizer:focus-visible::after, body.wall-resizing .command-wall-companion-resizer::after { background: var(--accent); }
+@media (hover: hover) {
+  .command-wall-companion-resizer:hover::after { background: var(--accent); }
+}
 .command-wall-companion-resizer:focus-visible { outline: none; }
 body.wall-resizing, body.wall-resizing * { cursor: col-resize !important; user-select: none !important; }
 /* A webview swallows pointer events mid-drag; let the drag see them. */
 body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
 .command-wall-companion-close { display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 7px; color: var(--ink-faint); }
-.command-wall-companion-close:hover { background: var(--surface-2); color: var(--ink); }
+@media (hover: hover) {
+  .command-wall-companion-close:hover { background: var(--surface-2); color: var(--ink); }
+}
 .command-wall-companion-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .command-wall-content[data-companions-visible] .command-wall-companions { display: flex; flex-direction: column; }
 .command-wall-companion { display: flex; flex-direction: column; flex: 1 0 240px; min-height: 240px; min-width: 0; border-left: 1px solid var(--line); }
@@ -65,7 +70,10 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
   color: var(--ink-faint);
   font-size: var(--text-2xs);
 }
-.command-wall-action:hover, .command-wall-action[aria-pressed="true"] { color: var(--accent); background: var(--surface-2); }
+.command-wall-action[aria-pressed="true"] { color: var(--accent); background: var(--surface-2); }
+@media (hover: hover) {
+  .command-wall-action:hover { color: var(--accent); background: var(--surface-2); }
+}
 .command-wall-action:focus-visible, .command-wall-add:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .command-wall-add {
   position: absolute;
@@ -79,7 +87,9 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
   font-size: var(--text-xs);
   transition: left 260ms ease, top 260ms ease, width 260ms ease, height 260ms ease;
 }
-.command-wall-add:hover { border-color: var(--accent); color: var(--accent); background: var(--surface-2); }
+@media (hover: hover) {
+  .command-wall-add:hover { border-color: var(--accent); color: var(--accent); background: var(--surface-2); }
+}
 .command-wall-empty { padding: 32px; color: var(--ink-faint); font-size: var(--text-sm); }
 /* An empty wall centres its illustration in the space the windows would use. */
 .command-wall-stage[data-wall-vacant] { min-height: 100%; }
@@ -246,7 +256,10 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   color: var(--ink-faint);
   transition: background var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out), color var(--dur-fast) ease;
 }
-.agent-panel-pill:hover, .agent-panel-pill:focus-visible { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
+.agent-panel-pill:focus-visible { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
+@media (hover: hover) {
+  .agent-panel-pill:hover { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
+}
 .agent-panel-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* HoverTip: words for an icon-only control, floated in a portal above everything. */
 .hover-tip {
@@ -341,7 +354,10 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .agent-list-resize { z-index: 5; }
 .agent-list-resize:focus-visible { outline: none; }
 .agent-list-resize > .pane-grip { background: color-mix(in srgb, var(--accent) 70%, white); box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 65%, transparent); pointer-events: none; }
-.agent-list-resize:is(:hover, :focus-visible, :active) > .pane-grip { opacity: 1; }
+.agent-list-resize:focus-visible > .pane-grip, .agent-list-resize:active > .pane-grip { opacity: 1; }
+@media (hover: hover) {
+  .agent-list-resize:hover > .pane-grip { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) { .agent-list-resize > .pane-grip { transition: none; } }
 /* Five stacked controls must not set the row's height below its cards. */
 [data-agent-panel][data-orientation='horizontal'] [data-agent-panel-header] > div { display: grid; grid-template-columns: repeat(2, 28px); gap: 4px; }
@@ -358,7 +374,9 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 500; letter-spacing: .02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.wall-zone-header:hover { background: var(--surface-2); color: var(--ink-soft); }
+@media (hover: hover) {
+  .wall-zone-header:hover { background: var(--surface-2); color: var(--ink-soft); }
+}
 .command-wall-window[data-zone-active] > .wall-zone-header { color: var(--accent); }
 /* The active zone: the selection colour plus a slightly heavier ring. */
 .command-wall-window[data-zone-active] > .panel {
@@ -380,10 +398,19 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* The label takes the slack so every shortcut lines up on the right. */
 .wall-zone-label { flex: 1; padding-right: 16px; text-align: left; }
 .wall-zone-kbd { opacity: .6; transition: opacity 140ms ease; }
-.wall-zone-option:is(:hover, :focus-visible) .wall-zone-kbd { opacity: 1; }
+.wall-zone-option:focus-visible .wall-zone-kbd { opacity: 1; }
+@media (hover: hover) {
+  .wall-zone-option:hover .wall-zone-kbd { opacity: 1; }
+}
 .wall-zone-plus { opacity: .6; transition: opacity 140ms ease, color 140ms ease; }
-.wall-zone-empty .wall-zone-option.text-accent:is(:hover, :focus-visible, :active) { color: var(--accent); }
-.wall-zone-option:is(:hover, :focus-visible) .wall-zone-plus { opacity: 1; color: var(--accent); }
+.wall-zone-empty .wall-zone-option.text-accent:focus-visible, .wall-zone-empty .wall-zone-option.text-accent:active { color: var(--accent); }
+@media (hover: hover) {
+  .wall-zone-empty .wall-zone-option.text-accent:hover { color: var(--accent); }
+}
+.wall-zone-option:focus-visible .wall-zone-plus { opacity: 1; color: var(--accent); }
+@media (hover: hover) {
+  .wall-zone-option:hover .wall-zone-plus { opacity: 1; color: var(--accent); }
+}
 .wall-zone-empty .wall-zone-option:active { transform: scale(.97); }
 @media (prefers-reduced-motion: reduce) { .wall-zone-empty .wall-zone-option, .wall-zone-plus { transition: none; transform: none !important; } }
 .wall-zone-art { position: relative; width: 88px; height: 52px; margin-bottom: 4px; opacity: .55; }
@@ -415,10 +442,21 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .wall-zone-rail[data-side='right'] .wall-zone-add::before { width: 2px; height: min(28px, 40%); }
 .wall-zone-rail[data-side='down'] .wall-zone-add::before { height: 2px; width: min(28px, 40%); }
 .wall-zone-add > svg { stroke-width: 1.75; opacity: 0; transition: opacity 120ms ease, transform 160ms var(--wall-push-ease); transform: scale(.8); }
-.wall-zone-rail:hover .wall-zone-add::before { opacity: .55; }
-.wall-zone-add:hover, .wall-zone-add:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
-.wall-zone-add:is(:hover, :focus-visible)::before { opacity: 0 !important; }
-.wall-zone-add:is(:hover, :focus-visible) > svg { opacity: 1; transform: none; }
+@media (hover: hover) {
+  .wall-zone-rail:hover .wall-zone-add::before { opacity: .55; }
+}
+.wall-zone-add:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
+@media (hover: hover) {
+  .wall-zone-add:hover { color: var(--accent); background: var(--accent-soft); outline: none; }
+}
+.wall-zone-add:focus-visible::before { opacity: 0 !important; }
+@media (hover: hover) {
+  .wall-zone-add:hover::before { opacity: 0 !important; }
+}
+.wall-zone-add:focus-visible > svg { opacity: 1; transform: none; }
+@media (hover: hover) {
+  .wall-zone-add:hover > svg { opacity: 1; transform: none; }
+}
 .wall-zone-span::before { display: none; }
 .wall-zone-span > svg { opacity: .5; transform: none; }
 .wall-zone-rail[data-side='down'] .wall-zone-span > svg { transform: rotate(90deg); }
@@ -469,7 +507,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .hover-tip-heading { text-align: center; font-size: var(--text-base); font-weight: 600; padding: 2px 8px 12px; overflow-wrap: anywhere; }
 .hover-tip-content {
   margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px;
-  max-height: min(420px, calc(100vh - 110px)); overflow: auto; white-space: pre-wrap;
+  max-height: min(420px, calc(100dvh - 110px)); overflow: auto; white-space: pre-wrap;
   overflow-wrap: anywhere; font-size: var(--text-sm); font-weight: 400; line-height: 1.6;
   background: var(--bg); pointer-events: auto;
 }

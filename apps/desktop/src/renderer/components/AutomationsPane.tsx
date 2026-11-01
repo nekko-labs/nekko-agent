@@ -124,7 +124,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
                     {st.live && <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: st.color }} />}
                     {st.label}
                   </span>
-                  <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                  <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-100">
                     {t.status !== 'done' && (
                       <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => window.nekko.runTaskNow(t.id)}>Run now</button>
                     )}

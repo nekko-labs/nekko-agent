@@ -399,7 +399,8 @@ class RelayClientTest {
         val c = client(relay, pair = "ABCD2345")
         c.connect()
         c.await(RelayState.ONLINE)
-        assertEquals("wss://relay.test/relay?role=client&room=abcd1234&key=k%26ey", relay.urls.single())
+        // The relay gets the derived credential, never the secret.
+        assertEquals("wss://relay.test/relay?role=client&room=abcd1234&key=${E2E.relayAuth("k&ey", "abcd1234")}", relay.urls.single())
         assertEquals("ABCD2345", relay.hellos.single()["pair"]!!.jsonPrimitive.content)
         assertEquals("Pixel", c.welcome.first().name)
 

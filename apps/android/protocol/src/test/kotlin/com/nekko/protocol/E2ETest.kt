@@ -24,6 +24,12 @@ class E2ETest {
         assertEquals(v("keyHex"), E2E.toHex(E2E.deriveKey(v("secret"), v("room"))))
     }
 
+    @Test fun `derives the relay credential the computer and the other clients derive`() {
+        assertEquals(v("relayAuth"), E2E.relayAuth(v("secret"), v("room")))
+        assertNotEquals(v("secret"), E2E.relayAuth(v("secret"), v("room")))
+        assertNotEquals(v("relayAuth"), E2E.relayAuth(v("secret"), "another-room"))
+    }
+
     @Test fun `seals byte-identical to WebCrypto AES-GCM for the same iv`() {
         val key = E2E.fromHex(v("keyHex"))
         assertEquals(v("sealed"), E2E.sealText(key, v("plaintext"), E2E.fromHex(v("ivHex"))))

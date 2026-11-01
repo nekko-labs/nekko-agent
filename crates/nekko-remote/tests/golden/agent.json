@@ -1,7 +1,7 @@
 {
  "secret": "00112233445566778899aabbccddeeff",
  "room": "a1b2c3d4e5f60718",
- "url": "ws://127.0.0.1:4400/relay?role=agent&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&access=tok%20en%2F1",
+ "url": "ws://127.0.0.1:4400/relay?role=agent&room=a1b2c3d4e5f60718&key=7a8260aa4bed6b4bf417c3884bd3e3b7b3c4d4ad2003f1426f91c6f7707de35c&access=tok%20en%2F1",
  "responses": {
   "sessions:summaries": {
    "result": [
