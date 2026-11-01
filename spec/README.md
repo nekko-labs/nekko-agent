@@ -76,7 +76,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Customizable UI: customizations, mods and custom layouts](desktop/customizable-ui.md) (6 KB)
 - [Design quality: type scale, readable text, quiet buttons and navigation](desktop/design-quality-type-contrast-and-elevation.md) (4 KB)
 - [Desktop: Simple and Expert modes, the effort dial, the context ring and the hardware strip (2026-10-25)](desktop/desktop-simple-and-expert-modes.md) (3 KB)
-- [Dynamic view: zones](desktop/dynamic-zones.md) (6 KB)
+- [Dynamic view: zones](desktop/dynamic-zones.md) (7 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (13 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (8 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
@@ -224,7 +224,7 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (10 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (11 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (13 KB)
