@@ -82,7 +82,7 @@ export function ScheduleTaskModal({
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" onClick={onClose} aria-label="Close"><CloseIcon className="h-4 w-4" /></button>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-1 gap-2 min-[360px]:grid-cols-3">
         {KIND_OPTS.map((o) => (
           <button
             key={o.k}

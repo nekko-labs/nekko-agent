@@ -374,7 +374,7 @@ function ChatHeader({
     <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {lead}
-        <span className="truncate text-sm font-medium">{title}</span>
+        <span className="truncate text-sm font-medium" title={title} dir="auto">{title}</span>
         {/* The "/" names the boundary between what this is (the title) and
             where it lives (the project and git context), so it leads that
             context rather than trailing it. */}
@@ -2629,7 +2629,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     {/* Message on top, actions underneath: beside a long
                         message the buttons wrapped into a ragged column. */}
                     <div className="flex items-start gap-3">
-                      <span className="min-w-0 flex-1 text-ink-soft">
+                      <span className="min-w-0 flex-1 text-ink-soft [overflow-wrap:anywhere]">
                         <span className="mr-2 font-medium" style={{ color: tone }}>{interruption.title}</span>
                         {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
                       </span>

@@ -178,7 +178,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
           title={hit.findText ? `Open and find “${hit.findText}”` : 'Open chat'}
         >
           <span className="min-w-0 flex-1">
-            <span className={`block truncate ${compact ? 'text-xs' : 'text-sm'} text-ink`}>{s.title || 'Untitled chat'}</span>
+            <span className={`block truncate ${compact ? 'text-xs' : 'text-sm'} text-ink`} title={s.title || undefined} dir="auto">{s.title || 'Untitled chat'}</span>
             {hit.snippet && <span className="block truncate text-2xs text-ink-faint">{hit.snippet}</span>}
           </span>
           {label && <span className="chat-finder-badge shrink-0" data-finder-badge>{label}</span>}
@@ -211,7 +211,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
             return (
               <section key={f.key} className="chat-finder-facet mb-1 rounded-lg" data-finder-facet={f.key} aria-label={f.name}>
                 <h3 className="flex items-center gap-2 px-3 pb-0.5 pt-1 text-xs font-semibold text-ink">
-                  <span className="min-w-0 truncate">{f.name}</span>
+                  <span className="min-w-0 truncate" title={f.name} dir="auto">{f.name}</span>
                   <span className="chat-finder-badge tabular-nums">{f.sessions.length}</span>
                 </h3>
                 {shown.map((s) => {
@@ -274,7 +274,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
                     {a.filename.split('.').pop()?.slice(0, 4)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-ink">{a.title}</span>
+                    <span className="block truncate text-sm text-ink" title={a.title} dir="auto">{a.title}</span>
                     <span className="block truncate text-2xs text-ink-faint">{chat?.title || a.sessionTitle} · {a.filename}</span>
                   </span>
                   <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{finderAge(a.at, now)}</span>

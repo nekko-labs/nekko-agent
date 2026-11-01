@@ -5,6 +5,7 @@ import { ArtifactPreview, MermaidDiagram } from './ArtifactPreview.js';
 import { FileTypeIcon } from '../fileIcons.js';
 import { ExternalIcon, CloseIcon, UndoIcon, RedoIcon, CopyIcon, PasteIcon } from '../icons.js';
 import { useStore } from '../store.js';
+import { MiddleTruncate } from './primitives/MiddleTruncate.js';
 
 /** Fixed editor line height (px) so the comment gutter aligns row-for-row. */
 const LINE_H = 20;
@@ -291,14 +292,14 @@ function HostFilePane({ path }: { path: string }) {
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
       <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-xs">
-        <FileTypeIcon name={name} size={15} />
-        <span className="font-medium">{name}</span>
+        <span className="shrink-0"><FileTypeIcon name={name} size={15} /></span>
+        <MiddleTruncate text={name} tail={12} className="font-medium" />
         {comments.length > 0 && (
           <span className="chip text-2xs" title={`${comments.length} comment${comments.length > 1 ? 's' : ''} on this file`}>💬 {comments.length}</span>
         )}
         {editable && <SaveState dirty={dirty} saving={saving} savedAt={savedAt} autoSave={autoSave} />}
 
-        <span className="ml-auto flex items-center gap-1">
+        <span className="ml-auto flex shrink-0 items-center gap-1">
           {editable && (
             <>
               {/* Edit actions. The pane has no native menu bar, so undo/redo and

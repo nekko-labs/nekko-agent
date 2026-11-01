@@ -83,7 +83,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (6 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (2 KB)
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
-- [Motion, phone and edge cases: interruptible motion, frame budget, worst-case data](desktop/motion-phone-and-edge-cases.md) (5 KB)
+- [Motion, phone and edge cases: interruptible motion, frame budget, worst-case data](desktop/motion-phone-and-edge-cases.md) (6 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
 - [Nekko Dark and the branded System theme (desktop)](desktop/nekko-dark-and-branded-system-theme.md) (3 KB)
