@@ -844,6 +844,15 @@
         "id": "gpt-6-luna",
         "providerId": "chatgpt",
         "name": "gpt-6-luna"
+      },
+      {
+        "id": "gpt-6.1-sol",
+        "providerId": "chatgpt",
+        "name": "GPT-6.1 Sol",
+        "availability": {
+          "status": "ready",
+          "detail": "Not listed for this account. You can try it, but the provider may reject it."
+        }
       }
     ]
   },

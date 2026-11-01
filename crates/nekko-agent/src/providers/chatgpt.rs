@@ -351,6 +351,7 @@ impl ChatGptProvider {
                 })
                 .collect()
         });
+        offer_latest_known_model(&mut all, &self.config.id);
         let custom = self.config.custom_model_id.as_deref().map(js::trim).filter(|c| !c.is_empty());
         if let Some(custom) = custom
             && !all.iter().any(|m| m.id == custom)
@@ -366,6 +367,24 @@ impl ChatGptProvider {
         }
         Ok(all)
     }
+}
+
+// A live catalog can lag a backend rollout. Let the user try the latest known
+// id, but do not present its absence from their account's catalog as access.
+fn offer_latest_known_model(models: &mut Vec<ModelInfo>, provider_id: &str) {
+    if models.iter().any(|m| m.id == "gpt-6.1-sol") {
+        return;
+    }
+    models.push(ModelInfo {
+        id: "gpt-6.1-sol".into(),
+        provider_id: provider_id.into(),
+        name: "GPT-6.1 Sol".into(),
+        availability: Some(json!({
+            "status": "ready",
+            "detail": "Not listed for this account. You can try it, but the provider may reject it."
+        })),
+        ..Default::default()
+    });
 }
 
 /// Map normalized chat history onto Responses API input items. A `system`
@@ -440,6 +459,19 @@ mod tests {
         }))
         .unwrap();
         super::to_response_items(&req)
+    }
+
+    #[test]
+    fn offers_latest_id_without_overriding_live_catalog_or_promising_access() {
+        let mut live = vec![super::ModelInfo { id: "gpt-6-sol".into(), name: "Live Sol".into(), ..Default::default() }];
+        super::offer_latest_known_model(&mut live, "chatgpt");
+        assert_eq!(live.len(), 2);
+        assert_eq!(live[0].name, "Live Sol");
+        assert_eq!(live[1].id, "gpt-6.1-sol");
+        assert_eq!(live[1].provider_id, "chatgpt");
+        assert!(live[1].availability.as_ref().unwrap()["detail"].as_str().unwrap().contains("may reject"));
+        super::offer_latest_known_model(&mut live, "chatgpt");
+        assert_eq!(live.len(), 2);
     }
 
     #[test]

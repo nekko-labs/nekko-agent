@@ -85,6 +85,20 @@ describe('account emails in the picker', () => {
   });
 });
 
+describe('subscription model version labels', () => {
+  it('names the resolved Claude version in the selected alias row without renaming other aliases', () => {
+    const out = renderToStaticMarkup(<ModelPicker expanded open providers={[{ id: 'cc', kind: 'claude-code', label: 'Claude Agent', baseUrl: '', enabled: true }]} providerId="cc" modelId="opus" resolvedModelId="claude-opus-5-5" models={[{ id: 'opus', providerId: 'cc', name: 'Claude Opus' }, { id: 'sonnet', providerId: 'cc', name: 'Claude Sonnet' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    expect(out).toContain('Claude Opus (Opus 5.5)');
+    expect(out).toContain('Currently Opus 5.5');
+    expect(out).toContain('Claude Code chooses the version when the chat starts');
+  });
+  it('shows a missing ChatGPT catalog model as an attempt, not verified access', () => {
+    const out = renderToStaticMarkup(<ModelPicker expanded open providers={[{ id: 'gpt', kind: 'chatgpt', label: 'ChatGPT', baseUrl: '', enabled: true }]} providerId="gpt" modelId={null} models={[{ id: 'gpt-6.1-sol', providerId: 'gpt', name: 'GPT-6.1 Sol', availability: { status: 'ready', detail: 'Not listed for this account. You can try it, but the provider may reject it.' } }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    expect(out).toContain('GPT-6.1 Sol');
+    expect(out).toContain('Not listed for this account. You can try it');
+  });
+});
+
 describe('model chip name priority', () => {
   it('wraps the complete model name rather than ellipsizing it for the account label', () => {
     const out = renderToStaticMarkup(<ModelPicker open={false} providers={[{id:'p',kind:'anthropic',label:'Claude API very long account',enabled:true,baseUrl:''}]} providerId="p" modelId="m" models={[{id:'m',providerId:'p',name:'Claude Opus 4.6'}]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
