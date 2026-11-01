@@ -28,7 +28,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   awake: true,
   error: null,
   today: { jobs: 14, seconds: 7800 },
-  repos: [],
+  repos: [], forkApprovalOpen: false,
   host: { ramMb: 32768, cores: 10, recommendedMemoryMb: 16384, runnerMemoryMb: 16384, cpusPerVm: 4, onBattery: false, batteryPct: 100, networkId: 'home', networkTrusted: true },
   recent: [
     { ts: now - 600, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'mobile', job: 'iOS build', result: 'finished', seconds: 660, reason: [] },
@@ -104,10 +104,19 @@ describe('RunnerCard', () => {
     expect(render(noImage)).toContain('No VM image yet.');
   });
 
+  it('an_off_runner_with_no_image_stays_off', () => {
+    // The daemon sends `No VM image yet.` for a switched-off runner too, which is every runner after Confirm.
+    const html = render(view({ state: 'off', error: 'No VM image yet.', slots: [], reasons: ['off'] }), image());
+    expect(html).toContain('>Off<');
+    expect(html).not.toContain('>Waiting<');
+    expect(html).not.toContain('No VM image yet.');
+  });
+
   it('a_build_shows_its_stage_and_bar', () => {
     const html = render(noImage, image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] }));
     expect(html).toContain('Download macOS: 12.4 of 25.6 GB');
     expect(html).toContain('width:48.4375%');
+    expect(html).toContain('role="progressbar"');
     expect(html).toContain('Details');
     expect(html).not.toContain('No VM image yet.');
   });

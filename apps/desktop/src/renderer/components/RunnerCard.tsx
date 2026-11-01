@@ -46,7 +46,7 @@ function ImageRow({ image, onSetup }: { image: ImageView; onSetup?(): void }) {
         <button className={`btn py-1! text-xs ${busy ? 'btn-outline' : 'btn-primary'}`} onClick={onSetup}>{action}</button>
       </div>
       {fraction !== null && (
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }} role="progressbar" aria-label="Setting up this Mac" aria-valuenow={Math.round(fraction * 100)}>
           <div className="h-full rounded-full" style={{ width: `${fraction * 100}%`, background: 'var(--accent)' }} />
         </div>
       )}
@@ -63,8 +63,8 @@ export function RunnerCard({ view: given, now, image = null, onSettings, onSetup
   const [busy, setBusy] = useState(false);
   const pushToast = useStore((s) => s.pushToast);
   const settingUp = image !== null && (image.state !== 'ready' || image.canResume);
-  // Setup is the answer to "No VM image yet", so the runner is waiting for it, not failing.
-  const view: RunnerView = settingUp && given.error === NO_IMAGE_ERROR ? { ...given, state: 'waiting', error: null } : given;
+  // Setup is the answer to "No VM image yet", so a runner that is on waits for it, and one that is off stays off.
+  const view: RunnerView = settingUp && given.error === NO_IMAGE_ERROR ? { ...given, state: given.state === 'error' ? 'waiting' : given.state, error: null } : given;
   const { config, state, host, today } = view;
   const sampled = host.ramMb > 0;
   const power = host.onBattery === null ? 'Unknown' : host.onBattery ? `On battery, ${Math.round(host.batteryPct ?? 0)}%` : 'On AC';

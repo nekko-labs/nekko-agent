@@ -122,10 +122,10 @@ export function ProgressStep({ image, error, busy, onCancel, onResume }: { image
       {imageStageRows(image).map((row) => (
         <React.Fragment key={row.stage}>
           <Stage row={row} />
-          {row.mark === 'now' && fraction !== null && <div className="runner-bar"><b style={{ width: `${fraction * 100}%` }} /></div>}
+          {row.mark === 'now' && fraction !== null && <div className="runner-bar" role="progressbar" aria-label={row.label} aria-valuenow={Math.round(fraction * 100)}><b style={{ width: `${fraction * 100}%` }} /></div>}
         </React.Fragment>
       ))}
-      {image.state === 'waiting' && <p className="runner-note warn">{image.detail}</p>}
+      {image.state === 'waiting' && <p role="status" className="runner-note warn">{image.detail}</p>}
       <Fine>
         {onResume
           ? 'Finished stages are kept, and a stopped download picks up where it left off.'
@@ -150,7 +150,9 @@ export function FailedStep({ image, error, busy, onCancel, onRetry }: { image: I
       <Heading>Setup stopped</Heading>
       {rows.slice(Math.max(0, bad - 1), bad + 1).map((row) => <Stage key={row.stage} row={row} />)}
       <p role="alert" className="runner-note bad">{image.error}</p>
-      {image.doneStages.length > 0 && <Fine>Finished stages are kept. Trying again restarts this stage only.</Fine>}
+      {image.doneStages.length > 0 && (
+        <Fine>{image.stage === 'lockdown' ? 'Finished stages are kept. Trying again goes back to the checkpoint and adds Xcode again.' : 'Finished stages are kept. Trying again restarts this stage only.'}</Fine>
+      )}
       {log && image.log && <pre className="max-h-48 overflow-auto rounded-lg bg-surface-2 p-2 font-mono text-2xs text-ink-soft">{image.log}</pre>}
       <Alert error={error} />
       <Buttons>
@@ -165,8 +167,8 @@ export function FailedStep({ image, error, busy, onCancel, onRetry }: { image: I
 export type SetupScreen = 'plan' | 'mode' | 'progress' | 'failed' | 'resume' | 'ready';
 
 /** Which screen shows. The daemon owns the build, so a sheet opened at any moment lands on the right one. */
-export function setupScreen({ image, rebuild, finished }: { image: ImageView | null; rebuild: boolean; finished: boolean }): SetupScreen {
-  if (finished) return 'ready';
+export function setupScreen({ image, rebuild, finished, needsMode }: { image: ImageView | null; rebuild: boolean; finished: boolean; needsMode: boolean }): SetupScreen {
+  if (finished) return needsMode ? 'mode' : 'ready';
   if (image?.state === 'failed') return 'failed';
   if (image?.state === 'building' || image?.state === 'waiting') return 'progress';
   if (image?.canResume) return 'resume';
@@ -246,7 +248,9 @@ export function MacSetupSheet({ runnerId, view, image, rebuild, onClose, onWorkf
     setFinished(true);
   });
 
-  const screen = setupScreen({ image, rebuild, finished });
+  // A build only turns on the runner it names, so one connected during it still needs its mode.
+  const needsMode = !rebuild && view !== undefined && !view.config.settings.enabled && !view.forkApprovalOpen;
+  const screen = setupScreen({ image, rebuild, finished, needsMode });
   return (
     <Modal title="Set up this Mac" onClose={onClose} overlayClassName="p-4" className="card w-[460px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
       {screen === 'plan' && (
@@ -256,7 +260,7 @@ export function MacSetupSheet({ runnerId, view, image, rebuild, onClose, onWorkf
       {screen === 'progress' && image && <ProgressStep image={image} error={error} busy={busy} onCancel={() => void cancel()} />}
       {screen === 'resume' && image && <ProgressStep image={image} error={error} busy={busy} onCancel={() => void cancel()} onResume={() => void act(() => window.nekko.resumeImage())} />}
       {screen === 'failed' && image && <FailedStep image={image} error={error} busy={busy} onCancel={() => void cancel()} onRetry={() => void act(() => window.nekko.resumeImage())} />}
-      {screen === 'ready' && <RunnerReady on={view?.config.settings.enabled ?? false} onDone={onClose} onWorkflow={onWorkflow} />}
+      {screen === 'ready' && <RunnerReady on={view?.config.settings.enabled ?? false} forkOpen={view?.forkApprovalOpen ?? false} onDone={onClose} onWorkflow={onWorkflow} />}
     </Modal>
   );
 }

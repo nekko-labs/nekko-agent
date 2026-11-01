@@ -11,7 +11,7 @@ const { RunnerReady, connectToWorkflow } = await import('./RunnerReady.js');
 
 const view = {
   config: { id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac', settings: DEFAULT_RUNNER_SETTINGS },
-  repos: [],
+  repos: [], forkApprovalOpen: false,
 } as unknown as RunnerView;
 const created: Session = { id: 'new_chat', title: 'New chat', createdAt: 1, updatedAt: 1, messages: [], providerId: 'p', modelId: 'm' };
 const buttons = (html: string) => html.match(/<button/g)?.length ?? 0;
@@ -24,18 +24,25 @@ beforeEach(() => {
 
 describe('RunnerReady', () => {
   it('ready_has_exactly_two_buttons', () => {
-    const html = renderToStaticMarkup(<RunnerReady on onDone={() => {}} onWorkflow={() => {}} />);
+    const html = renderToStaticMarkup(<RunnerReady on forkOpen={false} onDone={() => {}} onWorkflow={() => {}} />);
     expect(html).toContain('This Mac is ready');
     expect(buttons(html)).toBe(2);
     for (const s of ['Done', 'Connect to a workflow now', 'runner-burst']) expect(html).toContain(s);
   });
 
   it('a_runner_left_off_is_never_called_ready', () => {
-    const html = renderToStaticMarkup(<RunnerReady on={false} onDone={() => {}} onWorkflow={() => {}} />);
+    const html = renderToStaticMarkup(<RunnerReady on={false} forkOpen onDone={() => {}} onWorkflow={() => {}} />);
     expect(html).not.toContain('This Mac is ready');
     expect(html).not.toContain('runner-burst');
     expect(html).toContain('The runner is off.');
+    expect(html).toContain('outside contributors');
     expect(buttons(html)).toBe(1);
+  });
+
+  it('a_private_runner_that_is_off_never_hears_about_public_repos', () => {
+    const html = renderToStaticMarkup(<RunnerReady on={false} forkOpen={false} onDone={() => {}} onWorkflow={() => {}} />);
+    expect(html).toContain('The runner is off.');
+    expect(html).not.toContain('outside contributors');
   });
 });
 

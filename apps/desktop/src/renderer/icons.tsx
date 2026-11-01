@@ -150,6 +150,10 @@ export const ControlPanelIcon = (p: P) => <S {...p}><rect x="3" y="3" width="18"
 /* Mode panel glyphs: one per setting and per option, so the panel scans by shape. */
 export const CloudIcon = (p: P) => (<S {...p}><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.6 9.1 4.7 4.7 0 0 0 7 18.5z" /></S>);
 export const PhoneIcon = (p: P) => (<S {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2" /><path d="M11 18.5h2" /></S>);
+/** The ready burst's check, on a 16 box because its path is drawn on by dash length. */
+export const ReadyCheckIcon = () => (
+  <svg viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
 /** A crescent with a small z: Do not disturb. */
 export const MoonIcon = (p: P) => (
   <S {...p}><path d="M20 14.6A8.6 8.6 0 1 1 9.4 4a7 7 0 0 0 10.6 10.6z" /><path strokeWidth="1.5" d="M15.5 5.5h3l-3 3.5h3" /></S>

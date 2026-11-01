@@ -95,6 +95,8 @@ pub struct RunnerView {
     pub host: HostView,
     /// The repos an org runner serves, for the message that connects its workflows.
     pub repos: Vec<String>,
+    /// A public repo's approval is unsettled, so the daemon keeps this runner off.
+    pub fork_approval_open: bool,
     /// This runner's last jobs, newest first.
     pub recent: Vec<AuditLine>,
 }
@@ -635,6 +637,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 today: self.today.get(&r.record.config.id).copied().unwrap_or_default(),
                 host: self.mac.as_ref().map(|m| HostView::of(m, &r.record.config.settings)).unwrap_or_default(),
                 repos: r.record.repos().to_vec(),
+                fork_approval_open: r.record.fork_approval_open(),
                 recent: r.recent.iter().cloned().collect(),
             })
             .collect()

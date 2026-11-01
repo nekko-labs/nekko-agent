@@ -16,7 +16,7 @@ const form = (over: Partial<ConnectForm> = {}): ConnectForm => ({
 });
 const view: RunnerView = {
   config: { id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac', settings: { ...DEFAULT_RUNNER_SETTINGS } },
-  state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, repos: [],
+  state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, repos: [], forkApprovalOpen: false,
   host: { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false },
   recent: [],
 };
@@ -121,8 +121,8 @@ const accounts: GithubAccounts = { login: 'ermish', accounts: [
 ] };
 const account = (over: Partial<GithubAccounts> = {}, choice: AccountChoice = { login: 'nekko-labs', kind: 'org', canGroup: true }) =>
   renderToStaticMarkup(<AccountStep accounts={{ ...accounts, ...over }} choice={choice} error={null} busy={false} onChoice={() => {}} onContinue={() => {}} onManual={() => {}} />);
-const confirm = (status: GithubSetupView, picked: string[], allowPublic = false, error: string | null = null) =>
-  renderToStaticMarkup(<ConfirmStep status={status} picks={{ repos: picked, allowPublic, label: '' }} error={error} busy={false} onTick={() => {}} onAllowPublic={() => {}} onLabel={() => {}} onContinue={() => {}} onRecheck={() => {}} onCancel={() => {}} />);
+const confirm = (status: GithubSetupView, picked: string[], allowPublic = false, error: string | null = null, busy = false) =>
+  renderToStaticMarkup(<ConfirmStep status={status} picks={{ repos: picked, allowPublic, label: '' }} error={error} busy={busy} onTick={() => {}} onAllowPublic={() => {}} onLabel={() => {}} onContinue={() => {}} onRecheck={() => {}} onCancel={() => {}} />);
 /** The named button's opening tag. */
 const button = (html: string, name: string) => html.match(new RegExp(`<button[^>]*>(?:(?!</button>).)*${name}`))?.[0] ?? '';
 
@@ -173,6 +173,10 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     expect(html.match(/type="checkbox"/g)).toHaveLength(2);
     expect(button(html, 'Continue to Mac setup')).not.toContain('disabled=""');
     expect(button(html, 'Cancel')).not.toBe('');
+  });
+
+  it('cancel_waits_for_a_connect_in_flight', () => {
+    expect(button(confirm(setup(), ['nekko-labs/app'], false, null, true), 'Cancel')).toContain('disabled=""');
   });
 
   it('a_personal_account_picks_one_repo_by_radio', () => {
@@ -264,7 +268,7 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     const publicSetup = setup({ repos: [repo('nekko-labs/site', false)] });
     const picks = { repos: ['nekko-labs/site'], allowPublic: true, label: '' };
     const deps = (over = {}) => ({
-      connectRunner: vi.fn(async () => view), setForkApproval: vi.fn(async () => ({ done: true, url: 'u' })), pushToast: vi.fn(), ...over,
+      connectRunner: vi.fn(async () => view), setForkApproval: vi.fn(async () => ({ done: true, url: 'u' })), ...over,
     });
 
     it('a_private_repo_connects_off_and_skips_fork_approval', async () => {
@@ -289,11 +293,10 @@ describe('ConnectRunnerSheet GitHub steps', () => {
       expect(res).toEqual({ view, approval: { done: false, url: 'https://github.com/o/r/settings/actions', runnerId: 'r1' } });
     });
 
-    it('a_failed_approval_call_says_so', async () => {
+    it('a_failed_approval_call_stops_at_the_fork_step_before_mac_setup', async () => {
       const d = deps({ setForkApproval: () => Promise.reject(new Error('The daemon is busy.')) });
       const res = await submitSetup(publicSetup, picks, d);
-      expect(d.pushToast).toHaveBeenCalledWith('error', expect.stringContaining('The daemon is busy.'));
-      expect(res).toEqual({ view, approval: null });
+      expect(res).toEqual({ view, approval: { done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions', runnerId: 'r1' } });
     });
 
     it('a_refused_connect_is_the_daemons_sentence', async () => {

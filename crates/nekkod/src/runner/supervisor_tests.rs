@@ -1214,7 +1214,8 @@ async fn an_open_fork_approval_holds_the_runner_off_until_it_is_settled() {
     held.config.scope = Scope::Repo { owner: "o".into(), repo: "public".into() };
     held.config.settings.enabled = false;
     held.link = Link::Github(GithubLink { fork_approval_open: true, ..held.github().unwrap().clone() });
-    runners.save_connected(held, None).await.unwrap();
+    let view = runners.save_connected(held, None).await.unwrap();
+    assert_eq!(view["forkApprovalOpen"], true);
 
     let id = serde_json::json!("r2");
     let on = serde_json::json!(true);
@@ -1230,6 +1231,7 @@ async fn an_open_fork_approval_holds_the_runner_off_until_it_is_settled() {
     runners.route("runner:setForkApproval", &[said]).await.unwrap();
     let view = runners.route("runner:setEnabled", &[id, on]).await.unwrap();
     assert_eq!(view["config"]["settings"]["enabled"], true);
+    assert_eq!(view["forkApprovalOpen"], false);
 }
 
 /// A 16 GB Mac: room for exactly one 8 GB VM, and the VM's own memory shows as used.

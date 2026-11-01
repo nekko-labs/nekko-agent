@@ -94,6 +94,8 @@ export interface RunnerView {
   host: HostView;
   /** The repos an org runner serves, from its link; empty when the scope says it all. */
   repos: string[];
+  /** A public repo's approval for outside contributors is unsettled, so the daemon keeps this runner off. */
+  forkApprovalOpen: boolean;
   /** Newest first. */
   recent: AuditLine[];
 }
@@ -594,5 +596,8 @@ export function toSetupRequest(v: GithubSetupView, p: SetupPicks): GithubConnect
 }
 
 export const githubInstallUrl = (slug: string) => `https://github.com/apps/${slug}/installations/new`;
+/** Where fork approval is set by hand, when Nekko could not ask. */
+export const githubActionsSettingsUrl = (s: Scope) =>
+  (s.kind === 'org' ? `https://github.com/organizations/${s.org}/settings/actions` : `https://github.com/${s.owner}/${s.repo}/settings/actions`);
 /** Where an org's app is deleted, which is the way out when the org turns out to have no runner groups. */
 export const githubAppSettingsUrl = (org: string, slug: string) => `https://github.com/organizations/${org}/settings/apps/${slug}/advanced`;

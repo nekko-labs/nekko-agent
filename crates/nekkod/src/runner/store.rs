@@ -84,6 +84,10 @@ impl RunnerRecord {
         }
     }
 
+    pub fn fork_approval_open(&self) -> bool {
+        self.github().is_some_and(|g| g.fork_approval_open)
+    }
+
     /// The repos an org or group runner watches; empty when its scope says it all.
     pub fn repos(&self) -> &[String] {
         match &self.link {

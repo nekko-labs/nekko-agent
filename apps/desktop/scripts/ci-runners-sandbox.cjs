@@ -105,6 +105,16 @@ app.whenReady().then(async () => {
     },
     ready: async () => { await finish(); },
     'ready-left-off': async () => { await finish(); },
+    'ready-second-runner': async () => { await finish(); },
+    'rebuild-cancelled': async () => {
+      await details(); await click(byText('[role=dialog] button', 'Cancel setup')); await sleep(300);
+      await click(byText('[role=dialog] button', 'Delete')); await sleep(400);
+    },
+    'connect-busy': async () => {
+      await connect(); await click(byText('[role=dialog] button', 'Continue to Mac setup')); await sleep(100);
+      await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"); await sleep(100);
+    },
+    'image-retry': async () => { await run('integration.pushRunners()'); await sleep(300); },
     'card-ready': async () => {},
     settings: async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     // The sheet is taller than the window: the same sheet scrolled to its end shows Max job time.
@@ -116,7 +126,8 @@ app.whenReady().then(async () => {
   };
   const checks = {
     'first-visit': [['both steps, step 2 waits', "(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent==='After step 1');return document.body.innerText.includes('Use this Mac as a CI runner')&&document.querySelectorAll('.runner-step svg').length===2&&b&&b.disabled})()"]],
-    'first-visit-connected': [['step 1 checked, step 2 lit, the card below', "(()=>{const t=document.body.innerText;return t.includes('Connected')&&!t.includes('After step 1')&&!!document.querySelector('[data-runner-card]')&&[...document.querySelectorAll('.runner-step button')].some(e=>e.textContent==='Set up this Mac')})()"]],
+    'first-visit-connected': [['step 1 checked, step 2 lit, the card below', "(()=>{const t=document.body.innerText;return t.includes('Connected')&&!t.includes('After step 1')&&!!document.querySelector('[data-runner-card]')&&[...document.querySelectorAll('.runner-step button')].some(e=>e.textContent==='Set up this Mac')})()"],
+      ['the off runner reads Off, with no error line', "(()=>{const c=document.querySelector('[data-runner-card]');const leaf=t=>[...c.querySelectorAll('*')].some(e=>!e.children.length&&e.textContent===t);return leaf('Off')&&!leaf('Waiting')&&!c.innerText.includes('No VM image yet.')})()"]],
     running: [['running job and waiting slot', "document.body.innerText.includes('ios-native · PR #904') && document.body.innerText.includes('Waiting: you\\'re using the Mac') && document.body.innerText.includes('14 jobs')"]],
     waiting: [['every reason as a sentence', "['This Mac is on battery, below what this mode allows.','This network is not one you trust. Add it in runner settings.','You\\'re using the Mac.'].every(s=>document.body.innerText.includes(s))"],
       ['memory-bound slot greyed with its sentence', "document.body.innerText.includes('Not available: Not enough runner memory for another VM.')"]],
@@ -148,7 +159,11 @@ app.whenReady().then(async () => {
     'setup-resume': [['resume offered', "document.querySelector('[role=dialog]').innerText.includes('Resume setup')"]],
     'setup-rebuild': [['rebuild asks no mode', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('Rebuild image')&&!d.includes('Do not disturb')})()"]],
     ready: [['frame 8, exactly two buttons', "(()=>{const d=document.querySelector('[role=dialog]');return d.innerText.includes('This Mac is ready')&&d.querySelectorAll('button').length===2&&!!d.querySelector('.runner-burst')})()"]],
-    'ready-left-off': [['never called ready while off', "(()=>{const d=document.querySelector('[role=dialog]');return !d.innerText.includes('This Mac is ready')&&!d.querySelector('.runner-burst')&&d.innerText.includes('The runner is off.')})()"]],
+    'ready-left-off': [['never called ready while off', "(()=>{const d=document.querySelector('[role=dialog]');return !d.innerText.includes('This Mac is ready')&&!d.querySelector('.runner-burst')&&d.innerText.includes('The runner is off.')&&d.innerText.includes('outside contributors')})()"]],
+    'ready-second-runner': [['a runner the build did not name gets its mode', "(()=>{const d=document.querySelector('[role=dialog]');return d.innerText.includes('Start runner')&&!d.innerText.includes('outside contributors')})()"]],
+    'rebuild-cancelled': [['a cancelled rebuild closes, never ready', "!document.querySelector('[role=dialog]')&&!document.body.innerText.includes('This Mac is ready')"]],
+    'connect-busy': [['Escape waits for the connect', "[...document.querySelectorAll('[role=dialog]')].some(d=>d.innerText.includes('GitHub is connected'))"]],
+    'image-retry': [['the card recovers after a refused first status', "document.querySelector('[data-runner-card]').innerText.includes('Set up this Mac')"]],
     'card-ready': [['workflow action on the card', "document.querySelector('[data-runner-card]').innerText.includes('Connect to a workflow')"]],
     settings: [['exact mode labels present', "[\"Do not disturb: Only run when I'm idle\",'Balanced: in the background','Runner first','System default','While a runner is active','Always','Let jobs use the internet directly while a VPN is on'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"],
       ['recommendation shown', "document.body.innerText.includes('Recommended: 20 GB for this Mac')"]],

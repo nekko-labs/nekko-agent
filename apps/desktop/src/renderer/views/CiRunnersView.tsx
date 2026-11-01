@@ -109,8 +109,15 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // Read with the runners, so it recovers when they do: a daemon that restarts publishes no image view of its own.
+    // Rejects on a daemon with no builder, and the card then keeps its error line.
+    const readImage = () => void window.nekko.imageStatus().then((v) => { if (live) setImage(v); }, () => {});
     const list = (attempt: number) => window.nekko.listRunners().then(
-      (views) => live && setState((s) => afterList(s, { kind: 'ready', views })),
+      (views) => {
+        if (!live) return;
+        setState((s) => afterList(s, { kind: 'ready', views }));
+        readImage();
+      },
       (e: unknown) => {
         if (!live) return;
         setState((s) => afterList(s, { kind: 'unavailable', message: e instanceof Error ? e.message : String(e) }));
@@ -122,22 +129,14 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
       pushes.current += 1;
       clearTimeout(timer);
       setState({ kind: 'ready', views });
+      readImage();
     });
+    const offImage = window.nekko.onImageChanged(setImage);
     return () => {
       live = false;
       clearTimeout(timer);
       off();
-    };
-  }, []);
-
-  // Rejects on a daemon with no builder: the card then keeps its error line.
-  useEffect(() => {
-    let live = true;
-    void window.nekko.imageStatus().then((v) => { if (live) setImage((cur) => cur ?? v); }, () => {});
-    const off = window.nekko.onImageChanged(setImage);
-    return () => {
-      live = false;
-      off();
+      offImage();
     };
   }, []);
 

@@ -6,6 +6,7 @@ import {
   PRIORITY_DESCRIPTIONS,
   PRIORITY_LABELS,
   defaultRepoPicks,
+  githubActionsSettingsUrl,
   githubAppSettingsUrl,
   githubInstallUrl,
   publicPicks,
@@ -384,7 +385,7 @@ export function ConfirmStep({
       <Alert error={error} />
       {stuck && <TextLink onClick={() => void window.nekko.openPath(githubAppSettingsUrl(status.owner!, status.slug!))}>Delete the app on GitHub</TextLink>}
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
+        <button type="button" className="btn btn-outline" disabled={busy} onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !picks.repos.length || (anyPublic && !picks.allowPublic)} onClick={onContinue}>Continue to Mac setup</button>
       </div>
     </div>
@@ -411,15 +412,14 @@ export function ForkStep({ url, busy, onOpen, onLeaveOff, onConfirmed }: { url: 
 export interface SetupDeps {
   connectRunner(req: ConnectRequest): Promise<RunnerView>;
   setForkApproval(req: { runnerId: string; confirmed?: boolean }): Promise<ForkApproval>;
-  pushToast(kind: 'error' | 'success' | 'info', message: string): void;
 }
 export type PendingApproval = ForkApproval & { runnerId: string };
 
 /**
  * Confirm: connect off with the stored key, then settle a public repo's fork
  * approval, all before Mac setup. Only a finished setup turns the runner on, so
- * it can never take a job first. Once connected, a failure only toasts: the
- * daemon keeps the runner off until approval is settled.
+ * it can never take a job first. An approval call that fails stops at the fork
+ * step, the same as one GitHub refuses.
  */
 export async function submitSetup(
   status: GithubSetupView,
@@ -440,9 +440,8 @@ export async function submitSetup(
   try {
     const approval = await deps.setForkApproval({ runnerId });
     return { view, approval: approval.done ? null : { ...approval, runnerId } };
-  } catch (e) {
-    deps.pushToast('error', `Connected, but the runner stays off: ${said(e)}`);
-    return { view, approval: null };
+  } catch {
+    return { view, approval: { done: false, url: githubActionsSettingsUrl(view.config.scope), runnerId } };
   }
 }
 
@@ -501,7 +500,9 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
     if (status.step === 'confirm') setPicks((p) => ({ ...p, repos: defaultRepoPicks(status) }));
   }, [status]);
 
+  // A connect in flight has to end here: closing would lose the fork step, or open Mac setup uninvited.
   const close = () => {
+    if (busy) return;
     setForm(emptyConnectForm());
     onClose();
   };
@@ -524,7 +525,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
     setSubmitting(true);
     setError(null);
     const reply = beginReply();
-    const res = await submitSetup(status, picks, { connectRunner: window.nekko.connectRunner, setForkApproval: window.nekko.setForkApproval, pushToast });
+    const res = await submitSetup(status, picks, window.nekko);
     setBusy(false);
     setSubmitting(false);
     if ('error' in res) {

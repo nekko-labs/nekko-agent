@@ -10,6 +10,7 @@ import {
   VPN_DIRECT_LABEL,
   auditText,
   formatMinutes,
+  githubActionsSettingsUrl,
   imageFraction,
   imageLine,
   imageStageRows,
@@ -46,7 +47,7 @@ const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['conf
     settings: { ...DEFAULT_RUNNER_SETTINGS, ...settings },
   },
   state: 'waiting', slots: [], reasons: [], available: 1, limit: null, awake: false, error: null,
-  today: { jobs: 0, seconds: 0 }, host, repos: [], recent: [],
+  today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [],
   ...over,
 });
 const slot = (state: SlotView['state'], over: Partial<SlotView> = {}): SlotView => ({ state, job: null, since: now, drainEndsAt: null, ...over });
@@ -272,4 +273,9 @@ describe('image progress', () => {
   it('every stage is done at Finish', () => {
     expect(marks(image({ stage: 'finish', doneStages: ['check', 'download', 'install', 'xcode', 'lockdown', 'test'] }))).toEqual(Array(6).fill('done'));
   });
+});
+
+it('links to the Actions settings of a repo or an org', () => {
+  expect(githubActionsSettingsUrl({ kind: 'repo', owner: 'o', repo: 'r' })).toBe('https://github.com/o/r/settings/actions');
+  expect(githubActionsSettingsUrl({ kind: 'org', org: 'acme' })).toBe('https://github.com/organizations/acme/settings/actions');
 });

@@ -60,11 +60,11 @@ describe('MacSetupSheet', () => {
     const html = renderToStaticMarkup(<ModeStep priority="balanced" error={null} busy={false} onPriority={() => {}} onStart={() => {}} />);
     for (const s of ['Do not disturb', 'Balanced', 'Runner first', 'Start runner']) expect(html).toContain(s);
     for (const s of ['from Apple', 'Space needed', 'license']) expect(html).not.toContain(s);
-    expect(setupScreen({ image: image({ state: 'ready' }), rebuild: false, finished: false })).toBe('mode');
+    expect(setupScreen({ image: image({ state: 'ready' }), rebuild: false, finished: false, needsMode: false })).toBe('mode');
   });
 
   it('the_screen_follows_the_build', () => {
-    const screen = (v: ImageView | null, rebuild = false, finished = false) => setupScreen({ image: v, rebuild, finished });
+    const screen = (v: ImageView | null, rebuild = false, finished = false, needsMode = false) => setupScreen({ image: v, rebuild, finished, needsMode });
     expect(screen(null)).toBe('plan');
     expect(screen(image())).toBe('plan');
     expect(screen(image({ state: 'ready' }), true)).toBe('plan');
@@ -74,19 +74,22 @@ describe('MacSetupSheet', () => {
     expect(screen(image({ canResume: true }))).toBe('resume');
     expect(screen(image({ state: 'ready', canResume: true }))).toBe('resume');
     expect(screen(image({ state: 'ready' }), false, true)).toBe('ready');
+    // A build for another runner finished, and this one still has no mode.
+    expect(screen(image({ state: 'ready' }), false, true, true)).toBe('mode');
   });
 
   it('progress_renders_each_stage', () => {
     const html = progress(image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] }));
     for (const s of ['Setting up this Mac', 'Check this Mac', 'Download macOS', '12.4 of 25.6 GB', 'Install macOS', 'Add Xcode and tools', 'Lock the VM down', 'Test a boot', 'You can close this.', 'Cancel setup']) expect(html).toContain(s);
     expect(html).toContain('runner-bar');
+    expect(html).toContain('role="progressbar"');
     expect(html).not.toContain('Resume setup');
   });
 
   it('waiting_shows_its_reason', () => {
     const html = progress(image({ state: 'waiting', stage: 'install', doneStages: ['check', 'download'], detail: 'Waiting for a free VM slot' }));
     expect(html).toContain('>Waiting<');
-    expect(html).toMatch(/runner-note warn[^>]*>Waiting for a free VM slot/);
+    expect(html).toMatch(/role="status"[^>]*runner-note warn[^>]*>Waiting for a free VM slot/);
     expect(html).not.toContain('runner-bar');
   });
 
@@ -104,10 +107,17 @@ describe('MacSetupSheet', () => {
     expect(html).not.toContain('Download macOS');
   });
 
+  it('a_failed_lockdown_says_it_goes_back_further', () => {
+    // Lockdown runs once per image, so the daemon restarts from the checkpoint, Xcode included.
+    const html = failed(image({ state: 'failed', stage: 'lockdown', doneStages: ['check', 'download', 'install', 'xcode'], error: 'No proof.', canResume: true }));
+    expect(html).toContain('Trying again goes back to the checkpoint and adds Xcode again.');
+    expect(html).not.toContain('restarts this stage only');
+  });
+
   it('check_refusing_is_a_sentence_with_a_way_out_not_a_spinner', () => {
     for (const sentence of ['Update this Mac to macOS 27 to set it up here.', 'This copy of Nekko cannot build a VM on its own. Update Nekko, or bring your own image.']) {
       const v = image({ state: 'failed', stage: 'check', error: sentence, canResume: true });
-      expect(setupScreen({ image: v, rebuild: false, finished: false })).toBe('failed');
+      expect(setupScreen({ image: v, rebuild: false, finished: false, needsMode: false })).toBe('failed');
       const html = failed(v);
       expect(html).toContain(renderToStaticMarkup(<>{sentence}</>));
       for (const s of ['Check this Mac', 'Try again', 'Cancel setup']) expect(html).toContain(s);
@@ -144,7 +154,7 @@ describe('MacSetupSheet', () => {
 
   it('no_em_dash', () => {
     const v = image({ state: 'failed', stage: 'check', error: 'x' });
-    for (const html of [planStep(plan()), planStep(plan({ xcode: null })), progress(image({ state: 'building', stage: 'check' })), failed(v)]) expect(html).not.toContain('—');
+    for (const html of [planStep(plan()), planStep(plan({ xcode: null })), progress(image({ state: 'building', stage: 'check' })), failed(v)]) expect(html).not.toContain('\u2014');
   });
 });
 

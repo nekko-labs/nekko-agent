@@ -107,12 +107,12 @@ sheet again. Quitting Nekko pauses the build, and **Resume setup** picks up wher
 build holds the Mac awake while it works, and pauses with its reason on screen when there is no free
 VM slot, memory is critical, the Mac is hot, the disk is too full, or, from the install on, the Mac
 is on battery. If a stage fails, **Setup stopped** gives the reason, **Show log** the detail, and
-**Try again** restarts that stage. **Cancel setup** deletes the build and leaves an image already in
-use alone.
+**Try again** restarts that stage, except that a failed lockdown goes back to before Xcode, because
+it runs once per image. **Cancel setup** deletes the build and leaves an image already in use alone.
 
 When it finishes, **This Mac is ready** offers **Connect to a workflow now**, or see
-[Use it in a workflow](#use-it-in-a-workflow). If the runner is off because a public repo's approval
-is not set, the sheet says so instead.
+[Use it in a workflow](#use-it-in-a-workflow). If the runner is off, the sheet says so instead. A
+runner you connected while the build was running gets its mode then.
 
 **Rebuild image** in the runner's settings runs the same build, which is how macOS, Xcode and runner
 updates arrive. The runner keeps working on the old image until the new one passes its test boot,

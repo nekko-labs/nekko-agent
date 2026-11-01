@@ -39,7 +39,7 @@ describe('CI runners section', () => {
   });
 
   it('the_two_steps_stay_above_the_card_until_there_is_an_image', () => {
-    const view = { config: { id: 'r1', scope: { kind: 'repo', owner: 'o', repo: 'r' }, label: 'l', settings: DEFAULT_RUNNER_SETTINGS }, state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, host: { ramMb: 0, onBattery: null, networkId: null }, repos: [], recent: [] } as unknown as RunnerView;
+    const view = { config: { id: 'r1', scope: { kind: 'repo', owner: 'o', repo: 'r' }, label: 'l', settings: DEFAULT_RUNNER_SETTINGS }, state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, host: { ramMb: 0, onBattery: null, networkId: null }, repos: [], forkApprovalOpen: false, recent: [] } as unknown as RunnerView;
     const at = (state: ImageView['state']) => renderToStaticMarkup(<>{runnersBody({ kind: 'ready', views: [view] }, { now: 0, image: { state, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false }, onConnect() {}, onSettings() {}, beginReply: () => () => {} })}</>);
     expect(at('none')).toContain('STEP 2');
     expect(at('none')).toContain('data-runner-card="r1"');
