@@ -151,6 +151,9 @@ struct ChatView: View {
             .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
           }
+            // The bar has no background to hide what scrolls behind it: stop the transcript at the
+            // bar's top edge, and leave the top open so it still runs under the navigation glass.
+            .clipShape(Rectangle().scale(x: 1, y: 2, anchor: .bottom))
             // Follow streamed output only while the reader is at the end, and
             // without animating every token (overlapping animations shudder).
             .onChange(of: chat.blocksRevision) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
@@ -174,6 +177,9 @@ struct ChatView: View {
                 }
                 .animation(.smooth(duration: 0.2), value: !atBottom && chat.running)
             }
+            .safeAreaInset(edge: .bottom) {
+                if flex == nil { bottomBar(chat) }
+            }
             .frame(height: flex.map { CGFloat($0.top) })
           if let flex {
               // Nothing sits on the hinge.
@@ -181,10 +187,6 @@ struct ChatView: View {
               ScrollView { bottomBar(chat) }
                   .scrollBounceBehavior(.basedOnSize)
                   .accessibilityIdentifier("chat.flexLower")
-          } else {
-              // Below the transcript rather than over it: it has no background to hide what scrolls behind.
-              // Its own height: a VStack's even share collapsed the answer field to nothing above the keyboard.
-              bottomBar(chat).fixedSize(horizontal: false, vertical: true)
           }
          }
         }

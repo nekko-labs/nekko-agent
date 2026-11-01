@@ -6,6 +6,12 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Live Activity language and the bottom of a chat (#1487, added 2026-11-02)
+
+Philip's Live Activity read in Japanese on an English-first iPhone, and he asked for a lighter bottom of a chat. Spec: [The bottom of a chat](spec/phone/native-ios-app.md).
+
+- [x] **T228, Live Activity language and the bottom of a chat (2026-11-02).** The widget extension declares the app's languages and development region; the string catalog gives English no `.lproj`, so without them English was not a language there (`WidgetLanguageTests`). The bar's background is gone and the transcript is clipped at its top edge, keeping `safeAreaInset`: moving the bar into the `VStack` froze the app when a plan sheet folded and squeezed fields above the keyboard. Message box and cards 12 pt, controls inside 8 pt; the question card takes the message box's surface and the answer field the app's style.
+
 ## Model scheduler (#1462, added 2026-11-01)
 
 Fast switching between local models through residency tiers (Hot, Warm in RAM, Staged on a fast SSD, Cold), and preloading from what is coming next (scheduled tasks, workflow steps, active agents). Design and acceptance criteria in [#1462](https://github.com/nekko-labs/nekko-agent/issues/1462); Phase 0 results in [the report](reports/model-switching-phase0-2026-11-01.md). Prefix **MS**.
