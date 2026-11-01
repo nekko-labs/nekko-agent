@@ -827,6 +827,16 @@ async fn views_serialize_camel_case() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn views_carry_the_repos_an_org_runner_serves() {
+    let mut r = record("r1", Priority::Balanced, 1);
+    let Link::Github(g) = &mut r.link else { panic!("a GitHub record") };
+    g.repos = vec!["nekko-labs/app".into(), "nekko-labs/site".into()];
+    let h = harness(vec![r]);
+    let v = serde_json::to_value(h.sup.views()).unwrap();
+    assert_eq!(v[0]["repos"], json!(["nekko-labs/app", "nekko-labs/site"]));
+}
+
+#[tokio::test(start_paused = true)]
 async fn views_carry_host_facts() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
     assert_eq!(h.view().host, HostView::default(), "zeros before the first sample");

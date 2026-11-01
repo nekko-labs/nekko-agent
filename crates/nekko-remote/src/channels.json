@@ -172,6 +172,7 @@
  "runner:githubStatus",
  "runner:imageBuild",
  "runner:imageCancel",
+ "runner:imagePlan",
  "runner:imageResume",
  "runner:imageStatus",
  "runner:list",

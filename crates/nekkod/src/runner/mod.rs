@@ -401,9 +401,11 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     error: None,
                     today: Default::default(),
                     host: Default::default(),
+                    repos: Vec::new(),
                     recent: Vec::new(),
                 });
                 v.config = r.config.clone();
+                v.repos = r.repos().to_vec();
                 if reset.contains(&r.config.id) {
                     v.error = None;
                 }

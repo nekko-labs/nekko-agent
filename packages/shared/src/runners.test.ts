@@ -10,6 +10,9 @@ import {
   VPN_DIRECT_LABEL,
   auditText,
   formatMinutes,
+  imageFraction,
+  imageLine,
+  imageStageRows,
   settingsPatch,
   todayText,
   reasonText,
@@ -18,12 +21,14 @@ import {
   runnerActivity,
   runnerSubtitle,
   runnerTitle,
+  runnerWorkflowPrompt,
   slotLimitText,
   slotLines,
   toConnectRequest,
   type AuditLine,
   type ConnectForm,
   type HostView,
+  type ImageView,
   type RunnerView,
   type SlotView,
 } from './runners.js';
@@ -41,7 +46,7 @@ const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['conf
     settings: { ...DEFAULT_RUNNER_SETTINGS, ...settings },
   },
   state: 'waiting', slots: [], reasons: [], available: 1, limit: null, awake: false, error: null,
-  today: { jobs: 0, seconds: 0 }, host, recent: [],
+  today: { jobs: 0, seconds: 0 }, host, repos: [], recent: [],
   ...over,
 });
 const slot = (state: SlotView['state'], over: Partial<SlotView> = {}): SlotView => ({ state, job: null, since: now, drainEndsAt: null, ...over });
@@ -183,5 +188,88 @@ describe('settingsPatch', () => {
     expect(settingsPatch(base, { ...base, maxJobMinutes: 30, trustedNetworks: ['gw:a', 'gw:b'] })).toEqual({ maxJobMinutes: 30, trustedNetworks: ['gw:a', 'gw:b'] });
     expect(settingsPatch(base, { ...base, cpusPerVm: 4 })).toEqual({ cpusPerVm: 4 });
     expect(settingsPatch({ ...base, cpusPerVm: 4 }, { ...base, cpusPerVm: null })).toEqual({ cpusPerVm: null });
+  });
+});
+
+describe('runnerWorkflowPrompt', () => {
+  const tail = (label: string) => [
+    "Read the workflows, then ask me which ones should run on this Mac. Offer only jobs that can run on macOS, and warn me about any that run on pull requests from forks. If the repo isn't in this folder, ask me where it is.",
+    '',
+    `Set \`runs-on: [self-hosted, macOS, ARM64, ${label}]\` on the ones I pick, and open a pull request.`,
+  ];
+
+  it('writes frame 9 for a repo runner', () => {
+    expect(runnerWorkflowPrompt(view()).split('\n')).toEqual([
+      'Connect my Mac runner to my GitHub Actions workflows.',
+      '',
+      'Runner label: `nekko-cloud-mac`',
+      'Repos: `nekko-labs/nekko-agent`',
+      '',
+      ...tail('nekko-cloud-mac'),
+    ]);
+  });
+
+  it('lists an org runner\'s repos', () => {
+    const org = view({
+      config: { id: 'r2', scope: { kind: 'org', org: 'nekko-labs' }, label: 'mine', settings: DEFAULT_RUNNER_SETTINGS },
+      repos: ['nekko-labs/app', 'nekko-labs/site'],
+    });
+    expect(runnerWorkflowPrompt(org).split('\n')).toEqual([
+      'Connect my Mac runner to my GitHub Actions workflows.',
+      '',
+      'Runner label: `mine`',
+      'Repos: `nekko-labs/app`, `nekko-labs/site`',
+      '',
+      ...tail('mine'),
+    ]);
+  });
+});
+
+describe('image progress', () => {
+  const image = (over: Partial<ImageView>): ImageView => ({
+    state: 'building', stage: 'download', doneStages: ['check'], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+  });
+  const marks = (v: ImageView) => imageStageRows(v).map((r) => r.mark);
+
+  it('lists the six stages a person follows', () => {
+    expect(imageStageRows(image({})).map((r) => r.label)).toEqual(['Check this Mac', 'Download macOS', 'Install macOS', 'Add Xcode and tools', 'Lock the VM down', 'Test a boot']);
+  });
+
+  it('marks each stage of a running build', () => {
+    expect(marks(image({ bytes: [12_400_000_000, 25_600_000_000] }))).toEqual(['done', 'now', 'todo', 'todo', 'todo', 'todo']);
+    expect(imageStageRows(image({ bytes: [12_400_000_000, 25_600_000_000] }))[1].note).toBe('12.4 of 25.6 GB');
+    expect(imageStageRows(image({ stage: 'install', fraction: 0.5 }))[2].note).toBe('50%');
+    expect(imageStageRows(image({ stage: 'xcode', detail: 'Downloading the iOS simulator' }))[3].note).toBe('Downloading the iOS simulator');
+  });
+
+  it('a wait counts the stage before it as done and drops the old numbers', () => {
+    // The daemon names the next stage before it lists the last one as done, and keeps its bytes.
+    const v = image({ state: 'waiting', stage: 'install', doneStages: ['check'], bytes: [9, 9], detail: 'Waiting for power: plug this Mac in' });
+    expect(marks(v)).toEqual(['done', 'done', 'now', 'todo', 'todo', 'todo']);
+    expect(imageStageRows(v)[2].note).toBe('Waiting');
+    expect(imageFraction(v)).toBeNull();
+    expect(imageLine(v)).toBe('Install macOS: Waiting for power: plug this Mac in');
+  });
+
+  it('a failed stage is marked bad', () => {
+    const v = image({ state: 'failed', stage: 'xcode', doneStages: ['check', 'download', 'install'], error: 'No room.' });
+    expect(marks(v)).toEqual(['done', 'done', 'done', 'bad', 'todo', 'todo']);
+    expect(imageLine(v)).toBe('Setup stopped: No room.');
+  });
+
+  it('a build at rest is paused on its next stage', () => {
+    const v = image({ state: 'none', stage: 'xcode', doneStages: ['check', 'download', 'install'], canResume: true });
+    expect(imageStageRows(v)[3]).toMatchObject({ mark: 'now', note: 'Paused' });
+  });
+
+  it('the bar follows bytes, then the install fraction, and nothing else', () => {
+    expect(imageFraction(image({ bytes: [1, 4] }))).toBe(0.25);
+    expect(imageFraction(image({ bytes: [0, 0] }))).toBeNull();
+    expect(imageFraction(image({ stage: 'install', fraction: 0.5 }))).toBe(0.5);
+    expect(imageFraction(image({ stage: 'xcode' }))).toBeNull();
+  });
+
+  it('every stage is done at Finish', () => {
+    expect(marks(image({ stage: 'finish', doneStages: ['check', 'download', 'install', 'xcode', 'lockdown', 'test'] }))).toEqual(Array(6).fill('done'));
   });
 });

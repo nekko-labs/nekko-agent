@@ -83,6 +83,14 @@ impl RunnerRecord {
             Link::Github(_) => None,
         }
     }
+
+    /// The repos an org or group runner watches; empty when its scope says it all.
+    pub fn repos(&self) -> &[String] {
+        match &self.link {
+            Link::Github(g) => &g.repos,
+            Link::Gitlab(g) => &g.projects,
+        }
+    }
 }
 
 /// GitHub owner, org and repo names match in any case.
