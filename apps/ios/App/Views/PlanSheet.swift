@@ -75,7 +75,7 @@ struct PlanSheet: View {
         return VStack(alignment: .leading, spacing: 4) {
             Button { toggle(true) } label: {
                 HStack(spacing: 8) {
-                    StepMark(status: current.status, paused: paused)
+                    PlanStepMark(status: current.status, paused: paused)
                     if let kind = current.kind { KindLabel(kind: kind, current: current.status == .active) }
                     Text(current.title).font(.footnote).lineLimit(1)
                         .foregroundStyle(current.status == .done ? palette.inkSoft : palette.ink)
@@ -137,7 +137,7 @@ struct PlanSheet: View {
         let more = step.detail != nil || chips
         let shown = !step.squeezed || unsqueezed.contains(step.id)
         return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            StepMark(status: step.status, paused: paused)
+            PlanStepMark(status: step.status, paused: paused)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     // The loop kind sits in a fixed column, as on the desktop.
@@ -260,7 +260,7 @@ struct PlanSheet: View {
 
 /// The step's status mark: a check when done, a sun-burst while worked (two
 /// bars when paused), a ring ahead, a struck ring when skipped. Not animated.
-private struct StepMark: View {
+private struct PlanStepMark: View {
     let status: PlanStep.Status
     let paused: Bool
     @Environment(\.palette) private var palette
