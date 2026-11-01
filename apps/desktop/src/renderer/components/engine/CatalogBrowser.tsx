@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { CatalogModel, EngineMemory } from '@nekko-agent/shared';
 import { downloadFitVerdict } from '@nekko-agent/shared';
 import { CheckIcon, ChevronIcon } from '../../icons.js';
-import { formatBytes } from '../runtimes/verdict.js';
+import { formatBytes, formatCount } from '../runtimes/verdict.js';
 
 /**
  * Finding a model to run.
@@ -199,8 +199,4 @@ function smallest(m: CatalogModel): string | null {
   return sizes.length ? `from ${formatBytes(Math.min(...sizes))}` : null;
 }
 
-function compact(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
-  return String(n);
-}
+const compact = formatCount;

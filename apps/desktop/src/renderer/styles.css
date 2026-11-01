@@ -2284,7 +2284,11 @@
 /* Clean, conversational thread (no bubbles). The user's turn sits in a soft
    rounded block on the right; the assistant's reply is plain full-width prose on
    the left, the way Claude Code / a document reads. */
+/* A long path, hash or URL with no break opportunity wraps rather than being
+   cut off by the transcript's overflow-x: hidden. Code blocks keep their own
+   horizontal scroll. */
 .msg-user {
+  overflow-wrap: anywhere;
   max-width: min(85%, calc(68ch + 32px));
   border-radius: 16px;
   padding: 8px 16px;
@@ -2292,6 +2296,7 @@
   color: var(--ink);
 }
 .msg-ai {
+  overflow-wrap: anywhere;
   width: 100%;
   min-width: 0;
   color: var(--ink);
@@ -2303,6 +2308,7 @@
 :is(.msg-ai, .md-doc) :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
   max-width: 68ch;
 }
+:is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
 
 /* Find in this chat (ChatSearchBar): a small bar floating at the top right of
    the transcript, and the highlights it draws with the CSS Custom Highlight

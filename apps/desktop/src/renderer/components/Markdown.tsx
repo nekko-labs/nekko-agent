@@ -266,7 +266,7 @@ function renderList(items: ListItem[], key: string, ctx: Ctx, depth = 0): React.
     // `- [x] done` renders as a checkbox rather than a literal bracket pair.
     const task = TASK_RE.exec(items[i].text);
     nodes.push(
-      <li key={`${key}-${i}`} className={task ? 'list-none' : undefined}>
+      <li key={`${key}-${i}`} dir="auto" className={task ? 'list-none' : undefined}>
         {task ? (
           <span className="flex items-start gap-2">
             <span
@@ -344,13 +344,13 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
       if (ctx.doc) {
         const Tag = `h${Math.min(level, 6)}` as 'h1';
         out.push(
-          <Tag key={`${key}-h${i}`} className={DOC_HEADING[level] ?? DOC_HEADING[6]}>
+          <Tag key={`${key}-h${i}`} dir="auto" className={DOC_HEADING[level] ?? DOC_HEADING[6]}>
             {inline(heading[2], ctx)}
           </Tag>,
         );
       } else {
         out.push(
-          <div key={`${key}-h${i}`} className={`font-semibold ${level <= 2 ? 'mt-1 text-base' : ''}`}>
+          <div key={`${key}-h${i}`} dir="auto" className={`font-semibold ${level <= 2 ? 'mt-1 text-base' : ''}`}>
             {inline(heading[2], ctx)}
           </div>,
         );
@@ -417,8 +417,8 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
     }
     out.push(
       ctx.doc
-        ? <p key={`${key}-p${i}`} className="my-2">{inline(para.join(' '), ctx)}</p>
-        : <p key={`${key}-p${i}`}>{lineBreaks(para, ctx)}</p>,
+        ? <p key={`${key}-p${i}`} dir="auto" className="my-2">{inline(para.join(' '), ctx)}</p>
+        : <p key={`${key}-p${i}`} dir="auto">{lineBreaks(para, ctx)}</p>,
     );
     i = j;
   }
@@ -477,7 +477,7 @@ function inline(s: string, ctx: Ctx): React.ReactNode {
       nodes.push(<s key={key++} className="text-ink-faint">{inline(strike, ctx)}</s>);
     } else if (code !== undefined) {
       nodes.push(
-        <code key={key++} className="rounded-sm px-1 py-0.5 font-mono text-sm" style={{ background: 'var(--surface-2)' }}>
+        <code key={key++} className="rounded-sm px-1 py-0.5 font-mono text-sm [overflow-wrap:anywhere]" style={{ background: 'var(--surface-2)' }}>
           {code}
         </code>,
       );

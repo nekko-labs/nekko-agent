@@ -104,17 +104,19 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
             const ran = runPolicyNote(t.lastRunLowPriority, t.lastRunWaitedMs);
             return (
               <div key={t.id} className="group px-4 py-2" data-task-row={t.id}>
-                <div className="flex items-center gap-3">
+                {/* Wraps on a narrow pane: a long cadence or the actions drop to a second line instead of squeezing the title to nothing. */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-sm" style={{ background: 'var(--surface-2)' }} title={meta.label}>{meta.icon}</span>
                   <button
-                    className="min-w-0 truncate text-left text-sm font-medium enabled:hover:text-accent"
+                    className="min-w-0 max-w-full truncate text-left text-sm font-medium enabled:hover:text-accent"
+                    dir="auto"
                     onClick={() => t.lastSessionId && onOpen(t.lastSessionId)}
                     disabled={!t.lastSessionId}
-                    title={t.lastSessionId ? 'Open this automation’s chat' : t.title}
+                    title={t.lastSessionId ? `${t.title}. Open this automation’s chat` : t.title}
                   >
                     {t.title}
                   </button>
-                  <span className="shrink-0 text-2xs text-ink-faint">{taskCadence(t)}</span>
+                  <span className="min-w-0 max-w-[50%] truncate text-2xs text-ink-faint" title={taskCadence(t)}>{taskCadence(t)}</span>
                   <span
                     className="ml-auto flex shrink-0 items-center gap-2 tabular-nums text-xs font-medium"
                     style={{ color: st.color }}

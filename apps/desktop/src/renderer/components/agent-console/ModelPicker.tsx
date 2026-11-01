@@ -427,7 +427,8 @@ export function ModelPicker({
   );
 
   return (
-    <div ref={ref} className={expanded ? 'h-full min-h-0 w-full min-w-0' : 'relative min-w-0 max-w-[240px]'}>
+    // min-w-20: squeezed by a phone-width strip, the chip used to wrap its name one letter per line.
+    <div ref={ref} className={expanded ? 'h-full min-h-0 w-full min-w-0' : 'relative min-w-20 max-w-[240px]'}>
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}><ContextAction onClick={() => { void window.nekko.updateSettings({defaultProviderId:menu.pid,defaultModelId:menu.mid}).then(() => refreshSettings()).catch(e => useStore.getState().pushToast('error', String(e))); setMenu(null); }}>Set as default</ContextAction></ContextMenu>}
       {!expanded && <button
         className="ctl-menu max-w-full"

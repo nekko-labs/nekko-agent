@@ -7,6 +7,7 @@ import { formatBytes, formatTokens, placementLabel, placementTitle } from '../ru
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
 import { ImageGeneration } from './ImageGeneration.js';
 import { gpuGuidance } from './modelFamilies.js';
+import { MiddleTruncate } from '../primitives/MiddleTruncate.js';
 
 /**
  * The models on this machine.
@@ -318,7 +319,7 @@ export function ModelLibrary({
           <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <CheckIcon className="h-3 w-3 shrink-0 text-success" />
-              <span className="min-w-0 max-w-full truncate font-medium">{m.name}</span>
+              <MiddleTruncate text={m.name} tail={20} className="max-w-full font-medium" />
               <span className="text-2xs text-ink-faint">{gpuGuidance(m.sizeBytes, undefined, m)}</span>
               {m.modality && m.modality !== 'chat' && (
                         <span
