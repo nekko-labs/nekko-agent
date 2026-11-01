@@ -69,7 +69,18 @@
     );
     reveals.forEach((el) => io.observe(el));
   }
-  window.addEventListener('scroll', showInView, { passive: true });
+  // The viewport check reads layout, so once a frame at most, and not at all
+  // once everything has been revealed.
+  let pending = 0;
+  const onScroll = () => {
+    if (pending) return;
+    pending = requestAnimationFrame(() => {
+      pending = 0;
+      showInView();
+      if (reveals.every((el) => el.classList.contains('in'))) window.removeEventListener('scroll', onScroll);
+    });
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
   showInView();
   window.addEventListener('load', showInView);
 
@@ -661,11 +672,28 @@
     last = now;
     draw();
   };
-  const start = () => { if (!raf && !reduced) { last = performance.now(); raf = requestAnimationFrame(loop); } };
+  // The wave moves only while the hero is on screen (and the tab is visible):
+  // past it, the dots hold their last frame instead of redrawing behind the
+  // content at 20 fps.
+  let heroVisible = true;
+  const start = () => { if (!raf && !reduced && heroVisible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(loop); } };
   const stop = () => { cancelAnimationFrame(raf); raf = 0; };
   size(); draw();
-  window.addEventListener('resize', () => { size(); draw(); });
+  // A phone's URL bar showing or hiding fires resize with only the height
+  // changed a little: keep the canvas rather than reallocating it.
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (window.innerWidth === W && Math.abs(window.innerHeight - H) < 120) return;
+      size(); draw();
+    }, 150);
+  });
   document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+  const hero = document.querySelector('.hero-band, .hero');
+  if (hero && 'IntersectionObserver' in window) {
+    new IntersectionObserver(([e]) => { heroVisible = e.isIntersecting; if (heroVisible) start(); else stop(); }).observe(hero);
+  }
   new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   start();
 })();
