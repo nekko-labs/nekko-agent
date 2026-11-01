@@ -53,6 +53,12 @@ describe('the prompt', () => {
     const html = memoryPromptHtml({ ...low, topApp: null });
     expect(html).not.toContain('value="close"'); expect(html).toContain('value="release"');
   });
+  it('wears the alarmed mascot and says what the Nekko option costs', () => {
+    const html = memoryPromptHtml(low);
+    expect(html).toContain('<header><svg viewBox="0 -7 34 39"');
+    expect(html).toContain("Shut down Nekko's local models<small>Agents using them stop.</small>");
+    expect(html).not.toContain('Free Nekko');
+  });
   it('reads only its own form', () => {
     expect(parseChoice('https://nekko.invalid/choose?app=PioneerGame&choice=close&remember=1')).toEqual({ choice: 'close', app: 'PioneerGame', remember: true });
     expect(parseChoice('https://nekko.invalid/choose?choice=ignore')).toEqual({ choice: 'ignore', app: undefined, remember: false });
@@ -69,7 +75,7 @@ describe('the watch', () => {
       calls.push(a);
       if (a[0] === 'memory:state') return state;
       if (a[0] === 'settings:get') return settings;
-      if (a[0] === 'engine:releaseIdle') return { unloaded: ['qwen'], freedBytes: 5 * GB, busy: 0 };
+      if (a[0] === 'engine:unloadAll') return { unloaded: ['qwen'], freedBytes: 5 * GB, stopped: 1 };
       if (a[0] === 'memory:closeApp') return { ok: true, processes: 1 };
       return {};
     }) };
@@ -90,9 +96,9 @@ describe('the watch', () => {
   it('frees Nekko memory without asking when that was remembered, and says so', async () => {
     const { calls, watch } = rig(low, { lowMemoryAction: 'release' });
     await watch.check();
-    expect(calls).toContainEqual(['engine:releaseIdle']);
+    expect(calls).toContainEqual(['engine:unloadAll']);
     const html = decodeURIComponent(mock.windows[0].loadURL.mock.calls[0][0]);
-    expect(html).toContain('Unloaded a local model (about 5.0 GB).');
+    expect(html).toContain('Shut down a local model (about 5.0 GB). An agent reply was stopped.');
     watch.dispose();
   });
   it('shows nothing over a full-screen game: the question waits, a remembered release runs quietly', async () => {
@@ -102,7 +108,7 @@ describe('the watch', () => {
     asked.watch.dispose();
     const { calls, watch } = rig(low, { lowMemoryAction: 'release' }, true);
     await watch.check();
-    expect(calls).toContainEqual(['engine:releaseIdle']);
+    expect(calls).toContainEqual(['engine:unloadAll']);
     expect(mock.windows).toHaveLength(0);
     watch.dispose();
   });

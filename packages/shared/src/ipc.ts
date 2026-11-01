@@ -125,8 +125,8 @@ export const IpcChannels = {
   memoryState: 'memory:state',
   /** Ask an app to close as a person would, so it can still ask to save. Never Nekko's own or the system's. */
   memoryCloseApp: 'memory:closeApp',
-  /** Unload every local model not replying, kept resident or not: the low-memory prompt's "Free Nekko's memory". */
-  engineReleaseIdle: 'engine:releaseIdle',
+  /** Shut down every loaded local model, mid-reply or kept resident: the low-memory prompt's "Shut down Nekko's local models". */
+  engineUnloadAll: 'engine:unloadAll',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */

@@ -69,25 +69,36 @@ export function leftLine(state: MemoryState): string {
     : `${gb(state.availableBytes)} of ${gb(state.totalBytes)} free`;
 }
 
-const STYLE = `*{box-sizing:border-box}html,body{height:100%;overflow:hidden}body{position:relative;margin:0;padding:14px 16px;background:#101714;color:#f2f1e9;font:13px system-ui;border:2px solid #e2b36b;border-radius:14px}h1{font-size:15px;margin:0 22px 4px 0}p{margin:0 0 10px;line-height:1.45;color:#cad6cb}form{display:flex;flex-direction:column;gap:6px}button{font:inherit;text-align:left;padding:6px 10px;border:1px solid #a7c8ac;border-radius:7px;background:transparent;color:#f2f1e9;cursor:pointer}button:hover{background:#ffffff14}button.primary{background:#a7c8ac;color:#101714;border-color:#a7c8ac}button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid white;outline-offset:2px}small{color:#9fb0a2}.primary small{color:#2f4a36}input{accent-color:#a7c8ac}label{display:flex;gap:6px;align-items:center;margin-top:4px;color:#cad6cb;font-size:12px}.x{position:absolute;top:6px;right:6px;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;color:#cad6cb;font-size:16px;text-decoration:none}.x:hover{background:#ffffff1a}`;
+const STYLE = `*{box-sizing:border-box}html,body{height:100%;overflow:hidden}body{position:relative;margin:0;padding:14px 16px;background:#101714;color:#f2f1e9;font:13px system-ui;border:2px solid #e2b36b;border-radius:14px}header{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}header svg{flex:none;width:44px;height:52px;image-rendering:pixelated}h1{font-size:15px;margin:2px 22px 4px 0}p{margin:0;line-height:1.45;color:#cad6cb}form{display:flex;flex-direction:column;gap:6px}button{font:inherit;text-align:left;padding:6px 10px;border:1px solid #a7c8ac;border-radius:7px;background:transparent;color:#f2f1e9;cursor:pointer}button:hover{background:#ffffff14}button.primary{background:#a7c8ac;color:#101714;border-color:#a7c8ac}button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid white;outline-offset:2px}small{color:#9fb0a2}button small{display:block;margin-top:1px;font-size:12px}.primary small{color:#2f4a36}input{accent-color:#a7c8ac}label{display:flex;gap:6px;align-items:center;margin-top:4px;color:#cad6cb;font-size:12px}.x{position:absolute;top:6px;right:6px;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;color:#cad6cb;font-size:16px;text-decoration:none}.x:hover{background:#ffffff1a}`;
 const page = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action https://nekko.invalid"><title>${title}</title><style>${STYLE}</style></head><body>${body}</body></html>`;
 
-/** The question: close the app, free Nekko's memory, or ignore; and whether to remember. No script: a form the main process reads from its navigation. */
+/**
+ * Nekko looking shocked, with the "!" over its right ear: the iOS refresh
+ * mascot's alarm pose (PixelCat `shocked`, PawArt `alarm`) on the same 32 x 32
+ * grid, with room above for the mark.
+ */
+export const ALERT_MASCOT = '<svg viewBox="0 -7 34 39" shape-rendering="crispEdges" aria-hidden="true">'
+  + '<path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#101714" stroke="#f2f1e9" stroke-width="2"/>'
+  + '<path d="M10 14H14V15H10Z M10 17H14V18H10Z M10 15H11V17H10Z M13 15H14V17H13Z M19 14H23V15H19Z M19 17H23V18H19Z M19 15H20V17H19Z M22 15H23V17H22Z M15 22H17V24H15Z" fill="#f2f1e9"/>'
+  + '<path d="M15 20H17V21H15Z" fill="#a7c8ac"/>'
+  + '<path d="M29 -7H32V-2H29Z M29 -1H32V2H29Z" fill="#e2b36b"/></svg>';
+
+/** The question: close the app, shut down Nekko's local models, or ignore; and whether to remember. No script: a form the main process reads from its navigation. */
 export function memoryPromptHtml(state: MemoryState): string {
   const app = state.topApp;
   const critical = state.level === 'critical';
-  return page('Nekko memory check', `<h1>${critical ? 'Memory is almost gone' : 'Memory is running low'}</h1>
-<p>${esc(leftLine(state))}.${app ? ` <b>${esc(app.name)}</b> holds ${gb(app.bytes)}.` : ''} Apps may crash when it runs out.</p>
+  return page('Nekko memory check', `<header>${ALERT_MASCOT}<div><h1>${critical ? 'Memory is almost gone' : 'Memory is running low'}</h1>
+<p>${esc(leftLine(state))}.${app ? ` <b>${esc(app.name)}</b> holds ${gb(app.bytes)}.` : ''} Apps may crash when it runs out.</p></div></header>
 <form action="https://nekko.invalid/choose" method="get">
-${app ? `<button class="primary" name="choice" value="close">Close ${esc(app.name)} <small>(it can still ask to save)</small></button><input type="hidden" name="app" value="${esc(app.name)}">` : ''}
-<button${app ? '' : ' class="primary"'} name="choice" value="release">Free Nekko's memory${state.nekkoBytes ? ` <small>(${gb(state.nekkoBytes)} now)</small>` : ''}</button>
+${app ? `<button class="primary" name="choice" value="close">Close ${esc(app.name)}<small>It can still ask you to save first.</small></button><input type="hidden" name="app" value="${esc(app.name)}">` : ''}
+<button${app ? '' : ' class="primary"'} name="choice" value="release">Shut down Nekko's local models<small>Agents using them stop.</small></button>
 <button name="choice" value="ignore">Ignore</button>
 <label><input type="checkbox" name="remember" value="1"> Remember this choice</label>
 </form><a class="x" href="https://nekko.invalid/dismiss" aria-label="Dismiss" title="Dismiss">&#215;</a>`);
 }
 
 export function memoryResultHtml(message: string): string {
-  return page('Nekko memory check', `<h1>Memory was low</h1><p>${esc(message)}</p><a class="x" href="https://nekko.invalid/dismiss" aria-label="Dismiss" title="Dismiss">&#215;</a>`);
+  return page('Nekko memory check', `<header>${ALERT_MASCOT}<div><h1>Memory was low</h1><p>${esc(message)}</p></div></header><a class="x" href="https://nekko.invalid/dismiss" aria-label="Dismiss" title="Dismiss">&#215;</a>`);
 }
 
 /** Reads a choice out of the prompt's form navigation. */
@@ -135,12 +146,13 @@ export function createMemoryWatch(options: { tray: Tray; engine: EngineProcess; 
     timer = setTimeout(dismiss, ms);
   };
   let hushed = false;
-  const tell = (message: string) => hushed ? Promise.resolve() : show(memoryResultHtml(message), 110, RESULT_MS);
+  const tell = (message: string) => hushed ? Promise.resolve() : show(memoryResultHtml(message), 100, RESULT_MS);
 
   const release = async (): Promise<string> => {
-    const r = await engine.call<{ unloaded: string[]; freedBytes: number; busy: number }>(IpcChannels.engineReleaseIdle);
-    const freed = r.unloaded.length ? `Unloaded ${r.unloaded.length === 1 ? 'a local model' : `${r.unloaded.length} local models`} (about ${gb(r.freedBytes)}).` : 'No local model was idle to unload.';
-    return r.busy ? `${freed} ${r.busy === 1 ? 'One is' : `${r.busy} are`} still replying and stayed.` : freed;
+    const r = await engine.call<{ unloaded: string[]; freedBytes: number; stopped: number }>(IpcChannels.engineUnloadAll);
+    if (!r.unloaded.length) return 'No local model was loaded, so there was nothing to shut down.';
+    const shut = `Shut down ${r.unloaded.length === 1 ? 'a local model' : `${r.unloaded.length} local models`} (about ${gb(r.freedBytes)}).`;
+    return r.stopped ? `${shut} ${r.stopped === 1 ? 'An agent reply was' : `${r.stopped} agent replies were`} stopped.` : shut;
   };
   const close = async (app: string): Promise<string> => {
     const r = await engine.call<{ ok: boolean; message?: string }>(IpcChannels.memoryCloseApp, app);
@@ -167,7 +179,7 @@ export function createMemoryWatch(options: { tray: Tray; engine: EngineProcess; 
       if (step.kind === 'release') await act('release', undefined);
       else if (step.kind === 'close') await act('close', step.app);
       else {
-        await show(memoryPromptHtml(state), state.topApp ? 236 : 176, MEMORY_PROMPT_MS, url => {
+        await show(memoryPromptHtml(state), state.topApp ? 298 : 224, MEMORY_PROMPT_MS, url => {
           const picked = parseChoice(url);
           if (!picked) return;
           dismiss();
