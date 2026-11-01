@@ -19,7 +19,8 @@ Fast switching between local models through residency tiers (Hot, Warm in RAM, S
 - [ ] **MS2, Schedule-aware preload.** Forecast from scheduled tasks, workflow steps, active sessions and role models; lead time from persisted load times; eviction by score; reasons; Up next strip.
 - [ ] **MS2-1, Share the machine with heavy programs.** Other processes' VRAM (NVML, DXGI `QueryVideoMemoryInfo`, Metal working set), a full-screen app in front (`activity:fullscreen`), the top RAM holder: no speculative preloads or staging, a smaller Warm budget and idle Hot models demoted while a game or other heavy app runs; re-plan when it closes; say so in the monitor chip.
 - [ ] **MS3, SSD staging** for libraries on slow or removable storage.
-- [ ] **MS4, Learn and extend.** Usage patterns, slot save/restore, Ollama and LM Studio preload, MCP `preload` hint.
+- [ ] **MS4, Learn and extend.** Usage patterns (MS4-1), slot save/restore, Ollama and LM Studio preload, MCP `preload` hint.
+- [ ] **MS4-1, Learn from past use with decayed counters, no trained model** (#1462 section 6). Per model: time-of-week counts (168 hourly slots), "after A comes B" transition counts, and a reuse-gap histogram, all exponentially decayed and updated in O(1) per use, stored as a small JSON file in the data dir. Strongest signal per model becomes P(use within horizon) for the planner score; explicit signals (schedules, workflow steps, sessions) always win. Ski-rental spin-down until a model has enough reuse-gap samples, then an adaptive TTL. Seed from `usage.jsonl` on first run; log each forecast's outcome (hit rate, wasted preloads); daily idle replay of two weeks over a small grid of half-life, threshold and horizon; pause habit-based preloads when the hit rate drops. Done when replay on a seeded history beats LRU with the fixed idle TTL on hit rate without raising wasted preloads past the budget.
 
 ## Two-step CI runner setup (#1467, added 2026-11-01)
 

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
 import type { GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
 import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -97,6 +98,13 @@ export function ModelLibrary({
   const [importing, setImporting] = useState(false);
   const [importPath, setImportPath] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  /** Rows rendered before "Show more"; a new search or filter starts over. */
+  const [shown, setShown] = useState(LIST_PAGE);
+  const [pagedFor, setPagedFor] = useState({ query, filter });
+  if (pagedFor.query !== query || pagedFor.filter !== filter) {
+    setPagedFor({ query, filter });
+    setShown(LIST_PAGE);
+  }
 
   const unload = async (id: string) => {
     setBusy(id);
@@ -203,6 +211,9 @@ export function ModelLibrary({
     );
   }, [visible]);
 
+  /** The page of rows on screen: a big library does not mount every row. */
+  const paged = useMemo(() => pageGroups(groups, shown), [groups, shown]);
+
   /** Residency, by model id: where a loaded model actually sits. */
   const residentById = useMemo(() => new Map((resident ?? []).map((r) => [r.id, r])), [resident]);
 
@@ -286,7 +297,7 @@ export function ModelLibrary({
         </p>
       ) : (
         <div>
-          {groups.map(([loc, ms]) => (
+          {paged.groups.map(([loc, ms]) => (
             <div key={loc} className="mt-2">
               {groups.length > 1 && (
                 <p className="px-1 pb-1 pt-1 text-xs font-medium text-ink-soft">{loc}</p>
@@ -294,6 +305,16 @@ export function ModelLibrary({
               <div className="space-y-1">{ms.map(renderRow)}</div>
             </div>
           ))}
+          {paged.hidden > 0 && (
+            <button
+              type="button"
+              data-model-library-more
+              className="mt-2 w-full rounded-lg px-3 py-1.5 text-left text-xs text-ink-faint hover:bg-surface-2 hover:text-ink"
+              onClick={() => setShown((n) => n + LIST_PAGE)}
+            >
+              {showMoreLabel(paged.hidden)}
+            </button>
+          )}
         </div>
       )}
     </div>

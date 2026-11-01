@@ -877,6 +877,10 @@ struct Composer: View {
                     }
                 }
             }
+            // The agent's plan, tucked behind the box's top edge (drawn first, so the box covers its foot).
+            if !PlanSheet.plan(chat, store).isEmpty {
+                PlanSheet(chat: chat).padding(.bottom, -(PlanSheet.tuck + 6))
+            }
             // One box the width of the screen: the message on top, + and Send inside it below.
             VStack(alignment: .leading, spacing: 0) {
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's

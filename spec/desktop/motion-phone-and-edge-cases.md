@@ -39,10 +39,13 @@ User intent: motion should never fight the user or cost frames, the Local Web UI
 - **Phone width.** The skills marketplace stacks its shelves above the detail below md; download rows wrap their progress under the file name; schedule kind tiles stack below 360px; the composer's model chip keeps a minimum width.
 - **Numbers.** Byte sizes under a megabyte read in KB or B (not "0 MB" / "0 GB"); stars, installs and downloads use compact `Intl` formatting ("1M", not "1000k"); "1 step", "1 skill"; a NaN download reading counts as unknown.
 - **Big folders.** The file tree shows 200 entries per folder, then "Show N more"; an empty folder says so and an unreadable one says it can't be read.
+- **Long lists page.** The chat list's Completed group and the model library render 50 rows, then "Show 50 more of N"; a selected or just-completed chat is always among the rendered rows, and a new library search or filter starts from the first page. Paging rather than the transcript's windowing, because both lists sit inside other scrollers with groups and expanding rows.
+- **Toasts stay few.** At most 3 toasts show at once; a new one pushes the oldest info or success out first, so an error outlives later chatter. Infos and successes leave after 5 s; errors stay until clicked or closed (they carry a close button). A dismissed toast fades down over 160 ms with an ease-out; with reduced motion it just goes.
 
 ## Status
 
 - Implemented: everything above. Measured numbers are in `docs/perf-history.md` (2026-11-01).
 - Phone: verified in headless Chromium with touch and mobile emulation at 320 and 390px; not checked on a real iPhone or Android device (safe areas and zoom-on-focus need hardware).
-- Not done from the edge-case audit: toasts are not capped or sticky for errors and have no exit motion; the chat list's Completed group and the model library are not virtualized or paged; a pasted 50k-character prompt is not clamped; token and duration stats in the done row are not compact (`2400k in`). The RunBoard best-run label (`slice(0, 26)`) is left for the change already editing that file.
+- Done from the edge-case audit (#1478): toasts are capped, sticky for errors and have an exit motion; the chat list's Completed group and the model library are paged. Verified in a headless Chromium fixture of the real App with 400 completed chats and 400 models, not on a real library.
+- Not done from the edge-case audit: a pasted 50k-character prompt is not clamped; token and duration stats in the done row are not compact (`2400k in`). The RunBoard best-run label (`slice(0, 26)`) is left for the change already editing that file.
 - Not done: the held window card still moves by left/top per pointer move (one fixed element), and the rail's hover expansion still animates its width (bounded to the rail).
