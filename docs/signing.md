@@ -87,6 +87,9 @@ process could then boot a VM.
   then signs `nekko-vm` again with its own file and reseals the app.
 - **Staging:** `stage-daemon.mjs` builds `nekko-vm` with `xcrun swiftc` and
   stages it beside nekkod. On Apple silicon a packaged build fails if it cannot.
+  The image builder's guest scripts go beside it in `runner-image/`. They are
+  text, so they are never signed, and `check-mac-entitlements.sh` skips that folder.
+  Building with the macOS 27 SDK is what gives `nekko-vm` first-boot support.
 
 `scripts/check-mac-entitlements.sh <app>` reads the entitlements of the app,
 every helper app under `Contents/Frameworks` and every file under

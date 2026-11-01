@@ -1657,6 +1657,9 @@ A Mac running Nekko Agent becomes a sandboxed GitHub Actions self-hosted runner,
   - Done 2026-10-25: spec, decision 0022 notes and the guest image requirements.
   - Pending: one real GitLab job end to end, with the guest image (T214 or Layer E).
   - Pending: a GitLab connect sheet in the desktop UI.
+- [ ] **T226** The image builder: one action builds the runner image from Apple's restore image and this Mac's Xcode, with no Tart and no terminal. Added: 2026-11-01. Issue #1467. [Decision 0038](docs/decisions/0038-image-builder-reaches-a-build-vm-over-ssh.md).
+  - Done 2026-11-01: `nekko-vm` gains `restore-image`, `install` and first-boot options on `run`, taken from the spike without its shared folder. `NetConfig.forward` loses its feature gate: `job_net_config` is the job path and `HelperVm::start_build`, off the `Vm` trait, is the only place that sets it. `xcode_source`, `tar_rename_arg`. The guest scripts stage in `runner-image/` beside `nekko-vm`, and `check-mac-entitlements.sh` skips that folder.
+  - Done 2026-11-01: the job. `runner/image.rs`: `BuildHost` (faked in `image_tests.rs`), `RealBuildHost`, `build.json`, the first-boot checkpoint, the gates between stages, a limit on every guest command, and `runner:imageStatus`, `imageBuild`, `imageResume`, `imageCancel` with the `runner:imageChanged` push. The supervisor holds the Mac awake while `building` is set. Shared types and the preload and web-client wiring for layer 3 (T227).
 
 ### Chat completion X icons ([#533](https://github.com/nekko-labs/nekko-agent/issues/533))
 

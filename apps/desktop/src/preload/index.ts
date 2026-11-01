@@ -356,6 +356,10 @@ const api: NekkoApi = {
   listWorkflowRuns: (workflowId) => inv(IpcChannels.workflowRuns, workflowId),
   listWorkflowSkillDefs: () => inv(IpcChannels.workflowSkillDefs),
   dispatchWorkflowEvent: (event) => inv(IpcChannels.workflowEvent, event),
+  imageStatus: () => inv(IpcChannels.runnerImageStatus),
+  buildImage: (req) => inv(IpcChannels.runnerImageBuild, req),
+  resumeImage: () => inv(IpcChannels.runnerImageResume),
+  cancelImage: () => inv(IpcChannels.runnerImageCancel),
   listRunners: () => inv(IpcChannels.runnerList),
   connectRunner: (req) => inv(IpcChannels.runnerConnect, req),
   updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
@@ -504,6 +508,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, snapshot: import('@nekko-agent/shared').WorkflowsSnapshot) => cb(snapshot);
     bus.on(IpcEvents.workflowsUpdated, listener);
     return () => bus.removeListener(IpcEvents.workflowsUpdated, listener);
+  },
+  onImageChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').ImageView) => cb(view);
+    bus.on(IpcEvents.runnerImageChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerImageChanged, listener);
   },
   onRunnersChanged: (cb) => {
     const listener = (_: unknown, views: import('@nekko-agent/shared').RunnerView[]) => cb(views);

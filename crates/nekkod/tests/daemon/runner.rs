@@ -4,6 +4,27 @@
 
 use crate::common::*;
 
+/// With no helper the job still answers, and Check would say why it cannot run.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn image_channels_answer_with_nothing_built() {
+    let data = tempfile::tempdir().unwrap();
+    let d = start_with(data.path());
+    let (status, view) = post(d.port, "runner:imageStatus", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{view}");
+    assert_eq!((view["state"].as_str(), view["canResume"].as_bool()), (Some("none"), Some(false)), "{view}");
+
+    let (status, err) = post(d.port, "runner:imageResume", json!([]), Some(TOKEN)).await;
+    assert!(status >= 400, "{err}");
+    assert_eq!(err["error"], "There is no setup to resume.");
+
+    let (status, err) = post(d.port, "runner:imageBuild", json!([{ "kind": "windows" }]), Some(TOKEN)).await;
+    assert!(status >= 400, "{err}");
+
+    let (status, view) = post(d.port, "runner:imageCancel", json!([]), Some(TOKEN)).await;
+    assert_eq!((status, view["state"].as_str()), (200, Some("none")), "{view}");
+}
+
 // VMs run only on macOS; elsewhere the runner channels are unknown, which the UI shows as unavailable.
 #[cfg(windows)]
 #[tokio::test(flavor = "multi_thread")]

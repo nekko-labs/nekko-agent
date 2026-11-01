@@ -28,9 +28,9 @@ the image itself has not yet been booted in a VM.
 
 - **An Apple silicon Mac.** Windows and Linux show "CI runners aren't available here", and a Mac
   that cannot run VMs shows "VM support unavailable" on the runner card.
-- **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. There is no
-  download in this version: you build the image yourself with the
-  [image guide](ci-runners-image.md). Until an image exists, the runner card shows `No VM image yet.`
+- **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. On macOS 27
+  Nekko builds it from Apple's restore image; on macOS 26 you
+  [bring your own](ci-runners-image.md). Until an image exists, the runner card shows `No VM image yet.`
 - **A build with VM support.** The `nekko-vm` helper needs Apple's virtualization entitlement.
   Development builds sign it themselves, and packaged builds sign it with its own entitlement
   (see [signing](signing.md#the-vm-helpers-entitlement)). A Developer ID signed release with it
