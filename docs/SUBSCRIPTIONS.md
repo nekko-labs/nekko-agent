@@ -11,7 +11,7 @@ To use Claude in Nekko Agent, choose **Add provider → Claude**. One table comp
 - **Subscription** - Nekko Agent runs the Claude Code you already have installed, on your Pro, Max or Team plan. You sign in inside Claude Code itself; Nekko Agent never sees that sign-in and never reads Claude Code's credentials. Chat, code edits, approvals and the phone remote work. Scheduled tasks, Nekko's own tools inside the chat, and usage limits in Nekko are off for now, because Anthropic's terms don't clearly cover them for third-party apps. If Anthropic has approved your own use of them in writing, you can turn them on (see below).
 - **API** - An Anthropic API key, or Claude through Amazon Bedrock, Google Vertex AI or Microsoft Foundry. Every Nekko Agent feature works, billed per token to that account.
 
-Below the table, **How Nekko works with Claude** draws the option you picked: with API, everything runs inside Nekko on your computer and only the API call goes out; with Subscription, Nekko hands each turn to Claude Code, which runs beside it and calls Claude on your plan.
+Below the table, **How Nekko works with Claude** draws the option you picked: with API, everything runs inside Nekko on your computer and only the API call goes out; with Subscription, Nekko hands each turn to Claude Code, which runs beside it and calls Claude on your plan. Claude subscription models appear as the Opus, Sonnet and Haiku family aliases. Claude Code chooses the exact version; after a turn, the selected model's picker row shows the version Claude Code reported.
 
 When you pick Claude, Nekko first checks whether Claude Code is installed (it runs `claude --version` and `claude auth status`). If it isn't, **Install Claude Code** opens a terminal inside Nekko and runs Anthropic's own installer (`curl -fsSL https://claude.ai/install.sh | bash`, or `irm https://claude.ai/install.ps1 | iex` on Windows). If it isn't signed in, **Connect** opens Claude Code in that terminal so you can type `/login`. Once it's connected, the panel says so in green, with the account and plan it uses.
 
@@ -42,6 +42,8 @@ The model picker switches a chat between your accounts in one click; see [Accoun
 The email comes from the ChatGPT `id_token`, stays in `tokens.json` next to the token, and is not part of a settings export. A plan signed in before this was added shows no email until you sign it in again. API keys and OpenRouter keys carry no email, so they show just the provider name.
 
 ## Caveats
+
+ChatGPT lists the models its signed-in account's API catalog reports, cached for up to five minutes for that provider configuration. Nekko does not insert a guessed model when the catalog omits it. If the API cannot be reached and there is no fresh cached result, the model list reports an error instead of showing a compiled-in list; retry after reconnecting. The provider card's optional custom model id is a user-supplied override, not a claim that the account can run it.
 
 The ChatGPT OAuth client is the same first-party client the Codex CLI uses. OpenAI's consumer terms are written around its own apps, so the flow may stop working at any time if OpenAI rotates the client id, changes a scope, or blocks the client. The API-key options are unaffected.
 

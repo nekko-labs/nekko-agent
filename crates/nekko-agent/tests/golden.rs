@@ -344,12 +344,6 @@ async fn only_a_shipped_catalog_is_flagged_as_the_fallback() {
         "anthropic-401-falls-back",
         "anthropic-malformed-falls-back",
         "anthropic-empty-falls-back",
-        "chatgpt-catalog-404-falls-back",
-        "chatgpt-catalog-empty-falls-back",
-        "chatgpt-catalog-wrong-shape-falls-back",
-        "chatgpt-no-account",
-        "chatgpt-custom",
-        "chatgpt-custom-duplicate",
     ];
     for c in cases.as_array().unwrap() {
         let name = c["name"].as_str().unwrap();
