@@ -22,7 +22,8 @@ final class RelayIntegrationTests: XCTestCase {
     }
 
     /// The phone testB enrolled, so later tests reconnect without a (single-use) code.
-    static var enrolled: String?
+    /// XCTest runs this case's tests one after another, in order, so nothing races on it.
+    nonisolated(unsafe) static var enrolled: String?
 
     static let env: Env? = {
         let e = ProcessInfo.processInfo.environment

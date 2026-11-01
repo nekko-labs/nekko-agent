@@ -233,7 +233,7 @@ public final class ComputersStore {
     // MARK: Wiring
 
     private let store: SecureStore
-    private let makeConnection: (RelayConfig) -> RemoteConnection
+    private let makeConnection: @MainActor (RelayConfig) -> RemoteConnection
     private let deviceName: () -> String
     private let deriveKey: @Sendable (String, String) async -> Data
     private let newId: () -> String
@@ -266,7 +266,7 @@ public final class ComputersStore {
     private var offlineComputer: String?
 
     public init(store: SecureStore,
-                makeConnection: @escaping (RelayConfig) -> RemoteConnection,
+                makeConnection: @escaping @MainActor (RelayConfig) -> RemoteConnection,
                 deviceName: @escaping () -> String,
                 platform: String = "ios",
                 app: String? = nil,
@@ -910,7 +910,7 @@ public final class ComputersStore {
                 var config = base
                 config.relayUrl = route
                 config.handshakeTimeout = 8
-                return await Self.hello(make(config), computer: name)
+                return await Self.hello(await make(config), computer: name)
             }
             guard active?.id == computer.id, i < checks.count else { return }
             checks[i] = report
@@ -1085,16 +1085,20 @@ public final class ComputersStore {
                 modelErrors[id] = nil
             }
         }
-        await withTaskGroup(of: Void.self) { group in
+        // Children report their error; the store is written here, on the main actor.
+        await withTaskGroup(of: (id: String, error: String?).self) { group in
             for id in enabled {
-                group.addTask { @MainActor in
+                group.addTask { [self] in
                     do {
                         try await self.loadModels(id)
+                        return (id, nil)
                     } catch {
-                        let m = error.localizedDescription
-                        self.modelErrors[id] = m.hasSuffix("timed out") ? "Didn’t answer in time." : m
+                        return (id, error.localizedDescription)
                     }
                 }
+            }
+            for await (id, m) in group {
+                if let m { modelErrors[id] = m.hasSuffix("timed out") ? "Didn’t answer in time." : m }
             }
         }
     }

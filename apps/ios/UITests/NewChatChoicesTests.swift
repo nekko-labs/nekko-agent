@@ -1,6 +1,7 @@
 import XCTest
 
 /// No paired computer, network or user data: the real New chat with a seeded draft.
+@MainActor
 final class NewChatChoicesTests: XCTestCase {
     func testConcreteChoicesAndIndependentRecommendations() {
         let app = launch()

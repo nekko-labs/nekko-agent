@@ -17,8 +17,11 @@ final class CloudMachinesTests: XCTestCase {
         var machines: [JSONValue] = []
         var calls: [(String, String, JSONValue)] = []
         let lock = NSLock()
-
         func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
+            reply(method, url, headers: headers, body: body)
+        }
+
+        private func reply(_ method: String, _ url: URL, headers: [String: String], body: Data?) -> (Int, Data) {
             lock.lock(); defer { lock.unlock() }
             let b = body.flatMap { try? JSONValue.parse($0) } ?? .null
             calls.append((method, url.path, b))
