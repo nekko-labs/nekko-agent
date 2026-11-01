@@ -8,7 +8,7 @@
     },
     "diffusion": {
       "repo": "leejet/stable-diffusion.cpp",
-      "tag": "master-929-3f8527a"
+      "tag": "master-1009-e6370bf"
     }
   },
   "gpus": {
@@ -3142,14 +3142,14 @@
     "llama-b11224-xcframework.zip"
   ],
   "sdAssetNames": [
-    "sd-master-929-3f8527a-bin-win-cuda12-x64.zip",
-    "sd-master-929-3f8527a-bin-win-vulkan-x64.zip",
-    "sd-master-929-3f8527a-bin-win-cpu-x64.zip",
-    "sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip",
-    "sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip",
-    "sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
-    "sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip",
-    "sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip",
+    "sd-master-1009-e6370bf-bin-win-cuda12-x64.zip",
+    "sd-master-1009-e6370bf-bin-win-vulkan-x64.zip",
+    "sd-master-1009-e6370bf-bin-win-cpu-x64.zip",
+    "sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip",
+    "sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip",
+    "sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
+    "sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip",
+    "sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip",
     "cudart-sd-bin-win-cu12-x64.zip"
   ],
   "assets": [
@@ -3229,56 +3229,56 @@
       "id": "sd-win-x64-cuda",
       "platform": "win32",
       "arch": "x64",
-      "asset": "sd-master-929-3f8527a-bin-win-cuda12-x64.zip",
+      "asset": "sd-master-1009-e6370bf-bin-win-cuda12-x64.zip",
       "companion": "cudart-sd-bin-win-cu12-x64.zip"
     },
     {
       "id": "sd-win-x64-vulkan",
       "platform": "win32",
       "arch": "x64",
-      "asset": "sd-master-929-3f8527a-bin-win-vulkan-x64.zip",
+      "asset": "sd-master-1009-e6370bf-bin-win-vulkan-x64.zip",
       "companion": null
     },
     {
       "id": "sd-win-x64-cpu",
       "platform": "win32",
       "arch": "x64",
-      "asset": "sd-master-929-3f8527a-bin-win-cpu-x64.zip",
+      "asset": "sd-master-1009-e6370bf-bin-win-cpu-x64.zip",
       "companion": null
     },
     {
       "id": "sd-win-x64-rocm",
       "platform": "win32",
       "arch": "x64",
-      "asset": "sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip",
+      "asset": "sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip",
       "companion": null
     },
     {
       "id": "sd-linux-x64-vulkan",
       "platform": "linux",
       "arch": "x64",
-      "asset": "sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
+      "asset": "sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
       "companion": null
     },
     {
       "id": "sd-linux-x64-cpu",
       "platform": "linux",
       "arch": "x64",
-      "asset": "sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip",
+      "asset": "sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip",
       "companion": null
     },
     {
       "id": "sd-linux-x64-rocm",
       "platform": "linux",
       "arch": "x64",
-      "asset": "sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip",
+      "asset": "sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip",
       "companion": null
     },
     {
       "id": "sd-macos-arm64-metal",
       "platform": "darwin",
       "arch": "arm64",
-      "asset": "sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip",
+      "asset": "sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip",
       "companion": null
     }
   ],
@@ -4718,41 +4718,41 @@
       "arch": "x64",
       "gpu": "nvidia",
       "http": {
-        "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-929-3f8527a": {
+        "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-1009-e6370bf": {
           "status": 200,
-          "body": "{\"tag_name\":\"master-929-3f8527a\",\"assets\":[{\"name\":\"sd-master-929-3f8527a-bin-win-cuda12-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-win-cuda12-x64.zip\",\"size\":47},{\"name\":\"sd-master-929-3f8527a-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-win-vulkan-x64.zip\",\"size\":47},{\"name\":\"sd-master-929-3f8527a-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-win-cpu-x64.zip\",\"size\":44},{\"name\":\"sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip\",\"size\":49},{\"name\":\"sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip\",\"size\":58},{\"name\":\"sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"size\":65},{\"name\":\"sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip\",\"size\":67},{\"name\":\"sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip\",\"size\":56},{\"name\":\"cudart-sd-bin-win-cu12-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-sd-bin-win-cu12-x64.zip\",\"size\":33},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"master-1009-e6370bf\",\"assets\":[{\"name\":\"sd-master-1009-e6370bf-bin-win-cuda12-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-win-cuda12-x64.zip\",\"size\":47},{\"name\":\"sd-master-1009-e6370bf-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-win-vulkan-x64.zip\",\"size\":47},{\"name\":\"sd-master-1009-e6370bf-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-win-cpu-x64.zip\",\"size\":44},{\"name\":\"sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip\",\"size\":49},{\"name\":\"sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip\",\"size\":58},{\"name\":\"sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"size\":65},{\"name\":\"sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip\",\"size\":67},{\"name\":\"sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip\",\"size\":56},{\"name\":\"cudart-sd-bin-win-cu12-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-sd-bin-win-cu12-x64.zip\",\"size\":33},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-win-cuda12-x64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-win-cuda12-x64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-win-cuda12-x64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-win-cuda12-x64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-win-vulkan-x64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-win-vulkan-x64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-win-vulkan-x64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-win-vulkan-x64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-win-cpu-x64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-win-cpu-x64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-win-cpu-x64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-win-cpu-x64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip"
         },
         "https://dl.test/cudart-sd-bin-win-cu12-x64.zip": {
           "status": 200,
@@ -4760,7 +4760,7 @@
         }
       },
       "archives": {
-        "sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip": [
+        "sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip": [
           "sd-server",
           "libstable-diffusion.so"
         ]
@@ -4784,28 +4784,28 @@
       ],
       "outs": [
         "{\"available\":[{\"id\":\"sd-linux-x64-vulkan\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"sd-linux-x64-cpu\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"cpu\",\"requires\":\"Any x64 Linux. Slower, but always works.\"},{\"id\":\"sd-linux-x64-rocm\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"hip\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"sd-linux-x64-vulkan\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},\"reason\":\"No engine installed yet. Nekko Agent can download one, or point it at a llama-server you already have.\"}",
-        "{\"runtime\":\"diffusion\",\"version\":\"master-929-3f8527a\",\"build\":{\"id\":\"sd-linux-x64-vulkan\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},\"files\":[{\"name\":\"sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"sizeBytes\":65}],\"sizeBytes\":65}",
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading stable-diffusion.cpp master-929-3f8527a.\",\"jobId\":\"engine:diffusion:sd-linux-x64-vulkan\"},\"job\":{\"id\":\"engine:diffusion:sd-linux-x64-vulkan\",\"kind\":\"engine\",\"label\":\"stable-diffusion.cpp master-929-3f8527a (vulkan)\",\"target\":\"sd-linux-x64-vulkan\",\"dest\":\"<root>/engine/sd-linux-x64-vulkan/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"state\":\"done\",\"receivedBytes\":65,\"startedAt\":1700000000000,\"finishedAt\":1700000000000}}",
-        "{\"binPath\":\"<root>/engine/sd-linux-x64-vulkan/sd-server\",\"source\":\"managed\",\"backend\":\"vulkan\",\"version\":\"master-929-3f8527a\",\"installedAt\":1700000000000,\"available\":[{\"id\":\"sd-linux-x64-vulkan\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"sd-linux-x64-cpu\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"cpu\",\"requires\":\"Any x64 Linux. Slower, but always works.\"},{\"id\":\"sd-linux-x64-rocm\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"hip\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"sd-linux-x64-vulkan\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"}}",
+        "{\"runtime\":\"diffusion\",\"version\":\"master-1009-e6370bf\",\"build\":{\"id\":\"sd-linux-x64-vulkan\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},\"files\":[{\"name\":\"sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"sizeBytes\":65}],\"sizeBytes\":65}",
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading stable-diffusion.cpp master-1009-e6370bf.\",\"jobId\":\"engine:diffusion:sd-linux-x64-vulkan\"},\"job\":{\"id\":\"engine:diffusion:sd-linux-x64-vulkan\",\"kind\":\"engine\",\"label\":\"stable-diffusion.cpp master-1009-e6370bf (vulkan)\",\"target\":\"sd-linux-x64-vulkan\",\"dest\":\"<root>/engine/sd-linux-x64-vulkan/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"state\":\"done\",\"receivedBytes\":65,\"startedAt\":1700000000000,\"finishedAt\":1700000000000}}",
+        "{\"binPath\":\"<root>/engine/sd-linux-x64-vulkan/sd-server\",\"source\":\"managed\",\"backend\":\"vulkan\",\"version\":\"master-1009-e6370bf\",\"installedAt\":1700000000000,\"available\":[{\"id\":\"sd-linux-x64-vulkan\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"sd-linux-x64-cpu\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"cpu\",\"requires\":\"Any x64 Linux. Slower, but always works.\"},{\"id\":\"sd-linux-x64-rocm\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"hip\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"sd-linux-x64-vulkan\",\"platform\":\"linux\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"A GPU with Vulkan drivers. On a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"}}",
         "{\"ok\":true,\"message\":\"Removed the engine.\"}"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-929-3f8527a",
+          "url": "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-1009-e6370bf",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-929-3f8527a",
+          "url": "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-1009-e6370bf",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
+          "url": "https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
           "headers": {}
         }
       ],
@@ -4821,7 +4821,7 @@
         [
           "tar",
           "-xf",
-          "<root>/engine/sd-linux-x64-vulkan/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
+          "<root>/engine/sd-linux-x64-vulkan/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
           "-C",
           "<root>/engine/sd-linux-x64-vulkan"
         ]
@@ -4838,41 +4838,41 @@
       "arch": "x64",
       "gpu": "nvidia",
       "http": {
-        "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-929-3f8527a": {
+        "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-1009-e6370bf": {
           "status": 200,
-          "body": "{\"tag_name\":\"master-929-3f8527a\",\"assets\":[{\"name\":\"sd-master-929-3f8527a-bin-win-cuda12-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-win-cuda12-x64.zip\",\"size\":47},{\"name\":\"sd-master-929-3f8527a-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-win-vulkan-x64.zip\",\"size\":47},{\"name\":\"sd-master-929-3f8527a-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-win-cpu-x64.zip\",\"size\":44},{\"name\":\"sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip\",\"size\":49},{\"name\":\"sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip\",\"size\":58},{\"name\":\"sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"size\":65},{\"name\":\"sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip\",\"size\":67},{\"name\":\"sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip\",\"size\":56},{\"name\":\"cudart-sd-bin-win-cu12-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-sd-bin-win-cu12-x64.zip\",\"size\":33},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
+          "body": "{\"tag_name\":\"master-1009-e6370bf\",\"assets\":[{\"name\":\"sd-master-1009-e6370bf-bin-win-cuda12-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-win-cuda12-x64.zip\",\"size\":47},{\"name\":\"sd-master-1009-e6370bf-bin-win-vulkan-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-win-vulkan-x64.zip\",\"size\":47},{\"name\":\"sd-master-1009-e6370bf-bin-win-cpu-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-win-cpu-x64.zip\",\"size\":44},{\"name\":\"sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip\",\"size\":49},{\"name\":\"sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip\",\"size\":58},{\"name\":\"sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip\",\"size\":65},{\"name\":\"sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip\",\"size\":67},{\"name\":\"sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip\",\"browser_download_url\":\"https://dl.test/sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip\",\"size\":56},{\"name\":\"cudart-sd-bin-win-cu12-x64.zip\",\"browser_download_url\":\"https://dl.test/cudart-sd-bin-win-cu12-x64.zip\",\"size\":33},{\"name\":\"no-url.zip\",\"size\":3},{\"name\":\"zero-size.zip\",\"browser_download_url\":\"https://dl.test/zero\",\"size\":0}]}"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-win-cuda12-x64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-win-cuda12-x64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-win-cuda12-x64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-win-cuda12-x64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-win-vulkan-x64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-win-vulkan-x64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-win-vulkan-x64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-win-vulkan-x64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-win-cpu-x64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-win-cpu-x64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-win-cpu-x64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-win-cpu-x64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-win-rocm-6.4-x64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-win-rocm-6.4-x64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-Linux-Ubuntu-24.04-x86_64-rocm-6.4.zip"
         },
-        "https://dl.test/sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip": {
+        "https://dl.test/sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip": {
           "status": 200,
-          "body": "sd sd-master-929-3f8527a-bin-Darwin-macOS-15.6-arm64.zip"
+          "body": "sd sd-master-1009-e6370bf-bin-Darwin-macOS-15.6-arm64.zip"
         },
         "https://dl.test/cudart-sd-bin-win-cu12-x64.zip": {
           "status": 200,
@@ -4880,7 +4880,7 @@
         }
       },
       "archives": {
-        "sd-master-929-3f8527a-bin-win-cuda12-x64.zip": [
+        "sd-master-1009-e6370bf-bin-win-cuda12-x64.zip": [
           "sd-server.exe"
         ],
         "cudart-sd-bin-win-cu12-x64.zip": [
@@ -4899,27 +4899,27 @@
         }
       ],
       "outs": [
-        "{\"runtime\":\"diffusion\",\"version\":\"master-929-3f8527a\",\"build\":{\"id\":\"sd-win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-sd\"},\"files\":[{\"name\":\"sd-master-929-3f8527a-bin-win-cuda12-x64.zip\",\"sizeBytes\":47},{\"name\":\"cudart-sd-bin-win-cu12-x64.zip\",\"sizeBytes\":33}],\"sizeBytes\":80}",
-        "{\"res\":{\"ok\":true,\"message\":\"Downloading stable-diffusion.cpp master-929-3f8527a.\",\"jobId\":\"engine:diffusion:sd-win-x64-cuda\"},\"job\":{\"id\":\"engine:diffusion:sd-win-x64-cuda\",\"kind\":\"engine\",\"label\":\"stable-diffusion.cpp master-929-3f8527a (cuda)\",\"target\":\"sd-win-x64-cuda\",\"dest\":\"<root>/engine/sd-win-x64-cuda/sd-master-929-3f8527a-bin-win-cuda12-x64.zip\",\"state\":\"done\",\"receivedBytes\":47,\"startedAt\":1700000000000,\"finishedAt\":1700000000000}}",
-        "{\"binPath\":\"<root>/engine/sd-win-x64-cuda/sd-server.exe\",\"source\":\"managed\",\"backend\":\"cuda\",\"version\":\"master-929-3f8527a\",\"installedAt\":1700000000000,\"available\":[{\"id\":\"sd-win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-sd\"},{\"id\":\"sd-win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"sd-win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"sd-win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"hip\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"sd-win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-sd\"}}"
+        "{\"runtime\":\"diffusion\",\"version\":\"master-1009-e6370bf\",\"build\":{\"id\":\"sd-win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-sd\"},\"files\":[{\"name\":\"sd-master-1009-e6370bf-bin-win-cuda12-x64.zip\",\"sizeBytes\":47},{\"name\":\"cudart-sd-bin-win-cu12-x64.zip\",\"sizeBytes\":33}],\"sizeBytes\":80}",
+        "{\"res\":{\"ok\":true,\"message\":\"Downloading stable-diffusion.cpp master-1009-e6370bf.\",\"jobId\":\"engine:diffusion:sd-win-x64-cuda\"},\"job\":{\"id\":\"engine:diffusion:sd-win-x64-cuda\",\"kind\":\"engine\",\"label\":\"stable-diffusion.cpp master-1009-e6370bf (cuda)\",\"target\":\"sd-win-x64-cuda\",\"dest\":\"<root>/engine/sd-win-x64-cuda/sd-master-1009-e6370bf-bin-win-cuda12-x64.zip\",\"state\":\"done\",\"receivedBytes\":47,\"startedAt\":1700000000000,\"finishedAt\":1700000000000}}",
+        "{\"binPath\":\"<root>/engine/sd-win-x64-cuda/sd-server.exe\",\"source\":\"managed\",\"backend\":\"cuda\",\"version\":\"master-1009-e6370bf\",\"installedAt\":1700000000000,\"available\":[{\"id\":\"sd-win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-sd\"},{\"id\":\"sd-win-x64-vulkan\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"vulkan\",\"assetPattern\":\"vulkan\",\"requires\":\"Any GPU with Vulkan drivers (AMD, Intel, or NVIDIA). A small download; on a recent NVIDIA GPU, CUDA is roughly 15-20% faster.\"},{\"id\":\"sd-win-x64-cpu\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cpu\",\"assetPattern\":\"cpu\",\"requires\":\"Any x64 processor. Slower, but always works.\"},{\"id\":\"sd-win-x64-rocm\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"hip\",\"assetPattern\":\"hip\",\"requires\":\"A recent AMD GPU with ROCm support.\"}],\"recommended\":{\"id\":\"sd-win-x64-cuda\",\"platform\":\"win32\",\"arch\":\"x64\",\"backend\":\"cuda\",\"assetPattern\":\"cuda\",\"requires\":\"An NVIDIA GPU from the GTX 16 or RTX 20 series on, with driver 580 or newer. Roughly 15-20% faster than Vulkan on NVIDIA, but a bigger download: it brings the CUDA libraries along.\",\"companionPattern\":\"cudart-sd\"}}"
       ],
       "requests": [
         {
-          "url": "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-929-3f8527a",
+          "url": "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-1009-e6370bf",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-929-3f8527a",
+          "url": "https://api.github.com/repos/leejet/stable-diffusion.cpp/releases/tags/master-1009-e6370bf",
           "headers": {
             "accept": "application/vnd.github+json",
             "user-agent": "nekko-agent"
           }
         },
         {
-          "url": "https://dl.test/sd-master-929-3f8527a-bin-win-cuda12-x64.zip",
+          "url": "https://dl.test/sd-master-1009-e6370bf-bin-win-cuda12-x64.zip",
           "headers": {}
         },
         {
@@ -4931,7 +4931,7 @@
         [
           "tar",
           "-xf",
-          "<root>/engine/sd-win-x64-cuda/sd-master-929-3f8527a-bin-win-cuda12-x64.zip",
+          "<root>/engine/sd-win-x64-cuda/sd-master-1009-e6370bf-bin-win-cuda12-x64.zip",
           "-C",
           "<root>/engine/sd-win-x64-cuda"
         ],
@@ -4947,9 +4947,9 @@
         "stop"
       ],
       "left": [
-        "engine/engine.json={\n  \"binPath\": \"<root>/engine/sd-win-x64-cuda/sd-server.exe\",\n  \"backend\": \"cuda\",\n  \"buildId\": \"sd-win-x64-cuda\",\n  \"version\": \"master-929-3f8527a\",\n  \"installedAt\": 1700000000000\n}",
+        "engine/engine.json={\n  \"binPath\": \"<root>/engine/sd-win-x64-cuda/sd-server.exe\",\n  \"backend\": \"cuda\",\n  \"buildId\": \"sd-win-x64-cuda\",\n  \"version\": \"master-1009-e6370bf\",\n  \"installedAt\": 1700000000000\n}",
         "engine/sd-win-x64-cuda/cudart64_12.dll=from cudart-sd-bin-win-cu12-x64.zip",
-        "engine/sd-win-x64-cuda/sd-server.exe=from sd-master-929-3f8527a-bin-win-cuda12-x64.zip"
+        "engine/sd-win-x64-cuda/sd-server.exe=from sd-master-1009-e6370bf-bin-win-cuda12-x64.zip"
       ]
     }
   ],
