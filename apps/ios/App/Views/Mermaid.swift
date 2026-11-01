@@ -331,14 +331,15 @@ final class MermaidRenderer {
         let started = Date()
         do {
             let web = try await webView()
-            let value: Any = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Any, Error>) in
+            // Only strings come back from the page; they cross as a Sendable dictionary, not `Any`.
+            let out: [String: String]? = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[String: String]?, Error>) in
                 var finished = false
                 web.callAsyncJavaScript("return await window.nekkoRender(source, dark, width, scale)",
                                         arguments: ["source": source, "dark": dark, "width": width, "scale": Double(scale)],
                                         in: nil, in: .page) { result in
                     guard !finished else { return }
                     finished = true
-                    cont.resume(with: result)
+                    cont.resume(with: result.map { ($0 as? [String: Any])?.compactMapValues { $0 as? String } })
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + MermaidRules.timeout) {
                     guard !finished else { return }
@@ -346,9 +347,9 @@ final class MermaidRenderer {
                     cont.resume(throwing: TimedOut())
                 }
             }
-            guard let out = value as? [String: Any] else { return .failure(.unavailable("no result")) }
-            if let error = out["error"] as? String { return .failure(.parse(error)) }
-            guard let png = out["png"] as? String, let svg = out["svg"] as? String,
+            guard let out else { return .failure(.unavailable("no result")) }
+            if let error = out["error"] { return .failure(.parse(error)) }
+            guard let png = out["png"], let svg = out["svg"],
                   let comma = png.firstIndex(of: ","), let data = Data(base64Encoded: String(png[png.index(after: comma)...])),
                   let image = UIImage(data: data, scale: scale) else { return .failure(.unavailable("no image")) }
             let drawing = Drawing(image: image, svg: svg)
