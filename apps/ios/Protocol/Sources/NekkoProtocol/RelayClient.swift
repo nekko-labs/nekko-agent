@@ -376,15 +376,29 @@ public final class RelayClient: @unchecked Sendable {
         if let proof { fields["proof"] = proof }
         if let stepUp { fields["stepUp"] = stepUp }
         let limit = timeout ?? config.requestTimeout
-        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<JSONValue, Error>) in
-            locked { pending[id] = cont }
-            guard sendRequest(fields) else {
-                takePending(id)?.resume(throwing: RelayError("Could not reach your computer."))
-                return
+        // Cancelling the caller (a screen's task ending, a re-read replaced) ends the wait
+        // at once instead of at the reply or the timeout, which is hours for `chat:send`.
+        // The request already sent still runs on the computer; only its answer is dropped.
+        // `takePending` takes the lock and hands the continuation out once, so the handler,
+        // the reply, the timeout and a closing socket can race safely.
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<JSONValue, Error>) in
+                locked { pending[id] = cont }
+                // Cancelled before the continuation was registered: the handler found nothing to end.
+                if Task.isCancelled {
+                    takePending(id)?.resume(throwing: CancellationError())
+                    return
+                }
+                guard sendRequest(fields) else {
+                    takePending(id)?.resume(throwing: RelayError("Could not reach your computer."))
+                    return
+                }
+                queue.asyncAfter(deadline: .now() + limit) { [weak self] in
+                    self?.takePending(id)?.resume(throwing: RelayError("\(channel): timed out"))
+                }
             }
-            queue.asyncAfter(deadline: .now() + limit) { [weak self] in
-                self?.takePending(id)?.resume(throwing: RelayError("\(channel): timed out"))
-            }
+        } onCancel: {
+            takePending(id)?.resume(throwing: CancellationError())
         }
     }
 
@@ -424,6 +438,7 @@ public final class RelayClient: @unchecked Sendable {
         if denied { throw RelayError("This phone is no longer paired.") }
         if isStopped { throw RelayError("Not connected.") }
         let settled = await waitForSettledStatus(timeout: config.handshakeTimeout)
+        try Task.checkCancellation()
         if isReady { return }
         let s = state
         if !settled { throw RelayError(s == .offline ? "Your computer is offline." : "Could not reach your computer.") }
@@ -431,23 +446,37 @@ public final class RelayClient: @unchecked Sendable {
     }
 
     /// Resolves true when the state becomes online, denied or idle; false on timeout.
+    /// A cancelled caller stops waiting at once (the handler resumes its waiter).
     private func waitForSettledStatus(timeout: TimeInterval) async -> Bool {
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            let id: Int? = locked {
-                if [.online, .denied, .idle].contains(_status.state) { return nil }
-                let id = nextWaiter
-                nextWaiter += 1
-                waiters[id] = cont
-                return id
+        let id: Int = locked {
+            let id = nextWaiter
+            nextWaiter += 1
+            return id
+        }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                let waiting: Bool = locked {
+                    if [.online, .denied, .idle].contains(_status.state) { return false }
+                    waiters[id] = cont
+                    return true
+                }
+                guard waiting else { cont.resume(); return }
+                if Task.isCancelled {
+                    takeWaiter(id)?.resume()
+                    return
+                }
+                queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                    self?.takeWaiter(id)?.resume()
+                }
             }
-            guard let id else { cont.resume(); return }
-            queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
-                guard let self else { return }
-                let w: CheckedContinuation<Void, Never>? = self.locked { self.waiters.removeValue(forKey: id) }
-                w?.resume()
-            }
+        } onCancel: {
+            takeWaiter(id)?.resume()
         }
         return [.online, .denied, .idle].contains(state)
+    }
+
+    private func takeWaiter(_ id: Int) -> CheckedContinuation<Void, Never>? {
+        locked { waiters.removeValue(forKey: id) }
     }
 
     private var isReady: Bool { locked { welcomed && conn != nil } }

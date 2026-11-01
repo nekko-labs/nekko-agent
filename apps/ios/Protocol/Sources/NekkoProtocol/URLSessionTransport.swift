@@ -42,6 +42,8 @@ final class URLSessionConnection: NSObject, WsConnection, URLSessionWebSocketDel
     private var open = false
     private var closed = false
     private var pingTimer: DispatchSourceTimer?
+    /// A ping was sent and its pong hasn't come back yet (under `lock`).
+    private var pingOutstanding = false
 
     init(url: URL, handlers: WsHandlers, pingInterval: TimeInterval) {
         self.url = url
@@ -116,8 +118,20 @@ final class URLSessionConnection: NSObject, WsConnection, URLSessionWebSocketDel
         timer.schedule(deadline: .now() + pingInterval, repeating: pingInterval)
         timer.setEventHandler { [weak self] in
             guard let me = self else { return }
+            // A ping still unanswered a whole interval later is a dead path (a black-holed
+            // route never fails sendPing until the TCP timeout): close, and the client reconnects.
+            let unanswered: Bool = me.lock.withLock {
+                let previous = me.pingOutstanding
+                me.pingOutstanding = true
+                return previous
+            }
+            if unanswered {
+                me.finish(1006, "No answer to a ping")
+                return
+            }
             t.sendPing { error in
-                if let error { me.finish(1006, error.localizedDescription) }
+                if let error { me.finish(1006, error.localizedDescription); return }
+                me.lock.withLock { me.pingOutstanding = false }
             }
         }
         lock.lock()
