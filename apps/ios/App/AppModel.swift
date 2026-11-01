@@ -94,6 +94,8 @@ final class AppModel {
             offlineFiles: offlineFiles)
         // Change actions (IO-33) are signed in the Secure Enclave behind Face ID or the passcode.
         computers.changeSigner = SecureEnclaveChangeSigner(store: keychain)
+        // Every relay HELLO is signed with this iPhone's device key (decision 0036), without asking.
+        computers.helloSigner = SecureEnclaveHelloSigner(store: keychain)
         store = computers
         previews = PreviewLoader(store: computers)
         let cloudKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.cloud")

@@ -32,10 +32,26 @@ final class RelayIntegrationTests: XCTestCase {
         return Env(relay: relay, room: room, key: key, pair: pair, keyBytes: E2E.deriveKey(secret: key, room: room))
     }()
 
+    /// One device key per test device, kept across its connections, as the Keychain keeps it.
+    final class Signers: @unchecked Sendable {
+        private let lock = NSLock()
+        private var all: [String: SoftwareHelloSigner] = [:]
+        func signer(for id: String) -> SoftwareHelloSigner {
+            lock.lock()
+            defer { lock.unlock() }
+            if let s = all[id] { return s }
+            let s = SoftwareHelloSigner()
+            all[id] = s
+            return s
+        }
+    }
+    static let signers = Signers()
+
     func client(_ env: Env, pair: String?, deviceId: String = UUID().uuidString.lowercased()) -> (RelayClient, RelayClientTests.Recorder) {
         var cfg = RelayConfig(relayUrl: env.relay, room: env.room, key: env.key, keyBytes: env.keyBytes, deviceId: deviceId,
                               deviceName: "iOS itest", pairCode: pair)
         cfg.requestTimeout = 30
+        cfg.helloSigner = Self.signers.signer(for: deviceId)
         #if os(Linux)
         let transport: WsTransport = SocketTransport() // libcurl there has no WebSockets
         #else

@@ -26,8 +26,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 1. On your computer: **Settings → Phone pairing** (second in the left-hand list), then in **Remote access**
    pick how your phone connects: **Use Tailscale** (free, needs the Tailscale app on both) or
-   **Use Nekko Cloud** (works anywhere, nothing to install). A self-hosted relay goes under **Use your
-   own relay**. Then **Pair a device**. The QR appears right under the button.
+   **Use Nekko Cloud** (works anywhere, nothing to install; shown as *Coming soon* and off until the
+   managed relay is running again). A self-hosted relay goes under **Use your own relay**. Then
+   **Pair a device**. To switch later, click **Change** next to *Connected through*; paired phones
+   keep the old address, so pair them again afterwards. The QR appears right under the button.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to
@@ -36,7 +38,8 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 **Updating from a version before November 2026:** the first time your computer starts with the
 update, it replaces its pairing secret (the phones it knew stay listed). Each phone then says the
-pairing key changed: pair it again with a fresh QR from **Pair a device**. Phones and the computer
+pairing key changed: pair it again with a fresh QR from **Pair a device**. Pairing also enrolls the
+phone's own device key, which signs every connection from then on. Phones and the computer
 both need the update; an older app cannot connect to an updated computer.
 
 ## The phone app
@@ -535,7 +538,8 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 | Threat | Defense |
 |---|---|
 | Relay operator reads your traffic | E2E encryption: the relay sees ciphertext and a room credential derived from the pairing secret, never the secret the key is derived from (decision 0036) |
-| Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, the secret itself to seal a HELLO, then a registered device or a live pairing code |
+| Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, the secret itself to seal a HELLO, then a live pairing code, or the private key of a device that enrolled (every HELLO is signed with it) |
+| Someone copies the pairing secret off a phone | Not enough to connect as that phone: each phone signs every HELLO with its own device key (Secure Enclave on iPhone, Android Keystore), which never leaves it |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
@@ -553,6 +557,8 @@ and it's why relayed local-model use is inherently zero-data-retention for conte
 How the Android and iOS apps each handle the connection (URL rules, pairing, reconnects, push, background) is compared in [phone-connection.md](phone-connection.md).
 
 ### Nekko Cloud (the managed relay): `wss://nekko-agent-relay.fly.dev`
+
+**Not running right now:** the Fly app is gone and its name no longer resolves, so the desktop shows Nekko Cloud as *Coming soon*. A computer still set to it shows a warning with a **Change** button, and a phone paired through it says it can't find the address instead of "Connecting…". Use Tailscale until it is back.
 
 The app calls this **Nekko Cloud** and never shows the URL. Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
 managed relay becomes part of the paid plans (it already supports gating via

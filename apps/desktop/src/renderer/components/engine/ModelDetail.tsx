@@ -6,7 +6,7 @@ import { DiffusionInstallCard } from './DiffusionInstallCard.js';
 import { useStore } from '../../store.js';
 import { Badge } from '../primitives/index.js';
 import { CheckIcon, ChevronIcon, ExternalIcon } from '../../icons.js';
-import { formatBytes } from '../runtimes/verdict.js';
+import { formatBytes, formatCount } from '../runtimes/verdict.js';
 import { gpuGuidance } from './modelFamilies.js';
 
 /**
@@ -515,11 +515,7 @@ function Inline({ text }: { text: string }) {
   );
 }
 
-function compact(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
-  return String(n);
-}
+const compact = formatCount;
 
 /** "3 months ago", for the is-this-maintained question. */
 function ago(ms: number): string {

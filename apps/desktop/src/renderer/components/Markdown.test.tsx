@@ -83,9 +83,9 @@ describe('Markdown', () => {
     // The shape people actually type into the composer: a lead-in line with no
     // blank line before the dashes.
     const out = html('Nekko Agent project.\n- first thing\n- second thing');
-    expect(out).toContain('<p>Nekko Agent project.</p>');
-    expect(out.match(/<li>/g)).toHaveLength(2);
-    expect(out).toContain('<li>first thing</li>');
+    expect(out).toContain('<p dir="auto">Nekko Agent project.</p>');
+    expect(out.match(/<li dir="auto">/g)).toHaveLength(2);
+    expect(out).toContain('<li dir="auto">first thing</li>');
     expect(out).toContain('list-style-type:disc');
   });
 
@@ -94,7 +94,7 @@ describe('Markdown', () => {
     expect(out).toContain('list-style-type:circle');
     // One outer list with two top-level items, one inner list with two.
     expect(out.match(/<ul/g)).toHaveLength(2);
-    expect(out.match(/<li>/g)).toHaveLength(4);
+    expect(out.match(/<li dir="auto">/g)).toHaveLength(4);
   });
 
   it('keeps single newlines inside a paragraph as line breaks', () => {
@@ -125,7 +125,7 @@ describe('Markdown', () => {
     const out = html('```ts\n- not a bullet\n```');
     expect(out).toContain('<pre');
     expect(out).toContain('- not a bullet');
-    expect(out).not.toContain('<li>');
+    expect(out).not.toContain('<li');
   });
 
   it('covers inline bold, italic, strike, code and links', () => {
@@ -167,8 +167,8 @@ describe('Markdown', () => {
   });
 
   it('renders nothing for empty text', () => {
-    expect(html('')).not.toContain('<p>');
-    expect(html('   \n  ')).not.toContain('<p>');
+    expect(html('')).not.toContain('<p');
+    expect(html('   \n  ')).not.toContain('<p');
   });
 });
 
@@ -299,7 +299,7 @@ describe('Markdown block split', () => {
     const out = html('Here:\n\n```ts\nconst a = 1;\n- not yet a bullet');
     expect(out).toContain('<pre');
     expect(out).toContain('- not yet a bullet');
-    expect(out).not.toContain('<li>');
+    expect(out).not.toContain('<li');
   });
 
   it('leaves finished blocks untouched as a reply grows', () => {

@@ -1,8 +1,9 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
-import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, relayAuth, RELAY_PAIRING_VERSION, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
+import { loadHelloKeys } from './helloKeys.js';
 import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
 import { runWebAuthnCeremony } from '../webauthnCeremony.js';
 import { webAuthnUnavailableReason } from './secureContext.js';
@@ -162,6 +163,21 @@ function makeWebClient(): NekkoApi {
     const sendSealed = async (frame: unknown) => {
       relay?.send(JSON.stringify({ enc: await seal(await keyP, frame) }));
     };
+    // This browser's device key: every HELLO is signed with it (protocol 5, decision 0036).
+    const helloKeysP = loadHelloKeys();
+    // The connection's challenge and request counter (relay replay protection).
+    let challenge: string | null = null;
+    let seq = 0;
+    let sendQueue: Promise<void> = Promise.resolve();
+    const sendHello = async (nonce: string) => {
+      challenge = nonce;
+      seq = 0;
+      const proof = await helloProof(await helloKeysP, deviceId!, room!, nonce);
+      await sendSealed({
+        type: 'hello', deviceId, name: deviceName, platform, protocol: REMOTE_PROTOCOL_VERSION, challenge: nonce, ...proof,
+        ...(pairCode ? { pair: pairCode } : {}),
+      });
+    };
     const onDenied = (reason: string) => {
       // Kicked out of the registry (revoked, or a stale/used pairing link).
       localStorage.removeItem('nekko_relay');
@@ -170,7 +186,11 @@ function makeWebClient(): NekkoApi {
       else alert(`This device can't reach the paired computer (${reason}). Pair it again from Settings → Remote access.`);
     };
     const handle = async (frame: any) => {
-      if (frame.type === 'welcome') {
+      if (frame.type === 'challenge' && typeof frame.challenge === 'string') {
+        // A new connection, or the computer restarted the handshake: answer it.
+        welcomed = false;
+        await sendHello(frame.challenge);
+      } else if (frame.type === 'welcome') {
         welcomed = true;
         pairCode = null; // enrollment done; never resend the code
         sessionStorage.removeItem('nekko_relay_denied');
@@ -192,9 +212,7 @@ function makeWebClient(): NekkoApi {
       welcomed = false;
       const auth = await authP;
       relay = new WebSocket(`${relayUrl.replace(/\/$/, '')}/relay?role=client&room=${encodeURIComponent(room)}&key=${encodeURIComponent(auth)}`);
-      relay.onopen = () => {
-        void sendSealed({ type: 'hello', deviceId, name: deviceName, platform, ...(pairCode ? { pair: pairCode } : {}) });
-      };
+      // The computer seals a challenge to each new connection; the HELLO answers it.
       relay.onmessage = async (ev) => {
         let env: any;
         try {
@@ -208,10 +226,8 @@ function makeWebClient(): NekkoApi {
           } catch {
             /* tampered / wrong key */
           }
-        } else if (env.type === 'agent-online' && relay?.readyState === WebSocket.OPEN && !welcomed) {
-          // Agent (re)connected after us → repeat the handshake.
-          void sendSealed({ type: 'hello', deviceId, name: deviceName, platform, ...(pairCode ? { pair: pairCode } : {}) });
         }
+        // When the computer (re)connects after us it challenges this connection itself.
       };
       relay.onclose = (ev) => {
         welcomed = false;
@@ -239,10 +255,18 @@ function makeWebClient(): NekkoApi {
     call = async (channel, ...args) => {
       await ready();
       const id = nextId++;
-      const enc = await seal(await keyP, { type: 'req', id, channel, args });
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject });
-        relay!.send(JSON.stringify({ enc }));
+        // Sealed and sent one at a time, so requests leave in seq order.
+        const sent = sendQueue.then(async () => {
+          const enc = await seal(await keyP, { type: 'req', id, seq: ++seq, challenge, channel, args });
+          relay!.send(JSON.stringify({ enc }));
+        });
+        sendQueue = sent.catch(() => {});
+        sent.catch((e) => {
+          pending.delete(id);
+          reject(e);
+        });
         setTimeout(() => {
           if (pending.has(id)) {
             pending.delete(id);

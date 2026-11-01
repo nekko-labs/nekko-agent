@@ -35,6 +35,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { StarIcon, SendIcon, CloseIcon, BinocularsIcon, WrenchIcon, BranchIcon, BoltIcon, DownloadIcon, GridIcon } from '../icons.js';
 import { hasAppChrome } from '../chrome.js';
+import { formatCount } from '../components/runtimes/verdict.js';
 
 /** Per-node-kind visual identity for the workflow canvas. */
 const KIND: Record<SkillNodeKind, { color: string; glyph: string; label: string }> = {
@@ -322,7 +323,7 @@ function SkillCard({ skill, installed, selected, onOpen }: { skill: SkillDef; in
       </div>
       <p className="mt-3 line-clamp-2 text-xs leading-snug text-ink-soft">{skill.description}</p>
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-        <span className="text-2xs text-ink-faint">{skill.workflow.nodes.length} steps</span>
+        <span className="text-2xs text-ink-faint">{skill.workflow.nodes.length} {skill.workflow.nodes.length === 1 ? 'step' : 'steps'}</span>
         {skill.kind === 'goal' && (
           <span className="rounded-full px-2 py-0 text-2xs" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
             background agent
@@ -359,9 +360,8 @@ function TierChip({ tier }: { tier?: MarketplaceSkill['tier'] }) {
   );
 }
 
-function fmtMetric(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
-}
+/** Stars and installs: 1,500,000 reads "1.5M", not "1500k". */
+const fmtMetric = formatCount;
 
 /** Browse + install skills: your installs, Nekko Labs' shelf, and popular online skills. */
 function MarketplaceTab() {
@@ -415,7 +415,7 @@ function MarketplaceTab() {
       setVaizer(cat);
       pushToast(
         cat.source === 'live' ? 'success' : 'info',
-        cat.source === 'live' ? `Vaizer catalog refreshed: ${cat.skills.length} skill(s).` : 'Vaizer unreachable, showing the offline catalog.',
+        cat.source === 'live' ? `Vaizer catalog refreshed: ${cat.skills.length} ${cat.skills.length === 1 ? 'skill' : 'skills'}.` : 'Vaizer unreachable, showing the offline catalog.',
       );
     } finally {
       setVaizerBusy(false);
@@ -592,9 +592,11 @@ function MarketplaceTab() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1">
+    // On a phone the shelves stack above the detail instead of leaving it
+    // 100px beside a fixed 320px column.
+    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
       {/* Shelves */}
-      <aside className="flex w-80 flex-col border-r border-line">
+      <aside className="flex max-h-[45dvh] w-full flex-col border-b border-line md:max-h-none md:w-80 md:border-b-0 md:border-r">
         <div className="p-4">
           <h1 className="view-title">Marketplace</h1>
           <p className="mt-0.5 text-xs text-ink-faint">
@@ -710,7 +712,7 @@ function MarketplaceTab() {
                   <span> · {vaizer.source === 'live' ? 'live' : vaizer.source === 'cached' ? 'cached' : 'offline snapshot'}</span>
                 )}
                 {shelf.listing && shelf.listing.state !== 'none' && (
-                  <span> · {shelf.listing.state === 'error' ? 'could not refresh' : shelf.listing.state} · {shelf.listing.skills.length} skills</span>
+                  <span> · {shelf.listing.state === 'error' ? 'could not refresh' : shelf.listing.state} · {shelf.listing.skills.length} {shelf.listing.skills.length === 1 ? 'skill' : 'skills'}</span>
                 )}
               </p>
               {shelf.items.length === 0 && (
