@@ -1346,12 +1346,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const onMove = (ev: PointerEvent) => {
       const h = Math.round(Math.min(maxH, Math.max(COMPOSER_MIN_H, startH + (startY - ev.clientY))));
       latest = defaultH !== null && Math.abs(h - defaultH) <= COMPOSER_SNAP ? null : maxH - h <= COMPOSER_SNAP ? Math.round(maxH) : h;
-      setComposerH(latest);
+      // Straight onto the editor while dragging: a React render of this whole
+      // pane per pointer move was the cost. State takes it once, on release.
+      ta.style.minHeight = latest === null ? '' : `${latest}px`;
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       document.body.style.cursor = '';
+      setComposerH(latest);
       try {
         if (latest === null) window.localStorage.removeItem(COMPOSER_H_KEY);
         else window.localStorage.setItem(COMPOSER_H_KEY, String(latest));
@@ -2473,6 +2476,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       </ContextMenu>}
       <section className={`relative isolate flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
         {emptyWave && <PixelWaveBackground wave={emptyWave} visible={paneShown} />}
+        {/* The new-chat colour drift: three static palettes crossfaded by
+            opacity alone, so the compositor does it without a repaint. */}
+        {cleanStart && [1, 2, 3].map((n) => <div key={n} className="clean-start-tint" data-n={n} aria-hidden="true" />)}
         {/* The per-chat Nekko watches this composer's caret; wall windows and
             the lone composer surface already carry their own picker and don't
             need another cat on top of the transcript. */}
@@ -3261,7 +3267,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
-                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-all duration-150 disabled:opacity-40`}
+                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[background-color,border-color,color,opacity,transform] duration-150 disabled:opacity-40`}
                       onClick={() => void send()}
                       disabled={imageMode ? streaming || !draft.trim() : (!draft.trim() && pendingImages.length === 0 && pendingVideos.length === 0 && !activeSkill) || !hasProvider}
                       title={streaming ? 'Add to queue after this reply' : 'Send'}

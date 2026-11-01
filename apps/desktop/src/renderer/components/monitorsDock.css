@@ -148,7 +148,7 @@
   from { opacity: 1; transform: scale(1); }
   to { flex-basis: 0; transform: scale(.08); }
 }
-.monitors-dock__monitor--collapsing { transform-origin: top left; pointer-events: none; animation: wall-panel-collapse 220ms ease-in both; }
+.monitors-dock__monitor--collapsing { transform-origin: top left; pointer-events: none; animation: wall-panel-collapse 200ms var(--ease-out) both; }
 @media (prefers-reduced-motion: reduce) { .monitors-dock__monitor--collapsing { animation: none; } }
 
 /* Drag to reorder. The lifted panel leaves the column; a dashed landing zone
@@ -161,13 +161,14 @@
 .monitors-dock__monitors[data-dock-dragging] > .monitors-dock__monitor { margin-bottom: 12px; }
 .monitors-dock__monitor[data-monitor-lifted] { display: none; }
 .monitors-dock__monitor-header[draggable='true'] { cursor: grab; }
-.monitors-dock__landing { flex: 0 0 auto; height: 0; overflow: hidden; transition: height 200ms cubic-bezier(.2, .8, .2, 1); }
-.monitors-dock__landing[data-open] { height: calc(var(--landing-height) + 12px); }
+/* The zone opens on a 0fr to 1fr grid row rather than a height tween. */
+.monitors-dock__landing { flex: 0 0 auto; display: grid; grid-template-rows: 0fr; overflow: hidden; transition: grid-template-rows 200ms var(--ease-out); }
+.monitors-dock__landing[data-open] { grid-template-rows: 1fr; }
 .monitors-dock__landing > span {
-  display: block; box-sizing: border-box; height: var(--landing-height);
+  display: block; box-sizing: border-box; height: var(--landing-height); min-height: 0; margin-bottom: 12px;
   border: 1.5px dashed color-mix(in srgb, var(--accent) 60%, var(--line)); border-radius: 16px;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
-  opacity: 0; transform: scale(.97); transition: opacity 160ms ease, transform 200ms cubic-bezier(.2, .8, .2, 1);
+  opacity: 0; transform: scale(.97); transition: opacity 160ms ease, transform 200ms var(--ease-out);
 }
 .monitors-dock__landing[data-open] > span { opacity: 1; transform: none; }
 .monitors-dock__monitors[data-dock-lifting] .monitors-dock__landing,

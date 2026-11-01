@@ -332,7 +332,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
         </button>
         <button
           type="button"
-          className="send-avatar grid h-8 w-8 shrink-0 place-items-center rounded-xl transition-all duration-150"
+          className="send-avatar grid h-8 w-8 shrink-0 place-items-center rounded-xl transition-[background-color,border-color,color,opacity,transform] duration-150"
           title="Search now (Enter)"
           aria-label="Search now"
           data-finder-search

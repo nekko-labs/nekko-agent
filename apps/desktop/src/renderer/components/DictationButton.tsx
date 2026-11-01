@@ -47,7 +47,7 @@ export function DictationButton(props: VoiceTarget) {
       {shown && (snap.listening || busy || pending || snap.error) && <div className="absolute bottom-full right-0 z-40 mb-2 w-72 rounded-xl border border-line bg-surface p-3 shadow-(--shadow-float)" data-voice-strip>
         {(snap.listening || busy) && <div role="status" className="flex items-center gap-2 text-xs text-ink-soft">
           <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
-            <span className="block h-full rounded-full bg-(--danger) transition-[width] duration-100" style={{ width: Math.round(Math.min(1, snap.level) * 100) + '%' }} />
+            <span className="block h-full w-full origin-left rounded-full bg-(--danger) transition-transform duration-100" style={{ transform: `scaleX(${Math.max(0, Math.min(1, snap.level))})` }} />
           </span>
           <span className="min-w-0 truncate">{busy || (snap.heard ? `Heard: ${snap.heard}` : 'Listening locally… Say ‘Nekko…’ for commands.')}</span>
         </div>}

@@ -256,9 +256,9 @@ function LoadingRow({ load, name, elapsedMs }: { load: LoadingModel; name: strin
           aria-label={`Loading ${name}`}
         >
           <div
-            className="h-full rounded-full transition-[width] duration-500"
+            className="h-full w-full origin-left rounded-full transition-transform duration-200 ease-(--ease-out)"
             style={{
-              width: pct === null ? '35%' : `${Math.max(4, pct)}%`,
+              transform: `scaleX(${pct === null ? 0.35 : Math.max(4, Math.min(100, pct)) / 100})`,
               background: 'var(--accent)',
               opacity: pct === null ? 0.5 : 1,
             }}
