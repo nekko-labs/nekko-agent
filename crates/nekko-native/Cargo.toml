@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 base64.workspace = true
+# The release signing key (release_key.rs): the update feed and the Claude policy override.
+ed25519-dalek = "2"
 futures-util.workspace = true
 nekko-net = { path = "../nekko-net" }
 raw-window-handle = "0.6"
