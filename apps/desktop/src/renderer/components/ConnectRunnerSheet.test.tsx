@@ -163,6 +163,8 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     for (const s of ['Finish on GitHub', 'Create the app', 'Choose repos and click Install', 'This updates by itself.', 'Cancel', 'Open GitHub again']) expect(wait('install')).toContain(s);
     expect(wait('install')).toMatch(/Create the app.*Done.*Choose repos and click Install.*Waiting/s);
     expect(wait('create')).toMatch(/Create the app.*Waiting.*Choose repos and click Install(?!.*Waiting)/s);
+    expect(wait('create')).toContain('If signing in left you on an empty form, close it and choose Open GitHub again.');
+    expect(wait('install')).not.toContain('empty form');
   });
 
   it('confirm_step_lists_the_repos', () => {

@@ -311,6 +311,7 @@ export function WaitingStep({ status, busy, onCancel, onOpen }: { status: Github
       <Stage done={installing} label="Create the app" />
       <Stage done={installing ? false : null} label="Choose repos and click Install" />
       <p className="text-xs text-ink-faint">Everything on GitHub is already filled in. This updates by itself.</p>
+      {!installing && <p className="text-xs text-ink-faint">If signing in left you on an empty form, close it and choose Open GitHub again.</p>}
       <div className="flex justify-end gap-2">
         <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-outline" disabled={busy} onClick={onOpen}>Open GitHub again</button>

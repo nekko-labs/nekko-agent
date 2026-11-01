@@ -47,7 +47,9 @@ In **Workflows > CI runners**, choose **Connect GitHub**:
 
 1. **Where do your repos live?** Pick your account or an org. The list comes from `gh` when it is
    signed in; without it, type the name and say whether it is an org.
-2. **Create.** Your browser opens GitHub with everything filled in. Click **Create**.
+2. **Create.** Your browser opens GitHub with everything filled in. Click **Create**. If GitHub
+   asks you to sign in first, it may then show an empty form: close it and choose
+   **Open GitHub again**.
 3. **Install.** Pick the repos the runner may use and click **Install**. Nekko notices by itself,
    even if you close the tab.
 4. **Confirm.** Choose the repos this Mac serves: up to 20 for an org, one for a personal account,
@@ -58,7 +60,9 @@ In **Workflows > CI runners**, choose **Connect GitHub**:
 
 Leaving is safe. The app and its key are kept from the moment GitHub creates it, so if you close
 the sheet, cancel or quit Nekko, **Connect GitHub** picks up at Install with the same app. It does
-not make a second one.
+not make a second one. To remove an app you no longer want, delete it on GitHub: under **Settings >
+Developer settings > GitHub Apps**, choose the app, then **Advanced**. GitHub has no way for Nekko to
+do that for you.
 
 The app gets **Actions: Read and write** and **Metadata: Read**. An org's app also gets
 **Self-hosted runners: Read and write**, and a personal account's gets repository
