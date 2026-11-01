@@ -45,15 +45,15 @@ export function WorkTrackingStep({
   return (
     <div className="w-full">
       <h1 className="text-center text-2xl font-semibold tracking-tight">Track the work</h1>
-      <p className="mx-auto mt-2 max-w-md text-center text-[13px] text-ink-soft">
+      <p className="mx-auto mt-2 max-w-md text-center text-sm text-ink-soft">
         When an agent chat opens a PR, it files an issue for the change first and links the PR to it. Choose what of yours goes in them. You can change this later in Settings.
       </p>
       <div className="mt-5 rounded-xl border p-4" style={{ borderColor: 'var(--line)' }}>
-        <h2 className="text-[14px] font-semibold">Project management</h2>
+        <h2 className="text-sm font-semibold">Project management</h2>
         <ProjectManagementToggles value={pm} onChange={setPm} />
       </div>
       <div className="mt-3 rounded-xl border p-4" style={{ borderColor: 'var(--line)' }}>
-        <h2 className="text-[14px] font-semibold">Pull requests</h2>
+        <h2 className="text-sm font-semibold">Pull requests</h2>
         <PullRequestToggles value={prs} onChange={setPrs} />
       </div>
     </div>

@@ -7,13 +7,13 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
-  padding: 14px 1px 0;
+  padding: 12px 1px 0;
 }
 .command-wall-stage { position: relative; min-height: 304px; }
 /* Windows stop one gap short of a composer docked below them. */
-.wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout { padding-bottom: var(--wall-gap); }
+.wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout { padding-bottom: var(--pane-gap); }
 /* Keep in step with WALL_PUSH_MS and WALL_PUSH_EASE in wallMotion.ts. */
-.command-wall-layout { --wall-push-ms: 280ms; --wall-push-ease: cubic-bezier(.22, 1, .36, 1); }
+.command-wall-layout { --wall-push-ms: 220ms; --wall-push-ease: cubic-bezier(.23, 1, .32, 1); }
 /* A closing window's last picture folds away here, under the live windows. */
 .command-wall-leaving { position: absolute; inset: 0; pointer-events: none; }
 .command-wall-leaving > .command-wall-window { transition: none; }
@@ -23,8 +23,8 @@
   min-width: 0;
   min-height: 0;
   border-radius: var(--pane-radius);
-  /* Existing windows slide once; sizes settle without a corner-resize tween. */
-  transition: left var(--wall-push-ms) var(--wall-push-ease), top var(--wall-push-ms) var(--wall-push-ease);
+  /* No left/top/width/height transition: a window that moves slides on a
+     transform (wallMotion.ts slideWindow) and sizes settle at once. */
 }
 .command-wall-window > .panel { min-width: 0; min-height: 0; overflow: hidden; }
 /* A Focus window that is not the hero: kept laid out under it, never drawn. */
@@ -51,7 +51,7 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
 .command-wall-companion-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .command-wall-content[data-companions-visible] .command-wall-companions { display: flex; flex-direction: column; }
 .command-wall-companion { display: flex; flex-direction: column; flex: 1 0 240px; min-height: 240px; min-width: 0; border-left: 1px solid var(--line); }
-.command-wall-companion > header { padding: 6px 8px; font-size: 11px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-wall-companion > header { padding: 4px 8px; font-size: var(--text-2xs); color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .command-wall-companion-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 @media (max-width: 639px) {
   .command-wall-content[data-companions-visible] { flex-direction: column; }
@@ -63,7 +63,7 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
   padding: 2px 4px;
   border-radius: 3px;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 .command-wall-action:hover, .command-wall-action[aria-pressed="true"] { color: var(--accent); background: var(--surface-2); }
 .command-wall-action:focus-visible, .command-wall-add:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -76,16 +76,16 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
   border-radius: var(--pane-radius);
   background: transparent;
   color: var(--ink-faint);
-  font-size: 12px;
+  font-size: var(--text-xs);
   transition: left 260ms ease, top 260ms ease, width 260ms ease, height 260ms ease;
 }
 .command-wall-add:hover { border-color: var(--accent); color: var(--accent); background: var(--surface-2); }
-.command-wall-empty { padding: 32px; color: var(--ink-faint); font-size: 13px; }
+.command-wall-empty { padding: 32px; color: var(--ink-faint); font-size: var(--text-sm); }
 /* An empty wall centres its illustration in the space the windows would use. */
 .command-wall-stage[data-wall-vacant] { min-height: 100%; }
 .command-wall-stage[data-wall-vacant] > .command-wall-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-.command-wall-empty-state { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 340px; text-align: center; line-height: 1.5; }
-.command-wall-empty-title { margin-top: 6px; color: var(--ink); font-size: 15px; font-weight: 600; }
+.command-wall-empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 340px; text-align: center; line-height: 1.5; }
+.command-wall-empty-title { margin-top: 4px; color: var(--ink); font-size: var(--text-base); font-weight: 600; }
 .wall-empty-art { position: relative; width: 240px; height: 150px; }
 .wall-empty-art > svg { display: block; }
 /* Nekko sits on the floor line, below the wall's frame. */
@@ -116,6 +116,7 @@ body.wall-resizing webview, body.wall-resizing iframe { pointer-events: none; }
 .command-wall-layout[data-wall-lifting] .command-wall-window {
   transition-property: left, top, width, height;
   transition-duration: 200ms;
+  transition-timing-function: var(--wall-push-ease);
 }
 .wall-drag-shield { position: fixed; inset: 0; z-index: 9998; cursor: grabbing; }
 body:has(.wall-drag-shield) { user-select: none; }
@@ -124,13 +125,14 @@ body:has(.wall-drag-shield) { user-select: none; }
   position: fixed; z-index: 9999; pointer-events: none; overflow: hidden;
   border-radius: var(--pane-radius); border: 2px solid var(--accent);
   background: color-mix(in srgb, var(--win) 60%, transparent);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, .22), 0 2px 6px rgba(0, 0, 0, .1);
+  box-shadow: var(--shadow-lift);
   transform: rotate(-1.5deg);
 }
-.wall-held-card[data-picking] { transition: left 200ms cubic-bezier(.2, .9, .3, 1.2), top 200ms cubic-bezier(.2, .9, .3, 1.2), width 200ms cubic-bezier(.2, .9, .3, 1.2), height 200ms cubic-bezier(.2, .9, .3, 1.2); }
+/* Picked up on a plain ease-out: an overshoot on a drop reads as wobble. */
+.wall-held-card[data-picking] { transition: left 200ms var(--wall-push-ease), top 200ms var(--wall-push-ease), width 200ms var(--wall-push-ease), height 200ms var(--wall-push-ease); }
 .wall-held-card-strip {
-  display: flex; align-items: center; gap: 6px; padding: 4px 8px;
-  background: var(--accent-soft); color: var(--ink); font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px;
+  background: var(--accent-soft); color: var(--ink); font-size: var(--text-xs); font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -163,37 +165,39 @@ body:has(.wall-drag-shield) { user-select: none; }
 .command-wall-add-fill { height: 100%; }
 .command-wall-add > .command-wall-create { width: 100%; flex: 1; min-width: 0; }
 .command-wall-add-fill > span { pointer-events: none; }
-.command-wall-add { flex-direction: column; gap: 8px; background: var(--accent-soft); border-color: var(--accent); animation: wall-liquid-border 1800ms ease-in-out infinite; overflow: hidden; }
+.command-wall-add { flex-direction: column; gap: 8px; background: var(--accent-soft); border-color: var(--accent); animation: wall-liquid-border 1800ms ease-in-out 1; overflow: hidden; }
 .command-wall-add[data-solid] { animation: none; border-style: solid; border-radius: var(--pane-radius); background: var(--surface); }
 .command-wall-add-fill { display: flex; flex: 1; width: 100%; min-height: inherit; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 12px; }
+/* One wobble as the preview appears, then still: a border-radius loop on a
+   persistent tile repainted it every frame for as long as it stayed. */
 @keyframes wall-liquid-border { 0%, 100% { border-radius: 22px 34px 24px 30px; } 50% { border-radius: 34px 20px 32px 22px; } }
 @media (prefers-reduced-motion: reduce) { .command-wall-add { animation: none; } }
-.command-wall-add-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:14px; background:var(--accent-soft); color:var(--accent); font-size:24px; }
-.command-wall-companion > header { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:3px 4px 3px 10px; background:var(--surface); }
+.command-wall-add-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:14px; background:var(--accent-soft); color:var(--accent); font-size: var(--text-2xl); }
+.command-wall-companion > header { display:flex; gap:8px; align-items:center; justify-content:space-between; padding: 4px 4px 4px 12px; background:var(--surface); }
 .command-wall-companion > header span { overflow:hidden; text-overflow:ellipsis; }
-.command-wall-deck-window .command-wall-content { visibility:hidden; } .command-wall-card { position:absolute; inset:0; display:flex; flex-direction:column; gap:8px; padding:12px; text-align:left; color:var(--ink-soft); font-size:12px; } .command-wall-card span { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; } .command-wall-card small { margin-top:auto; color:var(--ink-faint); }
+.command-wall-deck-window .command-wall-content { visibility:hidden; } .command-wall-card { position:absolute; inset:0; display:flex; flex-direction:column; gap:8px; padding:12px; text-align:left; color:var(--ink-soft); font-size: var(--text-xs); } .command-wall-card span { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; } .command-wall-card small { margin-top:auto; color:var(--ink-faint); }
 
 /* The deck scroll offset moves only cards, never the hero or composer. */
 .command-wall-layout[data-wall-layout="focus"] { overflow-x:clip; scrollbar-gutter: auto; }
 .command-wall-deck-scroll { position:absolute; left:0; right:0; height:20px; overflow-x:auto; overflow-y:hidden; }
 .command-wall-deck-scroll:focus-visible { outline:2px solid var(--accent); }
 
-.command-wall-notice { position:sticky; top:0; z-index:30; padding:8px 12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; font-size:12px; }
+.command-wall-notice { position:sticky; top:0; z-index:30; padding:8px 12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; font-size: var(--text-xs); }
 .command-wall-notice button { margin-left:12px; color:var(--accent); }
 .numbered-chat-icon { position: relative; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; flex-shrink: 0; color: var(--ink-faint); }
-.numbered-chat-icon > span { position: absolute; top: 5px; left: 5px; right: 4px; text-align: center; font-size: 10px; font-weight: 700; line-height: 13px; color: var(--ink); }
+.numbered-chat-icon > span { position: absolute; top: 5px; left: 5px; right: 4px; text-align: center; font-size: var(--text-2xs); font-weight: 700; line-height: 13px; color: var(--ink); }
 [data-wall-selected] .numbered-chat-icon, [aria-pressed="true"] .numbered-chat-icon { color: var(--accent); }
 .numbered-agent-icon { position: relative; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; flex-shrink: 0; color: var(--ink-faint); }
 /* The number is the robot's face: centred in the head, below the antenna.
    top is set by the digit's ink, not its line box: at 10px the figures sat
    ~1.1px low (3.6px of head above them, 1.4px below). */
-.numbered-agent-icon > span { position: absolute; left: 0; right: 0; top: 8.9px; text-align: center; font-size: 10.5px; font-weight: 700; line-height: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.numbered-agent-icon > span { position: absolute; left: 0; right: 0; top: 8.9px; text-align: center; font-size: var(--text-2xs); font-weight: 700; line-height: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
 [data-wall-selected] .numbered-agent-icon, [data-wall-working] .numbered-agent-icon { color: var(--accent); }
-.wall-focus-agents { display: flex; gap: 6px; flex-shrink: 0; overflow-x: auto; padding: 2px; }
-.wall-focus-agent { display: flex; align-items: center; gap: 6px; max-width: 260px; flex-shrink: 0; padding: 3px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; color: var(--ink-soft); }
+.wall-focus-agents { display: flex; gap: 8px; flex-shrink: 0; overflow-x: auto; padding: 2px; }
+.wall-focus-agent { display: flex; align-items: center; gap: 8px; max-width: 260px; flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: var(--text-xs); color: var(--ink-soft); }
 .wall-focus-agent[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
-.command-wall-content[data-focus-chat] .command-wall-primary { flex: 1 1 100%; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1); }
-.command-wall-content[data-focus-chat] .command-wall-companions { display: flex; flex: 0 0 0%; width: 0; opacity: 0; overflow: hidden; transform: translateX(100%); transform-origin: left center; border-radius: 28px; transition: flex-basis 360ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease, transform 360ms cubic-bezier(.22, 1, .36, 1), border-radius 360ms ease; }
+.command-wall-content[data-focus-chat] .command-wall-primary { flex: 1 1 100%; transition: flex-basis 260ms var(--ease-out); }
+.command-wall-content[data-focus-chat] .command-wall-companions { display: flex; flex: 0 0 0%; width: 0; opacity: 0; overflow: hidden; transform: translateX(100%); transform-origin: left center; border-radius: 28px; transition: flex-basis 260ms var(--ease-out), opacity 200ms ease, transform 260ms var(--ease-out); }
 .command-wall-content[data-focus-chat][data-companions-visible] .command-wall-primary { flex-basis: auto; }
 /* No transition while dragging the column: it would lag the pointer. */
 body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary, body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-companions { transition: none; }
@@ -222,7 +226,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* Tab placement remains independent of focus/grid/fixed window layout. */
 .wall-agent-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 /* The wall's 1px inset makes up the rest of the gap to the agent panel. */
-.wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: calc(var(--wall-gap) - 1px); }
+.wall-agent-workspace[data-tabs='left'] { flex-direction: row; gap: calc(var(--pane-gap) - 1px); }
 /* The vertical agent panel spans exactly the wall's windows: CommandCenterView
    measures how far they sit from the column's top and bottom. Only beside the
    wall: stacked above it (narrow), the measurement includes the panel itself. */
@@ -248,11 +252,13 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .hover-tip {
   position: fixed; z-index: 1000; max-width: 240px; padding: 4px 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--win); color: var(--ink);
-  font-size: 12px; font-weight: 500; line-height: 1.35; white-space: nowrap;
-  box-shadow: 0 6px 18px -8px rgb(0 0 0 / .35); pointer-events: none;
+  font-size: var(--text-xs); font-weight: 500; line-height: 1.35; white-space: nowrap;
+  box-shadow: var(--shadow-md); pointer-events: none;
   animation: hover-tip-in 120ms ease-out;
 }
 @keyframes hover-tip-in { from { opacity: 0; } to { opacity: 1; } }
+/* In the warm window after another tip, or from the keyboard: no fade. */
+.hover-tip[data-instant] { animation: none; }
 /* Collapsed: the controls hold the panel's corner so the way back is where it was. */
 .agent-panel-collapsed { display: flex; flex-shrink: 0; align-items: flex-start; padding: 4px 2px; }
 .agent-panel-collapsed[data-orientation='horizontal'] { justify-content: flex-start; }
@@ -265,7 +271,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .agent-panel-row { max-height: 168px; padding-block: 0; }
 .agent-panel-row .collapse-wrap > div { padding-bottom: 0; }
 .agent-panel-row > * { flex: 0 0 auto; margin-bottom: 0 !important; }
-.agent-panel-row .collapse-wrap > div { display: flex; flex-direction: row; gap: 6px; }
+.agent-panel-row .collapse-wrap > div { display: flex; flex-direction: row; gap: 8px; }
 .agent-panel-row .collapse-wrap > div > * { flex: 0 0 240px; min-width: 0; }
 /* A closed group hides its cards completely. In the row its strip collapses to
    nothing (a 0fr grid row leaves the cards' width behind), and in the column
@@ -297,9 +303,9 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 
 /* Keep the drop surface stationary while its contents make room. */
-.agent-panel-group { padding-top: 0; transition: padding-top 140ms cubic-bezier(.2,.8,.2,1); }
+.agent-panel-group { padding-top: 0; transition: padding-top 140ms var(--ease-out); }
 .agent-panel-group[data-group-gap] { padding-top: 36px; }
-.agent-panel-row > .agent-panel-group { position: relative; padding-top: 0; padding-left: 0; transition: padding-left 140ms cubic-bezier(.2,.8,.2,1); }
+.agent-panel-row > .agent-panel-group { position: relative; padding-top: 0; padding-left: 0; transition: padding-left 140ms var(--ease-out); }
 .agent-panel-row > .agent-panel-group[data-group-gap] { padding-left: 48px; }
 @media (prefers-reduced-motion: reduce) {
   .agent-panel-group, .agent-panel-row > .agent-panel-group { transition: none; }
@@ -324,8 +330,8 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 /* Separate project/status/date sections without inflating the agent cards. */
 .agent-panel-group + .agent-panel-group { margin-top: 16px; }
-.agent-panel-group-heading { margin-bottom: 6px; }
-.agent-panel-group-label { font-size: 13px; line-height: 20px; color: var(--accent); }
+.agent-panel-group-heading { margin-bottom: 4px; }
+.agent-panel-group-label { font-size: var(--text-sm); line-height: 20px; color: var(--accent); }
 .agent-panel-row > .agent-panel-group + .agent-panel-group { margin-top: 0; }
 
 .hover-tip-multiline { max-width: min(420px, calc(100vw - 16px)); white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 400; }
@@ -344,12 +350,12 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 /* ---------- Zones ---------- */
 /* A zone is a slim name bar over its window. The bar is the zone's handle:
    drag it to move the zone, right-click it to close the zone. */
-.command-wall-window[data-zone] { flex-direction: column; gap: 3px; }
+.command-wall-window[data-zone] { flex-direction: column; gap: 4px; }
 .command-wall-window[data-zone] > .panel { flex: 1 1 0; }
 .wall-zone-header {
-  flex: 0 0 16px; display: flex; align-items: center; gap: 6px; padding: 0 6px;
+  flex: 0 0 16px; display: flex; align-items: center; gap: 8px; padding: 0 8px;
   border-radius: 6px; cursor: grab; user-select: none;
-  color: var(--ink-faint); font-size: 10.5px; font-weight: 500; letter-spacing: .02em;
+  color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 500; letter-spacing: .02em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .wall-zone-header:hover { background: var(--surface-2); color: var(--ink-soft); }
@@ -361,26 +367,24 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 /* An empty zone keeps its place, drawn dotted. */
 .wall-zone-empty {
-  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  padding: 16px; text-align: center; color: var(--ink-faint); font-size: 12px; line-height: 1.5;
+  flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  padding: 16px; text-align: center; color: var(--ink-faint); font-size: var(--text-xs); line-height: 1.5;
   border: 1.5px dotted color-mix(in srgb, var(--ink) 28%, transparent); border-radius: var(--pane-radius);
   transition: border-color 140ms ease, background 140ms ease;
 }
-.wall-zone-empty-title { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.wall-zone-empty-title { color: var(--ink-soft); font-size: var(--text-sm); font-weight: 600; }
 .wall-zone-create { display: flex; flex-direction: column; align-items: stretch; max-width: 100%; margin-top: 4px; }
-.wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; }
-/* Each option leans in on hover and its plus turns a quarter; a press squeezes it and turns the plus on. */
-.wall-zone-empty .wall-zone-option { transition: transform 180ms cubic-bezier(.2, .8, .2, 1), background var(--dur-fast) ease, color var(--dur-fast) ease; }
+.wall-zone-empty .btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; }
+/* Hover is colour and opacity only (tens a day); a press answers with a small squeeze. */
+.wall-zone-empty .wall-zone-option { transition: transform 100ms var(--ease-out), background var(--dur-fast) ease, color var(--dur-fast) ease; }
 /* The label takes the slack so every shortcut lines up on the right. */
 .wall-zone-label { flex: 1; padding-right: 16px; text-align: left; }
 .wall-zone-kbd { opacity: .6; transition: opacity 140ms ease; }
 .wall-zone-option:is(:hover, :focus-visible) .wall-zone-kbd { opacity: 1; }
-.wall-zone-plus { opacity: .6; transition: transform 260ms cubic-bezier(.34, 1.56, .64, 1), opacity 140ms ease, color 140ms ease; }
-.wall-zone-empty .wall-zone-option:is(:hover, :focus-visible) { transform: translateX(3px); }
+.wall-zone-plus { opacity: .6; transition: opacity 140ms ease, color 140ms ease; }
 .wall-zone-empty .wall-zone-option.text-accent:is(:hover, :focus-visible, :active) { color: var(--accent); }
-.wall-zone-option:is(:hover, :focus-visible) .wall-zone-plus { opacity: 1; color: var(--accent); transform: rotate(90deg) scale(1.15); }
-.wall-zone-empty .wall-zone-option:active { transform: translateX(3px) scale(.95); transition-duration: 70ms; }
-.wall-zone-option:active .wall-zone-plus { transform: rotate(180deg) scale(.9); transition-duration: 120ms; }
+.wall-zone-option:is(:hover, :focus-visible) .wall-zone-plus { opacity: 1; color: var(--accent); }
+.wall-zone-empty .wall-zone-option:active { transform: scale(.97); }
 @media (prefers-reduced-motion: reduce) { .wall-zone-empty .wall-zone-option, .wall-zone-plus { transition: none; transform: none !important; } }
 .wall-zone-art { position: relative; width: 88px; height: 52px; margin-bottom: 4px; opacity: .55; }
 .wall-zone-art > svg { display: block; }
@@ -391,32 +395,45 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .command-wall-window[data-zone-drop] > .panel { --panel-ring-color: var(--accent) !important; --panel-ring-width: 2px !important; border-color: var(--accent); background: var(--accent-soft); }
 
 /* The add-zone rails along the right and bottom edges are the wall's gaps to
-   the dock and the composer, so they are --wall-gap wide; their pluses overhang. */
-/* A zoned board always fits its viewport, so it clips instead of scrolling:
-   an overhanging plus must not bring up a scrollbar and its gutter. */
-.command-wall-layout[data-zone-rails] { padding-right: var(--wall-gap); padding-bottom: var(--wall-gap); overflow: clip; overflow-clip-margin: calc(8px - var(--wall-gap) / 2); }
-.wall-zone-rail { position: absolute; width: var(--wall-gap); height: var(--wall-gap); }
+   the dock and the composer, widened to --zone-rail so they can be hit. */
+/* A zoned board always fits its viewport, so it clips instead of scrolling. */
+.command-wall-layout[data-zone-rails] { --zone-rail: 14px; padding-right: var(--zone-rail); padding-bottom: var(--zone-rail); overflow: clip; }
+.wall-zone-rail { position: absolute; width: var(--zone-rail); height: var(--zone-rail); }
+/* Each plus is the whole stretch of edge beside its zone: a quiet hairline at
+   rest that fills and shows its plus on hover. The span button is the short
+   strip at the rail's end and keeps its icon. */
 .wall-zone-add {
-  position: absolute; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px;
-  color: var(--ink-faint); opacity: .45; transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+  position: absolute; display: grid; place-items: center; border-radius: 6px;
+  color: var(--ink-faint); transition: color 120ms ease, background 120ms ease;
 }
-.wall-zone-rail[data-side='right'] .wall-zone-add { left: calc(var(--wall-gap) / 2 - 8px); transform: translateY(-50%); }
-.wall-zone-rail[data-side='down'] .wall-zone-add { top: calc(var(--wall-gap) / 2 - 8px); transform: translateX(-50%); }
-.wall-zone-rail[data-side='down'] .wall-zone-span svg { transform: rotate(90deg); }
-.wall-zone-rail:hover .wall-zone-add { opacity: .8; }
-.wall-zone-add:hover, .wall-zone-add:focus-visible { opacity: 1 !important; color: var(--accent); background: var(--accent-soft); outline: none; }
-.wall-zone-add svg { stroke-width: 1.5; }
+.wall-zone-rail[data-side='right'] .wall-zone-add { left: 2px; width: calc(var(--zone-rail) - 4px); }
+.wall-zone-rail[data-side='down'] .wall-zone-add { top: 2px; height: calc(var(--zone-rail) - 4px); }
+.wall-zone-add::before {
+  content: ''; position: absolute; border-radius: 2px; background: currentColor; opacity: .3;
+  transition: opacity 120ms ease;
+}
+.wall-zone-rail[data-side='right'] .wall-zone-add::before { width: 2px; height: min(28px, 40%); }
+.wall-zone-rail[data-side='down'] .wall-zone-add::before { height: 2px; width: min(28px, 40%); }
+.wall-zone-add > svg { stroke-width: 1.75; opacity: 0; transition: opacity 120ms ease, transform 160ms var(--wall-push-ease); transform: scale(.8); }
+.wall-zone-rail:hover .wall-zone-add::before { opacity: .55; }
+.wall-zone-add:hover, .wall-zone-add:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
+.wall-zone-add:is(:hover, :focus-visible)::before { opacity: 0 !important; }
+.wall-zone-add:is(:hover, :focus-visible) > svg { opacity: 1; transform: none; }
+.wall-zone-span::before { display: none; }
+.wall-zone-span > svg { opacity: .5; transform: none; }
+.wall-zone-rail[data-side='down'] .wall-zone-span > svg { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .wall-zone-add > svg { transition: none; } }
 /* Where a hovered plus would put the new zone. */
 .wall-zone-ghost {
   position: absolute; z-index: 3; pointer-events: none; display: grid; place-items: center;
   border: 2px dotted var(--accent); border-radius: var(--pane-radius);
   background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
-  color: var(--accent); font-size: 12px; font-weight: 600;
+  color: var(--accent); font-size: var(--text-xs); font-weight: 600;
 }
 .wall-span-hint {
   position: absolute; z-index: 4; transform: translate(-50%, -50%); pointer-events: none;
-  padding: 4px 10px; border-radius: 999px; background: var(--win); color: var(--ink-soft);
-  font-size: 11.5px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+  padding: 4px 12px; border-radius: 999px; background: var(--win); color: var(--ink-soft);
+  font-size: var(--text-xs); white-space: nowrap; box-shadow: var(--shadow-md);
 }
 
 /* The agent row in the hand, dragged in from the panel. On a drop it flies
@@ -424,13 +441,13 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 .wall-agent-chip {
   position: fixed; z-index: 9999; pointer-events: none; overflow: hidden;
   border-radius: 10px; background: var(--win); border: 1px solid var(--accent);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .2), 0 2px 6px rgba(0, 0, 0, .1);
+  box-shadow: var(--shadow-lift);
   transform: rotate(-1.5deg) scale(.96);
 }
 .wall-agent-chip > * { width: 100%; }
 .wall-agent-chip[data-landing] {
   transform: none; border-radius: var(--pane-radius); border-width: 2px;
-  transition: left 320ms cubic-bezier(.22, 1, .36, 1), top 320ms cubic-bezier(.22, 1, .36, 1), width 320ms cubic-bezier(.22, 1, .36, 1), height 320ms cubic-bezier(.22, 1, .36, 1), transform 320ms ease, opacity 180ms ease;
+  transition: left 240ms var(--ease-out), top 240ms var(--ease-out), width 240ms var(--ease-out), height 240ms var(--ease-out), transform 240ms var(--ease-out), opacity 180ms ease;
 }
 .wall-agent-chip[data-landing] > * { opacity: 0; transition: opacity 160ms ease; }
 .wall-agent-chip[data-landed] { opacity: 0; }
@@ -449,10 +466,10 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
   width: min(640px, calc(100vw - 16px)); max-width: min(640px, calc(100vw - 16px));
   padding: 12px; border-radius: 16px; white-space: normal;
 }
-.hover-tip-heading { text-align: center; font-size: 16px; font-weight: 600; padding: 2px 8px 12px; overflow-wrap: anywhere; }
+.hover-tip-heading { text-align: center; font-size: var(--text-base); font-weight: 600; padding: 2px 8px 12px; overflow-wrap: anywhere; }
 .hover-tip-content {
-  margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px;
+  margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px;
   max-height: min(420px, calc(100vh - 110px)); overflow: auto; white-space: pre-wrap;
-  overflow-wrap: anywhere; font-size: 13px; font-weight: 400; line-height: 1.6;
+  overflow-wrap: anywhere; font-size: var(--text-sm); font-weight: 400; line-height: 1.6;
   background: var(--bg); pointer-events: auto;
 }

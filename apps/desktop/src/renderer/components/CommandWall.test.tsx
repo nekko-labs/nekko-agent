@@ -288,12 +288,12 @@ describe('workspace companions and stable bodies', () => {
     } finally { fixture.workspaces = []; }
   });
 
-  it('slides windows by position only, in step with the push timing, and stops under reduced motion', () => {
+  it('slides windows on a transform, never a layout transition, in step with the push timing', () => {
     const css = stylesheet('components/commandWallLayouts.css');
-    const move = cssRule(css, '.command-wall-window').transition;
-    expect(move).toBe(cssValue('left var(--wall-push-ms) var(--wall-push-ease), top var(--wall-push-ms) var(--wall-push-ease)'));
-    expect(move).not.toMatch(/width|height/);
-    expect(cssRule(css, '.command-wall-layout')).toMatchObject({ '--wall-push-ms': '280ms', '--wall-push-ease': cssValue('cubic-bezier(.22, 1, .36, 1)') });
+    // wallMotion.slideWindow animates the transform; the box itself never tweens.
+    expect(cssRule(css, '.command-wall-window').transition).toBeUndefined();
+    expect(cssRule(css, '.command-wall-layout')).toMatchObject({ '--wall-push-ms': '220ms', '--wall-push-ease': cssValue('cubic-bezier(.23, 1, .32, 1)') });
+    expect(css.toString()).not.toMatch(/cubic-bezier\(\.2, \.9, \.3, 1\.2\)|cubic-bezier\(\.34, 1\.56/);
     for (const selector of ['.command-wall-window', '.command-wall-add']) {
       expect(cssRule(css, selector, { media: 'prefers-reduced-motion: reduce' }).transition, selector).toBe('none');
     }

@@ -24,7 +24,7 @@ function DirChildren({ path, depth, onOpen }: { path: string; depth: number; onO
   }, [path]);
 
   const pad = 8 + depth * 12;
-  if (entries === null) return <p className="py-0.5 text-[11px] text-ink-faint" style={{ paddingLeft: pad }}>…</p>;
+  if (entries === null) return <p className="py-0.5 text-2xs text-ink-faint" style={{ paddingLeft: pad }}>…</p>;
   if (entries.length === 0) return null;
   return (
     <>
@@ -43,10 +43,10 @@ function TreeFolder({ entry, depth, onOpen }: { entry: DirEntry; depth: number; 
     <>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1.5 rounded-sm py-0.5 pr-2 text-left text-[12px] text-ink-soft hover:bg-surface-2"
+        className="flex w-full items-center gap-2 rounded-sm py-0.5 pr-2 text-left text-xs text-ink-soft hover:bg-surface-2"
         style={{ paddingLeft: 8 + depth * 12 }}
       >
-        <span className="w-2 shrink-0 text-[9px] text-ink-faint">{open ? '▾' : '▸'}</span>
+        <span className="w-2 shrink-0 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
         <FolderIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
         <span className="truncate">{entry.name}</span>
       </button>
@@ -60,7 +60,7 @@ function TreeFile({ entry, depth, onOpen }: { entry: DirEntry; depth: number; on
     <button
       onClick={() => onOpen(entry.path)}
       title={entry.name}
-      className="flex w-full items-center gap-1.5 rounded-sm py-0.5 pr-2 text-left text-[12px] text-ink-soft hover:bg-surface-2"
+      className="flex w-full items-center gap-2 rounded-sm py-0.5 pr-2 text-left text-xs text-ink-soft hover:bg-surface-2"
       style={{ paddingLeft: 8 + depth * 12 + 10 }}
     >
       <FileTypeIcon name={entry.name} size={14} />

@@ -12,7 +12,7 @@ split-from: SPEC.md (2026-10-22)
 - **Open** (hover, keyboard focus inside the rail, or a `data-open` attribute on `.rail`) every point of the outline moves to x = 198px, so the whole rail becomes one even column from top to bottom with 20px rounded ends. Rest and open outlines share one command list, so the SVG path `d` morphs between them: 440ms to open, 320ms to close, on a curve with a quick start and a long settle and no overshoot. Opening waits 50ms and closing 120ms, so sweeping the pointer past never opens it and a brief slip out never snaps it shut. Pointing at any painted part of the outline keeps it open.
 - **Fill:** a pale accent tint of the paper at rest; open, a tint of the surface plus a soft accent shadow on the content. The colorful icons are unchanged.
 - **Labels** fade in from a 2px blur and 6px to the left as the edge passes them, top row first, 18ms apart.
-- **Active destination:** one shared tile (a 12% accent tint with the brand-gradient notch on the wall) slides between rows with a small spring when the view changes, instead of each row painting its own highlight. Where no title bar carries the brand mark (web and phone builds) the tile starts below the brand row.
+- **Active destination:** one shared tile (a neutral ink wash since the 2026-11 design pass; it was a 12% accent tint with a brand-gradient notch) slides between rows when the view changes, instead of each row painting its own highlight. Where no title bar carries the brand mark (web and phone builds) the tile starts below the brand row.
 - Reduced motion removes every transition. No host calls, settings, permissions or network use change.
 
 

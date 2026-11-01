@@ -124,7 +124,7 @@ export function WallComposer({
             <>
               <span className="min-w-0 truncate font-medium" data-composer-title title={agents.length > 1 ? `${agent.session.title} · Ctrl+Tab cycles windows, Ctrl+1…9 selects one` : agent.session.title}>{agent.session.title}</span>
               {agent.status && (
-                <span className="flex min-w-0 items-center gap-1 text-[11px]" style={{ color: agent.status.tone }}>
+                <span className="flex min-w-0 items-center gap-1 text-2xs" style={{ color: agent.status.tone }}>
                   <StatusIcon status={agent.glyph} />
                   <span className="truncate">{agent.status.label}</span>
                 </span>
@@ -146,8 +146,8 @@ export function WallComposer({
               <LayoutIcon className="h-3.5 w-3.5" />
             </button>
             {pickerOpen && (
-              <div className="card absolute right-0 top-8 z-40 p-2.5 shadow-lg" style={{ background: 'var(--paper)' }} role="dialog" aria-label="Where the composer sits">
-                <p className="mb-1.5 px-0.5 text-[11px] text-ink-faint">Where should the composer sit?</p>
+              <div className="card absolute right-0 top-8 z-40 p-3 shadow-(--shadow-float)" style={{ background: 'var(--paper)' }} role="dialog" aria-label="Where the composer sits">
+                <p className="mb-1 px-0.5 text-2xs text-ink-faint">Where should the composer sit?</p>
                 <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(3, 44px)' }} role="grid">
                   {SIDES.map((side) => ALIGNS.map((align) => {
                     const on = dock.side === side && dock.align === align;
@@ -201,19 +201,19 @@ export function WallComposer({
         onPointerUp={() => { widthDrag.current = null; }} onPointerCancel={() => { widthDrag.current = null; }} onLostPointerCapture={() => { widthDrag.current = null; }}
         onDoubleClick={() => setWidth(null)}
         onKeyDown={e => { if (e.key === 'Home') { e.preventDefault(); setWidth(null); } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); resizeWidth((panelRef.current?.offsetWidth ?? 320) + (e.key === 'ArrowRight' ? 20 : -20) * (edge === 'left' ? -1 : 1)); } }} />)}
-      {!agent && <div className="composer-head flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1 text-[12px]" data-composer-head>{head}</div>}
+      {!agent && <div className="composer-head flex shrink-0 items-center gap-2 border-b border-line px-2 py-1 text-xs" data-composer-head>{head}</div>}
       {agent ? (
         <div className="wall-composer-body min-h-0">
           <ChatPane key={agent.session.id} sessionId={agent.session.id} commandCenter surface="composer" header={head} />
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-3 px-4 py-4 text-[12.5px] text-ink-faint">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-4 text-xs text-ink-faint">
           <span>Click an agent window to talk to it here, or start one.</span>
-          <button className="btn btn-primary py-1 text-[12px]" onClick={onNewAgent}><ChatIcon className="h-3.5 w-3.5" /> New agent</button>
+          <button className="btn btn-primary py-1 text-xs" onClick={onNewAgent}><ChatIcon className="h-3.5 w-3.5" /> New agent</button>
           {agents.length > 0 && (
             <span className="flex flex-wrap gap-1">
               {agents.map((a) => (
-                <button key={a.session.id} className="chip chip-action text-[11px]" onClick={() => onSelect(a.session.id)}><span className="wall-num">{a.n}</span>{a.session.title}</button>
+                <button key={a.session.id} className="chip chip-action text-2xs" onClick={() => onSelect(a.session.id)}><span className="wall-num">{a.n}</span>{a.session.title}</button>
               ))}
             </span>
           )}

@@ -25,17 +25,19 @@ describe('CLAUDE_POLICY', () => {
   });
 
   it('holds the approval-gated features off for a plan, with a reason each', () => {
-    for (const cap of ['unattended_runs', 'nekko_tools', 'context_note', 'usage_limits'] as const) {
+    for (const cap of ['unattended_runs', 'nekko_tools', 'context_note'] as const) {
       const row = claudeCapability('subscription', cap);
       expect(row.state).toBe('awaiting_approval');
       expect(claudeReasonText(row)).toBe(CLAUDE_REASONS[CLAUDE_AWAITING_REASON[cap]].text);
     }
     expect(claudeAllows('subscription', 'interactive_chat')).toBe(true);
     expect(claudeAllows('subscription', 'phone_remote')).toBe(true);
+    // What the user's own Claude Code reports about the plan.
+    expect(claudeAllows('subscription', 'usage_limits')).toBe(true);
   });
 
-  it('fails closed: unknown is a plan', () => {
-    expect(CLAUDE_POLICY.unknown).toEqual(CLAUDE_POLICY.subscription);
+  it('fails closed: unknown is a plan without plan usage', () => {
+    expect(CLAUDE_POLICY.unknown).toEqual({ ...CLAUDE_POLICY.subscription, usage_limits: { state: 'awaiting_approval', reason: 'usage_in_claude_code' } });
   });
 
   it('gives every non-enabled row a reason', () => {
@@ -59,7 +61,7 @@ describe('CLAUDE_POLICY', () => {
       phone_remote: ['Yes', 'Yes'],
       unattended_runs: ['Not yet', 'Yes'],
       nekko_tools: ['Not yet', 'Yes'],
-      usage_limits: ['No, check in Claude Code', 'Yes'],
+      usage_limits: ['Yes', 'Yes'],
       model_routing: ['No', 'Yes'],
     });
     expect(t.columns.map((c) => c.id)).toEqual(['subscription', 'api']);

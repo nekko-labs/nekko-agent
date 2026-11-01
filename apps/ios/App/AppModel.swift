@@ -208,8 +208,11 @@ final class AppModel {
         // A little time to deliver an approval or a finished turn as a notification:
         // a healthy socket stays open for the grace (IO-20), then closes before
         // iOS would suspend it; the same background task covers it, no new mode.
+        // UIKit calls the expiration handler on the main thread and needs the task
+        // ended before it returns, or it ends the app: no hop, no Task.
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "nekko.relay") { [weak self] in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
+                Log.background.notice("Background time ran out: suspending the relay connection")
                 self?.store.suspend()
                 self?.endBackgroundTask()
             }
@@ -226,9 +229,12 @@ final class AppModel {
         // Delivering what the user already wrote is not reading chats: the app lock doesn't hold it.
         start(force: true)
         guard !store.outbox.items.isEmpty else { return true }
+        let waiting = store.outbox.items.count
         if store.conn != .online { store.reconnect() }
-        if await waitOnline(seconds: 20) { await store.outbox.flush() }
+        let online = await waitOnline(seconds: 20)
+        if online { await store.outbox.flush() }
         let done = store.outbox.items.isEmpty
+        Log.background.info("Background delivery: \(waiting, privacy: .public) waiting, online \(online, privacy: .public), \(self.store.outbox.items.count, privacy: .public) left")
         if !done { OutboxRefresh.schedule() }
         return done
     }
@@ -320,6 +326,7 @@ final class AppModel {
     /// background (locked, so `start` never ran): connect just to register the
     /// token, as `deliverInBackground` does, and let the connection close as that does.
     private func cardTokenArrived(_ token: String?) {
+        Log.push.info("Live Activity push token \(token == nil ? "cleared" : "arrived", privacy: .public), connection \(String(describing: self.store.conn), privacy: .public)")
         store.cardToken = token
         guard token != nil, store.conn != .online else { return }
         Task {
@@ -366,15 +373,36 @@ final class AppModel {
     }
 
     /// From a notification action or a Live Activity button: wait for the
-    /// connection (the app may have just been woken), then answer.
+    /// connection (the app may have just been woken), then answer. Callers
+    /// await it, and it holds background time until the answer is sent, so iOS
+    /// does not suspend the app mid-answer. A failure is posted as a
+    /// notification rather than dropped: the user believes they answered.
     func answerApproval(_ sessionId: String, _ callId: String, _ allow: Bool) async {
         // Allowing a tool from outside the app needs an unlocked phone (the
         // notification action asks for it; a Lock Screen button may not).
-        if allow && !UIApplication.shared.isProtectedDataAvailable { return }
+        Log.approval.info("\(allow ? "Allow" : "Deny", privacy: .public) from outside the app for chat \(sessionId, privacy: .private(mask: .hash))")
+        if allow && !UIApplication.shared.isProtectedDataAvailable {
+            Log.approval.notice("Allow not sent: the phone is locked")
+            notifier.postUnsent(sessionId: sessionId, allow: allow, why: "Allowing a tool needs your iPhone unlocked.")
+            return
+        }
+        let time = BackgroundTime("nekko.approval")
+        defer { time.end() }
         start(force: true)
         store.resume()
-        guard await waitOnline(seconds: 10), let r = try? store.remote() else { return }
-        _ = try? await r.call(Channels.toolApprove, [.string(sessionId), .string(callId), .bool(allow)])
+        guard await waitOnline(seconds: 10), let r = try? store.remote() else {
+            Log.approval.error("Answer not sent: no connection within 10 s (\(String(describing: self.store.conn), privacy: .public))")
+            notifier.postUnsent(sessionId: sessionId, allow: allow, why: "Couldn’t reach \(store.active?.name ?? "your computer").")
+            return
+        }
+        do {
+            _ = try await r.call(Channels.toolApprove, [.string(sessionId), .string(callId), .bool(allow)])
+        } catch {
+            Log.approval.error("Answer not sent: \(error.localizedDescription)")
+            notifier.postUnsent(sessionId: sessionId, allow: allow, why: "\(store.active?.name ?? "Your computer") didn’t take it: \(error.localizedDescription)")
+            return
+        }
+        Log.approval.info("Answer delivered")
         notifier.clear(sessionId: sessionId)
     }
 
@@ -476,6 +504,7 @@ final class AppModel {
     }
 
     func didRegister(deviceToken: Data) {
+        Log.push.info("Registered for push")
         store.setPushToken(deviceToken.map { String(format: "%02x", $0) }.joined())
     }
 

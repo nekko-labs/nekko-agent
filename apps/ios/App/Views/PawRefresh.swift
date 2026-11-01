@@ -17,7 +17,7 @@ extension View {
 
 private struct OwnedPawRefresh: ViewModifier {
     let action: @MainActor () async -> Void
-    @StateObject private var pull = PawPull()
+    @State private var pull = PawPull()
 
     func body(content: Content) -> some View {
         content.pawRefreshable(pull, action: action)
@@ -106,15 +106,18 @@ struct PawPose: Equatable {
 }
 
 /// The scroll view's pull and refresh state, fed by the probe.
-final class PawPull: ObservableObject {
-    @Published var progress: CGFloat = 0
-    @Published var refreshStart: Date?
-    @Published var endStart: Date?
-    @Published var smiling = false
+@MainActor
+@Observable
+final class PawPull {
+    var progress: CGFloat = 0
+    var refreshStart: Date?
+    var endStart: Date?
+    var smiling = false
     /// A toolbar mascot is on screen and does the grabbing.
-    @Published var mascot = false
-    var reduceMotion = false
-    var ink = Color.secondary
+    var mascot = false
+    /// Set by the view each render; reading it redraws nothing.
+    @ObservationIgnored var reduceMotion = false
+    @ObservationIgnored var ink = Color.secondary
 
     var animating: Bool { refreshStart != nil || endStart != nil }
     var shocked: Bool { refreshStart != nil && !smiling }
@@ -183,7 +186,7 @@ enum PawArt {
 /// own, its paw and the spinner, in a 120 x 44 box at 1.4x. With a toolbar mascot,
 /// nothing: the mascot draws the spinner beside itself.
 struct PawRefreshArt: View {
-    @ObservedObject var pull: PawPull
+    var pull: PawPull
 
     var body: some View {
         TimelineView(.animation(paused: !pull.animating || pull.reduceMotion)) { timeline in
@@ -221,7 +224,7 @@ struct PawRefreshArt: View {
 /// The toolbar mascot's spinner, paw and "!", drawn behind the cat (so the arm comes
 /// out from under its cheek) in a canvas hanging from just above its top centre.
 struct MascotPawLayer: View {
-    @ObservedObject var pull: PawPull
+    var pull: PawPull
     static let size = CGSize(width: 160, height: 120)
     /// Room above the mascot for the "!".
     static let lift: CGFloat = 14

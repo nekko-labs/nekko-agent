@@ -12,9 +12,11 @@ import UserNotifications
 /// removed once it was handled anywhere (IO-30 dismissal sync).
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
-    static let approvalCategory = "nekko.approval"
-    static let allowAction = "nekko.allow"
-    static let denyAction = "nekko.deny"
+    nonisolated static let approvalCategory = "nekko.approval"
+    nonisolated static let allowAction = "nekko.allow"
+    nonisolated static let denyAction = "nekko.deny"
+    /// `userInfo` key on the note that says an answer did not reach the computer.
+    nonisolated static let unsentKey = "unsent"
 
     var onApprove: ((_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
     var onOpen: ((_ sessionId: String) -> Void)?
@@ -79,6 +81,21 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "nekko.test.\(UUID().uuidString)", content: content, trigger: trigger))
     }
 
+    /// An Allow or Deny from outside the app did not reach the computer: say so,
+    /// so the tool does not wait on an answer the user believes they gave. A tap
+    /// opens the chat, where the approval card still waits.
+    func postUnsent(sessionId: String, allow: Bool, why: String) {
+        let content = UNMutableNotificationContent()
+        content.threadIdentifier = sessionId
+        content.title = allow ? "Allow not sent" : "Deny not sent"
+        content.body = "\(why) Open the chat to answer again."
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        content.userInfo = ["sessionId": sessionId, Self.unsentKey: true]
+        let req = UNNotificationRequest(identifier: "\(sessionId).unsent.\(UUID().uuidString)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req)
+    }
+
     /// Whether notifications are allowed; asks when it was never asked (only after pairing).
     func ensurePermission() async -> Bool {
         switch await UNUserNotificationCenter.current().notificationSettings().authorizationStatus {
@@ -110,8 +127,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
         -> UNNotificationPresentationOptions {
         // A test is the one shown over the app: it was asked for here. Otherwise
-        // the chat itself shows it.
-        notification.request.content.userInfo["kind"] as? String == PushKind.test.rawValue ? [.banner, .list, .sound] : []
+        // the chat itself shows it. An unsent answer shows too: the user may be on
+        // another screen, and the card they answered from is gone.
+        let info = notification.request.content.userInfo
+        let shown = info["kind"] as? String == PushKind.test.rawValue || info[Self.unsentKey] != nil
+        return shown ? [.banner, .list, .sound] : []
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
@@ -119,15 +139,20 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         guard let sid = info["sessionId"] as? String else { return }
         let callId = info["callId"] as? String
         let action = response.actionIdentifier
-        await MainActor.run {
-            if let callId, action == Self.allowAction || action == Self.denyAction {
-                let allow = action == Self.allowAction
-                Task { await self.onApprove?(sid, callId, allow) }
-            } else {
-                self.onOpen?(sid)
-            }
+        if let callId, action == Self.allowAction || action == Self.denyAction {
+            // Awaited, not detached: returning tells iOS the action is handled, and
+            // a backgrounded app may be suspended right after, mid-answer.
+            await answer(sid, callId, allow: action == Self.allowAction)
+        } else {
+            await open(sid)
         }
     }
+
+    private func answer(_ sessionId: String, _ callId: String, allow: Bool) async {
+        await onApprove?(sessionId, callId, allow)
+    }
+
+    private func open(_ sessionId: String) { onOpen?(sessionId) }
 }
 
 enum Haptics {

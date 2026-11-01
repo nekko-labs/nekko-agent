@@ -387,7 +387,7 @@ export function VoiceIntro({ onClose, onTurnOn }: { onClose: () => void; onTurnO
   return (
     <Modal title="Always-on dictation" labelledBy={titleId} onClose={() => close()} overlayClassName="p-4" className="card w-full max-w-[720px] p-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 id={titleId} className="text-[15px] font-semibold">Always-on dictation</h2>
+        <h2 id={titleId} className="text-base font-semibold">Always-on dictation</h2>
         <button type="button" className="rounded-sm p-1 text-ink-faint hover:text-ink" onClick={() => close()} aria-label="Close"><CloseIcon className="h-4 w-4" /></button>
       </div>
       <div className="mt-3 overflow-hidden rounded-xl border border-line bg-surface-2" data-voice-intro>

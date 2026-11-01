@@ -35,13 +35,64 @@ public final class ChatModel {
             if let ids = session?.clientMessageIds, !ids.isEmpty { store.outbox.confirm(sessionId, ids) }
         }
     }
-    private var savedBlocks: [Block] = []
+    private var savedBlocks: [Block] = [] { didSet { merge() } }
     /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
-    private var shownIds: [String: String] = [:]
+    private var shownIds: [String: String] = [:] { didSet { merge() } }
     public private(set) var turn = LiveTurn() {
         didSet {
             if running != turn.running { running = turn.running }
+            // A streamed token adds its own length; anything else recounts.
+            liveChars = streamed.map { liveChars + $0 } ?? Self.characters(turn.blocks)
+            if turn.blocks != oldValue.blocks {
+                let appended = streamed != nil && oldValue.blocks.count == turn.blocks.count
+                if !(appended && patchLastBlock()) { merge() }
+            }
+            streamed = nil
             countContext()
+        }
+    }
+    /// Set for the one `turn` write that folds a streamed text or reasoning delta: its length.
+    private var streamed: Int?
+    /// Characters in `turn.blocks`, kept as tokens stream rather than recounted per token.
+    private(set) var liveChars = 0
+
+    /// The saved transcript with the live overlay merged in, as the view shows it.
+    /// Stored, not computed: a streamed token patches only the last block
+    /// (`patchLastBlock`) instead of merging the whole transcript again.
+    public private(set) var blocks: [Block] = []
+    /// Bumped whenever `blocks` changes anywhere but its last block, so a view
+    /// can keep what it derived from the earlier blocks across streamed tokens.
+    public private(set) var blocksLayout = 0
+    /// Bumped on every change to `blocks`: cheap to observe (scroll to follow).
+    public private(set) var blocksRevision = 0
+
+    private func merge() {
+        let merged = Transcript.mergeLive(saved: savedBlocks, live: turn.blocks)
+        blocks = shownIds.isEmpty ? merged : merged.map { b in shownIds[b.id].map { b.withId($0) } ?? b }
+        blocksLayout += 1
+        blocksRevision += 1
+    }
+
+    /// A streamed token grew the turn's last reply and nothing else: when the
+    /// merge would keep that reply as it is and it is already the last block on
+    /// screen, replace just that block. False when a full merge is needed.
+    private func patchLastBlock() -> Bool {
+        guard let live = turn.blocks.last, case .assistant = live, let last = blocks.last,
+              Transcript.keepsLiveReplies(saved: savedBlocks, live: turn.blocks) else { return false }
+        let shown = shownIds[live.id].map { live.withId($0) } ?? live
+        guard last.id == shown.id else { return false }
+        blocks[blocks.count - 1] = shown
+        blocksRevision += 1
+        return true
+    }
+
+    static func characters(_ blocks: [Block]) -> Int {
+        blocks.reduce(0) { n, b in
+            switch b {
+            case .assistant(_, let text, let reasoning, _, _): return n + text.utf16.count + (reasoning?.utf16.count ?? 0)
+            case .tool(_, _, let label, _, let output, _): return n + label.utf16.count + (output?.utf16.count ?? 0)
+            case .user(_, let text, _, _): return n + text.utf16.count
+            }
         }
     }
     /// `turn.running`, changing only when it does: views that need just this
@@ -222,14 +273,7 @@ public final class ChatModel {
         if let context {
             next = context.usedTokens
             if turn.running {
-                let chars = turn.blocks.reduce(0) { n, b in
-                    switch b {
-                    case .assistant(_, let text, let reasoning, _, _): return n + text.utf16.count + (reasoning?.utf16.count ?? 0)
-                    case .tool(_, _, let label, _, let output, _): return n + label.utf16.count + (output?.utf16.count ?? 0)
-                    case .user(_, let text, _, _): return n + text.utf16.count
-                    }
-                }
-                let streamed = Int64((chars + 3) / 4)
+                let streamed = Int64((liveChars + 3) / 4)
                 next = context.usedTokens + streamed / Self.contextStep * Self.contextStep
             }
         }
@@ -248,6 +292,10 @@ public final class ChatModel {
     public func onEvent(_ e: AgentEvent) {
         guard e.sessionId == sessionId else { return }
         cardChanges += 1
+        switch e {
+        case .text(_, let delta), .reasoning(_, let delta): streamed = delta.utf16.count
+        default: break
+        }
         turn = Transcript.apply(turn, e)
         switch e {
         case .done, .error, .sessionMeta: scheduleReload()
@@ -529,12 +577,6 @@ public final class ChatModel {
     public var modelName: String? {
         guard let id = modelId else { return nil }
         return providerId.flatMap { store.models[$0]?.first { $0.id == id }?.name } ?? id
-    }
-
-    public var blocks: [Block] {
-        let merged = Transcript.mergeLive(saved: savedBlocks, live: turn.blocks)
-        guard !shownIds.isEmpty else { return merged }
-        return merged.map { b in shownIds[b.id].map { b.withId($0) } ?? b }
     }
 
     public var queued: [String] { session?.queue ?? [] }

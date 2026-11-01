@@ -284,9 +284,9 @@ export function ClaudeSetup({
                 : 'Claude Code is signing you in. Nekko never sees your login.'}
             </span>
             {terminal.term.purpose === 'signin' && (
-              <button type="button" className="btn btn-ghost py-1 text-[12px]" onClick={terminal.retry}>Start sign-in again</button>
+              <button type="button" className="btn btn-ghost py-1 text-xs" onClick={terminal.retry}>Start sign-in again</button>
             )}
-            <button type="button" className="btn btn-ghost py-1 text-[12px]" onClick={terminal.close}>Hide</button>
+            <button type="button" className="btn btn-ghost py-1 text-xs" onClick={terminal.close}>Hide</button>
           </div>
           {terminal.term.purpose === 'signin' && (
             <ol className="claude-signin-steps">
@@ -319,7 +319,7 @@ export function ClaudeSetup({
       )}
 
       {choice && <ClaudeHowItWorks choice={choice} />}
-      <p className="mt-3 text-[12px] text-ink-faint"><ClaudeWhyLink label="What works with a Claude plan?" /></p>
+      <p className="mt-3 text-xs text-ink-faint"><ClaudeWhyLink label="What works with a Claude plan?" /></p>
     </div>
   );
 }
@@ -341,7 +341,7 @@ function ClaudeDetect({ status, checking, installing, onRetry }: { status: Claud
       <div className="claude-detect" data-tone="off">
         <BanIcon />
         <span className="min-w-0 flex-1">Claude Code isn't installed on this computer. You need it to use your subscription.</span>
-        <button type="button" className="btn btn-ghost py-1 text-[12px]" onClick={onRetry} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</button>
+        <button type="button" className="btn btn-ghost py-1 text-xs" onClick={onRetry} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</button>
       </div>
     );
   }
@@ -551,16 +551,16 @@ function AnotherAccount({
   const label = typed.trim();
   return (
     <div className="claude-another">
-      <label className="block text-[12px] font-medium text-ink-soft">
+      <label className="block text-xs font-medium text-ink-soft">
         Name for the other account
         <input className="input mt-1" value={typed} onChange={(e) => onType(e.target.value)} placeholder="Work" maxLength={40} autoFocus />
-        <span className="mt-1 block text-[11px] font-normal text-ink-faint">
+        <span className="mt-1 block text-2xs font-normal text-ink-faint">
           {name ? <>Claude Code keeps this login in its own folder, <code>{claudeAccountFolder(name)}</code>.</> : 'A short name, like Work or Client A.'}
         </span>
       </label>
       {name && !status && <p className="claude-detect mt-2"><span className="claude-spin" />Checking that folder's sign-in…</p>}
       {name && status?.installed && !status.loggedIn && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px]">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-ink-soft">Not signed in yet.</span>
           <button type="button" className="btn btn-primary" onClick={onSignIn}>Sign in to {label || name}</button>
         </div>

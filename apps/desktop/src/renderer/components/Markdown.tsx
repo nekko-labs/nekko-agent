@@ -48,14 +48,14 @@ export function Markdown({ text, doc = false, basePath }: MarkdownProps) {
 /** A document is parsed whole: it is read, not streamed, and its HTML stripping works line by line. */
 function DocMarkdown({ text, basePath }: { text: string; basePath?: string }) {
   const blocks = React.useMemo(() => renderWhole(text, { doc: true, basePath }), [text, basePath]);
-  return <div className="md-doc text-[14px] leading-7">{blocks}</div>;
+  return <div className="md-doc text-sm leading-[1.6]">{blocks}</div>;
 }
 
 function ChatMarkdown({ text, basePath }: { text: string; basePath?: string }) {
   const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath }), [basePath]);
   const segments = markdownSegments(text);
   return (
-    <div className="space-y-1 text-[14px] leading-relaxed">
+    <div className="space-y-1 text-sm leading-[1.6]">
       {segments.map((s) =>
         s.kind === 'code'
           ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} />
@@ -161,16 +161,16 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   return (
     <div className="group relative my-2">
       <pre
-        className="overflow-x-auto rounded-xl border border-line p-3 font-mono text-[13px] leading-relaxed"
+        className="overflow-x-auto rounded-xl border border-line p-3 font-mono text-sm leading-relaxed"
         style={{ background: 'var(--surface-2)' }}
       >
-        {lang && <div className="mb-1 text-[10px] uppercase tracking-wide text-ink-faint">{lang}</div>}
+        {lang && <div className="mb-1 text-xs text-ink-soft">{lang}</div>}
         <code>{code}</code>
       </pre>
       <button
         onClick={copy}
         title="Copy code"
-        className="absolute right-2 top-2 rounded-md border border-line px-1.5 py-0.5 text-[10px] text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+        className="absolute right-2 top-2 rounded-md border border-line px-2 py-0.5 text-2xs text-ink-faint opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
         style={{ background: 'var(--surface)' }}
       >
         {copied ? '✓ copied' : 'Copy'}
@@ -191,12 +191,12 @@ const TASK_RE = /^\[([ xX])\]\s+(.*)$/;
 
 /** Heading typography for document mode, by level. */
 const DOC_HEADING: Record<number, string> = {
-  1: 'mt-6 mb-3 border-b border-line pb-1.5 text-[22px] font-semibold leading-tight tracking-tight',
-  2: 'mt-6 mb-2 text-[18px] font-semibold leading-snug',
-  3: 'mt-5 mb-1.5 text-[15px] font-semibold',
-  4: 'mt-4 mb-1 text-[13px] font-semibold',
-  5: 'mt-3 mb-1 text-[12px] font-semibold uppercase tracking-wide text-ink-soft',
-  6: 'mt-3 mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint',
+  1: 'mt-6 mb-3 border-b border-line pb-1 text-xl font-semibold leading-tight tracking-tight',
+  2: 'mt-6 mb-2 text-xl font-semibold leading-snug',
+  3: 'mt-5 mb-1 text-base font-semibold',
+  4: 'mt-4 mb-1 text-sm font-semibold',
+  5: 'mt-3 mb-1 text-xs font-medium text-ink-soft',
+  6: 'mt-3 mb-1 text-xs font-medium text-ink-soft',
 };
 
 /** Drop HTML comments, which markdown hides but a plain reader would show. */
@@ -268,10 +268,10 @@ function renderList(items: ListItem[], key: string, ctx: Ctx, depth = 0): React.
     nodes.push(
       <li key={`${key}-${i}`} className={task ? 'list-none' : undefined}>
         {task ? (
-          <span className="flex items-start gap-1.5">
+          <span className="flex items-start gap-2">
             <span
               aria-hidden
-              className="mt-[3px] shrink-0 text-[11px]"
+              className="mt-1 shrink-0 text-2xs"
               style={{ color: task[1] === ' ' ? 'var(--ink-faint)' : 'var(--success)' }}
             >
               {task[1] === ' ' ? '☐' : '☑'}
@@ -314,11 +314,11 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
       while (j < lines.length && lines[j].trim().startsWith('|')) { body.push(tableCells(lines[j])); j += 1; }
       out.push(
         <div key={`${key}-t${i}`} className="my-3 overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
                 {header.map((h, k) => (
-                  <th key={k} className="border-b border-line px-2.5 py-1.5 text-left font-semibold">{inline(h, ctx)}</th>
+                  <th key={k} className="border-b border-line px-3 py-1 text-left font-semibold">{inline(h, ctx)}</th>
                 ))}
               </tr>
             </thead>
@@ -326,7 +326,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
               {body.map((row, r) => (
                 <tr key={r}>
                   {header.map((_, c) => (
-                    <td key={c} className="border-b border-line px-2.5 py-1.5 align-top text-ink-soft">{inline(row[c] ?? '', ctx)}</td>
+                    <td key={c} className="border-b border-line px-3 py-1 align-top text-ink-soft">{inline(row[c] ?? '', ctx)}</td>
                   ))}
                 </tr>
               ))}
@@ -350,7 +350,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
         );
       } else {
         out.push(
-          <div key={`${key}-h${i}`} className={`font-semibold ${level <= 2 ? 'mt-1 text-[15px]' : ''}`}>
+          <div key={`${key}-h${i}`} className={`font-semibold ${level <= 2 ? 'mt-1 text-base' : ''}`}>
             {inline(heading[2], ctx)}
           </div>,
         );
@@ -378,7 +378,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
       out.push(
         <blockquote
           key={`${key}-q${i}`}
-          className={ctx.doc ? 'my-3 border-l-2 border-accent/40 pl-3 text-ink-soft' : 'my-1 border-l-2 border-line pl-2.5 text-ink-soft'}
+          className={ctx.doc ? 'my-3 border-l-2 border-accent/40 pl-3 text-ink-soft' : 'my-1 border-l-2 border-line pl-3 text-ink-soft'}
         >
           {renderBlocks(quoted.join('\n'), `${key}-q${i}i`, ctx)}
         </blockquote>,
@@ -417,7 +417,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
     }
     out.push(
       ctx.doc
-        ? <p key={`${key}-p${i}`} className="my-2.5">{inline(para.join(' '), ctx)}</p>
+        ? <p key={`${key}-p${i}`} className="my-2">{inline(para.join(' '), ctx)}</p>
         : <p key={`${key}-p${i}`}>{lineBreaks(para, ctx)}</p>,
     );
     i = j;
@@ -477,7 +477,7 @@ function inline(s: string, ctx: Ctx): React.ReactNode {
       nodes.push(<s key={key++} className="text-ink-faint">{inline(strike, ctx)}</s>);
     } else if (code !== undefined) {
       nodes.push(
-        <code key={key++} className="rounded-sm px-1 py-0.5 font-mono text-[13px]" style={{ background: 'var(--surface-2)' }}>
+        <code key={key++} className="rounded-sm px-1 py-0.5 font-mono text-sm" style={{ background: 'var(--surface-2)' }}>
           {code}
         </code>,
       );

@@ -290,11 +290,11 @@ function HostFilePane({ path }: { path: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[12px]">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-xs">
         <FileTypeIcon name={name} size={15} />
         <span className="font-medium">{name}</span>
         {comments.length > 0 && (
-          <span className="chip text-[10px]" title={`${comments.length} comment${comments.length > 1 ? 's' : ''} on this file`}>💬 {comments.length}</span>
+          <span className="chip text-2xs" title={`${comments.length} comment${comments.length > 1 ? 's' : ''} on this file`}>💬 {comments.length}</span>
         )}
         {editable && <SaveState dirty={dirty} saving={saving} savedAt={savedAt} autoSave={autoSave} />}
 
@@ -317,7 +317,7 @@ function HostFilePane({ path }: { path: string }) {
               </IconAction>
               <span className="mx-0.5 h-4 w-px bg-line" aria-hidden="true" />
               <button
-                className="ctl-toggle text-[11px]"
+                className="ctl-toggle text-2xs"
                 onClick={toggleAutoSave}
                 aria-pressed={autoSave}
                 title={autoSave ? 'Auto-save is on - edits save as you pause' : 'Auto-save is off - save with Ctrl+S'}
@@ -327,7 +327,7 @@ function HostFilePane({ path }: { path: string }) {
             </>
           )}
           {isHtml && !truncated && (
-            <button className="chip chip-action text-[11px]" onClick={async () => {
+            <button className="chip chip-action text-2xs" onClick={async () => {
               const state = useStore.getState();
               const workspaceId = state.activeProjectId ?? state.settings?.workspaces[0]?.id;
               if (!workspaceId) { pushToast('error', 'Choose a project first.'); return; }
@@ -336,7 +336,7 @@ function HostFilePane({ path }: { path: string }) {
             }}>Add to design board</button>
           )}
           {loaded && !truncated && !binary && (
-            <button className="chip chip-action text-[11px]" onClick={() => {
+            <button className="chip chip-action text-2xs" onClick={() => {
               const url = URL.createObjectURL(new Blob([content], { type: isHtml && /\.svg$/i.test(path) ? 'image/svg+xml' : 'text/plain;charset=utf-8' }));
               const link = document.createElement('a');
               link.href = url;
@@ -346,12 +346,12 @@ function HostFilePane({ path }: { path: string }) {
             }} title="Download a copy of this file">Download</button>
           )}
           {canPreview && (
-            <button className="chip chip-action text-[11px]" onClick={() => setPreview((p) => !p)} title={preview ? 'Edit source' : 'Preview artifact'}>
+            <button className="chip chip-action text-2xs" onClick={() => setPreview((p) => !p)} title={preview ? 'Edit source' : 'Preview artifact'}>
               {preview ? 'Source' : 'Preview'}
             </button>
           )}
           {editable && !autoSave && (
-            <button className="btn btn-ghost px-2 py-0.5 text-[11px]" onClick={save} disabled={!dirty || saving}>
+            <button className="btn btn-ghost px-2 py-0.5 text-2xs" onClick={save} disabled={!dirty || saving}>
               {saving ? 'Saving…' : 'Save'}
             </button>
           )}
@@ -361,7 +361,7 @@ function HostFilePane({ path }: { path: string }) {
       </div>
 
       {truncated && (
-        <div className="border-b border-line px-3 py-1 text-[11px] text-amber-500">
+        <div className="border-b border-line px-3 py-1 text-2xs text-amber-500">
           Large file, showing the first part only; editing is disabled.
         </div>
       )}
@@ -377,7 +377,7 @@ function HostFilePane({ path }: { path: string }) {
                 return (
                   <div
                     key={ln}
-                    className={`group/g relative cursor-pointer pr-1.5 font-mono text-[11px] ${isActive ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+                    className={`group/g relative cursor-pointer pr-2 font-mono text-2xs ${isActive ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
                     style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}
                     onClick={() => setActiveLine(ln)}
                     title={has ? 'View comment' : 'Comment on this line'}
@@ -396,11 +396,11 @@ function HostFilePane({ path }: { path: string }) {
 
         <div className="min-h-0 flex-1 overflow-auto">
           {!loaded ? (
-            <p className="p-4 text-[12px] text-ink-faint">Loading…</p>
+            <p className="p-4 text-xs text-ink-faint">Loading…</p>
           ) : image ? (
             <img src={image} alt={name} className="mx-auto max-h-full max-w-full object-contain p-4" />
           ) : binary ? (
-            <p className="p-4 text-[12px] text-ink-faint">Binary file, can't display as text.</p>
+            <p className="p-4 text-xs text-ink-faint">Binary file, can't display as text.</p>
           ) : isHtml && preview ? (
             <ArtifactPreview source={content} title={name} />
           ) : isMermaid && preview ? (
@@ -465,10 +465,10 @@ function SaveState({
 }: {
   dirty: boolean; saving: boolean; savedAt: number | null; autoSave: boolean;
 }) {
-  if (saving) return <span className="text-[11px] text-ink-faint">Saving…</span>;
+  if (saving) return <span className="text-2xs text-ink-faint">Saving…</span>;
   if (dirty) {
     return (
-      <span className="flex items-center gap-1.5 text-[11px] text-ink-faint" title={autoSave ? 'Saves shortly after you stop typing' : 'Unsaved changes (Ctrl+S)'}>
+      <span className="flex items-center gap-2 text-2xs text-ink-faint" title={autoSave ? 'Saves shortly after you stop typing' : 'Unsaved changes (Ctrl+S)'}>
         <span className="h-1.5 w-1.5 rounded-full bg-accent" />
         {autoSave ? 'Saving shortly' : 'Unsaved'}
       </span>
@@ -476,7 +476,7 @@ function SaveState({
   }
   if (savedAt) {
     return (
-      <span className="text-[11px]" style={{ color: 'var(--success)' }} title={new Date(savedAt).toLocaleTimeString()}>
+      <span className="text-2xs" style={{ color: 'var(--success)' }} title={new Date(savedAt).toLocaleTimeString()}>
         Saved
       </span>
     );
@@ -500,16 +500,16 @@ function CommentDock({
   const act = (action: 'save' | 'prompt' | 'run') => { onAdd(text, action); setText(''); };
   return (
     <div className="max-h-[45%] shrink-0 overflow-y-auto border-t border-line px-3 py-2" style={{ background: 'var(--surface-2)' }}>
-      <div className="mb-1.5 flex items-center gap-2 text-[12px]">
+      <div className="mb-1 flex items-center gap-2 text-xs">
         <span className="font-semibold text-accent">Line {line}</span>
-        <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-faint">{lineText.trim() || '(empty line)'}</code>
+        <code className="min-w-0 flex-1 truncate font-mono text-2xs text-ink-faint">{lineText.trim() || '(empty line)'}</code>
         <button className="rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Close" onClick={onClose}><CloseIcon className="h-3.5 w-3.5" /></button>
       </div>
 
       {comments.map((c) => (
-        <div key={c.id} className="mb-1.5 rounded-lg border border-line p-2" style={{ background: 'var(--paper)' }}>
-          <p className="whitespace-pre-wrap text-[12.5px]">{c.comment}</p>
-          <div className="mt-1 flex items-center gap-3 text-[10.5px] text-ink-faint">
+        <div key={c.id} className="mb-1 rounded-lg border border-line p-2" style={{ background: 'var(--paper)' }}>
+          <p className="whitespace-pre-wrap text-xs">{c.comment}</p>
+          <div className="mt-1 flex items-center gap-3 text-2xs text-ink-faint">
             <button className="hover:text-accent" onClick={() => onResend(c, false)} title="Queue into the composer">Add to prompt</button>
             <button className="hover:text-accent" onClick={() => onResend(c, true)} title="Send to the agent now">Run now</button>
             <button className="ml-auto hover:text-ink" onClick={() => onResolve(c.id)} title="Remove this comment">Resolve</button>
@@ -518,7 +518,7 @@ function CommentDock({
       ))}
 
       <textarea
-        className="input min-h-[44px] resize-none text-[12.5px]"
+        className="input min-h-[44px] resize-none text-xs"
         rows={2}
         placeholder="Comment on this line for the agent…"
         value={text}
@@ -526,7 +526,7 @@ function CommentDock({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); act('prompt'); } }}
       />
-      <div className="mt-1.5 flex items-center justify-end gap-2 text-[12px]">
+      <div className="mt-1 flex items-center justify-end gap-2 text-xs">
         <button className="btn btn-ghost py-1" disabled={!text.trim()} onClick={() => act('save')} title="Save as a note (no agent)">Save</button>
         <button className="btn btn-outline py-1" disabled={!text.trim()} onClick={() => act('prompt')}>Add to prompt</button>
         <button className="btn btn-primary py-1" disabled={!text.trim()} onClick={() => act('run')}>Run now</button>
