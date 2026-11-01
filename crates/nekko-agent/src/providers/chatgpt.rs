@@ -13,19 +13,6 @@ use crate::stream::{ChunkStream, DecodeClock, Sink, Stop, spawn};
 use crate::types::*;
 use serde_json::{Map, Value, json};
 
-/// Last-known subscription model set, used only when the live catalog cannot
-/// be fetched (offline, unsigned, backend down). The Codex backend retired the
-/// gpt-5/codex ids in 2026, so this mirrors the current picker generation.
-const CHATGPT_MODELS: &[(&str, &str, u64)] = &[
-    ("gpt-6.1-sol", "GPT-6.1 Sol", 0),
-    ("gpt-6-sol", "GPT-6 Sol", 0),
-    ("gpt-6-luna", "GPT-6 Luna", 0),
-    ("gpt-6-astra", "GPT-6 Astra", 0),
-    ("gpt-5.6-sol", "GPT-5.6 Sol", 272_000),
-    ("gpt-5.6-terra", "GPT-5.6 Terra", 272_000),
-    ("gpt-5.6-luna", "GPT-5.6 Luna", 272_000),
-];
-
 /// The backend filters the catalog by the Codex CLI version a client reports;
 /// unversioned and stale versions get a truncated or empty list. Raise this
 /// when the backend starts gating newer entries behind a higher line.
@@ -241,7 +228,7 @@ impl ChatGptProvider {
 
     /// Headers for the catalog GET: same subscription auth as chat, but no
     /// `OpenAI-Beta`/`session_id`, which are Responses-API concerns. None when
-    /// the sign-in is incomplete, so the caller falls back to the curated list.
+    /// the sign-in is incomplete; a catalog cannot be fetched without it.
     fn catalog_headers(&self) -> Option<Vec<(String, String)>> {
         let key = self.config.api_key.as_deref().filter(|k| !k.is_empty())?;
         let account = self.config.account_id.as_deref().filter(|a| !a.is_empty())?;
@@ -266,7 +253,7 @@ impl ChatGptProvider {
     /// `client_version` we report, the account's plan, and active rollouts, so
     /// the answer is exactly the set this sign-in can run — including models
     /// that did not exist when this build shipped. None on any failure, or
-    /// after `CATALOG_TIMEOUT`, so the caller falls back to the curated list.
+    /// after `CATALOG_TIMEOUT`, so the caller reports the unavailable catalog.
     async fn fetch_catalog(&self) -> Option<Vec<ModelInfo>> {
         let req = self.catalog_request()?;
         let fetch = async {
@@ -338,20 +325,14 @@ impl ChatGptProvider {
     }
 
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
-        let mut all = self.fetch_catalog().await.unwrap_or_else(|| {
-            CHATGPT_MODELS
-                .iter()
-                .map(|(id, name, ctx)| ModelInfo {
-                    id: id.to_string(),
-                    provider_id: self.config.id.clone(),
-                    name: name.to_string(),
-                    context_length: (*ctx > 0).then_some(*ctx),
-                    fallback: true,
-                    ..Default::default()
-                })
-                .collect()
-        });
-        offer_latest_known_model(&mut all, &self.config.id);
+        if self.catalog_request().is_none() {
+            return Err(ProviderError::new("Sign in with ChatGPT to load your models."));
+        }
+        let mut all = self.fetch_catalog().await.ok_or_else(|| {
+            ProviderError::new(
+                "ChatGPT's model catalog is unavailable. Check your connection or sign in again, then retry.",
+            )
+        })?;
         let custom = self.config.custom_model_id.as_deref().map(js::trim).filter(|c| !c.is_empty());
         if let Some(custom) = custom
             && !all.iter().any(|m| m.id == custom)
@@ -367,24 +348,6 @@ impl ChatGptProvider {
         }
         Ok(all)
     }
-}
-
-// A live catalog can lag a backend rollout. Let the user try the latest known
-// id, but do not present its absence from their account's catalog as access.
-fn offer_latest_known_model(models: &mut Vec<ModelInfo>, provider_id: &str) {
-    if models.iter().any(|m| m.id == "gpt-6.1-sol") {
-        return;
-    }
-    models.push(ModelInfo {
-        id: "gpt-6.1-sol".into(),
-        provider_id: provider_id.into(),
-        name: "GPT-6.1 Sol".into(),
-        availability: Some(json!({
-            "status": "ready",
-            "detail": "Not listed for this account. You can try it, but the provider may reject it."
-        })),
-        ..Default::default()
-    });
 }
 
 /// Map normalized chat history onto Responses API input items. A `system`
@@ -459,19 +422,6 @@ mod tests {
         }))
         .unwrap();
         super::to_response_items(&req)
-    }
-
-    #[test]
-    fn offers_latest_id_without_overriding_live_catalog_or_promising_access() {
-        let mut live = vec![super::ModelInfo { id: "gpt-6-sol".into(), name: "Live Sol".into(), ..Default::default() }];
-        super::offer_latest_known_model(&mut live, "chatgpt");
-        assert_eq!(live.len(), 2);
-        assert_eq!(live[0].name, "Live Sol");
-        assert_eq!(live[1].id, "gpt-6.1-sol");
-        assert_eq!(live[1].provider_id, "chatgpt");
-        assert!(live[1].availability.as_ref().unwrap()["detail"].as_str().unwrap().contains("may reject"));
-        super::offer_latest_known_model(&mut live, "chatgpt");
-        assert_eq!(live.len(), 2);
     }
 
     #[test]

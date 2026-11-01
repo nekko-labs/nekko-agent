@@ -9,7 +9,6 @@ Promise.all([import('react'), import('react-dom/client'), import('../src/rendere
   ];
   const models = [
     { id: 'gpt-6-sol', providerId: 'chatgpt', name: 'GPT-6 Sol' },
-    { id: 'gpt-6.1-sol', providerId: 'chatgpt', name: 'GPT-6.1 Sol', availability: { status: 'ready', detail: 'Not listed for this account. You can try it, but the provider may reject it.' } },
     { id: 'opus', providerId: 'claude', name: 'Claude Opus' },
     { id: 'sonnet', providerId: 'claude', name: 'Claude Sonnet' },
   ];

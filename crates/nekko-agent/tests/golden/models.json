@@ -844,15 +844,6 @@
         "id": "gpt-6-luna",
         "providerId": "chatgpt",
         "name": "gpt-6-luna"
-      },
-      {
-        "id": "gpt-6.1-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-6.1 Sol",
-        "availability": {
-          "status": "ready",
-          "detail": "Not listed for this account. You can try it, but the provider may reject it."
-        }
       }
     ]
   },
@@ -870,46 +861,7 @@
         "body": null
       }
     ],
-    "models": [
-      {
-        "id": "gpt-6.1-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-6.1 Sol"
-      },
-      {
-        "id": "gpt-6-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Sol"
-      },
-      {
-        "id": "gpt-6-luna",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Luna"
-      },
-      {
-        "id": "gpt-6-astra",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Astra"
-      },
-      {
-        "id": "gpt-5.6-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Sol",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-terra",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Terra",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-luna",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Luna",
-        "contextLength": 272000
-      }
-    ]
+    "error": "ChatGPT's model catalog is unavailable. Check your connection or sign in again, then retry."
   },
   "chatgpt-catalog-empty-falls-back": {
     "requests": [
@@ -925,46 +877,7 @@
         "body": null
       }
     ],
-    "models": [
-      {
-        "id": "gpt-6.1-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-6.1 Sol"
-      },
-      {
-        "id": "gpt-6-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Sol"
-      },
-      {
-        "id": "gpt-6-luna",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Luna"
-      },
-      {
-        "id": "gpt-6-astra",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Astra"
-      },
-      {
-        "id": "gpt-5.6-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Sol",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-terra",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Terra",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-luna",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Luna",
-        "contextLength": 272000
-      }
-    ]
+    "error": "ChatGPT's model catalog is unavailable. Check your connection or sign in again, then retry."
   },
   "chatgpt-catalog-wrong-shape-falls-back": {
     "requests": [
@@ -980,89 +893,11 @@
         "body": null
       }
     ],
-    "models": [
-      {
-        "id": "gpt-6.1-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-6.1 Sol"
-      },
-      {
-        "id": "gpt-6-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Sol"
-      },
-      {
-        "id": "gpt-6-luna",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Luna"
-      },
-      {
-        "id": "gpt-6-astra",
-        "providerId": "chatgpt",
-        "name": "GPT-6 Astra"
-      },
-      {
-        "id": "gpt-5.6-sol",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Sol",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-terra",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Terra",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-luna",
-        "providerId": "chatgpt",
-        "name": "GPT-5.6 Luna",
-        "contextLength": 272000
-      }
-    ]
+    "error": "ChatGPT's model catalog is unavailable. Check your connection or sign in again, then retry."
   },
   "chatgpt-no-account": {
     "requests": [],
-    "models": [
-      {
-        "id": "gpt-6.1-sol",
-        "providerId": "chatgpt-no-account",
-        "name": "GPT-6.1 Sol"
-      },
-      {
-        "id": "gpt-6-sol",
-        "providerId": "chatgpt-no-account",
-        "name": "GPT-6 Sol"
-      },
-      {
-        "id": "gpt-6-luna",
-        "providerId": "chatgpt-no-account",
-        "name": "GPT-6 Luna"
-      },
-      {
-        "id": "gpt-6-astra",
-        "providerId": "chatgpt-no-account",
-        "name": "GPT-6 Astra"
-      },
-      {
-        "id": "gpt-5.6-sol",
-        "providerId": "chatgpt-no-account",
-        "name": "GPT-5.6 Sol",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-terra",
-        "providerId": "chatgpt-no-account",
-        "name": "GPT-5.6 Terra",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-luna",
-        "providerId": "chatgpt-no-account",
-        "name": "GPT-5.6 Luna",
-        "contextLength": 272000
-      }
-    ]
+    "error": "Sign in with ChatGPT to load your models."
   },
   "chatgpt-custom": {
     "requests": [
@@ -1078,51 +913,7 @@
         "body": null
       }
     ],
-    "models": [
-      {
-        "id": "gpt-6.1-sol",
-        "providerId": "chatgpt-custom",
-        "name": "GPT-6.1 Sol"
-      },
-      {
-        "id": "gpt-6-sol",
-        "providerId": "chatgpt-custom",
-        "name": "GPT-6 Sol"
-      },
-      {
-        "id": "gpt-6-luna",
-        "providerId": "chatgpt-custom",
-        "name": "GPT-6 Luna"
-      },
-      {
-        "id": "gpt-6-astra",
-        "providerId": "chatgpt-custom",
-        "name": "GPT-6 Astra"
-      },
-      {
-        "id": "gpt-5.6-sol",
-        "providerId": "chatgpt-custom",
-        "name": "GPT-5.6 Sol",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-terra",
-        "providerId": "chatgpt-custom",
-        "name": "GPT-5.6 Terra",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-luna",
-        "providerId": "chatgpt-custom",
-        "name": "GPT-5.6 Luna",
-        "contextLength": 272000
-      },
-      {
-        "id": "my-codex-model",
-        "providerId": "chatgpt-custom",
-        "name": "my-codex-model (custom)"
-      }
-    ]
+    "error": "ChatGPT's model catalog is unavailable. Check your connection or sign in again, then retry."
   },
   "chatgpt-custom-live": {
     "requests": [
@@ -1153,45 +944,6 @@
   },
   "chatgpt-custom-duplicate": {
     "requests": [],
-    "models": [
-      {
-        "id": "gpt-6.1-sol",
-        "providerId": "chatgpt-custom-dup",
-        "name": "GPT-6.1 Sol"
-      },
-      {
-        "id": "gpt-6-sol",
-        "providerId": "chatgpt-custom-dup",
-        "name": "GPT-6 Sol"
-      },
-      {
-        "id": "gpt-6-luna",
-        "providerId": "chatgpt-custom-dup",
-        "name": "GPT-6 Luna"
-      },
-      {
-        "id": "gpt-6-astra",
-        "providerId": "chatgpt-custom-dup",
-        "name": "GPT-6 Astra"
-      },
-      {
-        "id": "gpt-5.6-sol",
-        "providerId": "chatgpt-custom-dup",
-        "name": "GPT-5.6 Sol",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-terra",
-        "providerId": "chatgpt-custom-dup",
-        "name": "GPT-5.6 Terra",
-        "contextLength": 272000
-      },
-      {
-        "id": "gpt-5.6-luna",
-        "providerId": "chatgpt-custom-dup",
-        "name": "GPT-5.6 Luna",
-        "contextLength": 272000
-      }
-    ]
+    "error": "Sign in with ChatGPT to load your models."
   }
 }

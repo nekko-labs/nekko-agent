@@ -92,11 +92,6 @@ describe('subscription model version labels', () => {
     expect(out).toContain('Currently Opus 5.5');
     expect(out).toContain('Claude Code chooses the version when the chat starts');
   });
-  it('shows a missing ChatGPT catalog model as an attempt, not verified access', () => {
-    const out = renderToStaticMarkup(<ModelPicker expanded open providers={[{ id: 'gpt', kind: 'chatgpt', label: 'ChatGPT', baseUrl: '', enabled: true }]} providerId="gpt" modelId={null} models={[{ id: 'gpt-6.1-sol', providerId: 'gpt', name: 'GPT-6.1 Sol', availability: { status: 'ready', detail: 'Not listed for this account. You can try it, but the provider may reject it.' } }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
-    expect(out).toContain('GPT-6.1 Sol');
-    expect(out).toContain('Not listed for this account. You can try it');
-  });
 });
 
 describe('model chip name priority', () => {

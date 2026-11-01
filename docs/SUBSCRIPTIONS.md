@@ -43,7 +43,7 @@ The email comes from the ChatGPT `id_token`, stays in `tokens.json` next to the 
 
 ## Caveats
 
-ChatGPT normally lists the models its signed-in account reports. If GPT-6.1 Sol is absent from that live catalog, Nekko also shows it as a try-it choice with a warning; selecting it does not grant access, and OpenAI may reject the request. The provider card's optional custom model id is available for other ids not listed by the account.
+ChatGPT lists the models its signed-in account's API catalog reports, cached for up to five minutes for that provider configuration. Nekko does not insert a guessed model when the catalog omits it. If the API cannot be reached and there is no fresh cached result, the model list reports an error instead of showing a compiled-in list; retry after reconnecting. The provider card's optional custom model id is a user-supplied override, not a claim that the account can run it.
 
 The ChatGPT OAuth client is the same first-party client the Codex CLI uses. OpenAI's consumer terms are written around its own apps, so the flow may stop working at any time if OpenAI rotates the client id, changes a scope, or blocks the client. The API-key options are unaffected.
 
