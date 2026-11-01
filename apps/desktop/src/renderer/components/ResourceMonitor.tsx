@@ -215,7 +215,7 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
         aria-expanded={open}
         title={open ? 'Collapse the resource meters' : 'Show the resource meters'}
       >
-        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-xs font-medium text-ink-soft">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Resources
           {gpu && (monitors.gpu || monitors.vram) && (

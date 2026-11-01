@@ -231,7 +231,7 @@ export function TemplateSetup({
 
         {needs.length > 0 && (
           <section className="mt-4">
-            <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">What it needs</p>
+            <p className="mb-1 text-xs font-medium text-ink-soft">What it needs</p>
             <ul className="space-y-1">
               {needs.map((n) => (
                 <li key={n.id} className="flex items-center gap-2 text-xs">
@@ -297,7 +297,7 @@ export function TemplateSetup({
                 const known = skills.some((sk) => sk.id === value);
                 return (
                   <label key={input.key} className="block" data-template-skill>
-                    <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
+                    <span className="mb-1 block text-xs font-medium text-ink-soft">{input.label}</span>
                     <select
                       className="input w-full"
                       value={value}
@@ -319,7 +319,7 @@ export function TemplateSetup({
               }
               return (
                 <label key={input.key} className="block">
-                  <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">{input.label}</span>
+                  <span className="mb-1 block text-xs font-medium text-ink-soft">{input.label}</span>
                   <input
                     className="input w-full"
                     type={input.kind === 'time' ? 'time' : 'text'}
@@ -341,7 +341,7 @@ export function TemplateSetup({
         )}
 
         <label className="mt-4 block">
-          <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Notify me</span>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Notify me</span>
           <select className="input w-full" value={notify} onChange={(e) => setNotify(e.target.value as WorkflowNotify)}>
             {WORKFLOW_NOTIFY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>

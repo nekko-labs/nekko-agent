@@ -61,7 +61,7 @@ export function FirstWorkflowWizard({ onCreate, onBrowse }: { onCreate: (seed: W
   const valid = !!selected && firstWorkflowDetailValid(selected.example, detail);
   return (
     <section className="mx-auto w-full max-w-4xl p-4 sm:p-8" data-first-workflow-wizard>
-      <p className="text-2xs font-semibold uppercase tracking-wide text-(--accent)">Your first workflow</p>
+      <p className="text-xs font-medium text-(--accent)">Your first workflow</p>
       <h1 className="mt-2 text-2xl font-semibold">Put a little work on autopilot</h1>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">A workflow gives Nekko repeatable instructions. Try it by hand first, then choose a schedule or an event to run it for you.</p>
       <ol className="my-5 flex flex-wrap gap-3 text-xs text-ink-faint" aria-label="Setup progress">

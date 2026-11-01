@@ -200,7 +200,7 @@ export function FirstModelSteps({
   return (
     <section className="mx-auto max-w-3xl py-4" data-first-local-model={phase.kind}>
       <div className="flex flex-col items-center text-center">
-        <p className="text-2xs font-semibold uppercase tracking-widest text-ink-faint">Your first local model · Step {step} of 3</p>
+        <p className="text-xs font-medium text-ink-soft">Your first local model · Step {step} of 3</p>
         <h1 className="mt-3 text-2xl font-semibold">{title}</h1>
         <p className="mt-2 max-w-lg text-sm text-ink-soft">{lead}</p>
         <ol className="my-6 flex gap-5 text-xs text-ink-soft" aria-label="Setup progress">

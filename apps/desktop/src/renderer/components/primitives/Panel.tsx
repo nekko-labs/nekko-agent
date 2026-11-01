@@ -42,9 +42,9 @@ export function EmptyHint({ children, className = '' }: { children: React.ReactN
   );
 }
 
-/** A tiny uppercase label above a group of rows or fields. */
+/** A small sentence-case label above a group of rows or fields. */
 export function FieldLabel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <p className={`text-2xs font-semibold uppercase tracking-wide text-ink-faint ${className}`}>{children}</p>;
+  return <p className={`text-xs font-medium text-ink-soft ${className}`}>{children}</p>;
 }
 
 /** A number + caption tile (run stats, usage summaries). */
@@ -59,7 +59,7 @@ export function StatTile({
 }) {
   return (
     <div className={`card px-3 py-2 ${className}`}>
-      <div className="font-mono text-2xs uppercase tracking-[0.14em] text-ink-faint">{label}</div>
+      <div className="text-xs text-ink-soft">{label}</div>
       <div className="mt-0.5 text-xl font-bold tabular-nums" style={color ? { color } : undefined}>{value}</div>
       {sub != null && <div className="truncate text-2xs text-ink-faint">{sub}</div>}
     </div>

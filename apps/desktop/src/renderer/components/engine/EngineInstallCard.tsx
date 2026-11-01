@@ -58,7 +58,7 @@ export function EngineInstallCard({
       {install.recommended ? (
         <>
           <div className="mt-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
-            <label className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+            <label className="text-xs font-medium text-ink-soft">
               Build for this machine
             </label>
             <select
@@ -102,7 +102,7 @@ export function EngineInstallCard({
 
       {(showOther || !install.recommended) && (
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
-          <label className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+          <label className="text-xs font-medium text-ink-soft">
             Path to llama-server
           </label>
           <div className="mt-1 flex gap-2">

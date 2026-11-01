@@ -30,7 +30,7 @@ export function CompactionSummary({ message, latest }: { message: ChatMessage; l
       </div>
       {open && (
         <div className="mt-2 rounded-xl border border-line bg-surface-2 px-4 py-3 text-sm">
-          <p className="mb-1 text-2xs font-semibold uppercase tracking-wider text-ink-faint">
+          <p className="mb-1 text-xs font-medium text-ink-soft">
             {latest ? 'Summary the model continues from' : 'Earlier summary'}
           </p>
           <div className="text-ink-soft">

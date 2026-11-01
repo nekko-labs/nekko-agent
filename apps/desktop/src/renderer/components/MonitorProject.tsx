@@ -95,7 +95,7 @@ export function MonitorProject({ sessionId, projectPath }: { sessionId: string; 
 
   return (
     <details open className="group rounded-lg p-2" data-monitor-project data-project-source={current ?? (fileSource ? 'repo' : 'none')}>
-      <summary className="flex cursor-pointer items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+      <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium text-ink-soft">
         <span className="flex-1">Project{data && 'items' in data && <span className="ml-1 tabular-nums">{data.items.length}</span>}</span>
         {(current || fileSource) && <button type="button" className="rounded px-1 text-2xs normal-case tracking-normal hover:bg-surface-2 disabled:opacity-50" disabled={busy}
           onClick={(e) => { e.preventDefault(); if (current) void load(current); else void reload(); }} title="Reload tasks">{busy ? 'Loading…' : 'Refresh'}</button>}

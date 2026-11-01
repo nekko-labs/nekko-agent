@@ -256,7 +256,7 @@ export function PrivacyShieldPanel({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-3">
-      <div className="mb-1 text-2xs font-medium uppercase tracking-wide text-ink-faint">{title}</div>
+      <div className="mb-1 text-xs font-medium text-ink-soft">{title}</div>
       {children}
     </div>
   );

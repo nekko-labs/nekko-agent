@@ -29,11 +29,11 @@ export function RunStatusChip({ run }: { run: TrainingRun }) {
   const color = STATUS_COLOR[run.status];
   return (
     <span
-      className="inline-flex items-center gap-2 rounded-full border px-2 py-0.5 font-mono text-2xs uppercase tracking-wider"
+      className="inline-flex items-center gap-2 rounded-full border px-2 py-0.5 text-xs"
       style={{ color, borderColor: `color-mix(in srgb, ${color} 45%, transparent)` }}
     >
       <span className={`inline-block h-1.5 w-1.5 rounded-full ${run.status === 'running' ? 'animate-pulse' : ''}`} style={{ background: color }} />
-      {run.status}
+      {run.status.charAt(0).toUpperCase() + run.status.slice(1)}
     </span>
   );
 }
@@ -71,7 +71,7 @@ export function ChampionCard({ run }: { run: TrainingRun }) {
   if (!best) return null;
   return (
     <div className="card px-4 py-3" style={{ borderColor: 'color-mix(in srgb, var(--success) 35%, var(--line))' }}>
-      <div className="font-mono text-2xs uppercase tracking-[0.14em]" style={{ color: STATUS.success }}>
+      <div className="text-xs" style={{ color: STATUS.success }}>
         Current champion{best.approach ? ` · ${best.approach}` : ''}
       </div>
       <div className="mt-1 font-mono text-xs font-semibold" style={{ color: STATUS.success }}>{best.title}</div>
@@ -107,7 +107,7 @@ export function ArtifactsCard({ run }: { run: TrainingRun }) {
   return (
     <div className="card px-4 py-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="font-mono text-2xs uppercase tracking-[0.14em] text-(--ink-faint)">
+        <div className="text-xs text-ink-soft">
           Artifacts{artifacts.length ? ` · ${artifacts.length}` : ''}
         </div>
         <button
@@ -227,7 +227,7 @@ export function IdeaMaze({ run }: { run: TrainingRun }) {
   return (
     <div className="card overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-(--line) px-4 py-2">
-        <span className="font-mono text-2xs uppercase tracking-[0.16em] text-(--ink-faint)">
+        <span className="text-xs text-ink-soft">
           The idea maze — every idea the agent tried, growing over time
         </span>
         <span className="ml-auto flex items-center gap-3 font-mono text-2xs text-(--ink-faint)">
@@ -353,7 +353,7 @@ export function HintComposer({
   };
   return (
     <div className="card px-4 py-3">
-      <div className="font-mono text-2xs uppercase tracking-[0.14em] text-(--ink-faint)">{title}</div>
+      <div className="text-xs text-ink-soft">{title}</div>
       <div className="mt-2 flex gap-2">
         <textarea
           className="input min-h-[44px] flex-1 resize-y py-2 text-xs"
@@ -405,7 +405,7 @@ export function RunLog({ run, max = 5000 }: { run: TrainingRun; max?: number }) 
   if (!entries.length) return null;
   return (
     <div className="card px-4 py-2">
-      <div className="font-mono text-2xs uppercase tracking-[0.14em] text-(--ink-faint)">Activity</div>
+      <div className="text-xs text-ink-soft">Activity</div>
       <LogSurface
         items={entries}
         label="Run activity log"

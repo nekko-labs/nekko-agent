@@ -716,7 +716,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     className={`h-3 w-3 shrink-0 text-accent transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
-                  <span className="agent-panel-group-label truncate font-semibold uppercase tracking-wider">{b.name}</span>
+                  <span className="agent-panel-group-label truncate font-medium">{b.name}</span>
                   {isCollapsed && (items.length > 0 || completedGroup) && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}

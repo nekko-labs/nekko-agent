@@ -35,7 +35,7 @@ export function AboutNekko() {
           <NekkoAvatar size={72} title="Nekko" />
           {purr && <span key={purr} className="about-nekko-purr" aria-live="polite">{purr}</span>}
         </button>
-        <h2 className="text-gradient text-2xl font-semibold tracking-tight">Nekko Agent</h2>
+        <h2 className="text-2xl text-ink font-semibold tracking-tight">Nekko Agent</h2>
         {version && <span className="chip text-2xs">v{version}</span>}
         <p className="text-sm text-ink-soft">A local-first agent for chat, cowork and code, with a cat for a co-pilot.</p>
         <ul className="mt-1 flex w-full flex-col gap-2 text-left">

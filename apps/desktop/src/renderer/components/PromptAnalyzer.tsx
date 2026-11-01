@@ -193,7 +193,7 @@ export function PromptAnalyzer({
       {/* What this prompt will reference — mentioned projects + their context. */}
       {refCount > 0 && (
         <div className="space-y-1">
-          <p className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+          <p className="flex items-center gap-2 text-xs font-medium text-ink-soft">
             <FolderIcon className="h-3 w-3" /> Will reference
           </p>
           {mentionedIds.map((id) => {

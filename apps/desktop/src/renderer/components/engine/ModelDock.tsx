@@ -90,7 +90,7 @@ export function ModelDock() {
         aria-expanded={open}
         title={open ? 'Collapse model settings' : 'Show the loaded models and their settings'}
       >
-        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-xs font-medium text-ink-soft">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Model settings
           {rows.length > 0 && <span className="chip text-2xs">{rows.length} loaded</span>}
@@ -288,7 +288,7 @@ function DockRow({
           {/* Unloading is a property of the row, not of the edit, so it sits
               in the corner rather than beside the reload it has nothing to do with. */}
           <div className="flex items-center justify-between gap-2">
-            <span className="text-2xs font-semibold uppercase tracking-wide text-ink-faint">Settings</span>
+            <span className="text-xs font-medium text-ink-soft">Settings</span>
             {/* The quick fields below are a subset; everything else (Runs on,
                 threads, batch, flash attention) is one jump away. */}
             <button

@@ -25,7 +25,7 @@ export function RunPolicyField({
   const shown = value ?? fallback;
   return (
     <label className="block">
-      <span className={compact ? 'block text-2xs font-medium text-ink-faint' : 'mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint'}>
+      <span className={compact ? 'block text-2xs font-medium text-ink-faint' : 'mb-1 block text-xs font-medium text-ink-soft'}>
         When it runs
       </span>
       <select

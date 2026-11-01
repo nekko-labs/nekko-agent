@@ -561,7 +561,7 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center justify-between px-4 pb-1 pt-3">
-      <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+      <span className="flex items-center gap-2 text-xs font-medium text-ink-soft">
         {title}
         {info && <InfoHint text={info} />}
       </span>
@@ -590,7 +590,7 @@ function Section({
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-xs font-medium text-ink-soft">
           {title}
           {info && <InfoHint text={info} />}
         </span>

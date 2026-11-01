@@ -300,7 +300,7 @@ export function WorkflowEditor({
         {/* Identity */}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Name</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Name</span>
             <input
               className="input w-full"
               placeholder="Review every new PR"
@@ -309,7 +309,7 @@ export function WorkflowEditor({
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Category</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Category</span>
             <input
               className="input w-full"
               list="wf-categories"
@@ -322,7 +322,7 @@ export function WorkflowEditor({
             </datalist>
           </label>
           <label className="block sm:col-span-2">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">
               Description (optional)
             </span>
             <input
@@ -333,7 +333,7 @@ export function WorkflowEditor({
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Workspace</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Workspace</span>
             <select className="input w-full" value={draft.workspaceId ?? ''} onChange={(e) => set('workspaceId', e.target.value || undefined)}>
               <option value="">(first workspace)</option>
               {(settings?.workspaces ?? []).map((w) => (
@@ -342,7 +342,7 @@ export function WorkflowEditor({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Notify me</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Notify me</span>
             <select className="input w-full" value={draft.notify} onChange={(e) => set('notify', e.target.value as WorkflowNotify)}>
               {WORKFLOW_NOTIFY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
             </select>
@@ -361,7 +361,7 @@ export function WorkflowEditor({
           </div>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             <div className="block">
-              <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Model</span>
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Model</span>
               <WorkflowModelField
                 providers={providers}
                 providerId={draft.providerId}
@@ -384,7 +384,7 @@ export function WorkflowEditor({
               )}
             </div>
             <label className="block">
-              <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Tool access</span>
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Tool access</span>
               <select
                 className="input w-full"
                 data-wf-tool-access
@@ -605,7 +605,7 @@ function SkillStepFields({
         </p>
       )}
       <label className="block">
-        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Arguments</span>
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Arguments</span>
         <input
           className="input w-full font-mono text-xs"
           data-step-args
@@ -741,7 +741,7 @@ function StepEditor({
         {(step.kind === 'prompt' || step.kind === 'skill') && (
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <div className="block">
-              <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Model</span>
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Model</span>
               <WorkflowModelField
                 providers={providers}
                 providerId={step.providerId}
@@ -758,7 +758,7 @@ function StepEditor({
             </div>
             {toolAccess === 'allowlist' && (
               <label className="block">
-                <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Allowed tools</span>
+                <span className="mb-1 block text-xs font-medium text-ink-soft">Allowed tools</span>
                 <textarea
                   className="input min-h-[36px] w-full resize-y font-mono text-xs"
                   data-step-allowed-tools
@@ -791,7 +791,7 @@ function StepEditor({
       {/* Retry + routing */}
       <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block">
-          <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Retries</span>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Retries</span>
           <input
             type="number"
             min={0}
@@ -802,7 +802,7 @@ function StepEditor({
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Timeout (s)</span>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Timeout (s)</span>
           <input
             type="number"
             min={0}
@@ -920,7 +920,7 @@ function ActionStepFields({
         <div className="grid gap-2 sm:grid-cols-2">
           {spec.params.map((p) => (
             <label key={p.key} className={`block ${p.multiline ? 'sm:col-span-2' : ''}`}>
-              <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">
                 {p.label}{p.required ? ' *' : ''}
               </span>
               {p.multiline ? (
@@ -978,7 +978,7 @@ function ConnectorTriggerFields({
   return (
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       <label className="block">
-        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Connector</span>
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Connector</span>
         <select
           className="input w-full py-1! text-xs"
           value={trigger.connector ?? ''}
@@ -991,7 +991,7 @@ function ConnectorTriggerFields({
         </select>
       </label>
       <label className="block">
-        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Event type</span>
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Event type</span>
         <input
           className="input w-full text-xs"
           placeholder={trigger.connector === 'slack' ? 'message' : 'issue'}
@@ -1008,7 +1008,7 @@ function ConnectorTriggerFields({
         )}
       </label>
       <label className="block">
-        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Poll every N minutes</span>
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Poll every N minutes</span>
         <input
           type="number"
           min={1}
@@ -1021,7 +1021,7 @@ function ConnectorTriggerFields({
       </label>
       {isChannel && (
         <label className="block">
-          <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Channel</span>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Channel</span>
           <input
             className="input w-full text-xs"
             placeholder={trigger.connector === 'slack' ? '#builds or a channel id' : 'channel id'}
@@ -1032,7 +1032,7 @@ function ConnectorTriggerFields({
       )}
       {isRepo && (
         <label className="block">
-          <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Repo / project</span>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Repo / project</span>
           <input
             className="input w-full text-xs"
             placeholder={pollEvent ? 'owner/name (required)' : 'owner/name (any)'}
@@ -1054,7 +1054,7 @@ function ConnectorTriggerFields({
       {isGitHub && (
         <>
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Action</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Action</span>
             <input
               className="input w-full text-xs"
               placeholder="opened (any)"
@@ -1063,7 +1063,7 @@ function ConnectorTriggerFields({
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Only by</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Only by</span>
             <input
               className="input w-full text-xs"
               placeholder="GitHub username (anyone)"
@@ -1074,7 +1074,7 @@ function ConnectorTriggerFields({
         </>
       )}
       <label className="block sm:col-span-2">
-        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Filter</span>
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Filter</span>
         <input
           className="input w-full text-xs"
           placeholder="Optional substring filter on the event text or payload"
@@ -1108,7 +1108,7 @@ function WebhookTriggerFields({
   return (
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       <label className="block sm:col-span-2">
-        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Webhook secret</span>
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Webhook secret</span>
         <div className="flex gap-2">
           <input
             className="input w-full font-mono text-xs"
@@ -1129,7 +1129,7 @@ function WebhookTriggerFields({
         </p>
       </label>
       <div className="block sm:col-span-2">
-        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Webhook URL</span>
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Webhook URL</span>
         <code className="block break-all rounded-lg border border-line bg-(--surface) px-3 py-1 font-mono text-2xs text-ink-soft">
           POST https://&lt;your-host&gt;/api/hooks/{slug}?key={secret}
         </code>
@@ -1155,7 +1155,7 @@ function RouteSelect({
   const current = !value ? 'default' : value.goto === 'step' ? `step:${value.stepId}` : value.goto;
   return (
     <label className="block">
-      <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-ink-soft">{label}</span>
       <select
         className="input w-full py-1! text-xs"
         value={current}
@@ -1223,7 +1223,7 @@ function TriggerEditor({
       {trigger.kind === 'schedule' && (
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Cron</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Cron</span>
             <input
               className="input w-full font-mono text-xs"
               placeholder="0 3 * * *"
@@ -1240,7 +1240,7 @@ function TriggerEditor({
             )}
           </label>
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">
               Or every N minutes
             </span>
             <input
@@ -1262,7 +1262,7 @@ function TriggerEditor({
 
       {trigger.kind === 'cli' && (
         <label className="mt-2 block">
-          <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Command</span>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Command</span>
           <input
             className="input w-full font-mono text-xs"
             placeholder={slugSource ? cliCommand({ name: slugSource } as Workflow, undefined) : 'workflow-name'}
@@ -1278,7 +1278,7 @@ function TriggerEditor({
       {trigger.kind === 'slack' && (
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Channel</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Channel</span>
             <input
               className="input w-full text-xs"
               placeholder="builds"
@@ -1287,7 +1287,7 @@ function TriggerEditor({
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">
               Only when it contains
             </span>
             <input
@@ -1304,7 +1304,7 @@ function TriggerEditor({
         <div className="mt-2 space-y-2">
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="block">
-              <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Provider</span>
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Provider</span>
               <select
                 className="input w-full py-1! text-xs"
                 value={trigger.provider ?? 'github'}
@@ -1314,7 +1314,7 @@ function TriggerEditor({
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Repo</span>
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Repo</span>
               <input
                 className="input w-full text-xs"
                 placeholder="owner/name (any)"
@@ -1323,7 +1323,7 @@ function TriggerEditor({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Branches</span>
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Branches</span>
               <input
                 className="input w-full text-xs"
                 placeholder="main, release/* (any)"
@@ -1336,7 +1336,7 @@ function TriggerEditor({
             </label>
           </div>
           <div>
-            <span className="mb-1 block text-2xs font-semibold uppercase tracking-wide text-ink-faint">Events</span>
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Events</span>
             <div className="flex flex-wrap gap-2">
               {GIT_EVENTS.map((e) => {
                 const on = events.has(e.id);

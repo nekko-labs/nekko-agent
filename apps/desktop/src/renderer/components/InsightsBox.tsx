@@ -80,7 +80,7 @@ export function InsightsBox({
       </button>
       {gearOpen && (
         <div className="card absolute right-0 top-9 z-30 w-72 p-2 shadow-(--shadow-float)" style={{ background: 'var(--paper)' }} role="menu">
-          <p className="px-2 pb-1 pt-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">Show</p>
+          <p className="px-2 pb-1 pt-1 text-xs font-medium text-ink-soft">Show</p>
           {availablePanels.map((p) => (
             <label key={p.key} className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-1 hover:bg-surface-2">
               <input type="checkbox" className="mt-0.5" checked={on(p.key)} onChange={() => toggle(p.key)} />
