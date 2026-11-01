@@ -50,6 +50,9 @@ public struct RelayStatus: Equatable, Sendable {
         self.denied = denied
         self.route = route
     }
+
+    /// `detail` when the relay's name doesn't resolve: the paired address is gone.
+    public static let hostNotFound = "host not found"
 }
 
 public struct RelayError: Error, Equatable, LocalizedError, Sendable {
@@ -781,7 +784,9 @@ public final class RelayClient: @unchecked Sendable {
                 self.retryPending = false
                 return true
             }
-            if go { self.dial() }
+            // The redial keeps saying why the last one failed, or the banner
+            // drops to a bare "Connecting…" between attempts.
+            if go { self.dial(detail: offline ? nil : detail) }
         }
     }
 

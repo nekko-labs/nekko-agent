@@ -16,6 +16,12 @@ import { SECURITY_SECTION_ID } from './security/SecuritySettings.js';
 
 /** The managed relay, shown to owners as Nekko Cloud. */
 export const MANAGED_RELAY_URL = 'wss://nekko-agent-relay.fly.dev';
+/**
+ * Whether the managed relay is deployed. It is not today (the Fly app is gone
+ * and its name no longer resolves), so Nekko Cloud is shown as coming soon and
+ * a computer still pointed at it is told to change. Flip this when it is back.
+ */
+export const NEKKO_CLOUD_LIVE = false;
 const SELF_HOST_DOCS = 'https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md';
 const TAILSCALE_DOWNLOAD = 'https://tailscale.com/download';
 
@@ -164,6 +170,11 @@ export function RemoteAccess() {
     setStatus(await window.nekko.disableRemote());
     setBusy(false);
   };
+  /** Back to the Tailscale / Nekko Cloud choice. Phones carry the old address, so they pair again. */
+  const change = async () => {
+    if (active.length > 0 && !confirm('Change how phones connect? Paired phones keep the old address and need to pair again afterwards.')) return;
+    await disable();
+  };
   const pair = async () => {
     setGrant(await window.nekko.startRemotePairing());
     setNow(Date.now());
@@ -226,6 +237,7 @@ export function RemoteAccess() {
       ) : (
         <div className="mt-3 space-y-4">
           {security && !security.enabled && <ProtectComputerPrompt />}
+          {!NEKKO_CLOUD_LIVE && status.relayUrl === MANAGED_RELAY_URL && <CloudGoneBanner busy={busy} onChange={() => void change()} />}
           {/* Paired devices */}
           <div data-shot="phone-pairing">
             <div className="flex items-center justify-between">
@@ -307,7 +319,12 @@ export function RemoteAccess() {
           </div>
 
           <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
-            <Field label="Connected through" value={connectionName(status.relayUrl!, localRelay)} />
+            <div className="flex items-end gap-2">
+              <Field label="Connected through" value={connectionName(status.relayUrl!, localRelay)} />
+              <button className="btn btn-ghost py-0.5 text-xs" onClick={() => void change()} disabled={busy}>
+                Change
+              </button>
+            </div>
             <Field label="Room" value={status.room!} mono />
           </div>
           {connectionName(status.relayUrl!, localRelay) === 'Tailscale' && <LocalRelayCard inUse={status.relayUrl} onStatus={setLocalRelay} />}
@@ -354,6 +371,7 @@ export function PairingChoiceView({
   onTailscale,
   onCloud,
   onOwnRelay,
+  cloudLive = NEKKO_CLOUD_LIVE,
 }: {
   local: LocalRelayStatus | null;
   busy?: boolean;
@@ -363,6 +381,7 @@ export function PairingChoiceView({
   onTailscale: () => void;
   onCloud: () => void;
   onOwnRelay: () => void;
+  cloudLive?: boolean;
 }) {
   const tailscale = !!local && local.available !== false;
   const connected = !!local?.tailnetIp && !!local.url;
@@ -388,18 +407,22 @@ export function PairingChoiceView({
                 <a className="underline" href={TAILSCALE_DOWNLOAD} target="_blank" rel="noreferrer">Get Tailscale</a> and sign in on this computer and your phone.
               </p>
             )}
-            <button className="btn btn-outline mt-3 self-start py-1 text-xs disabled:opacity-50" onClick={onTailscale} disabled={busy || !connected}>
-              Use Tailscale
+            <button className={`btn ${cloudLive ? 'btn-outline' : 'btn-primary'} mt-3 self-start py-1 text-xs disabled:opacity-50`} onClick={onTailscale} disabled={busy || !connected}>
+              {busy && !cloudLive ? 'Connecting…' : 'Use Tailscale'}
             </button>
           </div>
         )}
         <div data-shot="pair-cloud" className="flex flex-col rounded-lg border border-line p-3">
-          <h3 className="text-sm font-medium">Nekko Cloud</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium">Nekko Cloud</h3>
+            {!cloudLive && <Badge tone="neutral" variant="soft">Coming soon</Badge>}
+          </div>
           <p className="mt-1 flex-1 text-xs text-ink-faint">
             Works anywhere, nothing to install. End-to-end encrypted: Nekko Cloud only passes along messages it can’t read.
+            {!cloudLive && ' Not running yet: use Tailscale for now.'}
           </p>
-          <button className="btn btn-primary mt-3 self-start py-1 text-xs" onClick={onCloud} disabled={busy}>
-            {busy ? 'Connecting…' : 'Use Nekko Cloud'}
+          <button className={`btn ${cloudLive ? 'btn-primary' : 'btn-outline'} mt-3 self-start py-1 text-xs disabled:opacity-50`} onClick={onCloud} disabled={busy || !cloudLive}>
+            {busy && cloudLive ? 'Connecting…' : 'Use Nekko Cloud'}
           </button>
         </div>
       </div>
@@ -870,6 +893,20 @@ export function PhoneChangesSwitch() {
  * After a phone pressed *Stop remote access on the computer* (SK-3): who
  * stopped it and when, until remote access is turned on again here.
  */
+/** Remote access still points at Nekko Cloud while it isn't running: phones can't reach this computer. */
+export function CloudGoneBanner({ busy, onChange }: { busy?: boolean; onChange: () => void }) {
+  return (
+    <div data-shot="cloud-gone" role="alert" className="flex flex-wrap items-center gap-2 rounded border px-2 py-1 text-xs text-ink-soft" style={{ borderColor: 'var(--danger)' }}>
+      <span className="min-w-0 flex-1">
+        Nekko Cloud isn’t running yet, so phones can’t reach this computer through it. Switch to Tailscale, then pair your phone again.
+      </span>
+      <button className="btn btn-primary py-1 text-xs" onClick={onChange} disabled={busy}>
+        Change
+      </button>
+    </div>
+  );
+}
+
 export function RemoteStoppedBanner({ stoppedBy, time }: { stoppedBy: { name?: string | null; at: number }; time?: (at: number) => string }) {
   return (
     <p data-shot="remote-stopped" role="status" className="mt-2 rounded border px-2 py-1 text-xs text-ink-soft" style={{ borderColor: 'var(--warning)' }}>
