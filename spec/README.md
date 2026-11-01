@@ -185,7 +185,7 @@ Workflows, goals, integrations and tools.
 Phone remote control and the native iOS and Android apps.
 
 - [Agent-linked files and local previews on the phone](phone/agent-linked-files-and-previews-on-the-phone.md) (9 KB)
-- [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
+- [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (15 KB)
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
 - [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
 - [iPhone Markdown composer and rich replies (iPhone implemented 2026-10-25; Android planned)](phone/iphone-markdown-composer-and-rich-replies.md) (8 KB)

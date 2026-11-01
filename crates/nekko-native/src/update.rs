@@ -687,7 +687,12 @@ pub fn verify_same_signer(file: &Path, running_exe: &Path) -> Result<(), String>
     if !cfg!(windows) {
         return Ok(());
     }
-    let running = authenticode(running_exe)?;
+    // Nothing to compare against when the running executable is not a file
+    // whose signature can be read (a development run).
+    if !running_exe.is_file() {
+        return Ok(());
+    }
+    let Ok(running) = authenticode(running_exe) else { return Ok(()) };
     if running.get("Status").and_then(Value::as_i64) != Some(0) {
         return Ok(());
     }
