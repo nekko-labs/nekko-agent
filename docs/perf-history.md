@@ -93,6 +93,21 @@ Threads worth an article, with the entries that tell each story:
   real avoidable work without mistaking it for resolution of the user-facing
   performance problem.
 
+## 2026-11
+
+### Website: pixel wave pauses past the hero, no blur over it (2026-11-01)
+Area: website
+Result: improvement
+Conditions: Windows 11 desktop, the marketing site served by `scripts/serve-website.mjs`, headless Playwright Chromium 1243 over CDP with vsync on and focus emulated, 1440x900, Colourful look. 3 s idle traces (`devtools.timeline`), one run each; before is `main` at the branch point.
+
+| Metric | Before | After |
+|---|---|---|
+| Idle at the top: script (FunctionCall) ms | 335 | 341 |
+| Idle scrolled to 60% of the page: script (FunctionCall) ms | 335 | 0 |
+| Idle scrolled: Paint events | 0 | 0 |
+
+Why: the dot-matrix wave redrew at 20 fps for as long as the tab was visible; it now stops when the hero leaves the viewport and holds its last frame. At the top nothing changed, as intended. The frosted panels over the canvas became solid; their re-blur cost lands in the compositor and was not separately measured. Source: the website PR for #1410 / #1411.
+
 ## 2026-10
 
 ### A full GPU offload puts the output layer on the GPU too (2026-10-28)
