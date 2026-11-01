@@ -208,6 +208,7 @@ mod tests {
             group_id: None,
             repos: vec![],
             allow_public: false,
+            slug: None,
         }));
         let gl = record(Link::Gitlab(GitlabLink {
             base_url: "https://gitlab.com".into(),

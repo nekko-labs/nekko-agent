@@ -23,6 +23,7 @@ pub mod updates;
 pub mod vm;
 
 use github::{ConnectRequest, GitHub, SecKeySigner};
+use github_setup::GithubSetup;
 use gitlab::{GitLab, GitlabConnectRequest};
 use keychain::{key_name, runner_vault, token_key};
 use nekko_cloud::vault::Vault;
@@ -54,6 +55,7 @@ const GATEWAY_EVERY: Duration = Duration::from_secs(30);
 pub struct Connectors {
     pub github: GitHub<Net>,
     pub gitlab: GitLab<Net>,
+    pub setup: Arc<GithubSetup<Net>>,
 }
 
 /// The vault item a record's credential lives in: its GitHub App's key, shared
@@ -192,7 +194,9 @@ impl Runners {
         let gitlab = || GitLab::new(Net::default(), vault.clone(), now_secs);
         let provider = ByLink { github: github.clone(), gitlab: gitlab() };
         let sup = Supervisor::new(dir.clone(), sense, vm, provider, Box::new(awake::Caffeinate::default()), host_name);
-        let connectors = Connectors { github, gitlab: gitlab() };
+        let gh_path = std::env::var("NEKKO_GH_PATH").unwrap_or_else(|_| "gh".into());
+        let setup = GithubSetup::new(github.clone(), &dir, hub.clone(), gh_path);
+        let connectors = Connectors { github, gitlab: gitlab(), setup };
         let me = Runners::new(&dir, sup, Some(connectors), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
         if helper.is_ok() {
             me.spawn_loop();
@@ -417,6 +421,9 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         if channel == "runner:connect" {
             return self.connect(arg(0)).await;
         }
+        if github_setup::CHANNELS.contains(&channel) {
+            return self.github_setup(channel, arg(0)).await;
+        }
         let _g = self.edit.lock().await;
         let mut records = self.store.load();
         let i = records.iter().position(|r| r.config.id == id).ok_or(NO_RUNNER)?;
@@ -446,6 +453,21 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         }
     }
 
+    /// The click-through GitHub connect. Confirming it is an ordinary `runner:connect`.
+    async fn github_setup(&self, channel: &str, arg: Value) -> Result<Value, String> {
+        let setup = &self.connectors.as_ref().ok_or("Connecting is not available here.")?.setup;
+        match channel {
+            "runner:githubAccounts" => Ok(setup.accounts().await),
+            "runner:githubStart" => {
+                let req = serde_json::from_value(arg).map_err(|_| "That is not a valid GitHub setup request.")?;
+                setup.start(req, &self.store.load()).await
+            }
+            "runner:githubStatus" => Ok(json!(setup.status().await)),
+            "runner:githubCancel" => Ok(json!(setup.cancel())),
+            _ => Err(format!("unknown channel {channel}")),
+        }
+    }
+
     /// Checks and saves a new runner. The provider's checks hold no lock.
     async fn connect(&self, req: Value) -> Result<Value, String> {
         // Never echo the request: it holds a private key or an access token.
@@ -456,10 +478,14 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         let (rec, network, previous) = match req["provider"].as_str() {
             Some("github") => {
                 let req: ConnectRequest = serde_json::from_value(req).map_err(|_| INVALID)?;
-                let _connecting = self.connect_guard(key_name(req.app_id));
+                let app_id = req.app_id;
+                let _connecting = self.connect_guard(key_name(app_id));
                 let network = signals::read_network_id().await;
-                let rec = c.github.connect(req, network.clone()).await?;
-                return self.save_connected(rec, network).await;
+                let mut rec = c.github.connect(req, network.clone()).await?;
+                c.setup.stamp(&mut rec);
+                let view = self.save_connected(rec, network).await?;
+                c.setup.connected(app_id);
+                return Ok(view);
             }
             Some("gitlab") => {
                 let req: GitlabConnectRequest = serde_json::from_value(req).map_err(|_| INVALID)?;
@@ -531,6 +557,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     self.vault.delete(&new);
                 }
                 let before = secret_key(old);
+                // A public repo waiting on fork approval must not come up running.
+                old.config.settings.enabled &= rec.config.settings.enabled;
                 old.link = rec.link;
                 old.config.label = rec.config.label;
                 let nets = &mut old.config.settings.trusted_networks;

@@ -61,6 +61,7 @@ fn record(id: &str, priority: Priority, slots: u8) -> RunnerRecord {
             group_id: None,
             repos: vec![],
             allow_public: false,
+            slug: None,
         }),
         image: None,
     }
@@ -1136,6 +1137,20 @@ async fn reconnecting_a_scope_to_another_app_forgets_the_old_key() {
     let saved = crate::runner::store::Store::new(dir.path()).load();
     assert_eq!(saved[0].github().unwrap().app_id, 2);
     assert_eq!(vault.get("github-app-1"), None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn reconnecting_with_the_runner_held_off_turns_it_off() {
+    let Rig { runners, dir, .. } = runners_rig(harness(vec![]));
+    let mut again = record("new-id", Priority::RunnerFirst, 1);
+    again.config.scope = Scope::Org { org: "ACME".into() };
+    again.config.settings.enabled = false;
+    runners.save_connected(again.clone(), None).await.unwrap();
+    assert!(!crate::runner::store::Store::new(dir.path()).load()[0].config.settings.enabled);
+    // Held off stays off: a connect never turns a runner on by itself.
+    again.config.settings.enabled = true;
+    runners.save_connected(again, None).await.unwrap();
+    assert!(!crate::runner::store::Store::new(dir.path()).load()[0].config.settings.enabled);
 }
 
 /// A 16 GB Mac: room for exactly one 8 GB VM, and the VM's own memory shows as used.

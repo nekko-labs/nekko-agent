@@ -75,6 +75,7 @@ fn repo_record() -> RunnerRecord {
             group_id: None,
             repos: vec!["o/r".into()],
             allow_public: false,
+            slug: None,
         }),
         image: None,
     }
@@ -323,9 +324,26 @@ async fn connect_stores_the_key_only_after_github_accepts_it() {
     assert_eq!(rec.config.scope, Scope::Repo { owner: "o".into(), repo: "r".into() });
     assert_eq!(
         *rec.github().unwrap(),
-        GithubLink { app_id: 123, installation_id: 9, group_id: None, repos: vec!["o/r".into()], allow_public: false }
+        GithubLink {
+            app_id: 123,
+            installation_id: 9,
+            group_id: None,
+            repos: vec!["o/r".into()],
+            allow_public: false,
+            slug: None,
+        }
     );
     assert!(!rec.config.id.is_empty());
+}
+
+#[tokio::test]
+async fn connect_can_leave_a_new_runner_off() {
+    let t = rig(
+        vec![token(), (200, json!({ "account": { "login": "O" } })), (200, json!({ "id": 11, "private": true }))],
+        false,
+    );
+    let req = ConnectRequest { enabled: false, ..repo_request(false) };
+    assert!(!t.gh.connect(req, None).await.unwrap().config.settings.enabled);
 }
 
 #[tokio::test]

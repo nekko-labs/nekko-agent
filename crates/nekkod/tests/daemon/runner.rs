@@ -90,6 +90,48 @@ async fn gitlab_connect_rejects_unknown_provider() {
     );
 }
 
+// Stops at the local page: past Create, a key would reach the login keychain, which tests never write.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn github_setup_channels_serve_the_local_page() {
+    let data = tempfile::tempdir().unwrap();
+    let d = start_with_env(data.path(), json!({}), &[("NEKKO_GH_PATH", Some("/nonexistent/gh"))]);
+    let events = record_channel(d.port, "runner:githubChanged");
+
+    let (status, accounts) = post(d.port, "runner:githubAccounts", json!([]), Some(TOKEN)).await;
+    assert_eq!((status, accounts), (200, json!({ "login": null, "accounts": [] })));
+    let (_, idle) = post(d.port, "runner:githubStatus", json!([]), Some(TOKEN)).await;
+    assert_eq!(idle["step"], "idle", "{idle}");
+
+    let bad = json!([{ "owner": "a/b", "kind": "user" }]);
+    let (status, err) = post(d.port, "runner:githubStart", bad, Some(TOKEN)).await;
+    assert!(status >= 400 && err.to_string().contains("not a GitHub account name"), "{status} {err}");
+
+    let start = json!([{ "owner": "acme", "kind": "org" }]);
+    let (status, started) = post(d.port, "runner:githubStart", start, Some(TOKEN)).await;
+    assert_eq!(status, 200, "{started}");
+    let url = started["url"].as_str().unwrap();
+    assert!(url.starts_with("http://localhost:") && url.contains("/start?t="), "{url}");
+    let page = reqwest::get(url.replace("localhost", "127.0.0.1")).await.unwrap().text().await.unwrap();
+    assert!(page.contains("https://github.com/organizations/acme/settings/apps/new?state="), "{page}");
+    let (_, status_now) = post(d.port, "runner:githubStatus", json!([]), Some(TOKEN)).await;
+    assert_eq!((status_now["step"].as_str(), status_now["owner"].as_str()), (Some("create"), Some("acme")));
+    until("a runner:githubChanged event", Duration::from_secs(10), || {
+        let got = events.lock().unwrap().iter().any(|e| e["step"] == "create");
+        async move { got.then_some(()) }
+    })
+    .await;
+
+    let (_, cancelled) = post(d.port, "runner:githubCancel", json!([]), Some(TOKEN)).await;
+    assert_eq!(cancelled["step"], "idle", "{cancelled}");
+    let page = url.replace("localhost", "127.0.0.1");
+    until("the port to close", Duration::from_secs(10), || {
+        let page = page.clone();
+        async move { reqwest::get(page).await.is_err().then_some(()) }
+    })
+    .await;
+}
+
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread")]
 async fn gitlab_record_lists_and_removes() {

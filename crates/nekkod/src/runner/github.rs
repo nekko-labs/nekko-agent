@@ -6,7 +6,7 @@
 
 use super::keychain::key_name;
 use super::provider::{JobRef, Minted, Provider, ProviderError, RunnerStatus};
-use super::store::{GithubLink, Link, RunnerRecord};
+use super::store::{GithubLink, Link, RunnerRecord, yes};
 use super::vm::GITHUB_SEED;
 use base64::Engine as _;
 use nekko_cloud::vault::Vault;
@@ -112,6 +112,9 @@ pub struct ConnectRequest {
     pub allow_public: bool,
     #[serde(default)]
     pub label: Option<String>,
+    /// False leaves a new runner off, for a sheet that has more to settle first.
+    #[serde(default = "yes")]
+    pub enabled: bool,
 }
 
 type Tokens = HashMap<(u64, u64), (String, u64)>;
@@ -127,6 +130,7 @@ impl std::fmt::Debug for ConnectRequest {
             .field("repos", &self.repos)
             .field("allow_public", &self.allow_public)
             .field("label", &self.label)
+            .field("enabled", &self.enabled)
             .finish()
     }
 }
@@ -182,7 +186,7 @@ fn link(r: &RunnerRecord) -> Result<&GithubLink, ProviderError> {
     r.github().ok_or_else(|| ProviderError::Other(format!("runner {} is not a GitHub runner", r.config.id)))
 }
 
-fn ok(status: u16) -> bool {
+pub(super) fn ok(status: u16) -> bool {
     (200..300).contains(&status)
 }
 
@@ -233,7 +237,8 @@ impl<H: Http> GitHub<H> {
         Ok(format!("{input}.{}", b64url(&sig)))
     }
 
-    async fn api(
+    /// `auth` empty sends no `Authorization` (GitHub's manifest conversion takes none).
+    pub(super) async fn api(
         &self,
         method: &str,
         path: &str,
@@ -246,8 +251,10 @@ impl<H: Http> GitHub<H> {
             ("Accept", "application/vnd.github+json"),
             ("X-GitHub-Api-Version", "2022-11-28"),
             ("User-Agent", "nekko-agent"),
-            ("Authorization", bearer.as_str()),
         ];
+        if !auth.is_empty() {
+            h.push(("Authorization", bearer.as_str()));
+        }
         let body = body.map(|b| b.to_string());
         if body.is_some() {
             h.push(("Content-Type", "application/json"));
@@ -287,6 +294,12 @@ impl<H: Http> GitHub<H> {
             .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
             .map_or((self.now)() + 600, |t| t.timestamp().max(0) as u64);
         Ok((token, expires))
+    }
+
+    /// A fresh installation token, signed with the stored key.
+    pub(super) async fn token_for(&self, app_id: u64, installation_id: u64) -> Result<String, ProviderError> {
+        let pem = self.vault.get(&key_name(app_id)).ok_or_else(|| ProviderError::Auth(NO_KEY.into()))?;
+        Ok(self.fetch_token(app_id, installation_id, &pem).await?.0)
     }
 
     /// The installation token, cached until `TOKEN_MARGIN` before it expires.
@@ -407,8 +420,11 @@ impl<H: Http> GitHub<H> {
         }
         let mut id = [0u8; 6];
         let _ = getrandom::fill(&mut id);
-        let settings =
-            RunnerSettings { enabled: true, trusted_networks: network.into_iter().collect(), ..Default::default() };
+        let settings = RunnerSettings {
+            enabled: req.enabled,
+            trusted_networks: network.into_iter().collect(),
+            ..Default::default()
+        };
         Ok(RunnerRecord {
             config: RunnerConfig {
                 id: format!("gh-{}", id.iter().map(|b| format!("{b:02x}")).collect::<String>()),
@@ -422,6 +438,7 @@ impl<H: Http> GitHub<H> {
                 group_id,
                 repos,
                 allow_public: req.allow_public,
+                slug: None,
             }),
             image: None,
         })
