@@ -447,6 +447,19 @@ async fn start_with_the_installation_already_there_goes_straight_to_confirm() {
 }
 
 #[tokio::test]
+async fn starting_again_at_confirm_reads_the_repos_again() {
+    let more = (200, json!({ "repositories": [{ "full_name": "acme/new", "private": true }] }));
+    let t = rig(vec![installed(), inst_token(), repos(), installed(), inst_token(), more]);
+    t.seed_pending("acme");
+    t.start().await;
+    assert_eq!(t.setup.view().repos.len(), 2);
+    assert_eq!(t.start().await["url"], Value::Null);
+    let v = t.setup.view();
+    assert_eq!(v.step, Step::Confirm);
+    assert_eq!(v.repos, vec![RepoView { name: "acme/new".into(), private: true }]);
+}
+
+#[tokio::test]
 async fn a_saved_record_of_the_same_owner_reuses_its_app() {
     let t = rig(vec![installed(), inst_token(), repos()]);
     FileVault::new(t.secrets.clone()).set(&key_name(7), PEM).unwrap();

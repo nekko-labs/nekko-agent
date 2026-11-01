@@ -587,7 +587,7 @@ impl<H: Http + 'static> GithubSetup<H> {
                 Some(Some(url))
             }
             Step::Install => Some(s.view.slug.as_deref().map(install_url)),
-            Step::Confirm => Some(None),
+            // Falls through to reading the repos again: the owner may have just added some on GitHub.
             _ => None,
         }
     }

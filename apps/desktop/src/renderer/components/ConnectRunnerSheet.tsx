@@ -1,14 +1,27 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   DEFAULT_RUNNER_LABEL,
+  IDLE_GITHUB_SETUP,
+  MAX_RUNNER_REPOS,
   PRIORITY_DESCRIPTIONS,
   PRIORITY_LABELS,
+  defaultRepoPicks,
+  githubAppSettingsUrl,
+  githubInstallUrl,
+  publicPicks,
+  servesOneRepo,
+  tickRepo,
   toConnectRequest,
+  toSetupRequest,
   type ConnectForm,
   type ConnectRequest,
+  type ForkApproval,
+  type GithubAccounts,
+  type GithubSetupView,
   type Priority,
   type RunnerSettings,
   type RunnerView,
+  type SetupPicks,
 } from '@nekko-agent/shared';
 import { Modal } from './primitives/index.js';
 import { CheckIcon, ExternalIcon } from '../icons.js';
@@ -86,6 +99,20 @@ const Choice = ({ name, checked, onChange, title, description }: { name: string;
       {description && <span className="block text-xs text-ink-soft">{description}</span>}
     </span>
   </label>
+);
+
+const ModeChoices = ({ priority, onPriority }: { priority: Priority; onPriority(p: Priority): void }) => (
+  <>
+    <div>
+      <h3 className="text-base font-semibold text-ink">How should this Mac help?</h3>
+      <p className="text-sm text-ink-soft">You can change this any time.</p>
+    </div>
+    <div role="radiogroup" aria-label="Priority" className="flex flex-col gap-2">
+      {PRIORITIES.map((p) => (
+        <Choice key={p} name="connect-priority" checked={priority === p} onChange={() => onPriority(p)} title={PRIORITY_LABELS[p]} description={PRIORITY_DESCRIPTIONS[p]} />
+      ))}
+    </div>
+  </>
 );
 
 /** The sheet's body for one step (mockup 2); pure so tests render it statically. */
@@ -180,15 +207,7 @@ export function ConnectBody({
 
       {step === 3 && (
         <>
-          <div>
-            <h3 className="text-base font-semibold text-ink">How should this Mac help?</h3>
-            <p className="text-sm text-ink-soft">You can change this any time.</p>
-          </div>
-          <div role="radiogroup" aria-label="Priority" className="flex flex-col gap-2">
-            {PRIORITIES.map((p) => (
-              <Choice key={p} name="connect-priority" checked={form.priority === p} onChange={() => onField('priority', p)} title={PRIORITY_LABELS[p]} description={PRIORITY_DESCRIPTIONS[p]} />
-            ))}
-          </div>
+          <ModeChoices priority={form.priority} onPriority={(p) => onField('priority', p)} />
           {form.allowPublic && (
             <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
               {`${scope} may be public. Keep "Require approval for all external contributors" on in the repo's Actions settings so fork pull requests wait for you.`}
@@ -209,6 +228,261 @@ export function ConnectBody({
   );
 }
 
+const Heading = ({ children }: { children: React.ReactNode }) => <h2 className="text-base font-semibold text-ink">{children}</h2>;
+const TextLink = ({ onClick, children }: { onClick(): void; children: React.ReactNode }) => (
+  <button type="button" className="self-start text-xs text-accent" onClick={onClick}>{children}</button>
+);
+const Alert = ({ error }: { error: string | null }) => (error ? <p role="alert" className="text-xs text-[var(--danger)]">{error}</p> : null);
+
+/** The account the sheet will set up. `typed` means its name came from the text box. */
+export interface AccountChoice { login: string; kind: 'user' | 'org'; canGroup: boolean | null; typed?: boolean }
+
+/** Frame 2: where the repos live. From `gh` when it is signed in, otherwise one text box. */
+export function AccountStep({
+  accounts, choice, error, busy, onChoice, onContinue, onManual,
+}: {
+  accounts: GithubAccounts;
+  choice: AccountChoice;
+  error: string | null;
+  busy: boolean;
+  onChoice(c: AccountChoice): void;
+  onContinue(repoAdmin: boolean): void;
+  onManual(): void;
+}) {
+  const known = accounts.accounts.length > 0;
+  const free = choice.canGroup === false;
+  return (
+    <div className="flex flex-col gap-3 p-5">
+      <Heading>Where do your repos live?</Heading>
+      {known && (
+        <div role="radiogroup" aria-label="GitHub account" className="flex flex-col gap-2">
+          {accounts.accounts.map((a) => (
+            <Choice key={a.login} name="github-account" checked={!choice.typed && choice.login === a.login} onChange={() => onChoice(a)} title={a.login} description={a.kind === 'org' ? 'Organization' : 'Your account'} />
+          ))}
+          <Choice name="github-account" checked={!!choice.typed} onChange={() => onChoice({ login: '', kind: 'org', canGroup: null, typed: true })} title="Another account" description="Type its name" />
+        </div>
+      )}
+      {choice.typed && (
+        <>
+          <Field label="GitHub account or org">
+            <input className="input w-full" autoComplete="off" spellCheck={false} value={choice.login} onChange={(e) => onChoice({ ...choice, login: e.target.value.trim() })} />
+          </Field>
+          <div role="radiogroup" aria-label="Kind of account" className="grid grid-cols-2 gap-2">
+            <Choice name="github-account-kind" checked={choice.kind === 'org'} onChange={() => onChoice({ ...choice, kind: 'org' })} title="An org" />
+            <Choice name="github-account-kind" checked={choice.kind === 'user'} onChange={() => onChoice({ ...choice, kind: 'user' })} title="My account" />
+          </div>
+        </>
+      )}
+      {free && (
+        <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
+          <b>{choice.login}</b> is on GitHub's Free plan, which has no runner groups, so a runner can't be limited to some of its repos. Nekko can connect one repo instead. That app gets the repo's Administration permission.
+        </p>
+      )}
+      <Alert error={error} />
+      <div className="flex justify-end">
+        <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !choice.login} onClick={() => onContinue(free)}>
+          {free ? 'Connect one repo on GitHub' : 'Continue on GitHub'}
+        </button>
+      </div>
+      <TextLink onClick={onManual}>Use an app I already have</TextLink>
+    </div>
+  );
+}
+
+const Stage = ({ done, label }: { done: boolean | null; label: string }) => (
+  <div className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 text-sm text-ink">
+    {done
+      ? <CheckIcon className="h-3.5 w-3.5 justify-self-center text-[var(--success)]" />
+      : <span className="h-2.25 w-2.25 justify-self-center rounded-full" style={{ background: done === false ? 'var(--accent)' : 'var(--surface-2)' }} />}
+    <span>{label}</span>
+    <span className="text-xs text-ink-faint">{done ? 'Done' : done === false ? 'Waiting' : ''}</span>
+  </div>
+);
+
+/** Frame 3: everything left happens on github.com. Leaving is safe: the app and key are kept. */
+export function WaitingStep({ status, busy, onCancel, onOpen }: { status: GithubSetupView; busy: boolean; onCancel(): void; onOpen(): void }) {
+  const installing = status.step === 'install';
+  return (
+    <div className="flex flex-col gap-3 p-5">
+      <Heading>Finish on GitHub</Heading>
+      <Stage done={installing} label="Create the app" />
+      <Stage done={installing ? false : null} label="Choose repos and click Install" />
+      <p className="text-xs text-ink-faint">Everything on GitHub is already filled in. This updates by itself.</p>
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
+        <button type="button" className="btn btn-outline" disabled={busy} onClick={onOpen}>Open GitHub again</button>
+      </div>
+    </div>
+  );
+}
+
+/** Frame 4: repos come from GitHub, so nothing is typed. */
+export function ConfirmStep({
+  status, picks, error, busy, onTick, onAllowPublic, onLabel, onContinue, onRecheck,
+}: {
+  status: GithubSetupView;
+  picks: SetupPicks;
+  error: string | null;
+  busy: boolean;
+  onTick(name: string, on: boolean): void;
+  onAllowPublic(allow: boolean): void;
+  onLabel(label: string): void;
+  onContinue(): void;
+  onRecheck(): void;
+}) {
+  const [advanced, setAdvanced] = useState(false);
+  const one = servesOneRepo(status);
+  const anyPublic = publicPicks(status, picks.repos).length > 0;
+  const label = picks.label.trim() || DEFAULT_RUNNER_LABEL;
+  return (
+    <div className="flex flex-col gap-3 p-5">
+      <Heading>GitHub is connected</Heading>
+      <p className="text-sm text-ink-soft">This Mac will serve these repos:</p>
+      {!one && status.repos.length > 1 && <p className="text-xs text-ink-faint">{`Tick up to ${MAX_RUNNER_REPOS}.`}</p>}
+      <div role={one ? 'radiogroup' : 'group'} aria-label="Repos" className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+        {status.repos.map((r) => (
+          <label key={r.name} className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm text-ink">
+            <input type={one ? 'radio' : 'checkbox'} name="github-repos" checked={picks.repos.includes(r.name)} onChange={(e) => onTick(r.name, e.target.checked)} />
+            <span className="min-w-0 flex-1 truncate">{r.name}</span>
+            <span className="text-xs text-ink-faint">{r.private ? 'Private' : 'Public'}</span>
+          </label>
+        ))}
+      </div>
+      {!status.repos.length && <p className="text-xs text-ink-faint">This app has no repos yet.</p>}
+      <div className="flex gap-3">
+        {status.slug && <TextLink onClick={() => void window.nekko.openPath(githubInstallUrl(status.slug!))}>Add repos on GitHub</TextLink>}
+        <TextLink onClick={onRecheck}>Check again</TextLink>
+      </div>
+      {anyPublic && (
+        <>
+          <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
+            <b>Public repo.</b> Anyone can open a pull request, so outside contributors need your approval before their jobs run.
+          </p>
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2" style={{ borderColor: picks.allowPublic ? 'var(--accent)' : 'var(--line)', background: picks.allowPublic ? 'var(--accent-soft)' : 'var(--surface)' }}>
+            <input type="checkbox" className="mt-0.5" checked={picks.allowPublic} onChange={(e) => onAllowPublic(e.target.checked)} />
+            <span>
+              <span className="block text-sm font-semibold text-ink">Require approval for outside contributors</span>
+              <span className="block text-xs text-ink-soft">Nekko sets this on GitHub for you.</span>
+            </span>
+          </label>
+        </>
+      )}
+      {advanced
+        ? (
+          <Field label="Runner label" hint={<>Use it in <code className="font-mono">{`runs-on: [self-hosted, macOS, ARM64, ${label}]`}</code></>}>
+            <input className="input w-full" placeholder={DEFAULT_RUNNER_LABEL} value={picks.label} onChange={(e) => onLabel(e.target.value)} />
+          </Field>
+        )
+        : <TextLink onClick={() => setAdvanced(true)}>Advanced: runner label</TextLink>}
+      <Alert error={error} />
+      <div className="flex justify-end">
+        <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !picks.repos.length || (anyPublic && !picks.allowPublic)} onClick={onContinue}>Continue</button>
+      </div>
+    </div>
+  );
+}
+
+/** Last for now: layer 3 moves the mode to the Mac setup sheet. */
+export function ModeStep({
+  status, priority, error, busy, onPriority, onBack, onSubmit,
+}: {
+  status: GithubSetupView;
+  priority: Priority;
+  error: string | null;
+  busy: boolean;
+  onPriority(p: Priority): void;
+  onBack(): void;
+  onSubmit(): void;
+}) {
+  // Without `gh` a Free org is only found out here. Its app has no repo Administration, so the way out is a new one.
+  const stuck = status.kind === 'org' && status.owner && status.slug && error?.includes('runner groups');
+  return (
+    <div className="flex flex-col gap-3 p-5">
+      <ModeChoices priority={priority} onPriority={onPriority} />
+      <Alert error={error} />
+      {stuck && <TextLink onClick={() => void window.nekko.openPath(githubAppSettingsUrl(status.owner!, status.slug!))}>Delete the app on GitHub</TextLink>}
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn btn-outline" disabled={busy} onClick={onBack}>Back</button>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={onSubmit}>{busy ? 'Starting…' : 'Start runner'}</button>
+      </div>
+    </div>
+  );
+}
+
+/** Nekko could not set fork approval. The runner stays off until the owner says it is on. */
+export function ForkStep({ url, busy, onOpen, onLeaveOff, onConfirmed }: { url: string; busy: boolean; onOpen(url: string): void; onLeaveOff(): void; onConfirmed(): void }) {
+  return (
+    <div className="flex flex-col gap-3 p-5">
+      <Heading>One more step on GitHub</Heading>
+      <p className="text-sm text-ink-soft">
+        Nekko couldn't set this for you, so the runner stays off. Turn on <b>Require approval for all external contributors</b>, so fork pull requests wait for you.
+      </p>
+      <TextLink onClick={() => onOpen(url)}>Open Actions settings <ExternalIcon className="inline h-2.5 w-2.5" /></TextLink>
+      <div className="flex justify-end gap-2">
+        <button type="button" className="btn btn-outline" disabled={busy} onClick={onLeaveOff}>Leave it off</button>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={onConfirmed}>It is on, start the runner</button>
+      </div>
+    </div>
+  );
+}
+
+export interface SetupDeps extends ConnectDeps {
+  setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
+  setForkApproval(req: { runnerId: string }): Promise<ForkApproval>;
+}
+export type PendingApproval = ForkApproval & { runnerId: string };
+
+/**
+ * Confirm: connect with the stored key, apply the mode, then settle fork approval.
+ * A public repo's runner connects off and turns on only once GitHub holds outside
+ * contributors, so it can never take a job first. Once connected, a failure only toasts.
+ */
+export async function submitSetup(
+  status: GithubSetupView,
+  picks: SetupPicks,
+  priority: Priority,
+  deps: SetupDeps,
+): Promise<{ error: string } | { view: RunnerView; approval: PendingApproval | null }> {
+  const req = toSetupRequest(status, picks);
+  if ('error' in req) return req;
+  const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  let view: RunnerView;
+  try {
+    view = await deps.connectRunner(req);
+  } catch (e) {
+    return { error: said(e) };
+  }
+  const runnerId = view.config.id;
+  try {
+    if (priority !== 'doNotDisturb') view = await deps.updateRunner(runnerId, { priority });
+  } catch (e) {
+    deps.pushToast('error', `Connected, but could not set the mode: ${said(e)}`);
+  }
+  if (req.enabled !== false) return { view, approval: null };
+  try {
+    const approval = await deps.setForkApproval({ runnerId });
+    if (!approval.done) return { view, approval: { ...approval, runnerId } };
+    return { view: await deps.setRunnerEnabled(runnerId, true), approval: null };
+  } catch (e) {
+    deps.pushToast('error', `Connected, but the runner stays off: ${said(e)}`);
+    return { view, approval: null };
+  }
+}
+
+export type SheetScreen = 'manual' | 'account' | 'waiting' | 'confirm' | 'mode' | 'fork';
+
+/** Which screen shows. The daemon owns the setup; this sheet only owns the manual path and the last two steps. */
+export function sheetScreen({ status, manual, moding, approval }: { status: GithubSetupView; manual: boolean; moding: boolean; approval: PendingApproval | null }): SheetScreen {
+  if (approval) return 'fork';
+  if (manual) return 'manual';
+  if (status.step === 'create' || status.step === 'install') return 'waiting';
+  if (status.step === 'confirm') return moding ? 'mode' : 'confirm';
+  return 'account';
+}
+
+const NO_ACCOUNTS: GithubAccounts = { login: null, accounts: [] };
+const TYPED: AccountChoice = { login: '', kind: 'org', canGroup: null, typed: true };
+
 /** The Connect GitHub sheet. The pasted key lives only in this sheet's form, and only until it closes or connects. */
 export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStoredFor }: { onClose(): void; onConnected(): void; beginReply(): (v: RunnerView) => void; keyStoredFor: (appId: number) => boolean }) {
   const pushToast = useStore((s) => s.pushToast);
@@ -216,10 +490,81 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   const [step, setStep] = useState<ConnectStep>(1);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [manual, setManual] = useState(false);
+  const [status, setStatus] = useState<GithubSetupView>(IDLE_GITHUB_SETUP);
+  const [accounts, setAccounts] = useState<GithubAccounts>(NO_ACCOUNTS);
+  const [choice, setChoice] = useState<AccountChoice>(TYPED);
+  const [picks, setPicks] = useState<SetupPicks>({ repos: [], allowPublic: false, label: '' });
+  const [priority, setPriority] = useState<Priority>('doNotDisturb');
+  const [moding, setModing] = useState(false);
+  const [approval, setApproval] = useState<PendingApproval | null>(null);
+
+  // Rejects on a daemon that predates this: the sheet then stays on the account step, and the manual path still works.
+  useEffect(() => {
+    let live = true;
+    void window.nekko.githubAccounts().then((a) => {
+      if (!live) return;
+      setAccounts(a);
+      if (a.accounts.length) setChoice((c) => (c.login ? c : a.accounts[0]));
+    }, () => {});
+    void window.nekko.githubStatus().then((v) => { if (live) setStatus(v); }, () => {});
+    const off = window.nekko.onGithubSetupChanged(setStatus);
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status.step === 'confirm') setPicks((p) => ({ ...p, repos: defaultRepoPicks(status) }));
+    else setModing(false);
+  }, [status]);
 
   const close = () => {
     setForm(emptyConnectForm());
     onClose();
+  };
+  const open = (url: string | null) => { if (url) void window.nekko.openPath(url); };
+  /** Asks the daemon for the page to open; it never makes a second app for the same owner. */
+  const start = async (req: { owner: string; kind: 'user' | 'org'; repoAdmin: boolean }) => {
+    setBusy(true);
+    setError(null);
+    try {
+      open((await window.nekko.githubStart(req)).url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+    setBusy(false);
+  };
+  const again = () => void start({ owner: status.owner ?? '', kind: status.kind ?? 'org', repoAdmin: status.repoAdmin });
+  const startRunner = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const reply = beginReply();
+    const res = await submitSetup(status, picks, priority, {
+      connectRunner: window.nekko.connectRunner, updateRunner: window.nekko.updateRunner, setRunnerEnabled: window.nekko.setRunnerEnabled, setForkApproval: window.nekko.setForkApproval, pushToast,
+    });
+    setBusy(false);
+    if ('error' in res) {
+      setError(res.error);
+      return;
+    }
+    reply(res.view);
+    if (res.approval) setApproval(res.approval);
+    else onConnected();
+  };
+  const approved = async () => {
+    if (!approval) return;
+    setBusy(true);
+    const reply = beginReply();
+    try {
+      reply(await window.nekko.setRunnerEnabled(approval.runnerId, true));
+    } catch (e) {
+      pushToast('error', `Could not start the runner: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setBusy(false);
+    onConnected();
   };
   const submit = async () => {
     if (busy) return;
@@ -238,22 +583,56 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
     onConnected();
   };
 
+  const screen = sheetScreen({ status, manual, moding, approval });
   return (
     <Modal title="Connect GitHub" onClose={close} overlayClassName="p-4" className="card w-[560px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
-      <ConnectBody
-        step={step}
-        form={form}
-        error={error}
-        busy={busy}
-        onField={(k, v) => setForm((f) => ({ ...f, [k]: v }))}
-        onStep={(s) => {
-          // Moving forward checks the steps being left; the error shows here without moving.
-          const err = s > step ? stepError(form, (s - 1) as 1 | 2, keyStoredFor(Number(form.appId.trim()))) : null;
-          setError(err);
-          if (!err) setStep(s);
-        }}
-        onSubmit={() => void submit()}
-      />
+      {screen === 'manual' && (
+        <ConnectBody
+          step={step}
+          form={form}
+          error={error}
+          busy={busy}
+          onField={(k, v) => setForm((f) => ({ ...f, [k]: v }))}
+          onStep={(s) => {
+            // Moving forward checks the steps being left; the error shows here without moving.
+            const err = s > step ? stepError(form, (s - 1) as 1 | 2, keyStoredFor(Number(form.appId.trim()))) : null;
+            setError(err);
+            if (!err) setStep(s);
+          }}
+          onSubmit={() => void submit()}
+        />
+      )}
+      {screen === 'account' && (
+        <AccountStep
+          accounts={accounts}
+          choice={choice}
+          error={error ?? status.error}
+          busy={busy}
+          onChoice={setChoice}
+          onContinue={(repoAdmin) => void start({ owner: choice.login, kind: choice.kind, repoAdmin })}
+          onManual={() => { setError(null); setManual(true); }}
+        />
+      )}
+      {screen === 'waiting' && <WaitingStep status={status} busy={busy} onCancel={() => void window.nekko.githubCancel()} onOpen={again} />}
+      {screen === 'confirm' && (
+        <ConfirmStep
+          status={status}
+          picks={picks}
+          error={error}
+          busy={busy}
+          onTick={(name, on) => {
+            const res = tickRepo(status, picks.repos, name, on);
+            setError(res.error);
+            setPicks((p) => ({ ...p, repos: res.picked }));
+          }}
+          onAllowPublic={(allowPublic) => setPicks((p) => ({ ...p, allowPublic }))}
+          onLabel={(label) => setPicks((p) => ({ ...p, label }))}
+          onContinue={() => { setError(null); setModing(true); }}
+          onRecheck={again}
+        />
+      )}
+      {screen === 'mode' && <ModeStep status={status} priority={priority} error={error} busy={busy} onPriority={setPriority} onBack={() => { setError(null); setModing(false); }} onSubmit={() => void startRunner()} />}
+      {screen === 'fork' && approval && <ForkStep url={approval.url} busy={busy} onOpen={open} onLeaveOff={onConnected} onConfirmed={() => void approved()} />}
     </Modal>
   );
 }
