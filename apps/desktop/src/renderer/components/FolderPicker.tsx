@@ -5,6 +5,7 @@ import { CloseIcon, FolderIcon, PlusIcon, StarIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { toggleDefaultFolder } from '../defaultFolders.js';
 import { addFolderToChat, applyFolderSelection, withoutPrimary, withPrimary } from '../sessionFolders.js';
+import { MiddleTruncate } from './primitives/MiddleTruncate.js';
 
 type ChatFolders = Pick<SessionMeta, 'workspaceId' | 'supportingWorkspaceIds'>;
 const NO_DEFAULTS: string[] = [];
@@ -23,7 +24,9 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
 }) {
   const primary = chat?.workspaceId;
   const supporting = new Set(chat?.supportingWorkspaceIds ?? []);
-  const row = 'flex w-full flex-col rounded-lg px-3 py-1 text-left hover:bg-surface-2';
+  // min-w-0 flex-1: a long name or path shrinks the row instead of pushing
+  // the revoke button out of the menu.
+  const row = 'flex min-w-0 flex-1 flex-col rounded-lg px-3 py-1 text-left hover:bg-surface-2';
 
   return <>
     {folders.map((f) => {
@@ -39,11 +42,11 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
         )}
         <button role="menuitemradio" aria-checked={primary === f.id} title={f.path}
           className={`${row} ${primary === f.id ? 'text-accent' : ''}`} onClick={() => onPick(f.id)}>
-          <span className="flex items-center gap-2 text-xs font-medium">
-            {f.name}
-            {supporting.has(f.id) && <span className="text-2xs font-normal text-ink-faint">supporting</span>}
+          <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
+            <span className="min-w-0 truncate" dir="auto">{f.name}</span>
+            {supporting.has(f.id) && <span className="shrink-0 text-2xs font-normal text-ink-faint">supporting</span>}
           </span>
-          <span className="truncate text-2xs text-ink-faint">{f.path}</span>
+          <MiddleTruncate text={f.path} tail={24} className="text-2xs text-ink-faint" />
         </button>
         <button type="button" aria-label={`Revoke access to ${f.name}`} title="Revoke saved folder access, not delete files" className="shrink-0 rounded p-2 text-ink-faint hover:bg-surface-2 hover:text-ink" onClick={() => onRemove(f.id)}>
           <CloseIcon className="h-3.5 w-3.5" />

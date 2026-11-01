@@ -6,6 +6,7 @@ import XCTest
 /// it. Each step is a screenshot attachment (the PR's visual evidence).
 ///
 /// Opt-in: the CI passes `TEST_RUNNER_NEKKO_ITEST_LINK`; without it this skips.
+@MainActor
 final class LiveRelayTests: XCTestCase {
     /// How long a step the computer drives may take to reach the phone: a
     /// reply from the fake model, an approval or question card, a tool step,

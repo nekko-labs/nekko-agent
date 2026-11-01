@@ -152,22 +152,17 @@ public enum MarkdownParser {
         return out
     }
 
-    private final class Box {
+    private final class Box: Sendable {
         let blocks: [MarkdownBlock]
         init(_ blocks: [MarkdownBlock]) { self.blocks = blocks }
     }
 
-    private static let cache: NSCache<NSString, Box> = {
-        let c = NSCache<NSString, Box>()
-        c.countLimit = 2_000
-        return c
-    }()
+    private static let cache = SharedCache<Box>(countLimit: 2_000)
 
     private static func cachedParse(_ segment: String) -> [MarkdownBlock] {
-        let key = segment as NSString
-        if let hit = cache.object(forKey: key) { return hit.blocks }
+        if let hit = cache[segment] { return hit.blocks }
         let blocks = parse(segment)
-        cache.setObject(Box(blocks), forKey: key)
+        cache[segment] = Box(blocks)
         return blocks
     }
 

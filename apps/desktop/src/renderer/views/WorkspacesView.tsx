@@ -716,7 +716,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     className={`h-3 w-3 shrink-0 text-accent transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
-                  <span className="agent-panel-group-label truncate font-medium">{b.name}</span>
+                  <span className="agent-panel-group-label truncate font-medium" title={b.name} dir="auto">{b.name}</span>
                   {isCollapsed && (items.length > 0 || completedGroup) && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
@@ -966,7 +966,7 @@ function CompletedRow({
       <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">
         <CheckIcon className="h-3 w-3" />
       </span>
-      <span className={`min-w-0 flex-1 truncate text-xs line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.title}</span>
+      <span className={`min-w-0 flex-1 truncate text-xs line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`} dir="auto">{s.title || 'Untitled chat'}</span>
       <time
         className="shrink-0 text-2xs tabular-nums"
         style={{ color: 'var(--ink-faint)' }}
@@ -995,7 +995,7 @@ function SubAgentRow({
         aria-hidden
         className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
       />
-      <span className="min-w-0 flex-1 truncate">{session.title}</span>
+      <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
       <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, session.activeWatchCount)} />
     </button>
   );

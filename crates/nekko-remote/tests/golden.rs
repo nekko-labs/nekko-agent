@@ -275,17 +275,36 @@ impl LinkHandle for FakeHandle {
     }
 }
 
-/// A recorded HELLO as a protocol 4 phone sends it (an object only).
-fn as_current(hello: &Value) -> Value {
+/// A phone's device key in these tests: one fixed key per device id.
+fn device_key(device_id: &str) -> p256::ecdsa::SigningKey {
+    use sha2::Digest;
+    p256::ecdsa::SigningKey::from_slice(&sha2::Sha256::digest(device_id.as_bytes())).unwrap()
+}
+
+fn device_key_b64(device_id: &str) -> String {
+    let point = device_key(device_id).verifying_key().to_encoded_point(false);
+    base64::engine::general_purpose::STANDARD.encode(point.as_bytes())
+}
+
+/// A recorded HELLO as a current phone sends it: protocol 5, answering a
+/// challenge, and signed with the device's key for `room`.
+fn as_current(hello: &Value, room: &str) -> Value {
+    use p256::ecdsa::signature::Signer;
     let mut h = hello.clone();
+    let id = h.get("deviceId").and_then(Value::as_str).unwrap_or_default().to_string();
     if let Some(o) = h.as_object_mut() {
-        o.insert("protocol".into(), json!(4));
+        o.insert("protocol".into(), json!(5));
+        o.insert("challenge".into(), json!("golden-challenge"));
+        o.insert("helloKey".into(), json!(device_key_b64(&id)));
+        let sig: p256::ecdsa::Signature =
+            device_key(&id).sign(hello::hello_text(&id, room, "golden-challenge").as_bytes());
+        o.insert("sig".into(), json!(base64::engine::general_purpose::STANDARD.encode(sig.to_bytes())));
     }
     h
 }
 
 #[test]
-fn a_legacy_phone_is_marked_and_can_be_refused() {
+fn a_phone_app_from_before_device_keys_is_told_to_update() {
     let dir = tempfile::tempdir().unwrap();
     let svc = RemoteService::new(
         dir.path(),
@@ -295,38 +314,81 @@ fn a_legacy_phone_is_marked_and_can_be_refused() {
     );
     let file = dir.path().join("remote.json");
     let device = json!({ "id": "p1", "name": "Old phone", "platform": "ios", "createdAt": 1, "lastSeenAt": 1 });
-    std::fs::write(&file, json!({ "enabled": false, "devices": [device] }).to_string()).unwrap();
-    let devices = |file: &Path| -> Value {
-        serde_json::from_str::<Value>(&std::fs::read_to_string(file).unwrap()).unwrap()["devices"][0].clone()
-    };
+    std::fs::write(&file, json!({ "enabled": false, "room": "r", "devices": [device] }).to_string()).unwrap();
     let activity = |svc: &RemoteService| svc.route("remote:activity", &[json!("p1")]).unwrap();
-    // On by default: welcomed, marked, and written to the activity once.
-    for _ in 0..2 {
-        let reply = svc.verify(&json!({ "type": "hello", "deviceId": "p1", "protocol": 3 }));
-        assert_eq!(reply["type"], "welcome", "{reply}");
+    for protocol in [json!(null), json!(3), json!(4)] {
+        let reply = svc.verify(&json!({ "type": "hello", "deviceId": "p1", "protocol": protocol, "challenge": "c" }));
+        assert_eq!(reply, json!({ "type": "denied", "reason": "update-required" }), "protocol {protocol}");
     }
-    assert_eq!(devices(&file)["legacyProtocol"], json!(true));
     let log = activity(&svc);
-    assert_eq!(log.as_array().unwrap().len(), 1, "{log}");
     assert_eq!(log[0]["channel"], "relay:hello");
-    assert_eq!(log[0]["ok"], true);
+    assert_eq!(log[0]["ok"], false);
     assert_eq!(log[0]["reason"], "legacy-protocol");
-    // The app updated: the mark goes.
-    svc.verify(&json!({ "type": "hello", "deviceId": "p1", "protocol": 4 }));
-    assert!(devices(&file).get("legacyProtocol").is_none());
-    // The owner turned legacy phones off.
-    let mut cfg: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    cfg["acceptLegacyPhones"] = json!(false);
-    std::fs::write(&file, cfg.to_string()).unwrap();
-    let reply = svc.verify(&json!({ "type": "hello", "deviceId": "p1" }));
-    assert_eq!(reply, json!({ "type": "denied", "reason": "update-required" }));
-    let log = activity(&svc);
-    assert_eq!(log[1]["ok"], false);
-    assert_eq!(log[1]["reason"], "legacy-protocol");
-    // The setting survives the registry's own writes.
-    svc.verify(&json!({ "type": "hello", "deviceId": "p1", "protocol": 4 }));
-    let cfg: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    assert_eq!(cfg["acceptLegacyPhones"], json!(false));
+    // A current app on a device paired before device keys: pair again.
+    let reply = svc.verify(&as_current(&json!({ "type": "hello", "deviceId": "p1" }), "r"));
+    assert_eq!(reply, json!({ "type": "denied", "reason": "bad-key" }));
+}
+
+#[test]
+fn a_hello_must_be_signed_with_the_key_the_device_enrolled_with() {
+    let dir = tempfile::tempdir().unwrap();
+    let svc = RemoteService::new(
+        dir.path(),
+        counter_random(),
+        Arc::new(|| 1_760_000_000_000.0),
+        Box::new(FakeLink { kicked: Arc::default() }),
+    );
+    svc.route("remote:enable", &[json!("wss://relay.example/")]).unwrap();
+    let cfg: Value = serde_json::from_str(&std::fs::read_to_string(dir.path().join("remote.json")).unwrap()).unwrap();
+    let room = cfg["room"].as_str().unwrap().to_string();
+    let code = svc.pair()["code"].as_str().unwrap().to_string();
+    let hello = |extra: Value| {
+        let mut h = json!({ "type": "hello", "deviceId": "p1", "name": "Phone", "platform": "ios" });
+        for (k, v) in extra.as_object().unwrap() {
+            h[k] = v.clone();
+        }
+        h
+    };
+    // Enrolling: the code, the key and a signature with it.
+    let unsigned = json!({ "type": "hello", "deviceId": "p1", "protocol": 5, "challenge": "c", "pair": code });
+    assert_eq!(svc.verify(&unsigned), json!({ "type": "denied", "reason": "invalid" }));
+    let welcome = svc.verify(&as_current(&hello(json!({ "pair": code })), &room));
+    assert_eq!(welcome["type"], "welcome", "{welcome}");
+    let keys: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("remote-hello-keys.json")).unwrap()).unwrap();
+    assert_eq!(keys["p1"], json!(device_key_b64("p1")));
+    // Back again: signed with that key, no code needed.
+    assert_eq!(svc.verify(&as_current(&hello(json!({})), &room))["type"], "welcome");
+    // Signed for another room, or for another challenge than it answers: refused.
+    assert_eq!(svc.verify(&as_current(&hello(json!({})), "other-room"))["reason"], "bad-key");
+    let mut moved = as_current(&hello(json!({})), &room);
+    moved["challenge"] = json!("another-challenge");
+    assert_eq!(svc.verify(&moved)["reason"], "bad-key");
+    // Another key claiming the same device, without a live code: refused.
+    let mut other = as_current(&hello(json!({ "deviceId": "p2" })), &room);
+    other["deviceId"] = json!("p1");
+    assert_eq!(svc.verify(&other)["reason"], "bad-key");
+    // With a live code, the device enrolls again with a new key.
+    let code = svc.pair()["code"].as_str().unwrap().to_string();
+    let mut rekey = as_current(&hello(json!({ "deviceId": "p2", "pair": code })), &room);
+    rekey["deviceId"] = json!("p1");
+    // (signed as p2's key over p1's text)
+    use p256::ecdsa::signature::Signer;
+    let sig: p256::ecdsa::Signature =
+        device_key("p2").sign(hello::hello_text("p1", &room, "golden-challenge").as_bytes());
+    rekey["sig"] = json!(base64::engine::general_purpose::STANDARD.encode(sig.to_bytes()));
+    assert_eq!(svc.verify(&rekey)["type"], "welcome");
+    let keys: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("remote-hello-keys.json")).unwrap()).unwrap();
+    assert_eq!(keys["p1"], json!(device_key_b64("p2")));
+    // The new key is the device's now, and the code was single use.
+    assert_eq!(svc.verify(&rekey)["type"], "welcome");
+    let mut again = as_current(&hello(json!({ "deviceId": "p3", "pair": code })), &room);
+    again["deviceId"] = json!("p1");
+    assert_eq!(svc.verify(&again)["reason"], "bad-key");
+    // Signing out every phone forgets every key.
+    svc.route("remote:rotate", &[]).unwrap();
+    assert!(!dir.path().join("remote-hello-keys.json").exists());
 }
 
 #[test]
@@ -358,7 +420,14 @@ fn remote_json_and_replies_match_across_operations() {
             // read them as protocol 4 phones whose challenge the agent already
             // checked, so the registry is the one the TS wrote. The legacy
             // path has its own test (`a_legacy_phone_is_marked_and_can_be_refused`).
-            "hello" => svc.verify(&as_current(&args[0])),
+            "hello" => {
+                let room = std::fs::read_to_string(&file)
+                    .ok()
+                    .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                    .and_then(|c| c["room"].as_str().map(str::to_string))
+                    .unwrap_or_default();
+                svc.verify(&as_current(&args[0], &room))
+            }
             "pair" => svc.pair(),
             other => svc.route(&format!("remote:{other}"), args).unwrap_or_else(|e| json!({ "error": e })),
         };
@@ -662,4 +731,23 @@ fn step_up_matches_the_ts_verifier() {
     for (code, hash) in r["codes"].as_array().unwrap().iter().zip(r["hashes"].as_array().unwrap()) {
         assert_eq!(step_up::hash_recovery_code(code.as_str().unwrap()), hash.as_str().unwrap());
     }
+}
+
+#[test]
+fn the_hello_signature_matches_the_phones() {
+    // relay-handshake.json's device key: the text a HELLO signs, and a
+    // signature the phones' tests verify too.
+    let g = golden("relay-handshake.json");
+    let k = &g["helloKey"];
+    let text = hello::hello_text(s(&g["device"]["deviceId"]), s(&g["room"]), s(&g["challenge"]["frame"]["challenge"]));
+    assert_eq!(text, s(&k["text"]));
+    let key = nekko_remote::proof::parse_key(s(&k["publicKey"])).expect("an X9.63 P-256 key");
+    let sig = base64::engine::general_purpose::STANDARD.decode(s(&k["sig"])).unwrap();
+    assert!(nekko_remote::proof::verify(&key, &text, &sig));
+    assert!(!nekko_remote::proof::verify(&key, &text.replace("a1b2", "ffff"), &sig));
+    let d: Vec<u8> =
+        (0..32).map(|i| u8::from_str_radix(&s(&k["privateKeyHex"])[i * 2..i * 2 + 2], 16).unwrap()).collect();
+    let signing = p256::ecdsa::SigningKey::from_slice(&d).unwrap();
+    assert_eq!(&key, signing.verifying_key());
+    assert_eq!(g["protocol"], json!(hello::PROTOCOL_VERSION));
 }

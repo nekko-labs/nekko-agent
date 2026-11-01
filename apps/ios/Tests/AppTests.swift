@@ -56,6 +56,7 @@ final class MarkdownTests: XCTestCase {
     }
 }
 
+@MainActor
 final class PaletteTests: XCTestCase {
     func testPicksReadableInkOnTheAccent() {
         XCTAssertGreaterThan(Palette.luminance(0xFFFFFF), 0.99)
@@ -448,6 +449,7 @@ final class NotificationPrefsTests: XCTestCase {
     }
 }
 
+@MainActor
 final class ChatStatusIconTests: XCTestCase {
     @MainActor
     func testArchivedDoneUsesTheSameGrayCheckAsUnarchivedDone() throws {

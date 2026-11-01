@@ -200,7 +200,7 @@ final class StoreChangeTests: XCTestCase {
         XCTAssertEqual(mine, ["device:registerKey", "file:write", "file:write"], "registered once per connection")
     }
 
-    func pairedStore(_ computer: ProofComputer) async -> ComputersStore {
+    static func pairedStore(_ computer: ProofComputer) async -> ComputersStore {
         let store = ComputersStore(store: MemoryStore(), makeConnection: { _ in computer }, deviceName: { "iPhone" },
                                    deriveKey: { _, _ in Data(repeating: 7, count: 32) }, newId: { "id-1" })
         store.load()
@@ -212,7 +212,7 @@ final class StoreChangeTests: XCTestCase {
     func testRaisingAChatsModeAsksForFaceIDAndLoweringItDoesNot() async throws {
         let computer = ProofComputer(deviceId: "id-1")
         computer.now = Int64(Date().timeIntervalSince1970 * 1000)
-        let store = await pairedStore(computer)
+        let store = await Self.pairedStore(computer)
         let signer = SoftwareChangeSigner()
         store.changeSigner = signer
 
@@ -238,7 +238,7 @@ final class StoreChangeTests: XCTestCase {
     func testARaiseWithoutFaceIDOrWithChangesOffSaysWhy() async throws {
         let computer = ProofComputer(deviceId: "id-1")
         computer.now = Int64(Date().timeIntervalSince1970 * 1000)
-        let store = await pairedStore(computer)
+        let store = await Self.pairedStore(computer)
         do {
             _ = try await store.call(raising: Channels.sessionSetOptions, ["s1", ["mode": "yolo"]])
             XCTFail("no signer")
@@ -258,7 +258,7 @@ final class StoreChangeTests: XCTestCase {
 
     func testPlainRefusalsReadPlainly() async throws {
         let computer = ProofComputer(deviceId: "id-1")
-        let store = await pairedStore(computer)
+        let store = await Self.pairedStore(computer)
         let raw = RelayError("Not allowed from a paired phone (change-off): chat:send", fromComputer: true)
         XCTAssertEqual(store.readable(raw).localizedDescription,
                        "Changes from this phone are turned off on My computer. Turn them on in Remote access → What phones can do.")

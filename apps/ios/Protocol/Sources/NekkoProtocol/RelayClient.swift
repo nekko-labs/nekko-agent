@@ -50,6 +50,9 @@ public struct RelayStatus: Equatable, Sendable {
         self.denied = denied
         self.route = route
     }
+
+    /// `detail` when the relay's name doesn't resolve: the paired address is gone.
+    public static let hostNotFound = "host not found"
 }
 
 public struct RelayError: Error, Equatable, LocalizedError, Sendable {
@@ -122,6 +125,9 @@ public struct RelayConfig: Sendable {
     public var retryBase: TimeInterval = 1
     public var retryMax: TimeInterval = 30
     public var offlinePoll: TimeInterval = 15
+    /// The device key every HELLO is signed with (protocol 5). Without one the
+    /// HELLO goes unsigned and the computer asks this phone to pair again.
+    public var helloSigner: HelloSigner?
 
     public init(relayUrl: String, room: String, key: String, keyBytes: Data, deviceId: String, deviceName: String,
                 pairCode: String? = nil, platform: String = "ios") {
@@ -370,15 +376,29 @@ public final class RelayClient: @unchecked Sendable {
         if let proof { fields["proof"] = proof }
         if let stepUp { fields["stepUp"] = stepUp }
         let limit = timeout ?? config.requestTimeout
-        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<JSONValue, Error>) in
-            locked { pending[id] = cont }
-            guard sendRequest(fields) else {
-                takePending(id)?.resume(throwing: RelayError("Could not reach your computer."))
-                return
+        // Cancelling the caller (a screen's task ending, a re-read replaced) ends the wait
+        // at once instead of at the reply or the timeout, which is hours for `chat:send`.
+        // The request already sent still runs on the computer; only its answer is dropped.
+        // `takePending` takes the lock and hands the continuation out once, so the handler,
+        // the reply, the timeout and a closing socket can race safely.
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<JSONValue, Error>) in
+                locked { pending[id] = cont }
+                // Cancelled before the continuation was registered: the handler found nothing to end.
+                if Task.isCancelled {
+                    takePending(id)?.resume(throwing: CancellationError())
+                    return
+                }
+                guard sendRequest(fields) else {
+                    takePending(id)?.resume(throwing: RelayError("Could not reach your computer."))
+                    return
+                }
+                queue.asyncAfter(deadline: .now() + limit) { [weak self] in
+                    self?.takePending(id)?.resume(throwing: RelayError("\(channel): timed out"))
+                }
             }
-            queue.asyncAfter(deadline: .now() + limit) { [weak self] in
-                self?.takePending(id)?.resume(throwing: RelayError("\(channel): timed out"))
-            }
+        } onCancel: {
+            takePending(id)?.resume(throwing: CancellationError())
         }
     }
 
@@ -418,6 +438,7 @@ public final class RelayClient: @unchecked Sendable {
         if denied { throw RelayError("This phone is no longer paired.") }
         if isStopped { throw RelayError("Not connected.") }
         let settled = await waitForSettledStatus(timeout: config.handshakeTimeout)
+        try Task.checkCancellation()
         if isReady { return }
         let s = state
         if !settled { throw RelayError(s == .offline ? "Your computer is offline." : "Could not reach your computer.") }
@@ -425,23 +446,37 @@ public final class RelayClient: @unchecked Sendable {
     }
 
     /// Resolves true when the state becomes online, denied or idle; false on timeout.
+    /// A cancelled caller stops waiting at once (the handler resumes its waiter).
     private func waitForSettledStatus(timeout: TimeInterval) async -> Bool {
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            let id: Int? = locked {
-                if [.online, .denied, .idle].contains(_status.state) { return nil }
-                let id = nextWaiter
-                nextWaiter += 1
-                waiters[id] = cont
-                return id
+        let id: Int = locked {
+            let id = nextWaiter
+            nextWaiter += 1
+            return id
+        }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                let waiting: Bool = locked {
+                    if [.online, .denied, .idle].contains(_status.state) { return false }
+                    waiters[id] = cont
+                    return true
+                }
+                guard waiting else { cont.resume(); return }
+                if Task.isCancelled {
+                    takeWaiter(id)?.resume()
+                    return
+                }
+                queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                    self?.takeWaiter(id)?.resume()
+                }
             }
-            guard let id else { cont.resume(); return }
-            queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
-                guard let self else { return }
-                let w: CheckedContinuation<Void, Never>? = self.locked { self.waiters.removeValue(forKey: id) }
-                w?.resume()
-            }
+        } onCancel: {
+            takeWaiter(id)?.resume()
         }
         return [.online, .denied, .idle].contains(state)
+    }
+
+    private func takeWaiter(_ id: Int) -> CheckedContinuation<Void, Never>? {
+        locked { waiters.removeValue(forKey: id) }
     }
 
     private var isReady: Bool { locked { welcomed && conn != nil } }
@@ -641,6 +676,12 @@ public final class RelayClient: @unchecked Sendable {
         if let nonce {
             o["protocol"] = .int(Int64(PhoneProtocol.version))
             o["challenge"] = .string(nonce)
+            // Signed with the device key, for this room and this challenge only (decision 0036).
+            if let signer = config.helloSigner,
+               let proof = try? HelloKey.proof(signer, deviceId: config.deviceId, room: config.room, challenge: nonce) {
+                o["helloKey"] = .string(proof.key)
+                o["sig"] = .string(proof.sig)
+            }
         } else {
             o["protocol"] = .int(Int64(PhoneProtocol.legacyVersion))
         }
@@ -781,7 +822,9 @@ public final class RelayClient: @unchecked Sendable {
                 self.retryPending = false
                 return true
             }
-            if go { self.dial() }
+            // The redial keeps saying why the last one failed, or the banner
+            // drops to a bare "Connecting…" between attempts.
+            if go { self.dial(detail: offline ? nil : detail) }
         }
     }
 

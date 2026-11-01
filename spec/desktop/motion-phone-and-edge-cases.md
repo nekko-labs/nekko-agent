@@ -30,9 +30,19 @@ User intent: motion should never fight the user or cost frames, the Local Web UI
 - **Safe areas.** The shell keeps clear of the notch and side insets (`viewport-fit=cover`); the main area reserves the tab bar plus the home indicator's inset; the tab bar pads the side insets and answers the press.
 - **Native feel.** No tap highlight or text inflation; no pull-to-refresh on the app (`overscroll-behavior: none`) and the transcript contains its overscroll; `touch-action: manipulation` on controls; `100dvh` instead of `100vh`; every `:hover` rule in the renderer's CSS sits under `@media (hover: hover)`, so a tap leaves no sticky hover; `theme-color` follows the app's own light or dark paper.
 
+## Worst-case data
+
+- **Long unbroken text wraps.** Chat bubbles, inline code and error rows wrap a long path, hash or URL (`overflow-wrap: anywhere`); code blocks keep their own horizontal scroll.
+- **Right-to-left text.** Markdown paragraphs, list items and headings, and chat, file and folder names carry `dir="auto"`.
+- **Truncation keeps what matters.** Model ids, file names and paths lose their middle, not their end (`MiddleTruncate`), with the full text as the tooltip: the folder picker, file pane header, file tree, downloads, model library and provider model lists. Truncated chat, group and window names have a `title`.
+- **Controls stay reachable.** A long folder path no longer pushes the folder picker's revoke button out; a long file name no longer hides the file pane's Save and Reveal; a long automation cadence truncates and the row wraps instead of squeezing the title to nothing.
+- **Phone width.** The skills marketplace stacks its shelves above the detail below md; download rows wrap their progress under the file name; schedule kind tiles stack below 360px; the composer's model chip keeps a minimum width.
+- **Numbers.** Byte sizes under a megabyte read in KB or B (not "0 MB" / "0 GB"); stars, installs and downloads use compact `Intl` formatting ("1M", not "1000k"); "1 step", "1 skill"; a NaN download reading counts as unknown.
+- **Big folders.** The file tree shows 200 entries per folder, then "Show N more"; an empty folder says so and an unreadable one says it can't be read.
+
 ## Status
 
 - Implemented: everything above. Measured numbers are in `docs/perf-history.md` (2026-11-01).
 - Phone: verified in headless Chromium with touch and mobile emulation at 320 and 390px; not checked on a real iPhone or Android device (safe areas and zoom-on-focus need hardware).
-- Worst-case-data fixes are a later pass under the same issue.
+- Not done from the edge-case audit: toasts are not capped or sticky for errors and have no exit motion; the chat list's Completed group and the model library are not virtualized or paged; a pasted 50k-character prompt is not clamped; token and duration stats in the done row are not compact (`2400k in`). The RunBoard best-run label (`slice(0, 26)`) is left for the change already editing that file.
 - Not done: the held window card still moves by left/top per pointer move (one fixed element), and the rail's hover expansion still animates its width (bounded to the rail).

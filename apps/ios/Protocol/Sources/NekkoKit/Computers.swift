@@ -233,7 +233,7 @@ public final class ComputersStore {
     // MARK: Wiring
 
     private let store: SecureStore
-    private let makeConnection: (RelayConfig) -> RemoteConnection
+    private let makeConnection: @MainActor (RelayConfig) -> RemoteConnection
     private let deviceName: () -> String
     private let deriveKey: @Sendable (String, String) async -> Data
     private let newId: () -> String
@@ -245,6 +245,8 @@ public final class ComputersStore {
     private let probeNetwork: ProbeNetwork
     /// Signs Change actions (IO-33): the Secure Enclave in the app; nil where there is none.
     @ObservationIgnored public var changeSigner: ChangeSigner?
+    /// Signs every relay HELLO (decision 0036): the Secure Enclave device key in the app, a software key in tests.
+    @ObservationIgnored public var helloSigner: HelloSigner?
     /// Asks the owner for a step-up (SK-6): the app's sheet; nil where there is none.
     @ObservationIgnored public var stepUpPrompt: StepUpPrompt?
     @ObservationIgnored private var flushingSignOuts = false
@@ -264,7 +266,7 @@ public final class ComputersStore {
     private var offlineComputer: String?
 
     public init(store: SecureStore,
-                makeConnection: @escaping (RelayConfig) -> RemoteConnection,
+                makeConnection: @escaping @MainActor (RelayConfig) -> RemoteConnection,
                 deviceName: @escaping () -> String,
                 platform: String = "ios",
                 app: String? = nil,
@@ -518,6 +520,7 @@ public final class ComputersStore {
             var config = RelayConfig(relayUrl: p.relayUrl, room: p.room, key: p.key, keyBytes: keyBytes,
                                      deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
             config.alternates = p.alts
+            config.helloSigner = helloSigner
             config.app = app
             if await Self.deliverSignOut(makeConnection(config), timeout: timeout) { done.insert(p.computerId) }
         }
@@ -712,6 +715,7 @@ public final class ComputersStore {
         var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
         config.alternates = computer.alts
+        config.helloSigner = helloSigner
         config.requestTimeout = 120
         config.app = app
         let c = makeConnection(config)
@@ -896,16 +900,19 @@ public final class ComputersStore {
         defer { checking = false }
         let routes = computer.routes
         checks = routes.map { RouteReport(url: $0) }
-        let base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
+        var base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
+        base.helloSigner = helloSigner
+        // A constant for the concurrently run probes (Swift 6 mode: a captured var is an error).
+        let probe = base
         let make = makeConnection
         let name = computer.name
         for (i, url) in routes.enumerated() {
             let report = await Diagnostics.check(url, network: probeNetwork) { route in
-                var config = base
+                var config = probe
                 config.relayUrl = route
                 config.handshakeTimeout = 8
-                return await Self.hello(make(config), computer: name)
+                return await Self.hello(await make(config), computer: name)
             }
             guard active?.id == computer.id, i < checks.count else { return }
             checks[i] = report
@@ -1080,16 +1087,20 @@ public final class ComputersStore {
                 modelErrors[id] = nil
             }
         }
-        await withTaskGroup(of: Void.self) { group in
+        // Children report their error; the store is written here, on the main actor.
+        await withTaskGroup(of: (id: String, error: String?).self) { group in
             for id in enabled {
-                group.addTask { @MainActor in
+                group.addTask { [self] in
                     do {
                         try await self.loadModels(id)
+                        return (id, nil)
                     } catch {
-                        let m = error.localizedDescription
-                        self.modelErrors[id] = m.hasSuffix("timed out") ? "Didn’t answer in time." : m
+                        return (id, error.localizedDescription)
                     }
                 }
+            }
+            for await (id, m) in group {
+                if let m { modelErrors[id] = m.hasSuffix("timed out") ? "Didn’t answer in time." : m }
             }
         }
     }

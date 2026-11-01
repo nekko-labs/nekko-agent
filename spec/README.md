@@ -18,7 +18,7 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 
 Vision, users, product names, scope boundaries, open questions and policies.
 
-- [Claude policy (2026-10-19)](product/claude-policy.md) (9 KB)
+- [Claude policy (2026-10-19)](product/claude-policy.md) (10 KB)
 - [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
@@ -83,7 +83,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (6 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (2 KB)
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
-- [Motion, phone and edge cases: interruptible motion, frame budget, worst-case data](desktop/motion-phone-and-edge-cases.md) (5 KB)
+- [Motion, phone and edge cases: interruptible motion, frame budget, worst-case data](desktop/motion-phone-and-edge-cases.md) (6 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
 - [Nekko Dark and the branded System theme (desktop)](desktop/nekko-dark-and-branded-system-theme.md) (3 KB)
@@ -115,6 +115,7 @@ Agents panel, monitors, subagents and delegation.
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
 - [Delegating frontier planning to a local worker](agents/delegating-frontier-planning-to-a-local-worker.md) (2 KB)
 - [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
+- [Routing a Claude Agent chat between a local model and Claude Code](agents/routing-between-local-and-claude-code.md) (13 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
 - [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (5 KB)
@@ -185,7 +186,7 @@ Workflows, goals, integrations and tools.
 Phone remote control and the native iOS and Android apps.
 
 - [Agent-linked files and local previews on the phone](phone/agent-linked-files-and-previews-on-the-phone.md) (9 KB)
-- [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (13 KB)
+- [Driving your home model from your phone (remote control)](phone/driving-your-home-model-from-your-phone-remote-control.md) (15 KB)
 - [Folding phones: two chats at once, a Monitors pane and vertical mode (2026-10-24)](phone/folding-phones-two-chats-and-monitors.md) (13 KB)
 - [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
 - [iPhone Markdown composer and rich replies (iPhone implemented 2026-10-25; Android planned)](phone/iphone-markdown-composer-and-rich-replies.md) (8 KB)
