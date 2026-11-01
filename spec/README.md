@@ -56,7 +56,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Muted pending-change badge](chat/muted-pending-change-badge.md) (1 KB)
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
-- [Plan sheet on the composer (2026-10-25; folded summary, loop kinds and sub-agent chips 2026-10-28)](chat/plan-sheet-on-the-composer.md) (11 KB)
+- [Plan sheet on the composer (2026-10-25; folded summary, loop kinds and sub-agent chips 2026-10-28)](chat/plan-sheet-on-the-composer.md) (14 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
 - [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (19 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
@@ -174,7 +174,7 @@ Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
-- [CI runners](automation/ci-runners.md) (40 KB)
+- [CI runners](automation/ci-runners.md) (46 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)

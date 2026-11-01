@@ -524,6 +524,11 @@ impl Table {
         t.add(crate::runner::CHANNELS, handler!(|ctx, channel, args| ctx.runners.route(channel, &args).await));
         #[cfg(unix)]
         t.add(
+            crate::runner::github_setup::CHANNELS,
+            handler!(|ctx, channel, args| ctx.runners.route(channel, &args).await),
+        );
+        #[cfg(unix)]
+        t.add(
             crate::runner::image::CHANNELS,
             handler!(|ctx, channel, args| ctx.runners.image_route(channel, &args).await),
         );

@@ -68,6 +68,7 @@ import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { ExpertMonitor, ModeToggle, useExpertMode } from './ModeViews.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
+import { sheetPlan } from '../claudeAgentPlan.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
 import { useWallLogs } from '../wallLogs.js';
@@ -3293,7 +3294,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             chrome of its own: empty, it used to show as a bare band under the
             composer. */}
         {/* The PR deck sits between the composer and the footer controls, on the window surface. */}
-        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!session?.agentPlan?.length || (activeProvider?.kind === CLAUDE_CODE_PROVIDER_KIND && !!session?.messages?.some(m => m.role === 'user'))} />}
+        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!sheetPlan(session, providers, streaming)?.length} />}
         {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}

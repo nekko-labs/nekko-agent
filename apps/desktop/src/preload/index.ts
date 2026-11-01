@@ -365,6 +365,11 @@ const api: NekkoApi = {
   updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
   removeRunner: (id) => inv(IpcChannels.runnerRemove, id),
   setRunnerEnabled: (id, enabled) => inv(IpcChannels.runnerSetEnabled, id, enabled),
+  githubAccounts: () => inv(IpcChannels.runnerGithubAccounts),
+  githubStart: (req) => inv(IpcChannels.runnerGithubStart, req),
+  githubStatus: () => inv(IpcChannels.runnerGithubStatus),
+  githubCancel: () => inv(IpcChannels.runnerGithubCancel),
+  setForkApproval: (req) => inv(IpcChannels.runnerSetForkApproval, req),
 
   listConnectors: () => inv(IpcChannels.connectorsList),
   connectConnector: (kind: ConnectorKind, token, settings) => inv(IpcChannels.connectorConnect, kind, token, settings),
@@ -518,6 +523,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, views: import('@nekko-agent/shared').RunnerView[]) => cb(views);
     bus.on(IpcEvents.runnerChanged, listener);
     return () => bus.removeListener(IpcEvents.runnerChanged, listener);
+  },
+  onGithubSetupChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').GithubSetupView) => cb(view);
+    bus.on(IpcEvents.runnerGithubChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerGithubChanged, listener);
   },
   onDownloadsUpdated: (cb) => {
     const listener = (_: unknown, jobs: import('@nekko-agent/shared').DownloadJob[]) => cb(jobs);

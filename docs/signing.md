@@ -89,7 +89,8 @@ process could then boot a VM.
   stages it beside nekkod. On Apple silicon a packaged build fails if it cannot.
   The image builder's guest scripts go beside it in `runner-image/`. They are
   text, so they are never signed, and `check-mac-entitlements.sh` skips that folder.
-  Building with the macOS 27 SDK is what gives `nekko-vm` first-boot support.
+  Building with the macOS 27 SDK is what gives `nekko-vm` first-boot support, so
+  `release.yml` and `installers.yml` build macOS on the `xcode-27` runner.
 
 `scripts/check-mac-entitlements.sh <app>` reads the entitlements of the app,
 every helper app under `Contents/Frameworks` and every file under

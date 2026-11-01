@@ -22,7 +22,9 @@ You find it in **Workflows**, under the **Workflows | CI runners** switch at the
 checked on a real macOS 15 guest, but one real GitHub job has not yet run end to end, and the
 rule that keeps job traffic off a VPN has not yet been checked against a real tunnel. Both are
 part of the pilot (T214). The [image guide](ci-runners-image.md) and the job picker are in place;
-the image itself has not yet been booted in a VM.
+the image itself has not yet been booted in a VM. Connecting GitHub with clicks has been tested
+against a stand-in for GitHub, not GitHub itself, so if GitHub refuses the app, use
+[an app you already have](#use-an-app-you-already-have).
 
 ## Before you start
 
@@ -33,13 +35,60 @@ the image itself has not yet been booted in a VM.
   [bring your own](ci-runners-image.md). Until an image exists, the runner card shows `No VM image yet.`
 - **A build with VM support.** The `nekko-vm` helper needs Apple's virtualization entitlement.
   Development builds sign it themselves, and packaged builds sign it with its own entitlement
-  (see [signing](signing.md#the-vm-helpers-entitlement)). A Developer ID signed release with it
-  has not shipped yet.
+  (see [signing](signing.md#the-vm-helpers-entitlement)).
 
-## Create the GitHub App
+## Connect GitHub
 
-The runner talks to GitHub as a GitHub App you create and own, so its access is limited to what
-you grant and you can revoke it at any time.
+The runner talks to GitHub as a GitHub App you own, so its access is limited to what you grant and
+you can revoke it at any time. Nekko creates the app for you with two clicks on GitHub. Nothing is
+copied or pasted.
+
+In **Workflows > CI runners**, choose **Connect GitHub**:
+
+1. **Where do your repos live?** Pick your account or an org. The list comes from `gh` when it is
+   signed in; without it, type the name and say whether it is an org.
+2. **Create.** Your browser opens GitHub with everything filled in. Click **Create**. If GitHub
+   asks you to sign in first, it may then show an empty form: close it and choose
+   **Open GitHub again**.
+3. **Install.** Pick the repos the runner may use and click **Install**. Nekko notices by itself,
+   even if you close the tab.
+4. **Confirm.** Choose the repos this Mac serves: up to 20 for an org, one for a personal account,
+   because GitHub has no account-wide runners. If you add repos on GitHub, choose **Check again**.
+   If an install returns more than 5 repos, none start ticked. **Advanced: runner label** changes
+   the label, which defaults to `nekko-cloud-mac`.
+5. **How this Mac helps.** Pick a mode (below), then **Start runner**.
+
+Leaving is safe. The app and its key are kept from the moment GitHub creates it, so if you close
+the sheet, cancel or quit Nekko, **Connect GitHub** picks up at Install with the same app. It does
+not make a second one. To remove an app you no longer want, delete it on GitHub: under **Settings >
+Developer settings > GitHub Apps**, choose the app, then **Advanced**. GitHub has no way for Nekko to
+do that for you.
+
+The app gets **Actions: Read and write** and **Metadata: Read**. An org's app also gets
+**Self-hosted runners: Read and write**, and a personal account's gets repository
+**Administration: Read and write**. Why those: see [below](#create-the-github-app). Its key is saved
+in this Mac's keychain and never shown.
+
+**A public repo.** The sheet warns you and won't continue until you choose **Require approval for
+outside contributors**. The runner starts off, and turns on once GitHub holds outside contributors'
+jobs for your approval. Nekko sets that for you: a repo's app can, and for an org it uses `gh` when
+that is signed in with enough access. Otherwise the sheet links to the setting, and the runner stays
+off until you confirm it is on. If you leave it off, turning it on from the runner card is refused
+until you have: choose **Connect GitHub** again to finish. See [Use it in a workflow](#use-it-in-a-workflow) for what else a public
+repo needs.
+
+**A Free org.** An org on GitHub's Free plan cannot limit a runner with runner groups, so Nekko
+offers one repo instead, and that app gets repository Administration. Without `gh`, Nekko can't see
+the plan, so choose **On the Free plan? Connect one repo instead** on the first screen. If you don't,
+Confirm stops with the reason and a link to delete the app. Delete it, connect again and choose that
+link.
+
+## Use an app you already have
+
+To make the app yourself, or if you already have one, choose **Use an app I already have** on the
+first screen.
+
+### Create the GitHub App
 
 1. On GitHub, open **Settings > Developer settings > GitHub Apps > New GitHub App** for your
    account, or the same page under your org's settings for an org runner. Give it any name and
@@ -62,9 +111,10 @@ list workflow runs and re-run a job. See GitHub's
 (the "Self-hosted runners", "Administration" and "Actions" sections) and the
 [self-hosted runners REST API](https://docs.github.com/en/rest/actions/self-hosted-runners).
 
-## Connect this Mac
+### Connect this Mac
 
-In **Workflows > CI runners**, choose **Connect GitHub**. The sheet has three steps:
+In **Workflows > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
+sheet has three steps:
 
 1. **Install app.** Paste the App ID, the installation ID and the whole private key file. The key
    is saved in this Mac's keychain, and only after GitHub accepts it. It is never shown again,

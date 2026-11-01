@@ -106,6 +106,8 @@ export interface GithubConnectRequest {
   repos: string[];
   allowPublic: boolean;
   label?: string;
+  /** False leaves a new runner off; the daemon defaults to true. */
+  enabled?: boolean;
 }
 /** A GitLab project (repo scope, `owner` may hold subgroups) or group (org scope). */
 export interface GitlabConnectRequest {
@@ -122,6 +124,36 @@ export interface GitlabConnectRequest {
   protectedOnly?: boolean;
   label?: string;
 }
+
+/** `canGroup` is null when it cannot be known: an org's plan is hidden, or a personal account. */
+export interface GithubAccount { login: string; kind: 'user' | 'org'; canGroup: boolean | null }
+export interface GithubAccounts { login: string | null; accounts: GithubAccount[] }
+export interface GithubRepo { name: string; private: boolean }
+export type GithubSetupStep = 'idle' | 'create' | 'install' | 'confirm' | 'failed';
+/** The click-through connect, from `runner:githubStatus` and the `runner:githubChanged` push. */
+export interface GithubSetupView {
+  step: GithubSetupStep;
+  owner: string | null;
+  kind: 'user' | 'org' | null;
+  /** The app has repo Administration, so it serves one repo, even under an org. */
+  repoAdmin: boolean;
+  slug: string | null;
+  appId: number | null;
+  installationId: number | null;
+  repos: GithubRepo[];
+  error: string | null;
+}
+export interface GithubStartRequest { owner: string; kind: 'user' | 'org'; repoAdmin?: boolean }
+/** `url` is the GitHub settings page to link to when `done` is false. */
+export interface ForkApproval { done: boolean; url: string }
+
+export const IDLE_GITHUB_SETUP: GithubSetupView = {
+  step: 'idle', owner: null, kind: null, repoAdmin: false, slug: null, appId: null, installationId: null, repos: [], error: null,
+};
+/** The runner polls every repo it serves. */
+export const MAX_RUNNER_REPOS = 20;
+/** More repos than this on an install means "All repositories", so none start ticked. */
+const TICKED_BY_DEFAULT = 5;
 
 export const DEFAULT_RUNNER_SETTINGS: RunnerSettings = {
   enabled: false,
@@ -424,3 +456,56 @@ export function toConnectRequest(f: ConnectForm, keyStored: boolean): GithubConn
     label,
   };
 }
+
+/** A personal account's runner, or an org's that cannot use runner groups, serves one repo. */
+export const servesOneRepo = (v: GithubSetupView) => v.kind === 'user' || v.repoAdmin;
+
+export function defaultRepoPicks(v: GithubSetupView): string[] {
+  if (servesOneRepo(v)) return v.repos.length === 1 ? [v.repos[0].name] : [];
+  return v.repos.length > TICKED_BY_DEFAULT ? [] : v.repos.map((r) => r.name);
+}
+
+/** The picks after ticking `name` on or off, or a sentence saying why not. */
+export function tickRepo(v: GithubSetupView, picked: string[], name: string, on: boolean): { picked: string[]; error: string | null } {
+  if (servesOneRepo(v)) return { picked: [name], error: null };
+  if (!on) return { picked: picked.filter((r) => r !== name), error: null };
+  if (picked.includes(name)) return { picked, error: null };
+  if (picked.length >= MAX_RUNNER_REPOS) return { picked, error: `A runner serves at most ${MAX_RUNNER_REPOS} repos.` };
+  return { picked: [...picked, name], error: null };
+}
+
+export const publicPicks = (v: GithubSetupView, picked: string[]) =>
+  v.repos.filter((r) => !r.private && picked.includes(r.name)).map((r) => r.name);
+
+export interface SetupPicks { repos: string[]; allowPublic: boolean; label: string }
+
+/**
+ * The confirm step as a `runner:connect` request, or the sentence to fix. A
+ * runner with a public repo starts off, so it cannot take a job before GitHub
+ * holds outside contributors for approval.
+ */
+export function toSetupRequest(v: GithubSetupView, p: SetupPicks): GithubConnectRequest | { error: string } {
+  if (!v.owner || v.appId === null || v.installationId === null) return { error: 'GitHub is not connected yet.' };
+  if (!p.repos.length) return { error: 'Pick at least one repo.' };
+  if (p.repos.length > MAX_RUNNER_REPOS) return { error: `A runner serves at most ${MAX_RUNNER_REPOS} repos.` };
+  const anyPublic = publicPicks(v, p.repos).length > 0;
+  if (anyPublic && !p.allowPublic) return { error: 'Choose how to handle the public repo first.' };
+  const label = p.label.trim() || DEFAULT_RUNNER_LABEL;
+  if (!LABEL.test(label)) return { error: 'Labels use letters, digits, dot, dash and underscore.' };
+  const [owner, repo] = p.repos[0].split('/');
+  const scope: Scope = servesOneRepo(v) ? { kind: 'repo', owner, repo } : { kind: 'org', org: v.owner };
+  return {
+    provider: 'github',
+    scope,
+    appId: v.appId,
+    installationId: v.installationId,
+    repos: servesOneRepo(v) ? [] : p.repos,
+    allowPublic: anyPublic,
+    label,
+    enabled: !anyPublic,
+  };
+}
+
+export const githubInstallUrl = (slug: string) => `https://github.com/apps/${slug}/installations/new`;
+/** Where an org's app is deleted, which is the way out when the org turns out to have no runner groups. */
+export const githubAppSettingsUrl = (org: string, slug: string) => `https://github.com/organizations/${org}/settings/apps/${slug}/advanced`;

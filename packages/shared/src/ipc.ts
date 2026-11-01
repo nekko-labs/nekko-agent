@@ -24,7 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
-import type { ConnectRequest, ImageBuildRequest, ImageView, RunnerSettings, RunnerView } from './runners.js';
+import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImageView, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -342,6 +342,12 @@ export const IpcChannels = {
   runnerUpdate: 'runner:update',
   runnerRemove: 'runner:remove',
   runnerSetEnabled: 'runner:setEnabled',
+  /** The click-through GitHub connect, confirmed through `runner:connect`. */
+  runnerGithubAccounts: 'runner:githubAccounts',
+  runnerGithubStart: 'runner:githubStart',
+  runnerGithubStatus: 'runner:githubStatus',
+  runnerGithubCancel: 'runner:githubCancel',
+  runnerSetForkApproval: 'runner:setForkApproval',
 
   connectorsList: 'connectors:list',
   connectorConnect: 'connector:connect',
@@ -475,6 +481,8 @@ export const IpcEvents = {
   runnerImageChanged: 'runner:imageChanged',
   /** Every runner's `RunnerView`, after any change. */
   runnerChanged: 'runner:changed',
+  /** The GitHub connect moved on: a `GithubSetupView`. */
+  runnerGithubChanged: 'runner:githubChanged',
   limitsUpdated: 'limits:updated',
   /** The look a paired phone mirrors changed: the theme fields of the settings, never anything else. */
   appearanceUpdated: 'appearance:updated',
@@ -1097,6 +1105,16 @@ export interface NekkoApi {
   updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
   removeRunner(id: string): Promise<null>;
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
+  /** Accounts `gh` is signed in to; empty without `gh`. */
+  githubAccounts(): Promise<GithubAccounts>;
+  /** `url` is the page to open in the browser, or null when GitHub has nothing left to do. */
+  githubStart(req: GithubStartRequest): Promise<{ url: string | null }>;
+  /** Also picks a pending app back up, so a sheet opened after a quit resumes at Install. */
+  githubStatus(): Promise<GithubSetupView>;
+  /** Stops waiting. The app and its key stay, so the next start resumes. */
+  githubCancel(): Promise<GithubSetupView>;
+  /** `confirmed`: the owner set it themselves, so GitHub is not asked. Either way, `done` lets the runner start. */
+  setForkApproval(req: { runnerId: string; confirmed?: boolean }): Promise<ForkApproval>;
 
   listConnectors(): Promise<ConnectorConfig[]>;
   connectConnector(kind: ConnectorKind, token: string, settings?: Record<string, string>): Promise<ConnectorConfig[]>;
@@ -1272,6 +1290,7 @@ export interface NekkoApi {
   onWorkflowsUpdated(cb: (snapshot: WorkflowsSnapshot) => void): () => void;
   onImageChanged(cb: (view: ImageView) => void): () => void;
   onRunnersChanged(cb: (views: RunnerView[]) => void): () => void;
+  onGithubSetupChanged(cb: (view: GithubSetupView) => void): () => void;
   /** Fires when subscription limits are captured or polled for any token key. */
   onLimitsUpdated(cb: (e: { tokenKey: string; limits: SubscriptionLimits }) => void): () => void;
   /** Fires as engine and model downloads progress, finish, or fail. */
