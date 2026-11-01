@@ -168,5 +168,59 @@ pub fn cut16(s: &str, n: usize) -> &str {
 
 /// The phone protocol version this computer speaks, sent in the welcome
 /// (`REMOTE_PROTOCOL_VERSION` in packages/shared/src/remote.ts). 4 is the
-/// first with relay replay protection (`agent::CHALLENGE_PROTOCOL`).
-pub const PROTOCOL_VERSION: u64 = 4;
+/// first with relay replay protection (`agent::CHALLENGE_PROTOCOL`); 5 signs
+/// every HELLO with the phone's device key ([`HELLO_KEY_PROTOCOL`]).
+pub const PROTOCOL_VERSION: u64 = 5;
+
+/// The first protocol whose HELLO is signed with a device key (decision 0036).
+/// An older phone app is refused with `update-required`.
+pub const HELLO_KEY_PROTOCOL: u64 = 5;
+
+/// The first line of the text a HELLO signs: bumped if its shape ever changes.
+pub const HELLO_KEY_VERSION: &str = "nekko-hello-v1";
+
+/// What a HELLO signs with the phone's device key, ECDSA P-256 SHA-256:
+/// the four lines `nekko-hello-v1`, the deviceId, the room and the challenge,
+/// joined by `\n`. The challenge is the computer's fresh nonce for this
+/// connection, so a signature is good for one HELLO, to one room, from one
+/// device.
+pub fn hello_text(device_id: &str, room: &str, challenge: &str) -> String {
+    format!("{HELLO_KEY_VERSION}\n{device_id}\n{room}\n{challenge}")
+}
+
+/// The HELLO's device key check, before [`verify_hello`]. `known` is the
+/// device's record when it is paired and not revoked; `code_ok` says the HELLO
+/// brings the live pairing code.
+///
+/// - Bringing the live code: the HELLO must carry `helloKey` (X9.63 P-256,
+///   base64) and a signature with it; that key is the one to keep
+///   (`Ok(Some(key))`). This is how a device enrolls, or enrolls again.
+/// - Otherwise a known device must sign with the key it enrolled with. One
+///   without a key (paired before device keys) or whose signature does not
+///   verify (a reinstalled app) is told to pair again (`bad-key`).
+/// - An unknown device without the code is left to [`verify_hello`], which
+///   refuses it.
+pub fn check_hello_key(
+    known: Option<&Value>,
+    hello: &Value,
+    room: &str,
+    code_ok: bool,
+) -> Result<Option<String>, &'static str> {
+    let text = |k: &str| hello.get(k).and_then(Value::as_str);
+    let (Some(device_id), Some(challenge)) = (text("deviceId"), text("challenge")) else { return Err("invalid") };
+    let signed = hello_text(device_id, room, challenge);
+    let sig = text("sig").and_then(crate::proof::b64).filter(|s| s.len() == 64);
+    let verifies = |key_text: &str| {
+        let key = crate::proof::parse_key(key_text);
+        matches!((&key, &sig), (Some(k), Some(s)) if crate::proof::verify(k, &signed, s))
+    };
+    if code_ok && truthy(hello.get("pair")) {
+        let offered = text("helloKey").ok_or("invalid")?;
+        return if verifies(offered) { Ok(Some(offered.to_string())) } else { Err("invalid") };
+    }
+    let Some(known) = known else { return Ok(None) };
+    match known.get("helloKey").and_then(Value::as_str) {
+        Some(stored) if verifies(stored) => Ok(None),
+        _ => Err("bad-key"),
+    }
+}
