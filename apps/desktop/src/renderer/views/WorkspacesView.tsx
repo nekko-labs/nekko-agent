@@ -137,10 +137,12 @@ type SidebarActions = {
   onOrientation?: (orientation: AgentPanelOrientation) => void;
   /** Hide the panel; the Agents toolbar offers it back. */
   onClosePanel?: () => void;
+  /** The colour of the zone showing each agent on the board, by chat or terminal id. */
+  zoneTints?: Map<string, number>;
 };
 
 /** The Agent board's list of agents: one card per active agent, grouped, beside or above the wall. */
-export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, orientation = 'vertical', onOrientation, onClosePanel }: SidebarActions) {
+export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, orientation = 'vertical', onOrientation, onClosePanel, zoneTints }: SidebarActions) {
   const horizontal = orientation === 'horizontal';
   const {
     sessions, terminals, workspaces, settings,
@@ -782,6 +784,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
                           showProvider={view.showProvider}
+                          zoneTint={zoneTints?.get(s?.id ?? entry.t?.id ?? '')}
                           onOpen={() => {
                             if (s) onOpenChat(s.id);
                             else if (entry.t) onOpenTerminal(entry.t.id);

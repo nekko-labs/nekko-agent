@@ -32,6 +32,7 @@ import {
   minimizeFinishedReply,
   DEFAULT_ASPECT,
   openWallPane,
+  agentZoneTints,
   loadWallState,
   nextAgent,
   reconcileWall,
@@ -425,6 +426,8 @@ export function CommandCenterView() {
     setSelected(chat.id);
   }, [focusRequest, listsReady, sessions, setWall]);
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
+  // Zones are drawn everywhere but Focus, so only there do the cards carry no zone colour.
+  const agentTints = useMemo(() => (wall.layout.mode === 'focus' ? undefined : agentZoneTints(wall.root)), [wall.root, wall.layout.mode]);
   const panel = readAgentPanel(wall.agentPanel);
   const agentsPresent = usePanelPresence(panel.show);
   useEffect(() => {
@@ -562,6 +565,7 @@ export function CommandCenterView() {
         }
       }} onOpenTerminal={(id) => { setCompletedId(null); void addFromToolbar('terminal', id); }}
         orientation={panel.orientation}
+        zoneTints={agentTints}
         onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))}
         onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">

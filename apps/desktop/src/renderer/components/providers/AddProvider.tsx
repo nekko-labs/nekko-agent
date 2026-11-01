@@ -244,8 +244,12 @@ export function AddProvider({
       const config = draft();
       const check = await window.nekko.testProviderConfig(config);
       setResult(check);
-      if (!check.ok) return;
+      if (!check.ok) {
+        pushToast('error', check.message || `Could not connect ${config.label}.`);
+        return;
+      }
       await window.nekko.saveProvider(config);
+      pushToast('success', `${config.label} connected.`);
       if (claude) {
         // Stay on the Claude panel so the user sees it connected.
         setClaudeConnected({ title: 'Claude is connected', detail: `Using ${config.label} (${API_SOURCE[config.kind] ?? 'API'}), billed to that account.` });
@@ -256,7 +260,9 @@ export function AddProvider({
       }
       onDone();
     } catch (error) {
-      setResult({ ok: false, message: String(error) });
+      const message = String(error);
+      setResult({ ok: false, message });
+      pushToast('error', `Could not save: ${message}`);
     } finally { setTesting(false); }
   };
 
@@ -381,7 +387,9 @@ export function AddProvider({
               <button className="btn btn-outline" onClick={test} disabled={testing}>
                 {testing ? 'Testing…' : 'Test connection'}
               </button>
-              <button className="btn btn-primary" onClick={save} disabled={testing}>Connect provider</button>
+              <button className="btn btn-primary" onClick={save} disabled={testing}>
+                {testing ? 'Connecting…' : 'Connect provider'}
+              </button>
             </>
           )}
         </div>

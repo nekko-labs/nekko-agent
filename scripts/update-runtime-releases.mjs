@@ -50,18 +50,21 @@ function run() {
   const alsoNamingIt = ['crates/nekko-engine/tests/golden/install.json', 'crates/nekkod/tests/daemon/engine.rs'];
   const repoName = process.env.GITHUB_REPOSITORY;
   const existing = JSON.parse(gh('pr', 'list', '--repo', repoName, '--head', branch, '--state', 'open', '--json', 'number'))[0];
-  if (git('ls-remote', '--heads', 'origin', branch)) {
+  // Build on the branch only while its PR is open. Once that PR is squash-merged
+  // the branch is a dead end: merging main into it conflicts with the squashed
+  // copy of its own commits, so start over from main and replace it.
+  if (existing && git('ls-remote', '--heads', 'origin', branch)) {
     git('fetch', 'origin', branch);
     git('switch', '--track', `origin/${branch}`);
     git('-c', 'user.name=runtime-update-bot', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'merge', 'origin/main', '--no-edit');
-  } else git('switch', '-c', branch);
+  } else git('switch', '-C', branch);
   const current = currentPin(readFileSync(file, 'utf8'), repo);
   if (!current) throw new Error('The runtime pin has an unexpected shape.');
   if (!shouldUpdate(runtime, current, release.tag_name)) { console.log('No newer eligible release.'); return; }
   for (const f of [file, ...alsoNamingIt]) writeFileSync(f, readFileSync(f, 'utf8').split(current).join(release.tag_name));
   git('add', file, ...alsoNamingIt);
   git('-c', 'user.name=runtime-update-bot', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-m', `Update ${repo} to ${release.tag_name}`);
-  git('push', 'origin', branch);
+  git('push', ...(existing ? [] : ['--force']), 'origin', branch);
   if (!existing) gh('pr', 'create', '--repo', repoName, '--head', branch, '--base', 'main', '--title', `Update ${repo} to ${release.tag_name}`, '--body', `## Summary\nUpdate the recommended runtime to upstream ${release.tag_name}. Release assets exist for the supported baseline platforms and the release is at least seven days old.\n\n## Test plan\nRuntime matching tests, typecheck and build run through CI.\n\nNo visual change.`);
   if (existing) gh('pr', 'edit', String(existing.number), '--repo', repoName, '--title', `Update ${repo} to ${release.tag_name}`);
 }

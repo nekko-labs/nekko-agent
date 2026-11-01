@@ -18,9 +18,9 @@ describe('guarded wall selection', () => {
       const activeZone = allPanes(root)[0].id;
       const state = { ...DEFAULT_WALL_STATE, root, activeZone, hero: 'a', layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } };
       const next = openWallPane(state, 'chat', 'b');
-      // Focus only shows it; the board trades it into the active zone.
-      if (mode === 'focus') expect(next.root).toBe(root);
-      else expect(allPanes(next.root).map((p) => p.refId)).toEqual(['b', 'a']);
+      // One already on the board is only shown: its zone becomes the active one, nothing moves.
+      expect(next.root).toBe(root);
+      expect(next.activeZone).toBe(allPanes(root)[1].id);
       expect(next.hero).toBe('b');
       expect(next.layout).toBe(state.layout);
       expect(openWallPane(next, 'chat', 'b')).toBe(next);

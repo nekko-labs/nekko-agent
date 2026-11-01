@@ -145,18 +145,37 @@ fn system(name: &str) -> bool {
 /// Nekko's processes: the daemon and every process under it (model servers),
 /// and anything named Nekko (the desktop app and its helpers).
 pub fn own_pids(procs: &[Proc], me: u32) -> HashSet<u32> {
-    let mut own: HashSet<u32> =
-        procs.iter().filter(|p| p.name.to_ascii_lowercase().contains("nekko")).map(|p| p.pid).collect();
-    own.insert(me);
-    let mut frontier = vec![me];
+    let mut own = with_descendants(procs, &[me]);
+    own.extend(procs.iter().filter(|p| p.name.to_ascii_lowercase().contains("nekko")).map(|p| p.pid));
+    own
+}
+
+/// `roots` and every process under them.
+fn with_descendants(procs: &[Proc], roots: &[u32]) -> HashSet<u32> {
+    let mut tree: HashSet<u32> = roots.iter().copied().collect();
+    let mut frontier = roots.to_vec();
     while let Some(parent) = frontier.pop() {
         for p in procs.iter().filter(|p| p.parent == Some(parent)) {
-            if own.insert(p.pid) {
+            if tree.insert(p.pid) {
                 frontier.push(p.pid);
             }
         }
     }
-    own
+    tree
+}
+
+/// What `roots` and the processes under them hold: what stopping them frees.
+pub fn tree_bytes_of(procs: &[Proc], roots: &[u32]) -> u64 {
+    let tree = with_descendants(procs, roots);
+    procs.iter().filter(|p| tree.contains(&p.pid)).map(|p| p.bytes).sum()
+}
+
+/// `tree_bytes_of` the processes running now (the model servers, say).
+pub fn tree_bytes(roots: &[u32]) -> u64 {
+    if roots.is_empty() {
+        return 0;
+    }
+    tree_bytes_of(&processes(), roots)
 }
 
 /// The app outside Nekko and the system that holds the most memory, if it

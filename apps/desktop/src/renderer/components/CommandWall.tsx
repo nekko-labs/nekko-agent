@@ -34,7 +34,10 @@ import {
   wallAgents,
   wallArrangement,
   nextZoneName,
+  setZoneTint,
   wallPane,
+  zoneTints,
+  ZONE_TINTS,
   type CommandWallState,
   type ZoneSpot,
 } from '../commandWall.js';
@@ -558,6 +561,7 @@ export function CommandWall({
   // Clicking a zone, or anything in it, makes it the active zone.
   const activate = (paneId: string) => setState((s) => (s.activeZone === paneId ? s : { ...s, activeZone: paneId }));
   const [zoneMenu, setZoneMenu] = useState<{ x: number; y: number; paneId: string } | null>(null);
+  const tints = useMemo(() => zoneTints(state.root), [state.root]);
 
   /*
    * An agent row dragged in from the panel. Its chip follows the pointer;
@@ -836,7 +840,8 @@ export function CommandWall({
         {zoned && <div className="wall-zone-header" title="Drag to move this zone. Right-click to close it."
           onPointerDown={pickable ? (e) => { if (e.button === 0) pickUp(e, pane, title); } : undefined}
           onContextMenu={(e) => { e.preventDefault(); setZoneMenu({ x: e.clientX, y: e.clientY, paneId: pane.id }); }}>
-          <span>{pane.zone ?? 'Zone'}</span>
+          <span className="wall-zone-swatch" style={{ background: `var(--zone-tint-${tints.get(pane.id) ?? 0})` }} aria-hidden />
+          <span className="wall-zone-name">{pane.zone ?? 'Zone'}</span>
         </div>}
         {pane.kind === 'zone' ? <div className="wall-zone-empty" data-zone-empty>
           <ZoneEmptyIllustration />
@@ -991,6 +996,11 @@ export function CommandWall({
     <div ref={wrapRef} className="command-wall-layout" data-command-wall="windows" data-wall-layout={wallArrangement(state.layout)} data-wall-lifting={lift ? '' : undefined} data-zone-rails={zoneRails || undefined}>
       {chip && createPortal(<div ref={chipRef} className="wall-agent-chip" aria-hidden />, document.body)}
       {zoneMenu && <ContextMenu x={zoneMenu.x} y={zoneMenu.y} onClose={() => setZoneMenu(null)}>
+        <div className="wall-zone-tints" role="group" aria-label="Zone colour">
+          {Array.from({ length: ZONE_TINTS }, (_, i) => <button key={i} type="button" role="menuitemradio" aria-checked={tints.get(zoneMenu.paneId) === i} aria-label={`Colour ${i + 1}`}
+            className="wall-zone-tint" style={{ background: `var(--zone-tint-${i})` }}
+            onClick={() => { const id = zoneMenu.paneId; setZoneMenu(null); setState((s) => ({ ...s, root: setZoneTint(s.root, id, i) })); }} />)}
+        </div>
         <ContextAction disabled={allPanes(state.root).length < 2} onClick={() => {
           const id = zoneMenu.paneId;
           setZoneMenu(null);

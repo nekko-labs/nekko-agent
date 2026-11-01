@@ -150,3 +150,45 @@ How each server was started for the results above:
 - **LM Studio:** `lms server start` and `lms load google/gemma-4-12b --context-length 32768 --gpu max --identifier bench-gemma`.
 
 The harness counts tokens from each server's usage report when it sends one, and times the first streamed piece of text or reasoning as the first token.
+
+## Switching models
+
+How long it takes to switch to a local model that is not loaded, depending on where its weights are: a cold file on a fast SSD, a cold file on a slow disk, or a file already in memory. This is the groundwork for the model scheduler ([#1462](https://github.com/nekko-labs/nekko-agent/issues/1462)); the full write-up is in [the Phase 0 report](../reports/model-switching-phase0-2026-11-01.md).
+
+RTX 5090, Windows 11, llama.cpp b11149 CUDA, default load mode, 2026-11-01:
+
+| Model | From | Cold | Already in memory |
+| --- | --- | --- | --- |
+| Qwen3 8B Q4_K_M (5.0 GB) | 7200 rpm hard disk | 24.4 s | 3.0 s |
+| Gemma 4 12B Q4_K_M (7.4 GB) | 7200 rpm hard disk | 35.2 s | 4.6 s |
+| Qwen3 8B Q4_K_M (5.0 GB) | PCIe 5 NVMe | 3.4 s | 2.5 s |
+| Gemma 4 12B Q4_K_M (7.4 GB) | PCIe 5 NVMe | 6.1 s | 5.5 s |
+
+From a hard disk, having the model in memory makes the switch 7-8 times faster. From a fast NVMe the disk is not what you wait for: llama.cpp's direct I/O load mode (`--load-mode dio`) loads Qwen3 8B cold in 1.8 s.
+
+### Measuring it: `nekko-bench switch`
+
+Unlike the serving benchmark, this one starts `llama-server` itself, because the load is what it measures. For each model and each folder you list, it writes a fresh copy with the OS cache bypassed, measures the disk's raw read speed on it, loads it cold, reads it once through the cache, and loads it again. Each load is split by the server's own log clock into startup, weights and serve, and the first and a second request are timed. It stops rather than load a model that would leave less than `minFreeGb` of memory.
+
+```json
+{
+  "machine": "RTX 5090 32 GB, Windows 11",
+  "server": "C:/Users/me/.nekko-agent/engine/win-x64-cuda/llama-server.exe",
+  "repeats": 3,
+  "args": ["--n-gpu-layers", "999", "--ctx-size", "4096"],
+  "volumes": [
+    { "name": "NVMe", "dir": "C:/bench" },
+    { "name": "HDD", "dir": "E:/bench" }
+  ],
+  "models": [
+    { "name": "Qwen3 8B Q4_K_M", "path": "C:/models/Qwen3-8B-Q4_K_M.gguf" },
+    { "name": "Qwen3 8B Q4_K_M, direct I/O", "path": "C:/models/Qwen3-8B-Q4_K_M.gguf", "args": ["--load-mode", "dio"] }
+  ]
+}
+```
+
+```bash
+target/release/nekko-bench switch switch.json --out results.json --markdown results.md
+```
+
+Each volume needs free space for one copy of the largest model. Close games and other GPU-heavy programs first: they hold VRAM and slow the requests.

@@ -215,6 +215,7 @@ export function ClaudeSetup({
         title: 'Claude is connected',
         detail: `Using your Claude subscription through Claude Code${s?.installed ? ` ${s.version}` : ''}${who ? `, signed in as ${who}` : ''}.`,
       });
+      pushToast('success', who ? `Claude subscription connected as ${who}.` : 'Claude subscription connected.');
     } catch (e) {
       pushToast('error', `Could not save: ${String(e)}`);
     } finally {
@@ -257,13 +258,14 @@ export function ClaudeSetup({
         </div>
       )}
 
+      <ClaudeOptionsList choice={choice} onChoose={choose} subscriptionNote={claudeCodeNote(status, !!usual)} />
+
       <ClaudeDetect status={status} checking={checking} installing={terminal.term?.purpose === 'install'} onRetry={refresh} />
 
       <ClaudeChoiceTable
         table={table}
         choice={choice}
         onChoose={choose}
-        subscriptionNote={claudeCodeNote(status, !!usual)}
         footer={{
           subscription: subscriptionButton,
           api: apiOpen ? null : <button type="button" className="btn btn-primary" onClick={onConnectApi}>Connect: add a key or cloud account</button>,
@@ -357,18 +359,65 @@ function ClaudeDetect({ status, checking, installing, onRetry }: { status: Claud
   );
 }
 
-/** The comparison table as the picker: click a column to choose it. */
+/**
+ * The primary picker: two bullet-list options, Subscription or API, each with
+ * a title and one line of plain-language detail. The comparison table below is
+ * for reference; this is where the choice is made.
+ */
+function ClaudeOptionsList({
+  choice,
+  onChoose,
+  subscriptionNote,
+}: {
+  choice: ClaudeChoice | undefined;
+  onChoose: (c: ClaudeChoice) => void;
+  subscriptionNote: { tone: 'busy' | 'ok' | 'off'; text: string };
+}) {
+  const options: Array<{ id: ClaudeChoice; label: string; detail: string }> = [
+    { id: 'subscription', label: 'Claude subscription', detail: 'Use your Claude plan through Claude Code on this computer. Billed to your Claude plan.' },
+    { id: 'api', label: 'API key or cloud account', detail: 'Anthropic API key, Amazon Bedrock, Google Vertex AI, or Microsoft Foundry. Billed per token.' },
+  ];
+  return (
+    <div className="claude-options" role="radiogroup" aria-label="Pick how to use Claude">
+      <p className="claude-options-h">Pick one</p>
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          role="radio"
+          aria-checked={choice === o.id}
+          data-claude-option={o.id}
+          data-on={choice === o.id || undefined}
+          className="claude-option"
+          onClick={() => onChoose(o.id)}
+        >
+          <span className="claude-radio" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <strong>{o.label}</strong>
+            <small>{o.detail}</small>
+          </span>
+          {o.id === 'subscription' && (
+            <span className="claude-option-note" data-tone={subscriptionNote.tone}>
+              {subscriptionNote.tone === 'busy' ? <span className="claude-spin" /> : subscriptionNote.tone === 'ok' ? <CheckIcon className="h-3.5 w-3.5" /> : <BanIcon />}
+              {subscriptionNote.text}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The comparison table, kept beside the picker as a reference. Clicking a column still updates the choice. */
 function ClaudeChoiceTable({
   table,
   choice,
   onChoose,
-  subscriptionNote,
   footer,
 }: {
   table: ReturnType<typeof claudeComparisonTable>;
   choice: ClaudeChoice | undefined;
   onChoose: (c: ClaudeChoice) => void;
-  subscriptionNote: { tone: 'busy' | 'ok' | 'off'; text: string };
   footer: Record<ClaudeChoice, React.ReactNode>;
 }) {
   const col = (id: ClaudeChoice) => ({
@@ -390,12 +439,6 @@ function ClaudeChoiceTable({
                   <span>{c.label}</span>
                 </button>
                 <small>{c.detail}</small>
-                {c.id === 'subscription' && (
-                  <span className="claude-col-note" data-tone={subscriptionNote.tone}>
-                    {subscriptionNote.tone === 'busy' ? <span className="claude-spin" /> : subscriptionNote.tone === 'ok' ? <CheckIcon className="h-3.5 w-3.5" /> : <BanIcon />}
-                    {subscriptionNote.text}
-                  </span>
-                )}
               </th>
             ))}
           </tr>

@@ -12,8 +12,12 @@
 //! ```
 //!
 //! `nekko-bench <config.json> [--out results.json] [--markdown results.md] [--only decode,agent]`
+//!
+//! `nekko-bench switch <config.json> ...` measures model switching instead
+//! (see `switch.rs`).
 
 mod client;
+mod switch;
 mod workloads;
 
 use client::Target;
@@ -49,7 +53,11 @@ struct Report {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut args = std::env::args().skip(1);
+    let mut args = std::env::args().skip(1).peekable();
+    if args.peek().map(String::as_str) == Some("switch") {
+        args.next();
+        return switch::run(args).await;
+    }
     let config_path = args
         .next()
         .ok_or_else(|| anyhow::anyhow!("usage: nekko-bench <config.json> [--out f] [--markdown f] [--only a,b]"))?;

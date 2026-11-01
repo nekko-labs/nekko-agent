@@ -732,6 +732,11 @@ app.on('before-quit', (event) => {
   engine = null;
   void stopping.stop().finally(() => {
     engineStopped = true;
-    app.quit();
+    // Not from inside this handler: with no daemon running, stop() is already
+    // settled and this runs as a microtask of the same emit. Electron then sets
+    // its quitting flag from the nested quit and clears it again when the outer
+    // one sees this preventDefault, so the windows close but the app never
+    // quits (macOS keeps it running with no window).
+    setImmediate(() => app.quit());
   });
 });

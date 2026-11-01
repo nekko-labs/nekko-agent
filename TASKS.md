@@ -6,6 +6,21 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Model scheduler (#1462, added 2026-11-01)
+
+Fast switching between local models through residency tiers (Hot, Warm in RAM, Staged on a fast SSD, Cold), and preloading from what is coming next (scheduled tasks, workflow steps, active agents). Design and acceptance criteria in [#1462](https://github.com/nekko-labs/nekko-agent/issues/1462); Phase 0 results in [the report](reports/model-switching-phase0-2026-11-01.md). Prefix **MS**.
+
+- [x] **MS0-1, `nekko-bench switch` (2026-11-01).** `crates/nekko-bench/src/switch.rs` loads each model cold (a fresh copy written and read with the OS cache bypassed: `FILE_FLAG_NO_BUFFERING` on Windows, `O_DIRECT`/`POSIX_FADV_DONTNEED` on Linux, `F_NOCACHE` on macOS) and warm (the same copy read once through the cache) per volume, splits each load by `llama-server`'s log clock into startup, weights and serve, and times the first and a second request. Stops under a free-memory headroom. Documented in [benchmarks](docs/benchmarks.md#switching-models).
+- [x] **MS0-2, Engine records load times (2026-11-01).** `ModelServer::load_times` (`crates/nekko-engine/src/server.rs`) keeps each model's last 8 successful loads (spawn-to-health and total, size, when), across unloads; `engine:loadTimes` serves them. In memory only; Phase 2 persists them for preload lead times.
+- [x] **MS0-3, Matrix on Windows/NVIDIA (2026-11-01).** RTX 5090, PCIe 5 NVMe and a 7200 rpm HDD, three models and three llama.cpp load modes. Warm is 7-8x faster than cold from the HDD and 1.1-1.4x from the NVMe; `--load-mode dio` cold (1.8 s) beats the default mmap from memory (2.5 s); startup is ~0.13 s. A game shared the GPU during the runs, so first-token times are noisy. See the report.
+- [ ] **MS0-4, The other platforms and an idle re-run.** Run `nekko-bench switch` on an idle machine here, on Windows/Vulkan (AMD), Apple Silicon (unified memory: Warm and Hot share a pool) and CPU-only, plus load modes on the HDD, a SATA SSD and a USB disk; add them to the report.
+- [ ] **MS1-0, Load mode by where the weights are.** Direct I/O from a fast local SSD, mmap or `none` when the file is Warm (direct I/O skips the page cache). Confirm with MS0-4 first; it speeds up every load with or without the scheduler.
+- [ ] **MS1, Tiers.** Warm tier with a RAM budget and pressure release, Hot to Warm demotion, tier and estimated switch time in status, Model Server and the picker. Scheduler Off reproduces today exactly.
+- [ ] **MS2, Schedule-aware preload.** Forecast from scheduled tasks, workflow steps, active sessions and role models; lead time from persisted load times; eviction by score; reasons; Up next strip.
+- [ ] **MS2-1, Share the machine with heavy programs.** Other processes' VRAM (NVML, DXGI `QueryVideoMemoryInfo`, Metal working set), a full-screen app in front (`activity:fullscreen`), the top RAM holder: no speculative preloads or staging, a smaller Warm budget and idle Hot models demoted while a game or other heavy app runs; re-plan when it closes; say so in the monitor chip.
+- [ ] **MS3, SSD staging** for libraries on slow or removable storage.
+- [ ] **MS4, Learn and extend.** Usage patterns, slot save/restore, Ollama and LM Studio preload, MCP `preload` hint.
+
 ## Per-chat watching Nekko and resolved Claude model (added 2026-10-31)
 
 Nekko used to sit in the app's bottom-left corner as one global mascot. Philip asked for her to live inside each agent window at the top-right (~80% along the top edge) and to watch the composer as the user types; the single `mascotEnabled` setting still hides them all at once. In the same session he asked that a Claude subscription chat stop reading as the generic "Opus" alias once Claude Code reports which version it resolved to. Both ride under the existing H-group's `claude-code` plumbing (`claudeCodeContext.model`).

@@ -146,6 +146,23 @@ struct State {
     serving: bool,
     started_at: Option<f64>,
     timers: Vec<tokio::task::JoinHandle<()>>,
+    /// Each model's last few successful loads, oldest first. They outlive the
+    /// unload: how long a model takes to come back is what a preload needs.
+    load_times: Vec<(String, Vec<LoadTime>)>,
+}
+
+/// How many loads per model `load_times` keeps.
+const LOAD_TIMES_KEPT: usize = 8;
+
+/// One successful load, timed on the engine clock (ms).
+#[derive(Clone, Debug)]
+struct LoadTime {
+    /// Spawning the server until it answered health: the load itself.
+    spawn_ms: f64,
+    /// From the load leaving the queue, including making room.
+    total_ms: f64,
+    size_bytes: f64,
+    at: f64,
 }
 
 fn upsert<V>(list: &mut Vec<(String, V)>, key: &str, value: V) {
@@ -608,6 +625,7 @@ impl ModelServer {
     }
 
     async fn do_load(&self, id: &str, params: Value) -> Value {
+        let begun = self.env.now();
         let params = if params.is_object() { params } else { json!({}) };
         if let Some(l) = get_mut(&mut self.state.lock().unwrap().loading, id) {
             l.phase = "loading";
@@ -836,7 +854,9 @@ impl ModelServer {
             spec.insert("healthExpect".into(), json!("\"ok\""));
         }
         spec.insert("budgetSecs".into(), json!(LOAD_BUDGET_SECS));
+        let spawned_at = self.env.now();
         let outcome = self.daemon.spawn(Value::Object(spec)).await;
+        let ready_at = self.env.now();
         if outcome.get("status").and_then(Value::as_str) != Some("ready") {
             let log: Vec<String> = outcome
                 .get("log")
@@ -879,10 +899,18 @@ impl ModelServer {
             loaded_on: on,
             active_requests: 0.0,
         };
+        let took =
+            LoadTime { spawn_ms: ready_at - spawned_at, total_ms: ready_at - begun, size_bytes: size, at: ready_at };
         {
             let mut s = self.state.lock().unwrap();
             upsert(&mut s.children, id, child);
             remove(&mut s.errors, id);
+            let mut times = remove(&mut s.load_times, id).unwrap_or_default();
+            times.push(took);
+            if times.len() > LOAD_TIMES_KEPT {
+                times.remove(0);
+            }
+            upsert(&mut s.load_times, id, times);
         }
         self.say(format!("Loaded {id} on port {}.", text(outcome.get("port"))));
         reply(true, format!("Loaded {id}."))
@@ -959,29 +987,27 @@ impl ModelServer {
         }
     }
 
-    /// Unload every model not answering a request, kept resident or not
-    /// (`releaseIdle`): the person asked for the memory back, because the
-    /// computer ran short. A model mid-reply stays.
-    pub async fn release_idle(&self) -> Value {
+    /// Shut down every loaded model, kept resident or mid-reply (`unloadAll`):
+    /// the person asked for the memory back because the computer ran short,
+    /// and was told the agents using them stop. The server keeps listening,
+    /// so the next message loads its model again. `stopped` counts the models
+    /// that were answering a request.
+    pub async fn unload_all(&self) -> Value {
         self.sync().await;
-        let idle: Vec<(String, f64)> = {
+        let loaded: Vec<(String, f64, bool)> = {
             let s = self.state.lock().unwrap();
-            s.children
-                .iter()
-                .filter(|(_, c)| c.active_requests == 0.0)
-                .map(|(k, c)| (k.clone(), c.size_bytes))
-                .collect()
+            s.children.iter().map(|(k, c)| (k.clone(), c.size_bytes, c.active_requests > 0.0)).collect()
         };
-        let busy = self.state.lock().unwrap().children.len() - idle.len();
-        let mut freed = 0.0;
+        let (mut freed, mut stopped) = (0.0, 0);
         let mut unloaded = Vec::new();
-        for (id, size) in idle {
+        for (id, size, busy) in loaded {
             if self.unload(&id).await["ok"] == true {
                 freed += size;
+                stopped += usize::from(busy);
                 unloaded.push(id);
             }
         }
-        json!({ "ok": true, "unloaded": unloaded, "freedBytes": freed, "busy": busy })
+        json!({ "ok": true, "unloaded": unloaded, "freedBytes": freed, "stopped": stopped })
     }
 
     /// Change a resident model's idle TTL without a reload (`setResidentTtl`).
@@ -1053,6 +1079,24 @@ impl ModelServer {
 
     pub fn loaded_ids(&self) -> Vec<String> {
         self.state.lock().unwrap().children.iter().map(|(k, _)| k.clone()).collect()
+    }
+
+    /// Each model's recent load times, oldest first (`engine:loadTimes`), for
+    /// the model scheduler (#1462): `{ id: [{ spawnMs, totalMs, sizeBytes, at }] }`.
+    pub fn load_times(&self) -> Map<String, Value> {
+        let s = self.state.lock().unwrap();
+        s.load_times
+            .iter()
+            .map(|(id, times)| {
+                let list = times
+                    .iter()
+                    .map(|t| {
+                        json!({ "spawnMs": num(t.spawn_ms), "totalMs": num(t.total_ms), "sizeBytes": num(t.size_bytes), "at": num(t.at) })
+                    })
+                    .collect();
+                (id.clone(), Value::Array(list))
+            })
+            .collect()
     }
 
     /// The last load failure of each model (`loadErrorFor`).

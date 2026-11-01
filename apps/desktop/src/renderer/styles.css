@@ -2682,6 +2682,19 @@
    title and every one opens while the pointer or focus is anywhere on the
    sheet, via a 0fr -> 1fr row, kept fast. */
 .plan-sheet-dock { --plan-sheet-bg: color-mix(in srgb, var(--surface-2) 90%, var(--accent)); position: relative; width: 84%; margin: 0 auto -10px; clip-path: inset(-2px -14px 0 -14px); }
+/* The per-chat Nekko peeks over the composer's left end (face behind its top
+   edge, paws over it, as the new-chat greeting does). The art's 25-unit face
+   is 62.5px of its 75px box, so -62.5px puts the composer edge at its chin.
+   With him there, the plan sheet keeps its right inset but starts clear of
+   his ears instead of overlapping them. */
+.chat-mascot { position: absolute; z-index: 2; left: 4px; top: -62.5px; width: 80px; height: 75px; pointer-events: none; user-select: none; }
+.chat-mascot-art { display: block; width: 80px; height: 75px; }
+/* His paws stay down behind the edge until the composer has focus (or on a
+   random occasion), then hop up over it. */
+.chat-mascot .peek-paws-slot { transform: translateY(5px); opacity: 0; transition: transform 160ms var(--ease-out), opacity 120ms var(--ease-out); }
+.chat-mascot .peek-paws-slot[data-shown] { transform: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .chat-mascot .peek-paws-slot { transition: none; } }
+.composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock { width: auto; margin-left: max(8%, 92px); margin-right: 8%; }
 .plan-sheet-dock::before, .plan-sheet-dock::after { content: ''; position: absolute; bottom: 10px; width: 12px; height: 12px; pointer-events: none; }
 .plan-sheet-dock::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
 .plan-sheet-dock::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
@@ -3173,6 +3186,18 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .claude-connected > svg { color: var(--success); flex: none; }
 .claude-connected strong { display: block; font-size: var(--text-sm); }
 .claude-connected span { display: block; font-size: var(--text-xs); color: var(--ink-soft); }
+.claude-options { display: flex; flex-direction: column; gap: 8px; }
+.claude-options-h { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.claude-option { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+.claude-option:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); background: var(--surface-2); }
+.claude-option[data-on] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.claude-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.claude-option > .claude-radio { color: var(--ink-faint); }
+.claude-option[data-on] > .claude-radio { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 2px var(--surface); }
+.claude-option strong { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
+.claude-option small { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--ink-soft); }
+.claude-option-note { display: flex; align-items: center; gap: 5px; flex: none; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); }
+.claude-option-note[data-tone="ok"] { color: var(--success); }
 .claude-choice { overflow-x: auto; }
 .claude-choice table { width: 100%; border-collapse: separate; border-spacing: 10px 0; margin: 0 -10px; font-size: var(--text-xs); }
 .claude-choice th, .claude-choice td { padding: 8px 12px; text-align: left; vertical-align: middle; }
@@ -3574,10 +3599,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .mode-panel { display: flex; overflow: hidden; padding: 0; font-size: var(--text-xs); color: var(--ink); }
 .mode-panel svg { width: 15px; height: 15px; flex: none; }
 .mode-rail { width: 176px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: var(--surface-2); border-right: 1px solid var(--line); overflow-y: auto; }
-.mode-sec { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; padding: 0 12px; font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
-.mode-sec svg { width: 12px; height: 12px; }
-.mode-rail .mode-sec { padding: 0 8px 4px; }
-.mode-rail-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 4px 4px 8px; border-radius: 9px; text-align: left; cursor: pointer; }
+.mode-sec { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 0 10px 6px; font-size: var(--text-xs); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--line); }
+.mode-sec svg { width: 13px; height: 13px; color: var(--accent); }
+.mode-sec.is-sub { margin-top: 22px; }
+.mode-rail .mode-sec { padding: 0 8px 6px; border-bottom: 1px solid var(--line); }
+.mode-rail-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 4px 6px 7px; border-radius: 9px; text-align: left; cursor: pointer; }
 @media (hover: hover) {
   .mode-rail-item:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 }
@@ -3620,7 +3646,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 
 .mode-scroll { min-height: 0; overflow-y: auto; }
 .mode-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.mode-col { min-width: 0; padding: 12px 8px 8px; border-right: 1px solid var(--line); }
+.mode-col { min-width: 0; padding: 16px 8px 12px; border-right: 1px solid var(--line); }
 .mode-col:last-child { border-right: 0; }
 .mode-row { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 8px 12px; border-radius: 9px; text-align: left; }
 @media (hover: hover) {
