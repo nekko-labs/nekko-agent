@@ -903,11 +903,12 @@ public final class ComputersStore {
         var base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
                                deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
         base.helloSigner = helloSigner
+        let probe = base
         let make = makeConnection
         let name = computer.name
         for (i, url) in routes.enumerated() {
             let report = await Diagnostics.check(url, network: probeNetwork) { route in
-                var config = base
+                var config = probe
                 config.relayUrl = route
                 config.handshakeTimeout = 8
                 return await Self.hello(await make(config), computer: name)
