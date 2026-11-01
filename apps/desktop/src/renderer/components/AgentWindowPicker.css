@@ -33,7 +33,9 @@
   font: inherit;
   text-align: left;
 }
-.agent-window-picker button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--accent); }
+@media (hover: hover) {
+  .agent-window-picker button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--accent); }
+}
 .agent-window-picker button:focus-visible, .agent-window-picker input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .agent-window-picker button:disabled { cursor: not-allowed; opacity: .6; }
 .agent-window-picker__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
@@ -59,7 +61,9 @@
 .agent-window-picker__list button { display: flex; flex-direction: column; gap: 4px; }
 .agent-window-picker__list strong { overflow-wrap: anywhere; }
 .agent-window-picker .agent-window-picker__primary { background: var(--accent); color: var(--accent-ink, var(--surface)); border-color: var(--accent); text-align: center; }
-.agent-window-picker .agent-window-picker__primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, var(--ink)); }
+@media (hover: hover) {
+  .agent-window-picker .agent-window-picker__primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, var(--ink)); }
+}
 .agent-window-picker .agent-window-picker__error { color: var(--danger); margin-top: 16px; overflow-wrap: anywhere; }
 .agent-window-picker > [role="status"] { margin-top: 16px; }
 .agent-window-picker__sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -88,7 +92,9 @@
 /* Save or clear the checked folders as what every new agent starts with. */
 .agent-window-picker__default-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-height: 20px; font-size: var(--text-xs); }
 .agent-window-picker .agent-window-picker__link { border: 0; padding: 0; background: none; color: var(--accent); font-size: var(--text-xs); font-weight: 600; }
-.agent-window-picker .agent-window-picker__link:hover:not(:disabled) { background: none; text-decoration: underline; }
+@media (hover: hover) {
+  .agent-window-picker .agent-window-picker__link:hover:not(:disabled) { background: none; text-decoration: underline; }
+}
 .agent-window-picker .agent-window-picker__link--quiet { color: var(--ink-faint); font-weight: 500; }
 .agent-window-picker__default-note { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-soft); }
 .agent-window-picker__existing summary { cursor: pointer; list-style: none; }

@@ -46,7 +46,9 @@
   font: inherit;
 }
 .monitors-dock button { cursor: pointer; }
-.monitors-dock button:hover:not(:disabled) { background: var(--surface); }
+@media (hover: hover) {
+  .monitors-dock button:hover:not(:disabled) { background: var(--surface); }
+}
 .monitors-dock button:disabled { opacity: .5; cursor: default; }
 .monitors-dock button:focus-visible,
 .monitors-dock input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -54,7 +56,9 @@
 /* The dock's show/hide icon, top right of the header: the agent panel's pill,
    not the dock's bordered buttons. */
 .monitors-dock .monitors-dock__toggle { width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--ink-faint); }
-.monitors-dock .monitors-dock__toggle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
+@media (hover: hover) {
+  .monitors-dock .monitors-dock__toggle:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
+}
 /* Hidden: only the show button stays, in the dock's corner. */
 .monitors-dock-collapsed { display: flex; flex-shrink: 0; align-items: flex-start; justify-content: flex-end; padding: 4px 2px; }
 .monitors-dock-collapsed[data-dock-side='left'] { order: -1; }
@@ -69,7 +73,7 @@
   z-index: 40;
   width: 380px;
   max-width: calc(100vw - 24px);
-  max-height: min(420px, calc(100vh - 24px));
+  max-height: min(420px, calc(100dvh - 24px));
   overflow: auto;
   padding: 12px;
   background: var(--paper);
@@ -138,7 +142,10 @@
    rounded line centred in the gap, hidden until hover or focus. */
 .monitors-dock__resize:focus-visible { outline: none; }
 .monitors-dock__grip { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; transform: translateX(-50%); border-radius: 999px; opacity: 0; transition: opacity 150ms ease; pointer-events: none; }
-.monitors-dock__resize:hover > .monitors-dock__grip, .monitors-dock__resize:focus-visible > .monitors-dock__grip, .monitors-dock__resize:active > .monitors-dock__grip { opacity: 1; }
+.monitors-dock__resize:focus-visible > .monitors-dock__grip, .monitors-dock__resize:active > .monitors-dock__grip { opacity: 1; }
+@media (hover: hover) {
+  .monitors-dock__resize:hover > .monitors-dock__grip { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) { .monitors-dock__grip { transition: none; } }
 @media (max-width: 767px) { .monitors-dock__resize { display: none; } }
 @media (prefers-reduced-motion: reduce) { .monitors-dock__minimized button { animation: none; } }
@@ -204,12 +211,18 @@
 .monitors-dock button.monitors-dock__text-button { border: 0; background: transparent; padding: 0; justify-self: start; color: var(--ink-soft); font-size: var(--text-2xs); text-decoration: underline; text-underline-offset: 3px; }
 .monitors-dock__monitor-resize { height: 8px; cursor: row-resize; touch-action: none; position: relative; }
 .monitors-dock__monitor-resize::after { content: ''; display: block; position: absolute; width: 28px; height: 2px; border-radius: 2px; background: var(--line); left: calc(50% - 14px); top: 3px; }
-.monitors-dock__monitor-resize:hover, .monitors-dock__monitor-resize:focus-visible { background: var(--accent-soft); outline: none; }
+.monitors-dock__monitor-resize:focus-visible { background: var(--accent-soft); outline: none; }
+@media (hover: hover) {
+  .monitors-dock__monitor-resize:hover { background: var(--accent-soft); outline: none; }
+}
 .monitors-dock__monitor-resize:focus-visible::after { background: var(--accent); }
 .monitors-dock select:focus-visible, .monitors-dock summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Sign in again, inline under an expired subscription: the primary button keeps its own look on hover. */
 .monitors-dock__signin { display: grid; gap: 8px; justify-items: start; }
-.monitors-dock .monitors-dock__signin .btn-primary, .monitors-dock .monitors-dock__signin .btn-primary:hover:not(:disabled) { border: 0; border-radius: 10px; padding: 4px 16px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.monitors-dock .monitors-dock__signin .btn-primary { border: 0; border-radius: 10px; padding: 4px 16px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
+@media (hover: hover) {
+  .monitors-dock .monitors-dock__signin .btn-primary:hover:not(:disabled) { border: 0; border-radius: 10px; padding: 4px 16px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
+}
 /* A long account email truncates rather than widening the panel. */
 .monitors-dock__provider-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .monitors-dock__account { font-weight: 400; color: var(--ink-faint); }

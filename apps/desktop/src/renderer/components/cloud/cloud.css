@@ -71,7 +71,9 @@
   border-radius: 11px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   font-size: var(--text-sm); font-weight: 500; transition: border-color 0.15s, background 0.15s, transform 0.1s;
 }
-.cloud-provider:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+@media (hover: hover) {
+  .cloud-provider:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+}
 .cloud-provider:active { transform: translateY(1px); }
 .cloud-provider:disabled { opacity: 0.55; }
 .cloud-provider svg { width: 17px; height: 17px; }

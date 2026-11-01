@@ -371,7 +371,7 @@ export function UpdateBanner() {
   const available = !isDesktop && update && (update.state === 'available' || update.state === 'downloading' || update.state === 'downloaded');
 
   return (
-    <div className="pointer-events-none absolute right-4 top-12 z-50 flex w-80 flex-col gap-3">
+    <div className="pointer-events-none absolute left-4 right-4 top-12 z-50 flex flex-col gap-3 sm:left-auto sm:w-80">
       {showFirstRun && (
         <div className="card pointer-events-auto fade-in p-3 shadow-(--shadow-float)">
           <div className="text-sm font-semibold">Auto-check for updates?</div>

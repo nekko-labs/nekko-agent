@@ -2982,7 +2982,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         />
                         <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1 text-xs text-white">Video</span>
                         <button
-                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-2xs leading-4 text-paper group-hover:block"
+                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-2xs leading-4 text-paper group-hover:block touch:block"
                           onClick={(e) => {
                             e.stopPropagation();
                             setPendingVideos((current) => current.filter((_, index) => index !== i));
@@ -3004,7 +3004,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           title="Click to preview · right-click to copy or save"
                         />
                         <button
-                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-2xs leading-4 text-paper group-hover:block"
+                          className="absolute -right-1 -top-1 hidden h-4 w-4 rounded-full bg-ink text-2xs leading-4 text-paper group-hover:block touch:block"
                           onClick={(e) => {
                             e.stopPropagation();
                             setPendingImages((current) => current.filter((_, index) => index !== i));

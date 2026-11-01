@@ -246,7 +246,9 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: 'var(--field, var(--paper))' }}>
+    // viewport-fit=cover hands the notch and the rounded corners to the page:
+    // the shell keeps clear of them (all zero on a desktop).
+    <div className="flex h-full w-full flex-col" style={{ background: 'var(--field, var(--paper))', padding: 'env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px)' }}>
       {/* With the Lilac / Lavender pixel field on, the shell stays see-through so
           the dots (drawn behind it) show in the space around the panels; the
           body still paints --paper beneath them. */}
@@ -321,8 +323,9 @@ export function App() {
           </div>
         </nav>
 
-        {/* Main (bottom padding on phones so the tab bar never covers content) */}
-        <main className="relative flex min-w-0 flex-1 flex-col pb-16 md:pb-0">
+        {/* Main (bottom padding on phones so the tab bar never covers content,
+            the home indicator's inset included) */}
+        <main className="relative flex min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
           {providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
             <button
               className="flex items-center justify-center gap-2 border-b border-line py-2 text-sm"
@@ -355,7 +358,7 @@ export function App() {
           destinations (models, connectors, …) stays reachable via ⌘K / More. */}
       <nav
         className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line md:hidden"
-        style={{ background: 'var(--paper)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        style={{ background: 'var(--paper)', paddingBottom: 'env(safe-area-inset-bottom)', paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}
       >
         {mobileNav.map((v) => {
           const item = NAV.find((n) => n.view === v)!;
@@ -363,7 +366,7 @@ export function App() {
           return (
             <button
               key={v}
-              className="flex flex-1 flex-col items-center gap-0.5 py-1"
+              className="phone-tab flex flex-1 flex-col items-center gap-0.5 py-1"
               style={view === v ? { color: 'var(--accent)' } : { color: 'var(--ink-faint)' }}
               aria-label={t(item.labelKey)}
               onClick={() => setView(v)}

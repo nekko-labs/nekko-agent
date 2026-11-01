@@ -29,9 +29,10 @@ describe('side panel resize grips', () => {
     for (const [css, handle] of [[board, '.agent-list-resize'], [dock, '.monitors-dock__resize']] as const) {
       expect(cssRule(css, `${handle} > .pane-grip`).background).toBe(cssValue('color-mix(in srgb, var(--accent) 70%, white)'));
     }
-    expect(cssRule(board, '.agent-list-resize:is(:hover, :focus-visible, :active) > .pane-grip').opacity).toBe('1');
-    for (const state of [':hover', ':focus-visible', ':active']) {
-      expect(cssRule(dock, `.monitors-dock__resize${state} > .monitors-dock__grip`).opacity).toBe('1');
+    // Hover reveals only where there is hover (no sticky grip after a tap on a phone).
+    for (const [css, handle, grip] of [[board, '.agent-list-resize', '.pane-grip'], [dock, '.monitors-dock__resize', '.monitors-dock__grip']] as const) {
+      for (const state of [':focus-visible', ':active']) expect(cssRule(css, `${handle}${state} > ${grip}`).opacity).toBe('1');
+      expect(cssRule(css, `${handle}:hover > ${grip}`, { media: 'hover: hover' }).opacity).toBe('1');
     }
     expect(cssRule(dock, '.monitors-dock__grip').opacity).toBe('0');
   });
