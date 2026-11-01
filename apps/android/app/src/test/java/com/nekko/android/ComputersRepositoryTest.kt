@@ -181,6 +181,31 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `a pairing saved before derived relay credentials asks to pair again without dialing`() = runTest {
+        val store = FakeStore()
+        val id = repo(store).pair(link)
+        runCurrent()
+        assertEquals(2, secretOf(store, id)["v"]!!.jsonPrimitive.content.toInt())
+        // As an older app saved it: no version.
+        val old = secretOf(store, id).filterKeys { it != "v" }
+        store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(old).toString()
+
+        val remotes = FakeRemotes()
+        val again = repo(store, remotes)
+        again.load()
+        runCurrent()
+        assertTrue("no connection on the old pairing", remotes.created.isEmpty())
+        assertEquals(RelayState.DENIED, again.state.value.conn)
+        assertEquals(com.nekko.protocol.DenyReason.BAD_KEY, again.state.value.denied)
+
+        // Scanning the computer's new QR pairs again and connects.
+        again.pair(link.copy(room = "0123456789abcdef"))
+        runCurrent()
+        assertEquals(1, remotes.created.size)
+        assertEquals(RelayState.CONNECTING, again.state.value.conn)
+    }
+
+    @Test
     fun `pairing stores the secret, connects, and drops the pair code once welcomed`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()

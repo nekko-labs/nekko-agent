@@ -122,7 +122,10 @@ public final class ChatModel {
     private let store: ComputersStore
     private let now: () -> Int64
     private var subscription: UUID?
-    private var reloadTask: Task<Void, Never>?
+    /// The re-read scheduled after a turn ends (tests await it instead of sleeping).
+    private(set) var reloadTask: Task<Void, Never>?
+    /// The `chat:send` of the last prompt, which resolves when its turn ends (tests await it).
+    private(set) var sendTask: Task<Void, Never>?
     /// Events and answers so far, so a re-read can tell whether the cards changed while it waited.
     private var cardChanges = 0
     private var agentStateTask: Task<Void, Never>?
@@ -137,12 +140,15 @@ public final class ChatModel {
     /// Start following the computer's events for this chat. A saved copy, if
     /// the phone has one, is on screen at once; the computer's answer then
     /// replaces it in place (the same message ids, so nothing jumps).
-    public func start() {
-        guard subscription == nil else { return }
+    /// Returns the first read, so a caller (a test) can await it; nil when already started.
+    @discardableResult
+    public func start() -> Task<Void, Never>? {
+        guard subscription == nil else { return nil }
         subscription = store.subscribe { [weak self] e in self?.onEvent(e) }
         showSavedCopy()
-        Task { await reload() }
+        let first = Task { await reload() }
         pollAgentState()
+        return first
     }
 
     /// While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
@@ -198,10 +204,11 @@ public final class ChatModel {
             async let raw = r.call(Channels.sessionGet, [.string(sessionId)])
             async let pendingRaw = orNil { try await r.call(Channels.chatPending) }
             let (s, p) = (try await raw, await pendingRaw)
-            Task { await loadSkills() }
+            // Alongside the rest of the read, and part of it: awaiting a reload awaits these too.
+            async let skillsRead: Void = loadSkills()
             // Between turns only: while one runs the live estimate covers it, and the
             // computer is busy with the reply (done, send and session_meta all re-read).
-            if !turn.running { Task { await loadContext() } }
+            async let contextRead: Void = loadContext(unless: turn.running)
             guard let session = Session.from(s) else {
                 loadError = "This chat was deleted on your computer."
                 store.transcripts.remove(sessionId)
@@ -235,6 +242,7 @@ public final class ChatModel {
             let carried = Transcript.carriedIds(shown: shown, next: Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
             if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
             await refreshAgentState()
+            _ = await (skillsRead, contextRead)
         } catch {
             // Out of reach: the saved copy (if any) says so itself, under "Saved copy from …".
             showSavedCopy()
@@ -258,6 +266,10 @@ public final class ChatModel {
         context = c
     }
     private var readingContext = false
+
+    private func loadContext(unless running: Bool) async {
+        if !running { await loadContext() }
+    }
 
     /// Tokens in the window now: the computer's count, plus what the running
     /// reply has streamed since (about four characters a token, as the
@@ -364,7 +376,7 @@ public final class ChatModel {
         turn = LiveTurn(running: true, blocks: [.user(id: "pending-\(at)", text: shown, at: at, images: images.count)], startedAt: at)
         sending = true
         // Resolves only when the whole turn ends; the events carry the progress.
-        Task { @MainActor in
+        sendTask = Task { @MainActor in
             defer { self.sending = false }
             do {
                 _ = try await self.callWithId(r, Channels.chatSend, id, timeout: turnTimeout) { cid in

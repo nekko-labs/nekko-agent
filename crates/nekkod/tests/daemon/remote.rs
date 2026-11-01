@@ -46,7 +46,10 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     )
     .await
     .unwrap();
-    assert_eq!(path, format!("/relay?role=agent&room={room}&key={secret}"));
+    // The relay gets a credential derived from the secret, never the secret.
+    let auth = nekko_remote::e2e::relay_auth(&secret, &room);
+    assert_eq!(path, format!("/relay?role=agent&room={room}&key={auth}"));
+    assert!(!path.contains(&secret));
     let key = nekko_remote::e2e::derive_key(&secret, &room);
     let seal = |v: Value| {
         json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()

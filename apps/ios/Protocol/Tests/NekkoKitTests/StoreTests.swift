@@ -343,6 +343,27 @@ final class StoreTests: XCTestCase {
         s.disconnect()
     }
 
+    /// A pairing saved by an older app predates the derived relay credential (decision 0036):
+    /// the computer has replaced its secret, so the phone asks for a fresh QR instead of dialing.
+    func testAPairingFromBeforeDerivedRelayCredentialsAsksToPairAgain() async throws {
+        let s = makeStore()
+        s.load()
+        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let saved = try XCTUnwrap(secure.get(ComputersStore.secretKey(id)))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(saved.utf8)) as? [String: Any])
+        XCTAssertEqual(object["v"] as? Int, E2E.pairingVersion)
+        object.removeValue(forKey: "v")
+        secure.set(ComputersStore.secretKey(id), String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self))
+
+        let before = connections.count
+        let again = makeStore()
+        again.load()
+        await settle()
+        XCTAssertEqual(connections.count, before, "no connection on the old pairing")
+        XCTAssertEqual(again.conn, .denied)
+        XCTAssertEqual(again.denied, .badKey)
+    }
+
     func testDenialAndForget() async throws {
         let s = makeStore()
         s.load()
@@ -453,7 +474,7 @@ final class StoreTests: XCTestCase {
 
 @MainActor
 final class ChatModelTests: XCTestCase {
-    func makeOnline() async throws -> (ComputersStore, FakeConnection) {
+    static func makeOnline() async throws -> (ComputersStore, FakeConnection) {
         var conns: [FakeConnection] = []
         let s = ComputersStore(store: MemoryStore(), makeConnection: { cfg in
             let c = FakeConnection(config: cfg)
@@ -481,10 +502,9 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testStreamsATurnAndReReadsWhenItEnds() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s, now: { 42 })
-        chat.start()
-        await settle()
+        await chat.start()?.value
         XCTAssertEqual(chat.title, "T")
         XCTAssertEqual(chat.skills.map(\.name), ["review"])
         XCTAssertNil(chat.blocked)
@@ -525,11 +545,10 @@ final class ChatModelTests: XCTestCase {
     /// A Send tapped just as a reply finishes goes as a new turn: the re-read that
     /// still says "running" is stale until the debounced reload after `done`.
     func testASendRightAfterDoneStartsATurnNotAQueue() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "activeRun": ["startedAt": 1]] }
         let chat = ChatModel(sessionId: "s", store: s)
-        chat.start()
-        await settle()
+        await chat.start()?.value
         c.event(["type": "text", "sessionId": "s", "delta": "Hi"])
         c.event(["type": "done", "sessionId": "s"])
         for _ in 0..<20 { await Task.yield() }
@@ -542,10 +561,9 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testApprovalsQuestionsAndStop() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
-        chat.start()
-        await settle()
+        await chat.start()?.value
         c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
         await settle()
         XCTAssertEqual(chat.turn.approval?.severity, .high)
@@ -564,10 +582,9 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testAReReadInFlightKeepsACardThatArrivedMeanwhile() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
-        chat.start()
-        await settle()
+        await chat.start()?.value
         // The computer answers "nothing pending" from before the approval, and the
         // approval's event reaches the phone before that answer does.
         c.replies[Channels.chatPending] = { _ in
@@ -598,10 +615,9 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testAFailedAnswerKeepsTheCardSoItCanBeRetried() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
-        chat.start()
-        await settle()
+        await chat.start()?.value
         c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
         await settle()
         c.replies[Channels.toolApprove] = { _ in throw RelayError("offline") }
@@ -617,15 +633,14 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testAPromptThatNeverStartedComesBackToTheComposer() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s, now: { 7 })
-        chat.start()
-        await settle()
+        await chat.start()?.value
         // The computer answered with a refusal (not a dropped connection, which goes to the outbox).
         c.replies[Channels.chatSend] = { _ in throw RelayError("The computer went offline.", fromComputer: true) }
         try await chat.send("draft", skill: SkillSummary(name: "review"), images: ["data:image/jpeg;base64,AA"])
         XCTAssertTrue(chat.running)
-        await settle()
+        await chat.sendTask?.value
         XCTAssertFalse(chat.running)
         XCTAssertEqual(chat.error, "The computer went offline.")
         XCTAssertFalse(chat.blocks.contains { $0.id == "pending-7" }, "no bubble for a prompt that was never delivered")
@@ -638,7 +653,7 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testBlockedReasons() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
         c.status(RelayStatus(.offline))
         await settle()
