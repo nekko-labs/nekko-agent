@@ -2105,8 +2105,7 @@
     input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
     textarea,
     select,
-    [contenteditable='true'],
-    [contenteditable=''] {
+    [contenteditable]:not([contenteditable='false']) {
       font-size: 16px !important;
     }
   }
