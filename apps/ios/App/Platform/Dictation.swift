@@ -24,11 +24,12 @@ protocol SpeechRecognizing: AnyObject {
     var isAvailable: Bool { get }
     var locale: Locale { get }
     /// The final transcript, or nil when the recognizer heard no words; a real failure throws.
-    func text(for request: SFSpeechURLRecognitionRequest) async throws -> String?
+    /// On the main actor, where Dictation asks: neither the recognizer nor the request is Sendable.
+    @MainActor func text(for request: SFSpeechURLRecognitionRequest) async throws -> String?
 }
 
 extension SFSpeechRecognizer: SpeechRecognizing {
-    func text(for request: SFSpeechURLRecognitionRequest) async throws -> String? {
+    @MainActor func text(for request: SFSpeechURLRecognitionRequest) async throws -> String? {
         try await withCheckedThrowingContinuation { c in
             let once = Once()
             recognitionTask(with: request) { result, err in
