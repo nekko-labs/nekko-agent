@@ -46,3 +46,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0035](0035-plan-usage-on-for-claude-plans-from-claude-codes-own-output.md) | A Claude plan shows its usage limits, read only from what the user's own Claude Code printed | accepted |
 | [0036](0036-the-relay-sees-a-derived-room-credential-never-the-pairing-secret.md) | The relay sees a room credential derived from the pairing secret, never the secret; older pairings are replaced and phones pair again | accepted |
 | [0037](0037-route-each-message-once-to-a-local-model-or-claude-code.md) | Route each message once, before the turn, to a local model or the user's Claude Code, passing it through unchanged | proposed |
+| [0038](0038-image-builder-reaches-a-build-vm-over-ssh.md) | The image builder reaches a build VM over SSH, from Apple's restore image, with no shared folder (amends 0022) | accepted |

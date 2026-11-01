@@ -155,9 +155,9 @@
         },
         {
           "slug": "ci-runners-image",
-          "title": "Build the CI runner image",
+          "title": "Bring your own CI runner image",
           "source": "docs/ci-runners-image.md",
-          "description": "Build the macOS image your CI runner jobs boot from, and check it in a VM."
+          "description": "What Nekko's image build does, and how to build the macOS image yourself on macOS 26."
         },
         {
           "slug": "decision-models",

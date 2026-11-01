@@ -357,6 +357,47 @@ export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Part
   ) as Partial<RunnerSettings>;
 }
 
+/** The image build's stages, in order. */
+export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'test', 'finish'] as const;
+export type ImageStage = (typeof IMAGE_STAGES)[number];
+export type ImageState = 'none' | 'ready' | 'building' | 'waiting' | 'failed';
+
+/** What the image holds, from the proof file `provision.sh` writes. */
+export interface ImageInfo {
+  macos: string;
+  xcode: string | null;
+  actionsRunner: string;
+  built: string;
+}
+
+export interface ImageView {
+  state: ImageState;
+  /** The stage running, failed, waiting, or next to resume. */
+  stage: ImageStage | null;
+  doneStages: ImageStage[];
+  /** What the stage is doing now, or why it waits. */
+  detail: string;
+  /** Received and total bytes, during Download. */
+  bytes: [number, number] | null;
+  /** 0 to 1, during Install. */
+  fraction: number | null;
+  /** The sentence to show when `state` is `failed`. */
+  error: string | null;
+  /** The end of the build log, for a failure. */
+  log: string | null;
+  info: ImageInfo | null;
+  /** A stopped build can pick up where it left off. */
+  canResume: boolean;
+}
+
+export interface ImageBuildRequest {
+  kind: 'xcode' | 'macosOnly';
+  /** The runner to turn on when the build finishes. */
+  runnerId?: string;
+  /** The mode that runner gets. */
+  priority: Priority;
+}
+
 export function runnerActivity(views: RunnerView[]): { vms: number; awake: boolean } {
   return { vms: views.reduce((n, v) => n + v.slots.length, 0), awake: views.some((v) => v.awake) };
 }

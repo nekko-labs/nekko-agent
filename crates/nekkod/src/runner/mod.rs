@@ -10,6 +10,7 @@ pub mod github;
 pub mod github_setup;
 pub mod gitlab;
 pub mod hostnets;
+pub mod image;
 pub mod keychain;
 pub mod lan;
 pub mod net;
@@ -36,7 +37,7 @@ use signals::Sense;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use store::{Link, RunnerRecord, Store, same_scope, same_target};
 use supervisor::{RunnerState, RunnerView, Supervisor, TICK};
@@ -94,6 +95,10 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     running_vm_mb: Arc<AtomicU64>,
     /// Why no VM can run here, shown on every enabled runner.
     vm_error: Option<String>,
+    /// The image builder; unset in tests.
+    image: OnceLock<Arc<image::ImageJob<image::RealBuildHost>>>,
+    /// The Mac as of the last tick, for the image builder's gates.
+    mac: Arc<std::sync::Mutex<Option<signals::MacState>>>,
 }
 
 fn now_secs() -> u64 {
@@ -181,7 +186,8 @@ impl Runners {
             }
             Err(_) => Arc::new(RwLock::new(None)),
         };
-        let vm = helper.clone().map(|h| HelperVm::new(h, host, egress.clone()));
+        let vm = helper.clone().map(|h| HelperVm::new(h, host.clone(), egress.clone()));
+        let build_vm = helper.clone().map(|h| HelperVm::new(h, host, egress.clone()));
         let sense = HostSense::new(
             machine,
             dir.clone(),
@@ -202,12 +208,26 @@ impl Runners {
         let vault = github.vault();
         let gitlab = || GitLab::new(Net::default(), vault.clone(), now_secs);
         let provider = ByLink { github: github.clone(), gitlab: gitlab() };
-        let sup = Supervisor::new(dir.clone(), sense, vm, provider, Box::new(awake::Caffeinate::default()), host_name);
+        let mut sup =
+            Supervisor::new(dir.clone(), sense, vm, provider, Box::new(awake::Caffeinate::default()), host_name);
+        let building = Arc::new(AtomicBool::new(false));
+        sup.set_building(building.clone());
         let gh =
             github_setup::gh_path(std::env::var("NEKKO_GH_PATH").ok(), &["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]);
         let setup = GithubSetup::new(github.clone(), &dir, hub.clone(), gh);
         let connectors = Connectors { github, gitlab: gitlab(), setup };
+        let job_vault = vault.clone();
+        let job_hub = hub.clone();
         let me = Runners::new(&dir, sup, Some(connectors), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
+        let images = dir.join("images");
+        let job = image::ImageJob::new(
+            images.clone(),
+            image::RealBuildHost::new(build_vm, images, me.mac.clone(), Arc::downgrade(&me)),
+            job_vault,
+            building,
+            Box::new(move |v| job_hub.publish(image::EVENT, json!(v), false)),
+        );
+        let _ = me.image.set(Arc::new(job));
         if helper.is_ok() {
             me.spawn_loop();
         }
@@ -252,6 +272,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             wake: tokio::sync::Notify::new(),
             running_vm_mb,
             vm_error,
+            image: OnceLock::new(),
+            mac: Arc::default(),
         })
     }
 
@@ -269,6 +291,9 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     let mut s = r.sup.lock().await;
                     let gone = r.step(&mut s, true).await;
                     r.running_vm_mb.store(s.running_vm_mb(), Ordering::SeqCst);
+                    if let Ok(mut mac) = r.mac.lock() {
+                        *mac = s.mac_state();
+                    }
                     (s.views(), gone)
                 };
                 forget.extend(gone.iter().map(secret_key));
@@ -464,6 +489,18 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             }
             _ => Err(format!("unknown channel {channel}")),
         }
+    }
+
+    /// A finished image build turns its runner on, with the mode chosen for it.
+    /// A runner removed during the build needs nothing.
+    async fn enable_after_build(&self, id: &str, priority: nekko_runner::Priority) -> Result<(), String> {
+        let _g = self.edit.lock().await;
+        let mut records = self.store.load();
+        let Some(r) = records.iter_mut().find(|r| r.config.id == id) else { return Ok(()) };
+        r.config.settings.priority = priority;
+        // A public repo's runner stays off until its fork approval is settled.
+        r.config.settings.enabled = !matches!(&r.link, Link::Github(g) if g.fork_approval_open);
+        self.commit(records, Some(id)).await.map(drop)
     }
 
     /// The click-through GitHub connect. Confirming it is an ordinary `runner:connect`.
