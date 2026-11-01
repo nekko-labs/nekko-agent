@@ -148,6 +148,11 @@ class RelayConfig(
     val routeRules: RouteRules = RouteRules(),
     /** Whether this phone may dial a route at all (see [RouteSupervisor]). */
     val routeAllowed: (String) -> Boolean = { true },
+    /**
+     * The device key every HELLO is signed with (protocol 5). Without one the
+     * HELLO goes unsigned and the computer asks this phone to pair again.
+     */
+    val helloSigner: HelloSigner? = null,
 ) {
     /** The relay address first, then the alternates. */
     val routes: List<String> get() = listOf(relayUrl) + alts
@@ -590,6 +595,13 @@ class RelayClient(
             put("platform", config.platform)
             put("protocol", if (challenge != null) PhoneProtocol.VERSION else PhoneProtocol.LEGACY)
             challenge?.let { put("challenge", it) }
+            // Signed with the device key, for this room and this challenge only (decision 0036).
+            val signer = config.helloSigner
+            if (challenge != null && signer != null) {
+                val (key, sig) = HelloKey.proof(signer, config.deviceId, config.room, challenge)
+                put("helloKey", key)
+                put("sig", sig)
+            }
             pairCode?.let { put("pair", it) }
         })
     }

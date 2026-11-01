@@ -103,8 +103,14 @@ class RelayIntegrationTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** One device key per test device, kept across its connections, as the Keystore keeps it. */
+    private val signers = java.util.concurrent.ConcurrentHashMap<String, SoftwareHelloSigner>()
+
     private fun client(pair: String? = null, deviceId: String = UUID.randomUUID().toString()) = RelayClient(
-        RelayConfig(relayUrl, room, key, keyBytes, deviceId, "Android itest", pairCode = pair, requestTimeoutMs = 30_000),
+        RelayConfig(
+            relayUrl, room, key, keyBytes, deviceId, "Android itest", pairCode = pair, requestTimeoutMs = 30_000,
+            helloSigner = signers.getOrPut(deviceId) { SoftwareHelloSigner.generate() },
+        ),
         OkHttpTransport(), scope,
     )
 

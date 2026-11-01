@@ -214,7 +214,7 @@ class RelayClientTest {
         }
     }
 
-    private fun fixtureClient(t: WsTransport, challengeWaitMs: Long = 2_000): RelayClient {
+    private fun fixtureClient(t: WsTransport, challengeWaitMs: Long = 2_000, signer: HelloSigner? = null): RelayClient {
         val d = fxObj("device")
         return RelayClient(
             RelayConfig(
@@ -223,6 +223,7 @@ class RelayClientTest {
                 platform = d["platform"]!!.jsonPrimitive.content,
                 handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
                 challengeWaitMs = challengeWaitMs,
+                helloSigner = signer,
             ),
             t, scope,
         )
@@ -247,6 +248,32 @@ class RelayClientTest {
             assertEquals(read, c.welcome.first().protocol)
             c.close()
         }
+    }
+
+    @Test fun `the HELLO signs the shared text with the device key`() = runBlocking {
+        val k = fxObj("helloKey")
+        val text = k["text"]!!.jsonPrimitive.content
+        val nonce = fxObj("challenge")["frame"]!!.jsonObject["challenge"]!!.jsonPrimitive.content
+        assertEquals(text, HelloKey.text(fxObj("device")["deviceId"]!!.jsonPrimitive.content, fx("room"), nonce))
+        // The fixture's signature verifies with the fixture's key, as on the computer.
+        val fixtureKey = java.util.Base64.getDecoder().decode(k["publicKey"]!!.jsonPrimitive.content)
+        assertTrue(ChangeProof.verify(fixtureKey, text, java.util.Base64.getDecoder().decode(k["sig"]!!.jsonPrimitive.content)))
+        // A phone with a device key adds its key and a fresh signature; the rest is the shared HELLO.
+        val signer = SoftwareHelloSigner.generate()
+        val t = Recorder(E2E.fromHex(fx("key")))
+        val c = fixtureClient(t, signer = signer)
+        c.connect()
+        until("the socket") { t.sockets.isNotEmpty() }
+        t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+        until("the HELLO") { t.last.of("hello").isNotEmpty() }
+        val hello = t.last.of("hello").single()
+        val key = java.util.Base64.getDecoder().decode(hello["helloKey"]!!.jsonPrimitive.content)
+        assertTrue(key.contentEquals(signer.publicKey()))
+        val sig = java.util.Base64.getDecoder().decode(hello["sig"]!!.jsonPrimitive.content)
+        assertEquals(64, sig.size)
+        assertTrue(ChangeProof.verify(key, text, sig))
+        assertEquals(fxObj("hello"), JsonObject(hello - "helloKey" - "sig"))
+        c.close()
     }
 
     @Test fun `answers the shared challenge with the shared HELLO, then sends the shared requests`() = runBlocking {
@@ -374,7 +401,7 @@ class RelayClientTest {
         relay.current!!.drop(1006, "network")
         until("two sockets without a challenge") { relay.urls.size >= 3 }
         assertEquals("never a HELLO without a challenge", 1, relay.hellos.size)
-        assertTrue(relay.hellos.all { it["challenge"] != null && it["protocol"]!!.jsonPrimitive.content == "4" })
+        assertTrue(relay.hellos.all { it["challenge"] != null && it["protocol"]!!.jsonPrimitive.content == PhoneProtocol.VERSION.toString() })
 
         relay.challenges = true
         c.await(RelayState.ONLINE)

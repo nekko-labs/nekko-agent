@@ -100,8 +100,35 @@ export interface RemotePairing {
  *   it (single use), and every request after the welcome carries it plus a
  *   rising `seq`. Older phones are legacy: accepted unless the computer's
  *   `acceptLegacyPhones` is false, then refused with `update-required`.
+ * 5 (2026-11-01): device-key HELLOs (decision 0036). The HELLO carries the
+ *   device's P-256 public key (`helloKey`) and a signature (`sig`) of
+ *   `helloText(deviceId, room, challenge)`; a device enrolls its key with the
+ *   pairing code and must sign every later HELLO with it. Anything older is
+ *   refused with `update-required`, and a device without an enrolled key with
+ *   `bad-key` (pair again).
  */
-export const REMOTE_PROTOCOL_VERSION = 4;
+export const REMOTE_PROTOCOL_VERSION = 5;
+
+/** The first protocol whose HELLO is signed with a device key (crates/nekko-remote `HELLO_KEY_PROTOCOL`). */
+export const REMOTE_HELLO_KEY_PROTOCOL = 5;
+
+/**
+ * What a HELLO signs with the device key (ECDSA P-256 SHA-256, raw r||s):
+ * `nekko-hello-v1`, the deviceId, the room and the challenge, one per line.
+ */
+export function helloText(deviceId: string, room: string, challenge: string): string {
+  return ['nekko-hello-v1', deviceId, room, challenge].join(String.fromCharCode(10));
+}
+
+/** `helloKey` (X9.63 public key, base64) and `sig` (raw r||s, base64) for a HELLO answering `challenge`. */
+export async function helloProof(keys: CryptoKeyPair, deviceId: string, room: string, challenge: string): Promise<{ helloKey: string; sig: string }> {
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', keys.publicKey));
+  const sig = new Uint8Array(
+    await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, keys.privateKey, new TextEncoder().encode(helloText(deviceId, room, challenge))),
+  );
+  const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+  return { helloKey: b64(raw), sig: b64(sig) };
+}
 
 /** The first protocol whose HELLO answers the agent's challenge (crates/nekko-remote `CHALLENGE_PROTOCOL`). */
 export const REMOTE_CHALLENGE_PROTOCOL = 4;
@@ -125,6 +152,10 @@ export interface RemoteHello {
   protocol?: number;
   /** The connection's `RemoteChallenge`, required from protocol 4. */
   challenge?: string;
+  /** From protocol 5: the device's P-256 public key, X9.63 uncompressed, base64. */
+  helloKey?: string;
+  /** From protocol 5: `helloKey`'s signature of `helloText(deviceId, room, challenge)`, raw r||s, base64. */
+  sig?: string;
 }
 
 /** A phone's request: from protocol 4 it carries its connection's challenge and a `seq` above every earlier one. */

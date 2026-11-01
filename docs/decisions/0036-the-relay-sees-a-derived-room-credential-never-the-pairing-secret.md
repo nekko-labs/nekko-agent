@@ -61,9 +61,37 @@ depend on how a relay treats its inputs.
 - A Nekko Cloud machine and the Local Web UI's relay-agent mode take the room
   and secret from their operator (`remote:attach`) and only change how the
   credential is derived; whoever created that secret still holds it.
-- Not covered here: binding the HELLO to a per-device signing key, so that a
-  holder of the pairing secret alone cannot act as an enrolled phone. The
-  Change key (`device:registerKey`) needs the owner's unlock on every use, so
-  it cannot sign every connection; that needs a second, silent device key on
-  both phones. Tracked as follow-up work.
+- The HELLO is bound to a per-device key as well; see the addendum below.
 - Spec: [spec/phone/relay-credential-and-re-pairing.md](../../spec/phone/relay-credential-and-re-pairing.md).
+
+## Addendum (2026-11-01): the HELLO is signed with a device key
+
+The pairing secret is shared by every phone of a computer and travels in the
+pairing QR, so holding it should not be enough to connect as an enrolled
+phone. Phone protocol 5 binds each HELLO to a key the device made itself:
+
+- **A silent device key on each client.** iPhone: a P-256 key in the Secure
+  Enclave with `.privateKeyUsage` only (a software key on the simulator).
+  Android: an EC P-256 key in the Android Keystore without user
+  authentication. Browser: a WebCrypto P-256 key kept beside the saved
+  pairing. Unlike the Change key it never asks the owner, since every
+  connection uses it.
+- **What it signs.** `nekko-hello-v1`, the deviceId, the room and the
+  connection's challenge, one per line (ECDSA P-256 SHA-256, raw r||s). The
+  HELLO carries the public key (`helloKey`, X9.63) and the signature
+  (`sig`). The challenge is fresh per connection, so a signature is good for
+  one HELLO to one room.
+- **Enrollment.** A HELLO with the live pairing code must be signed with the
+  key it carries; the computer keeps that key (`remote-hello-keys.json` beside
+  `remote.json`). Without the code, a known device must sign with the key it
+  enrolled with. A device paired before device keys, or whose signature does
+  not verify (a reinstalled app), is refused with `bad-key`, which both phone
+  apps show as the pair-again message. A HELLO below protocol 5 is refused with
+  `update-required`; the `acceptLegacyPhones` setting no longer admits phones
+  older than this. Signing out every phone forgets every device key.
+- **The Change key.** `device:registerKey` stays first-use for a device that
+  has none, but it is now reachable only from a connection whose HELLO was
+  signed with the enrolled device key, and an existing Change key is still
+  never replaced (`key-mismatch`).
+- One shared vector (`helloKey` in `crates/nekko-remote/tests/golden/relay-handshake.json`)
+  is checked by the computer, both phones and the TypeScript client.
