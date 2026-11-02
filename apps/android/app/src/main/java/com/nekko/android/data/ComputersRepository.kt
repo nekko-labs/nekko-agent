@@ -730,6 +730,11 @@ class ComputersRepository(
         if (stepUp == null) callRaising(Channels.SESSION_SET_OPTIONS, args) else callChange(Channels.SESSION_SET_OPTIONS, args, stepUp)
     }
 
+    /** Set one run setting on the computer running a chat; one that loosens an agent is signed ([callRaising]). */
+    suspend fun setRunOption(sessionId: String, key: String, value: JsonElement) {
+        callRaising(Channels.SESSION_SET_OPTIONS, listOf(JsonPrimitive(sessionId), buildJsonObject { put(key, value) }))
+    }
+
     private fun setArchived(sessionId: String, at: Long?) {
         _state.update { s ->
             s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(archived = at != null, archivedAt = at) else it })
