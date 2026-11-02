@@ -704,6 +704,7 @@ function makeWebClient(): NekkoApi {
     renameComputer: async () => [],
     setComputerColor: async () => [],
     forgetComputer: async () => [],
+    computerCatalog: async () => null,
     onComputersUpdated: () => () => {},
     listRemoteDevices: () => call(IpcChannels.remoteDevices),
     revokeRemoteDevice: (deviceId) => call(IpcChannels.remoteRevoke, deviceId),

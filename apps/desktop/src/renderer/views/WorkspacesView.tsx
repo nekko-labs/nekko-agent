@@ -4,8 +4,9 @@ import { confirmDeletion } from '../components/DeleteConfirmation.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID } from '@nekko-agent/shared';
+import type { AgentEvent, ComputerStatus, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, computerIdOf } from '@nekko-agent/shared';
+import { computerBlock } from '../components/ComputerChip.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
@@ -49,11 +50,18 @@ function sortable(e: Entry): SortableCard {
 }
 
 /** One group the panel shows: a project, a status, a date range, or all of it. */
+/** The group heading for agents on this computer. */
+function thisComputerName(): string {
+  return navigator.platform.startsWith('Mac') ? 'This Mac' : navigator.platform.startsWith('Win') ? 'This PC' : 'This computer';
+}
+
 type PanelGroup = {
   key: string;
   name: string;
   /** The project folder, when grouped by project. */
   ws?: WorkspaceFolder;
+  /** The computer, when grouped by computer. */
+  computer?: ComputerStatus;
   items: Entry[];
   /** Completed chats folded under the group. */
   done: SessionSummary[];
@@ -259,6 +267,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   /** Groups whose completed chats are expanded under their active ones. */
   const completionTipSessionId = useStore((s) => s.completionTipSessionId);
+  const computers = useStore((s) => s.computers);
+  const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
   /** Completed rows rendered per group past the first page ("Show more"). */
@@ -437,13 +447,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
 
   // Project buckets: a "General" bucket for project-less work (kept at the top,
   // hidden when empty), then one bucket per project folder.
+  const remoteFolders = useMemo(() => computers.flatMap((c) => computerCatalogs[c.id]?.workspaces ?? []), [computers, computerCatalogs]);
   const buckets: Array<{ ws?: WorkspaceFolder; key: string; name: string }> = [
     { key: '__none', name: 'General' },
     ...(settings?.workspaces ?? []).map((w) => ({ ws: w, key: w.id, name: w.name })),
+    // Same-named projects on two computers are two checkouts: two groups.
+    ...remoteFolders.map((w) => ({ ws: w, key: w.id, name: `${w.name} · ${computers.find((c) => c.id === computerIdOf(w.id))?.name ?? ''}` })),
   ];
 
   const chatGroupOf = (s: SessionSummary): string =>
-    settings?.workspaces.some((p) => p.id === s.workspaceId) ? (s.workspaceId as string) : '__none';
+    settings?.workspaces.some((p) => p.id === s.workspaceId) || remoteFolders.some((p) => p.id === s.workspaceId) ? (s.workspaceId as string) : '__none';
 
   /**
    * Every active agent in a bucket: open workspaces and chats that are not
@@ -490,6 +503,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     const done = completedInGroup(sessions, '*', () => '*').filter(shownDone);
     const completed: PanelGroup[] = done.length > 0 ? [{ key: COMPLETED_GROUP, name: 'Completed', items: [], done }] : [];
     if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, done: [], bare: true }, ...completed];
+    if (view.groupBy === 'computer' && computers.length > 0) {
+      const here = (e: Entry) => !computerIdOf(e.s?.id);
+      return [
+        { key: 'computer:here', name: thisComputerName(), items: all.filter(here), done: [] },
+        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id), done: [] })),
+        ...completed,
+      ];
+    }
     const groupOf = view.groupBy === 'status'
       ? (e: Entry) => statusGroupOf(e.s ? statuses.get(e.s.id) : undefined)
       : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
@@ -724,7 +745,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     className={`h-3 w-3 shrink-0 text-accent transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
+                  {b.computer && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: b.computer.state === 'online' ? 'var(--success)' : 'var(--ink-faint)' }} />}
                   <span className="agent-panel-group-label truncate font-medium" title={b.name} dir="auto">{b.name}</span>
+                  {b.computer && b.computer.state !== 'online' && <span className="shrink-0 text-2xs text-ink-faint">{computerBlock(b.computer)}</span>}
                   {isCollapsed && (items.length > 0 || completedGroup) && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
@@ -790,6 +813,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
                           showProvider={view.showProvider}
+                          showComputer={view.showComputer}
                           zoneTint={zoneTints?.get(s?.id ?? entry.t?.id ?? '')}
                           onOpen={() => {
                             if (s) onOpenChat(s.id);

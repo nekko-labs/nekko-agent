@@ -2,7 +2,7 @@ import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import { rememberSplashColours } from './splash.js';
-import type { AppSettings, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
+import type { AppSettings, ComputerCatalog, ComputerStatus, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
 import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent, findThemePreset, resolveThemePreset, themePresetOf } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
@@ -299,6 +299,10 @@ interface UiState {
   setOnboardingOpen: (open: boolean) => void;
   refreshSettings: (autoOpenOnboarding?: boolean) => Promise<void>;
   refreshSessions: () => Promise<void>;
+  /** Computers this one is connected to. Empty for almost everyone: nothing below reads it then. */
+  computers: ComputerStatus[];
+  computerCatalogs: Record<string, ComputerCatalog>;
+  refreshComputers: () => Promise<void>;
   setActiveSession: (id: string | null) => void;
   refreshProviders: () => Promise<void>;
   selectProvider: (id: string) => Promise<void>;
@@ -620,6 +624,8 @@ export const useStore = create<UiState>((set, get) => ({
   }),
   activeSessionId: null,
   providers: [],
+  computers: [],
+  computerCatalogs: {},
   models: [],
   activeProviderId: null,
   activeModelId: null,
@@ -742,6 +748,17 @@ export const useStore = create<UiState>((set, get) => ({
       set({ settingsLoaded: true, settingsError });
       get().pushToast('error', `Could not load settings: ${settingsError}`);
       get().applyTheme();
+    }
+  },
+
+  refreshComputers: async () => {
+    const computers = await window.nekko.listComputers();
+    set({ computers });
+    // shortcut: read once per run, so a provider added over there shows after a restart; refresh from Settings if that bites.
+    for (const c of computers) {
+      if (get().computerCatalogs[c.id]) continue;
+      const catalog = await window.nekko.computerCatalog(c.id);
+      if (catalog) set((s) => ({ computerCatalogs: { ...s.computerCatalogs, [c.id]: catalog } }));
     }
   },
 

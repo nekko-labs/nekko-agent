@@ -46,3 +46,26 @@ export interface ComputerPairingLink {
   pair?: string;
   alts: string[];
 }
+
+/** A computer's providers and folders, for its pickers. Holds no secrets. Their ids are qualified. */
+export interface ComputerCatalog {
+  providers: import('./models.js').ProviderConfig[];
+  workspaces: import('./workspace.js').WorkspaceFolder[];
+}
+
+/** One of these per computer. None is a status color: those mean working, warning, needs input and error. */
+export const COMPUTER_COLORS = ['#5b8def', '#a57cf0', '#2fb7b1', '#e26fb4', '#7f8cf5', '#8aa0b8'] as const;
+
+export function computerColor(c: { color: number }): string {
+  return COMPUTER_COLORS[c.color % COMPUTER_COLORS.length];
+}
+
+/**
+ * The computer a chat or folder id belongs to, or null for this one. An id from
+ * another computer reads `@<computerId>:<rawId>`; a local id never starts with `@`.
+ */
+export function computerIdOf(id: string | null | undefined): string | null {
+  if (!id?.startsWith('@')) return null;
+  const end = id.indexOf(':');
+  return end > 1 ? id.slice(1, end) : null;
+}

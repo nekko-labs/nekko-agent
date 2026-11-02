@@ -1,4 +1,5 @@
 import { ActiveWatchChips } from './ActiveWatchChips.js';
+import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
@@ -587,13 +588,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
   // What a delegation that names no model runs on: the saved route, else this chat's model.
   const delegationDefaultModel = useStore(s => s.settings?.orchestration?.delegationRoute?.modelId);
-  const { providers, setMascotMood, refreshSessions } = useStore(
+  const computer = useComputerOf(sessionId);
+  const remoteBlock = computerBlock(computer);
+  const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
+  const { providers: localProviders, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
       providers: s.providers,
       setMascotMood: s.setMascotMood,
       refreshSessions: s.refreshSessions,
     })),
   );
+  // A chat on another computer picks from that computer's providers, never this one's.
+  const providers = computer ? remoteProviders ?? [] : localProviders;
   const settings = useStore(useShallow((s) => chatPaneSettings(s.settings)));
 
   // Painted straight from the session cache when this chat was open recently;
@@ -1566,6 +1572,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * `admitted` fires once the turn has begun or been queued; the returned promise settles only when the turn ends.
    */
   const send = async (override?: string, admitted?: () => void): Promise<boolean | undefined> => {
+    if (remoteBlock) {
+      useStore.getState().pushToast('error', `${remoteBlock}. This message wasn't sent.`);
+      return false;
+    }
     if (session?.executionMode === 'sandbox') {
       try {
         const status = await window.nekko.sandboxStatus(session.id);
@@ -1866,7 +1876,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   };
 
 
-  const hasProvider = !needsProviderSetup(providers, modelId ?? models[0]?.id);
+  const hasProvider = !!computer || !needsProviderSetup(providers, modelId ?? models[0]?.id);
   // An image chat runs on the engine's image model, not a chat provider, so it
   // can compose with no provider configured at all.
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
@@ -2595,6 +2605,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : null}
                 />
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
+                {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
                 </div>}
@@ -2703,7 +2714,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </div>
         )}
 
-        {approval && surface !== 'composer' && <ApprovalBar approval={approval} onDecide={approve} />}
+        {approval && surface !== 'composer' && <ApprovalBar approval={approval} onDecide={approve} computerName={computer?.name} />}
 
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
@@ -3079,7 +3090,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <MarkdownEditor
                     ref={composerRef}
                     className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[52px] py-2'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
-                    placeholder={imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter sends it at the next step)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
+                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter sends it at the next step)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}

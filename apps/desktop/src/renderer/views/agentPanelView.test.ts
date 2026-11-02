@@ -11,6 +11,8 @@ describe('agent panel view', () => {
     expect(DEFAULT_AGENT_PANEL_VIEW).toEqual({
       groupBy: 'status', sortBy: 'manual', direction: 'desc',
       showMetadata: true, showProvider: true, showAutomations: true, showEmptyGroups: true,
+      showComputer: true,
+      showComputerIcons: true,
     });
     expect(isDefaultView(DEFAULT_AGENT_PANEL_VIEW)).toBe(true);
     expect(isDefaultView({ ...DEFAULT_AGENT_PANEL_VIEW, showMetadata: false })).toBe(false);
