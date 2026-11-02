@@ -31,16 +31,19 @@ describe('plan sheet, folded and open (#1317)', () => {
     { id: 'c', createdAt: 1, updatedAt: 1, title: 'Auth tests pass', status: 'pending', kind: 'verify' },
     { id: 'd', createdAt: 1, updatedAt: 1, title: 'Open the PR', status: 'pending', kind: 'ship' },
   ] } as unknown as Session;
-  it('folds by default to the step being worked: kind, title, pass and its place, with no Change plan', () => {
-    const markup = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
-    expect(markup).toContain('data-folded');
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toMatch(/data-plan-kind="build" data-current="true">Build<\/span>/);
-    expect(markup).toContain('Move checks into one middleware');
-    expect(markup).toContain('Pass 2');
-    expect(markup).toContain('2 of 4');
-    expect(markup).not.toContain('Find every inline check');
-    expect(markup).not.toContain('Change plan');
+  it('opens by default to every step; folded, it collapses to the step being worked: kind, title, pass and its place, with no Change plan', () => {
+    const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
+    expect(open).toContain('1 of 4 done');
+    expect(open).toContain('Find every inline check');
+    const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
+    expect(folded).toContain('data-folded');
+    expect(folded).toContain('aria-expanded="false"');
+    expect(folded).toMatch(/data-plan-kind="build" data-current="true">Build<\/span>/);
+    expect(folded).toContain('Move checks into one middleware');
+    expect(folded).toContain('Pass 2');
+    expect(folded).toContain('2 of 4');
+    expect(folded).not.toContain('Find every inline check');
+    expect(folded).not.toContain('Change plan');
   });
   it('sums the sub-agents into one chip when folded, and puts each under its step when open', () => {
     store.sessions = [
@@ -49,7 +52,7 @@ describe('plan sheet, folded and open (#1317)', () => {
       { id: 'other', parentSessionId: 'x', title: 'Not mine', createdAt: 0 },
     ];
     try {
-      const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
+      const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
       expect(folded).toMatch(/data-plan-chip="subagents" title="Sub-agents: 1 running, 1 done">Sub-agents<b>1<\/b>[^]*?aria-label="running"[^]*?<b>1<\/b>[^]*?aria-label="done"/);
       const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
       expect(open).toContain('1 of 4 done');
