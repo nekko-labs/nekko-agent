@@ -345,7 +345,7 @@ export const COMPUTER_ACCESS = {
   // `model:next` and `model:cancel` carry a reply `model:open` already started: not logged per piece.
   read: ['agent:replay', 'chat:running', 'model:cancel', 'model:next', 'session:images', 'session:page'],
   agent: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'chat:cancelCompaction', 'chat:compact', 'chat:dequeue', 'model:open', 'session:setAttachments', 'session:truncate'],
-  sendKeys: ['clientMessageId', 'images', 'modelId', 'providerId', 'regenerate', 'resume', 'sessionId', 'skill', 'text', 'videos'],
+  sendKeys: ['clientMessageId', 'images', 'maxHistoryTurns', 'modelId', 'noTools', 'providerId', 'regenerate', 'resume', 'sessionId', 'skill', 'text', 'videos'],
 } as const;
 
 /**
@@ -709,13 +709,15 @@ export const PHONE_SESSION_OPTION_KEYS = [
  * the same signed proof as raising a mode, in either direction, since the gate
  * can't always rank two values.
  */
-export const PHONE_GUARDED_OPTION_KEYS = ['cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'offline', 'privacy'] as const;
+export const PHONE_GUARDED_OPTION_KEYS = ['cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'guidance', 'incognito', 'memory', 'offline', 'privacy'] as const;
 
 /** The values a closed chat option may take (the store checks the rest). */
 export const PHONE_OPTION_VALUES = {
   autoQuality: ['cheap', 'normal', 'quality'],
   chatType: ['image', 'multimodal'],
   executionMode: ['sandbox', 'unified', 'worktree'],
+  guidance: ['off', 'root', 'rules'],
+  memory: ['all', 'off', 'project'],
   toolApproach: ['code', 'list'],
   workMode: ['best-output', 'better-review', 'default', 'design'],
 } as const;
@@ -729,7 +731,9 @@ export const PHONE_OPTION_VALUES = {
 export const PHONE_ENGINE_KEYS = ['autoStart', 'autoload', 'idleTtlSeconds', 'jitLoad', 'maxLoaded'] as const;
 export const PHONE_MODEL_SERVER_VIEW = [...PHONE_ENGINE_KEYS, 'clientModelSettings', 'shareWithComputers'] as const;
 /** Refused with `server-locked` while the Model Server sets its own. */
-export const PHONE_MODEL_SETTING_CHANNELS = ['engine:saveModelPreset', 'engine:settings', 'model:load'] as const;
+export const PHONE_MODEL_SETTING_CHANNELS = ['engine:saveModelPreset', 'engine:settings', 'engine:unloadAll', 'model:load'] as const;
+/** A preset's keys that name files on the machine, which stay there. */
+export const PHONE_PRESET_PATH_KEYS = ['clip_g', 'clip_l', 'llm', 't5xxl', 'taesd', 'vae'] as const;
 
 /** Chat options that are on or off. */
 export const PHONE_OPTION_SWITCHES = ['autoModel', 'autoProviderSwitch', 'cloudOnly', 'gitIsolation', 'incognito', 'offline'] as const;
@@ -988,6 +992,21 @@ export function screenPhoneCall(
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (args[1] !== undefined && args[1] !== null && (typeof args[1] !== 'string' || args[1] === '')) throw new PhoneAccessError('value-invalid', 'message id');
       return {};
+    case 'model:load':
+    case 'model:unload':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
+      // Passed to a runtime's own CLI on the computer: a leading dash would read as a flag.
+      if (typeof args[1] !== 'string' || args[1] === '' || args[1].startsWith('-')) throw new PhoneAccessError('value-invalid', 'model id');
+      return {};
+    case 'engine:saveModelPreset': {
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'model id');
+      if (!isObj(args[1])) throw new PhoneAccessError('value-invalid', 'preset');
+      const diffusion = args[1].diffusion;
+      for (const key of PHONE_PRESET_PATH_KEYS) {
+        if (isObj(diffusion) && own(diffusion, key)) throw new PhoneAccessError('option-denied', key);
+      }
+      return {};
+    }
     case 'engine:settings': {
       if (!isObj(args[0])) throw new PhoneAccessError('value-invalid', 'model server settings');
       for (const key of Object.keys(args[0])) {
@@ -1032,10 +1051,6 @@ export function screenPhoneCall(
       return {};
     case 'context:preview':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
-      return {};
-    case 'model:unload':
-      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
-      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'model id');
       return {};
     case 'settings:update':
       return { settingsPatch: checkPhoneSettingsPatch(args[0]) };
@@ -1419,6 +1434,7 @@ export function phoneAccessPolicy() {
     engineKeys: [...PHONE_ENGINE_KEYS],
     modelServerView: [...PHONE_MODEL_SERVER_VIEW],
     modelSettingChannels: [...PHONE_MODEL_SETTING_CHANNELS],
+    presetPathKeys: [...PHONE_PRESET_PATH_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],
     chatModes: [...PHONE_CHAT_MODES],
     effortLevels: [...PHONE_EFFORT_LEVELS],

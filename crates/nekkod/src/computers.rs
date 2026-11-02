@@ -285,6 +285,8 @@ impl Computers {
                 "baseUrl": format!("http://127.0.0.1:{port}/{}/v1", p.id),
                 "apiKey": &*token,
                 "enabled": true,
+                // What makes it another machine, though its address is loopback.
+                "computerId": p.id,
             })
         });
         let next: Vec<Value> = held.iter().filter(|p| !ours(p)).cloned().chain(rows).collect();
