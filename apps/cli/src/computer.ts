@@ -2,9 +2,10 @@ import { pairingLink, type PairingGrant, type RemoteDevice, type RemotePairing, 
 
 /**
  * A computer with no window (rented compute, a Mac Studio nobody is logged in
- * to): `nekko-agent computer serve` keeps it reachable, and `link` prints what
- * Settings > Computers takes on the desktop that will drive it. The same engine,
- * gate and device registry run as behind the desktop app.
+ * to): `nekko-agent computer serve` keeps it reachable, and prints what Settings >
+ * Computers takes on the desktop that will drive it. The same engine, gate and
+ * device registry run as behind the desktop app. A pairing code lives in the
+ * running engine, so a new link is a restart of `serve`, not a command beside it.
  */
 
 export interface ComputerClient {
@@ -16,7 +17,7 @@ export interface ComputerClient {
   revokeDevice(id: string): Promise<RemoteDevice[]>;
 }
 
-export const COMPUTER_USAGE = 'Usage: nekko-agent computer serve --relay <wss://…>|link|list|revoke <device>';
+export const COMPUTER_USAGE = 'Usage: nekko-agent computer serve --relay <wss://…>|list|revoke <device>';
 
 /** A one-time link for Settings > Computers, or why there can't be one. */
 export async function computerLink(client: ComputerClient): Promise<string> {

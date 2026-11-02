@@ -49,7 +49,8 @@ Where the agent runs and where the model runs are separate choices. Whichever co
 
 - **A connected Model Server is a provider here.** Each connected computer adds *gomi Model Server* to this computer's providers, so a chat's model picker lists it, and a phone connected here can pick it too. It reaches that computer over the same sealed link, on LAN, tailnet or relay, with no change to the Model Server's `bind` or key.
 - **Only the engine crosses.** Three paths: chat completions, embeddings and the model list. It never reaches a local runtime, a provider or Claude Code, so a subscription stays on the computer it signed in on.
-- **Model Server settings.** *Let connected computers use these models* removes that provider elsewhere when off. *Connected devices choose model settings*, off, means the server's saved settings decide: a request's temperature, seed and token limits are dropped, and devices can't change how models load. Both are on by default, and neither can be changed from another device.
+- **It counts as off this computer.** An Offline chat, a local-only task and a local-only workflow refuse it, and Privacy Shield applies to it, though its address here is loopback. It never starts a Model Server its owner stopped: *Start with Nekko* is what lets it.
+- **Model Server settings.** *Let connected computers use these models* removes that provider elsewhere when off. *Connected devices choose model settings*, off, means the server's saved settings decide: a request keeps what it asks and loses how to sample, and devices can't load, unload or change how models load. A request can still name a model, which loads it, as on the server's own address. Both are on by default, and neither can be changed from another device.
 - A chat using a model on another computer stops if that computer goes away, with *gomi went offline during this reply*. Its transcript is kept here.
 
 ## Every run setting, from any client
@@ -57,7 +58,7 @@ Where the agent runs and where the model runs are separate choices. Whichever co
 `[gate implemented 2026-11-02 for phones and computers; the phone section built on iOS and Android; model-loading controls not built on any client]`
 
 - A phone or a desktop can set everything `setSessionOptions` takes on the computer running a chat. The phone's model sheet has *Run settings*: choosing the model automatically, offline, cloud only, incognito, a separate Git branch, work mode and tool style.
-- **Options that change what an agent may touch need the same proof as raising a mode, in either direction:** execution mode, Git isolation, disabled tools, MCP servers and connectors, privacy, offline and cloud only.
+- **Options that change what an agent may touch or where its data goes need the same proof as raising a mode, in either direction:** execution mode, Git isolation, disabled tools, MCP servers and connectors, memory, guidance, privacy, offline, cloud only and incognito. A fork keeps its chat's offline, cloud-only, privacy and incognito settings, since it carries the transcript.
 - `chat:send` also takes videos, a history limit and no-tools. Attaching a path on the host stays refused.
 - How a Model Server loads and keeps models is open to devices while it allows it (`maxLoaded`, `idleTtlSeconds`, `jitLoad`, `autoload`, `autoStart`, presets, loading a model). `port`, `bind`, `apiKey`, `corsOrigins`, the model folders and the two settings above stay on the machine, because they open it to its network or decide this rule.
 
@@ -65,7 +66,7 @@ Where the agent runs and where the model runs are separate choices. Whichever co
 
 `[implemented 2026-11-02; CLI logic tested, not yet run on rented compute]`
 
-`nekko-agent computer serve --relay <wss://…>` keeps a computer reachable with no desktop app, and prints the link for Settings > Computers. `computer link`, `computer list` and `computer revoke <device>` do the rest. A rented box, or a Mac Studio with nobody logged in, is then a computer like any other.
+`nekko-agent computer serve --relay <wss://…>` keeps a computer reachable with no desktop app, and prints the link for Settings > Computers. Running it again prints a new one. `computer list` and `computer revoke <device>` work while it is stopped, since one engine uses the data folder at a time. A rented box, or a Mac Studio with nobody logged in, is then a computer like any other.
 
 ## What a computer may do
 

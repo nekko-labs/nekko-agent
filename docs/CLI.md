@@ -44,10 +44,11 @@ Rented compute, or a Mac Studio nobody is logged in to, has no desktop app. Run 
 nekko-agent computer serve --relay wss://relay.example
 ```
 
-It stays reachable until you stop it, and prints a one-time link. On the desktop that will drive it, open Settings, Computers, Add a computer, and paste that link. The relay is only needed the first time.
+It stays reachable until you stop it, and prints a one-time link. On the desktop that will drive it, open Settings, Computers, Add a computer, and paste that link. The relay is only needed the first time. Running it again prints a new link.
+
+Stop `serve` before these: only one engine can use the data folder at a time.
 
 ```bash
-nekko-agent computer link              # a new one-time link
 nekko-agent computer list              # what is paired here
 nekko-agent computer revoke <device>   # remove one
 ```

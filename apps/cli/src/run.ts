@@ -1,4 +1,4 @@
-import { COMPUTER_USAGE, computerLink, pairedDevices, serveComputer } from './computer.js';
+import { COMPUTER_USAGE, pairedDevices, serveComputer } from './computer.js';
 import { readFileSync } from 'node:fs';
 import { stdin } from 'node:process';
 import {
@@ -72,7 +72,7 @@ Usage:
   nekko-agent workspace list|add|remove|index|search [opts]
   nekko-agent prompts|tasks|skills|tools|models [opts]
   nekko-agent workflow list|run <name>|trigger <command>|runs [--json]
-  nekko-agent computer serve --relay <wss://…>|link|list|revoke <device>
+  nekko-agent computer serve --relay <wss://…>|list|revoke <device>
   nekko-agent train start|status|hint|stop [opts]
   nekko-agent local status|list|search|download|downloads|cancel|load|unload|start|stop
   nekko-agent mcp
@@ -450,7 +450,6 @@ export async function runCli(argv: string[]): Promise<void> {
     }
     if (cmd === 'computer') {
       const sub = _[1];
-      if (sub === 'link') return void print(await computerLink(client), json);
       if (sub === 'list') return void print(await pairedDevices(client), json);
       if (sub === 'revoke' && _[2]) return void print(await client.revokeDevice(_[2]), json);
       if (sub === 'serve') {

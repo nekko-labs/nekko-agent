@@ -31,10 +31,21 @@ pub const CHANNELS: &[&str] = &["model:open", "model:next", "model:cancel"];
 /// The engine's own paths, nothing else.
 const PATHS: &[&str] = &["/v1/chat/completions", "/v1/embeddings", "/v1/models"];
 
-/// What a request may say about how the model samples. With *Connected devices
-/// choose model settings* off, the server's saved preset decides these.
-const CLIENT_SAMPLING: &[&str] =
-    &["temperature", "top_p", "top_k", "min_p", "max_tokens", "max_completion_tokens", "seed", "n_predict"];
+/// What a request keeps with *Connected devices choose model settings* off:
+/// what it asks, not how the model samples. The server's saved preset decides
+/// the rest. A token limit stays, since it only ever asks for less.
+const CONTENT_KEYS: &[&str] = &[
+    "input",
+    "max_completion_tokens",
+    "max_tokens",
+    "messages",
+    "model",
+    "response_format",
+    "stream",
+    "stream_options",
+    "tool_choice",
+    "tools",
+];
 
 /// The most one `model:next` carries: it travels in one relay frame.
 const PIECE_BYTES: usize = 256 * 1024;
@@ -42,6 +53,8 @@ const PIECE_BYTES: usize = 256 * 1024;
 const WAIT: Duration = Duration::from_secs(15);
 /// A reply nobody has read for this long is dropped.
 const ABANDONED: Duration = Duration::from_secs(120);
+/// Replies held at once: each pins a model's slot.
+const MAX_STREAMS: usize = 16;
 
 struct Stream {
     rx: mpsc::Receiver<Result<Bytes, String>>,
@@ -69,7 +82,7 @@ pub fn clean_body(settings: &Value, mut body: Value) -> Value {
     if engine_setting(settings, "clientModelSettings") == Value::Bool(false)
         && let Some(o) = body.as_object_mut()
     {
-        o.retain(|k, _| !CLIENT_SAMPLING.contains(&k.as_str()));
+        o.retain(|k, _| CONTENT_KEYS.contains(&k.as_str()));
     }
     body
 }
@@ -96,17 +109,26 @@ impl Tunnel {
         if !sharing(&settings) {
             return Err("This computer doesn't share its models.".into());
         }
-        // Its address stays valid across starts, and a request loads what it names.
-        let _ = crate::routes::route(ctx, "engine:start", vec![]).await;
         let engine = crate::library::engine_settings(&settings);
+        // Never restart a server its owner stopped: that would bring back a network bind.
+        if engine.get("autoStart") == Some(&Value::Bool(true)) {
+            let _ = crate::routes::route(ctx, "engine:start", vec![]).await;
+        }
         let port = engine.get("port").and_then(Value::as_u64).ok_or("This computer's Model Server has no port.")?;
         let url = format!("http://127.0.0.1:{port}{path}");
         let client = reqwest::Client::new();
-        let mut request = if body.is_null() { client.get(&url) } else { client.post(&url).json(&clean_body(&settings, body)) };
+        let mut request =
+            if body.is_null() { client.get(&url) } else { client.post(&url).json(&clean_body(&settings, body)) };
         if let Some(key) = engine.get("apiKey").and_then(Value::as_str).filter(|k| !k.is_empty()) {
             request = request.bearer_auth(key);
         }
-        let reply = request.send().await.map_err(|_| "This computer's Model Server didn't answer.".to_string())?;
+        let mut streams = self.streams.lock().await;
+        streams.retain(|_, s| s.read_at.elapsed() < ABANDONED);
+        if streams.len() >= MAX_STREAMS {
+            return Err("This computer's Model Server is busy with other computers.".into());
+        }
+        drop(streams);
+        let reply = request.send().await.map_err(|_| "This computer's Model Server isn't running.".to_string())?;
         let status = reply.status().as_u16();
         let content_type = reply.headers().get("content-type").and_then(|v| v.to_str().ok()).map(str::to_string);
 
@@ -117,14 +139,15 @@ impl Tunnel {
             while let Some(chunk) = bytes.next().await {
                 let chunk = chunk.map_err(|e| e.to_string());
                 let failed = chunk.is_err();
-                if tx.send(chunk).await.is_err() || failed {
+                // Nobody reading: let go of the model's slot.
+                let sent = tokio::time::timeout(ABANDONED, tx.send(chunk)).await;
+                if !matches!(sent, Ok(Ok(()))) || failed {
                     return;
                 }
             }
         });
         let id = nekko_js::host::uuid();
         let mut streams = self.streams.lock().await;
-        streams.retain(|_, s| s.read_at.elapsed() < ABANDONED);
         streams.insert(id.clone(), Stream { rx, read_at: Instant::now(), done: false });
         Ok(json!({ "id": id, "status": status, "contentType": content_type }))
     }
@@ -205,7 +228,8 @@ async fn forward(
     let opened = match client.call("model:open", json!([path, body])).await {
         Ok(v) => v,
         Err(e) => {
-            return (StatusCode::BAD_GATEWAY, axum::Json(json!({ "error": { "message": e.to_string() } }))).into_response();
+            return (StatusCode::BAD_GATEWAY, axum::Json(json!({ "error": { "message": e.to_string() } })))
+                .into_response();
         }
     };
     let stream_id = opened["id"].as_str().unwrap_or_default().to_string();
@@ -221,7 +245,7 @@ async fn forward(
             };
             let data = piece["data"].as_str().and_then(|d| STANDARD.decode(d).ok()).unwrap_or_default();
             // The turn stopped listening: stop the model over there too.
-            if !data.is_empty() && tx.send(Ok(Bytes::from(data))).await.is_err() {
+            if tx.is_closed() || (!data.is_empty() && tx.send(Ok(Bytes::from(data))).await.is_err()) {
                 let _ = client.call("model:cancel", json!([stream_id])).await;
                 return;
             }
@@ -261,8 +285,11 @@ mod tests {
     #[test]
     fn a_server_that_sets_its_own_settings_keeps_them() {
         let off = json!({ "engine": { "clientModelSettings": false } });
-        let body = json!({ "model": "qwen", "messages": [], "temperature": 2, "seed": 1, "max_tokens": 9, "stream": true });
-        assert_eq!(clean_body(&off, body.clone()), json!({ "model": "qwen", "messages": [], "stream": true }));
+        let body = json!({ "model": "qwen", "messages": [], "temperature": 2, "seed": 1, "grammar": "x", "id_slot": 0, "max_tokens": 9, "stream": true });
+        assert_eq!(
+            clean_body(&off, body.clone()),
+            json!({ "model": "qwen", "messages": [], "max_tokens": 9, "stream": true })
+        );
         assert_eq!(clean_body(&json!({}), body.clone()), body, "on by default");
     }
 

@@ -419,6 +419,9 @@
   "disabledTools",
   "executionMode",
   "gitIsolation",
+  "guidance",
+  "incognito",
+  "memory",
   "offline",
   "privacy"
  ],
@@ -436,6 +439,16 @@
    "sandbox",
    "unified",
    "worktree"
+  ],
+  "guidance": [
+   "off",
+   "root",
+   "rules"
+  ],
+  "memory": [
+   "all",
+   "off",
+   "project"
   ],
   "toolApproach": [
    "code",
@@ -475,7 +488,16 @@
  "modelSettingChannels": [
   "engine:saveModelPreset",
   "engine:settings",
+  "engine:unloadAll",
   "model:load"
+ ],
+ "presetPathKeys": [
+  "clip_g",
+  "clip_l",
+  "llm",
+  "t5xxl",
+  "taesd",
+  "vae"
  ],
  "chatSendKeys": [
   "clientMessageId",
@@ -669,7 +691,9 @@
   "sendKeys": [
    "clientMessageId",
    "images",
+   "maxHistoryTurns",
    "modelId",
+   "noTools",
    "providerId",
    "regenerate",
    "resume",

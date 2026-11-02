@@ -66,6 +66,7 @@ pub struct Policy {
     pub engine_keys: Vec<String>,
     pub model_server_view: Vec<String>,
     pub model_setting_channels: Vec<String>,
+    pub preset_path_keys: Vec<String>,
     pub computer_refused: Vec<String>,
     pub computer_read: Vec<String>,
     pub computer_agent: Vec<String>,
@@ -153,6 +154,7 @@ pub fn policy() -> &'static Policy {
             engine_keys: strings(&v["engineKeys"]),
             model_server_view: strings(&v["modelServerView"]),
             model_setting_channels: strings(&v["modelSettingChannels"]),
+            preset_path_keys: strings(&v["presetPathKeys"]),
             computer_refused: strings(&v["computerAccess"]["refused"]),
             computer_read: strings(&v["computerAccess"]["read"]),
             computer_agent: strings(&v["computerAccess"]["agent"]),
@@ -414,9 +416,13 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         "workflow:run" => id(0, "workflow id")?,
         "limits:get" => id(0, "provider id")?,
         "context:preview" => id(0, "chat id")?,
-        "model:unload" => {
+        "model:load" | "model:unload" => {
             id(0, "provider id")?;
             id(1, "model id")?;
+            // Passed to a runtime's own CLI on the computer: a leading dash would read as a flag.
+            if arg(1).as_str().is_some_and(|m| m.starts_with('-')) {
+                return Err(denied("value-invalid", "model id"));
+            }
         }
         "settings:update" => out.settings = Some(check_settings_patch(arg(0))?),
         "session:setOptions" => {
@@ -441,9 +447,16 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             }
         }
         "engine:settings" => keys_within(arg(0), &policy().engine_keys, "model server settings")?,
-        "model:load" => {
-            id(0, "provider id")?;
-            id(1, "model id")?;
+        "engine:saveModelPreset" => {
+            id(0, "model id")?;
+            if !arg(1).is_object() {
+                return Err(denied("value-invalid", "preset"));
+            }
+            for key in &policy().preset_path_keys {
+                if arg(1).get("diffusion").is_some_and(|d| d.get(key).is_some()) {
+                    return Err(denied("option-denied", key.clone()));
+                }
+            }
         }
         "chat:send" => {
             keys_within(arg(0), &policy().chat_send_keys, "chat:send options")?;
@@ -2122,6 +2135,9 @@ mod tests {
                 json!({ "offline": false }),
                 json!({ "cloudOnly": false }),
                 json!({ "privacy": {} }),
+                json!({ "incognito": true }),
+                json!({ "memory": "all" }),
+                json!({ "guidance": "off" }),
             ] {
                 assert!(set(guarded.clone()).unwrap_err().contains("proof-required"), "{guarded}");
             }
@@ -2133,6 +2149,14 @@ mod tests {
             let (_, _, phone) = with_device(PHONE);
             let save = |o: Value| ask(&phone, "engine:settings", json!([o]));
             assert!(save(json!({ "maxLoaded": 3, "idleTtlSeconds": 60 })).is_ok());
+            let preset = |p: Value| ask(&phone, "engine:saveModelPreset", json!(["m1", p]));
+            assert!(preset(json!({ "contextTokens": 8192 })).is_ok());
+            assert!(
+                preset(json!({ "diffusion": { "vae": "/Users/x/.ssh/id_rsa" } }))
+                    .unwrap_err()
+                    .contains("option-denied")
+            );
+            assert!(ask(&phone, "model:load", json!(["lms", "--help"])).unwrap_err().contains("value-invalid"));
             for key in [
                 "port",
                 "bind",
@@ -2252,7 +2276,7 @@ mod tests {
             let (_, _, computer) = with_device(COMPUTER);
             let send = |o: Value| ask(&computer, "chat:send", json!([o]));
             assert!(send(json!({ "sessionId": "s1", "text": "hi", "videos": ["data:video/mp4;base64,AA"] })).is_ok());
-            for bad in ["unattended", "attachedPaths", "noTools", "maxHistoryTurns"] {
+            for bad in ["unattended", "attachedPaths"] {
                 let mut o = json!({ "sessionId": "s1", "text": "hi" });
                 o[bad] = json!(true);
                 assert!(send(o).unwrap_err().contains("option-denied"), "{bad}");

@@ -350,7 +350,8 @@ async fn a_chat_here_uses_the_model_server_on_another_computer() {
     post(host, "remote:enable", json!([url]), Some(TOKEN)).await;
     let (_, pairing) = post(host, "remote:pairing", json!([]), Some(TOKEN)).await;
     let (_, grant) = post(host, "remote:pairComputer", json!([]), Some(TOKEN)).await;
-    let link = json!({ "relayUrl": url, "room": pairing["room"], "key": pairing["key"], "pair": grant["code"], "alts": [] });
+    let link =
+        json!({ "relayUrl": url, "room": pairing["room"], "key": pairing["key"], "pair": grant["code"], "alts": [] });
     let mut window = Window::open(laptop.port).await;
     let id = window.call("computers:pair", json!([link])).await.unwrap()["id"].as_str().unwrap().to_string();
     window.wait_state(&id, "online").await;
@@ -361,7 +362,8 @@ async fn a_chat_here_uses_the_model_server_on_another_computer() {
     assert!(providers.to_string().contains(&provider), "{providers}");
 
     // A chat on this computer, on the other computer's model.
-    let send = json!({ "sessionId": "s_here", "providerId": provider, "modelId": "synthetic", "text": "Say something" });
+    let send =
+        json!({ "sessionId": "s_here", "providerId": provider, "modelId": "synthetic", "text": "Say something" });
     let (code, body) = post(laptop.port, "chat:send", json!([send]), Some(TOKEN)).await;
     assert_eq!(code, 200, "{body}");
     let mut saved = String::new();
@@ -376,8 +378,21 @@ async fn a_chat_here_uses_the_model_server_on_another_computer() {
     assert!(saved.contains("Answered on gomi"), "{saved}");
     assert_eq!(model.requests.lock().unwrap().len(), 1, "the model ran over there");
 
+    // An Offline chat can't use it: its address is loopback, its requests leave this computer.
+    let stored = std::fs::read_to_string(laptop_dir.join("settings.json")).unwrap();
+    assert!(stored.contains("computerId"), "what marks it as another machine must survive the save");
+    let offline =
+        json!({ "id": "s_off", "title": "Off", "offline": true, "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(laptop_dir.join("sessions/s_off.json"), offline.to_string()).unwrap();
+    let served = model.requests.lock().unwrap().len();
+    let send = json!({ "sessionId": "s_off", "providerId": format!("computer:{id}"), "modelId": "synthetic", "text": "Stay here" });
+    post(laptop.port, "chat:send", json!([send]), Some(TOKEN)).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(model.requests.lock().unwrap().len(), served, "an Offline chat never reached the other computer");
+
     // Only the engine's own paths cross.
-    let refused = window.call("computers:call", json!([id, "model:open", ["/v1/../settings", null]])).await.unwrap_err();
+    let refused =
+        window.call("computers:call", json!([id, "model:open", ["/v1/../settings", null]])).await.unwrap_err();
     assert!(refused.contains("isn't a Model Server path"), "{refused}");
 
     // The owner can stop sharing, and the provider goes.
