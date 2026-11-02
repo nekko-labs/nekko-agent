@@ -78,7 +78,7 @@ never harms the image you have.
 | Install | A 140 GB sparse disk, then a first boot that creates the `nekko-build` admin, with no window. Saved as a checkpoint, and the restore image is deleted | Restarts this stage |
 | Xcode | Over SSH: Xcode as a `tar` stream, first launch, the iOS simulator, Homebrew. macOS only skips Xcode and the simulator | Back to the checkpoint |
 | Lockdown | `provision.sh` as a one-off LaunchDaemon, because it turns SSH off partway. The guest stops, and Nekko reads the proof file from its disk, read-only | Back to the checkpoint: it runs once per image |
-| Test | A clone must boot, reject a `not-a-config` seed and power off within 10 minutes | Keeps the build and shows the log |
+| Test | A clone must boot, reject a `not-a-config` seed and power off within 10 minutes, and its boot log must show the runner ran: a guest also powers off on a seed it could not read | Keeps the build and shows the log |
 | Finish | Swaps the image in, writes `image.json`, applies the chosen mode, turns the runner on, deletes the build folder | Safe to run again |
 
 Between stages it waits, with the reason on screen, for a free VM slot, critical memory, heat,
@@ -193,7 +193,10 @@ The script that waited only for the mount point powered off early in 6 of 10 boo
 with `unexpected seed contents`: macOS makes the mount point (empty, mode 0111) seconds before it
 mounts the volume, and a boot from a warm disk cache gets there first. The script that waits for a
 file ran the runner in 10 of 10. An image built before this change keeps the old script until it is
-rebuilt; its early stops now show as failed starts.
+rebuilt; its early stops now show as failed starts. The Test stage then ran both ways on one build:
+it failed, in about 10 s, on a boot script that powers off at the seed check, which the earlier check
+passed, and it passed in about 50 s once the real script was back on the disk. Treat the Test time
+in the 2026-11-01 entry below with care: 16 s is short enough to be this same early stop.
 
 2026-11-01, on an M1 Max running macOS 27.0.1, Nekko's own build from the daemon's channels with
 the dev helper, guest macOS 27.2, Xcode 27.2 (an App Store Xcode). The whole build took 26 minutes
