@@ -21,6 +21,7 @@ struct ComputersView: View {
                             Circle().fill(c.id == store.activeId ? dot : palette.inkFaint.opacity(0.5)).frame(width: 8, height: 8)
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 6) {
+                                    ComputerGlyph(icon: c.icon).foregroundStyle(palette.inkSoft)
                                     Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
                                     if c.id == app.prefs.defaultComputer {
                                         Image(systemName: "star.fill").font(.caption2).foregroundStyle(palette.warning)
@@ -233,7 +234,7 @@ struct SettingsView: View {
                 NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right") }
                 Picker("Open at launch", selection: $prefs.defaultComputer) {
                     Text("The one used last").tag(String?.none)
-                    ForEach(store.computers) { Text($0.name).tag(Optional($0.id)) }
+                    ForEach(store.computers) { ComputerLabel(c: $0).tag(Optional($0.id)) }
                 }
             } header: { SectionHeader("Computers") }
             Section {

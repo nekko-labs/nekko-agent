@@ -560,7 +560,16 @@ struct ComputerMenu: View {
                     }
                     Button(role: .destructive) { forgetting = c } label: { Label("Forget…", systemImage: "trash") }
                 } label: {
-                    if c.id == store.activeId { Label(c.name, systemImage: "checkmark") } else { Text(c.name) }
+                    if c.id != store.activeId {
+                        ComputerLabel(c: c)
+                    } else if let icon = c.icon {
+                        // A menu reads these as title, subtitle and image: its state marks the one in use.
+                        Text(c.name)
+                        Text(stateName(store.conn))
+                        Image("computer-\(icon)")
+                    } else {
+                        Label(c.name, systemImage: "checkmark")
+                    }
                 }
             }
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
@@ -590,6 +599,7 @@ struct ComputerMenu: View {
             // The computer is the title's companion: its state, its name, and a chevron into the menu.
             HStack(spacing: 6) {
                 Circle().fill(dot).frame(width: 8, height: 8)
+                ComputerGlyph(icon: store.active?.icon, size: 14).foregroundStyle(palette.inkSoft)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(store.active?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                     if let paired = Self.paired(store.computers.count) {

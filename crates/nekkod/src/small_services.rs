@@ -64,6 +64,9 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "data:wipe" => wipe(ctx).await,
         "app:info" => {
             let mut info = app_info(&ctx.app.facts);
+            let settings = crate::settings::current(ctx).await;
+            info["machineIcon"] = settings.get("machineIcon").cloned().unwrap_or(Value::Null);
+            info["sharesModels"] = json!(crate::model_tunnel::sharing(&settings));
             let on = crate::settings::current(ctx).await.get("quitFromPhone") == Some(&Value::Bool(true));
             info["quitFromPhone"] = json!(on);
             Ok(info)
@@ -146,7 +149,8 @@ pub fn app_info(facts: &AppFacts) -> Value {
     let version =
         facts.version.clone().or_else(|| std::env::var("NEKKO_VERSION").ok()).unwrap_or_else(|| "0.0.0".into());
     let edition = facts.edition.clone().unwrap_or_else(|| "web".into());
-    json!({ "version": version, "platform": crate::admission::platform(), "edition": edition })
+    let hostname = gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string();
+    json!({ "version": version, "platform": crate::admission::platform(), "edition": edition, "hostname": hostname })
 }
 
 // ---- app:quit ----
@@ -649,7 +653,12 @@ mod tests {
         let desktop = app_info(&AppFacts { version: Some("1.2.3".into()), edition: Some("desktop".into()) });
         assert_eq!(
             desktop,
-            json!({ "version": "1.2.3", "platform": crate::admission::platform(), "edition": "desktop" })
+            json!({
+                "version": "1.2.3",
+                "platform": crate::admission::platform(),
+                "edition": "desktop",
+                "hostname": desktop["hostname"],
+            })
         );
         assert_eq!(app_info(&AppFacts::default())["edition"], "web");
     }

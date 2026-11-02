@@ -147,6 +147,12 @@ class StepUpTest {
         assertFalse(AppInfo.from(json("""{"version":"1.2.3","platform":"darwin","quitFromPhone":false}""")).quitFromPhone)
         assertFalse("an older computer", AppInfo.from(json("""{"version":"1.0.0","platform":"win32"}""")).quitFromPhone)
         assertFalse(AppInfo.from(json("""{"quitFromPhone":"yes"}""")).quitFromPhone)
+        assertEquals("tower", AppInfo.from(json("""{"machineIcon":"tower"}""")).machineIcon)
+        assertEquals(null, AppInfo.from(json("""{"machineIcon":""}""")).machineIcon)
+        assertEquals("one this app doesn't draw", null, AppInfo.from(json("""{"machineIcon":"spaceship"}""")).machineIcon)
+        assertEquals(null, AppInfo.from(json("""{"machineIcon":null}""")).machineIcon)
+        assertEquals("an older computer", null, AppInfo.from(json("""{"version":"1.0.0"}""")).machineIcon)
+        assertEquals("""{"machineIcon":"cat"}""", PcSettings.patch(icon = "cat").toString())
     }
 
     @Test fun `the safety exits and the challenge are phone channels`() {

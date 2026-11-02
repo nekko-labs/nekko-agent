@@ -8,9 +8,9 @@ owner:
 
 ## Simple and Expert, reframed (#1311, added 2026-10-28)
 
-Simple becomes the everyday app with developer controls out of sight, chosen per control in Settings > Simple mode (Show, Expert only, Hide), per device, Simple for new installs, controls not pages. Spec: [Desktop Simple and Expert modes](spec/desktop/desktop-simple-and-expert-modes.md), [iPhone and Android](spec/phone/iphone-simple-and-expert-modes.md); [decision 0040](docs/decisions/0040-simple-hides-developer-controls-per-device.md); docs page `docs/simple-and-expert.md`. Prefix **SEM**. Built on branch `simple-expert-modes` for Philip to test before merging.
+Simple becomes the everyday app with developer controls out of sight, chosen per control in Settings > Simple mode (Show, Expert only, Hide), per device, Simple for new installs, controls not pages. Spec: [Desktop Simple and Expert modes](spec/desktop/desktop-simple-and-expert-modes.md), [iPhone and Android](spec/phone/iphone-simple-and-expert-modes.md); [decision 0041](docs/decisions/0041-simple-hides-developer-controls-per-device.md); docs page `docs/simple-and-expert.md`. Prefix **SEM**. Built on branch `simple-expert-modes` for Philip to test before merging.
 
-- [x] **SEM-13, brought up to date with main (2026-11-03).** Decision renumbered to 0040. New gates: Android Chat mode (`ph-policy`, now in its Settings screen), an empty zone's Terminal (`terminal`), the plan sheet's PR chips (`ph-git`), watch wake-ups folded as steps on both phones. The details panel stays off wall windows; Settings gains a Simple mode page in the command palette.
+- [x] **SEM-13, brought up to date with main (2026-11-03).** Decision renumbered to 0041. New gates: Android Chat mode (`ph-policy`, now in its Settings screen), an empty zone's Terminal (`terminal`), the plan sheet's PR chips (`ph-git`), watch wake-ups folded as steps on both phones. The details panel stays off wall windows; Settings gains a Simple mode page in the command palette.
 - [x] **SEM-1, catalogue.** `packages/shared/src/simple-mode.ts` (ids, areas, platforms, defaults, `simpleShown`, `parseSimpleChoices`, `simpleAreas`) with unit tests. (2026-10-28)
 - [x] **SEM-2, desktop switch and gates.** `simpleMode.ts` store (`useShown`, `shownNow`), the chat and code icon switch in the title bar, and each catalogue control gated where it renders. (2026-10-28)
 - [x] **SEM-3, composer details panel.** The strip under the composer moved into the card as a panel that shrinks to the model. (2026-10-28)
@@ -34,15 +34,16 @@ Philip's Live Activity read in Japanese on an English-first iPhone, and he asked
 
 A desktop connects to other computers the way a phone does, and shows every agent they run in one place. Where the agent runs and where the model runs are separate choices. [Design](docs/superpowers/specs/2026-11-02-connected-computers-design.md), [plan](docs/superpowers/plans/2026-11-02-connected-computers.md). Prefix **CC**.
 
-- [ ] **CC0, Messages during a run.** Queued, Next step and Interrupt on all clients; the word steer leaves the app and docs.
-- [ ] **CC1, Link and host class.** Rust relay client, `computers.rs`, the computer access class, Settings > Computers.
-- [ ] **CC2, Federation.** Qualified ids, routing, rewriting, merged summaries, offline cache.
-- [ ] **CC3, See and drive.** Per-computer catalogs, chips, Group by Computer, offline states, icons.
-- [ ] **CC4, Start and monitor.** *Run on*, Monitors switcher, Keep this computer awake.
-- [ ] **CC5, Model sources.** The model tunnel, generated provider rows, two Model Server settings.
-- [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys, the phone sheet.
-- [ ] **CC7, A host with no window.** `nekko computer serve`, `link`, `revoke`.
+- [ ] **CC0, Messages during a run.** Queued messages reach the agent at its next step on their own, and **Interrupt and send now** is the one action on all clients; the word steer leaves the app and docs.
+- [x] **CC1, Link and host class (2026-11-02).** Rust relay client, `computers.rs`, the computer access class, Settings > Computers. Decision [0040](docs/decisions/0040-a-desktop-is-a-paired-device-with-its-own-class.md), [spec](spec/desktop/connected-computers.md).
+- [x] **CC2, Federation (2026-11-02).** Qualified ids, routing, rewriting, merged summaries, offline cache.
+- [x] **CC3, See and drive (2026-11-02).** Per-computer catalogs, chips, Group by Computer, offline states, icons. Notifications still name the chat only.
+- [ ] **CC4, Start and monitor.** *Run on* and the Hardware monitor's switch done 2026-11-02. Left: Local models and Utilization following the switch, Keep this computer awake.
+- [x] **CC5, Model sources (2026-11-02).** The model tunnel, generated provider rows, two Model Server settings.
+- [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys and the phone section done 2026-11-02. Left: controls for model loading on any client, and for disabled tools, memory and privacy on phones.
+- [x] **CC7, A host with no window (2026-11-02).** `nekko-agent computer serve`, `link`, `list`, `revoke`.
 - [ ] **CC8, Pair without pasting.** Discovery, relay lobby, comparison code.
+- [x] **CC9, Computer icons on phones (2026-11-02).** `scripts/computer-icons.mjs` renders the desktop's glyphs into an SVG imageset per icon (template, vector kept) and an Android vector drawable per icon; `scripts/computer-icons.test.mjs` keeps `COMPUTER_ICONS`, both phones' lists and the assets equal. Each phone keeps `machineIcon` from `app:info` on the computer's record, shows it beside the name in lists and switchers, and sets it from the computer's page with `settings:update`. No gate change: the key was already phone-settable and needs no proof.
 
 ## Model scheduler (#1462, added 2026-11-01)
 

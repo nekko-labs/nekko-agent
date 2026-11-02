@@ -219,6 +219,50 @@ struct ModelEffortButton: View {
     }
 }
 
+/// One run setting: a switch, or a choice of its values.
+struct RunOptionRow: View {
+    let option: RunOption
+    let value: JSONValue?
+    var set: (JSONValue) -> Void
+
+    private var title: LocalizedStringKey {
+        switch option.key {
+        case "autoModel": "Choose the model automatically"
+        case "offline": "Offline"
+        case "cloudOnly": "Cloud only"
+        case "incognito": "Incognito"
+        case "gitIsolation": "Separate Git branch"
+        case "workMode": "Work mode"
+        default: "Tool style"
+        }
+    }
+
+    private func label(_ v: String) -> LocalizedStringKey {
+        switch v {
+        case "better-review": "Better review"
+        case "design": "Design"
+        case "best-output": "Best output"
+        case "list": "List"
+        case "code": "Code"
+        default: "Default"
+        }
+    }
+
+    var body: some View {
+        if option.values.isEmpty {
+            Toggle(title, isOn: Binding(get: { value?.bool ?? false }, set: { set(.bool($0)) }))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("run.\(option.key)")
+        } else {
+            Picker(title, selection: Binding(get: { value?.string ?? option.values[0] }, set: { set(.string($0)) })) {
+                ForEach(option.values, id: \.self) { Text(label($0)).tag($0) }
+            }
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("run.\(option.key)")
+        }
+    }
+}
+
 /// The chat's model, and its effort on a slider with one stop per level: a
 /// small dropdown under the composer's control.
 struct ModelEffortPanel: View {
@@ -266,6 +310,18 @@ struct ModelEffortPanel: View {
                          ? "Following \(computer)’s effort setting. Higher effort thinks longer and spends more tokens."
                          : "Higher effort thinks longer and spends more tokens.")
                         .font(.caption2).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if prefs.shows("run-settings") {
+                Divider()
+                Text("Run settings").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                ForEach(RunOption.all) { option in
+                    RunOptionRow(option: option, value: chat.runOptions[option.key]) { value in
+                        error = nil
+                        Task {
+                            do { try await chat.setRunOption(option.key, value) } catch { self.error = error.localizedDescription }
+                        }
+                    }
                 }
             }
             if let error {

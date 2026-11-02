@@ -43,15 +43,8 @@ struct QueueList: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Queued: \(q.shown)")
                 if chat.running {
-                    HStack(spacing: 16) {
-                        if q.canTakeAtNextStep {
-                            textButton("Next step", hint: "The agent reads this at its next step and keeps going", id: "chat.queue.nextStep") {
-                                try await chat.sendQueuedAtNextStep(i, expect: q.text)
-                            }
-                        }
-                        textButton("Interrupt", hint: "Stops the reply and sends this now", id: "chat.queue.interrupt") {
-                            try await chat.interruptQueued(i)
-                        }
+                    textButton("Interrupt and send now", hint: "Stops the reply and sends this now", id: "chat.queue.interrupt") {
+                        try await chat.interruptQueued(i)
                     }
                     .padding(.leading, 20)
                 }

@@ -919,6 +919,26 @@ async fn interrupting_starts_the_chosen_queued_prompt_and_keeps_the_others() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_message_sent_mid_turn_reaches_the_next_model_call() {
+    let session = json!({ "id": "s_mid", "title": "Named", "titleAuto": false, "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("mid", session);
+    let model = scripted_model(vec![call_tool("c1", "read_file", json!({ "path": "a.txt" })), say_text("done")]).await;
+    let spec = turn_spec(&rig, &model, "turn_d_mid", "s_mid", json!({}));
+    let (status, _) = post(rig.d.port, "chat:queue", json!(["s_mid", "also check the tests"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, record) = turn_record(&rig, "turn_d_mid", "s_mid").await;
+    assert_eq!(record["stop"], "complete", "{record}");
+    let saved = saved_session(&rig, "s_mid");
+    assert_eq!(saved["queue"], json!([]), "{saved}");
+    let requests = model.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 2, "no second turn: the same turn read it");
+    assert!(requests[1].to_string().contains("also check the tests"), "{}", requests[1]);
+    assert!(!requests[0].to_string().contains("also check the tests"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_resent_client_message_id_runs_one_turn_and_queues_once() {
     let session = json!({ "id": "s_once", "title": "Named", "titleAuto": false, "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
     let rig = turn_rig("once", session);

@@ -132,6 +132,12 @@ pub trait ModelClient: Sync {
 pub trait ToolRunner: Sync {
     /// Run one call and return its `ToolResult`; an `Err` becomes an error result.
     fn run(&self, call: &Value) -> impl Future<Output = Result<Value, String>> + Send;
+
+    /// The step boundary, just before the steering inbox is read: the host's
+    /// chance to put in what the user left waiting.
+    fn before_step(&self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 pub struct RunOptions<'a> {
@@ -691,6 +697,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             if !first_call {
                 // Steering joins the transcript at the step boundary (never
                 // mid-stream), so the next call sees it without a restart.
+                self.tools.before_step().await;
                 let steered: Vec<Value> =
                     std::mem::take(&mut *self.opts.steering.lock().unwrap_or_else(|e| e.into_inner()));
                 for m in steered {

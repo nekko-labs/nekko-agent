@@ -42,7 +42,24 @@ function publish(next: ResourceSample) {
   for (const l of listeners) l();
 }
 
+/** The connected computer the readings are from; null is this one. */
+let target: string | null = null;
+
+/** Point the readings at a connected computer. What this one read before is dropped, not shown as that one's. */
+export function watchComputer(id: string | null) {
+  target = id;
+  publish({ gpu: null, system: null });
+  poll();
+}
+
 function poll() {
+  if (target) {
+    const asked = target;
+    window.nekko.computerStats(asked).then((s) => {
+      if (target === asked) publish({ gpu: sources.gpu ? s.gpu : null, system: sources.system ? s.system : null });
+    }).catch(() => {});
+    return;
+  }
   if (sources.system) {
     window.nekko.getSystemStats?.().then((s) => {
       if (sources.system) publish({ ...sample, system: s });
@@ -474,5 +491,23 @@ export function ResourceHud() {
         )}
       </button>
     </div>
+  );
+}
+
+/** Which computer the Hardware monitor reads. Absent with none connected. */
+export function MonitorComputerSwitch() {
+  const computers = useStore((s) => s.computers) ?? [];
+  const [chosen, setChosen] = useState('');
+  if (computers.length === 0) return null;
+  return (
+    <select
+      className="input w-auto max-w-[110px] py-0.5 text-2xs"
+      aria-label="Computer the hardware readings are from"
+      value={chosen}
+      onChange={(e) => { setChosen(e.target.value); watchComputer(e.target.value || null); }}
+    >
+      <option value="">This computer</option>
+      {computers.map((c) => <option key={c.id} value={c.id} disabled={c.state !== 'online'}>{c.name}</option>)}
+    </select>
   );
 }

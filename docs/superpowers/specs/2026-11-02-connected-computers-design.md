@@ -287,7 +287,7 @@ Scenes in the prototype. Colors, type scale and spacing are the app's real token
 - **Show > Computer icons** in the view menu.
 - **Model picker.** A section per connected computer, *gomi Model Server*, under this computer's own sections, with a state dot.
 - **Model Server > Server tab.** The two settings above.
-- **Queued messages.** Each row has **Next step** and **Interrupt**, on all three clients.
+- **Queued messages.** Each row has **Interrupt and send now**, on all three clients; the agent reads the rest at its next step on its own (changed 2026-11-02, Philip).
 - **Run settings on phones.** A sheet on the chat listing every option, with guarded ones marked by a lock until proved.
 
 ### What a message during a run does

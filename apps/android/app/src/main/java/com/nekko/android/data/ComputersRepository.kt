@@ -574,6 +574,13 @@ class ComputersRepository(
         _state.update { it.copy(pcSettings = PcSettings.from(reply)) }
     }
 
+    /** Set the active computer's icon, there, so every device shows the same one: a name from `COMPUTER_ICONS`, or "" for none. */
+    suspend fun setMachineIcon(name: String) {
+        val id = _state.value.activeId ?: return
+        updatePcSettings(PcSettings.patch(icon = name))
+        learnIcon(id, name.ifEmpty { null })
+    }
+
     /**
      * A fresh step-up challenge from the active computer (SK-7): single use,
      * two minutes, and which kinds of method it has. Fetched for every try.
@@ -730,6 +737,11 @@ class ComputersRepository(
         if (stepUp == null) callRaising(Channels.SESSION_SET_OPTIONS, args) else callChange(Channels.SESSION_SET_OPTIONS, args, stepUp)
     }
 
+    /** Set one run setting on the computer running a chat; one that loosens an agent is signed ([callRaising]). */
+    suspend fun setRunOption(sessionId: String, key: String, value: JsonElement) {
+        callRaising(Channels.SESSION_SET_OPTIONS, listOf(JsonPrimitive(sessionId), buildJsonObject { put(key, value) }))
+    }
+
     private fun setArchived(sessionId: String, at: Long?) {
         _state.update { s ->
             s.copy(summaries = s.summaries.map { if (it.id == sessionId) it.copy(archived = at != null, archivedAt = at) else it })
@@ -799,6 +811,8 @@ class ComputersRepository(
             liveList = true
             saveList()
             learnPlatform(r.info?.platform)
+            // A failed read says nothing about the icon; an answer without one clears it.
+            if (r.info != null) _state.value.activeId?.let { learnIcon(it, r.info.machineIcon) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -907,6 +921,16 @@ class ComputersRepository(
             // First connection names the computer after its OS, unless the user renamed it.
             val name = if (c.name == DEFAULT_COMPUTER_NAME) osName(platform) else c.name
             val next = list.map { if (it.id == id) it.copy(platform = platform, name = name) else it }
+            _state.update { it.copy(computers = next) }
+            saveIndex(next)
+        }
+    }
+
+    private suspend fun learnIcon(id: String, icon: String?) {
+        lock.withLock {
+            val list = _state.value.computers
+            if (list.firstOrNull { it.id == id }?.let { it.icon != icon } != true) return
+            val next = list.map { if (it.id == id) it.copy(icon = icon) else it }
             _state.update { it.copy(computers = next) }
             saveIndex(next)
         }

@@ -381,7 +381,7 @@ private fun ChatScreenContent(
     }
 
     if (showModelEffort) {
-        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onDismiss = { showModelEffort = false })
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onDismiss = { showModelEffort = false })
     }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
     terminals?.let { t ->
@@ -654,7 +654,6 @@ private fun ChatScreenContent(
                         prompts = prompts,
                         queuedPrompts = chat.queuedPrompts,
                         onEditQueued = vm::editQueued,
-                        onNextStep = vm::sendQueuedAtNextStep,
                         onInterrupt = vm::interruptQueued,
                         onNewAgent = onNewChat,
                         onTerminal = if (showTerminal) vm::openTerminals else null,

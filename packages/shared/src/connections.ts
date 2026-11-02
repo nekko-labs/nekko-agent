@@ -37,6 +37,7 @@ export const CONNECTIONS: ConnectionInfo[] = [
   { id: 'skills-catalog', label: 'Skills catalog', group: 'background', where: 'raw.githubusercontent.com', desc: 'Refreshes the skills marketplace every 6 hours when switched on.' },
   { id: 'cloud-sync', label: 'Nekko Cloud', group: 'background', where: 'nekko-agent-api.fly.dev', desc: 'Your account and end-to-end encrypted sync, every minute while sync is on.' },
   { id: 'phone-relay', label: 'Phone relay', group: 'background', where: 'nekko-agent-relay.fly.dev or your relay', desc: 'Keeps a connection open to the relay while remote access is on, so your phone can reach this computer.' },
+  { id: 'connected-computers', label: 'Connected computers', group: 'background', where: 'The computers you connected', desc: 'Keeps a sealed link to each computer you connected, to show and run its agents.' },
   { id: 'limits', label: 'Plan and limit checks', group: 'background', where: 'chatgpt.com, openrouter.ai', desc: 'Reads your plan’s usage limits about every 30 seconds while a subscription or key is connected.' },
   { id: 'connectors', label: 'Connectors', group: 'background', where: 'GitHub, Slack, Linear and the others you connect', desc: 'Fetches context for each turn and polls for workflow triggers. Sends text from the turn.' },
   { id: 'decide', label: 'Decision models', group: 'background', where: 'api.typesafe.ai, github.com', desc: 'Hosted decisions on each turn when a TypeSafe key is set (sends turn text), and decision model downloads.' },

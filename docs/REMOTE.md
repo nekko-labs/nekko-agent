@@ -4,6 +4,16 @@ Drive the Nekko Agent running on your computer from your phone: start and manage
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
 
+## From another computer
+
+A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
+
+**Treat a connected computer like sitting at this one.** A phone asks for Face ID or the passcode before a change. A computer does not: the check is its own screen lock. It can start a chat in YOLO mode, and an agent in YOLO mode can do anything your account can on this computer, including reading files and keys. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. What the computer can't do directly is call the app's own settings for provider keys, sign-ins and remote access, open a terminal, or attach a file from this computer to a chat.
+
+If you turn on step-up (Settings, Security), raising a chat's mode from a computer is refused until you confirm it on this computer.
+
+**Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
+
 ## How it works
 
 ```
@@ -158,6 +168,10 @@ both need the update; an older app cannot connect to an updated computer.
 > free disk) and the connection. The computer sends this as one read, `machine:summary`, built
 > without paths or addresses; an older computer says it cannot.
 >
+> A computer that has an icon shows it beside its name wherever the phone lists or switches
+> computers. Set it from the computer's page, while connected: **Icon** offers None and the same 24
+> icons as the desktop. It is saved on the computer, so every device shows the same one.
+>
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version, the phone protocol on each side and the open-source licenses of the app and the
@@ -227,11 +241,11 @@ both need the update; an older app cannot connect to an updated computer.
 > backed up, and are deleted when you forget the computer or a chat is deleted on it.
 >
 > **Beyond the chat** (iPhone): the phone is a remote for the agent, not a second desktop.
-> - **Edit the queue:** a follow-up sent while a reply runs waits under **Queued** with Edit and
->   Remove. An edit only lands if that prompt hasn't started yet; otherwise nothing changes.
-> - **Don't wait:** while the reply runs, each queued message also has **Next step** (the agent reads
->   it at its next step and keeps going) and **Interrupt** (the reply stops and this starts now).
->   Next step is text only, so a message with photos or a skill offers Interrupt.
+> - **Message a running agent:** a message sent while a reply runs waits under **Queued** with Edit
+>   and Remove, and the agent reads it at its next step. A message with photos or a skill, or one
+>   for a Claude Code chat, runs when the reply ends. An edit only lands if that prompt hasn't
+>   started yet; otherwise nothing changes.
+> - **Don't wait:** **Interrupt and send now** stops the reply and starts that message at once.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
 > - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.

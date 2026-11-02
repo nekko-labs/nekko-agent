@@ -30,6 +30,10 @@ pub fn provider_endpoint(provider: &Value) -> Option<url::Url> {
 
 /// `offlineProviderAllowed`: a local kind (or openai-compat) on a loopback address.
 pub fn offline_provider_allowed(provider: &Value) -> bool {
+    // Loopback here, but the requests go to another machine.
+    if provider.get("computerId").is_some_and(|c| !c.is_null()) {
+        return false;
+    }
     let Some(url) = provider_endpoint(provider) else { return false };
     let kind = kind(provider);
     let host = url.host_str().unwrap_or_default();
@@ -50,6 +54,14 @@ pub fn cloud_provider_allowed(provider: &Value) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_connected_model_server_is_not_local_though_its_address_is() {
+        let p =
+            json!({ "kind": "openai-compat", "baseUrl": "http://127.0.0.1:5000/gomi/v1", "computerId": "gomi1234" });
+        assert!(!offline_provider_allowed(&p), "its requests leave this computer");
+        assert!(cloud_provider_allowed(&p));
+    }
 
     #[test]
     fn local_means_a_local_kind_on_loopback() {

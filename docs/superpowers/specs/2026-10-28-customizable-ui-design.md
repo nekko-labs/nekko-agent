@@ -48,7 +48,7 @@ The package format these travel in is an open pattern (a plain zip plus a JSON m
 - **Command palette** (`CommandPalette.tsx` 35 to 65) is a fixed array. Shortcuts are a fixed object in `shortcuts.ts`.
 - **Themes** are data: `packages/shared/src/themes.ts` (`ThemePreset`, `THEME_PRESETS`), applied by `store.ts` `applyTheme` as CSS variables and `data-theme`/`data-preset`. Choices live in AppSettings (`theme`, `themePreset`, `accent`, `accent2`, `fontSans`, `fontMono`, `textScale`).
 - **Settings** are `settings.json` in the data folder, written over IPC (`settingsUpdate`). Several small UI choices live only in localStorage.
-- **Simple and Expert** ([PR #1312](https://github.com/nekko-labs/nekko-agent/pull/1312), open, being tried by Philip) adds `packages/shared/src/simple-mode.ts`: a catalogue of controls, each Show, Expert only or Hide, with copies on iPhone and Android. [Decision 0040](../../decisions/0040-simple-hides-developer-controls-per-device.md) keeps those choices per device and never synced.
+- **Simple and Expert** ([PR #1312](https://github.com/nekko-labs/nekko-agent/pull/1312), open, being tried by Philip) adds `packages/shared/src/simple-mode.ts`: a catalogue of controls, each Show, Expert only or Hide, with copies on iPhone and Android. [Decision 0041](../../decisions/0041-simple-hides-developer-controls-per-device.md) keeps those choices per device and never synced.
 - **Nekko Cloud sync** is end-to-end encrypted record sync (`crates/nekko-cloud`, `apps/nekko-agent-api/src/sync.ts`). It handles only `chat` and `account` collections today, accepts any collection name matching `^[a-z][a-z0-9-]{0,31}$`, is Pro and up, and is not yet switched on for users (waiting on the outside crypto review, ES-10).
 - **Untrusted HTML** is already isolated two ways: `sandbox=""` srcdoc iframes with a `default-src 'none'` CSP (`ArtifactPreview.tsx`), and a separate preview window on a one-time-token loopback server with no engine token or preload (`src/main/artifactPreview.ts`, `src/previewPolicy.ts`).
 - **No UI extension mechanism exists.**
@@ -255,7 +255,7 @@ The renderer shell, the wall composer and the chat panes are being reshaped this
 
 **Can start now (no shell files touched):**
 
-1. Spec file, decision records (the layered model, the `.nekko` format, customizations syncing for people who turn on encrypted sync, which amends the "never synced" part of decision 0040, and mods running agent tools), and a TASKS group.
+1. Spec file, decision records (the layered model, the `.nekko` format, customizations syncing for people who turn on encrypted sync, which amends the "never synced" part of decision 0041, and mods running agent tools), and a TASKS group.
 2. `packages/shared/src/nekko-package.ts`: the manifest types, JSON Schema, a never-throws validator (in the style of `parseSimpleChoices`), and path and size checks, with unit tests.
 3. `SIGNATURES` hashing and verification in the same module, with a shared test vector.
 4. The layout document and customizations document types, schemas and validators. They depend on nothing in the renderer. Fields that mirror `SimpleChoices` are typed independently until PR #1312 merges.

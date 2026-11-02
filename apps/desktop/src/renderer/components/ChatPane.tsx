@@ -1,4 +1,5 @@
 import { ActiveWatchChips } from './ActiveWatchChips.js';
+import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
 import { ClaudeBackgroundTasks, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
@@ -596,13 +597,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
   // What a delegation that names no model runs on: the saved route, else this chat's model.
   const delegationDefaultModel = useStore(s => s.settings?.orchestration?.delegationRoute?.modelId);
-  const { providers, setMascotMood, refreshSessions } = useStore(
+  const computer = useComputerOf(sessionId);
+  const remoteBlock = computerBlock(computer);
+  const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
+  const { providers: localProviders, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
       providers: s.providers,
       setMascotMood: s.setMascotMood,
       refreshSessions: s.refreshSessions,
     })),
   );
+  // A chat on another computer picks from that computer's providers, never this one's.
+  const providers = computer ? remoteProviders ?? [] : localProviders;
   const settings = useStore(useShallow((s) => chatPaneSettings(s.settings)));
 
   // Painted straight from the session cache when this chat was open recently;
@@ -1598,6 +1604,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * `admitted` fires once the turn has begun or been queued; the returned promise settles only when the turn ends.
    */
   const send = async (override?: string, admitted?: () => void): Promise<boolean | undefined> => {
+    if (remoteBlock) {
+      useStore.getState().pushToast('error', `${remoteBlock}. This message wasn't sent.`);
+      return false;
+    }
     if (session?.executionMode === 'sandbox') {
       try {
         const status = await window.nekko.sandboxStatus(session.id);
@@ -1722,29 +1732,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     setActiveSkill(null);
     clearDraft(sessionId);
     setSession(updated);
-    refreshSessions();
-  };
-
-  // Steer the running reply with the draft: it joins the transcript at the
-  // next tool boundary, the turn carries on. Ctrl/⌘+Enter while a reply runs.
-  const steerDraft = async () => {
-    const text = draft.trim();
-    if (!text) return;
-    const updated = await window.nekko.steerChat(sessionId, text);
-    setDraft('');
-    clearDraft(sessionId);
-    if (updated) setSession(updated);
-    refreshSessions();
-  };
-
-  // Steer with a queued message instead of waiting for the turn to end.
-  const steerQueued = async (index: number) => {
-    const text = queueItemText(session?.queue?.[index] ?? '');
-    if (!text.trim()) return;
-    const updated = await window.nekko.dequeuePrompt(sessionId, index);
-    if (updated) setSession(updated);
-    const steered = await window.nekko.steerChat(sessionId, text);
-    if (steered) setSession(steered);
     refreshSessions();
   };
 
@@ -1898,7 +1885,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   };
 
 
-  const hasProvider = !needsProviderSetup(providers, modelId ?? models[0]?.id);
+  const hasProvider = !!computer || !needsProviderSetup(providers, modelId ?? models[0]?.id);
   // An image chat runs on the engine's image model, not a chat provider, so it
   // can compose with no provider configured at all.
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
@@ -2089,9 +2076,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Ctrl/⌘+Enter while a reply runs steers it; Enter queues the follow-up.
-      if ((e.ctrlKey || e.metaKey) && streamingRef.current && !imageMode) void steerDraft();
-      else void send();
+      void send();
     }
   };
 
@@ -2686,6 +2671,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 />
                 {!streaming && <ClaudeBackgroundTasks tasks={claudeBackground} />}
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
+                {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
                 </div>}
@@ -2777,7 +2763,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </div>
         )}
 
-        {approval && surface !== 'composer' && <ApprovalBar approval={approval} onDecide={approve} />}
+        {approval && surface !== 'composer' && <ApprovalBar approval={approval} onDecide={approve} computerName={computer?.name} />}
 
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
@@ -2923,7 +2909,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               <div className="min-h-0 overflow-hidden">
                 <div className="border-b border-line bg-surface-2 px-3 py-2">
                   <div className="mb-1 flex items-center gap-2 text-xs text-ink-soft">
-                    <ListIcon className="h-3 w-3" /> Queued · {queued.length} {streaming ? 'after this reply' : 'waiting to run'}
+                    <ListIcon className="h-3 w-3" /> Queued · {queued.length} {streaming ? 'waiting for the agent' : 'waiting to run'}
                   </div>
                   <div className="space-y-1">
                     {queued.map((q, i) => {
@@ -2935,8 +2921,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <span className="min-w-0 flex-1 truncate text-ink-soft" title={label}>{payload.text || '(no text)'}</span>
                         {payload.skill && <span className="skill-pill shrink-0 text-2xs" title={`Skill: ${payload.skill.name}`}><span className="skill-pill-slash">/</span>{payload.skill.name}</span>}
                         {!!payload.images?.length && <span className="shrink-0 rounded-full border border-line px-2 py-px text-2xs text-ink-faint">{payload.images.length} image{payload.images.length === 1 ? '' : 's'}</span>}
-                        {streaming && !payload.images?.length && !payload.skill && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="The agent reads this at its next step and keeps going" onClick={() => void steerQueued(i)}>Next step</button>}
-                        {streaming && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Stop the reply and send this now" onClick={() => void sendQueuedNow(i)}>Interrupt</button>}
+                        {streaming && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Stops the reply and sends this now" onClick={() => void sendQueuedNow(i)}>Interrupt and send now</button>}
                         <button
                           className="shrink-0 rounded-sm px-1 text-ink-faint hover:text-(--danger)"
                           title="Remove from queue"
@@ -3145,7 +3130,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <MarkdownEditor
                     ref={composerRef}
                     className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[52px] py-2'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
-                    placeholder={imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter sends it at the next step)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
+                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}
@@ -3367,7 +3352,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       className={`${wallWindow ? 'wall-send' : 'send-avatar'} grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[background-color,border-color,color,opacity,transform] duration-150 disabled:opacity-40`}
                       onClick={() => void send()}
                       disabled={imageMode ? streaming || !draft.trim() : (!draft.trim() && pendingImages.length === 0 && pendingVideos.length === 0 && !activeSkill) || !hasProvider}
-                      title={streaming ? 'Add to queue after this reply' : 'Send'}
+                      title={streaming ? 'Add to the queue' : 'Send'}
                       aria-label={streaming ? 'Add to queue' : 'Send'}
                     >
                       {/* On the wall Nekko wears the window's status in its header, so Send is a plain arrow. */}

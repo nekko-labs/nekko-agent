@@ -389,6 +389,55 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `a computer's icon comes from app info, is kept on its record and clears when it goes`() = runTest {
+        var info: JsonElement = buildJsonObject { put("platform", "darwin"); put("machineIcon", "tower") }
+        val remotes = FakeRemotes { c -> if (c.channel == Channels.APP_INFO) info else FakeRemotes.defaultAnswer(c) }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals("tower", repo.state.value.active?.icon)
+        val saved = com.nekko.android.data.StoredJson.encodeIndex(repo.state.value.computers)
+        assertEquals("tower", com.nekko.android.data.StoredJson.decodeIndex(saved).single().icon)
+
+        // One this app doesn't draw, or none from an older computer: no icon.
+        info = buildJsonObject { put("platform", "darwin"); put("machineIcon", "spaceship") }
+        repo.refresh()
+        assertNull(repo.state.value.active?.icon)
+        info = buildJsonObject { put("platform", "darwin"); put("machineIcon", "cat") }
+        repo.refresh()
+        assertEquals("cat", repo.state.value.active?.icon)
+        info = buildJsonObject { put("platform", "darwin") }
+        repo.refresh()
+        assertNull(repo.state.value.active?.icon)
+    }
+
+    @Test
+    fun `the picker sends only the icon and a refused change shows nothing new`() = runTest {
+        var refuse = false
+        val remotes = FakeRemotes { c ->
+            if (c.channel != Channels.SETTINGS_UPDATE) FakeRemotes.defaultAnswer(c)
+            else if (refuse) throw com.nekko.protocol.RelayException("Not allowed from a paired phone (change-off): settings:update")
+            else buildJsonObject { put("chatPaneAction", "complete") }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        repo.setMachineIcon("cat")
+        assertEquals("cat", repo.state.value.active?.icon)
+        repo.setMachineIcon("")
+        assertNull(repo.state.value.active?.icon)
+        assertEquals(
+            listOf("""{"machineIcon":"cat"}""", """{"machineIcon":""}"""),
+            remotes.last.calls.filter { it.channel == Channels.SETTINGS_UPDATE }.map { it.args.single().toString() },
+        )
+        refuse = true
+        assertTrue(runCatching { repo.setMachineIcon("sun") }.isFailure)
+        assertNull(repo.state.value.active?.icon)
+    }
+
+    @Test
     fun `osName maps host platforms`() {
         assertEquals("Windows PC", osName("win32"))
         assertEquals("Mac", osName("darwin"))

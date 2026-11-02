@@ -131,7 +131,6 @@ class ChatViewModel(
 
     /** Change or remove a queued prompt before it runs (AN-29); the computer checks it still reads [expect]. */
     suspend fun editQueued(index: Int, expect: String, text: String?) = controller.editQueued(index, expect, text)
-    suspend fun sendQueuedAtNextStep(index: Int, expect: String) = controller.sendQueuedAtNextStep(index, expect)
     suspend fun interruptQueued(index: Int) = controller.interruptQueued(index)
 
     /** Whether [block] is saved, so the chat can be forked from it. */
@@ -289,6 +288,11 @@ class ChatViewModel(
     suspend fun complete() = repo.completeChat(sessionId)
 
     /** Raising the mode is signed; a step-up refusal is thrown for the sheet, which passes its [stepUp]. */
+    suspend fun setRunOption(key: String, value: kotlinx.serialization.json.JsonElement) {
+        repo.setRunOption(sessionId, key, value)
+        controller.reload()
+    }
+
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         repo.setChatMode(sessionId, mode, stepUp)
         controller.reload()

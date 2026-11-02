@@ -315,11 +315,13 @@ export function CommandCenterView() {
     // Folders picked in Add window override the project default: the first is
     // the chat's working folder, any others are supporting folders.
     const [primaryFolder, ...supportingFolders] = selection?.workspaceIds ?? [];
-    let s = unfinishedChat.current ?? await window.nekko.createSession(selection?.workspaceIds ? primaryFolder : projectId);
+    let s = unfinishedChat.current ?? (selection?.computerId
+      ? await window.nekko.createSessionOn(selection.computerId, primaryFolder)
+      : await window.nekko.createSession(selection?.workspaceIds ? primaryFolder : projectId));
     if (unfinishedChat.current && !selection) selection = { kind: 'chat', chatType: 'multimodal' };
     if (selection) {
       try {
-        if (unfinishedChat.current && selection.workspaceIds) {
+        if (unfinishedChat.current && selection.workspaceIds && !selection.computerId) {
           const relocated = await window.nekko.setSessionWorkspace(s.id, primaryFolder);
           if (!relocated) throw new Error('Could not configure the new agent working folder.');
           s = relocated;
@@ -333,7 +335,7 @@ export function CommandCenterView() {
           if (!updated) throw new Error('Could not configure the new agent window.');
           s = updated;
         }
-        if (needs.supporting) {
+        if (needs.supporting && !selection.computerId) {
           const configured = await window.nekko.setSessionSupportingWorkspaces(s.id, supportingFolders);
           if (!configured) throw new Error('Could not configure the new agent folders.');
           s = configured;

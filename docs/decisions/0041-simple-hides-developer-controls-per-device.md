@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-28
 ---
 
-# 0040. Simple hides developer controls, chosen per control and kept per device
+# 0041. Simple hides developer controls, chosen per control and kept per device
 
 ## Context
 

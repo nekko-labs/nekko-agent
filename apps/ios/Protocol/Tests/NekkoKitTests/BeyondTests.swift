@@ -10,7 +10,6 @@ final class BeyondTests: XCTestCase {
     let room = "a1b2c3d4e5f60718"
     let key = "00112233445566778899aabbccddeeff"
     var connections: [FakeConnection] = []
-    var refuseSteer = false
     var interruptTimesOut = false
     var queue: [JSONValue] = ["first", ["text": "with a photo", "images": [""]], ["text": "Review.\n\nnow", "skill": ["name": "review", "input": "now"]]]
 
@@ -73,10 +72,6 @@ final class BeyondTests: XCTestCase {
                 }
                 if let text = args[2].str("text") { self.queue[0] = .string(text) } else { self.queue.removeFirst() }
                 return ["id": "s1", "queue": .array(self.queue)]
-            },
-            Channels.chatSteer: { args in
-                if self.refuseSteer { throw RelayError("Not allowed from a paired phone (channel-denied): chat:steer", fromComputer: true) }
-                return self.session()
             },
             Channels.chatQueue: { args in
                 self.queue.append(args[1])
@@ -144,44 +139,6 @@ final class BeyondTests: XCTestCase {
         XCTAssertEqual(c.callsTo(Channels.chatEditQueued).count, before)
     }
 
-    func testNextStepTakesThePromptOffTheQueueThenSendsIt() async throws {
-        let (s, c) = try await makeStore()
-        let chat = ChatModel(sessionId: "s1", store: s)
-        await chat.reload()
-        XCTAssertEqual(chat.queuedPrompts.map(\.canTakeAtNextStep), [true, false, false], "text only: photos and skills wait their turn")
-
-        try await chat.sendQueuedAtNextStep(0, expect: "first")
-        XCTAssertEqual(c.callsTo(Channels.chatEditQueued).last, [.string("s1"), .int(0), ["expect": "first"]])
-        XCTAssertEqual(c.callsTo(Channels.chatSteer).last, [.string("s1"), .string("first")])
-        XCTAssertFalse(chat.queued.contains("first"))
-    }
-
-    func testNextStepOnAMovedQueueSendsNothing() async throws {
-        let (s, c) = try await makeStore()
-        let chat = ChatModel(sessionId: "s1", store: s)
-        await chat.reload()
-        do {
-            try await chat.sendQueuedAtNextStep(0, expect: "already started")
-            XCTFail("a stale prompt is refused")
-        } catch let e as RelayError {
-            XCTAssertTrue(e.fromComputer)
-        }
-        XCTAssertTrue(c.callsTo(Channels.chatSteer).isEmpty)
-    }
-
-    func testAComputerTooOldForNextStepKeepsThePromptQueued() async throws {
-        let (s, c) = try await makeStore()
-        refuseSteer = true
-        let chat = ChatModel(sessionId: "s1", store: s)
-        await chat.reload()
-        do {
-            try await chat.sendQueuedAtNextStep(0, expect: "first")
-            XCTFail("the refusal reaches the phone")
-        } catch {}
-        XCTAssertEqual(c.callsTo(Channels.chatQueue).last, [.string("s1"), .string("first")])
-        XCTAssertTrue(chat.queued.contains("first"))
-    }
-
     func testInterruptNamesThePromptAndTheChatsModel() async throws {
         let (s, c) = try await makeStore()
         let chat = ChatModel(sessionId: "s1", store: s)
@@ -198,6 +155,15 @@ final class BeyondTests: XCTestCase {
         let chat = ChatModel(sessionId: "s1", store: s)
         await chat.reload()
         try await chat.interruptQueued(0)
+    }
+
+    func testARunSettingGoesToTheComputerAndReadsBack() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        try await chat.setRunOption("workMode", "design")
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, [.string("s1"), ["workMode": "design"]])
+        XCTAssertEqual(RunOption.values(of: ["autoModel": true, "title": "x", "offline": .null]), ["autoModel": true], "only run settings, and only set ones")
     }
 
     func testForksBeforeAPromptWithItsTextOrAfterAReply() async throws {
