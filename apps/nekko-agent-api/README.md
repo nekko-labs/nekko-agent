@@ -41,8 +41,9 @@ hostname).
   Unsubscribing deletes the address's signup rows and keeps only a SHA-256 of
   it in `email_suppressions`, which no email is ever sent to (a later signup
   saves but gets no email).
-- Retention: every 6 hours (and on start) pending signups never confirmed
-  within 30 days, and any row marked `unsubscribed`, are deleted in one
+- Retention: every 6 hours (and on start) pending signups not confirmed
+  within 30 days of their last confirmation email (never one that wasn't
+  emailed), and any row marked `unsubscribed`, are deleted in one
   transaction; confirmed, invited and joined rows are never touched.
   Links point at `PUBLIC_URL` (default `https://nekko-agent-api.fly.dev`).
 - `/v1/sync/*`: end-to-end encrypted sync for Pro and Team (see

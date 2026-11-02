@@ -1,5 +1,5 @@
--- Retention for signups (privacy policy: unconfirmed sign-ups deleted after
--- 30 days, unsubscribed ones removed promptly).
+-- Retention for signups (privacy policy: unconfirmed sign-ups deleted 30 days after
+-- their confirmation email, unsubscribed ones removed promptly).
 --
 -- email_suppressions: who asked never to be emailed again. Only a SHA-256 of
 --   the lowercased address, so the list can't be read back as addresses but

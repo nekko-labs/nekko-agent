@@ -148,16 +148,18 @@ describe("retention", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("deletes unconfirmed sign-ups after 30 days and nothing else", async () => {
+  it("deletes sign-ups unconfirmed 30 days after their email, and nothing else", async () => {
     const app = server();
     for (const e of ["old@example.com", "new@example.com", "conf@example.com", "inv@example.com"]) await signup(app, e);
     await app.inject({ method: "GET", url: link(sent[2], "/v1/signups/confirm") });
     await db.query("update signups set status = 'invited' where email = 'inv@example.com'", []);
-    await db.query("update signups set created_at = now() - interval '31 days' where email <> 'new@example.com'", []);
-    await db.query("update signups set created_at = now() - interval '29 days' where email = 'new@example.com'", []);
+    await db.query("update signups set confirmation_sent_at = now() - interval '31 days' where email <> 'new@example.com'", []);
+    await db.query("update signups set confirmation_sent_at = now() - interval '29 days' where email = 'new@example.com'", []);
+    // Signed up long ago but never emailed (before double opt-in, or no Resend key): kept.
+    await db.query("insert into signups (email, created_at) values ('legacy@example.com', now() - interval '400 days')", []);
     expect(await purgeSignups(db)).toEqual({ unconfirmed: 1, unsubscribed: 0 });
     const { rows } = await db.query<{ email: string }>("select email from signups order by email", []);
-    expect(rows.map((r) => r.email)).toEqual(["conf@example.com", "inv@example.com", "new@example.com"]);
+    expect(rows.map((r) => r.email)).toEqual(["conf@example.com", "inv@example.com", "legacy@example.com", "new@example.com"]);
   });
 
   it("removes rows marked unsubscribed but keeps them suppressed", async () => {
@@ -171,7 +173,7 @@ describe("retention", () => {
 
   it("deletes nothing when a run fails partway", async () => {
     await signup(server(), "old@example.com");
-    await db.query("update signups set created_at = now() - interval '31 days', status = 'unsubscribed'", []);
+    await db.query("update signups set confirmation_sent_at = now() - interval '31 days', status = 'unsubscribed'", []);
     // The second delete fails after the first statements ran.
     const failing: Db = { ...db, transaction: (fn) => db.transaction((tx) => fn({ ...tx, query: async (text, params) => {
       if (text.includes("status = 'pending'")) throw new Error("boom");

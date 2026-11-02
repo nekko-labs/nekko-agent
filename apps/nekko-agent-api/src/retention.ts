@@ -14,7 +14,9 @@ export async function isSuppressed(db: Db, email: string): Promise<boolean> {
 
 /**
  * Deletes what the privacy policy says we don't keep, in one transaction:
- * pending signups never confirmed within 30 days, and any signup marked
+ * pending signups not confirmed within 30 days of their last confirmation
+ * email (never one that wasn't emailed: the person must have had the chance
+ * to confirm), and any signup marked
  * unsubscribed (its address goes on the suppression list first, so it is
  * never emailed again). Confirmed, invited and joined rows are never touched.
  */
@@ -28,7 +30,7 @@ export async function purgeSignups(db: Db): Promise<{ unconfirmed: number; unsub
     const p = await tx.query(
       `delete from signups
        where status = 'pending' and confirmed_at is null
-         and created_at < now() - make_interval(days => ${UNCONFIRMED_DAYS})
+         and confirmation_sent_at < now() - make_interval(days => ${UNCONFIRMED_DAYS})
        returning id`,
       [],
     );
