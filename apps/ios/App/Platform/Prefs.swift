@@ -126,8 +126,8 @@ final class Prefs {
     }
 
     /// Whether a Simple mode control is on screen in the current mode.
-    func shows(_ id: String, localModelLoaded: Bool = false) -> Bool {
-        SimpleMode.shown(id, expert: expertMode, simpleChoices, localModelLoaded: localModelLoaded)
+    func shows(_ id: String, localModelLoaded: Bool = false, changes: Bool = false, pr: Bool = false) -> Bool {
+        SimpleMode.shown(id, expert: expertMode, simpleChoices, context: SimpleContext(localModel: localModelLoaded, changes: changes, pr: pr))
     }
 
     func dismissLongChat(_ chatId: String) {

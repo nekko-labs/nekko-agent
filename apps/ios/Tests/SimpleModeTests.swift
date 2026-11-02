@@ -4,10 +4,24 @@ import NekkoProtocol
 
 @MainActor
 final class SimpleModeTests: XCTestCase {
-    func testDefaultsShowTheModelEffortAndContextInSimpleAndEverythingInExpert() {
+    func testSimpleShowsOnlyTheEverydayControlsWhenNothingIsGoingOn() {
         let simple = SimpleMode.items.filter { SimpleMode.shown($0.id, expert: false, [:]) }.map(\.id)
-        XCTAssertEqual(simple, ["model", "effort", "context"])
-        XCTAssertTrue(SimpleMode.items.allSatisfy { SimpleMode.shown($0.id, expert: true, [:]) })
+        XCTAssertEqual(simple, ["model", "effort", "asks", "context"])
+        let off = SimpleMode.items.filter { !SimpleMode.shown($0.id, expert: true, [:]) }.map(\.id)
+        XCTAssertEqual(off, ["changes", "hardware", "pr-status", "ph-monitors"])
+        let all = SimpleContext(localModel: true, changes: true, pr: true)
+        XCTAssertTrue(SimpleMode.items.allSatisfy { SimpleMode.shown($0.id, expert: true, [:], context: all) })
+    }
+
+    func testChangesAndPrStatusNeedSomethingToShow() {
+        XCTAssertFalse(SimpleMode.shown("changes", expert: true, [:]))
+        XCTAssertTrue(SimpleMode.shown("changes", expert: false, [:], context: SimpleContext(changes: true)))
+        XCTAssertFalse(SimpleMode.shown("changes", expert: false, ["changes": .expert], context: SimpleContext(changes: true)))
+        XCTAssertFalse(SimpleMode.shown("pr-status", expert: false, [:]))
+        XCTAssertTrue(SimpleMode.shown("pr-status", expert: false, [:], context: SimpleContext(pr: true)))
+        XCTAssertFalse(SimpleMode.shown("ph-git", expert: false, [:], context: SimpleContext(pr: true)))
+        XCTAssertEqual(SimpleMode.filesChanged(1), "1 file changed")
+        XCTAssertEqual(SimpleMode.filesChanged(3), "3 files changed")
     }
 
     func testEachChoiceInEachMode() {
@@ -19,16 +33,25 @@ final class SimpleModeTests: XCTestCase {
         XCTAssertFalse(SimpleMode.shown("context", expert: true, ["context": .hide]))
     }
 
-    func testMonitorsShowInSimpleWhileALocalModelIsLoaded() {
+    func testMonitorsWaitForALocalModelInBothModesUnlessPinned() {
+        let running = SimpleContext(localModel: true)
         for id in ["hardware", "ph-monitors"] {
-            XCTAssertFalse(SimpleMode.shown(id, expert: false, [:]), id)
-            XCTAssertTrue(SimpleMode.shown(id, expert: false, [:], localModelLoaded: true), id)
-            XCTAssertTrue(SimpleMode.shown(id, expert: false, [id: .show]), id)
-            XCTAssertFalse(SimpleMode.shown(id, expert: false, [id: .hide], localModelLoaded: true), id)
-            XCTAssertFalse(SimpleMode.shown(id, expert: true, [id: .hide], localModelLoaded: true), id)
+            for expert in [false, true] {
+                XCTAssertFalse(SimpleMode.shown(id, expert: expert, [:]), id)
+                XCTAssertTrue(SimpleMode.shown(id, expert: expert, [:], context: running), id)
+                XCTAssertTrue(SimpleMode.shown(id, expert: expert, [id: .show]), id)
+                XCTAssertFalse(SimpleMode.shown(id, expert: expert, [id: .hide], context: running), id)
+            }
         }
         // Only the monitors follow the local model.
-        XCTAssertFalse(SimpleMode.shown("thinking", expert: false, [:], localModelLoaded: true))
+        XCTAssertFalse(SimpleMode.shown("thinking", expert: false, [:], context: running))
+    }
+
+    func testMonitorsOfferWhenRunningAndNotExpertOnly() throws {
+        let hardware = try XCTUnwrap(SimpleMode.items.first { $0.id == "hardware" })
+        XCTAssertEqual(SimpleMode.options(hardware), [.auto, .show, .hide])
+        XCTAssertEqual(SimpleVisibility.show.label(for: hardware), "Always")
+        XCTAssertEqual(SimpleMode.parse(#"{"hardware":"expert","terminal":"auto"}"#), [:])
     }
 
     private func usage(_ used: Int, window: Int?) throws -> ContextUsage {
@@ -171,6 +194,6 @@ final class SimpleModeTests: XCTestCase {
 
     func testIdsMatchThePhoneItemsOfTheDesktopList() {
         XCTAssertEqual(SimpleMode.items.map(\.id),
-                       ["changes", "hardware", "ph-subtitle", "model", "effort", "context", "ph-policy", "thinking", "ph-git", "terminal", "ph-monitors"])
+                       ["changes", "hardware", "ph-subtitle", "model", "effort", "asks", "context", "run-settings", "thinking", "pr-status", "ph-git", "terminal", "ph-monitors"])
     }
 }

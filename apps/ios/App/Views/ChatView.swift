@@ -13,6 +13,7 @@ struct ChatView: View {
     @State private var chat: ChatModel?
     @State private var showModels = false
     @State private var showChanges = false
+    @State private var changedFiles = 0
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
@@ -253,7 +254,8 @@ struct ChatView: View {
                         if ModelEffortButton.parts(prefs, chat).model {
                             Button { showModels = true } label: { Label("Model", systemImage: "cpu") }
                         }
-                        if prefs.shows("ph-policy") {
+                        // Simple shows this under the message box, in plain words.
+                        if prefs.expertMode && prefs.shows("asks") {
                             Menu {
                                 ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
                                     Button {
@@ -264,8 +266,8 @@ struct ChatView: View {
                                 }
                             } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
                         }
-                        if store.pcSettings.phoneChanges && prefs.shows("changes") {
-                            Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
+                        if store.pcSettings.phoneChanges && prefs.shows("changes", changes: changedFiles > 0) {
+                            Button { showChanges = true } label: { Label(SimpleMode.filesChanged(changedFiles), systemImage: "plusminus") }
                         }
                         if prefs.shows("ph-git") {
                             Button { showGitScreen = true } label: { Label("Git", systemImage: "arrow.triangle.branch") }
@@ -294,6 +296,11 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
+        // Read with the chat and after each turn: Changes shows only with something in it.
+        .task(id: chat.session?.updatedAt) {
+            guard store.pcSettings.phoneChanges, let c = try? await chat.changes() else { return }
+            changedFiles = c.files.count + c.omittedFiles
+        }
         .sheet(isPresented: $showGit) { PrSheet(chat: chat, initial: []) }
         .sheet(isPresented: $showGitScreen) { GitView(chatId: sessionId) }
         .sheet(isPresented: $showTerminals) { TerminalsView(chatId: sessionId) }
@@ -320,7 +327,7 @@ struct ChatView: View {
                 QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
             }
             if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
-            if prefs.shows("ph-git") { PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading) }
+            if prefs.shows("pr-status", pr: true) { PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading) }
             // The phone's saved copy (OF-5): read-only until the computer answers.
             if let at = chat.savedAt {
                 Label(SavedListNote.copy(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
@@ -1085,6 +1092,7 @@ struct Composer: View {
             if parts.model || parts.effort || prefs.shows("context") {
                 HStack(spacing: 0) {
                     if parts.model || parts.effort { ModelEffortButton(chat: chat) }
+                    if !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
                     Spacer(minLength: 8)
                     if prefs.shows("context") { ContextGauge(chat: chat) }
                 }

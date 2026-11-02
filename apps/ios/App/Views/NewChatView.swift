@@ -263,15 +263,16 @@ struct NewChatView: View {
                     chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? String(localized: "No folder"), icon: "folder")
                 }
                 .accessibilityIdentifier("newChat.folder")
-                if app.prefs.shows("ph-policy") {
+                if app.prefs.shows("asks") {
                     Menu {
                         Picker("Tools", selection: toolsChoice) {
                             ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                                Text(m == .guardrails ? String(localized: "\(modeName(m)) (Recommended)") : modeName(m)).tag(m)
+                                let name = app.prefs.expertMode ? modeName(m) : SimpleMode.asksName(m)
+                                Text(m == .guardrails ? String(localized: "\(name) (Recommended)") : name).tag(m)
                             }
                         }
                     } label: {
-                        chip(modeName(selectedTools), icon: "checkmark.shield")
+                        chip(app.prefs.expertMode ? modeName(selectedTools) : SimpleMode.asksName(selectedTools), icon: "checkmark.shield")
                     }
                     .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
                     .accessibilityIdentifier("newChat.tools")

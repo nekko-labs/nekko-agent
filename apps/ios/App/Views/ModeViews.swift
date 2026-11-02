@@ -178,6 +178,48 @@ func effortLabel(_ e: Effort) -> String {
     }
 }
 
+// MARK: - Asks first
+
+/// Simple's view of the tool policy: one plain choice beside the model. Same
+/// values and behaviour as More > Tool policy in Expert.
+struct AsksFirstMenu: View {
+    let chat: ChatModel
+    @Environment(AppModel.self) private var app
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+    @State private var failed: String?
+
+    private var mode: PcSettings.ChatMode {
+        chat.session?.mode.flatMap(PcSettings.ChatMode.init(rawValue:)) ?? app.prefs.newChatTools(computer: store.activeId, settings: store.pcSettings)
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
+                Button {
+                    Task {
+                        do { try await chat.setOptions(mode: m) } catch { failed = error.localizedDescription }
+                    }
+                } label: {
+                    if m == mode { Label(SimpleMode.asksName(m), systemImage: "checkmark") } else { Text(SimpleMode.asksName(m)) }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "hand.raised").font(.caption2).foregroundStyle(palette.inkFaint)
+                Text(SimpleMode.asksName(mode)).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+            }
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .disabled(chat.savedAt != nil)
+        .accessibilityIdentifier("chat.asksFirst")
+        .alert("Couldn’t change it", isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(failed ?? "") }
+    }
+}
+
 // MARK: - Model and effort
 
 /// The composer's one control for the chat's model and effort: a small effort
@@ -200,7 +242,8 @@ struct ModelEffortButton: View {
         let parts = Self.parts(prefs, chat)
         Button { open = true } label: {
             HStack(spacing: 6) {
-                if parts.effort { EffortGauge(level: level, count: levels.count, size: 16) }
+                // Simple keeps effort inside the dropdown, unless the model's half is out of sight.
+                if parts.effort && (prefs.expertMode || !parts.model) { EffortGauge(level: level, count: levels.count, size: 16) }
                 if parts.model { Text(name).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle) }
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
             }

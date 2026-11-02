@@ -69,7 +69,7 @@ struct PlanSheet: View {
     private func folded(_ plan: [PlanStep], current: PlanStep, links: [String: PlanStepLinks], paused: Bool) -> some View {
         let own = links[current.id]
         // The current step's PRs, else the newest PR the chat opened, so a finished plan still shows where it landed.
-        let shownPrs = !prefs.shows("ph-git") ? [] : own?.prs.isEmpty == false ? own!.prs : Array(plan.compactMap { links[$0.id]?.prs }.flatMap { $0 }.suffix(1))
+        let shownPrs = !prefs.shows("pr-status", pr: true) ? [] : own?.prs.isEmpty == false ? own!.prs : Array(plan.compactMap { links[$0.id]?.prs }.flatMap { $0 }.suffix(1))
         // The step's own task links, else the chat's (the first step's), which say what this work is for.
         let projects = own?.projects.isEmpty == false ? own!.projects : (plan.first.flatMap { links[$0.id]?.projects } ?? [])
         let position = (plan.firstIndex { $0.id == current.id } ?? 0) + 1
@@ -134,7 +134,7 @@ struct PlanSheet: View {
 
     private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool) -> some View {
         let kids = (own?.subagents ?? []).compactMap { id in chat.children.first { $0.id == id } }
-        let prs = prefs.shows("ph-git") ? own?.prs ?? [] : []
+        let prs = prefs.shows("pr-status", pr: true) ? own?.prs ?? [] : []
         let chips = !prs.isEmpty || own?.projects.isEmpty == false || !kids.isEmpty || step.verification != nil
         let more = step.detail != nil || chips
         let shown = !step.squeezed || unsqueezed.contains(step.id)

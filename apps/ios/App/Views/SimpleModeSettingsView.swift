@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Settings > Simple mode: per control, whether it shows in both modes, in
-/// Expert only, or in neither, each area drawn above its controls with what
-/// the previewed mode hides outlined in dashes and faded.
+/// Settings > Simple mode: per control, whether it shows in both modes when it
+/// applies, in Expert only, or in neither (a monitor offers When running, Always
+/// or Hide), each area drawn above its controls with what the previewed mode
+/// hides outlined in dashes and faded.
 struct SimpleModeSettingsView: View {
     @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
@@ -14,7 +15,7 @@ struct SimpleModeSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Text("Simple keeps Nekko calm for everyday use. Everything still works; these controls just stay out of sight.")
+                Text("Simple is a cleaner, more focused view, and details show only when they matter. Everything still works.")
                     .foregroundStyle(palette.inkSoft)
                 Picker("Preview", selection: $previewExpert) {
                     Text("Simple").tag(false)
@@ -48,9 +49,6 @@ struct SimpleModeSettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.label).foregroundStyle(palette.ink)
                 Text(item.hint).font(.footnote).foregroundStyle(palette.inkSoft)
-                if SimpleMode.withLocalModel.contains(item.id) {
-                    Text("Also shown in Simple while a local model is loaded").font(.footnote).foregroundStyle(palette.inkFaint)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -59,7 +57,7 @@ struct SimpleModeSettingsView: View {
                 prefs.simpleChoices[item.id] = v == item.fallback ? nil : v
                 highlight(item.id)
             })) {
-                ForEach(SimpleVisibility.allCases, id: \.self) { Text($0.label).tag($0) }
+                ForEach(SimpleMode.options(item), id: \.self) { Text($0.label(for: item)).tag($0) }
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("simpleMode.\(item.id)")
@@ -161,7 +159,7 @@ private struct SimpleAreaPreview: View {
             }
             HStack(spacing: 6) {
                 Text("More menu").font(.caption2).foregroundStyle(palette.inkFaint)
-                part("ph-policy") { tag("Tool policy", "shield.lefthalf.filled") }
+                part("asks") { tag("Asks first", "hand.raised") }
             }
         }
     }
@@ -185,7 +183,7 @@ private struct SimpleAreaPreview: View {
                 Capsule().fill(palette.line).frame(height: 6)
                 Capsule().fill(palette.line).frame(width: 160, height: 6)
             }
-            part("ph-git") { tag("PR #42 · checks passing", "arrow.triangle.pull") }
+            part("pr-status") { tag("PR #42 · checks passing", "arrow.triangle.pull") }
         }
     }
 
@@ -226,7 +224,7 @@ private struct SimpleAreaPreview: View {
         .font(.caption2)
     }
 
-    private func shown(_ id: String) -> Bool { SimpleMode.shown(id, expert: expert, choices) }
+    private func shown(_ id: String) -> Bool { SimpleMode.shown(id, expert: expert, choices, context: SimpleContext(changes: true, pr: true)) }
 
     private func part<Content: View>(_ id: String, wide: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         content()
