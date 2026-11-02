@@ -143,7 +143,8 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   initiallyOpen?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(!initiallyOpen);
-  const prsShown = useShown('ph-git');
+  // These chips are pull requests, so the condition holds wherever they would draw.
+  const prsShown = useShown('pr-status', { pr: true });
   const messages = session?.messages;
   const sessions = useStore((s) => s.sessions);
   const providers = useStore((s) => s.providers);

@@ -34,6 +34,7 @@ export function ContextGauge({
   contextWindow,
   windowReported = false,
   reported,
+  ringOnly = false,
 }: {
   bundle: ContextBundle | null;
   /** The skill armed in the composer, folded into the token count when present. */
@@ -59,6 +60,8 @@ export function ContextGauge({
    * prompt and tools, and its compactions), and its window beats any guess.
    */
   reported?: { used: number; window?: number };
+  /** Simple: the ring alone, at the row's right end; the numbers wait in its tooltip. */
+  ringOnly?: boolean;
 }) {
   const included = reported ? [] : (bundle?.items ?? []).filter((i: ContextItem) => i.included);
   const base = reported ? reported.used : included.reduce((s, i) => s + i.tokens, 0);
@@ -103,13 +106,13 @@ export function ContextGauge({
           <circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--surface-2)" strokeWidth="3" />
           {windowTokens > 0 && <circle cx="8" cy="8" r="6.5" fill="none" stroke={fillTone(pct)} strokeWidth="3" strokeLinecap="round" pathLength={100} strokeDasharray={`${pct} 100`} className="transition-[stroke-dasharray] duration-300" />}
         </svg>
-        <span className="text-ink-soft" style={pct >= 60 ? { color: fillTone(pct) } : undefined}>
+        {!ringOnly && <span className="text-ink-soft" style={pct >= 60 ? { color: fillTone(pct) } : undefined}>
           {formatContextTokens(used)}{windowTokens ? ` / ${!windowKnown ? '~' : ''}${formatContextTokens(windowTokens)}` : ''}
-        </span>
+        </span>}
       </span>
       {/* Expanded breakdown: segmented bar + per-source rows with %, plus free space. */}
       <div
-        className="pointer-events-none absolute bottom-7 left-0 z-40 hidden w-72 rounded-xl border border-line p-3 text-2xs shadow-(--shadow-float) group-hover:block group-focus-within:block"
+        className={`pointer-events-none absolute bottom-7 ${ringOnly ? 'right-0' : 'left-0'} z-40 hidden w-72 rounded-xl border border-line p-3 text-2xs shadow-(--shadow-float) group-hover:block group-focus-within:block`}
         style={{ background: 'var(--surface)' }}
         role="tooltip"
       >
@@ -173,17 +176,15 @@ export function effortRungs(saved: EffortLevel, modelId: string | undefined): { 
   return { options, index: Math.max(0, options.indexOf(effective)), shown: EFFORT_LABEL[effective] };
 }
 
-/**
- * Model-specific effort rungs on a compact slider beside the model picker.
- * Given a chat, it shows and sets that chat's effort (`Session.effort`, which
- * falls back to the app-wide setting); without one it sets the app-wide one.
- */
-export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
+type EffortProps = {
   modelId?: string;
   onChanged?: () => void;
   session?: Pick<Session, 'id' | 'effort'> | null;
   onSessionChange?: (s: Session) => void;
-}) {
+};
+
+/** The chat's effort (or the app-wide one without a chat), and setting it. */
+function useEffort({ modelId, onChanged, session, onSessionChange }: EffortProps) {
   const appEffort = useStore((s) => s.settings?.effort);
   const saved = (session ? chatEffort(session, appEffort) : appEffort) ?? 'normal';
   const pick = (level: EffortLevel) => {
@@ -203,7 +204,34 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
     }
   };
 
-  const { options, index, shown } = effortRungs(saved, modelId);
+  return { pick, ...effortRungs(saved, modelId) };
+}
+
+/** Simple's effort: the same levels as the dial's popover, at the foot of the model menu. */
+export function EffortChoices(props: EffortProps) {
+  const { pick, options, index } = useEffort(props);
+  return (
+    <div className="mt-1 shrink-0 border-t border-line px-1 pt-1" data-effort-in-model-menu>
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 px-1 text-xs font-medium text-ink-soft">Effort</span>
+        <div className="flex min-w-0 flex-1 gap-1" role="radiogroup" aria-label="Reasoning effort">
+          {options.map((o, i) => (
+            <button key={o} type="button" role="radio" aria-checked={i === index} data-effort={o} className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink-soft hover:text-ink'}`} onClick={() => pick(o)} title={o === modelDefaultEffort(props.modelId) ? 'Recommended' : undefined}>{EFFORT_LABEL[o]}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Model-specific effort rungs on a compact slider beside the model picker.
+ * Given a chat, it shows and sets that chat's effort (`Session.effort`, which
+ * falls back to the app-wide setting); without one it sets the app-wide one.
+ */
+export function EffortSlider(props: EffortProps) {
+  const { pick, options, index, shown } = useEffort(props);
+  const { modelId, session } = props;
   const pop = usePopover(380);
   const step = (by: number) => {
     const next = options[Math.max(0, Math.min(options.length - 1, index + by))];

@@ -65,10 +65,11 @@ import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInter
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
-import { ContextGauge, EffortSlider, formatContextTokens } from './ChatMetrics.js';
+import { ContextGauge, EffortChoices, EffortSlider, formatContextTokens } from './ChatMetrics.js';
+import { AsksFirstMenu } from './AsksFirstMenu.js';
 import { ExpertMonitor, ModeSwitch, useExpertMode, useShown } from './ModeViews.js';
 import { hasAppChrome } from '../chrome.js';
-import { PlanRail } from './PlanRail.js';
+import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
 import { sheetPlan } from '../claudeAgentPlan.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
@@ -92,7 +93,7 @@ import { FolderPicker } from './FolderPicker.js';
 import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
-import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
+import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 
@@ -675,12 +676,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // The context panel toggle lives in the store so the ⌘\ shortcut and the
   // command palette's "Toggle context panel" act on this pane too.
   const ctxOpen = useStore((s) => s.contextPanelOpen);
+  const [expertMode] = useExpertMode();
   // The plan/sub-agent rail beside the transcript (see PlanRail). Whether there
   // is room for it depends on this pane, not on the window: the workbench splits,
   // so a viewport breakpoint would keep the rail open in a pane squeezed to a
   // third of a wide screen and drop it from a narrow window that has nothing
   // else on it.
-  const planRailWanted = useStore((s) => s.planRailOpenBySession[sessionId] ?? s.planRailOpen);
+  // Simple never opens it on its own: only the button does, for this chat.
+  const planRailWanted = useStore((s) => s.planRailOpenBySession[sessionId] ?? (expertMode && s.planRailOpen));
   const paneRef = useRef<HTMLDivElement>(null);
   const paneWidth = useElementWidth(paneRef, sessionId);
   // On the wall the plan sheet carries the Agent Monitor's sub-agents and task links, so the rail stays closed there.
@@ -804,8 +807,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const showLogs = useShown('logs');
   const showMode = useShown('mode');
   const showPrivacy = useShown('privacy');
-  const showGit = useShown('ph-git');
-  const [expertMode] = useExpertMode();
+  const showAsks = useShown('asks');
+  const showInternet = useShown('internet');
   const [, setLongDismissed] = useState(0);
   // The chat details under the message box: open, or shrunk to the model alone.
   const [detailsOpen, setDetailsOpen] = useState(() => { try { return window.localStorage.getItem(DETAILS_KEY) !== 'closed'; } catch { return true; } });
@@ -2364,6 +2367,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // render of the pane, including each streaming frame.
   const sessionPrUrls = useMemo(() => (messages ? collectSessionPrUrls(messages) : []), [messages]);
   const prByUrl = useMemo(() => new Map(prs.map((p) => [p.url, p])), [prs]);
+  const showPrStatus = useShown('pr-status', { pr: prs.length > 0 || sessionPrUrls.length > 0 });
   // Handlers handed to rows go through refs, so a row never re-renders because
   // this pane re-rendered.
   const editResendRef = useRef(editResend);
@@ -2452,6 +2456,53 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // and the context gauge, where the eye already is when sending.
   // A window on the wall with its own composer: model and Mode ride the composer's bar, no footer row.
   const wallWindow = commandCenter && surface === 'full';
+  const detailsShown = !expertMode || detailsOpen;
+  const usageGauge = showContext ? (
+    <LiveContextGauge
+      sessionId={sessionId}
+      marks={marks}
+      bundle={ctx}
+      skill={skillTokens}
+      draftTokens={deferredDraft.trim() ? estimateTokens(deferredDraft) : 0}
+      contextWindow={selectedModelInfo?.contextLength}
+      windowReported={!!selectedModelInfo?.contextLength}
+      reported={reportedCtx}
+      ringOnly={!expertMode}
+    />
+  ) : null;
+  // The Mode button and Privacy Shield are what the strip above the box is for; without them Simple drops it.
+  const stripShown = expertMode || showMode || showPrivacy;
+  // On the wall there is no strip either, so Automate moves there in Simple as well.
+  const plusCarries = !expertMode && !showMode && !showPrivacy;
+  const toggleIncognito = () => {
+    window.nekko.setSessionOptions(sessionId, { incognito: !session?.incognito }).then(setSession).catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
+  // The Mode button already says this; the plain selector is for when it is out of sight.
+  const asksFirst = showAsks && !showMode && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} /> : null;
+  const effortProps = {
+    session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
+    onChanged: () => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } },
+  };
+  const autoQualityControl = modelId === AUTO_MODEL_ID ? (
+    <AutoQualityMenu
+      quality={autoQuality}
+      onPick={(q) => {
+        window.nekko
+          .setSessionOptions(sessionId, { autoQuality: q })
+          .then((s) => { if (s) setSession(s); })
+          .catch(() => {});
+      }}
+      followCapacity={!!session?.autoProviderSwitch}
+      onFollowCapacity={(v) => {
+        window.nekko
+          .setSessionOptions(sessionId, { autoProviderSwitch: v })
+          .then((s) => { if (s) setSession(s); })
+          .catch(() => {});
+      }}
+    />
+  ) : null;
+  // Simple keeps effort, and Auto's quality, inside the model menu, as Claude Code does.
+  const effortInMenu = !expertMode && showEffort && (showModel || needsModel);
   const modelControls = (
     <div className="flex min-w-0 shrink items-center gap-2 rounded-lg">
     {(showModel || needsModel) && <ModelPicker
@@ -2465,6 +2516,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       onOpenChange={openModelMenu}
       needsChoice={needsModel}
       unavailableModel={needsModel ? unavailableModel : null}
+      footer={expertMode ? undefined : <>
+        {autoQualityControl && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1">{autoQualityControl}</div>}
+        {effortInMenu && <EffortChoices {...effortProps} />}
+      </>}
       onProvider={setProviderId}
       onModel={(pid, v) => {
         if (session?.messages.length && (pid !== providerId || v !== modelId)) {
@@ -2489,8 +2544,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />}
-    {/* On the wall effort is in the Mode panel; the bar keeps just the model. */}
-    {showEffort && !wallWindow && (detailsOpen || cleanStart) && <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />}
+    {/* On the wall in Expert effort is in the Mode panel; the bar keeps just the model. */}
+    {showEffort && !effortInMenu && !(wallWindow && expertMode) && (detailsShown || cleanStart) && <EffortSlider {...effortProps} />}
     </div>
   );
 
@@ -2528,6 +2583,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 than in the wall's title bar, where they needed an agent to be
                 selected first. On the wall they open beside the window; in
                 the Chat view, as windows of the workspace. */}
+            {wideEnoughForRail && !planRailOpen && <AgentMonitorButton sessionId={sessionId} subAgents={subagentChildren} backgroundTasks={claudeBackground} planSteps={planSteps} />}
             {/* Find in this chat: the first of the window's header icons, left
                 of Changes and Files, in their exact button and icon style. */}
             <button
@@ -2699,23 +2755,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </>
             }
           /></WatchSessionContext.Provider></SubagentInheritedModelContext.Provider></SubagentParentContext.Provider></FoldThoughtsContext.Provider>
-          {/* The Agent Monitor button floats in the chat area's top-right corner
-              while the panel is minimized; the open panel has its own minimize
-              button, so the two never stack. */}
-          {wideEnoughForRail && !planRailOpen && (
-            <button
-              type="button"
-              className={`plan-rail-toggle ${planRailOpen ? 'is-open' : ''}`}
-              data-plan-toggle
-              onClick={() => useStore.getState().togglePlanRail(sessionId)}
-              title={planRailOpen ? 'Hide Agent Monitor' : 'Show Agent Monitor: plan, sub-agents and queue'}
-              aria-label={planRailOpen ? 'Hide Agent Monitor' : 'Show Agent Monitor'}
-              aria-pressed={planRailOpen}
-            >
-              <ControlPanelIcon className="h-4 w-4" /><span>Agent Monitor</span>
-              {!planRailOpen && planSteps.total > 0 && <span className="plan-rail-toggle-count tabular-nums">{planSteps.done}/{planSteps.total}</span>}
-            </button>
-          )}
           {searchOpen && (
             <ChatSearchBar
               key={searchEpoch}
@@ -2780,7 +2819,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               working={streaming || hasLive}
               wizardHat={settings?.themePreset === 'autumn'}
             />}
-            {compact && !wallWindow && (
+            {compact && !wallWindow && stripShown && (
               <div className="composer-summary">
                 <button
                   className="composer-summary-chip"
@@ -2823,7 +2862,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 )}
               </div>
             )}
-            {showControls && !header && !wallWindow && (<>
+            {showControls && !header && !wallWindow && stripShown && (<>
             {/* Chat-wide switches live at the top of the input surface; the
                 model and its effort sit in the bottom bar beside Send.
                 One row, never wraps: a longer mode or model label must not
@@ -2842,24 +2881,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               />
               </div>
               {!imageMode && (<>
-              {modelId === AUTO_MODEL_ID && (
-                <AutoQualityMenu
-                  quality={autoQuality}
-                  onPick={(q) => {
-                    window.nekko
-                      .setSessionOptions(sessionId, { autoQuality: q })
-                      .then((s) => { if (s) setSession(s); })
-                      .catch(() => {});
-                  }}
-                  followCapacity={!!session?.autoProviderSwitch}
-                  onFollowCapacity={(v) => {
-                    window.nekko
-                      .setSessionOptions(sessionId, { autoProviderSwitch: v })
-                      .then((s) => { if (s) setSession(s); })
-                      .catch(() => {});
-                  }}
-                />
-              )}
+              {autoQualityControl}
               {autoPick && (
                 <span
                   className="min-w-0 shrink truncate text-2xs text-ink-faint"
@@ -3205,6 +3227,34 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           <FolderIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="flex-1">Folder</span>
                         </button>
+                        {/* Simple has no strip above the box: its two switches live here. */}
+                        {plusCarries && session && <>
+                          <div className="my-1 border-t border-line" />
+                          <button
+                            role="menuitemcheckbox"
+                            aria-checked={!!session.incognito}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
+                            onClick={() => { closeAttachMenu(); toggleIncognito(); }}
+                            onMouseEnter={closeSkillsFly}
+                            title="Don't save this chat or update memory"
+                            data-plus-incognito
+                          >
+                            <IncognitoIcon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="flex-1">Incognito</span>
+                            {session.incognito && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-accent" />}
+                          </button>
+                          <button
+                            role="menuitem"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
+                            onClick={() => { closeAttachMenu(); setScheduleOpen(true); }}
+                            onMouseEnter={closeSkillsFly}
+                            title="Automate: schedule, repeat, or run in the background"
+                            data-plus-automate
+                          >
+                            <span className="shrink-0" style={{ color: 'var(--warning)' }}><BoltIcon className="h-3.5 w-3.5" /></span>
+                            <span className="flex-1">Automate</span>
+                          </button>
+                        </>}
                         {/* Skills expand as a side flyout on hover, so someone new
                             finds them without knowing to type `/` or to click. */}
                         <div className="my-1 border-t border-line" />
@@ -3284,9 +3334,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   {(header || wallWindow) && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
                       {wallWindow && !imageMode && modelControls}
+                      {wallWindow && !imageMode && asksFirst}
                       <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" hideMode={!showMode} />
                       {!wallWindow && <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" hidePrivacy={!showPrivacy} />}
-                      {wallWindow && !imageMode && <button type="button" className="ctl-toggle shrink-0" data-composer-automate onClick={() => setScheduleOpen(true)} aria-label="Automate: schedule, repeat, or run in the background" title="Automate: schedule, repeat, or run in the background"><BoltIcon className="h-3.5 w-3.5" /></button>}
+                      {wallWindow && !imageMode && !plusCarries && <button type="button" className="ctl-toggle shrink-0" data-composer-automate onClick={() => setScheduleOpen(true)} aria-label="Automate: schedule, repeat, or run in the background" title="Automate: schedule, repeat, or run in the background"><BoltIcon className="h-3.5 w-3.5" /></button>}
                     </div>
                   )}
                   <div className="flex-1" />
@@ -3328,24 +3379,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}
                 {!cleanStart && !imageMode && surface !== 'composer' && (!wallWindow || modelHint) && (
-                  <div className={`composer-details ${detailsOpen ? 'is-open' : ''}`} data-composer-details aria-label="Chat details">
+                  <div className={`composer-details ${detailsShown ? 'is-open' : ''}`} data-composer-details aria-label="Chat details">
                     {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
                     {!wallWindow && <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                      {detailsOpen && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
+                      {detailsShown && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
                       {modelControls}
-                      {detailsOpen && showContext && (
-                        <LiveContextGauge
-                          sessionId={sessionId}
-                          marks={marks}
-                          bundle={ctx}
-                          skill={skillTokens}
-                          draftTokens={deferredDraft.trim() ? estimateTokens(deferredDraft) : 0}
-                          contextWindow={selectedModelInfo?.contextLength}
-                          windowReported={!!selectedModelInfo?.contextLength}
-                          reported={reportedCtx}
-                        />
-                      )}
-                      {detailsOpen && showCost && (
+                      {asksFirst}
+                      {detailsShown && expertMode && usageGauge}
+                      {detailsShown && showCost && (
                         <LiveUsageChip
                           sessionId={sessionId}
                           marks={marks}
@@ -3361,12 +3402,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         />
                       )}
                       <div className="agent-footer-reach ml-auto flex shrink-0 items-center gap-1" data-agent-footer-controls>
-                        {detailsOpen && session && showTools && <>
+                        {/* Incognito has no strip to show on in Simple, and it should not be forgotten. */}
+                        {plusCarries && session?.incognito && <span className="ctl-toggle ctl-toggle-neutral whitespace-nowrap" data-incognito-on title="Don't save this chat or update memory"><IncognitoIcon className="h-3.5 w-3.5" /> Incognito</span>}
+                        {detailsShown && session && showTools && <>
                           <ToolsMenu session={session} onChange={setSession} />
                           {session?.executionMode === 'sandbox' ? <span className="text-2xs text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
                         </>}
-                        {detailsOpen && <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />}
-                        <button
+                        {detailsShown && (showInternet || session?.offline) && <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />}
+                        {!expertMode && usageGauge}
+                        {expertMode && <button
                           type="button"
                           className="composer-details-toggle"
                           onClick={toggleDetails}
@@ -3375,7 +3419,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           title={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
                         >
                           {detailsOpen ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronUpIcon className="h-3.5 w-3.5" />}
-                        </button>
+                        </button>}
                       </div>
                     </div>}
                   </div>
@@ -3390,7 +3434,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </div>
         )}
         {/* The PR deck sits under the composer, on the window surface. */}
-        {!cleanStart && showGit && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!sheetPlan(session, providers, streaming)?.length} />}
+        {!cleanStart && showPrStatus && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!sheetPlan(session, providers, streaming)?.length} />}
       </section>
 
       {/* The work rail, in the quarter the transcript gives back. Kept inside
@@ -3401,7 +3445,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           <PlanRail
             sessionId={sessionId}
             session={session}
-            onMinimize={() => useStore.getState().togglePlanRail(sessionId)}
+            onMinimize={() => useStore.getState().setPlanRail(sessionId, false)}
           />
         </div>
       )}

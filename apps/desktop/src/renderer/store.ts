@@ -307,7 +307,7 @@ interface UiState {
   selectModel: (id: string) => void;
   rememberModel: (providerId: string, modelId: string) => void;
   toggleContextPanel: () => void;
-  togglePlanRail: (sessionId: string) => void;
+  setPlanRail: (sessionId: string, open: boolean) => void;
   applyTheme: () => void;
   /** The preset whose colours `applyTheme` applied: System resolves to Nekko Dark or Lilac. */
   resolvedPreset: string | undefined;
@@ -864,9 +864,9 @@ export const useStore = create<UiState>((set, get) => ({
 
   toggleContextPanel: () => set((s) => ({ contextPanelOpen: !s.contextPanelOpen })),
 
-  togglePlanRail: (sessionId) =>
+  setPlanRail: (sessionId, open) =>
     set((s) => {
-      const planRailOpenBySession = { ...s.planRailOpenBySession, [sessionId]: !(s.planRailOpenBySession[sessionId] ?? s.planRailOpen) };
+      const planRailOpenBySession = { ...s.planRailOpenBySession, [sessionId]: open };
       try { localStorage.setItem(PLAN_RAIL_SESSIONS_KEY, JSON.stringify(planRailOpenBySession)); } catch { /* private mode */ }
       return { planRailOpenBySession };
     }),
