@@ -8,6 +8,7 @@ import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
 import { putCachedSession } from './sessionCache.js';
+import { autoDismisses, overflowToasts, TOAST_EXIT_MS, TOAST_MS } from './toastQueue.js';
 import { loadLayout, maxIdSeq, pruneLayout, saveLayout } from './workspacePersist.js';
 import {
   allPanes,
@@ -102,6 +103,8 @@ export interface Toast {
   id: string;
   kind: 'info' | 'error' | 'success';
   message: string;
+  /** Dismissed and playing its exit; removed once that ends. */
+  leaving?: boolean;
 }
 
 /**
@@ -167,6 +170,8 @@ const restored = loadLayout(typeof window === 'undefined' ? undefined : window.l
 let wsSeq = maxIdSeq(restored.workspaces);
 reserveIdSeq(wsSeq);
 const newWorkspaceId = () => `ws_${(++wsSeq).toString(36)}`;
+/** Makes toast ids unique even when several arrive in the same millisecond. */
+let toastSeq = 0;
 
 interface UiState {
   completionTipSessionId: string | null;
@@ -653,11 +658,18 @@ export const useStore = create<UiState>((set, get) => ({
     set({ activeProjectId: id });
   },
   pushToast: (kind, message) => {
-    const id = `t_${Date.now().toString(36)}_${Math.floor(performance.now())}`;
+    const id = `t_${Date.now().toString(36)}_${(toastSeq++).toString(36)}`;
     set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }));
-    setTimeout(() => get().dismissToast(id), 5000);
+    // At most a few on screen: older ones leave as a new one arrives.
+    for (const old of overflowToasts(get().toasts)) get().dismissToast(old);
+    if (autoDismisses(kind)) setTimeout(() => get().dismissToast(id), TOAST_MS);
   },
-  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  dismissToast: (id) => {
+    if (!get().toasts.some((t) => t.id === id && !t.leaving)) return;
+    // Mark it leaving so it plays its exit, then drop it.
+    set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t)) }));
+    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), TOAST_EXIT_MS);
+  },
   setPaletteOpen: (open) => set({ paletteOpen: open }),
   monitorDockRect: null,
   setMonitorDockRect: (r) =>

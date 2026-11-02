@@ -1,5 +1,8 @@
 package com.nekko.android.ui.settings
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -44,21 +47,21 @@ fun ThisComputerSection(deps: SettingsDeps) {
     val active = c.active
     if (active == null) {
         exits.outcome?.let { (text, tone) ->
-            SectionHeader("This computer")
+            SectionHeader(stringResource(R.string.settings_this_computer))
             Notice(text, tone, Modifier.padding(horizontal = 16.dp))
         }
         return
     }
-    SectionHeader("This computer")
+    SectionHeader(stringResource(R.string.settings_this_computer))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
-            safetyExits(c, exits).forEach { ExitRow(it) }
+            safetyExits(c, exits, LocalResources.current).forEach { ExitRow(it) }
         }
         exits.outcome?.let { (text, tone) -> Notice(text, tone, Modifier.padding(top = 10.dp)) }
         Text(
             listOfNotNull(
-                "For when this phone is lost or something looks wrong. None of these needs a key or a code.",
-                if (c.quitFromPhone) null else "Quitting Nekko Agent from a phone is off on ${active.name} (Settings → Remote access there).",
+                stringResource(R.string.settings_exits_footer),
+                if (c.quitFromPhone) null else stringResource(R.string.settings_quit_off, active.name),
             ).joinToString(" "),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,

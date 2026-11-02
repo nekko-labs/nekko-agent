@@ -22,6 +22,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::oneshot::error::TryRecvError;
 
@@ -91,6 +93,10 @@ pub struct RunnerView {
     pub error: Option<String>,
     pub today: Today,
     pub host: HostView,
+    /// The repos an org runner serves, for the message that connects its workflows.
+    pub repos: Vec<String>,
+    /// A public repo's approval is unsettled, so the daemon keeps this runner off.
+    pub fork_approval_open: bool,
     /// This runner's last jobs, newest first.
     pub recent: Vec<AuditLine>,
 }
@@ -315,6 +321,8 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     today: HashMap<String, Today>,
     /// The last sample, for `views`; `None` before the first tick.
     mac: Option<MacState>,
+    /// An image build is running: it holds the Mac awake too.
+    building: Arc<AtomicBool>,
 }
 
 /// A provider call that gives up after `PROVIDER_TIMEOUT`.
@@ -418,6 +426,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             serial: 0,
             day_start: u64::MAX,
             today: HashMap::new(),
+            building: Arc::default(),
             mac: None,
         }
     }
@@ -627,12 +636,23 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 error: vm_error.cloned().or_else(|| r.error.clone()).or_else(|| r.blocked.clone()),
                 today: self.today.get(&r.record.config.id).copied().unwrap_or_default(),
                 host: self.mac.as_ref().map(|m| HostView::of(m, &r.record.config.settings)).unwrap_or_default(),
+                repos: r.record.repos().to_vec(),
+                fork_approval_open: r.record.fork_approval_open(),
                 recent: r.recent.iter().cloned().collect(),
             })
             .collect()
     }
 
     /// Memory of every VM still running, for the owner's usual-use history.
+    pub fn set_building(&mut self, building: Arc<AtomicBool>) {
+        self.building = building;
+    }
+
+    /// The Mac as of the last tick.
+    pub fn mac_state(&self) -> Option<MacState> {
+        self.mac.clone()
+    }
+
     pub fn running_vm_mb(&self) -> u64 {
         self.runners.iter().flat_map(|r| &r.slots).map(|s| u64::from(s.memory_mb)).sum()
     }
@@ -686,7 +706,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             r.awake = hold_awake(s.keep_awake, job, r.gates_pass || (r.keep_idle && !r.slots.is_empty()));
             hold |= r.awake;
         }
-        self.awake.set(hold);
+        self.awake.set(hold || self.building.load(Ordering::SeqCst));
     }
 
     /// The Mac slept: every VM is killed, its job audited as lost and queued
@@ -843,6 +863,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     slot.polled_at = now;
                     match call(self.provider.status(&r.record, slot.runner_id)).await {
                         Ok(RunnerStatus::Busy) => {
+                            r.start_failures = 0;
                             slot.busy_since = Some(now);
                             slot.idle_since = None;
                             slot.set_state(SlotState::Running, now);
@@ -854,6 +875,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                             continue;
                         }
                         Ok(RunnerStatus::Idle) => {
+                            r.start_failures = 0;
                             slot.online = true;
                             slot.set_state(SlotState::Ready, now);
                         }
@@ -967,9 +989,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         .await;
         match made {
             Ok(handle) => {
-                let r = &mut self.runners[ri];
-                r.start_failures = 0;
-                r.slots.push(Slot {
+                self.runners[ri].slots.push(Slot {
                     name,
                     runner_id: minted.runner_id,
                     handle,
@@ -1046,6 +1066,13 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 Err(e) => self.runners[ri].note(e),
             }
         }
+        // A guest that shut down on its own ran its one job, even if no poll saw it busy, unless its
+        // runner never connected: the provider forgets a spent JIT runner but lists an unused one offline.
+        let own_stop = stopped == Stopped::Guest && slot.stop.is_none();
+        let never_connected = own_stop
+            && !slot.online
+            && slot.busy_since.is_none()
+            && matches!(call(self.provider.status(&record, slot.runner_id)).await, Ok(RunnerStatus::Offline));
         let dir = self.vms_dir().join(&slot.name);
         if let Err(e) = tokio::fs::remove_dir_all(&dir).await
             && e.kind() != std::io::ErrorKind::NotFound
@@ -1053,9 +1080,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             eprintln!("runner: cannot remove {}: {e}", dir.display());
         }
         self.remove(record.clone(), slot.runner_id, slot.name.clone(), now).await;
-        // A guest that shut down on its own ran its one job, even if no poll saw it busy.
-        let ran = slot.busy_since.is_some() || (stopped == Stopped::Guest && slot.stop.is_none());
-        if !ran {
+        if never_connected {
+            self.start_failed(ri, "it powered off before its runner connected".into(), now);
+            return;
+        }
+        if slot.busy_since.is_none() && !own_stop {
             return;
         }
         let (result, reason, rerun) = match (&slot.stop, &stopped) {

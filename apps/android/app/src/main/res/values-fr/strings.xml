@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="widget_description">Combien de discussions ont besoin de vous et combien travaillent. Seulement des nombres, jamais ce qu’elles disent.</string>
+    <string name="shortcut_new_chat">Nouvelle discussion</string>
+    <string name="shortcut_new_chat_long">Nouvelle discussion sur votre ordinateur</string>
+</resources>

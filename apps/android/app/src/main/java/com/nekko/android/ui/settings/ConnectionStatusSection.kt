@@ -1,5 +1,9 @@
 package com.nekko.android.ui.settings
 
+import androidx.compose.ui.platform.LocalResources
+import androidx.annotation.StringRes
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 
 import com.nekko.protocol.RouteReport
@@ -72,30 +76,36 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
     val advice = ConnectionAdvice.advise(inUse, c.name, state.conn, state.denied, state.connDetail, tailnet, BuildConfig.DEBUG)
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
+    val copiedText = stringResource(R.string.settings_copied)
     val scope = rememberCoroutineScope()
 
-    SectionHeader("Connection status")
+    SectionHeader(stringResource(R.string.settings_connection_status))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
-            Fact("Computer", c.name)
+            Fact(stringResource(R.string.settings_fact_computer), c.name)
             HorizontalDivider(color = p.line)
-            Fact("Route", routeName(RelayRoute.of(inUse)))
+            Fact(stringResource(R.string.settings_fact_route), routeLabel(RelayRoute.of(inUse)))
             HorizontalDivider(color = p.line)
-            Fact("Relay", Pairing.relayHost(inUse))
+            Fact(stringResource(R.string.settings_fact_relay), Pairing.relayHost(inUse))
             HorizontalDivider(color = p.line)
             if (others.isNotEmpty()) {
-                Fact("Other routes", others.joinToString(", ") { r ->
-                    "${routeName(RelayRoute.of(r))} (${Pairing.relayHost(r)}${if (RoutePolicy.allowed(r)) "" else ", not used on Android"})"
+                val res = LocalResources.current
+                val names = RelayRoute.entries.associateWith { routeLabel(it) }
+                Fact(stringResource(R.string.settings_fact_other_routes), others.joinToString(", ") { r ->
+                    res.getString(
+                        if (RoutePolicy.allowed(r)) R.string.settings_route_other else R.string.settings_route_other_unused,
+                        names.getValue(RelayRoute.of(r)), Pairing.relayHost(r),
+                    )
                 })
                 HorizontalDivider(color = p.line)
             }
-            Fact("Status", stateName(state.conn))
+            Fact(stringResource(R.string.settings_fact_status), stringResource(stateName(state.conn)))
             HorizontalDivider(color = p.line)
-            Fact("Tailscale on this phone", if (tailnet) "Connected" else "Off")
+            Fact(stringResource(R.string.settings_fact_tailscale), if (tailnet) stringResource(R.string.settings_connected) else stringResource(R.string.settings_off))
         }
         if (advice.isNotEmpty()) {
             Text(
-                "What to try", style = MaterialTheme.typography.titleSmall, color = p.ink,
+                stringResource(R.string.settings_what_to_try), style = MaterialTheme.typography.titleSmall, color = p.ink,
                 modifier = Modifier.padding(top = 14.dp, start = 4.dp).semantics { heading() },
             )
             NCard(Modifier.padding(top = 6.dp)) {
@@ -104,13 +114,13 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
                     Text(a, style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.padding(12.dp))
                 }
             }
-            if (state.conn != RelayState.DENIED) TextButton(onClick = { deps.repo.reconnect() }) { Text("Try again now") }
+            if (state.conn != RelayState.DENIED) TextButton(onClick = { deps.repo.reconnect() }) { Text(stringResource(R.string.settings_try_again_now)) }
         }
         // IO-21: each route checked in turn on a socket of its own, never the live one.
         val checks by deps.repo.checks.collectAsStateWithLifecycle()
         val checking by deps.repo.checking.collectAsStateWithLifecycle()
         Text(
-            "Routes", style = MaterialTheme.typography.titleSmall, color = p.ink,
+            stringResource(R.string.settings_routes), style = MaterialTheme.typography.titleSmall, color = p.ink,
             modifier = Modifier.padding(top = 14.dp, start = 4.dp).semantics { heading() },
         )
         if (checks.isNotEmpty()) {
@@ -126,30 +136,31 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
                 enabled = !checking,
                 onClick = { scope.launch { deps.repo.runChecks() } },
                 modifier = Modifier.testTag("connection.checkRoutes"),
-            ) { Text(if (checking) "Checking…" else "Check routes") }
+            ) { Text(if (checking) stringResource(R.string.settings_checking) else stringResource(R.string.settings_check_routes)) }
+            val shareTitle = stringResource(R.string.settings_share_diagnostics)
             TextButton(
                 onClick = {
                     val app = "Nekko Agent for Android ${BuildConfig.VERSION_NAME} (Android ${Build.VERSION.RELEASE}, ${Build.MODEL})"
                     val send = Intent(Intent.ACTION_SEND).setType("text/plain")
                         .putExtra(Intent.EXTRA_SUBJECT, "Nekko Agent connection diagnostics")
                         .putExtra(Intent.EXTRA_TEXT, deps.repo.diagnosticsText(app))
-                    context.startActivity(Intent.createChooser(send, "Share diagnostics"))
+                    context.startActivity(Intent.createChooser(send, shareTitle))
                 },
                 modifier = Modifier.testTag("connection.shareDiagnostics"),
-            ) { Text("Share diagnostics") }
+            ) { Text(shareTitle) }
         }
         Text(
-            "Check routes looks up each of ${c.name}'s addresses, opens a connection and says hello on a socket of its own. Share diagnostics sends the checks and the log: hosts and timings, never keys or messages.",
+            stringResource(R.string.settings_check_routes_footer, c.name),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkSoft,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
         Text(
-            "Since the app started", style = MaterialTheme.typography.titleSmall, color = p.ink,
+            stringResource(R.string.settings_since_started), style = MaterialTheme.typography.titleSmall, color = p.ink,
             modifier = Modifier.padding(top = 14.dp, start = 4.dp).semantics { heading() },
         )
         NCard(Modifier.padding(top = 6.dp)) {
-            if (log.isEmpty()) Text("Nothing yet.", color = p.inkSoft, modifier = Modifier.padding(12.dp))
+            if (log.isEmpty()) Text(stringResource(R.string.settings_nothing_yet), color = p.inkSoft, modifier = Modifier.padding(12.dp))
             log.asReversed().forEachIndexed { i, e ->
                 if (i > 0) HorizontalDivider(color = p.line)
                 LogRow(e)
@@ -160,11 +171,11 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
             onClick = {
                 val text = deps.repo.connectionLogText()
                 scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Connection log", text))) }
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
             },
-        ) { Text("Copy log") }
+        ) { Text(stringResource(R.string.settings_copy_log)) }
         Text(
-            "Messages are end-to-end encrypted on every route; the relay sees only sealed frames. The log holds times, states and the relay's host, no keys or messages.",
+            stringResource(R.string.settings_e2e_footer),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkSoft,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
@@ -177,11 +188,13 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
 private fun RouteReportRow(r: RouteReport) {
     val p = Nekko.palette
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("${routeName(r.kind)} · ${r.host}", style = MaterialTheme.typography.bodyMedium, color = p.ink)
-        for ((name, step) in listOf("Name lookup" to r.dns, "Connection" to r.tcp, "Hello" to r.hello)) {
+        Text("${routeLabel(r.kind)} · ${r.host}", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        for ((nameRes, step) in listOf(R.string.settings_step_dns to r.dns, R.string.settings_step_tcp to r.tcp, R.string.settings_step_hello to r.hello)) {
+            val name = stringResource(nameRes)
             val text = when {
-                step == null -> if (r.dns == null) "$name: checking…" else "$name: skipped"
-                else -> "$name: ${if (step.ok) "ok" else "failed"}" + (step.ms?.let { " · $it ms" } ?: "") + (step.detail?.let { " · $it" } ?: "")
+                step == null -> stringResource(if (r.dns == null) R.string.settings_step_checking else R.string.settings_step_skipped, name)
+                else -> stringResource(if (step.ok) R.string.settings_step_ok else R.string.settings_step_failed, name) +
+                    (step.ms?.let { " · $it ms" } ?: "") + (step.detail?.let { " · $it" } ?: "")
             }
             Text(text, style = MaterialTheme.typography.bodySmall, color = if (step != null && !step.ok) p.danger else p.inkSoft)
         }
@@ -211,15 +224,24 @@ private fun LogRow(e: ConnectionLog.Entry) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(stateName(e.state) + if (e.repeats > 1) " ×${e.repeats}" else "", style = MaterialTheme.typography.bodyMedium, color = p.ink)
-            val detail = e.denied?.let { "Refused: ${it.wire}" } ?: e.detail
+            Text(stringResource(stateName(e.state)) + if (e.repeats > 1) " ×${e.repeats}" else "", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+            val detail = e.denied?.let { stringResource(R.string.settings_refused_wire, it.wire) } ?: e.detail
             if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
         }
         Text(TIME.format(e.at), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
     }
 }
 
-/** Same names as the iPhone's `routeName`. */
+/** [routeName] in the phone's language. */
+@Composable
+fun routeLabel(r: RelayRoute): String = when (r) {
+    RelayRoute.TAILSCALE -> "Tailscale"
+    RelayRoute.LAN -> stringResource(R.string.settings_route_lan)
+    RelayRoute.LOOPBACK -> stringResource(R.string.settings_route_loopback)
+    RelayRoute.INTERNET -> stringResource(R.string.settings_route_internet)
+}
+
+/** Same names as the iPhone's `routeName`, in English; on screen use [routeLabel]. */
 fun routeName(r: RelayRoute) = when (r) {
     RelayRoute.TAILSCALE -> "Tailscale"
     RelayRoute.LAN -> "Local network"
@@ -227,10 +249,11 @@ fun routeName(r: RelayRoute) = when (r) {
     RelayRoute.INTERNET -> "Internet relay"
 }
 
+@StringRes
 private fun stateName(s: RelayState) = when (s) {
-    RelayState.IDLE -> "Not connected"
-    RelayState.CONNECTING -> "Connecting"
-    RelayState.ONLINE -> "Online"
-    RelayState.OFFLINE -> "Computer offline"
-    RelayState.DENIED -> "Refused"
+    RelayState.IDLE -> R.string.settings_state_idle
+    RelayState.CONNECTING -> R.string.settings_state_connecting
+    RelayState.ONLINE -> R.string.settings_state_online
+    RelayState.OFFLINE -> R.string.settings_state_offline
+    RelayState.DENIED -> R.string.settings_state_denied
 }

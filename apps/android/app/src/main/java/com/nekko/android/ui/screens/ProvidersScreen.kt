@@ -1,5 +1,8 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -112,8 +115,8 @@ private fun Page(title: String, onBack: () -> Unit, close: Boolean = false, acti
                 title = { Text(title, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        if (close) Icon(Icons.Filled.Close, contentDescription = "Cancel")
-                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        if (close) Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_cancel))
+                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
                     }
                 },
                 actions = { actions() },
@@ -127,8 +130,13 @@ private fun Page(title: String, onBack: () -> Unit, close: Boolean = false, acti
 private fun ProviderList(repo: ComputersRepository, setup: ProviderSetupController, onBack: () -> Unit, add: () -> Unit) {
     val p = Nekko.palette
     val c by repo.state.collectAsStateWithLifecycle()
-    val computer = c.active?.name ?: "your computer"
+    val computer = c.active?.name ?: stringResource(R.string.your_computer)
     val online = c.conn == RelayState.ONLINE
+    val res = LocalResources.current
+    val offlineNote = stringResource(R.string.settings_connect_to_change_providers, computer)
+    val noneNote = stringResource(R.string.settings_no_providers_yet, computer)
+    val addLabel = stringResource(R.string.settings_add_provider)
+    val sealNote = stringResource(R.string.settings_provider_note, computer)
     val scope = rememberCoroutineScope()
     var switching by remember { mutableStateOf(emptySet<String>()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -140,16 +148,16 @@ private fun ProviderList(repo: ComputersRepository, setup: ProviderSetupControll
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "The computer couldn’t change the provider."
+                error = e.message ?: res.getString(R.string.settings_provider_change_failed)
             } finally {
                 switching = switching - provider.id
             }
         }
     }
-    Page("Providers", onBack) { padding ->
+    Page(stringResource(R.string.settings_providers), onBack) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("providers.list"), contentPadding = PaddingValues(vertical = 8.dp)) {
-            if (!online) item { Note("Connect to $computer to change its providers.", Modifier.padding(16.dp)) }
-            if (c.providers.isEmpty() && online) item { Note("No providers on $computer yet.", Modifier.padding(16.dp)) }
+            if (!online) item { Note(offlineNote, Modifier.padding(16.dp)) }
+            if (c.providers.isEmpty() && online) item { Note(noneNote, Modifier.padding(16.dp)) }
             items(c.providers, key = { it.id }) { pr ->
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp).testTag("providers.row"),
@@ -172,18 +180,17 @@ private fun ProviderList(repo: ComputersRepository, setup: ProviderSetupControll
             item {
                 TextButton(onClick = add, enabled = online, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("providers.add")) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text("Add a provider", modifier = Modifier.padding(start = 8.dp))
+                    Text(addLabel, modifier = Modifier.padding(start = 8.dp))
                 }
                 Note(
-                    "A key you add here is sealed to $computer before it leaves this phone, and never kept on the phone. " +
-                        "Turning a provider on or off, or adding one, asks for your fingerprint, face or screen lock.",
+                    sealNote,
                     Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
         }
     }
     error?.let { e ->
-        AlertDialog(onDismissRequest = { error = null }, text = { Text(e) }, confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } })
+        AlertDialog(onDismissRequest = { error = null }, text = { Text(e) }, confirmButton = { TextButton(onClick = { error = null }) { Text(stringResource(R.string.settings_ok)) } })
     }
 }
 
@@ -196,7 +203,8 @@ private fun ProviderList(repo: ComputersRepository, setup: ProviderSetupControll
 private fun AddProviderPage(repo: ComputersRepository, setup: ProviderSetupController, onClose: () -> Unit) {
     val p = Nekko.palette
     val c by repo.state.collectAsStateWithLifecycle()
-    val computer = c.active?.name ?: "your computer"
+    val computer = c.active?.name ?: stringResource(R.string.your_computer)
+    val res = LocalResources.current
     val scope = rememberCoroutineScope()
     var kindId by rememberSaveable { mutableStateOf(ProviderSetup.KINDS[0].id) }
     val kind = ProviderSetup.kind(kindId) ?: ProviderSetup.KINDS[0]
@@ -218,7 +226,7 @@ private fun AddProviderPage(repo: ComputersRepository, setup: ProviderSetupContr
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                failed = e.message ?: "The computer couldn’t save the provider."
+                failed = e.message ?: res.getString(R.string.settings_provider_save_failed)
             } finally {
                 // The key is dropped the moment the call returns.
                 key = ""
@@ -227,14 +235,14 @@ private fun AddProviderPage(repo: ComputersRepository, setup: ProviderSetupContr
         }
     }
     val done = saved
-    Page("Add a provider", onClose, close = done == null, actions = {
+    Page(stringResource(R.string.settings_add_provider), onClose, close = done == null, actions = {
         when {
-            done != null -> TextButton(onClick = onClose) { Text("Done") }
+            done != null -> TextButton(onClick = onClose) { Text(stringResource(R.string.settings_done)) }
             busy -> CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 16.dp).size(22.dp))
             else -> TextButton(
                 onClick = ::save, enabled = !(kind.needsKey && key.isBlank()) && c.conn == RelayState.ONLINE,
                 modifier = Modifier.testTag("provider.save"),
-            ) { Text("Save to $computer", maxLines = 1) }
+            ) { Text(stringResource(R.string.settings_save_to, computer), maxLines = 1) }
         }
     }) { padding ->
         Column(
@@ -242,13 +250,13 @@ private fun AddProviderPage(repo: ComputersRepository, setup: ProviderSetupContr
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (done != null) {
-                Label("Saved · models $computer can use")
-                if (done.models.isEmpty()) Note("$computer saved it but listed no models yet.")
+                Label(stringResource(R.string.settings_saved_models, computer))
+                if (done.models.isEmpty()) Note(stringResource(R.string.settings_saved_no_models, computer))
                 done.models.take(12).forEach { Text(it.name, style = MaterialTheme.typography.bodyLarge, color = p.ink) }
-                if (done.models.size > 12) Note("and ${done.models.size - 12} more")
+                if (done.models.size > 12) Note(stringResource(R.string.settings_and_n_more, done.models.size - 12))
                 return@Column
             }
-            Label("Kind")
+            Label(stringResource(R.string.settings_kind))
             ProviderSetup.KINDS.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { k ->
@@ -272,9 +280,9 @@ private fun AddProviderPage(repo: ComputersRepository, setup: ProviderSetupContr
                 }
             }
             if (kind.needsKey) {
-                Label("API key")
+                Label(stringResource(R.string.settings_api_key))
                 OutlinedTextField(
-                    key, { key = it }, singleLine = true, placeholder = { Text("Paste the API key") },
+                    key, { key = it }, singleLine = true, placeholder = { Text(stringResource(R.string.settings_paste_key)) },
                     visualTransformation = PasswordVisualTransformation(),
                     // A password field: the keyboard neither learns nor suggests it.
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Next),
@@ -282,22 +290,19 @@ private fun AddProviderPage(repo: ComputersRepository, setup: ProviderSetupContr
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Filled.Lock, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp).padding(top = 2.dp))
-                    Note(
-                        "Sealed to $computer before it leaves this phone. The key is encrypted to the computer’s own key, sent once over the " +
-                            "end-to-end encrypted relay, and never written on this phone. $computer tests it and keeps it in its own keychain.",
-                    )
+                    Note(stringResource(R.string.settings_sealed_note, computer))
                 }
             }
             if (kind.takesUrl) {
-                Label("Address")
+                Label(stringResource(R.string.settings_address))
                 OutlinedTextField(
                     url, { url = it }, singleLine = true, placeholder = { Text(kind.defaultUrl) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth().testTag("provider.url"),
                 )
-                Note("As $computer reaches it: localhost means the computer itself.")
+                Note(stringResource(R.string.settings_localhost_note, computer))
             }
-            Label("Name")
+            Label(stringResource(R.string.settings_name))
             OutlinedTextField(
                 label, { label = it }, singleLine = true, placeholder = { Text(kind.label) },
                 modifier = Modifier.fillMaxWidth().testTag("provider.label"),

@@ -4,7 +4,11 @@ import { useStore } from '../store.js';
 
 const COLOR = { info: 'var(--info)', error: 'var(--danger)', success: 'var(--success)' };
 
-/** Bottom-left transient notifications (errors, confirmations). */
+/**
+ * Bottom-left notifications (errors, confirmations). At most a few show at
+ * once (the store pushes older ones out); infos time out, errors stay until
+ * clicked or closed. A dismissed toast fades down briefly before it goes.
+ */
 export function Toasts() {
   const { toasts, dismissToast } = useStore(useShallow((s) => ({ toasts: s.toasts, dismissToast: s.dismissToast })));
   if (toasts.length === 0) return null;
@@ -15,11 +19,23 @@ export function Toasts() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="fade-in card pointer-events-auto flex items-start gap-3 p-3 shadow-(--shadow-float)"
+          data-toast={t.kind}
+          data-leaving={t.leaving || undefined}
+          className="toast-item card pointer-events-auto flex items-start gap-3 p-3 shadow-(--shadow-float)"
           onClick={() => dismissToast(t.id)}
         >
           <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: COLOR[t.kind] }} />
           <span className="min-w-0 flex-1 text-sm leading-snug [overflow-wrap:anywhere]">{t.message}</span>
+          {t.kind === 'error' && (
+            <button
+              type="button"
+              aria-label="Dismiss"
+              className="-m-1 shrink-0 rounded p-1 text-ink-faint hover:text-ink"
+              onClick={(e) => { e.stopPropagation(); dismissToast(t.id); }}
+            >
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          )}
         </div>
       ))}
     </div>

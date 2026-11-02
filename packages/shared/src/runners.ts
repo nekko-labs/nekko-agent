@@ -92,6 +92,10 @@ export interface RunnerView {
   error: string | null;
   today: Today;
   host: HostView;
+  /** The repos an org runner serves, from its link; empty when the scope says it all. */
+  repos: string[];
+  /** A public repo's approval for outside contributors is unsettled, so the daemon keeps this runner off. */
+  forkApprovalOpen: boolean;
   /** Newest first. */
   recent: AuditLine[];
 }
@@ -106,6 +110,8 @@ export interface GithubConnectRequest {
   repos: string[];
   allowPublic: boolean;
   label?: string;
+  /** False leaves a new runner off; the daemon defaults to true. */
+  enabled?: boolean;
 }
 /** A GitLab project (repo scope, `owner` may hold subgroups) or group (org scope). */
 export interface GitlabConnectRequest {
@@ -122,6 +128,36 @@ export interface GitlabConnectRequest {
   protectedOnly?: boolean;
   label?: string;
 }
+
+/** `canGroup` is null when it cannot be known: an org's plan is hidden, or a personal account. */
+export interface GithubAccount { login: string; kind: 'user' | 'org'; canGroup: boolean | null }
+export interface GithubAccounts { login: string | null; accounts: GithubAccount[] }
+export interface GithubRepo { name: string; private: boolean }
+export type GithubSetupStep = 'idle' | 'create' | 'install' | 'confirm' | 'failed';
+/** The click-through connect, from `runner:githubStatus` and the `runner:githubChanged` push. */
+export interface GithubSetupView {
+  step: GithubSetupStep;
+  owner: string | null;
+  kind: 'user' | 'org' | null;
+  /** The app has repo Administration, so it serves one repo, even under an org. */
+  repoAdmin: boolean;
+  slug: string | null;
+  appId: number | null;
+  installationId: number | null;
+  repos: GithubRepo[];
+  error: string | null;
+}
+export interface GithubStartRequest { owner: string; kind: 'user' | 'org'; repoAdmin?: boolean }
+/** `url` is the GitHub settings page to link to when `done` is false. */
+export interface ForkApproval { done: boolean; url: string }
+
+export const IDLE_GITHUB_SETUP: GithubSetupView = {
+  step: 'idle', owner: null, kind: null, repoAdmin: false, slug: null, appId: null, installationId: null, repos: [], error: null,
+};
+/** The runner polls every repo it serves. */
+export const MAX_RUNNER_REPOS = 20;
+/** More repos than this on an install means "All repositories", so none start ticked. */
+const TICKED_BY_DEFAULT = 5;
 
 export const DEFAULT_RUNNER_SETTINGS: RunnerSettings = {
   enabled: false,
@@ -325,6 +361,132 @@ export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Part
   ) as Partial<RunnerSettings>;
 }
 
+/** The image build's stages, in order. */
+export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'test', 'finish'] as const;
+export type ImageStage = (typeof IMAGE_STAGES)[number];
+export type ImageState = 'none' | 'ready' | 'building' | 'waiting' | 'failed';
+
+/** What the image holds, from the proof file `provision.sh` writes. */
+export interface ImageInfo {
+  macos: string;
+  xcode: string | null;
+  actionsRunner: string;
+  built: string;
+}
+
+export interface ImageView {
+  state: ImageState;
+  /** The stage running, failed, waiting, or next to resume. */
+  stage: ImageStage | null;
+  doneStages: ImageStage[];
+  /** What the stage is doing now, or why it waits. */
+  detail: string;
+  /** Received and total bytes, during Download. */
+  bytes: [number, number] | null;
+  /** 0 to 1, during Install. */
+  fraction: number | null;
+  /** The sentence to show when `state` is `failed`. */
+  error: string | null;
+  /** The end of the build log, for a failure. */
+  log: string | null;
+  info: ImageInfo | null;
+  /** A stopped build can pick up where it left off. */
+  canResume: boolean;
+}
+
+export interface ImageBuildRequest {
+  kind: 'xcode' | 'macosOnly';
+  /** The runner to turn on when the build finishes. */
+  runnerId?: string;
+  /** The mode that runner gets. */
+  priority: Priority;
+}
+
+/** The daemon's words for a runner with no image, which the card replaces with **Set up this Mac**. */
+export const NO_IMAGE_ERROR = 'No VM image yet.';
+
+/** What setting up this Mac would use, from `runner:imagePlan`. */
+export interface ImagePlan {
+  /** This Mac's Xcode version, or null with no Xcode to copy in. */
+  xcode: string | null;
+  /** Null before the daemon's first reading. */
+  freeGb: number | null;
+  needsGb: number;
+}
+
+export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
+  check: 'Check this Mac',
+  download: 'Download macOS',
+  install: 'Install macOS',
+  xcode: 'Add Xcode and tools',
+  lockdown: 'Lock the VM down',
+  test: 'Test a boot',
+  finish: 'Turn the runner on',
+};
+
+export type StageMark = 'done' | 'now' | 'bad' | 'todo';
+export interface StageRow { stage: ImageStage; label: string; mark: StageMark; note: string }
+
+const gb = (bytes: number) => (bytes / 1e9).toFixed(1);
+
+/** The stage's own progress. A wait keeps the last stage's numbers, so they only count while building. */
+function stageNote(v: ImageView): string {
+  if (v.state === 'failed') return 'Failed';
+  if (v.state === 'waiting') return 'Waiting';
+  if (v.state !== 'building') return 'Paused';
+  if (v.bytes) return `${gb(v.bytes[0])} of ${gb(v.bytes[1])} GB`;
+  if (v.fraction !== null) return `${Math.round(v.fraction * 100)}%`;
+  return v.detail;
+}
+
+/**
+ * One row per stage a person follows; Finish is one rename, so it has none. A wait
+ * names the stage it waits for before the last one is listed as done, so order counts too.
+ */
+export function imageStageRows(v: ImageView): StageRow[] {
+  const at = v.stage === null ? -1 : IMAGE_STAGES.indexOf(v.stage);
+  return IMAGE_STAGES.filter((s) => s !== 'finish').map((stage, i) => {
+    const done = i < at || v.doneStages.includes(stage);
+    const mark: StageMark = stage === v.stage && !done ? (v.state === 'failed' ? 'bad' : 'now') : done ? 'done' : 'todo';
+    return { stage, label: IMAGE_STAGE_LABELS[stage], mark, note: mark === 'now' || mark === 'bad' ? stageNote(v) : '' };
+  });
+}
+
+/** 0 to 1 for the bar, or null when this stage has nothing to measure. */
+export function imageFraction(v: ImageView): number | null {
+  if (v.state !== 'building') return null;
+  if (v.bytes && v.bytes[1] > 0) return Math.min(1, v.bytes[0] / v.bytes[1]);
+  return v.fraction;
+}
+
+/** A build is running or stopped on a failure, so the sheet follows it. */
+export const imageBusy = (v: ImageView) => v.state === 'building' || v.state === 'waiting' || v.state === 'failed';
+
+/** What the runner card says about a build in progress. */
+export function imageLine(v: ImageView): string {
+  if (v.state === 'failed') return `Setup stopped: ${v.error ?? 'Something went wrong.'}`;
+  const stage = v.stage ? IMAGE_STAGE_LABELS[v.stage] : 'Setting up this Mac';
+  if (v.state === 'waiting') return `${stage}: ${v.detail}`;
+  const note = stageNote(v);
+  return note ? `${stage}: ${note}` : stage;
+}
+
+/** The message a new chat starts with. The person reads it and presses Send. */
+export function runnerWorkflowPrompt(v: RunnerView): string {
+  const { scope, label } = v.config;
+  const repos = (v.repos.length ? v.repos : [scopeName(scope)]).map((r) => `\`${r}\``).join(', ');
+  return [
+    'Connect my Mac runner to my GitHub Actions workflows.',
+    '',
+    `Runner label: \`${label}\``,
+    `Repos: ${repos}`,
+    '',
+    "Read the workflows, then ask me which ones should run on this Mac. Offer only jobs that can run on macOS, and warn me about any that run on pull requests from forks. If the repo isn't in this folder, ask me where it is.",
+    '',
+    `Set \`runs-on: [self-hosted, macOS, ARM64, ${label}]\` on the ones I pick, and open a pull request.`,
+  ].join('\n');
+}
+
 export function runnerActivity(views: RunnerView[]): { vms: number; awake: boolean } {
   return { vms: views.reduce((n, v) => n + v.slots.length, 0), awake: views.some((v) => v.awake) };
 }
@@ -383,3 +545,59 @@ export function toConnectRequest(f: ConnectForm, keyStored: boolean): GithubConn
     label,
   };
 }
+
+/** A personal account's runner, or an org's that cannot use runner groups, serves one repo. */
+export const servesOneRepo = (v: GithubSetupView) => v.kind === 'user' || v.repoAdmin;
+
+export function defaultRepoPicks(v: GithubSetupView): string[] {
+  if (servesOneRepo(v)) return v.repos.length === 1 ? [v.repos[0].name] : [];
+  return v.repos.length > TICKED_BY_DEFAULT ? [] : v.repos.map((r) => r.name);
+}
+
+/** The picks after ticking `name` on or off, or a sentence saying why not. */
+export function tickRepo(v: GithubSetupView, picked: string[], name: string, on: boolean): { picked: string[]; error: string | null } {
+  if (servesOneRepo(v)) return { picked: [name], error: null };
+  if (!on) return { picked: picked.filter((r) => r !== name), error: null };
+  if (picked.includes(name)) return { picked, error: null };
+  if (picked.length >= MAX_RUNNER_REPOS) return { picked, error: `A runner serves at most ${MAX_RUNNER_REPOS} repos.` };
+  return { picked: [...picked, name], error: null };
+}
+
+export const publicPicks = (v: GithubSetupView, picked: string[]) =>
+  v.repos.filter((r) => !r.private && picked.includes(r.name)).map((r) => r.name);
+
+export interface SetupPicks { repos: string[]; allowPublic: boolean; label: string }
+
+/**
+ * The confirm step as a `runner:connect` request, or the sentence to fix. Every
+ * runner connects off, because its mode is chosen on the Mac setup sheet. A public
+ * repo's runner also cannot start until GitHub holds outside contributors for approval.
+ */
+export function toSetupRequest(v: GithubSetupView, p: SetupPicks): GithubConnectRequest | { error: string } {
+  if (!v.owner || v.appId === null || v.installationId === null) return { error: 'GitHub is not connected yet.' };
+  if (!p.repos.length) return { error: 'Pick at least one repo.' };
+  if (p.repos.length > MAX_RUNNER_REPOS) return { error: `A runner serves at most ${MAX_RUNNER_REPOS} repos.` };
+  const anyPublic = publicPicks(v, p.repos).length > 0;
+  if (anyPublic && !p.allowPublic) return { error: 'Choose how to handle the public repo first.' };
+  const label = p.label.trim() || DEFAULT_RUNNER_LABEL;
+  if (!LABEL.test(label)) return { error: 'Labels use letters, digits, dot, dash and underscore.' };
+  const [owner, repo] = p.repos[0].split('/');
+  const scope: Scope = servesOneRepo(v) ? { kind: 'repo', owner, repo } : { kind: 'org', org: v.owner };
+  return {
+    provider: 'github',
+    scope,
+    appId: v.appId,
+    installationId: v.installationId,
+    repos: servesOneRepo(v) ? [] : p.repos,
+    allowPublic: anyPublic,
+    label,
+    enabled: false,
+  };
+}
+
+export const githubInstallUrl = (slug: string) => `https://github.com/apps/${slug}/installations/new`;
+/** Where fork approval is set by hand, when Nekko could not ask. */
+export const githubActionsSettingsUrl = (s: Scope) =>
+  (s.kind === 'org' ? `https://github.com/organizations/${s.org}/settings/actions` : `https://github.com/${s.owner}/${s.repo}/settings/actions`);
+/** Where an org's app is deleted, which is the way out when the org turns out to have no runner groups. */
+export const githubAppSettingsUrl = (org: string, slug: string) => `https://github.com/organizations/${org}/settings/apps/${slug}/advanced`;

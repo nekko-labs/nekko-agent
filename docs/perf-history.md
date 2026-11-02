@@ -95,6 +95,33 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### Empty-agent wave: full-pane tiled canvas instead of a bounded texture (2026-11-02)
+Area: renderer
+Result: no effect (within sample noise; a small focused GPU-process increase)
+Conditions: Windows 11, 125% display scaling, `empty-agent-wave-sandbox.cjs` through the layout-evidence fixture (isolated hidden non-focusable Electron window, 1440×900, Lilac, network blocked), 6 s CPU deltas, two sequential runs per side alternating main/head, nothing else running. Main's sandbox was fixed to call `applyTheme()` for both sides; before that fix it mounted no wave and measured nothing.
+
+| Metric (% of a core) | Before (main, run 1 / 2) | After (run 1 / 2) |
+|---|---|---|
+| Unfocused: GPU process | 2.41 / 2.31 | 2.42 / 2.29 |
+| Unfocused: renderer | 2.10 / 1.99 | 1.95 / 1.35 |
+| Synthetic focus: GPU process | 1.43 / 1.50 | 1.62 / 1.73 |
+| Synthetic focus: renderer | 1.17 / 1.21 | 1.30 / 1.30 |
+
+Why: the wave now covers the whole pane and advances one dot column every ~190ms (was a 1px nudge every ~625ms of a 720×360 image); each step copies a pre-rendered tile with `drawImage`, so the per-step work stayed small. Two short samples per side are not a distribution: read this as "no large change", not as a win or a regression. The view-switch pixel reveal in the same PR runs only for 300ms after a switch and was not measured. Source: this PR.
+
+### Completed chats and the model library page at 50 rows (2026-11-02)
+Area: renderer
+Result: improvement
+Conditions: Windows 11 desktop, the real App bundled against a stub bridge (the layout-evidence fixture) with 400 completed chats, and `ModelLibrary` alone with 400 text models, in headless Playwright Chromium 1243 at 1280x800. One run each; before is `main` at the branch point (issue #1478).
+
+| Metric | Before | After |
+|---|---|---|
+| Completed group open: elements inside it | 2808 | 359 |
+| Completed group open: buttons inside it | 401 | 52 |
+| Model library: model rows mounted | 400 | 50 |
+
+Why: both lists rendered every row (the Completed group even while folded, since its rows sit in a collapsing wrapper); they now render a page of 50 and a "Show more" button. Render time was not measured separately: the harness's fixed waits dominate its wall-clock numbers.
+
 ### Website: pixel wave pauses past the hero, no blur over it (2026-11-01)
 Area: website
 Result: improvement

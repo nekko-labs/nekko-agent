@@ -54,7 +54,9 @@ function makeWebClient(): NekkoApi {
   const tasksCbs = new Set<(t: import('@nekko-agent/shared').AutomationTask[]) => void>();
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
+  const imageCbs = new Set<(view: import('@nekko-agent/shared').ImageView) => void>();
   const runnerCbs = new Set<(views: import('@nekko-agent/shared').RunnerView[]) => void>();
+  const githubSetupCbs = new Set<(view: import('@nekko-agent/shared').GithubSetupView) => void>();
   const oauthStatusCbs = new Set<(s: OAuthStatus) => void>();
   const cloudStatusCbs = new Set<(s: import('@nekko-agent/shared').CloudStatus) => void>();
   const limitsUpdatedCbs = new Set<(e: { tokenKey: string; limits: SubscriptionLimits }) => void>();
@@ -76,7 +78,9 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerImageChanged) imageCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerChanged) runnerCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerGithubChanged) githubSetupCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.oauthStatus) oauthStatusCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.cloudStatus) cloudStatusCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.limitsUpdated) limitsUpdatedCbs.forEach((cb) => cb(payload));
@@ -642,11 +646,21 @@ function makeWebClient(): NekkoApi {
     listWorkflowRuns: (workflowId) => call(IpcChannels.workflowRuns, workflowId),
     listWorkflowSkillDefs: () => call(IpcChannels.workflowSkillDefs),
     dispatchWorkflowEvent: (event) => call(IpcChannels.workflowEvent, event),
+    imageStatus: () => call(IpcChannels.runnerImageStatus),
+    imagePlan: () => call(IpcChannels.runnerImagePlan),
+    buildImage: (req) => call(IpcChannels.runnerImageBuild, req),
+    resumeImage: () => call(IpcChannels.runnerImageResume),
+    cancelImage: () => call(IpcChannels.runnerImageCancel),
     listRunners: () => call(IpcChannels.runnerList),
     connectRunner: (req) => call(IpcChannels.runnerConnect, req),
     updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
     removeRunner: (id) => call(IpcChannels.runnerRemove, id),
     setRunnerEnabled: (id, enabled) => call(IpcChannels.runnerSetEnabled, id, enabled),
+    githubAccounts: () => call(IpcChannels.runnerGithubAccounts),
+    githubStart: (req) => call(IpcChannels.runnerGithubStart, req),
+    githubStatus: () => call(IpcChannels.runnerGithubStatus),
+    githubCancel: () => call(IpcChannels.runnerGithubCancel),
+    setForkApproval: (req) => call(IpcChannels.runnerSetForkApproval, req),
 
     listConnectors: () => call(IpcChannels.connectorsList),
     connectConnector: (kind, t, settings) => call(IpcChannels.connectorConnect, kind, t, settings),
@@ -793,9 +807,17 @@ function makeWebClient(): NekkoApi {
       workflowCbs.add(cb);
       return () => workflowCbs.delete(cb);
     },
+    onImageChanged: (cb) => {
+      imageCbs.add(cb);
+      return () => imageCbs.delete(cb);
+    },
     onRunnersChanged: (cb) => {
       runnerCbs.add(cb);
       return () => runnerCbs.delete(cb);
+    },
+    onGithubSetupChanged: (cb) => {
+      githubSetupCbs.add(cb);
+      return () => githubSetupCbs.delete(cb);
     },
     onLimitsUpdated: (cb) => {
       limitsUpdatedCbs.add(cb);

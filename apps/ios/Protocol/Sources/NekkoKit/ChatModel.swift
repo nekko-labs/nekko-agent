@@ -529,6 +529,44 @@ public final class ChatModel {
         await reload()
     }
 
+    /// Give the running agent the queued prompt at `index` at its next step, keeping its work.
+    /// It leaves the queue first, through the check an edit gets, so it can't run twice.
+    public func sendQueuedAtNextStep(_ index: Int, expect: String) async throws {
+        guard store.conn == .online else { throw RelayError(Self.reconnectToEditQueue) }
+        do {
+            let r = try store.remote()
+            _ = try await r.call(Channels.chatEditQueued, [.string(sessionId), .int(Int64(index)), QueuedPrompt.edit(expect: expect, text: nil)])
+            do {
+                _ = try await r.call(Channels.chatSteer, [.string(sessionId), .string(expect)])
+            } catch {
+                // A computer too old for this, or the link dropped: the prompt goes back in line.
+                _ = try? await r.call(Channels.chatQueue, [.string(sessionId), .string(expect)])
+                throw error
+            }
+        } catch {
+            await reload()
+            throw store.readable(error)
+        }
+        await reload()
+    }
+
+    /// Stop the reply and start the queued prompt at `index` on this chat's model.
+    public func interruptQueued(_ index: Int) async throws {
+        guard store.conn == .online else { throw RelayError(Self.reconnectToEditQueue) }
+        var args: [JSONValue] = [.string(sessionId), .int(Int64(index))]
+        let (providerId, modelId) = Self.resolveModel(session, store.defaults)
+        if let providerId, let modelId { args.append(["providerId": .string(providerId), "modelId": .string(modelId)]) }
+        do {
+            _ = try await store.remote().call(Channels.chatInterruptQueued, args)
+        } catch let e as RelayError where !e.fromComputer {
+            // The call stays open for the whole new reply, so running out of time is not a failure.
+        } catch {
+            await reload()
+            throw store.readable(error)
+        }
+        await reload()
+    }
+
     /// Where a fork from `block` cuts the chat, and what goes back in the new chat's message box.
     /// A prompt: the new chat ends before it, with that prompt to edit and send (the desktop's split).
     /// A reply or step: the new chat keeps everything up to the next prompt. Nil while it streams.

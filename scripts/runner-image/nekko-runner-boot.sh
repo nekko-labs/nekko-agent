@@ -29,9 +29,10 @@ finish() {
 }
 trap finish EXIT
 
-# 1. Wait for the seed volume.
+# 1. Wait for the seed volume. macOS makes its mount point seconds before mounting it, so an
+# empty folder is not the seed yet.
 deadline=$((SECONDS + NEKKO_SEED_WAIT))
-until [ -d "$NEKKO_SEED_DIR" ]; do
+until [ -n "$(ls -A "$NEKKO_SEED_DIR" 2>/dev/null)" ]; do
   if [ "$SECONDS" -ge "$deadline" ]; then
     log "no seed: no runner, staying up"
     stay_up=1

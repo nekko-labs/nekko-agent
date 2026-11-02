@@ -11,10 +11,9 @@ packages:
     path: Protocol
 settings:
   base:
-    SWIFT_VERSION: "5.0"
-    # Swift 6 data-race checks as warnings on every target (#1412); the language
-    # mode moves to 6 once they build clean.
-    SWIFT_STRICT_CONCURRENCY: complete
+    # The Swift 6 language mode on every target: data races are compile errors, and
+    # isolation is also checked at run time (#1412).
+    SWIFT_VERSION: "6.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES

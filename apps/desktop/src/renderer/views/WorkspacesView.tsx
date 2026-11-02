@@ -22,6 +22,7 @@ import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
+import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import {
   DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
@@ -260,6 +261,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const completionTipSessionId = useStore((s) => s.completionTipSessionId);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
+  /** Completed rows rendered per group past the first page ("Show more"). */
+  const [completedShown, setCompletedShown] = useState<Record<string, number>>({});
   const [sidebarW, setSidebarW] = useState(readSidebarWidth);
   const saveSidebarW = (px: number) => {
     const w = clampSidebarWidth(px);
@@ -679,6 +682,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
           const completedOpen = completedGroup || showCompleted.has(b.key);
           const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
+          // A page of completed rows at a time; the selected or just-completed
+          // chat is always in it.
+          const completedCount = pagedCount(done.length, completedShown[b.key] ?? LIST_PAGE, Math.max(done.findIndex((s) => s.id === selectedId), done.findIndex((s) => s.id === completionTipSessionId)));
           const bucketActive = dropTarget === 'bucket:' + b.key;
           const groupGap = bucketActive && drag?.kind === 'project' && drag.id !== b.key;
           return (
@@ -826,7 +832,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         {completedGroup ? 'Your completed chat is here. Open Completed to find or restore it.' : 'Your completed chat is here. Open Show completed to find or restore it.'}
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
                       </div>}
-                      {completedOpen && done.map((s) => (
+                      {completedOpen && done.slice(0, completedCount).map((s) => (
                         <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><CompletedRow
                           session={s}
                           now={now}
@@ -835,6 +841,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
                         /></div>
                       ))}
+                      {completedOpen && done.length > completedCount && (
+                        <button
+                          type="button"
+                          data-completed-more
+                          className="w-full rounded-md px-2 py-1 text-left text-2xs text-ink-faint hover:bg-surface-2 hover:text-ink"
+                          onClick={() => setCompletedShown((m) => ({ ...m, [b.key]: completedCount + LIST_PAGE }))}
+                        >
+                          {showMoreLabel(done.length - completedCount)}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

@@ -2869,8 +2869,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <span className="min-w-0 flex-1 truncate text-ink-soft" title={label}>{payload.text || '(no text)'}</span>
                         {payload.skill && <span className="skill-pill shrink-0 text-2xs" title={`Skill: ${payload.skill.name}`}><span className="skill-pill-slash">/</span>{payload.skill.name}</span>}
                         {!!payload.images?.length && <span className="shrink-0 rounded-full border border-line px-2 py-px text-2xs text-ink-faint">{payload.images.length} image{payload.images.length === 1 ? '' : 's'}</span>}
-                        {streaming && !payload.images?.length && !payload.skill && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Steer the running reply with this message at its next step, without stopping it" onClick={() => void steerQueued(i)}>Steer</button>}
-                        {streaming && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Interrupt the current reply and send this message now" onClick={() => void sendQueuedNow(i)}>Send now</button>}
+                        {streaming && !payload.images?.length && !payload.skill && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="The agent reads this at its next step and keeps going" onClick={() => void steerQueued(i)}>Next step</button>}
+                        {streaming && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Stop the reply and send this now" onClick={() => void sendQueuedNow(i)}>Interrupt</button>}
                         <button
                           className="shrink-0 rounded-sm px-1 text-ink-faint hover:text-(--danger)"
                           title="Remove from queue"
@@ -3079,7 +3079,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <MarkdownEditor
                     ref={composerRef}
                     className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[52px] py-2'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
-                    placeholder={imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter steers the running reply)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
+                    placeholder={imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter sends it at the next step)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}

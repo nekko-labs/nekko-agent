@@ -1,5 +1,7 @@
 package com.nekko.android.ui
 
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -324,16 +326,20 @@ private fun Panes(
     val context = LocalContext.current
     val running = s.activity.keys
     val waiting = remember(s.activity) { s.activity.filterValues { it == Activity.NEEDS_YOU }.keys }
-    val titles = remember(s.summaries) { s.summaries.associate { it.id to plainText(it.title).ifEmpty { "New chat" } } }
+    val newChat = stringResource(R.string.chats_new_chat)
+    val chatsLabel = stringResource(R.string.chats_title)
+    val monitorsLabel = stringResource(R.string.chats_monitors)
+    val chatLabel = stringResource(R.string.chats_chat)
+    val titles = remember(s.summaries, newChat) { s.summaries.associate { it.id to plainText(it.title).ifEmpty { newChat } } }
     val chats = remember(s.summaries) {
         s.summaries.filter { it.archivedAt == null }.sortedByDescending { it.updatedAt }.map { PaneChatChoice(it.id, titles.getValue(it.id)) }
     }
-    val labels = remember(titles) {
+    val labels = remember(titles, chatsLabel, monitorsLabel, chatLabel) {
         PaneLabels { c ->
             when (c) {
-                PaneContent.Chats -> "Chats"
-                PaneContent.Monitors -> "Monitors"
-                is PaneContent.Chat -> c.id?.let(titles::get) ?: "Chat"
+                PaneContent.Chats -> chatsLabel
+                PaneContent.Monitors -> monitorsLabel
+                is PaneContent.Chat -> c.id?.let(titles::get) ?: chatLabel
             }
         }
     }
@@ -399,7 +405,7 @@ private fun EmptyChatPane(slot: PaneSlot, onNewChat: () -> Unit) {
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Chat", style = MaterialTheme.typography.titleMedium) },
+                title = { Text(stringResource(R.string.chats_chat), style = MaterialTheme.typography.titleMedium) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 actions = slot.actions,
             )
@@ -411,12 +417,12 @@ private fun EmptyChatPane(slot: PaneSlot, onNewChat: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "Open a chat from the list, or pick one with Replace with… above.",
+                stringResource(R.string.chats_empty_pane),
                 style = MaterialTheme.typography.bodyLarge,
                 color = p.inkSoft,
                 textAlign = TextAlign.Center,
             )
-            OutlinedButton(onClick = onNewChat) { Text("New chat") }
+            OutlinedButton(onClick = onNewChat) { Text(stringResource(R.string.chats_new_chat)) }
         }
     }
 }
@@ -445,7 +451,7 @@ private fun firstRunStep(repo: ComputersRepository, prefs: PhonePrefs): Boolean 
     if (!c.ready) return false
     if (notifyStep && c.computers.isNotEmpty()) {
         FirstRunNotifications(
-            computer = c.active?.name ?: "Your computer",
+            computer = c.active?.name ?: stringResource(R.string.chats_your_computer_cap),
             asking = asking,
             onAllow = {
                 if (Build.VERSION.SDK_INT >= 33) {

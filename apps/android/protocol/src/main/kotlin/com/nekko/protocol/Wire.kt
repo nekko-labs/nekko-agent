@@ -41,6 +41,10 @@ object Channels {
     const val CHAT_SEND = "chat:send"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
+    /** Text the running agent reads at its next step, without stopping. */
+    const val CHAT_STEER = "chat:steer"
+    /** Stop the reply and start the queued prompt at an index. */
+    const val CHAT_INTERRUPT_QUEUED = "chat:interruptQueued"
     const val CHAT_PENDING = "chat:pending"
     const val CHAT_ANSWER = "chat:answer"
     /** Change or remove a queued prompt, only while it still reads what the phone showed ([QueuedPrompt.edit]). */
@@ -774,7 +778,8 @@ sealed interface AgentEvent {
                 "retry" -> Retry(sid)
                 "done" -> Done(sid, o.str("messageId"))
                 "error" -> Error(sid, o.str("message") ?: "Something went wrong.")
-                "session_meta" -> SessionMeta(sid)
+                // A message taken at the next step joined the transcript.
+                "session_meta", "steered" -> SessionMeta(sid)
                 null -> null
                 else -> Other(sid, t)
             }

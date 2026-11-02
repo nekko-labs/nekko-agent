@@ -1,5 +1,6 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -284,6 +285,7 @@ fun ModelEffortSheet(
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var picking by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf<Effort?>(null) }
@@ -301,7 +303,7 @@ fun ModelEffortSheet(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Couldn’t change it."
+                error = e.message ?: resources.getString(R.string.chat_change_failed)
             } finally {
                 busy = null
             }
@@ -562,6 +564,7 @@ fun MonitorSheet(
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var notice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper, modifier = Modifier.testTag(ModeTags.MONITOR_SHEET)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -583,7 +586,7 @@ fun MonitorSheet(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        (e.message ?: "Couldn’t unload it.") to false
+                        (e.message ?: resources.getString(R.string.chat_unload_failed)) to false
                     }
                 }
             }
