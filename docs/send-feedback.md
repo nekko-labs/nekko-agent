@@ -4,7 +4,7 @@ Every Nekko Agent app has a **Send feedback** button. It opens one sheet with th
 
 | Where | How to open it |
 | --- | --- |
-| Desktop, Local Web UI, Docker | The speech-bubble button at the bottom of the left rail, **Send feedback** in the command palette (⌘K / Ctrl+K), Help → Send Feedback… on macOS, or Send feedback… in the tray menu |
+| Desktop, Local Web UI, Docker | The speech-bubble button under Settings in the left rail, **Send feedback** in the command palette (⌘K / Ctrl+K), Help → Send Feedback… on macOS, or Send feedback… in the tray menu |
 | iPhone and iPad | **Send feedback** in the computer menu on the Chats screen, or Settings → About → Send feedback |
 | Android | Settings → Feedback → Send feedback |
 
