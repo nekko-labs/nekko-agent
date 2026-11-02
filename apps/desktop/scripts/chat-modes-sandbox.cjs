@@ -109,7 +109,7 @@ app.whenReady().then(async () => {
     check('the cat leaves the last transcript row clear', !(await overlap('[data-chat-mascot]', '[data-claude-background]')));
     await capture('a7b-transcript-end-clear-of-cat');
     await scene({ mode: 'simple', local: false, changes: 0, long: false, pr: true });
-    check('Simple with a pull request: the PR deck shows', await has('.pr-action-deck'));
+    check('Simple with a pull request: the live PR card shows', await has('[data-pr-actions]'));
     await capture('a8-simple-with-pr');
     await scene({ mode: 'simple', local: false, changes: 0, long: false });
     await sleep(1600);
