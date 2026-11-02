@@ -62,7 +62,7 @@ final class PostureTests: XCTestCase {
         XCTAssertEqual(Posture.from(PostureInput(horizontal: .regular, vertical: .regular, size: CGSize(width: 599, height: 800), hinge: fold)), .closed)
     }
 
-    func testTheHingeSourceIsInjectable() {
+    @MainActor func testTheHingeSourceIsInjectable() {
         defer { Posture.hingeSource = { nil } }
         let size = CGSize(width: 841, height: 673)
         XCTAssertEqual(Posture.current(horizontal: .regular, vertical: .regular, size: size), .openWide)

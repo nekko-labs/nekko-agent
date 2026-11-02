@@ -213,7 +213,7 @@ function MenuRow({ label, hint }: { label: string; hint?: string }) {
   return (
     <span className="flex items-center justify-between gap-3">
       <span>{label}</span>
-      {hint && <span className="text-[11px] text-ink-faint">{hint}</span>}
+      {hint && <span className="text-2xs text-ink-faint">{hint}</span>}
     </span>
   );
 }
@@ -387,7 +387,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
     term.focus();
   };
   const status = (
-    <span className="flex items-center gap-2 text-[11px] text-ink-faint">
+    <span className="flex items-center gap-2 text-2xs text-ink-faint">
       <TerminalViewersBadge terminalId={terminalId} initial={info?.viewers} />
       <span className="max-w-[26ch] truncate font-mono">{info?.cwd ?? ''}</span>
       {info && !info.running && (
@@ -401,7 +401,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
       {framed ? (
         <PaneActions>{status}</PaneActions>
       ) : (
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1.5">{status}</div>
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1">{status}</div>
       )}
       <div
         ref={hostRef}

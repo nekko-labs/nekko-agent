@@ -20,6 +20,23 @@ export async function deriveKey(secret: string, salt: string): Promise<CryptoKey
   );
 }
 
+/**
+ * The room credential presented to the relay as `key=`: hex of HMAC-SHA256
+ * keyed with the pairing secret over `"nekko-relay-auth:" + room` (decision
+ * 0036). One-way, so the relay can check both ends hold the same pairing
+ * without ever seeing the secret the E2E key derives from.
+ */
+export async function relayAuth(secret: string, room: string): Promise<string> {
+  const enc = new TextEncoder();
+  // PROTOCOL CONSTANT: the label every client and computer derives the relay credential with.
+  const mac = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', mac, enc.encode(`nekko-relay-auth:${room}`)));
+  return Array.from(sig, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** How saved pairings reach the relay: 2 is `relayAuth` (decision 0036). Older saved pairings must pair again. */
+export const RELAY_PAIRING_VERSION = 2;
+
 /** Encrypt a JSON-serializable value → a base64 string (iv ‖ ciphertext). */
 export async function seal(key: CryptoKey, value: unknown): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));

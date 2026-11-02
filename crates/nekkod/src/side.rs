@@ -16,16 +16,10 @@ use serde_json::{Value, json};
 
 pub const CHANNELS: &[&str] = &["chat:suggest", "chat:fillPrompt"];
 
-/// Served here only when the daemon owns the chats, the settings and turn
-/// admission.
-pub fn owned(ctx: &Ctx) -> bool {
-    ctx.sessions.is_some() && ctx.settings.is_some() && ctx.admission.is_some()
-}
-
 pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let arg = |i: usize| args.get(i).and_then(Value::as_str).unwrap_or_default().to_string();
     let session_id = arg(0);
-    let Some(store) = ctx.sessions.clone() else { return Ok(Value::Null) };
+    let store = ctx.sessions.clone();
     let id = session_id.clone();
     let Some(session) = tokio::task::spawn_blocking(move || store.get(&id)).await.map_err(|e| e.to_string())? else {
         return Ok(Value::Null);
@@ -98,9 +92,7 @@ async fn complete(
     // Usage is kept even when the call failed or timed out, as the host's sideband kept it.
     if let Some(usage) = out.get("usage").and_then(Value::as_array).filter(|u| !u.is_empty()) {
         let who = json!({ "id": resolved.get("id"), "kind": resolved.get("kind"), "auth": resolved.get("auth") });
-        if ctx.accounts.enabled() {
-            ctx.accounts.side_usage(&who, model_id.as_ref(), session_id, usage);
-        }
+        ctx.accounts.side_usage(&who, model_id.as_ref(), session_id, usage);
     }
     if out.get("error").is_some() {
         return None;

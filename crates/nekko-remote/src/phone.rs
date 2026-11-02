@@ -59,6 +59,7 @@ pub struct Policy {
     /// `PHONE_VIEWS` and the views beyond the chat (phone_views.rs).
     pub views: crate::phone_views::Views,
     pub queue_edit_keys: Vec<String>,
+    pub brain_keys: Vec<String>,
     /// `PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS` (IO-33).
     pub read_channels: Vec<String>,
     pub change_channels: Vec<String>,
@@ -129,6 +130,7 @@ pub fn policy() -> &'static Policy {
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
             views: crate::phone_views::Views::from_policy(&v),
             queue_edit_keys: strings(&v["queueEditKeys"]),
+            brain_keys: strings(&v["brainKeys"]),
             read_channels: strings(&v["readChannels"]),
             change_channels: strings(&v["changeChannels"]),
             agent_channels: strings(&v["agentChannels"]),
@@ -361,6 +363,25 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 return Err(denied("value-invalid", "queued prompt edit"));
             }
         }
+        "chat:steer" => {
+            id(0, "chat id")?;
+            if arg(1).as_str().is_none_or(|t| nekko_js::trim(t).is_empty()) {
+                return Err(denied("value-invalid", "message"));
+            }
+        }
+        "chat:interruptQueued" => {
+            id(0, "chat id")?;
+            let index_ok = arg(1).as_f64().is_some_and(|i| i.fract() == 0.0 && i >= 0.0);
+            if !index_ok {
+                return Err(denied("value-invalid", "queue index"));
+            }
+            if !arg(2).is_null() {
+                if !arg(2).is_object() {
+                    return Err(denied("value-invalid", "model"));
+                }
+                keys_within(arg(2), &policy().brain_keys, "model")?;
+            }
+        }
         "task:runNow" => id(0, "task id")?,
         "workflow:run" => id(0, "workflow id")?,
         "limits:get" => id(0, "provider id")?,
@@ -500,7 +521,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
             Value::Array(list) => Value::Array(list.iter().map(|s| pick(s, &policy().skill_view)).collect()),
             _ => json!([]),
         },
-        "session:get" => session_view(result),
+        "session:get" | "chat:steer" => session_view(result),
         "changes:list" => crate::phone_changes::view(&result, &policy().changes_view),
         "chat:editQueued" => match &result {
             Value::Object(o) => json!({
@@ -1861,12 +1882,39 @@ mod tests {
             for c in &p.channels {
                 assert!(classes.of(c).is_some() || has(&p.terminal.token_channels, c), "{c} is in no class");
             }
-            for c in ["chat:send", "chat:queue", "tool:approve", "chat:answer", "task:runNow", "workflow:run"] {
+            for c in [
+                "chat:send",
+                "chat:queue",
+                "chat:steer",
+                "chat:interruptQueued",
+                "tool:approve",
+                "chat:answer",
+                "task:runNow",
+                "workflow:run",
+            ] {
                 assert_eq!(classes.of(c), Some(Class::Agent), "{c}");
             }
             for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
                 assert_eq!(classes.of(c), Some(Class::Read), "{c}");
             }
+        }
+
+        #[test]
+        fn next_step_and_interrupt_check_their_arguments() {
+            let code = |c: &str, a: Value| {
+                let args = a.as_array().cloned().unwrap_or_default();
+                screen(c, &args).err().map(|d| d.code)
+            };
+            assert_eq!(code("chat:steer", json!(["s", "read the tests first"])), None);
+            assert_eq!(code("chat:steer", json!(["", "hi"])), Some("value-invalid"));
+            assert_eq!(code("chat:steer", json!(["s", "   "])), Some("value-invalid"));
+            assert_eq!(code("chat:steer", json!(["s", 5])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0])), None);
+            assert_eq!(code("chat:interruptQueued", json!(["s", 1, { "providerId": "p", "modelId": "m" }])), None);
+            assert_eq!(code("chat:interruptQueued", json!(["s", -1])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 1.5])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0, "p"])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0, { "yolo": true }])), Some("option-denied"));
         }
 
         #[test]

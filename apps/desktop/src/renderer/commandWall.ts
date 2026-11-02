@@ -375,16 +375,15 @@ export function addPane(root: WbNode | null, pane: WbPane, aspect = DEFAULT_ASPE
 }
 
 /**
- * Open a chat or shell from the panel, the toolbar or anywhere else: it goes
- * into the active zone (an agent already on the board trades places with what
- * the zone held), and a chat becomes the hero. In Focus an agent already on
- * the board is only shown, so the Dynamic board behind it does not shuffle.
- * Returns the same state when nothing changed, so reselecting a chat neither
- * re-renders the wall nor saves it again.
+ * Open a chat or shell from the panel, the toolbar or anywhere else: one
+ * already on the board is only shown, its zone becoming the active one, so
+ * nothing on the board moves; any other goes into the active zone. A chat
+ * becomes the hero. Returns the same state when nothing changed, so
+ * reselecting a chat neither re-renders the wall nor saves it again.
  */
 export function openWallPane(state: CommandWallState, kind: PaneKind, refId: string): CommandWallState {
   let { root, activeZone = null } = state;
-  const zone = state.layout.mode === 'focus' ? zoneOf(root, kind, refId) ?? targetZone(state) : targetZone(state);
+  const zone = zoneOf(root, kind, refId) ?? targetZone(state);
   if (!zone) {
     const pane = { ...emptyZone(null), kind, refId };
     root = pane;
@@ -464,14 +463,53 @@ export function nextZoneName(root: WbNode | null): string {
   return `Zone ${n}`;
 }
 
-/** A zone with nothing in it, named after the ones already on `root`. */
+/** How many zone colours there are; `--zone-tint-0` … `--zone-tint-5` in styles.css. */
+export const ZONE_TINTS = 6;
+
+/**
+ * Each zone's colour, by pane id. A zone keeps the tint it was given; one
+ * saved before zones had colours takes the first tint free, in reading order,
+ * so the board reads the same on every render.
+ */
+export function zoneTints(root: WbNode | null): Map<string, number> {
+  const panes = allPanes(root);
+  const tints = new Map<string, number>();
+  const taken = new Set<number>();
+  for (const p of panes) if (p.tint !== undefined) { tints.set(p.id, p.tint); taken.add(p.tint); }
+  for (const p of panes) {
+    if (tints.has(p.id)) continue;
+    const free = Array.from({ length: ZONE_TINTS }, (_, i) => i).find((i) => !taken.has(i)) ?? tints.size % ZONE_TINTS;
+    tints.set(p.id, free);
+    taken.add(free);
+  }
+  return tints;
+}
+
+/** The tint a new zone on `root` gets: the first one no zone is using. */
+export function nextZoneTint(root: WbNode | null): number {
+  const taken = new Set(zoneTints(root).values());
+  return Array.from({ length: ZONE_TINTS }, (_, i) => i).find((i) => !taken.has(i)) ?? taken.size % ZONE_TINTS;
+}
+
+/** The colour of the zone showing each chat or shell, by its id; agents off the board are absent. */
+export function agentZoneTints(root: WbNode | null): Map<string, number> {
+  const tints = zoneTints(root);
+  return new Map(allPanes(root).filter((p) => p.refId && p.kind !== 'zone').map((p) => [p.refId, tints.get(p.id)!]));
+}
+
+/** Give a zone a colour of its own, picked from its header's menu. */
+export function setZoneTint(root: WbNode | null, paneId: string, tint: number): WbNode | null {
+  return mapLeaf(root, paneId, (p) => (p.tint === tint ? p : { ...p, tint }));
+}
+
+/** A zone with nothing in it, named and coloured after the ones already on `root`. */
 export function emptyZone(root: WbNode | null): WbPane {
-  return { id: newPaneId(), kind: 'zone', refId: '', zone: nextZoneName(root) };
+  return { id: newPaneId(), kind: 'zone', refId: '', zone: nextZoneName(root), tint: nextZoneTint(root) };
 }
 
 /** Two zones side by side holding `chatIds` in order; empty where there are fewer. */
 export function startZones(chatIds: string[]): WbSplit {
-  const children: WbPane[] = Array.from({ length: START_ZONES }, (_, i) => ({ id: newPaneId(), kind: chatIds[i] ? 'chat' : 'zone', refId: chatIds[i] ?? '', zone: `Zone ${i + 1}` }));
+  const children: WbPane[] = Array.from({ length: START_ZONES }, (_, i) => ({ id: newPaneId(), kind: chatIds[i] ? 'chat' : 'zone', refId: chatIds[i] ?? '', zone: `Zone ${i + 1}`, tint: i }));
   return { id: newSplitId(), dir: 'row', children, sizes: children.map(() => 1 / START_ZONES) };
 }
 
@@ -570,7 +608,10 @@ function sanitize(node: unknown, reserve: (id: string) => void, dock: MonitorsDo
     dock.monitors[n.kind] = true;
     return null;
   }
-  const zone = typeof n.zone === 'string' && n.zone ? { zone: n.zone } : {};
+  const zone = {
+    ...(typeof n.zone === 'string' && n.zone ? { zone: n.zone } : {}),
+    ...(Number.isInteger(n.tint) && (n.tint as number) >= 0 && (n.tint as number) < ZONE_TINTS ? { tint: n.tint as number } : {}),
+  };
   if (n.kind === 'zone') { reserve(n.id); return { id: n.id, kind: 'zone', refId: '', ...zone }; }
   if (!WALL_KINDS.includes(n.kind as WallKind) || typeof n.refId !== 'string') return null;
   reserve(n.id);

@@ -121,6 +121,6 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
       <ContextAction onClick={() => { void clipboard('plain'); }}>Paste without formatting</ContextAction>
       {error && <p role="alert" className="px-2 text-xs">{error}</p>}
     </ContextMenu>}
-    {toolbar && !menu && !disabled && createPortal(<div ref={tools} data-composer-toolbar className="card fixed z-[99] rounded-lg p-1 shadow-lg" style={{ left: toolbar.x, top: toolbar.y, maxWidth: 'calc(100vw - 16px)', background: 'var(--paper)' }}>{controls}</div>, document.body)}
+    {toolbar && !menu && !disabled && createPortal(<div ref={tools} data-composer-toolbar className="card fixed z-[99] rounded-lg p-1 shadow-(--shadow-float)" style={{ left: toolbar.x, top: toolbar.y, maxWidth: 'calc(100vw - 16px)', background: 'var(--paper)' }}>{controls}</div>, document.body)}
   </>;
 }

@@ -8,11 +8,14 @@
 //! speeds measured here (`measured.rs`) and the model recommendations made
 //! against both (`machine:recommendations`, `recommend.rs`), and whether
 //! someone is using the computer (`activity:state`, `activity.rs`), and
-//! whether a full-screen app is in front (`activity:fullscreen`, `fullscreen.rs`).
+//! whether a full-screen app is in front (`activity:fullscreen`, `fullscreen.rs`),
+//! and whether memory is running low and which app holds it (`memory:state`,
+//! `memory.rs`).
 
 pub mod activity;
 pub mod fullscreen;
 pub mod measured;
+pub mod memory;
 pub mod nudges;
 pub mod parse;
 pub mod probe;

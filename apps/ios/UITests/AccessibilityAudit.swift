@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 extension XCTestCase {
     /// The appearances the light-and-dark tests run in: NEKKO_UI_THEMES ("light" on CI
     /// for a change that keeps its colours; scripts/ios-theme-scope.mjs), else both.
@@ -22,7 +23,7 @@ extension XCTestCase {
     ///   the audit samples whatever covers them.
     /// - Clipping on the system search field's placeholder.
     /// - Hit regions of activity indicators (spinners aren't tappable).
-    /// - Contrast and clipping of text partly under the navigation bar or in the home indicator's strip.
+    /// - Contrast and clipping of text partly under the navigation bar, the status bar or in the home indicator's strip.
     /// - Findings the audit can't attach to an element.
     /// `ignoring`: element labels excluded on this screen, each with its reason at the call site.
     /// `covered`: a pinned, translucent bar; text under it is measured against the
@@ -39,11 +40,15 @@ extension XCTestCase {
         let window = app.windows.firstMatch.frame
         // If the keyboard is still up, what's under it (and its Done bar) isn't what the user sees.
         let keyboard = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.insetBy(dx: 0, dy: -44) : .null
-        // Text scrolled under the translucent navigation bar, or into the home
-        // indicator's strip, is sampled against the bar: listed, not blocking.
+        // Text scrolled under the translucent navigation bar, into the status bar's strip
+        // above it, or into the home indicator's strip, is sampled against the bar: listed,
+        // not blocking. The status strip isn't part of the bar's frame and nothing there
+        // takes the hit test, so a row under it still reads as hittable (runs 41278277522,
+        // 41281896368: a list row and a transcript line at y ≈ 40 failed contrast).
         let navBar = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame : CGRect.null
+        let statusStrip = window.isEmpty ? CGRect.null : CGRect(x: window.minX, y: window.minY, width: window.width, height: 62)
         let homeStrip = window.isEmpty ? CGRect.null : CGRect(x: window.minX, y: window.maxY - 34, width: window.width, height: 34)
-        let bars = navBar.union(homeStrip)
+        let bars = navBar.union(statusStrip).union(homeStrip)
 
         var blocking: [String] = [], other: [String] = []
         // XCTest's audit sometimes times out on a busy simulator (code -56), more than once

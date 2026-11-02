@@ -2,6 +2,7 @@ import XCTest
 
 /// Nekko Cloud's sign-in screen, reached from the welcome screen, in light and
 /// dark (the screenshots are the PR's iPhone evidence), audited for accessibility.
+@MainActor
 final class CloudTests: XCTestCase {
     func testTheSignInScreenInLightAndDark() {
         for theme in uiTestThemes {

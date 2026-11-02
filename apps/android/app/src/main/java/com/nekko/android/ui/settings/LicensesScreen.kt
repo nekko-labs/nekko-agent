@@ -1,5 +1,6 @@
 package com.nekko.android.ui.settings
 
+import androidx.compose.ui.res.stringResource
 import androidx.annotation.RawRes
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -74,10 +75,10 @@ fun LicensesScreen(onBack: () -> Unit) {
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Open-source licenses") },
+                title = { Text(stringResource(R.string.settings_licenses)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back)) }
                 },
             )
         },
@@ -99,7 +100,7 @@ private fun LicenseCard(group: LicenseGroup) {
             group.components.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = p.ink) }
             group.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
             if (group.text != null) {
-                TextButton(onClick = { open = !open }) { Text(if (open) "Hide license text" else "Show license text") }
+                TextButton(onClick = { open = !open }) { Text(if (open) stringResource(R.string.settings_hide_license) else stringResource(R.string.settings_show_license)) }
                 if (open) LicenseText(group.text)
             }
         }

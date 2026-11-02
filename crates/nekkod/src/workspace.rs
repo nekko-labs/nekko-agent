@@ -3,7 +3,7 @@
 //! (`crates/nekko-workspace`).
 //!
 //! A workspace's folder comes from the settings (`crate::settings::current`,
-//! the daemon's own store when it knows the data directory); everything runs
+//! the daemon's own store); everything runs
 //! here, off the async threads. Index progress goes to the UI from here.
 
 use crate::hub::Hub;
@@ -51,8 +51,7 @@ pub const CHANNELS: &[&str] = &[
     "pr:checks",
 ];
 
-/// Channels that keep their files in the data directory, served only when
-/// this daemon knows it.
+/// Channels that keep their files in the data directory.
 pub const DATA_CHANNELS: &[&str] = &[
     // The saved folders: settings writes, and chats that lose a folder.
     "workspace:list",
@@ -93,7 +92,7 @@ pub const DATA_CHANNELS: &[&str] = &[
 const DESIGN_TIMEOUT_MS: u64 = 10 * 60 * 1000;
 
 pub struct Workspace {
-    data_dir: Option<PathBuf>,
+    data_dir: PathBuf,
     index: Arc<Index>,
     prs: Arc<Prs>,
     git: Git,
@@ -106,7 +105,7 @@ impl Workspace {
     /// `NEKKO_GITHUB_API_URL` for the Local Web UI, whose server writes the
     /// config). Tests point it at a loopback server, with `NEKKO_GH_PATH`
     /// naming a `gh` that does not exist so the REST fallback runs.
-    pub fn new(data_dir: Option<PathBuf>, github_api: Option<&str>) -> Self {
+    pub fn new(data_dir: PathBuf, github_api: Option<&str>) -> Self {
         let gh = std::env::var("NEKKO_GH_PATH").unwrap_or_else(|_| "gh".into());
         let api = github_api
             .map(str::to_string)
@@ -123,9 +122,9 @@ impl Workspace {
         }
     }
 
-    /// The data directory, when this daemon knows it.
-    pub fn data_dir(&self) -> Option<&std::path::Path> {
-        self.data_dir.as_deref()
+    /// The data directory.
+    pub fn data_dir(&self) -> &std::path::Path {
+        &self.data_dir
     }
 
     /// The PR reads and their caches, shared with the stacked-PR channels.
@@ -134,15 +133,9 @@ impl Workspace {
     }
 
     /// `getVaizerCatalog(refresh)` (`refreshVaizerCatalog` with `true`), for
-    /// the update checks; None without a data directory.
-    pub async fn vaizer_catalog(&self, refresh: bool) -> Option<Value> {
-        let dir = self.data_dir.clone()?;
-        Some(self.vaizer.catalog(&dir, refresh).await)
-    }
-
-    /// Is this channel answered here (never handed back to the host)?
-    pub fn serves(&self, channel: &str) -> bool {
-        CHANNELS.contains(&channel) || (self.data_dir.is_some() && DATA_CHANNELS.contains(&channel))
+    /// the update checks.
+    pub async fn vaizer_catalog(&self, refresh: bool) -> Value {
+        self.vaizer.catalog(&self.data_dir, refresh).await
     }
 }
 
@@ -170,7 +163,7 @@ async fn settings(ctx: &Ctx) -> Value {
 
 /// A chat, from the daemon's store or else the host.
 async fn session(ctx: &Ctx, id: &str) -> Value {
-    let Some(store) = ctx.sessions.clone() else { return Value::Null };
+    let store = ctx.sessions.clone();
     let id = id.to_string();
     blocking(move || store.get(&id).unwrap_or(Value::Null)).await.unwrap_or(Value::Null)
 }
@@ -387,7 +380,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "workspace:remove" => remove_folder(ctx, &text(&args, 0)).await,
         "skills:installed" | "skills:targets" | "skill:install" | "skill:uninstall" | "skills:external"
         | "skills:runnable" | "workflow:skillDefs" => {
-            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
+            let dir = ws.data_dir.clone();
             let roots: Vec<String> = if matches!(channel, "skills:external" | "skills:runnable" | "workflow:skillDefs")
             {
                 folders(ctx).await.iter().filter_map(|w| w.get("path").map(nekko_js::display)).collect()
@@ -397,10 +390,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
             let channel = channel.to_string();
             blocking(move || skills_route(&dir, &channel, &args, &roots)).await?
         }
-        "vaizer:catalog" => {
-            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
-            Ok(ws.vaizer.catalog(&dir, nekko_js::truthy(arg(&args, 0))).await)
-        }
+        "vaizer:catalog" => Ok(ws.vaizer.catalog(&ws.data_dir, nekko_js::truthy(arg(&args, 0))).await),
         "vaizer:skillMd" => Ok(ws.vaizer.skill_md(&text(&args, 0)).await),
         "spec:path" | "spec:readDocs" | "spec:setMethodology" | "spec:toggleTask" => {
             let sid = text(&args, 0);
@@ -421,7 +411,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                     ),
                     _ => {
                         spec::assert_host(&sid, &session, "Host spec access")?;
-                        if let Some(store) = store.filter(|_| !session.is_null()) {
+                        if !session.is_null() {
                             store.set_spec_methodology(&sid, &spec::methodology_id(arg(&args, 1)))?;
                         }
                         Ok(Value::Null)
@@ -432,19 +422,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         }
         "spec:build" | "spec:buildDoc" => build_spec(ctx, args).await,
         "design:addPage" => {
-            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
+            let dir = ws.data_dir.clone();
             let folder = folder_path(&folders(ctx).await, &arg(&args, 0).map(nekko_js::display).unwrap_or_default());
             blocking(move || design::add_page(&dir, arg(&args, 0), arg(&args, 1), arg(&args, 2), folder.as_deref()))
                 .await?
         }
-        "design:generate" => {
-            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
-            generate_design(ctx, dir, args).await
-        }
-        _ => {
-            let Some(dir) = ws.data_dir.clone() else { return Err(format!("{channel} needs the data directory")) };
-            data_route(dir, channel, args).await
-        }
+        "design:generate" => generate_design(ctx, ws.data_dir.clone(), args).await,
+        _ => data_route(ws.data_dir.clone(), channel, args).await,
     }
 }
 
@@ -537,7 +521,7 @@ fn busy_chats(ctx: &Ctx) -> Vec<String> {
 /// `removeWorkspace(id)`: revoke saved access only, never touching the
 /// folder. Refused while a chat using it runs; chats using it lose it.
 async fn remove_folder(ctx: &Ctx, id: &str) -> Result<Value, String> {
-    let Some(store) = ctx.sessions.clone() else { return Err("workspace:remove needs the data directory".into()) };
+    let store = ctx.sessions.clone();
     let wid = id.to_string();
     let affected: Vec<String> = blocking({
         let store = store.clone();
@@ -695,9 +679,7 @@ async fn commit_message(ctx: &Ctx, dir: &str) -> Result<Value, String> {
         "usageOnFailure": true,
     });
     let out = crate::sideband::complete(&request).await.map_err(|e| format!("Writing the message failed: {e}"))?;
-    if let Some(usage) = out.get("usage").and_then(Value::as_array).filter(|u| !u.is_empty())
-        && ctx.accounts.enabled()
-    {
+    if let Some(usage) = out.get("usage").and_then(Value::as_array).filter(|u| !u.is_empty()) {
         let who = json!({ "id": provider.get("id"), "kind": provider.get("kind"), "auth": provider.get("auth") });
         ctx.accounts.side_usage(&who, Some(&model), "", usage);
     }

@@ -43,6 +43,23 @@ export function parseClaudeModel(modelId: string | undefined): ClaudeId | null {
   return { family: m[1] as ClaudeId['family'], major: Number(m[2]), minor: Number(m[3] ?? 0) };
 }
 
+/**
+ * How a model id reads as a short card line. For a Claude id the family is
+ * capitalised and the version is dotted ("Opus 5.5", "Opus 4.7"); other ids
+ * come back unchanged. When the picker already carries a vendor label (the
+ * ProviderConfig line reads "Claude" on its own), the shared "Claude " prefix
+ * is dropped so the two don't repeat each other.
+ */
+export function shortModelName(id: string, known?: string): string {
+  if (known) return known.replace(/^Claude\s+/i, '');
+  const c = parseClaudeModel(id);
+  if (c) {
+    const family = c.family[0].toUpperCase() + c.family.slice(1);
+    return `${family} ${c.major}${c.minor ? `.${c.minor}` : ''}`;
+  }
+  return id;
+}
+
 /** True from the 4.6 generation onwards, where the 1M window became standard. */
 function atLeast(c: ClaudeId, major: number, minor: number): boolean {
   return c.major > major || (c.major === major && c.minor >= minor);

@@ -90,7 +90,7 @@ export function LocalServerSection() {
           it be), which is the setting the backend acts on. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent-2)' }} />
-        <h2 className="text-[15px] font-semibold">Agent server</h2>
+        <h2 className="text-base font-semibold">Agent server</h2>
         <div className="ml-auto flex items-center gap-3">
           {status.available === false && <span className="chip">this edition</span>}
           {canToggle && (
@@ -103,7 +103,7 @@ export function LocalServerSection() {
                 color="var(--accent-2)"
               />
               <label
-                className="flex items-center gap-1.5 text-[12px] text-ink-soft"
+                className="flex items-center gap-2 text-xs text-ink-soft"
                 title="Bring the agent server up when the app opens"
               >
                 Start Server on Nekko Launch
@@ -118,7 +118,7 @@ export function LocalServerSection() {
           )}
         </div>
       </div>
-      <p className="mt-0.5 text-[12px] text-ink-faint">
+      <p className="mt-0.5 text-xs text-ink-faint">
         Drive this app from other programs, the <span className="font-mono">nekko-agent</span> CLI, or other agents
         over MCP.
       </p>
@@ -126,9 +126,9 @@ export function LocalServerSection() {
       <div className="card mt-3 p-5">
         <div className="flex flex-wrap items-center gap-2">
           <StatusDot running={running} busy={busy} />
-          <span className="text-[13px]">{running ? 'Running' : 'Stopped'}</span>
+          <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
           {running && (
-            <span className="text-[11px] text-ink-faint">
+            <span className="text-2xs text-ink-faint">
               {status.requests} request{status.requests === 1 ? '' : 's'}
               {status.clients > 0 ? ` · ${status.clients} listening` : ''}
             </span>
@@ -139,12 +139,12 @@ export function LocalServerSection() {
         </div>
 
         {status.error && (
-          <p className="mt-2 text-[11.5px]" style={{ color: 'var(--danger)' }}>
+          <p className="mt-2 text-xs" style={{ color: 'var(--danger)' }}>
             {status.error}
           </p>
         )}
         {settings.bind === 'lan' && running && (
-          <p className="mt-2 text-[11.5px]" style={{ color: 'var(--warning)' }}>
+          <p className="mt-2 text-xs" style={{ color: 'var(--warning)' }}>
             Reachable from your whole network on port {settings.port}. Anything with the token can run the agent,
             including its shell and file tools.
           </p>
@@ -154,8 +154,8 @@ export function LocalServerSection() {
             once: folded away like the model server's settings, so the panel
             stays as short as the question most people arrive with. */}
         <details className="mt-4 border-t border-line pt-4">
-          <summary className="cursor-pointer text-[12px] font-medium">Agent server settings</summary>
-          <div className="mt-3 flex flex-wrap gap-1.5 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
+          <summary className="cursor-pointer text-xs font-medium">Agent server settings</summary>
+          <div className="mt-3 flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
             <TabButton active={tab === 'server'} onClick={() => setTab('server')}>Server</TabButton>
             <TabButton active={tab === 'cli'} onClick={() => setTab('cli')}>CLI</TabButton>
             <TabButton active={tab === 'mcp'} onClick={() => setTab('mcp')}>MCP</TabButton>
@@ -166,7 +166,7 @@ export function LocalServerSection() {
               (canToggle ? (
                 <ServerTab status={status} busy={busy} onSave={save} />
               ) : (
-                <p className="text-[12px] text-ink-soft">
+                <p className="text-xs text-ink-soft">
                   This edition already is the Nekko Agent server — it is serving this page. Point the CLI and MCP
                   clients at <span className="font-mono">{url}</span> with the token that server was started with
                   (<span className="font-mono">NEKKO_TOKEN</span>).
@@ -226,7 +226,7 @@ function ServerTab({
           }
         >
           <select
-            className="input w-44 py-1 text-[12px]"
+            className="input w-44 py-1 text-xs"
             value={draft.bind}
             aria-label="Reachable from"
             onChange={(e) => setDraft({ ...draft, bind: e.target.value as ApiServerBind })}
@@ -240,7 +240,7 @@ function ServerTab({
         <Field label="Port" hint="Where the server listens.">
           <input
             type="number"
-            className="input w-28 py-1 text-[12px]"
+            className="input w-28 py-1 text-xs"
             min={1024}
             max={65535}
             aria-label="Port"
@@ -252,7 +252,7 @@ function ServerTab({
         {draft.bind === 'custom' && (
           <Field label="Address to listen on" hint="An interface on this machine, e.g. 192.168.1.20 or ::1.">
             <input
-              className="input w-44 py-1 font-mono text-[12px]"
+              className="input w-44 py-1 font-mono text-xs"
               placeholder="192.168.1.20"
               aria-label="Address to listen on"
               value={draft.host ?? ''}
@@ -266,7 +266,7 @@ function ServerTab({
           hint="Only when it differs from where it listens: a tunnel, a container port, a Tailscale name."
         >
           <input
-            className="input w-52 py-1 font-mono text-[12px]"
+            className="input w-52 py-1 font-mono text-xs"
             placeholder={apiServerUrl(draft)}
             aria-label="Address clients use"
             value={draft.advertisedUrl ?? ''}
@@ -277,14 +277,14 @@ function ServerTab({
 
       <div>
         <div className="flex items-center justify-between gap-3">
-          <label className="text-[12px]">Token</label>
+          <label className="text-xs">Token</label>
           <div className="flex items-center gap-2">
-            <code className="max-w-[220px] truncate rounded-md px-2 py-1 font-mono text-[11px]" style={{ background: 'var(--surface-2)' }}>
+            <code className="max-w-[220px] truncate rounded-md px-2 py-1 font-mono text-2xs" style={{ background: 'var(--surface-2)' }}>
               {status.settings.token ? (revealed ? status.settings.token : '•'.repeat(18)) : 'generated when it starts'}
             </code>
             {status.settings.token && (
               <>
-                <button className="text-[11px] text-ink-faint hover:text-ink" onClick={() => setRevealed((v) => !v)}>
+                <button className="text-2xs text-ink-faint hover:text-ink" onClick={() => setRevealed((v) => !v)}>
                   {revealed ? 'Hide' : 'Show'}
                 </button>
                 <CopyPill value={status.settings.token} title="Copy the token" compact />
@@ -292,13 +292,13 @@ function ServerTab({
             )}
           </div>
         </div>
-        <p className="mt-0.5 text-[11px] text-ink-faint">
+        <p className="mt-0.5 text-2xs text-ink-faint">
           Sent as <span className="font-mono">Authorization: Bearer …</span> on every request. There is no
           unauthenticated mode: this endpoint can run shell commands. Rolling it updates the CLI and the MCP entries
           this app wrote.
         </p>
         <button
-          className="mt-1.5 text-[11.5px] text-ink-faint hover:text-ink"
+          className="mt-1 text-xs text-ink-faint hover:text-ink"
           onClick={async () => {
             if (!window.confirm('Roll the token? Anything you configured by hand with the old one stops working.')) return;
             await window.nekko.apiServerNewToken();
@@ -309,18 +309,18 @@ function ServerTab({
         </button>
       </div>
 
-      {refusal && <p className="text-[11.5px]" style={{ color: 'var(--danger)' }}>{refusal}</p>}
+      {refusal && <p className="text-xs" style={{ color: 'var(--danger)' }}>{refusal}</p>}
 
       <div className="flex flex-wrap items-center gap-2">
         <button
-          className="btn btn-primary py-1.5 text-[12px]"
+          className="btn btn-primary py-1 text-xs"
           onClick={() => onSave(draft)}
           disabled={!dirty || busy || !!refusal}
         >
           {busy ? 'Saving…' : 'Save'}
         </button>
         {dirty && (
-          <button className="btn btn-ghost py-1.5 text-[12px]" onClick={() => setDraft(status.settings)}>
+          <button className="btn btn-ghost py-1 text-xs" onClick={() => setDraft(status.settings)}>
             Discard
           </button>
         )}
@@ -331,21 +331,21 @@ function ServerTab({
           their own; these lines are for pointing anything else at it. */}
       <div className="border-t pt-3" style={{ borderColor: 'var(--line)' }}>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <p className="text-[11.5px] font-medium text-ink-soft">Environment</p>
+          <p className="text-xs font-medium text-ink-soft">Environment</p>
           <div className="flex gap-1">
             <TabButton active={shell === 'posix'} onClick={() => setShell('posix')}>bash / zsh</TabButton>
             <TabButton active={shell === 'powershell'} onClick={() => setShell('powershell')}>PowerShell</TabButton>
           </div>
         </div>
         <Command value={shownEnv.join('\n')} copyValue={env.join('\n')} />
-        <p className="mt-1 text-[11px] text-ink-faint">
+        <p className="mt-1 text-2xs text-ink-faint">
           Not needed for the <span className="font-mono">nekko-agent</span> command or the MCP entries this app
           added: they read the address and token from the app. Use these for scripts and anything else.
         </p>
       </div>
 
       {status.lastRequestAt && (
-        <p className="border-t pt-3 text-[11.5px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+        <p className="border-t pt-3 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
           Last request {new Date(status.lastRequestAt).toLocaleTimeString()}.
         </p>
       )}
@@ -391,17 +391,17 @@ function CliTab({ running }: { running: boolean }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-[12px] text-ink-soft">
+      <p className="text-xs text-ink-soft">
         The same agent, from a terminal. It drives this app while the server is on, and your local data directory
         when it is off.
       </p>
 
       {cli === null ? (
-        <p className="text-[12px] text-ink-faint">Checking the command…</p>
+        <p className="text-xs text-ink-faint">Checking the command…</p>
       ) : bundled ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border p-2.5" style={{ borderColor: 'var(--line)' }}>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--line)' }}>
           <TerminalIcon className="h-4 w-4 shrink-0 text-ink-faint" />
-          <span className="font-mono text-[12.5px]">nekko-agent</span>
+          <span className="font-mono text-xs">nekko-agent</span>
           {cli.installed && cli.onPath ? (
             <Badge tone="success" variant="soft">On your PATH</Badge>
           ) : cli.installed ? (
@@ -409,17 +409,17 @@ function CliTab({ running }: { running: boolean }) {
           ) : (
             <span className="chip">not installed</span>
           )}
-          <button className="btn btn-outline ml-auto py-1 text-[11.5px]" disabled={installing} onClick={install}>
+          <button className="btn btn-outline ml-auto py-1 text-xs" disabled={installing} onClick={install}>
             {installing ? 'Installing…' : cli.installed ? 'Reinstall' : 'Install'}
           </button>
           {cli.binDir && (
-            <p className="w-full text-[11px] text-ink-faint">
+            <p className="w-full text-2xs text-ink-faint">
               Shipped inside the app and linked from <span className="font-mono">{cli.binDir}</span>. No Node or npm
               needed.
             </p>
           )}
           {cli.message && (
-            <p className="w-full text-[11px]" style={{ color: 'var(--warning)' }}>
+            <p className="w-full text-2xs" style={{ color: 'var(--warning)' }}>
               {cli.message}
             </p>
           )}
@@ -439,12 +439,12 @@ function CliTab({ running }: { running: boolean }) {
           ].join('\n')}
         />
         {!running && (
-          <p className="mt-1 text-[11px]" style={{ color: 'var(--warning)' }}>
+          <p className="mt-1 text-2xs" style={{ color: 'var(--warning)' }}>
             The server is off, so these run against your local data directory instead of this window.
           </p>
         )}
       </Step>
-      <p className="text-[11px] text-ink-faint">
+      <p className="text-2xs text-ink-faint">
         <span className="font-mono">{command} --help</span> lists every command: sessions, workspaces, tasks, skills,
         workflows and training runs.
       </p>
@@ -491,25 +491,25 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
 
   return (
     <div className="space-y-3">
-      <p className="text-[12px] text-ink-soft">
+      <p className="text-xs text-ink-soft">
         Nekko Agent is also an MCP server, so Claude Code, Codex, Cursor or Windsurf can use it as a subagent: your
         workspaces, skills and sessions become tools they can call. Each entry is written pointing at this app, with
         its address and token, and kept up to date when they change.
       </p>
 
       <div className="space-y-2">
-        {tools === null && <p className="text-[12px] text-ink-faint">Checking which tools are installed…</p>}
+        {tools === null && <p className="text-xs text-ink-faint">Checking which tools are installed…</p>}
         {tools?.length === 0 && (
-          <p className="text-[12px] text-ink-faint">None of the supported tools are installed on this machine.</p>
+          <p className="text-xs text-ink-faint">None of the supported tools are installed on this machine.</p>
         )}
         {tools?.map((t) => (
           <div
             key={t.id}
-            className="flex flex-wrap items-center gap-2 rounded-xl border p-2.5"
+            className="flex flex-wrap items-center gap-2 rounded-xl border p-3"
             style={{ borderColor: 'var(--line)' }}
           >
             <TerminalIcon className="h-4 w-4 shrink-0 text-ink-faint" />
-            <span className="text-[12.5px] font-medium">{t.label}</span>
+            <span className="text-xs font-medium">{t.label}</span>
             {t.installed ? (
               <Badge tone="success" variant="soft">Added</Badge>
             ) : t.detected ? (
@@ -519,7 +519,7 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
             )}
             <span className="ml-auto flex items-center gap-2">
               <button
-                className="text-[11.5px] text-ink-faint hover:text-ink"
+                className="text-xs text-ink-faint hover:text-ink"
                 onClick={async () => {
                   const s = await window.nekko.subagentSnippet(t.id).catch(() => null);
                   setSnippet(s ? { ...s, id: t.id } : null);
@@ -529,7 +529,7 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
               </button>
               {!t.installed && t.detected && (
                 <button
-                  className="btn btn-outline py-1 text-[11.5px]"
+                  className="btn btn-outline py-1 text-xs"
                   disabled={installing !== null}
                   onClick={() => install(t.id)}
                 >
@@ -543,13 +543,13 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
 
       {snippet && (
         <div>
-          <p className="mb-1 text-[11px] text-ink-faint">Paste into {snippet.target}</p>
+          <p className="mb-1 text-2xs text-ink-faint">Paste into {snippet.target}</p>
           <Command value={snippet.snippet} />
         </div>
       )}
 
       <div className="border-t pt-3" style={{ borderColor: 'var(--line)' }}>
-        <p className="mb-1 text-[11.5px] text-ink-soft">
+        <p className="mb-1 text-xs text-ink-soft">
           Anything else that speaks MCP takes this. With the server on it drives this window; without it, a separate
           copy on your data directory.
         </p>
@@ -559,7 +559,7 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
           copyValue={apiServerMcpConfig(url, token || '<generated when the server starts>', cliCommand)}
         />
         {!running && (
-          <p className="mt-1 text-[11px]" style={{ color: 'var(--warning)' }}>
+          <p className="mt-1 text-2xs" style={{ color: 'var(--warning)' }}>
             The server is off, so the two env lines have nothing to reach yet.
           </p>
         )}
@@ -571,9 +571,9 @@ function McpTab({ url, token, running }: { url: string; token: string; running: 
 function Step({ n, label, children }: { n: number; label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-medium text-ink-soft">
+      <p className="mb-1 flex items-center gap-2 text-xs font-medium text-ink-soft">
         <span
-          className="grid h-4 w-4 place-items-center rounded-full text-[9px] tabular-nums"
+          className="grid h-4 w-4 place-items-center rounded-full text-2xs tabular-nums"
           style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
         >
           {n}
@@ -596,13 +596,13 @@ function Command({ value, copyValue }: { value: string; copyValue?: string }) {
   return (
     <div className="group relative">
       <pre
-        className="max-h-56 overflow-auto rounded-lg p-2.5 pr-9 font-mono text-[11px] leading-relaxed"
+        className="max-h-56 overflow-auto rounded-lg p-3 pr-9 font-mono text-2xs leading-relaxed"
         style={{ background: 'var(--surface-2)' }}
       >
         {value}
       </pre>
       <button
-        className="absolute right-1.5 top-1.5 rounded-md p-1 text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus:opacity-100"
+        className="absolute right-1.5 top-1.5 rounded-md p-1 text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 touch:opacity-100 focus:opacity-100"
         title="Copy"
         aria-label="Copy"
         onClick={async () => {
@@ -636,7 +636,7 @@ function CopyPill({ value, title, compact = false }: { value: string; title: str
   }, [copied]);
   return (
     <button
-      className={`inline-flex items-center gap-1.5 rounded-full border ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} font-mono text-[11px] text-ink-faint hover:text-ink`}
+      className={`inline-flex items-center gap-2 rounded-full border ${compact ? 'px-2 py-0.5' : 'px-2 py-1'} font-mono text-2xs text-ink-faint hover:text-ink`}
       style={{ borderColor: 'var(--line)' }}
       title={title}
       onClick={async () => {
@@ -663,7 +663,7 @@ function CopyPill({ value, title, compact = false }: { value: string; title: str
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
-      className="rounded-full px-2.5 py-1 text-[12px]"
+      className="rounded-full px-3 py-1 text-xs"
       style={
         active
           ? { background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }
@@ -691,10 +691,10 @@ function Field({ label, hint, children }: { label: string; hint: string; childre
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <label className="text-[12px]">{label}</label>
+        <label className="text-xs">{label}</label>
         {children}
       </div>
-      <p className="mt-0.5 text-[11px] text-ink-faint">{hint}</p>
+      <p className="mt-0.5 text-2xs text-ink-faint">{hint}</p>
     </div>
   );
 }

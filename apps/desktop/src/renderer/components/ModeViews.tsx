@@ -52,7 +52,7 @@ export function ModeToggle() {
   return (
     <button
       type="button"
-      className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-[11px] font-medium ${expert ? 'text-accent' : ''}`}
+      className={`btn btn-ghost shrink-0 gap-1 px-2 py-1 text-2xs font-medium ${expert ? 'text-accent' : ''}`}
       onClick={() => setExpert(!expert)}
       aria-pressed={expert}
       title={expert ? 'Expert: the hardware and loaded models are shown. Click for Simple.' : 'Simple. Click for Expert, which adds the hardware and loaded models.'}
@@ -118,7 +118,7 @@ export function RingDial({ pct, value, label, temp, size = 40 }: { pct: number |
           {t && <span style={{ fontSize: Math.max(8, size * 0.17), color: tTone === 'ok' ? 'var(--ink-soft)' : tTone === 'warn' ? 'var(--warning)' : 'var(--danger)' }}>{t}</span>}
         </span>
       </div>
-      <span className="max-w-[64px] truncate text-[10px] text-ink-soft">{label}</span>
+      <span className="max-w-[64px] truncate text-2xs text-ink-soft">{label}</span>
     </div>
   );
 }
@@ -160,7 +160,7 @@ export function ExpertMonitor() {
   const loaded = useLoadedCount();
   const { open, setOpen, anchor, pop, style } = usePopover(360, 560);
   return (
-    <div className="shrink-0 border-b border-line px-3 py-1.5" data-expert-monitor>
+    <div className="shrink-0 border-b border-line px-3 py-1" data-expert-monitor>
       <button
         ref={anchor}
         type="button"
@@ -171,19 +171,19 @@ export function ExpertMonitor() {
         aria-label={`Monitor: ${dials.map((d) => `${d.label} ${d.value}`).join(', ')}, ${loaded ?? 0} models loaded`}
       >
         {dials.length === 0
-          ? <span className="flex h-10 items-center text-[11px] text-ink-faint">Hardware monitors are off in Settings.</span>
+          ? <span className="flex h-10 items-center text-2xs text-ink-faint">Hardware monitors are off in Settings.</span>
           : dials.map((d) => <RingDial key={d.label} {...d} size={40} />)}
         <span className="ml-auto flex shrink-0 flex-col items-center gap-0.5 pl-2">
           <CubeIcon className="h-4 w-4 text-accent" />
-          <span className="text-[11px] font-semibold tabular-nums text-ink">{loaded ?? '–'}</span>
-          <span className="text-[10px] text-ink-soft">Loaded</span>
+          <span className="text-2xs font-semibold tabular-nums text-ink">{loaded ?? '–'}</span>
+          <span className="text-2xs text-ink-soft">Loaded</span>
         </span>
       </button>
       {open && createPortal(
-        <div ref={pop} style={style} className="card fixed z-[100] overflow-y-auto p-3 shadow-lg" role="dialog" aria-label="Monitor" data-expert-monitor-sheet>
-          <div className="mb-2 text-[12px] font-semibold text-ink">Hardware</div>
+        <div ref={pop} style={style} className="card fixed z-[100] overflow-y-auto p-3 shadow-(--shadow-float)" role="dialog" aria-label="Monitor" data-expert-monitor-sheet>
+          <div className="mb-2 text-xs font-semibold text-ink">Hardware</div>
           <div className="mb-3 grid grid-cols-4 gap-3">{dials.map((d) => <RingDial key={d.label} {...d} size={60} />)}</div>
-          <div className="mb-1 text-[12px] font-semibold text-ink">Loaded models</div>
+          <div className="mb-1 text-xs font-semibold text-ink">Loaded models</div>
           <LocalModels />
         </div>,
         document.body,

@@ -1,9 +1,9 @@
 {
-  "$comment": "Relay v2 replay protection (protocol 4), shared by the computer (crates/nekko-remote, tests/golden.rs), the iPhone (apps/ios/Protocol, RelayClientTests) and Android (apps/android/protocol, RelayClientTest). The agent seals `challenge.frame` to a connection when the relay announces it (client-open); the phone opens it and answers with exactly `hello` (its own deviceId, name and platform; pair only when enrolling); every request after the welcome carries the same challenge and a seq that starts at 1 and goes up by one (`requests`). `legacyHello` is what a phone sends to a computer that never challenged it. Sealed with AES-256-GCM under PBKDF2-SHA256(secret, \"nekko-relay:\" + room, 100000), IV first, base64.",
+  "$comment": "Relay v2 replay protection (protocol 4) and device-key HELLOs (protocol 5), shared by the computer (crates/nekko-remote, tests/golden.rs), the iPhone (apps/ios/Protocol, RelayClientTests) and Android (apps/android/protocol, RelayClientTest). The agent seals `challenge.frame` to a connection when the relay announces it (client-open); the phone opens it and answers with exactly `hello` (its own deviceId, name and platform; pair only when enrolling); every request after the welcome carries the same challenge and a seq that starts at 1 and goes up by one (`requests`). `legacyHello` is what a phone sends to a computer that never challenged it. Sealed with AES-256-GCM under PBKDF2-SHA256(secret, \"nekko-relay:\" + room, 100000), IV first, base64. `helloKey` is a device key (P-256, private scalar hex, public X9.63 base64), the text a HELLO answering `challenge` signs (nekko-hello-v1, deviceId, room, challenge joined by newlines) and one valid raw r||s signature of it; a phone with a device key adds `helloKey` (its public key) and `sig` to `hello`, which is otherwise exactly as here.",
   "secret": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
   "room": "a1b2c3d4e5f60718",
   "key": "df7d9b2ebbe22078543ea07b5a227d92f6eba4d7fa6ca5655f5b919de40f949a",
-  "protocol": 4,
+  "protocol": 5,
   "device": {
     "deviceId": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
     "name": "Test phone",
@@ -22,7 +22,7 @@
     "deviceId": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
     "name": "Test phone",
     "platform": "android",
-    "protocol": 4,
+    "protocol": 5,
     "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA"
   },
   "legacyHello": {
@@ -51,5 +51,11 @@
         "s1"
       ]
     }
-  ]
+  ],
+  "helloKey": {
+    "privateKeyHex": "2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+    "publicKey": "BAyQHUI8gxyoXifHPCY7oTJyG7nXqExPA4CypnVv1gEzHIhwI03sh4UEwXQUT6SxS2amUWkWBtgXPlW9N+OBVp4=",
+    "text": "nekko-hello-v1\n6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b\na1b2c3d4e5f60718\nBRAbJjE8R1JdaHN+iZSfqrXA",
+    "sig": "8ZPI7jKmbu35tB/WoFQI2Twkky7wKYH1pifCSdPk7oUHiSd2gGF2i/0+CWJc9hcEsEuukLgkSRUML34tJdjdoA=="
+  }
 }

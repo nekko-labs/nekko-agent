@@ -54,13 +54,15 @@ class ChatStatusTest {
 
     @Test fun runningOverridesArchivedWatch() {
         row(archived = true, watches = 1, activity = Activity.RUNNING)
-        compose.onNodeWithText("Running", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Working", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("Working", useUnmergedTree = true).assertExists()
         compose.onNodeWithContentDescription("Idle", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test fun needsYouOverridesArchivedWatch() {
         row(archived = true, watches = 1, activity = Activity.NEEDS_YOU)
         compose.onNodeWithText("Needs you", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("Needs you", useUnmergedTree = true).assertExists()
         compose.onNodeWithContentDescription("Idle", useUnmergedTree = true).assertDoesNotExist()
     }
 }

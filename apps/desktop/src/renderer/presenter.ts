@@ -11,7 +11,8 @@
  *
  * Turned on by `NEKKO_PRESENTER=1` in the desktop app (the preload passes it
  * on with the user, home and host names to mask) or `?presenter=1` in the
- * Local Web UI, which remembers it for the tab until `?presenter=0`.
+ * Local Web UI. Neither is remembered: the next launch, or the same page
+ * without the flag, is the normal app.
  */
 
 /** What the preload exposes as `window.nekkoPresenter` when the env var is set. */
@@ -23,7 +24,6 @@ export interface PresenterInfo {
 
 const EXEMPT = '[data-presenter-exempt]';
 const ATTRS = ['title', 'aria-label', 'placeholder', 'alt'] as const;
-const STORAGE_KEY = 'nekko.presenter';
 
 export const PLACEHOLDER = { email: 'you@example.com', user: 'demo', host: 'workstation', key: 'sk-••••' } as const;
 
@@ -49,7 +49,8 @@ export function createMasker(info: PresenterInfo = {}) {
 
   return function maskPersonal(text: string): string {
     if (!text) return text;
-    let out = text.replace(EMAIL, PLACEHOLDER.email);
+    // Reserved example domains are already safe, and demo scripts type them on purpose.
+    let out = text.replace(EMAIL, (m) => (/@example\.(com|org|net)$/i.test(m) ? m : PLACEHOLDER.email));
     if (info.home) out = out.split(info.home).join('~');
     out = out.replace(HOME_PATH, (_m, name: string) => { add(names, name); return '~'; });
     out = out.replace(KEY, PLACEHOLDER.key);
@@ -64,14 +65,7 @@ export function createMasker(info: PresenterInfo = {}) {
 export function presenterRequest(): PresenterInfo | null {
   const fromPreload = (window as { nekkoPresenter?: PresenterInfo }).nekkoPresenter;
   if (fromPreload) return fromPreload;
-  const param = new URLSearchParams(location.search).get('presenter');
-  try {
-    if (param === '1') sessionStorage.setItem(STORAGE_KEY, '1');
-    if (param === '0') sessionStorage.removeItem(STORAGE_KEY);
-    return sessionStorage.getItem(STORAGE_KEY) === '1' ? {} : null;
-  } catch {
-    return param === '1' ? {} : null;
-  }
+  return new URLSearchParams(location.search).get('presenter') === '1' ? {} : null;
 }
 
 /** Mask everything under `root` now and on every later change, skipping Settings. Returns a stop function. */
@@ -81,7 +75,8 @@ export function startPresenterMode(info: PresenterInfo, root: Node = document.bo
 
   const fixText = (node: Text) => {
     const parent = node.parentElement;
-    if (!parent || exempt(parent) || parent.closest('script, style, textarea, [contenteditable="true"]')) return;
+    // Never rewrite what is being typed: it would move the caret mid-word.
+    if (!parent || exempt(parent) || parent.isContentEditable || parent.closest('script, style, textarea')) return;
     const next = mask(node.data);
     if (next !== node.data) node.data = next;
   };

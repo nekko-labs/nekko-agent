@@ -98,7 +98,7 @@ export function RelayPairing() {
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6" style={{ background: 'var(--paper)' }}>
       <div className="mb-5 grid h-16 w-16 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={40} /></div>
       <h1 className="text-xl font-semibold">Pair with your computer</h1>
-      <p className="mt-2 max-w-sm text-center text-[13px] text-ink-faint">
+      <p className="mt-2 max-w-sm text-center text-sm text-ink-faint">
         Nekko Agent on your desktop → <span className="font-medium text-ink-soft">Settings → Remote access</span>, pick Tailscale or Nekko Cloud, then paste the pairing link here. Your phone drives the model on your computer, end-to-end encrypted.
       </p>
       <textarea
@@ -108,9 +108,9 @@ export function RelayPairing() {
         value={input}
         onChange={(e) => setInput(e.target.value)}
       />
-      {error && <p className="mt-2 max-w-sm text-center text-[12px]" style={{ color: 'var(--danger)' }}>{error}</p>}
+      {error && <p className="mt-2 max-w-sm text-center text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
       <button className="btn btn-primary mt-4 w-full max-w-sm" onClick={pair} disabled={!input.trim()}>Pair</button>
-      <div className="my-3 flex w-full max-w-sm items-center gap-3 text-[11px] text-ink-faint">
+      <div className="my-3 flex w-full max-w-sm items-center gap-3 text-2xs text-ink-faint">
         <span className="h-px flex-1" style={{ background: 'var(--line)' }} /> or <span className="h-px flex-1" style={{ background: 'var(--line)' }} />
       </div>
       <button className="btn btn-outline w-full max-w-sm" onClick={() => { setError(''); setScanning(true); }}>

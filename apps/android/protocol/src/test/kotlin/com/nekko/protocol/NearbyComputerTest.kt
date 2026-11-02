@@ -28,7 +28,7 @@ class NearbyComputerTest {
         assertNull("the phone itself", relay("wss://localhost:4400"))
         assertNull("not a relay address", relay("https://studio.tail1234.ts.net"))
         assertNull(relay("javascript:alert(1)"))
-        assertNull("Android allows plain ws:// only to *.ts.net", relay("ws://192.168.1.20:4400"))
+        assertEquals("plain ws:// on the LAN, as on the iPhone", "ws://192.168.1.20:4400", relay("ws://192.168.1.20:4400"))
         assertEquals("wss://relay.example.com", relay("wss://relay.example.com"))
     }
 

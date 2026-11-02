@@ -154,7 +154,8 @@ const PLAN: Record<ClaudeCapability, ClaudePolicyRow> = {
   unattended_runs: awaiting('unattended_runs'),
   nekko_tools: awaiting('nekko_tools'),
   context_note: awaiting('context_note'),
-  usage_limits: awaiting('usage_limits'),
+  // What the user's own Claude Code printed about the plan, never a plan endpoint or credential.
+  usage_limits: ON,
   // Plan usage has no per-turn price; the UI shows tokens, "billed to your Claude plan".
   cost_estimate: { state: 'unsupported', reason: 'billed_to_plan' },
   // A plan only ever runs through Claude Code, which owns the loop.
@@ -162,15 +163,21 @@ const PLAN: Record<ClaudeCapability, ClaudePolicyRow> = {
 };
 
 /**
+ * A Claude Code sign-in Nekko could not read: a plan, with nothing turned on
+ * that a plan only gets by being one (fail closed).
+ */
+const UNKNOWN: Record<ClaudeCapability, ClaudePolicyRow> = { ...PLAN, usage_limits: awaiting('usage_limits') };
+
+/**
  * The shipped table. `api_key` and `cloud` keep every feature; `subscription`
- * has the four approval-gated features off; `unknown` (Claude Code's auth
- * status could not be read) is the same as `subscription`: fail closed.
+ * has three approval-gated features off; `unknown` (Claude Code's auth
+ * status could not be read) is a plan with plan usage off too: fail closed.
  */
 export const CLAUDE_POLICY: ClaudePolicy = {
   api_key: ALL_ON,
   cloud: ALL_ON,
   subscription: PLAN,
-  unknown: PLAN,
+  unknown: UNKNOWN,
 };
 
 /** Which Claude engine runs a turn: Nekko's own loop, or the user's Claude Code. */
@@ -375,7 +382,7 @@ export const CLAUDE_PLAN_SHEET = {
   title: 'Using your Claude plan in Nekko Agent',
   paragraphs: [
     "Anthropic's terms say apps like Nekko Agent can't sign you in to your Claude account or send requests on your plan for you. So we don't. Instead, the Subscription option runs the Claude Code you already have installed, and you sign in inside Claude Code itself. Nekko never sees your Claude login.",
-    "With a Claude plan, you can chat, edit code, approve actions and use your phone, all on your plan. A few things are off for now because the terms don't clearly cover them for third-party apps: scheduled tasks, Nekko's own tools inside a Claude chat, and showing your plan's usage limits.",
+    "With a Claude plan, you can chat, edit code, approve actions and use your phone, all on your plan, and see your plan's usage limits as your own Claude Code reports them. A few things are off for now because the terms don't clearly cover them for third-party apps: scheduled tasks, and Nekko's own tools inside a Claude chat.",
     'Want everything? Choose API: an Anthropic API key, or Claude through AWS Bedrock, Google Vertex AI or Microsoft Foundry. You get every Nekko feature, billed to your own account.',
     "Has Anthropic approved your own use of these features on your plan? Then you can turn them on yourself in Settings > Agents > Claude plan features. That's your call and your responsibility; Nekko can't check it for you.",
   ],

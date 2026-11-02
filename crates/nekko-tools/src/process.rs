@@ -17,7 +17,7 @@
 use crate::allowlist::{Dialect, runs_git};
 use crate::bash::{Utf8Carry, shell, spawn_code, tree::Tree};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
-use crate::gitguard::hardened_git_env;
+use crate::gitguard::{harden_git_command, hardened_git_env};
 use crate::guardrails::{Action, NOT_READ_ONLY, classify_command, default_guardrails};
 use crate::sandbox::{asks_everything, first_workspace, process_cwd, resolve_path};
 use nekko_js as js;
@@ -456,12 +456,10 @@ pub async fn run_tool(call: &ToolCall, ctx: &ToolContext, procs: &Arc<Processes>
                 return Ok(ToolResult::err(call, format!("Blocked by guardrail ({labels}).")));
             }
             let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
-            // An auto-run git gets an environment that keeps repo config from running anything.
-            let env = if !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host()) {
-                hardened_git_env()
-            } else {
-                Vec::new()
-            };
+            // An auto-run git gets an environment, and options, that keep repo config from running anything.
+            let auto_git = !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host());
+            let env = if auto_git { hardened_git_env() } else { Vec::new() };
+            let command = if auto_git { harden_git_command(&command, Dialect::host()) } else { command };
             if needs_approval {
                 let reason = if labels.is_empty() { "Start a background process" } else { labels.as_str() };
                 let ok = tokio::select! {

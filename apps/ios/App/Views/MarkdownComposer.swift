@@ -56,6 +56,7 @@ struct MarkdownComposerField: View {
 }
 
 /// What the toolbar and the text view share: the selection, the text view to edit, a paste to offer formatting for.
+@MainActor
 @Observable
 final class MarkdownEditorState {
     struct PasteOffer: Equatable {

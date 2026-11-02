@@ -258,6 +258,10 @@ export interface AppSettings {
   trayCloseHintSeen?: boolean;
   /** A two-second tray mascot farewell, enabled by default. */
   trayFarewellEnabled?: boolean;
+  /** When memory runs low (desktop tray): ask (unset), shut down Nekko's local models, or do nothing. */
+  lowMemoryAction?: 'ask' | 'release' | 'ignore';
+  /** Apps the person chose to always close when memory runs low and they hold the most. */
+  lowMemoryCloseApps?: string[];
   /** How hard the model works per turn (an effort rung or a temperature). */
   effort?: EffortLevel;
   /** Cloud comparison for unpriced local models; unset uses the default, empty opts out. */

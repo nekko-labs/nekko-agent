@@ -109,6 +109,16 @@
       1015808
     ]
   ],
+  "epochProofs": [
+    {
+      "keyId": 1,
+      "proof": "h-Ga_dqAEQCov6FW_Ch2PD1Plo3QtW3allI5hybPud4"
+    },
+    {
+      "keyId": 2,
+      "proof": "abR0vVd6-i1jEs7NrBpigqcBmLqLZlDr3WhIvEOZTlU"
+    }
+  ],
   "device": {
     "id": "dev_7f3a",
     "private": "JjpNvkFIj7hyFLADIznbufDI2hTBbfzxMIS_PCVS7KU",

@@ -5,7 +5,7 @@ import { filteredModelGroups, isModelPickerEscape, modelRowLabel, nextFavoriteMo
 import type { AutoQuality, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 import {
   AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, formatModelPriceLabel,
-  isLocalProvider, modelPricing, resolveModelAvailability,
+  isLocalProvider, modelPricing, resolveModelAvailability, shortModelName,
 } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
@@ -46,6 +46,7 @@ export function ModelPicker({
   allowAuto = true,
   filterProviders,
   placeholder,
+  resolvedModelId,
 }: {
   providers: ProviderConfig[];
   providerId: string | null;
@@ -71,6 +72,14 @@ export function ModelPicker({
   filterProviders?: (p: ProviderConfig) => boolean;
   /** Chip text while no model is chosen (an inherited model), instead of "No model". */
   placeholder?: string;
+  /**
+   * The specific model id Claude Code reported in its `system/init` for this
+   * chat (`session.claudeCodeContext.model`). Claude Code picks from the user's
+   * plan, so this is "Opus 4.7" or "Opus 5.5" rather than the generic "opus"
+   * alias we send on `--model`. The chip reads it as the label; the picker's
+   * list stays the alias list because that is what Claude Code will accept.
+   */
+  resolvedModelId?: string;
 }) {
   // A provider switched off on the Models page is neither listed nor contacted.
   const providers = useMemo(() => allProviders.filter((p) => p.enabled !== false && (!filterProviders || filterProviders(p))), [allProviders, filterProviders]);
@@ -175,8 +184,19 @@ export function ModelPicker({
   const currentProvider = allProviders.find((p) => p.id === providerId);
   const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
   const currentModel = models.find((m) => m.id === modelId);
+  // A Claude subscription chat gets its model picked by Claude Code, not us:
+  // the picker still shows the alias "Opus"/"Sonnet" row that we send with
+  // `--model`, but once Claude Code has reported which version it resolved
+  // ("claude-opus-4-7") the chip reads that instead of the generic alias.
+  const claudeCodeResolved = currentProvider?.kind === 'claude-code' && resolvedModelId
+    ? shortModelName(resolvedModelId)
+    : null;
   const currentName =
-    modelId === AUTO_MODEL_ID ? '✨ Auto' : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name : 'No model';
+    modelId === AUTO_MODEL_ID ? '✨ Auto'
+      : claudeCodeResolved
+        ? claudeCodeResolved
+        : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name
+        : 'No model';
 
   const pick = (pid: string, mid: string) => {
     if (pid !== providerId) onProvider(pid);
@@ -200,7 +220,7 @@ export function ModelPicker({
   const accountSwitcher = accounts.length > 1 && (
     <div className="model-accounts mb-1 px-1" data-account-switcher>
       <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Account">
-        <span className="px-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Account</span>
+        <span className="px-2 text-xs font-medium text-ink-soft">Account</span>
         {accounts.map((p) => {
           const current = p.id === providerId;
           const blocked = current ? null : accountBlocked(p);
@@ -213,7 +233,7 @@ export function ModelPicker({
               aria-checked={current}
               disabled={!!blocked}
               title={blocked ?? (current ? `${name} (this chat)` : `Use ${currentName} on ${name}`)}
-              className={`max-w-[180px] truncate rounded-full border px-2 py-0.5 text-[11px] ${current ? 'border-accent text-accent' : 'border-line text-ink-soft hover:text-ink'} ${blocked ? 'cursor-not-allowed opacity-50' : ''}`}
+              className={`max-w-[180px] truncate rounded-full border px-2 py-0.5 text-2xs ${current ? 'border-accent text-accent' : 'border-line text-ink-soft hover:text-ink'} ${blocked ? 'cursor-not-allowed opacity-50' : ''}`}
               onClick={() => { if (!current) switchTo(p); }}
             >
               {name}
@@ -222,7 +242,7 @@ export function ModelPicker({
         })}
       </div>
       {currentProvider?.kind === 'claude-code' && (
-        <p className="px-1.5 pt-1 text-[10px] text-ink-faint">Switching starts a new Claude Code conversation on that account; this chat keeps its history here.</p>
+        <p className="px-2 pt-1 text-2xs text-ink-faint">Switching starts a new Claude Code conversation on that account; this chat keeps its history here.</p>
       )}
     </div>
   );
@@ -261,12 +281,12 @@ export function ModelPicker({
           aria-selected={selected}
           aria-disabled={blocked}
           disabled={blocked}
-          className={`flex min-w-0 flex-1 flex-col px-2.5 py-1.5 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
+          className={`flex min-w-0 flex-1 flex-col px-3 py-1 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
           onClick={() => pick(p.id, m.id)}
           title={blocked ? `${label.name} · ${why}` : sub ? `${label.name} · ${sub}` : m.id === label.name ? label.name : `${label.name} · ${m.id}`}
         >
           <div className="flex w-full items-center gap-2">
-            {key === defaultKey && <span className="text-[10px] text-accent">Default</span>}
+            {key === defaultKey && <span className="text-2xs text-accent">Default</span>}
             {m.loaded && (
               <span
                 className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -274,10 +294,10 @@ export function ModelPicker({
                 title="Loaded in memory"
               />
             )}
-            <span className={`min-w-0 truncate text-[12.5px] font-medium leading-tight ${blocked ? 'text-ink-faint' : ''}`} data-model-name>{label.name}</span>
+            <span className={`min-w-0 truncate text-xs font-medium leading-tight ${blocked ? 'text-ink-faint' : ''}`} data-model-name>{label.name}</span>
             {blocked && (
               <span
-                className="shrink-0 rounded-sm px-1 py-0.5 text-[10px] font-semibold leading-none"
+                className="shrink-0 rounded-sm px-1 py-0.5 text-2xs font-semibold leading-none"
                 style={{
                   background: 'color-mix(in srgb, var(--danger) 14%, transparent)',
                   color: 'var(--danger)',
@@ -286,17 +306,17 @@ export function ModelPicker({
                 {blockLabel(availability)}
               </span>
             )}
-            {showProvider && <span className="ml-auto min-w-0 max-w-[55%] shrink truncate text-[10px] text-ink-faint" title={nameOf(p)}>{nameOf(p)}</span>}
+            {showProvider && <span className="ml-auto min-w-0 max-w-[55%] shrink truncate text-2xs text-ink-faint" title={nameOf(p)}>{nameOf(p)}</span>}
           </div>
           <span
-            className={`truncate text-[10px] text-ink-faint ${sub ? 'font-mono' : ''}`}
+            className={`truncate text-2xs text-ink-faint ${sub ? 'font-mono' : ''}`}
             title={blocked ? why : sub ?? 'Estimated list price per 1M tokens'}
           >
             {blocked ? why : sub ?? price}
           </span>
         </button>
         {!readOnly && <button
-          className={`shrink-0 rounded-sm p-1.5 ${fav ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+          className={`shrink-0 rounded-sm p-2 ${fav ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
           title={fav ? 'Unstar' : 'Star (pin to the top of this list)'}
           aria-label={fav ? `Unstar ${m.name}` : `Star ${m.name}`}
           aria-pressed={fav}
@@ -313,8 +333,8 @@ export function ModelPicker({
   const header = (label: string, email?: string, provider = false) => (
     <p
       className={provider
-        ? 'truncate px-2.5 pb-0.5 pt-2 text-[12px] font-semibold text-ink'
-        : 'truncate px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint'}
+        ? 'truncate px-3 pb-0.5 pt-2 text-xs font-semibold text-ink'
+        : 'truncate px-3 pb-0.5 pt-1 text-xs font-medium text-ink-soft'}
       data-provider-heading={provider || undefined}
       title={email ? `${label} · ${email}` : undefined}
     >
@@ -324,8 +344,8 @@ export function ModelPicker({
   );
 
   const popup = (
-        <div ref={popupRef} style={expanded ? undefined : placement} className={expanded ? 'card flex h-full min-h-0 w-full flex-col p-2 text-left' : 'card fixed z-50 flex flex-col p-1.5 shadow-lg'}>
-          <div role="group" aria-label="Model source" className="mb-1.5 grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-surface-2 p-0.5">
+        <div ref={popupRef} style={expanded ? undefined : placement} className={expanded ? 'card flex h-full min-h-0 w-full flex-col p-2 text-left' : 'card fixed z-50 flex flex-col p-2 shadow-(--shadow-float)'}>
+          <div role="group" aria-label="Model source" className="mb-1 grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-surface-2 p-0.5">
             {([
               ['all', 'All', GridIcon], ['fusion', 'Fusion', RouteIcon],
               ['cloud', 'Cloud', CloudIcon], ['local', 'Local', LaptopIcon],
@@ -334,7 +354,7 @@ export function ModelPicker({
                 disabled={value === 'fusion' && !allowAuto}
                 title={value === 'fusion' ? (allowAuto ? 'Auto routing between models' : 'Auto routing is not available here') : `${label} models`}
                 onClick={() => setScope(value)}
-                className={`flex min-w-0 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium disabled:opacity-40 ${scope === value ? 'bg-paper text-accent shadow-sm' : 'text-ink-faint hover:text-ink'}`}>
+                className={`flex min-w-0 items-center justify-center gap-1 rounded-md px-2 py-1 text-2xs font-medium disabled:opacity-40 ${scope === value ? 'bg-paper text-accent shadow-(--shadow-sm)' : 'text-ink-faint hover:text-ink'}`}>
                 <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{label}
               </button>
             ))}
@@ -343,7 +363,7 @@ export function ModelPicker({
               capped so it never runs off a narrow pane. */}
           {(expanded || total > 8) && (
             <input
-              className="input mb-1 rounded-lg px-2.5 py-1 text-[12px]"
+              className="input mb-1 rounded-lg px-3 py-1 text-xs"
               placeholder="Filter models…"
               value={query}
               autoFocus={!expanded}
@@ -353,20 +373,20 @@ export function ModelPicker({
           )}
           {accountSwitcher}
           <div className="min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label="Model">
-            {defaultKey && !q && scope !== 'fusion' && (scope === 'all' || defaultProvider) && (defaultProvider && defaultModel ? row(defaultProvider, defaultModel, true) : <button role="option" disabled aria-disabled="true" className="w-full px-2.5 py-2 text-left text-[12px] text-ink-faint">{settings?.defaultModelId} <span className="text-[10px]">Default · {defaultStatus}</span></button>)}
-            {providers.length === 0 && <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">No provider configured.</p>}
+            {defaultKey && !q && scope !== 'fusion' && (scope === 'all' || defaultProvider) && (defaultProvider && defaultModel ? row(defaultProvider, defaultModel, true) : <button role="option" disabled aria-disabled="true" className="w-full px-3 py-2 text-left text-xs text-ink-faint">{settings?.defaultModelId} <span className="text-2xs">Default · {defaultStatus}</span></button>)}
+            {providers.length === 0 && <p className="px-3 py-1 text-2xs text-ink-faint">No provider configured.</p>}
             {providers.length > 0 && groups.length === 0 && scope !== 'fusion' && (
-              <p className="px-2.5 py-1.5 text-[11px] text-ink-faint">{q ? 'No models match.' : pending ? 'Loading models…' : 'No models available.'}</p>
+              <p className="px-3 py-1 text-2xs text-ink-faint">{q ? 'No models match.' : pending ? 'Loading models…' : 'No models available.'}</p>
             )}
             {allowAuto && total > 1 && !q && (scope === 'all' || scope === 'fusion') && (
               <button
                 role="option"
                 aria-selected={modelId === AUTO_MODEL_ID}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-surface-2 ${modelId === AUTO_MODEL_ID ? 'text-accent' : ''}`}
+                className={`flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2 ${modelId === AUTO_MODEL_ID ? 'text-accent' : ''}`}
                 onClick={() => { onModel(providerId ?? '', AUTO_MODEL_ID); setOpen(false); }}
                 title="Nekko Agent picks the best model for each message"
               >
-                ✨ Auto <span className="text-[11px] text-ink-faint">(pick best)</span>
+                ✨ Auto <span className="text-2xs text-ink-faint">(pick best)</span>
               </button>
             )}
             {recentModels.length > 0 && !q && <>{header('Recent')}{recentModels.filter(s => `${s.provider.id}::${s.model.id}` !== defaultKey).map((s) => row(s.provider, s.model, true))}</>}
@@ -392,7 +412,7 @@ export function ModelPicker({
                   {byLoc.map(({ loc, models: ms }) => (
                     <React.Fragment key={loc || '_'}>
                       {loc && (
-                        <p className="truncate px-4 pb-0.5 pt-1 text-[10px] italic text-ink-faint" title={loc}>
+                        <p className="truncate px-4 pb-0.5 pt-1 text-2xs italic text-ink-faint" title={loc}>
                           {loc}
                         </p>
                       )}
@@ -407,7 +427,8 @@ export function ModelPicker({
   );
 
   return (
-    <div ref={ref} className={expanded ? 'h-full min-h-0 w-full min-w-0' : 'relative min-w-0 max-w-[240px]'}>
+    // min-w-20: squeezed by a phone-width strip, the chip used to wrap its name one letter per line.
+    <div ref={ref} className={expanded ? 'h-full min-h-0 w-full min-w-0' : 'relative min-w-20 max-w-[240px]'}>
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}><ContextAction onClick={() => { void window.nekko.updateSettings({defaultProviderId:menu.pid,defaultModelId:menu.mid}).then(() => refreshSettings()).catch(e => useStore.getState().pushToast('error', String(e))); setMenu(null); }}>Set as default</ContextAction></ContextMenu>}
       {!expanded && <button
         className="ctl-menu max-w-full"
@@ -478,41 +499,41 @@ export function AutoQualityMenu({
         <span className="ctl-caret">▾</span>
       </button>
       {open && (
-        <div className="card absolute bottom-8 left-0 z-40 w-60 p-1.5 shadow-lg" role="menu">
+        <div className="card absolute bottom-8 left-0 z-40 w-60 p-2 shadow-(--shadow-float)" role="menu">
           {AUTO_QUALITIES.map((q) => (
             <button
               key={q}
               role="menuitemradio"
               aria-checked={quality === q}
-              className={`flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2 ${quality === q ? 'text-accent' : ''}`}
+              className={`flex w-full flex-col rounded-lg px-3 py-1 text-left hover:bg-surface-2 ${quality === q ? 'text-accent' : ''}`}
               onClick={() => { onPick(q); setOpen(false); }}
             >
-              <span className="text-[13px] font-medium">{AUTO_QUALITY_META[q].label}</span>
-              <span className="text-[11px] text-ink-faint">{AUTO_QUALITY_META[q].description}</span>
+              <span className="text-sm font-medium">{AUTO_QUALITY_META[q].label}</span>
+              <span className="text-2xs text-ink-faint">{AUTO_QUALITY_META[q].description}</span>
             </button>
           ))}
           {onFollowCapacity && (
             <button
               role="menuitemcheckbox"
               aria-checked={!!followCapacity}
-              className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2"
+              className="flex w-full items-start gap-2 rounded-lg px-3 py-1 text-left hover:bg-surface-2"
               onClick={() => onFollowCapacity(!followCapacity)}
             >
               <span
-                className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[9px] ${followCapacity ? 'border-accent bg-accent text-on-accent' : 'border-line'}`}
+                className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-2xs ${followCapacity ? 'border-accent bg-accent text-on-accent' : 'border-line'}`}
                 aria-hidden
               >
                 {followCapacity ? '✓' : ''}
               </span>
               <span>
-                <span className="block text-[13px] font-medium">Follow capacity &amp; cost</span>
-                <span className="block text-[11px] leading-snug text-ink-faint">
+                <span className="block text-sm font-medium">Follow capacity &amp; cost</span>
+                <span className="block text-2xs leading-snug text-ink-faint">
                   When this provider is spent or an equivalent model elsewhere is much cheaper, run the turn there and say why. Never a downgrade.
                 </span>
               </span>
             </button>
           )}
-          <p className="border-t border-line px-2.5 pb-0.5 pt-1.5 text-[10px] text-ink-faint">Applies to this chat only.</p>
+          <p className="border-t border-line px-3 pb-0.5 pt-1 text-2xs text-ink-faint">Applies to this chat only.</p>
         </div>
       )}
     </div>

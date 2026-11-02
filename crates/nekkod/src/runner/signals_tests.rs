@@ -1,5 +1,5 @@
 use super::*;
-use crate::runner::lan::{default_gateway, network_id};
+use crate::runner::lan::{default_gateway, network_id, scutil_field, service_network_id};
 use crate::runner::updates::{UpdateLedger, os_major, security_labels};
 use std::net::Ipv4Addr;
 
@@ -171,6 +171,26 @@ fn gateway_and_network_id_parse() {
     );
     assert_eq!(network_id("? (192.168.1.1) at (incomplete) on en0", gw), None);
     assert_eq!(default_gateway("    gateway: link#14\n"), None);
+}
+
+#[test]
+fn the_service_record_gives_the_same_id_as_arp() {
+    let show = "<dictionary> {
+  ARPResolvedHardwareAddress : a:1b:2c:3d:4e:5
+  ARPResolvedIPAddress : 192.168.1.1
+  ConfirmedInterfaceName : en0
+  NetworkSignature : IPv4.Router=192.168.1.1;IPv4.RouterHardwareAddress=a:1b:2c:3d:4e:5
+  Router : 192.168.1.1
+}
+";
+    assert_eq!(service_network_id(show).as_deref(), Some("gw:0a:1b:2c:3d:4e:05"));
+    // Resolved for a router this service has since left: not this network's id.
+    assert_eq!(service_network_id(&show.replace("Router : 192.168.1.1", "Router : 10.0.0.1")), None);
+    // A VPN's service has no router to resolve.
+    assert_eq!(service_network_id("<dictionary> {\n  InterfaceName : utun4\n}\n"), None);
+    let global =
+        "<dictionary> {\n  PrimaryInterface : en0\n  PrimaryService : 7115B664-E263\n  Router : 192.168.1.1\n}\n";
+    assert_eq!(scutil_field(global, "PrimaryService"), Some("7115B664-E263"));
 }
 
 #[test]

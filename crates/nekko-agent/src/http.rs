@@ -156,6 +156,36 @@ fn causes(e: &dyn std::error::Error) -> String {
     out
 }
 
+/// Requests whose last attempt failed, with the reason. Model lists are polled,
+/// so a provider whose server is off (LM Studio closed) would log the same line
+/// on every refresh; this logs it once, then again only when the reason changes,
+/// and says so when the request works again.
+#[derive(Default)]
+struct Failing(std::collections::HashMap<String, String>);
+
+impl Failing {
+    /// The line to log for this outcome of `key`, if any.
+    fn note(&mut self, key: &str, failure: Option<&str>) -> Option<String> {
+        match failure {
+            Some(why) if self.0.get(key).map(String::as_str) == Some(why) => None,
+            Some(why) => {
+                self.0.insert(key.to_string(), why.to_string());
+                Some(format!("nekkod: {key} failed: {why} (repeats not logged until it recovers)"))
+            }
+            None => self.0.remove(key).map(|_| format!("nekkod: {key} works again")),
+        }
+    }
+}
+
+fn log_outcome(req: &HttpRequest, failure: Option<&str>) {
+    static FAILING: LazyLock<std::sync::Mutex<Failing>> = LazyLock::new(Default::default);
+    let key = format!("{} {}", req.method, req.url);
+    let line = FAILING.lock().map(|mut f| f.note(&key, failure)).unwrap_or(None);
+    if let Some(line) = line {
+        eprintln!("{line}");
+    }
+}
+
 fn network(e: reqwest::Error, message: &str) -> TransportError {
     TransportError { message: message.into(), detail: Some(e.to_string()) }
 }
@@ -175,11 +205,12 @@ impl Transport for ReqwestTransport {
             let res = nekko_net::send("model-providers", b).await.map_err(|e| match e {
                 nekko_net::Error::Http(e) => {
                     // The message the user sees is "Can't reach …"; this is why.
-                    eprintln!("nekkod: {} {} failed: {}", req.method, req.url, causes(&e));
+                    log_outcome(req, Some(&causes(&e)));
                     network(e, "fetch failed")
                 }
                 blocked => TransportError { message: blocked.to_string(), detail: None },
             })?;
+            log_outcome(req, None);
             let headers = res
                 .headers()
                 .iter()
@@ -250,5 +281,22 @@ impl AbortSignal {
             }
         }
         std::future::pending::<()>().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Failing;
+
+    #[test]
+    fn a_failing_request_logs_once_until_it_recovers() {
+        let mut f = Failing::default();
+        let key = "GET http://127.0.0.1:1338/v1/models";
+        assert!(f.note(key, Some("refused")).unwrap().contains("failed: refused"));
+        assert_eq!(f.note(key, Some("refused")), None);
+        assert!(f.note(key, Some("timed out")).unwrap().contains("failed: timed out"));
+        assert_eq!(f.note("GET http://127.0.0.1:11434/api/tags", None), None);
+        assert_eq!(f.note(key, None).as_deref(), Some("nekkod: GET http://127.0.0.1:1338/v1/models works again"));
+        assert!(f.note(key, Some("refused")).is_some());
     }
 }

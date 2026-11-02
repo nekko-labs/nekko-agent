@@ -44,12 +44,13 @@ it('opens the log as a wall drawer, not an overlay inside the chat', async () =>
   expect(wall).toContain(`data-terminal="agent_${chat.id}"`);
 });
 
-it('looks joined to its window and animates out and back in', () => {
+it('looks joined to its window and slides out and back in, interruptibly', () => {
   expect(cssRule(css, '.agent-logs-drawer-inner')['border-left']).toBe('0');
-  expect(hasKeyframes(css, 'agent-logs-drawer-out')).toBe(true);
-  expect(hasKeyframes(css, 'agent-logs-drawer-in')).toBe(true);
-  expect(cssRule(css, '.agent-logs-drawer').animation).toMatch(/^agent-logs-drawer-out /);
-  expect(cssRule(css, '.agent-logs-drawer[data-closing]').animation).toMatch(/^agent-logs-drawer-in /);
+  // A transition, not a pair of keyframes, so a second toggle reverses from where it is.
+  expect(hasKeyframes(css, 'agent-logs-drawer-out')).toBe(false);
+  expect(cssRule(css, '.agent-logs-drawer').transition).toMatch(/^clip-path 260ms var\(--ease-out\)/);
+  expect(cssRule(css, '.agent-logs-drawer[data-closing]')['clip-path']).toBe('inset(0 100% 0 0)');
+  expect(css.toString()).not.toContain('cubic-bezier(.55, 0, .75, .2)');
   // The window keeps its rounded corners; concave fillets flow its edge into the drawer.
   expect(hasSelector(css, /\.command-wall-window\[data-wall-logs-open\] > \.panel/)).toBe(false);
   expect(cssRule(css, '.agent-logs-drawer:not([data-overlay])')['--logs-fillet']).toBe('12px');

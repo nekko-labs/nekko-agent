@@ -43,14 +43,11 @@ use std::sync::{Arc, Mutex, RwLock};
 /// The release's file name beside its update feed, and the cached copy in the data directory.
 pub const FEED_FILE: &str = "claude-policy.json";
 
-/// The Ed25519 public key `claudePolicy` documents are signed with.
-///
-/// TODO(Philip): replace with the release signing key's public half before
-/// any signed policy ships. Nekko has no release signing key yet (the update
-/// feed is checked by SHA-512 and, on Windows, Authenticode only). While this
-/// is all zeros, every signed override is refused, so the shipped table is the
-/// whole policy.
-pub const RELEASE_POLICY_KEY: [u8; 32] = [0; 32];
+/// The Ed25519 public key `claudePolicy` documents are signed with: the one
+/// release signing key, shared with the update feed
+/// (`nekko_native::release_key`). While it is the all-zero placeholder, every
+/// signed override is refused, so the shipped table is the whole policy.
+pub use nekko_native::release_key::RELEASE_SIGNING_KEY as RELEASE_POLICY_KEY;
 
 /// The setting a user turns on when Anthropic has approved their use of the
 /// plan's approval-gated features (`AppSettings.claudePlanFeaturesApproved`).
@@ -161,7 +158,7 @@ impl ClaudePolicyStore {
 
     /// Check a signed document: key, signature, type, version and rows.
     fn verify(&self, doc: &Value) -> Result<Applied, String> {
-        if self.key == [0; 32] {
+        if nekko_native::release_key::is_placeholder(&self.key) {
             return Err("no Claude policy signing key is configured".into());
         }
         let b64 = base64::engine::general_purpose::STANDARD;
@@ -401,6 +398,26 @@ pub async fn plan_usage_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Resul
     })
 }
 
+/// The Claude Agent provider a limits read names (`claude-code:<id>`, see
+/// `limitsKeyFor`), for `limits:get` and `limits:poll` only.
+pub fn limits_key_provider<'a>(channel: &str, args: &'a [Value]) -> Option<&'a str> {
+    if !matches!(channel, "limits:get" | "limits:poll") {
+        return None;
+    }
+    args.first()?.as_str()?.strip_prefix("claude-code:")
+}
+
+/// `limits:get` for a Claude Agent: the plan usage its own Claude Code
+/// printed, where `usage_limits` allows it; `null` otherwise (nothing yet,
+/// an unread sign-in, or the dev preview, whose example the UI renders itself).
+pub async fn plan_usage_limits(ctx: &crate::routes::Ctx, id: &str) -> Result<Value, String> {
+    let Ok(provider) = provider(ctx, id).await else { return Ok(Value::Null) };
+    Ok(match ctx.claude_policy.plan_usage(&provider, ctx.turns.harness.plan_usage(id)) {
+        PlanUsage::Observed(limits) => limits,
+        PlanUsage::Unavailable(_) | PlanUsage::Example => Value::Null,
+    })
+}
+
 /// Whether a `chat:send` was started by automation rather than a person.
 pub fn is_unattended(opts: &Value) -> bool {
     opts.get("unattended").and_then(Value::as_bool) == Some(true)
@@ -481,7 +498,7 @@ mod tests {
     fn every_gate_is_off_for_a_plan_and_on_for_an_api_key() {
         let s = store(None);
         let plan = on_plan(&s);
-        for cap in ALL_GATED {
+        for cap in ALL_GATED.into_iter().filter(|c| *c != Capability::UsageLimits) {
             let refusal = s.gate(&plan, cap).unwrap_err();
             assert_eq!(refusal.message, cap.awaiting_reason().reason().text);
             assert!(s.gate(&harness(Some("nekko-anthropic-key")), cap).is_ok());
@@ -489,11 +506,14 @@ mod tests {
         }
         assert!(s.gate(&plan, Capability::NekkoTools).is_err());
         assert!(s.gate(&plan, Capability::ContextNote).is_err());
-        assert_eq!(s.plan_usage(&plan, None), PlanUsage::Unavailable("Check your plan's usage in Claude Code."));
-        // What Claude Code printed stays hidden while the row awaits approval.
+        // Plan usage is on for a plan: what its own Claude Code printed, once it has.
+        assert_eq!(s.plan_usage(&plan, None), PlanUsage::Unavailable(NOT_REPORTED_YET));
         let seen = json!({ "windows": [] });
+        assert_eq!(s.plan_usage(&plan, Some(seen.clone())), PlanUsage::Observed(seen.clone()));
+        // An unread sign-in fails closed.
+        let unread = json!({ "id": "unread", "kind": "claude-code" });
         assert_eq!(
-            s.plan_usage(&plan, Some(seen.clone())),
+            s.plan_usage(&unread, Some(seen.clone())),
             PlanUsage::Unavailable("Check your plan's usage in Claude Code.")
         );
         assert_eq!(s.plan_usage(&harness(Some("vertex")), Some(seen.clone())), PlanUsage::Observed(seen));

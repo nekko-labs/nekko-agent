@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
@@ -61,10 +62,13 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nekko.android.R
 import com.nekko.android.ui.previews.PreviewCards
 import com.nekko.android.ui.theme.Nekko
+import com.nekko.protocol.AgentRows
 import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
 import com.nekko.protocol.PurposeCall
@@ -84,9 +88,12 @@ data class ForkAction(val label: String, val run: () -> Unit)
 @Composable
 fun BlockView(block: Block, fork: ForkAction? = null) {
     when (block) {
-        is Block.User -> UserBubble(block, fork)
+        // A watch's wake-up is a step of the run, not something the user typed.
+        is Block.User -> AgentRows.parseWake(block.text)?.takeIf { block.thumbs.isEmpty() }?.let { WatchWakeRow(it, block.text, block.at) }
+            ?: UserBubble(block, fork)
         is Block.Assistant -> Reply(block, fork)
-        is Block.Tool -> ToolRow(block)
+        // The agent's work, drawn as the desktop draws it: no fill, no stroke, one line each.
+        is Block.Tool -> AgentToolRow(block)
     }
 }
 
@@ -106,10 +113,11 @@ private fun UserBubble(b: Block.User, fork: ForkAction?) {
             }
             if (b.text.isNotEmpty()) {
                 LongPressMenu(b.text, fork) { press ->
-                    Text(
+                    // The user's own Markdown renders too, in the bubble's ink (as the desktop does, T101).
+                    MarkdownText(
                         b.text,
-                        style = MaterialTheme.typography.bodyLarge,
                         color = p.userInk,
+                        bubble = true,
                         modifier = Modifier.padding(top = if (b.thumbs.isNotEmpty()) 8.dp else 0.dp).then(press),
                     )
                 }
@@ -124,6 +132,9 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
     var open by rememberSaveable(b.id) { mutableStateOf(false) }
     val reasoning = b.reasoning
     val thinkingOnly = b.streaming && b.text.isEmpty() && !reasoning.isNullOrEmpty()
+    val expanded = stringResource(R.string.chat_expanded)
+    val collapsed = stringResource(R.string.chat_collapsed)
+    val writing = stringResource(R.string.chat_writing)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!reasoning.isNullOrEmpty()) {
             Row(
@@ -132,16 +143,16 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
                     .clickable(role = Role.Button) { open = !open }
                     .heightIn(min = 48.dp)
                     .padding(horizontal = 4.dp)
-                    .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
+                    .semantics { stateDescription = if (open) expanded else collapsed },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(Icons.Filled.Psychology, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
                 Text(
                     when {
-                        thinkingOnly && !open -> "Thinking…"
-                        open -> "Hide reasoning"
-                        else -> "Show reasoning"
+                        thinkingOnly && !open -> stringResource(R.string.chat_thinking)
+                        open -> stringResource(R.string.chat_hide_reasoning)
+                        else -> stringResource(R.string.chat_show_reasoning)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = p.inkFaint,
@@ -169,113 +180,21 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
             CircularProgressIndicator(
                 color = p.accent,
                 strokeWidth = 2.dp,
-                modifier = Modifier.size(18.dp).semantics { contentDescription = "Writing" },
+                modifier = Modifier.size(18.dp).semantics { contentDescription = writing },
             )
         }
         if (b.interrupted) {
-            Text("Stopped before finishing.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
-        }
-    }
-}
-
-@Composable
-private fun ToolRow(b: Block.Tool) {
-    val p = Nekko.palette
-    var open by rememberSaveable(b.id) { mutableStateOf(false) }
-    val color = when (b.status) {
-        ToolStatus.RUNNING -> p.running
-        ToolStatus.WAITING -> p.warning
-        ToolStatus.OK -> p.success
-        ToolStatus.ERROR -> p.danger
-    }
-    val statusText = when (b.status) {
-        ToolStatus.RUNNING -> "running"
-        ToolStatus.WAITING -> "waiting for you"
-        ToolStatus.OK -> "done"
-        ToolStatus.ERROR -> "failed"
-    }
-    val hasOutput = !b.output.isNullOrEmpty()
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(p.surface)
-            .border(1.dp, p.line, RoundedCornerShape(12.dp)),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(enabled = hasOutput, role = Role.Button) { open = !open }
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .semantics(mergeDescendants = true) { contentDescription = "${b.label}, $statusText" },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (b.status == ToolStatus.RUNNING) {
-                CircularProgressIndicator(color = color, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-            } else {
-                Icon(
-                    when (b.status) {
-                        ToolStatus.OK -> Icons.Filled.Check
-                        ToolStatus.WAITING -> Icons.Filled.Warning
-                        ToolStatus.ERROR -> Icons.Filled.Close
-                        else -> Icons.Filled.Build
-                    },
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            Text(
-                b.label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = p.inkSoft,
-                maxLines = if (open) Int.MAX_VALUE else 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (hasOutput) {
-                Icon(
-                    if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = null,
-                    tint = p.inkFaint,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
-        if (open && hasOutput) {
-            // What the phone doesn't show (cut output, left-out images) goes under the
-            // 40 lines, so it's visible however long the output is.
-            val (body, notes) = Transcript.splitNotes(b.output.orEmpty())
-            SelectionContainer {
-                Text(
-                    body,
-                    style = Nekko.mono,
-                    color = p.inkSoft,
-                    maxLines = 40,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = if (notes.isEmpty()) 12.dp else 4.dp),
-                )
-            }
-            if (notes.isNotEmpty()) {
-                Text(
-                    notes.joinToString("\n"),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = p.inkFaint,
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                )
-            }
+            Text(stringResource(R.string.chat_stopped_before_finishing), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
     }
 }
 
 /**
- * Adjacent calls with one purpose as one card that says the goal ("Read the
+ * Adjacent calls with one purpose as one row that says the goal ("Read the
  * project's guidance", "Ran the tests") with a quiet detail line, opening to
  * the calls as they look on their own (spec/chat/tool-calls-grouped-by-purpose.md).
- * Present tense with a spinner while a call in it runs; a group with a failed
- * call says so and starts open, so the failure is not hidden.
+ * Present tense with the running dots while a call in it runs; a group with a
+ * failed call says so and starts open, so the failure is not hidden.
  */
 @Composable
 fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<PurposeCall>) {
@@ -287,55 +206,43 @@ fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<Purp
         else Purpose.headline(purpose, calls.map { it.copy(failed = false) }, running).detail
     var chosen by rememberSaveable(blocks.firstOrNull()?.id) { mutableStateOf<Boolean?>(null) }
     val open = chosen ?: (h.failed > 0)
-    val count = if (calls.size == 1) "1 call" else "${calls.size} calls"
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(p.surface)
-            .border(1.dp, p.line, RoundedCornerShape(12.dp)),
-    ) {
+    val count = if (calls.size == 1) stringResource(R.string.chat_calls_one) else stringResource(R.string.chat_calls_other, calls.size)
+    val callsShown = stringResource(R.string.chat_calls_shown)
+    val callsHidden = stringResource(R.string.chat_calls_hidden)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
             Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
                 .clickable(role = Role.Button) { chosen = !open }
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .heightIn(min = 36.dp)
                 .semantics(mergeDescendants = true) {
                     contentDescription = listOf(h.headline, h.detail, count).filter { it.isNotEmpty() }.joinToString(", ")
-                    stateDescription = if (open) "Calls shown" else "Calls hidden"
+                    stateDescription = if (open) callsShown else callsHidden
                 },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (running) {
-                CircularProgressIndicator(color = p.running, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-            } else {
-                Icon(
-                    if (h.failed > 0) Icons.Filled.Close else Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = if (h.failed > 0) p.danger else p.success,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
+            if (running) RunningDots() else StepMark(if (h.failed > 0) ToolStatus.ERROR else ToolStatus.OK)
             Column(Modifier.weight(1f)) {
                 Text(
                     h.headline,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (running) p.accent else p.ink,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (running) p.accent else p.inkSoft,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (quiet.isNotEmpty() || h.failed > 0) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (quiet.isNotEmpty()) {
-                            Text(quiet, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            Text(quiet, style = Nekko.mono, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         }
-                        if (h.failed > 0) Text("${h.failed} failed", style = MaterialTheme.typography.bodySmall, color = p.danger)
+                        if (h.failed > 0) Text(stringResource(R.string.chat_n_failed, h.failed), style = Nekko.mono, color = p.danger)
                     }
                 }
             }
-            Text("${calls.size}", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+            RowChip("${calls.size}", tone = AgentRows.Tone.QUIET)
             Icon(
                 if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                 contentDescription = null,
@@ -343,14 +250,7 @@ fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<Purp
                 modifier = Modifier.size(18.dp),
             )
         }
-        if (open) {
-            Column(
-                Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                blocks.forEach { BlockView(it) }
-            }
-        }
+        if (open) Hairline { blocks.forEach { BlockView(it) } }
     }
 }
 
@@ -364,17 +264,17 @@ private fun LongPressMenu(text: String, fork: ForkAction?, content: @Composable 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     if (fork == null) {
-        content(Modifier.onLongPress(text, "Copy message") { copy(scope, clipboard, context, text) })
+        content(Modifier.onLongPress(text, stringResource(R.string.chat_copy_message)) { copy(scope, clipboard, context, text) })
         return
     }
     var open by remember { mutableStateOf(false) }
     Box {
         content(
-            Modifier.onLongPress(text, "Copy or fork") { open = true }
+            Modifier.onLongPress(text, stringResource(R.string.chat_copy_or_fork)) { open = true }
                 .semantics { customActions = listOf(CustomAccessibilityAction(fork.label) { fork.run(); true }) },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Copy") }, onClick = { open = false; copy(scope, clipboard, context, text) })
+            DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy)) }, onClick = { open = false; copy(scope, clipboard, context, text) })
             DropdownMenuItem(text = { Text(fork.label) }, onClick = { open = false; fork.run() }, modifier = Modifier.testTag("message.fork"))
         }
     }
@@ -417,5 +317,5 @@ private fun Modifier.onLongPress(text: String, label: String, action: () -> Unit
 private fun copy(scope: CoroutineScope, clipboard: Clipboard, context: Context, text: String) {
     scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Message", text))) }
     // Android 13+ shows its own copied confirmation.
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, context.getString(R.string.chat_copied), Toast.LENGTH_SHORT).show()
 }

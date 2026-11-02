@@ -284,8 +284,8 @@ impl Drop for TitleFlight {
 pub struct Turns {
     connectivity: Arc<crate::connectivity::Connectivity>,
     title_flights: TitleFlights,
-    store: Option<Arc<SessionStore>>,
-    data_dir: Option<PathBuf>,
+    store: Arc<SessionStore>,
+    data_dir: PathBuf,
     changes: Arc<ChangeTracker>,
     /// The usage and reply logs and the limit state (accounts.rs).
     accounts: Arc<Accounts>,
@@ -298,23 +298,21 @@ pub struct Turns {
     /// Background processes the agent started (`start_process`); they
     /// outlive the turn and die with the chat's Stop or the daemon.
     pub processes: Arc<Processes>,
-    /// settings.json, when the daemon writes it: tool hooks are re-read
-    /// from it per call, as the TS host did.
-    settings: Option<Arc<nekko_settings::SettingsStore>>,
+    /// settings.json: tool hooks are re-read from it per call, as the TS host did.
+    settings: Arc<nekko_settings::SettingsStore>,
     /// The desktop app's bridge to its in-app browser and window capturer
     /// (absent outside the desktop app), and the chats' browser sessions.
     bridge: Option<Arc<nekko_web::browser::HttpBridge>>,
     pub browsers: Arc<nekko_web::browser::Browsers>,
-    /// `agent_watch` and its scheduler (watches.rs), with a data directory.
-    pub watches: Option<Arc<crate::watches::Watches>>,
-    /// Training and goal runs (nekko-automation `training`), with a data
-    /// directory: a run chat's `report_experiment`, `report_artifact` and
-    /// `update_plan` are handled here.
-    pub training: Option<Arc<nekko_automation::Training>>,
+    /// `agent_watch` and its scheduler (watches.rs).
+    pub watches: Arc<crate::watches::Watches>,
+    /// Training and goal runs (nekko-automation `training`): a run chat's
+    /// `report_experiment`, `report_artifact` and `update_plan` are handled here.
+    pub training: Arc<nekko_automation::Training>,
     /// Sandbox chats' containers (sandbox.rs): a sandbox turn's tools run there.
-    pub sandboxes: Option<Arc<crate::sandbox::Sandboxes>>,
-    /// The chats' agent command logs (agent_logs.rs), with a data directory.
-    pub agent_logs: Option<Arc<crate::agent_logs::AgentLogs>>,
+    pub sandboxes: Arc<crate::sandbox::Sandboxes>,
+    /// The chats' agent command logs (agent_logs.rs).
+    pub agent_logs: Arc<crate::agent_logs::AgentLogs>,
     /// Claude Agent chats' Claude Code children (harness.rs).
     pub harness: Arc<crate::harness::Harness>,
     running: Mutex<HashMap<String, Arc<Shared>>>,
@@ -348,13 +346,19 @@ static STEER_SEQ: AtomicU64 = AtomicU64::new(0);
 const WAKE_WAIT: Duration = Duration::from_secs(15);
 
 impl Turns {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        store: Option<Arc<SessionStore>>,
-        data_dir: Option<PathBuf>,
+        store: Arc<SessionStore>,
+        data_dir: PathBuf,
         changes: Arc<ChangeTracker>,
         accounts: Arc<Accounts>,
         mcp: Arc<Mcp>,
         decide: Arc<DecideService>,
+        settings: Arc<nekko_settings::SettingsStore>,
+        agent_logs: Arc<crate::agent_logs::AgentLogs>,
+        watches: Arc<crate::watches::Watches>,
+        sandboxes: Arc<crate::sandbox::Sandboxes>,
+        training: Arc<nekko_automation::Training>,
     ) -> Self {
         Self {
             connectivity: crate::connectivity::Connectivity::new(),
@@ -366,13 +370,13 @@ impl Turns {
             mcp,
             decide,
             processes: Processes::new(),
-            settings: None,
+            settings,
             bridge: None,
             browsers: nekko_web::browser::Browsers::new(),
-            watches: None,
-            training: None,
-            sandboxes: None,
-            agent_logs: None,
+            watches,
+            training,
+            sandboxes,
+            agent_logs,
             harness: crate::harness::Harness::new(),
             running: Mutex::default(),
             wakes: Mutex::default(),
@@ -405,46 +409,15 @@ impl Turns {
         let _ = self.preparer.set(preparer);
     }
 
-    /// The daemon's settings store (settings.rs).
-    pub fn with_settings(mut self, settings: Option<Arc<nekko_settings::SettingsStore>>) -> Self {
-        self.settings = settings;
-        self
-    }
-
     /// The desktop bridge (`config.browserBridge`).
     pub fn with_bridge(mut self, bridge: Option<(String, String)>) -> Self {
         self.bridge = bridge.map(|(url, token)| Arc::new(nekko_web::browser::HttpBridge::new(url, token)));
         self
     }
 
-    /// `agent_watch` runs here (watches.rs).
-    pub fn with_watches(mut self, watches: Option<Arc<crate::watches::Watches>>) -> Self {
-        self.watches = watches;
-        self
-    }
-
-    /// A run chat's tools run here (nekko-automation `training`).
-    pub fn with_training(mut self, training: Option<Arc<nekko_automation::Training>>) -> Self {
-        self.training = training;
-        self
-    }
-
-    /// Sandbox turns run their tools in the daemon's containers (sandbox.rs).
-    pub fn with_sandboxes(mut self, sandboxes: Option<Arc<crate::sandbox::Sandboxes>>) -> Self {
-        self.sandboxes = sandboxes;
-        self
-    }
-
-    pub fn with_agent_logs(mut self, logs: Option<Arc<crate::agent_logs::AgentLogs>>) -> Self {
-        self.agent_logs = logs;
-        self
-    }
-
     /// A line of a chat's command output, in its agent log.
     pub fn command_output(&self, session_id: &str, workspace_id: &Value, text: &str) {
-        if let Some(logs) = &self.agent_logs {
-            logs.append(session_id, workspace_id.as_str(), text);
-        }
+        self.agent_logs.append(session_id, workspace_id.as_str(), text);
     }
 
     /// The session's turn here: the one under way, else one waiting to start.
@@ -607,14 +580,16 @@ impl Turns {
         let mode = self.live_mode(&shared).await;
         let rules: Vec<nekko_tools::GuardrailRule> = self
             .settings
-            .as_ref()
-            .map(|s| s.get())
-            .and_then(|s| s.get("guardrails").cloned())
+            .get()
+            .get("guardrails")
+            .cloned()
             .and_then(|g| serde_json::from_value(g).ok())
             .unwrap_or_else(nekko_tools::default_guardrails);
         let allow = || json!({ "behavior": "allow", "updatedInput": input });
         match crate::harness::decide(&mode, &tool, &input, &rules, &entry.roots) {
-            crate::harness::Decision::Allow => Some(allow()),
+            crate::harness::Decision::Allow => {
+                Some(json!({ "behavior": "allow", "updatedInput": crate::harness::auto_run_input(&tool, &input) }))
+            }
             crate::harness::Decision::Deny(message) => Some(deny(&message)),
             crate::harness::Decision::Ask { reason, severity } => {
                 let id = str_at(prompt, "tool_use_id")
@@ -641,7 +616,7 @@ impl Turns {
         let store = self.store.clone();
         let id = shared.session_id.clone();
         let mode = tokio::task::spawn_blocking(move || {
-            store.and_then(|s| s.get(&id)).and_then(|s| s.get("mode").and_then(Value::as_str).map(str::to_string))
+            store.get(&id).and_then(|s| s.get("mode").and_then(Value::as_str).map(str::to_string))
         })
         .await
         .ok()
@@ -681,7 +656,7 @@ impl Turns {
     }
 
     fn launch_turn(self: &Arc<Self>, hub: Hub, spec: Value, wake: bool) -> Result<(String, Ended), String> {
-        let store = self.store.clone().ok_or("chat:turn needs the daemon to know the data directory")?;
+        let store = self.store.clone();
         let turn_id = str_at(&spec, "turnId").ok_or("chat:turn needs a turnId")?.to_string();
         let opts = spec.get("opts").cloned().ok_or("chat:turn needs the send options")?;
         let session_id = str_at(&opts, "sessionId").ok_or("chat:turn needs a sessionId")?.to_string();
@@ -732,9 +707,7 @@ impl Turns {
             me.pending.release(&shared.session_id);
             let summary = me.after_turn(&hub, &store, &spec, &turn_id, summary).await;
             // The chat's agent terminal stops showing a running command.
-            if let Some(logs) = &me.agent_logs {
-                logs.finish(&shared.session_id);
-            }
+            me.agent_logs.finish(&shared.session_id);
             me.after_turn_hooks(&store, &spec, &summary);
             let _ = ended_tx.send((summary, lock(&shared.last_error).clone()));
         });
@@ -764,8 +737,8 @@ impl Turns {
             spec.pointer("/facts/workspaces/0/path").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| {
                 std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
             });
-        let settings = self.settings.as_ref().map(|s| s.shared());
-        let rules = nekko_tools::hooks::rules(settings.as_ref().and_then(|s| s.get("hooks")).unwrap_or(&json!([])));
+        let settings = self.settings.shared();
+        let rules = nekko_tools::hooks::rules(settings.get("hooks").unwrap_or(&json!([])));
         for rule in nekko_tools::hooks::matching_hooks(&rules, "TurnEnd", None) {
             let rule = rule.clone();
             let payload = json!({ "sessionId": session_id, "cwd": cwd, "stop": stop, "event": "TurnEnd" });
@@ -819,8 +792,7 @@ impl Turns {
             && spec.pointer("/facts/provider").is_some_and(Value::is_object)
             && let Some(flight) = self.title_flights.claim(&session_id)
         {
-            let accounts = self.accounts.enabled().then(|| self.accounts.clone());
-            tokio::spawn(generate_title(hub.clone(), store.clone(), accounts, spec.clone(), flight));
+            tokio::spawn(generate_title(hub.clone(), store.clone(), self.accounts.clone(), spec.clone(), flight));
         }
         if summary.get("aborted") == Some(&Value::Bool(true)) || js::truthy(fresh.get("archivedAt")) {
             return summary;
@@ -891,7 +863,7 @@ impl Turns {
         // A sandbox chat runs its tools in the daemon's container for it (a
         // spec that says `facts.sandbox`); a host that did not say so keeps it.
         let sandbox = str_at(&loaded, "executionMode") == Some("sandbox");
-        if sandbox && (facts.get("sandbox") != Some(&Value::Bool(true)) || self.sandboxes.is_none()) {
+        if sandbox && facts.get("sandbox") != Some(&Value::Bool(true)) {
             return early("chat:turn is unsupported for sandbox sessions; use the host container router");
         }
         let incognito = js::truthy(loaded.get("incognito"));
@@ -960,7 +932,7 @@ impl Turns {
         } else {
             facts.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default()
         };
-        let data_dir = self.data_dir.clone().or_else(|| store.dir().parent().map(PathBuf::from));
+        let data_dir = Some(self.data_dir.clone());
         let block = if sandbox {
             nekko_context::render_block(&nekko_context::assemble(nekko_context::AssembleInput::default()))
         } else {
@@ -1051,13 +1023,12 @@ impl Turns {
         if let Some(e) = facts.get("statsEffort").filter(|v| !v.is_null()) {
             identity.insert("effort".into(), e.clone());
         }
-        // This daemon accounts every turn when it keeps the logs (admission
-        // always sends `facts.account`).
-        let account = self.accounts.enabled().then(|| TurnAccount::from_facts(facts));
+        // This daemon accounts every turn (admission always sends `facts.account`).
+        let account = TurnAccount::from_facts(facts);
         let forwarder = tokio::spawn(forward(
             rx,
             Forward {
-                account: account.clone().map(|a| (self.accounts.clone(), a, opts.clone())),
+                account: (self.accounts.clone(), account.clone(), opts.clone()),
                 hub: hub.clone(),
                 store: store.clone(),
                 session: session.clone(),
@@ -1142,7 +1113,7 @@ impl Turns {
                             .unwrap_or(false)
                     };
                     if written {
-                        if !incognito && let Some(logs) = logs {
+                        if !incognito {
                             let at = notice["createdAt"]
                                 .as_i64()
                                 .and_then(chrono::DateTime::from_timestamp_millis)
@@ -1181,7 +1152,6 @@ impl Turns {
                     (settings.clone(), st.clone(), sid.clone(), pid.clone(), spid.clone(), smid.clone());
                 Box::pin(async move {
                     tokio::task::spawn_blocking(move || {
-                        let Some(settings) = &settings else { return false };
                         let settings = settings.shared();
                         if settings.get("autoResumeOnInternetRestore") != Some(&Value::Bool(true)) {
                             return false;
@@ -1235,7 +1205,7 @@ impl Turns {
             })
         };
         let runner = TurnTools {
-            sandbox: sandbox.then(|| self.sandboxes.clone()).flatten(),
+            sandbox: sandbox.then(|| self.sandboxes.clone()),
             // The decision runner the host picked; the local one is this daemon's.
             decide: (facts.get("decideWith").and_then(Value::as_str) == Some("local")).then(|| self.decide.clone()),
             hub: hub.clone(),
@@ -1250,7 +1220,7 @@ impl Turns {
             names,
             code: code_mode,
             native,
-            hook_rules: facts.get("hookRules").filter(|r| r.is_array() && !sandbox).map(nekko_tools::hooks::rules),
+            hooks: facts.get("hookRules").is_some_and(Value::is_array) && !sandbox,
             hook_cwd: workspaces.first().and_then(|w| str_at(w, "path")).map(str::to_string).unwrap_or_else(|| {
                 std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()
             }),
@@ -1261,7 +1231,6 @@ impl Turns {
             model_id: spec["opts"].get("modelId").cloned().unwrap_or(Value::Null),
             allow_spawn: turn::plan::allows_spawn(settings.get("orchestration")),
             decide_with: facts.get("decideWith").and_then(Value::as_str).map(str::to_string),
-            settings: settings.clone(),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
                 * 60_000.0) as u64,
         };
@@ -1456,6 +1425,17 @@ impl Turns {
             Mapped::PlanUsage(event) => {
                 self.harness.note_plan_usage(str_at(provider, "id").unwrap_or_default(), &event)
             }
+            Mapped::Plan(call) => {
+                let mut s = lock(session);
+                let Some(plan) = claude_code_plan(s.get("agentPlan"), call, nekko_js::now_ms()) else { return };
+                if let Some(obj) = s.as_object_mut() {
+                    obj.insert("agentPlan".into(), Value::Array(plan));
+                    obj.insert("updatedAt".into(), json!(nekko_js::now_ms()));
+                }
+                drop(s);
+                // After the call's checkpoint, which saves the plan with it.
+                shared.emit(json!({ "type": "session_meta", "sessionId": session_id }));
+            }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })
@@ -1543,6 +1523,27 @@ impl Turns {
     }
 }
 
+/// A Claude Agent chat's `agentPlan` after Claude Code changed its own plan
+/// (nekko_harness::PlanCall), through the same rules as `update_plan`;
+/// `None` when nothing changed.
+fn claude_code_plan(current: Option<&Value>, call: nekko_harness::PlanCall, now: u64) -> Option<Vec<Value>> {
+    use nekko_harness::PlanCall;
+    let (current, steps) = match call {
+        // A new list from Claude Code is the whole plan: nothing carries over.
+        PlanCall::Replace(steps) => (None, steps),
+        PlanCall::Upsert(step) => (current, vec![step]),
+        PlanCall::Remove(id) => {
+            let plan = current?.as_array()?;
+            let kept: Vec<Value> = plan.iter().filter(|s| str_at(s, "id") != Some(id.as_str())).cloned().collect();
+            return (kept.len() != plan.len()).then_some(kept);
+        }
+    };
+    match turn::apply_plan_update(current, &json!({ "steps": steps }), now) {
+        turn::PlanOutcome::Applied { plan, .. } => Some(plan),
+        _ => None,
+    }
+}
+
 /// `claudeCodeContext`: what a Claude Agent chat's context gauge shows, as
 /// Claude Code reported it (nekko_harness::ReportedContext). `modelId` is the
 /// chat's own model (an alias such as `opus`) the figures were reported for,
@@ -1582,7 +1583,7 @@ fn claude_code_context(
 async fn generate_title(
     hub: Hub,
     store: Arc<SessionStore>,
-    accounts: Option<Arc<Accounts>>,
+    accounts: Arc<Accounts>,
     spec: Value,
     _flight: TitleFlight,
 ) {
@@ -1618,12 +1619,10 @@ async fn generate_title(
         "usageOnFailure": true,
     });
     let Ok(out) = crate::sideband::complete(&request).await else { return };
-    if let Some(usage) = out.get("usage").filter(|u| u.as_array().is_some_and(|a| !a.is_empty()))
-        && let Some(a) = &accounts
-    {
+    if let Some(usage) = out.get("usage").filter(|u| u.as_array().is_some_and(|a| !a.is_empty())) {
         let provider = &facts["provider"];
         let who = json!({ "id": provider.get("id"), "kind": provider.get("kind"), "auth": provider.get("auth") });
-        a.side_usage(&who, opts.get("modelId"), &session_id, usage.as_array().map_or(&[], Vec::as_slice));
+        accounts.side_usage(&who, opts.get("modelId"), &session_id, usage.as_array().map_or(&[], Vec::as_slice));
     }
     if out.get("error").is_some() {
         return;
@@ -1825,7 +1824,7 @@ impl Deltas {
 
 struct Forward {
     /// Where this turn's usage and reply lines go, when the daemon keeps them.
-    account: Option<(Arc<Accounts>, TurnAccount, Value)>,
+    account: (Arc<Accounts>, TurnAccount, Value),
     hub: Hub,
     store: Arc<SessionStore>,
     session: Arc<Mutex<Value>>,
@@ -1876,7 +1875,8 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         deltas.flush(&f.hub);
         if str_at(&event, "type") == Some("usage") {
             f.stats.add(&event);
-            if let Some((accounts, account, opts)) = &f.account {
+            {
+                let (accounts, account, opts) = &f.account;
                 accounts.turn_usage(opts, account, &event);
             }
         }
@@ -1904,7 +1904,8 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                     }
                 }
             }
-            if let Some((accounts, account, opts)) = &f.account {
+            {
+                let (accounts, account, opts) = &f.account;
                 accounts.turn_end(opts, account, f.started_at, &event, finished.as_ref());
             }
         }
@@ -2002,7 +2003,7 @@ fn native_context(
     ctx.session_id = Some(session_id.to_string());
     ctx.changes = Some(turns.changes.clone());
     ctx.processes = Some(turns.processes.clone());
-    ctx.command_log = turns.agent_logs.clone().map(|logs| logs as Arc<dyn CommandLog>);
+    ctx.command_log = Some(turns.agent_logs.clone() as Arc<dyn CommandLog>);
     // Stop stops a running command too.
     let tools_cancel = ctx.cancel.clone();
     shared.cancel.on_cancel(move || tools_cancel.cancel());
@@ -2032,8 +2033,9 @@ struct TurnTools {
     /// Code mode: the tools `run_code` reaches, and what using it saved.
     code: Option<Arc<CodeMode>>,
     native: Option<ToolContext>,
-    /// This turn's hook rules, run here (`facts.hookRules`), and the folder they run in.
-    hook_rules: Option<Vec<nekko_tools::hooks::HookRule>>,
+    /// Whether tool hooks run here (`facts.hookRules` sent; the rules are
+    /// settings.json's, re-read per call), and the folder they run in.
+    hooks: bool,
     hook_cwd: String,
     /// `spec.allowBrowserControl`: a local desktop chat may use the browser and capture tools.
     allow_browser: bool,
@@ -2048,8 +2050,6 @@ struct TurnTools {
     allow_spawn: bool,
     /// Which decision runner `decide` uses (`facts.decideWith`): `local`, `typesafe`, or none.
     decide_with: Option<String>,
-    /// The settings at the turn's start, when no store holds fresher ones.
-    settings: Value,
 }
 
 fn result(id: &str, output: impl Into<String>) -> Value {
@@ -2089,16 +2089,11 @@ impl TurnTools {
     /// A call with this turn's hooks around it: a direct call, or one a
     /// code-mode script made.
     async fn guarded(&self, call: &Value) -> Result<Value, String> {
-        if let Some(spec_rules) = &self.hook_rules {
+        if self.hooks {
             // Re-read per call, so a hook added mid-turn applies to the next tool.
-            let rules = match &self.turns.settings {
-                Some(store) => {
-                    let store = store.clone();
-                    let settings = tokio::task::spawn_blocking(move || store.shared()).await.ok();
-                    nekko_tools::hooks::rules(settings.as_ref().map_or(&Value::Null, |s| &s["hooks"]))
-                }
-                None => spec_rules.clone(),
-            };
+            let store = self.turns.settings.clone();
+            let settings = tokio::task::spawn_blocking(move || store.shared()).await.ok();
+            let rules = nekko_tools::hooks::rules(settings.as_ref().map_or(&Value::Null, |s| &s["hooks"]));
             if nekko_tools::hooks::has_tool_hooks(&rules) {
                 return self.run_with_hooks(&rules, call).await;
             }
@@ -2225,10 +2220,8 @@ impl TurnTools {
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
             _ => {}
         }
-        if self.training
-            && let Some(runs) = self.turns.training.clone()
-            && matches!(name, "report_experiment" | "report_artifact" | "update_plan")
-        {
+        if self.training && matches!(name, "report_experiment" | "report_artifact" | "update_plan") {
+            let runs = self.turns.training.clone();
             return Ok(self.run_tool(&runs, id, name, input).await);
         }
         if name == "decide"
@@ -2269,9 +2262,8 @@ impl TurnTools {
         if name == "fetch_url" {
             return Ok(self.fetch_url(call).await);
         }
-        if name == "agent_watch"
-            && let Some(watches) = self.turns.watches.clone()
-        {
+        if name == "agent_watch" {
+            let watches = self.turns.watches.clone();
             return Ok(self.agent_watch(&watches, call).await);
         }
         if let Some(ctx) = &self.native
@@ -2385,12 +2377,9 @@ impl TurnTools {
             .ok()
             .flatten()
             .map(nekko_store::Meta::into_value);
-        let settings = match &self.turns.settings {
-            Some(s) => {
-                let s = s.clone();
-                tokio::task::spawn_blocking(move || s.get()).await.unwrap_or(Value::Null)
-            }
-            None => Value::Null,
+        let settings = {
+            let s = self.turns.settings.clone();
+            tokio::task::spawn_blocking(move || s.get()).await.unwrap_or(Value::Null)
         };
         let run = sandboxes.run_tool(stored.ok_or_else(|| "Sandbox session required".to_string()), &settings, call);
         tokio::pin!(run);
@@ -2498,7 +2487,7 @@ impl TurnTools {
         let Some(pid) = provider_id.as_str().filter(|p| !js::trim(p).is_empty() && js::trim(p) == *p) else {
             return failure("invalid_provider_id", "Use an exact nonblank provider ID.");
         };
-        let settings = self.turns.settings.as_ref().map(|s| s.get()).unwrap_or_else(|| self.settings.clone());
+        let settings = self.turns.settings.get();
         let provider = settings.get("providers").and_then(Value::as_array).and_then(|ps| {
             ps.iter()
                 .find(|p| p.get("id").and_then(Value::as_str) == Some(pid) && js::truthy(p.get("enabled")))
@@ -2567,7 +2556,7 @@ impl TurnTools {
         let mut failure: Option<String> = None;
         for attempt in 0..=MAX_CHILD_RESUMES {
             failure = None;
-            let prepared = match self.turns.dispatch.get().filter(|_| self.turns.store.is_some()) {
+            let prepared = match self.turns.dispatch.get() {
                 // Checked, made and admitted here (spawn.rs); the parent's own mode is the child's.
                 Some(d) => {
                     // The child takes the parent's settings, never its transcript.
@@ -2579,7 +2568,7 @@ impl TurnTools {
                     });
                     d("turn:spawnPrepare".into(), vec![req]).await
                 }
-                None => Err("Sub-agents need the daemon to know the data directory.".into()),
+                None => Err("the daemon is still starting".into()),
             };
             let prepared = match prepared {
                 Ok(v) => v,
@@ -2675,8 +2664,7 @@ impl TurnTools {
     /// `remember`: a global memory note. The chat's memory card reads the
     /// call's title and body and this result's first word after "Memory".
     async fn remember(&self, id: &str, input: &Value) -> Value {
-        let dir = self.turns.data_dir.clone().or_else(|| self.store.dir().parent().map(PathBuf::from));
-        let Some(dir) = dir else { return error(id, "Memory is unavailable here; nothing was saved.") };
+        let dir = self.turns.data_dir.clone();
         let text = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
         let (title, body) = (text("title"), text("body"));
         let saved = tokio::task::spawn_blocking(move || nekko_workspace::memory::remember(&dir, &title, &body))
@@ -2852,6 +2840,7 @@ mod tests {
             "messages": [{ "role": "user", "content": "Fix login" }] });
         std::fs::write(&path, session.to_string()).unwrap();
         let store = Arc::new(SessionStore::new(&dir));
+        let accounts = Arc::new(Accounts::new(dir.clone(), Hub::new()));
         let flights = TitleFlights::default();
         let spec = json!({ "opts": { "sessionId": "s_title", "modelId": "synthetic" },
             "facts": { "provider": { "id": "p1", "kind": "openai-compat",
@@ -2860,7 +2849,13 @@ mod tests {
             tx.send((fail, String::new())).unwrap();
             tokio::time::timeout(
                 Duration::from_secs(10),
-                generate_title(Hub::new(), store.clone(), None, spec.clone(), flights.claim("s_title").unwrap()),
+                generate_title(
+                    Hub::new(),
+                    store.clone(),
+                    accounts.clone(),
+                    spec.clone(),
+                    flights.claim("s_title").unwrap(),
+                ),
             )
             .await
             .unwrap();
@@ -2870,7 +2865,13 @@ mod tests {
         tx.send((false, "Later attempt".into())).unwrap();
         tokio::time::timeout(
             Duration::from_secs(10),
-            generate_title(Hub::new(), store.clone(), None, spec.clone(), flights.claim("s_title").unwrap()),
+            generate_title(
+                Hub::new(),
+                store.clone(),
+                accounts.clone(),
+                spec.clone(),
+                flights.claim("s_title").unwrap(),
+            ),
         )
         .await
         .unwrap();
@@ -2879,8 +2880,13 @@ mod tests {
         std::fs::write(&path, session.to_string()).unwrap();
         // Hold a successful response, then rename while it is pending.
         while seen_rx.try_recv().is_ok() {}
-        let task =
-            tokio::spawn(generate_title(Hub::new(), store.clone(), None, spec, flights.claim("s_title").unwrap()));
+        let task = tokio::spawn(generate_title(
+            Hub::new(),
+            store.clone(),
+            accounts.clone(),
+            spec,
+            flights.claim("s_title").unwrap(),
+        ));
         tokio::time::timeout(Duration::from_secs(10), seen_rx.recv()).await.unwrap().unwrap();
         let mut renamed = store.get("s_title").unwrap();
         renamed["title"] = json!("My name");
@@ -2959,6 +2965,32 @@ mod tests {
             claude_code_context(Some(&before), stopped, Some("claude-sonnet-5-5".into()), Some("sonnet".into())),
             json!({ "used": 52_000, "model": "claude-sonnet-5-5", "modelId": "sonnet" })
         );
+    }
+
+    #[test]
+    fn claude_codes_own_plan_becomes_the_chats() {
+        use nekko_harness::PlanCall;
+        let titles = |plan: &[Value]| -> Vec<(String, String)> {
+            plan.iter().map(|s| (s["title"].as_str().unwrap().into(), s["status"].as_str().unwrap().into())).collect()
+        };
+        let pair = |t: &str, s: &str| (t.to_string(), s.to_string());
+        // TaskCreate, then TaskUpdate by its id.
+        let a = json!({ "id": "task_1", "title": "Read", "status": "pending" });
+        let plan = claude_code_plan(None, PlanCall::Upsert(a), 1).unwrap();
+        let b = json!({ "id": "task_2", "title": "Fix", "status": "pending" });
+        let plan = claude_code_plan(Some(&json!(plan)), PlanCall::Upsert(b), 2).unwrap();
+        let start = json!({ "id": "task_1", "status": "active" });
+        let plan = claude_code_plan(Some(&json!(plan)), PlanCall::Upsert(start), 3).unwrap();
+        assert_eq!(titles(&plan), [pair("Read", "active"), pair("Fix", "pending")]);
+        let plan = claude_code_plan(Some(&json!(plan)), PlanCall::Remove("task_2".into()), 4).unwrap();
+        assert_eq!(titles(&plan), [pair("Read", "active")]);
+        assert_eq!(claude_code_plan(Some(&json!(plan)), PlanCall::Remove("task_9".into()), 5), None);
+        // An update for a task the plan never had changes nothing.
+        assert_eq!(claude_code_plan(None, PlanCall::Upsert(json!({ "id": "task_9", "status": "done" })), 5), None);
+        // TodoWrite's list replaces the plan, finished steps and all.
+        let todos = vec![json!({ "id": "todo_1", "title": "New", "status": "active" })];
+        let plan = claude_code_plan(Some(&json!(plan)), PlanCall::Replace(todos), 6).unwrap();
+        assert_eq!(titles(&plan), [pair("New", "active")]);
     }
 
     #[test]

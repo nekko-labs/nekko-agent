@@ -20,11 +20,9 @@ pub const KEEP: usize = 2;
 const EVENTS_MAX: usize = nekko_net::RECENT;
 
 /// Apply the saved switch now (later saves: [`follow`]) and log to `<dataDir>/logs`.
-pub fn start(data_dir: Option<&Path>, settings: Option<&Arc<Settings>>) {
-    if let Some(s) = settings {
-        nekko_net::configure(&s.store.get()["connections"]);
-    }
-    let Some(dir) = data_dir.map(|d| d.join("logs")) else { return };
+pub fn start(data_dir: &Path, settings: &Arc<Settings>) {
+    nekko_net::configure(&settings.store.get()["connections"]);
+    let dir = data_dir.join("logs");
     let path = dir.join(LOG);
     for old in (1..=KEEP).rev().map(|i| dir.join(format!("{LOG}.{i}"))).chain([path.clone()]) {
         if let Ok(text) = std::fs::read_to_string(old) {
@@ -46,7 +44,7 @@ pub fn start(data_dir: Option<&Path>, settings: Option<&Arc<Settings>>) {
 /// Apply each saved change to `settings.connections`, then bring the listeners
 /// in line at once rather than at their next watch tick.
 pub fn follow(ctx: crate::routes::Ctx) {
-    let Some(s) = ctx.settings.clone() else { return };
+    let s = ctx.settings.clone();
     let mut changes = s.store.subscribe();
     tokio::spawn(async move {
         let mut last = changes.borrow().get("connections").cloned();

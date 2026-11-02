@@ -29,20 +29,20 @@ export function DeveloperServerControls() {
   };
   return (
     <div className="developer-server-controls no-drag" aria-label="Developer server controls">
-      <button className="btn btn-outline px-2! py-1! text-[11px]" role="switch" aria-checked={status?.agentRunning ?? false} disabled={busy || !status}
+      <button className="btn btn-outline px-2! py-1! text-2xs" role="switch" aria-checked={status?.agentRunning ?? false} disabled={busy || !status}
         title="Start or stop the agent server" onClick={() => void run(status?.agentRunning ? 'stop' : 'start')}>
         Agent: {status ? status.agentRunning ? 'On' : 'Off' : '…'}
       </button>
-      <button className="btn btn-outline px-2! py-1! text-[11px]" role="switch" aria-checked={status?.modelRunning ?? false}
+      <button className="btn btn-outline px-2! py-1! text-2xs" role="switch" aria-checked={status?.modelRunning ?? false}
         disabled={busy || !status?.agentRunning || (!status.modelRunning && !status.modelAvailable)}
         title="Start or stop the model server (requires an installed runtime and the agent server)"
         onClick={() => void run(status?.modelRunning ? 'model-stop' : 'model-start')}>
         Model: {status?.modelRunning ? 'On' : 'Off'}
       </button>
-      <button className="btn btn-outline px-2! py-1! text-[11px]" disabled={busy} title="Restart the agent server without closing the app" onClick={() => void run('restart')}>
+      <button className="btn btn-outline px-2! py-1! text-2xs" disabled={busy} title="Restart the agent server without closing the app" onClick={() => void run('restart')}>
         {busy ? 'Working…' : 'Restart server'}
       </button>
-      {error && <span className="text-[11px] text-danger" role="alert" title={error}>{error}</span>}
+      {error && <span className="text-2xs text-danger" role="alert" title={error}>{error}</span>}
     </div>
   );
 }

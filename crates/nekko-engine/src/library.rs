@@ -20,7 +20,8 @@ use nekko_tools::path::native as path;
 use regress::Regex;
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
-use std::sync::OnceLock;
+use std::sync::{LazyLock, Mutex, OnceLock};
+use std::time::SystemTime;
 
 const INDEX_FILE: &str = "library.json";
 /// The folder downloads land in. Its models keep bare, unprefixed ids.
@@ -323,7 +324,25 @@ fn add_kv_layout(stored: &mut Map<String, Value>, p: &str) -> bool {
     if !(want_kv || want_weights) || stored.get("readable") != Some(&Value::Bool(true)) {
         return false;
     }
+    // A header without the layout (an image or speech model) stays without
+    // it, so it is read once per file version, not on every listing: the
+    // listing is polled, and a big vocabulary makes each read up to 16 MiB.
+    type FileVersion = (String, u64, Option<SystemTime>);
+    static LACKING: LazyLock<Mutex<HashSet<FileVersion>>> = LazyLock::new(Default::default);
+    let version = std::fs::metadata(p).ok().map(|m| (p.to_string(), m.len(), m.modified().ok()));
+    if let Some(v) = &version
+        && LACKING.lock().is_ok_and(|s| s.contains(v))
+    {
+        return false;
+    }
     let Some(meta) = gguf::read_metadata(p) else { return false };
+    let lacking = (want_kv && meta.kv_layout.is_none()) || (want_weights && meta.weight_layout.is_none());
+    if lacking
+        && let Some(v) = version
+        && let Ok(mut s) = LACKING.lock()
+    {
+        s.insert(v);
+    }
     let mut changed = false;
     if want_kv && let Some(l) = meta.kv_layout {
         stored.insert("kvLayout".into(), l.to_value());

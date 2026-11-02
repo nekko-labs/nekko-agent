@@ -45,6 +45,18 @@ final class SyncCryptoTests: XCTestCase {
         }
     }
 
+    func testEpochProofsMatch() throws {
+        let v = try vector()
+        let keyring = try SyncCrypto.Keyring(bytes: try d(v, "keyring"))
+        let proofs = try XCTUnwrap(v["epochProofs"]?.array)
+        XCTAssertFalse(proofs.isEmpty)
+        for p in proofs {
+            let keyId = UInt32(try XCTUnwrap(p.long("keyId")))
+            XCTAssertEqual(SyncCrypto.epochProof(keyring: keyring, keyId: keyId), try d(p, "proof"))
+        }
+        XCTAssertNotEqual(SyncCrypto.epochProof(keyring: keyring, keyId: 1), SyncCrypto.epochProof(keyring: keyring.rotated(), keyId: 1))
+    }
+
     func testPadmeMatches() throws {
         for p in try XCTUnwrap(try vector()["padme"]?.array) {
             let pair = try XCTUnwrap(p.array)

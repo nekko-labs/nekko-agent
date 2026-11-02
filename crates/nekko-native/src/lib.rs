@@ -10,6 +10,7 @@
 
 pub mod dialogs;
 pub mod mic;
+pub mod release_key;
 pub mod semver;
 pub mod shell;
 pub mod update;

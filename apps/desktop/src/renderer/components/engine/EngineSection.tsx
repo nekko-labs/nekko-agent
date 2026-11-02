@@ -166,7 +166,7 @@ export function EngineSection({
       <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent)' }} />
-        <h2 className="text-[15px] font-semibold">Model server</h2>
+        <h2 className="text-base font-semibold">Model server</h2>
         <div className="ml-auto flex items-center gap-3">
           <ServerPowerPill
             running={running}
@@ -177,7 +177,7 @@ export function EngineSection({
             color="var(--accent)"
           />
           <label
-            className="flex items-center gap-1.5 text-[12px] text-ink-soft"
+            className="flex items-center gap-2 text-xs text-ink-soft"
             title="Bring the engine up when the app opens"
           >
             Start Server on Nekko Launch
@@ -189,7 +189,7 @@ export function EngineSection({
           </label>
         </div>
       </div>
-      <p className="mt-0.5 text-[12px] text-ink-faint">
+      <p className="mt-0.5 text-xs text-ink-faint">
         Serve text and image models on one address, using managed runtimes or models already on this machine.
       </p>
 
@@ -203,10 +203,10 @@ export function EngineSection({
           <>
             <div className="flex flex-wrap items-center gap-2">
               <StatusDot running={running} busy={busy !== null} />
-              <span className="text-[13px]">{running ? 'Running' : 'Stopped'}</span>
-              {install.version && <span className="text-[11px] text-ink-faint">{install.version}</span>}
+              <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
+              {install.version && <span className="text-2xs text-ink-faint">{install.version}</span>}
               {running && (
-                <span className="text-[11px] text-ink-faint">
+                <span className="text-2xs text-ink-faint">
                   {status.resident.length} loaded
                   {residentBytes > 0 ? ` · ${formatBytes(residentBytes)} on GPU` : ''}
                 </span>
@@ -222,9 +222,9 @@ export function EngineSection({
                 className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3"
                 style={{ borderColor: 'var(--warning, #d1a054)' }}
               >
-                <p className="min-w-0 flex-1 text-[12.5px]">{install.problem.message}</p>
+                <p className="min-w-0 flex-1 text-xs">{install.problem.message}</p>
                 <button
-                  className="btn btn-primary py-1.5 text-[12px]"
+                  className="btn btn-primary py-1 text-xs"
                   onClick={() => void reinstall(install.problem?.repairBuildId, 'Repairing the engine. Models will use your graphics card once it finishes.')}
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
@@ -235,9 +235,9 @@ export function EngineSection({
 
             {install.upgrade && !install.problem && (
               <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }}>
-                <p className="min-w-0 flex-1 text-[12.5px] text-ink-soft">{install.upgrade.message}</p>
+                <p className="min-w-0 flex-1 text-xs text-ink-soft">{install.upgrade.message}</p>
                 <button
-                  className="btn py-1.5 text-[12px]"
+                  className="btn py-1 text-xs"
                   onClick={() => void reinstall(install.upgrade?.buildId, 'Downloading the CUDA engine. Nekko switches to it once it finishes.')}
                   disabled={repairing || active.some((g) => g.jobs.some((j) => j.kind === 'engine'))}
                 >
@@ -249,7 +249,7 @@ export function EngineSection({
             {repairing && <DownloadProgress group={runtimeDownload.group} />}
 
             {status.settings.bind === 'lan' && running && (
-              <p className="mt-2 text-[11.5px]" style={{ color: 'var(--warning, #d1a054)' }}>
+              <p className="mt-2 text-xs" style={{ color: 'var(--warning, #d1a054)' }}>
                 Reachable from your whole network on port {status.settings.port}
                 {status.settings.apiKey ? ', and a key is required.' : '. No key is set, so anything on it can use your models.'}
               </p>
@@ -258,7 +258,7 @@ export function EngineSection({
         )}
 
         <details className="mt-4 border-t border-line pt-4">
-          <summary className="cursor-pointer text-[12px] font-medium">Model server settings</summary>
+          <summary className="cursor-pointer text-xs font-medium">Model server settings</summary>
           <div className="mt-3"><EngineServerSettings settings={status.settings} install={install} running={running} onChanged={() => { void refresh(); onProvidersChanged(); }} /></div>
         </details>
         <ErrorBoundary label="Image runtime"><DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} /></ErrorBoundary>
@@ -269,8 +269,8 @@ export function EngineSection({
             it opens itself (showLog) so you do not have to. */}
         {status.log.length > 0 && (
           <details className="mt-3" open={showLog}>
-            <summary className="cursor-pointer text-[11px] text-ink-faint">Server logs</summary>
-            <pre className="mt-1 max-h-40 overflow-auto rounded bg-[color-mix(in_srgb,var(--ink-faint)_8%,transparent)] p-2 font-mono text-[10px]">
+            <summary className="cursor-pointer text-2xs text-ink-faint">Server logs</summary>
+            <pre className="mt-1 max-h-40 overflow-auto rounded bg-[color-mix(in_srgb,var(--ink-faint)_8%,transparent)] p-2 font-mono text-2xs">
               {status.log.join('\n')}
             </pre>
           </details>
@@ -280,10 +280,10 @@ export function EngineSection({
       <ErrorBoundary label="Local API"><LocalServerSection /></ErrorBoundary>
       </div>
       <div className="min-w-0">
-        <h2 className="text-[15px] font-semibold">Models</h2>
-        <p className="mt-0.5 text-[12px] text-ink-faint">Find, download and run models from one library.</p>
+        <h2 className="text-base font-semibold">Models</h2>
+        <p className="mt-0.5 text-xs text-ink-faint">Find, download and run models from one library.</p>
         <div className="card mt-3 min-w-0 p-4 sm:p-5">
-        <div className="flex flex-wrap gap-1.5 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
+        <div className="flex flex-wrap gap-2 border-b pb-2" style={{ borderColor: 'var(--line)' }}>
           <TabButton active={tab === 'models'} onClick={() => setTab('models')}>
             Models{models.length > 0 ? ` (${models.length})` : ''}
           </TabButton>
@@ -337,7 +337,7 @@ function TabButton({
 }) {
   return (
     <button
-      className="rounded-full px-2.5 py-1 text-[12px]"
+      className="rounded-full px-3 py-1 text-xs"
       style={
         active
           ? { background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }
@@ -360,7 +360,7 @@ function AddressPill({ address }: { address: string }) {
   }, [copied]);
   return (
     <button
-      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-mono text-[11px] text-ink-faint hover:text-ink"
+      className="inline-flex items-center gap-2 rounded-full border px-2 py-1 font-mono text-2xs text-ink-faint hover:text-ink"
       style={{ borderColor: 'var(--line)' }}
       title="Copy the address other tools should point at"
       onClick={async () => {

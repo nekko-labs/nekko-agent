@@ -127,8 +127,11 @@ apps/android/
   disk, and the app opts out of backup and device transfer.
 - `providers:list` and `settings:get` replies carry API keys; they are reduced
   to ids, labels and the default model on arrival and never stored or logged.
-- Release builds allow TLS only (`wss://`). Debug builds also allow `ws://` to
-  `localhost`, `127.0.0.1` and `10.0.2.2` (the emulator's host) for a local relay.
+- `wss://` anywhere; plain `ws://` only to the tailnet or the LAN, never the
+  open internet, as on the iPhone. The network security config permits
+  cleartext app-wide (it can't name IP ranges), so the app refuses public
+  `ws://` before dialing (`RelayRoute.publicCleartext`). Debug builds also
+  dial a loopback relay, for `adb reverse`.
 - The one-time pairing code is dropped from storage once the computer welcomes
   the phone, and is never sent again.
 

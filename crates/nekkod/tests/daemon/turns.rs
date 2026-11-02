@@ -658,14 +658,6 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn without_a_data_dir_accounting_is_not_served() {
-    let d = start();
-    let (status, body) = post(d.port, "limits:get", json!(["k"]), Some(TOKEN)).await;
-    assert_eq!(status, 400);
-    assert_eq!(body["error"], "unknown channel limits:get");
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn stop_during_admission_cancels_setup_and_refuses_duplicate_send() {
     let session = json!({ "id": "s_prepare_stop", "title": "Prepared", "titleAuto": false, "workspaceId": "w1", "gitIsolation": true, "executionMode": "worktree", "messages": [], "createdAt": 1, "updatedAt": 1 });
     let rig = turn_rig("prepare-stop", session);

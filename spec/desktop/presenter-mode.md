@@ -16,7 +16,8 @@ tooltips.
 ## Behavior
 
 - Turned on by `NEKKO_PRESENTER=1` in the desktop app, or `?presenter=1` in the
-  Local Web UI (remembered for that tab until `?presenter=0`).
+  Local Web UI. Neither is remembered: the next launch, or the page without the
+  flag, is the normal app, so no one is left in presenter mode by accident.
 - Outside Settings, every visible text node and the `title`, `aria-label`,
   `placeholder` and `alt` attributes are masked as they render:
   emails become `you@example.com`; home-directory paths become `~`; the OS user
@@ -38,7 +39,8 @@ recorded, because only the real app looks like the real app.
 
 - `npm run demo -w apps/desktop -- <scene>` starts the app in presenter mode on
   the demo profile with `NEKKO_DEMO_DEBUG_PORT` set (a remote-debugging port on
-  127.0.0.1, opened only when that variable is set), counts down five seconds
+  127.0.0.1, opened only when that variable is set and only in a dev build; an
+  installed app never opens it), counts down five seconds
   so recording can start, then plays `scripts/demo/scenes/<scene>.mjs`.
 - Each click or hover finds the element in the live page, glides the real
   Windows cursor there (eased) and clicks with the real mouse, so recorders that
@@ -47,7 +49,10 @@ recorded, because only the real app looks like the real app.
   movement.
 - `--attach` plays in an app already running with the port; `--dry --url`
   rehearses headless against the Local Web UI and saves a screenshot per step.
-- One scene ships: `tour` (zones, Artifacts, Workflows, Models, chat search).
+- The runner waits for Enter (press it once recording has started), then counts down 3 seconds; `--no-wait` skips the wait.
+- Scenes ship for the five website panels (`control`, `experience`, `fast`, `secure`, `convenient`) plus `tour`. Setup steps run before recording; the demo project is reset to its first commit before each take.
+- `fast` keeps tok/s readouts hidden unless run with `--benchmark` on the machine its numbers were measured on.
+- Presenter mode leaves reserved `example.com`/`.org`/`.net` addresses unmasked (demo scripts type them on purpose) and never rewrites text inside an editable field (it moved the caret mid-typing).
 
 
 
@@ -56,6 +61,24 @@ Text inside inputs, textareas and editors is not masked; neither are images,
 folder or project names that are not under a home path, nor names the masker
 cannot know (a colleague's name in a chat). Use the demo profile for footage
 that must be clean.
+
+## Unattended takes with Recordly
+
+- `--record` starts Recordly (`RECORDLY_EXE`, default its Windows install path)
+  with a local debugging port, restarting it for every take, picks the app's
+  window as the source, presses Record once setup is done and Stop after the
+  last step, and prints the saved file. It refuses to record if Recordly would
+  capture the whole screen instead of the window.
+- Scenes start a brand-new chat (Ctrl+T), attach the demo project, set low
+  effort and (for `control`) ask before every edit, and finish when a new reply
+  completes, approving each action on camera.
+- Scenes change settings in setup (no worktrees, no "Reply finished"
+  notifications, Agent Monitor closed), so they run only on the demo profile:
+  `--dry` and `--attach` refuse without `--demo-profile`.
+- The cursor's screen mapping is measured against the real window before each
+  take; a failed take saves a screenshot of the app under `scripts/demo/out/`.
+- Verified: the `control` scene recorded unattended end to end in dark mode,
+  window only (1282x720). Not yet run unattended: the other four scenes.
 
 ## Status
 

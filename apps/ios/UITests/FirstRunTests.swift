@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class FirstRunTests: XCTestCase {
     /// A fresh install shows the welcome screen with pairing and the Tailscale guide,
     /// and makes no connection before a computer is paired.

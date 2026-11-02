@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release: TLS by default. Relays are wss://; frames are E2E-sealed on top.
-     One exception: plain ws:// to a Tailscale MagicDNS name (*.ts.net), for the
-     private relay on the user's own computer (scripts/private-relay.sh). Those
-     names resolve only inside the user's tailnet and every hop is already
-     encrypted by WireGuard, under the app's own end-to-end encryption.
-     Android can't allow an IP range here, so a bare 100.x.y.z address stays
-     TLS-only: use the computer's MagicDNS name. -->
+<!-- Plain ws:// is permitted app-wide, as on the iPhone, because a computer's
+     own relay is usually reached at a LAN or tailnet IP (192.168.x.x,
+     100.x.y.z) and this file can only name domains, not IP ranges.
+     The barrier is in the app instead: RelayRoute.publicCleartext refuses
+     ws:// (and the http:// health probe) to the open internet before
+     dialing (OkHttpTransport, HealthProber), and RelayHint says why.
+     Every frame is end-to-end encrypted on every path.
+     Debug and release share this file. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">ts.net</domain>
-    </domain-config>
 </network-security-config>

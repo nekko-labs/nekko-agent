@@ -24,7 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
-import type { ConnectRequest, RunnerSettings, RunnerView } from './runners.js';
+import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -121,6 +121,14 @@ export const IpcChannels = {
   /** Background automations on a local model, and how many are paused for the user. */
   backgroundState: 'background:state',
   machineDismissNudge: 'machine:dismissNudge',
+  /** Whether memory is low, which app holds the most, and what Nekko holds (the tray's low-memory prompt). */
+  memoryState: 'memory:state',
+  /** Ask an app to close as a person would, so it can still ask to save. Never Nekko's own or the system's. */
+  memoryCloseApp: 'memory:closeApp',
+  /** Shut down every loaded local model, mid-reply or kept resident: the low-memory prompt's "Shut down Nekko's local models". */
+  engineUnloadAll: 'engine:unloadAll',
+  /** The loaded local models, how many are replying, and what their processes hold: what shutting them down frees. */
+  engineMemory: 'engine:memory',
   gpuStats: 'gpu:stats',
   systemStats: 'system:stats',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
@@ -323,12 +331,24 @@ export const IpcChannels = {
    * makes it the endpoint a Slack app or a git provider webhook posts to.
    */
   workflowEvent: 'workflow:event',
+  /** The CI runner image builder (T226), served by nekkod; never by a phone. */
+  runnerImageStatus: 'runner:imageStatus',
+  runnerImagePlan: 'runner:imagePlan',
+  runnerImageBuild: 'runner:imageBuild',
+  runnerImageResume: 'runner:imageResume',
+  runnerImageCancel: 'runner:imageCancel',
   /** CI runners (T213), served by nekkod's runner supervisor; never by a phone. */
   runnerList: 'runner:list',
   runnerConnect: 'runner:connect',
   runnerUpdate: 'runner:update',
   runnerRemove: 'runner:remove',
   runnerSetEnabled: 'runner:setEnabled',
+  /** The click-through GitHub connect, confirmed through `runner:connect`. */
+  runnerGithubAccounts: 'runner:githubAccounts',
+  runnerGithubStart: 'runner:githubStart',
+  runnerGithubStatus: 'runner:githubStatus',
+  runnerGithubCancel: 'runner:githubCancel',
+  runnerSetForkApproval: 'runner:setForkApproval',
 
   connectorsList: 'connectors:list',
   connectorConnect: 'connector:connect',
@@ -459,8 +479,12 @@ export const IpcEvents = {
   backgroundUpdated: 'background:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
+  /** The image builder's `ImageView`, after any change. */
+  runnerImageChanged: 'runner:imageChanged',
   /** Every runner's `RunnerView`, after any change. */
   runnerChanged: 'runner:changed',
+  /** The GitHub connect moved on: a `GithubSetupView`. */
+  runnerGithubChanged: 'runner:githubChanged',
   limitsUpdated: 'limits:updated',
   /** The look a paired phone mirrors changed: the theme fields of the settings, never anything else. */
   appearanceUpdated: 'appearance:updated',
@@ -1070,6 +1094,12 @@ export interface NekkoApi {
   listWorkflowSkillDefs(): Promise<import('./skills.js').SkillDef[]>;
   /** Offer an event to every listening workflow; returns the runs it started. */
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
+  /** Builds the runner VM image on this Mac. Rejects with a sentence, like the runner calls. */
+  imageStatus(): Promise<ImageView>;
+  imagePlan(): Promise<ImagePlan>;
+  buildImage(req: ImageBuildRequest): Promise<ImageView>;
+  resumeImage(): Promise<ImageView>;
+  cancelImage(): Promise<ImageView>;
   /** CI runners on this Mac. Rejects where the daemon serves none (not macOS, or an older daemon). */
   listRunners(): Promise<RunnerView[]>;
   connectRunner(req: ConnectRequest): Promise<RunnerView>;
@@ -1078,6 +1108,16 @@ export interface NekkoApi {
   updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
   removeRunner(id: string): Promise<null>;
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
+  /** Accounts `gh` is signed in to; empty without `gh`. */
+  githubAccounts(): Promise<GithubAccounts>;
+  /** `url` is the page to open in the browser, or null when GitHub has nothing left to do. */
+  githubStart(req: GithubStartRequest): Promise<{ url: string | null }>;
+  /** Also picks a pending app back up, so a sheet opened after a quit resumes at Install. */
+  githubStatus(): Promise<GithubSetupView>;
+  /** Stops waiting. The app and its key stay, so the next start resumes. */
+  githubCancel(): Promise<GithubSetupView>;
+  /** `confirmed`: the owner set it themselves, so GitHub is not asked. Either way, `done` lets the runner start. */
+  setForkApproval(req: { runnerId: string; confirmed?: boolean }): Promise<ForkApproval>;
 
   listConnectors(): Promise<ConnectorConfig[]>;
   connectConnector(kind: ConnectorKind, token: string, settings?: Record<string, string>): Promise<ConnectorConfig[]>;
@@ -1253,7 +1293,9 @@ export interface NekkoApi {
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */
   onWorkflowsUpdated(cb: (snapshot: WorkflowsSnapshot) => void): () => void;
+  onImageChanged(cb: (view: ImageView) => void): () => void;
   onRunnersChanged(cb: (views: RunnerView[]) => void): () => void;
+  onGithubSetupChanged(cb: (view: GithubSetupView) => void): () => void;
   /** Fires when subscription limits are captured or polled for any token key. */
   onLimitsUpdated(cb: (e: { tokenKey: string; limits: SubscriptionLimits }) => void): () => void;
   /** Fires as engine and model downloads progress, finish, or fail. */

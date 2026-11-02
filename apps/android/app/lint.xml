@@ -4,6 +4,12 @@
     <issue id="ApplySharedPref">
         <ignore path="src/main/java/com/nekko/android/data/AndroidSecureStore.kt" />
     </issue>
+    <!-- Cleartext is permitted app-wide on purpose: the config can't name the LAN or
+         tailnet IP ranges a computer's relay uses, so the app refuses public ws://
+         itself (RelayRoute.publicCleartext, OkHttpTransportTest). -->
+    <issue id="InsecureBaseConfiguration">
+        <ignore path="src/main/res/xml/network_security_config.xml" />
+    </issue>
     <!-- targetSdk 36 on purpose until the app is tested on API 37 devices; compileSdk is 37.2. -->
     <issue id="OldTargetApi" severity="informational" />
 </lint>

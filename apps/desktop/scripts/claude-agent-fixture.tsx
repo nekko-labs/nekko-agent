@@ -104,6 +104,8 @@ function Fixture() {
         setScene(name);
       },
       calls,
+      // What the usual login's checks answer from now on (a mid-sign-in miss, say).
+      setCodeStatus: (name: string) => { codeStatus = statuses[name]; },
     },
   });
   return (

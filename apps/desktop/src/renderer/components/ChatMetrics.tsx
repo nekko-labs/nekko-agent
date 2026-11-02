@@ -90,12 +90,12 @@ export function ContextGauge({
   const freePct = windowTokens ? (free / windowTokens) * 100 : 0;
 
   return (
-    <div className="group relative flex min-w-0 shrink-0 items-center text-[11px] text-ink-faint">
+    <div className="group relative flex min-w-0 shrink-0 items-center text-2xs text-ink-faint">
       {/* A ring that fills as the window does, and the count beside it, as on
           the phone. `~` marks a window guessed from the model family rather
           than reported. */}
       <span
-        className="context-bar flex h-6 cursor-default items-center gap-1.5 rounded-md px-1.5 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
+        className="context-bar flex h-6 cursor-default items-center gap-2 rounded-md px-2 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
         tabIndex={0}
         aria-label={`Context window: ${num(used)}${windowTokens ? ` of ${num(windowTokens)}` : ''} tokens in use`}
       >
@@ -109,7 +109,7 @@ export function ContextGauge({
       </span>
       {/* Expanded breakdown: segmented bar + per-source rows with %, plus free space. */}
       <div
-        className="pointer-events-none absolute bottom-7 left-0 z-40 hidden w-72 rounded-xl border border-line p-3 text-[11px] shadow-lg group-hover:block group-focus-within:block"
+        className="pointer-events-none absolute bottom-7 left-0 z-40 hidden w-72 rounded-xl border border-line p-3 text-2xs shadow-(--shadow-float) group-hover:block group-focus-within:block"
         style={{ background: 'var(--surface)' }}
         role="tooltip"
       >
@@ -125,7 +125,7 @@ export function ContextGauge({
           : windowReported ? 'Window reported by the model catalog. Usage is estimated.' : 'Window estimated from model family; the provider has not reported its exact limit.'}</p>
         {/* Segmented usage bar */}
         {windowTokens > 0 && (
-          <div className="mb-2.5 flex h-2 w-full overflow-hidden rounded-full" style={{ background: FREE_COLOR }}>
+          <div className="mb-2 flex h-2 w-full overflow-hidden rounded-full" style={{ background: FREE_COLOR }}>
             {rows.map((r) => (
               <span key={r.src} title={`${r.meta.label}: ${num(r.n)} tok`} style={{ width: `${r.pctWin}%`, background: r.meta.color }} />
             ))}
@@ -148,7 +148,7 @@ export function ContextGauge({
             <span className="w-9 shrink-0 text-right tabular-nums text-ink-faint">{freePct.toFixed(1)}%</span>
           </div>
         )}
-        <div className="mt-1.5 flex justify-between border-t border-line pt-1.5 font-medium text-ink">
+        <div className="mt-1 flex justify-between border-t border-line pt-1 font-medium text-ink">
           <span>Total in use</span>
           <span className="tabular-nums">{num(used)} tok</span>
         </div>
@@ -212,11 +212,11 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
   // A dial with one notch per level the model takes, as on the phone; the
   // levels themselves are stops in the popover, and the arrow keys step them.
   return (
-    <div className="effort-slider flex shrink-0 items-center rounded-lg border border-line text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort, remembered for new chats on this computer'}>
+    <div className="effort-slider flex shrink-0 items-center rounded-lg border border-line text-2xs" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort, remembered for new chats on this computer'}>
       <button
         ref={pop.anchor}
         type="button"
-        className="flex items-center gap-1.5 px-2 py-1"
+        className="flex items-center gap-2 px-2 py-1"
         onClick={() => pop.setOpen((o) => !o)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); step(1); }
@@ -233,10 +233,10 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
         <span className="min-w-12 text-ink-soft">{shown}</span>
       </button>
       {pop.open && createPortal(
-        <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-3 shadow-lg" role="dialog" aria-label="Reasoning effort" data-effort-popover>
+        <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-3 shadow-(--shadow-float)" role="dialog" aria-label="Reasoning effort" data-effort-popover>
           <div className="flex flex-col items-center gap-2">
             <EffortDial index={index} count={options.length} size={88} />
-            <span className="text-[13px] font-semibold text-ink">{shown}</span>
+            <span className="text-sm font-semibold text-ink">{shown}</span>
             <div className="flex w-full gap-1" role="radiogroup" aria-label="Reasoning effort">
               {options.map((o, i) => (
                 <button
@@ -244,14 +244,14 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
                   type="button"
                   role="radio"
                   aria-checked={i === index}
-                  className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink'}`}
+                  className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-1 text-2xs font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink'}`}
                   onClick={() => pick(o)}
                   data-effort={o}
                   title={o === modelDefaultEffort(modelId) ? 'Recommended' : undefined}
-                >{EFFORT_LABEL[o]}{o === modelDefaultEffort(modelId) && <span className="block text-[9px]">Recommended</span>}</button>
+                >{EFFORT_LABEL[o]}{o === modelDefaultEffort(modelId) && <span className="block text-2xs">Recommended</span>}</button>
               ))}
             </div>
-            <p className="text-center text-[11px] text-ink-faint">Higher effort thinks longer and spends more tokens.</p>
+            <p className="text-center text-2xs text-ink-faint">Higher effort thinks longer and spends more tokens.</p>
           </div>
         </div>,
         document.body,

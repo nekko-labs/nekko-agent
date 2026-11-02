@@ -2,6 +2,7 @@ import XCTest
 
 /// The desktop's themes and languages on the iPhone: Settings offers every
 /// desktop preset and a Language row, and the app runs in Japanese.
+@MainActor
 final class ThemeLanguageTests: XCTestCase {
     func testPicksADesktopThemeFromSettings() {
         let app = XCUIApplication()

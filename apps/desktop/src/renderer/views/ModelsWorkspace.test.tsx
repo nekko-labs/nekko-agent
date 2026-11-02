@@ -11,13 +11,17 @@ vi.mock('./ModelServerView.js', () => ({ ModelServerView: ({ embedded }: { embed
 import { guideFirstModel, ModelsWorkspace } from './ModelsWorkspace.js';
 
 describe('Models workspace', () => {
-  it('opens the cloud section for the existing models destination', () => {
-    state.view = 'models';
-    const html = renderToStaticMarkup(<ModelsWorkspace />);
-    expect(html).toContain('aria-label="Models"');
-    expect(html).toContain('aria-current="page">');
-    expect(html).toContain('data-providers="cloud"');
-    expect(html).not.toContain('data-server');
+  it('shows the local and cloud sections together from either destination', () => {
+    for (const view of ['models', 'modelserver']) {
+      state.view = view;
+      const html = renderToStaticMarkup(<ModelsWorkspace />);
+      expect(html).toContain('aria-label="Models"');
+      expect(html).toContain('id="models-local-title"');
+      expect(html).toContain('id="models-cloud-title"');
+      expect(html).toContain('data-providers="cloud"');
+      expect(html.indexOf('models-local-title')).toBeLessThan(html.indexOf('models-cloud-title'));
+      expect(html.match(/aria-current="location"/g)).toHaveLength(1);
+    }
   });
   it('waits for the engine before choosing between the guided screen and the full page', () => {
     state.view = 'modelserver';
@@ -25,8 +29,8 @@ describe('Models workspace', () => {
     expect(html).toContain('aria-label="Models"');
     expect(html).not.toContain('data-server');
     expect(html).not.toContain('data-first-run');
-    expect(html).not.toContain('data-providers="cloud"');
-    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(html).toContain('data-providers="cloud"');
+    expect(html.match(/aria-current="location"/g)).toHaveLength(1);
   });
   it('guides only someone with no local model and no local server of their own', () => {
     const engine = { enabled: true, kind: 'llamacpp' } as const;

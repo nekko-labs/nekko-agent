@@ -73,37 +73,37 @@ export function ArtifactsView() {
       <aside className="flex w-[340px] shrink-0 flex-col border-r border-line">
         <div className="flex items-center gap-2 p-4 pb-2">
           {!hasAppChrome && <h1 className="view-title">Artifacts</h1>}
-          <span className="ml-auto text-[11px] tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
+          <span className="ml-auto text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
         </div>
         <div className="space-y-2 px-3 pb-2">
-          <input className="input rounded-lg px-2.5 py-1.5 text-[12px]" placeholder="Filter by name, file or chat…" aria-label="Filter artifacts" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <label className="flex items-center gap-2 text-[11px] text-ink-faint">
+          <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter artifacts" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <label className="flex items-center gap-2 text-2xs text-ink-faint">
             <input type="checkbox" checked={includeCompleted} onChange={(e) => setIncludeCompleted(e.target.checked)} /> Include completed chats
           </label>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" role="list" aria-label="Artifacts">
           {entries && groups.length === 0 && (
-            <p className="px-3 py-2 text-[12px] text-ink-faint">
+            <p className="px-3 py-2 text-xs text-ink-faint">
               {query ? 'Nothing matches.' : 'No artifacts yet. Documents, pages, designs and diagrams your agents write or link to show up here.'}
             </p>
           )}
           {groups.map(({ kind, items }) => (
             <section key={kind.id} className="mb-2" data-artifact-kind={kind.id} aria-label={kind.label}>
-              <h2 className="flex items-center gap-2 px-2 pb-1 pt-2 text-[12px] font-semibold text-ink">
+              <h2 className="flex items-center gap-2 px-2 pb-1 pt-2 text-xs font-semibold text-ink">
                 {kind.label}
-                <span className="rounded-full bg-surface-2 px-1.5 text-[10px] font-normal tabular-nums text-ink-faint">{items.length}</span>
+                <span className="rounded-full bg-surface-2 px-2 text-2xs font-normal tabular-nums text-ink-faint">{items.length}</span>
               </h2>
               {items.map((e) => {
                 const active = selected?.path === e.path;
                 return (
                   <div key={e.path} role="listitem" className={`group rounded-lg ${active ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}>
-                    <button type="button" className="flex w-full min-w-0 items-start gap-2.5 px-2 py-1.5 text-left" onClick={() => setSelected(e)} title={e.path}>
-                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-[9px] font-semibold uppercase text-ink-faint" aria-hidden>
+                    <button type="button" className="flex w-full min-w-0 items-start gap-3 px-2 py-1 text-left" onClick={() => setSelected(e)} title={e.path}>
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-2 text-2xs font-semibold uppercase text-ink-faint" aria-hidden>
                         {e.filename.split('.').pop()?.slice(0, 4)}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12.5px] font-medium text-ink">{e.title}</span>
-                        <span className="block truncate text-[10.5px] text-ink-faint">{e.sessionTitle} · {when(e.at)}</span>
+                        <span className="block truncate text-xs font-medium text-ink">{e.title}</span>
+                        <span className="block truncate text-2xs text-ink-faint">{e.sessionTitle} · {when(e.at)}</span>
                       </span>
                     </button>
                   </div>
@@ -117,15 +117,15 @@ export function ArtifactsView() {
       <section className="flex min-w-0 flex-1 flex-col">
         {selected ? (
           <>
-            <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold">{selected.title}</p>
-                <p className="truncate font-mono text-[10.5px] text-ink-faint" title={selected.path}>{selected.path}</p>
+                <p className="truncate text-sm font-semibold">{selected.title}</p>
+                <p className="truncate font-mono text-2xs text-ink-faint" title={selected.path}>{selected.path}</p>
               </div>
-              <button type="button" className="btn btn-primary gap-1.5 py-1 text-[12px]" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Focused view`}>
+              <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Focused view`}>
                 <FocusLayoutIcon className="h-3.5 w-3.5" /> Open chat
               </button>
-              <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" onClick={() => window.nekko.openPath(selected.path)} title="Open with the system's default app">
+              <button type="button" className="btn btn-outline gap-2 py-1 text-xs" onClick={() => window.nekko.openPath(selected.path)} title="Open with the system's default app">
                 <ExternalIcon className="h-3.5 w-3.5" /> Open file
               </button>
             </div>
@@ -135,8 +135,8 @@ export function ArtifactsView() {
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-            <h2 className="text-lg font-semibold">What your agents made</h2>
-            <p className="max-w-sm text-[13px] text-ink-faint">
+            <h2 className="text-xl font-semibold">What your agents made</h2>
+            <p className="max-w-sm text-sm text-ink-faint">
               Reports, pages, designs and diagrams from every chat, grouped by kind. Pick one to preview it, or open the chat it came from in Focused view.
             </p>
           </div>

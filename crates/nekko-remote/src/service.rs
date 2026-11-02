@@ -11,6 +11,10 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
 
+/// How the stored pairing reaches the relay: 2 is a room credential derived
+/// from the secret (decision 0036). Anything else is replaced at start.
+const PAIRING_VERSION: u64 = 2;
+
 /// Validates a device's HELLO, answering with the sealed reply.
 pub type Verifier = Arc<dyn Fn(&Value) -> Value + Send + Sync>;
 
@@ -99,6 +103,7 @@ impl RemoteService {
                     .with("relayUrl", get("relayUrl"))
                     .with("room", get("room"))
                     .with("secret", get("secret"))
+                    .with("pairing", get("pairing"))
                     .with("devices", or(get("devices"), json!([])))
                     // Relay replay protection: phones from before protocol 4
                     // are welcomed unless this is `false` (one release).
@@ -107,6 +112,23 @@ impl RemoteService {
                     .with("stoppedBy", get("stoppedBy"))
             }
         }
+    }
+
+    /// A room and secret from before relay credentials were derived
+    /// (decision 0036) were sent to the relay as they are: replace them, keeping
+    /// the paired devices, so phones pair again with a secret the relay never
+    /// saw. `None` when the pairing is already current or there is none.
+    fn upgraded_pairing(&self, cfg: &JsObj) -> Option<JsObj> {
+        let current = cfg.get("pairing").and_then(Value::as_u64) == Some(PAIRING_VERSION);
+        if current || !nekko_js::truthy(cfg.get("secret")) {
+            return None;
+        }
+        Some(
+            cfg.clone()
+                .with("room", Some(json!(hello::new_room_code(&self.random))))
+                .with("secret", Some(json!(hello::new_room_secret(&self.random))))
+                .with("pairing", Some(json!(PAIRING_VERSION))),
+        )
     }
 
     fn save(&self, cfg: &JsObj) -> Result<(), String> {
@@ -121,51 +143,50 @@ impl RemoteService {
         st.grant.clone().filter(|g| g.expires_at > (self.clock)())
     }
 
-    /// Whether phones from before relay replay protection are still welcomed
-    /// (`acceptLegacyPhones` in remote.json; missing means yes, for one release).
-    fn accepts_legacy(cfg: &JsObj) -> bool {
-        cfg.get("acceptLegacyPhones") != Some(&Value::Bool(false))
-    }
-
     /// The HELLO check the agent runs for every connection. The agent has
-    /// already checked a protocol 4 HELLO's challenge; an older phone's HELLO
-    /// (legacy: no challenge, no request counter) is refused with
-    /// `update-required` when the owner turned legacy phones off, and
-    /// otherwise welcomed, logged and marked on the device (`legacyProtocol`,
-    /// and once in its activity) so the owner sees which phone to update.
+    /// already checked the HELLO's challenge. A phone app older than device
+    /// keys (protocol below [`hello::HELLO_KEY_PROTOCOL`], including apps from
+    /// before relay replay protection) is refused with `update-required`;
+    /// otherwise the HELLO must be signed with the device's key
+    /// ([`hello::check_hello_key`]) before the registry is consulted, and a
+    /// device that enrolls with the live code keeps the key it signed with
+    /// (`remote-hello-keys.json`).
     pub fn verify(&self, hello_frame: &Value) -> Value {
         let _io = lock(&self.io);
         let cfg = self.load();
-        let legacy =
-            hello_frame.as_object().is_some_and(|h| crate::agent::hello_protocol(h) < crate::agent::CHALLENGE_PROTOCOL);
+        let protocol = hello_frame.as_object().map_or(1, crate::agent::hello_protocol);
         let known = |cfg: &JsObj| -> Option<Value> {
             let id = hello_frame.get("deviceId")?;
             Self::devices_of(cfg).into_iter().find(|d| d.get("id") == Some(id) && !nekko_js::truthy(d.get("revoked")))
         };
-        if legacy && !Self::accepts_legacy(&cfg) {
+        if protocol < hello::HELLO_KEY_PROTOCOL {
             if let Some(d) = known(&cfg) {
                 let id = d.get("id").map(nekko_js::display).unwrap_or_default();
-                eprintln!(
-                    "nekkod: refused phone {id}: its app predates relay replay protection (acceptLegacyPhones is off)"
-                );
+                eprintln!("nekkod: refused phone {id}: its app predates device keys; it needs an update");
                 self.record_locked(&id, self.legacy_entry(false));
             }
             return json!({ "type": "denied", "reason": "update-required" });
         }
-        let was_legacy = known(&cfg).is_some_and(|d| d.get("legacyProtocol") == Some(&Value::Bool(true)));
         let mut st = lock(&self.state);
-        let verdict =
-            hello::verify_hello(&Self::devices_of(&cfg), hello_frame, self.live_grant(&st).as_ref(), (self.clock)());
+        let now = (self.clock)();
+        let grant = self.live_grant(&st);
+        let code_ok = grant.as_ref().is_some_and(|g| {
+            hello_frame.get("pair").and_then(Value::as_str) == Some(g.code.as_str()) && g.expires_at > now
+        });
+        let room = cfg.get("room").and_then(Value::as_str).unwrap_or_default().to_string();
+        let mut keys = self.load_hello_keys();
+        let id_text = hello_frame.get("deviceId").and_then(Value::as_str).unwrap_or_default();
+        let stored = known(&cfg).map(|_| json!({ "helloKey": keys.get(id_text) }));
+        let new_key = match hello::check_hello_key(stored.as_ref(), hello_frame, &room, code_ok) {
+            Ok(k) => k,
+            Err(reason) => return json!({ "type": "denied", "reason": reason }),
+        };
+        let verdict = hello::verify_hello(&Self::devices_of(&cfg), hello_frame, grant.as_ref(), now);
         if let Verdict::Welcome { device, enrolled } = &verdict {
             let mut device = device.clone();
             if let Some(o) = device.as_object_mut() {
-                if legacy {
-                    o.insert("legacyProtocol".into(), json!(true));
-                } else {
-                    o.remove("legacyProtocol");
-                }
+                o.remove("legacyProtocol");
             }
-            let device = &device;
             let id = device.get("id").cloned();
             let mut devices: Vec<Value> =
                 Self::devices_of(&cfg).into_iter().filter(|d| d.get("id") != id.as_ref()).collect();
@@ -175,16 +196,16 @@ impl RemoteService {
             if self.save(&cfg.clone().with("devices", Some(Value::Array(devices)))).is_err() {
                 return json!({ "type": "denied", "reason": "invalid" });
             }
-            if *enrolled {
-                st.grant = None; // single use
-            }
-            if legacy {
-                let id = id.as_ref().map(nekko_js::display).unwrap_or_default();
-                eprintln!("nekkod: phone {id} connected with an app that predates relay replay protection");
-                if !was_legacy {
-                    self.record_locked(&id, self.legacy_entry(true));
+            if let Some(k) = &new_key {
+                keys.insert(id_text.to_string(), json!(k));
+                if write_json_atomic(&self.hello_keys_file(), &Value::Object(keys)).is_err() {
+                    return json!({ "type": "denied", "reason": "invalid" });
                 }
             }
+            if *enrolled || new_key.is_some() {
+                st.grant = None; // single use, re-enrolling a known device included
+            }
+            return Verdict::Welcome { device, enrolled: *enrolled }.reply();
         }
         verdict.reply()
     }
@@ -253,7 +274,8 @@ impl RemoteService {
             return Err(problem);
         }
         let _io = lock(&self.io);
-        let prev = self.load();
+        let loaded = self.load();
+        let prev = self.upgraded_pairing(&loaded).unwrap_or(loaded);
         let room = match prev.get("room").filter(|v| !v.is_null()) {
             Some(r) => r.clone(),
             None => json!(hello::new_room_code(&self.random)),
@@ -268,7 +290,8 @@ impl RemoteService {
             .with("stoppedBy", None)
             .with("relayUrl", Some(relay_url.clone()))
             .with("room", Some(room))
-            .with("secret", Some(secret));
+            .with("secret", Some(secret))
+            .with("pairing", Some(json!(PAIRING_VERSION)));
         self.save(&cfg)?;
         self.connect(&mut lock(&self.state), &cfg);
         drop(_io);
@@ -294,7 +317,8 @@ impl RemoteService {
             .with("enabled", Some(json!(true)))
             .with("relayUrl", Some(relay_url))
             .with("room", Some(room))
-            .with("secret", Some(secret));
+            .with("secret", Some(secret))
+            .with("pairing", Some(json!(PAIRING_VERSION)));
         self.save(&cfg)?;
         self.connect(&mut lock(&self.state), &cfg);
         drop(_io);
@@ -438,6 +462,21 @@ impl RemoteService {
         Ok(Value::Array(devices))
     }
 
+    /// Each paired device's HELLO key (`{ [deviceId]: base64 X9.63 P-256 }`),
+    /// beside `remote.json` so the registry's shape is unchanged.
+    fn hello_keys_file(&self) -> PathBuf {
+        self.file.with_file_name("remote-hello-keys.json")
+    }
+
+    fn load_hello_keys(&self) -> serde_json::Map<String, Value> {
+        let file = self.hello_keys_file();
+        ensure_private(&file);
+        match std::fs::read(&file).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
+            Some(Value::Object(m)) => m,
+            _ => serde_json::Map::new(),
+        }
+    }
+
     fn activity_file(&self) -> PathBuf {
         self.file.with_file_name("remote-activity.json")
     }
@@ -464,11 +503,15 @@ impl RemoteService {
         let prev = self.load();
         let room = hello::new_room_code(&self.random);
         let secret = hello::new_room_secret(&self.random);
-        let cfg =
-            prev.with("room", Some(json!(room))).with("secret", Some(json!(secret))).with("devices", Some(json!([])));
+        let cfg = prev
+            .with("room", Some(json!(room)))
+            .with("secret", Some(json!(secret)))
+            .with("pairing", Some(json!(PAIRING_VERSION)))
+            .with("devices", Some(json!([])));
         self.save(&cfg)?;
         // Every device is gone, and so is what they did.
         let _ = std::fs::remove_file(self.activity_file());
+        let _ = std::fs::remove_file(self.hello_keys_file());
         {
             let mut st = lock(&self.state);
             st.grant = None;
@@ -484,7 +527,11 @@ impl RemoteService {
     pub fn start_if_enabled(&self) {
         let cfg = {
             let _io = lock(&self.io);
-            self.load()
+            let cfg = self.load();
+            match self.upgraded_pairing(&cfg) {
+                Some(next) if self.save(&next).is_ok() => next,
+                _ => cfg,
+            }
         };
         let t = |k: &str| nekko_js::truthy(cfg.get(k));
         if t("enabled") && t("relayUrl") && t("room") && t("secret") {

@@ -7,27 +7,30 @@ area: desktop
 
 **User intent.** Nekko Agent running, in any form, must not affect other programs. A user saw
 Overwatch drop from 200-300 FPS to 60-90 while Nekko ran, and only a game restart restored it.
-The cause found: Nekko brought something forward over the exclusive-fullscreen game (a
-"finished" toast at a turn's end, matched to the second in the game's focus log; the window's
-`show()`+`focus()` at launch and on a second launch). The game lost exclusive mode and stayed
-slower, composed by the desktop window manager, until it restarted. A process spawn storm
+The suspected cause: Nekko brought something forward over the exclusive-fullscreen game (a
+"finished" toast at a turn's end matched the second the game lost focus in its log). This is
+one data point and has not been reproduced: Windows toasts do not take the foreground, and
+Windows already holds its toast banners during a Direct3D fullscreen game. The drop also
+lasted after Nekko quit, until the game restarted. A process spawn storm
 (`nvidia-smi` and `where` every 6 s, each with a console host) added CPU wakeups beside it.
 Investigation: `.scratch/ow/` (local), issue linked from the PR.
 
 **Behavior (implemented, Windows).**
 
 - nekkod answers `activity:fullscreen` with `{ quiet, state }` from
-  `SHQueryUserNotificationState`: quiet for a Direct3D exclusive-fullscreen app, another
-  full-screen app (busy), or presentation mode. Elsewhere, and when it cannot be read, it is
-  never quiet. It never says which app.
+  `SHQueryUserNotificationState`: quiet only for a Direct3D exclusive-fullscreen app. Another
+  full-screen app (busy: borderless games, F11 browsers, video) and presentation mode are
+  reported in `state` but are not quiet. Elsewhere, and when it cannot be read, it is never
+  quiet. It never says which app.
 - While quiet, the desktop's native notices are held and delivered when it ends, the newest per
   chat and kind. Nothing is dropped.
-- While quiet, a window that would come forward on its own waits until it ends and then shows and
-  focuses as before: the first show at launch, a second launch, a deep link. Anything a person
-  does to reach Nekko (the tray, a toast, a shortcut) means they already left the game, so it
-  passes straight through; so does any request while one of Nekko's own windows has focus.
-- Without an answer within 400 ms (service stopped or still starting), nothing waits: the
-  previous behavior.
+- Windows are never held. Every window Nekko brings forward follows something the user did (a
+  launch, a second launch, a link, the tray). Holding them (as first shipped in #1296) made the
+  app look like it had not started while any full-screen app was in front, held links clicked
+  in a full-screen browser, and then took the foreground at a moment nobody chose when the
+  full-screen app went away.
+- Notices are not held while one of Nekko's own windows has focus, or without an answer within
+  400 ms (service stopped or still starting): the previous behavior.
 - The tray's 6 s refresh asks `engine:running` and `engine:installedBin(runtime)` instead of
   `engine:status`, so it no longer probes the GPU or searches for runtimes.
   `engine:installedBin` takes an optional runtime (`llama` by default, as before).
@@ -38,11 +41,12 @@ Investigation: `.scratch/ow/` (local), issue linked from the PR.
   hidden (minimized, in the tray, or covered: Chromium reports an occluded window as hidden),
   and ask again once it is visible.
 
-**Cost to Nekko.** None intended: notices and windows arrive late, not lost; meters are not
+**Cost to Nekko.** None intended: notices arrive late during exclusive fullscreen, not lost; meters are not
 refreshed while nobody can see them.
 
 **Not done (by choice).** Separate profiles for development and agent launches; preferring the
 integrated GPU for Nekko's own rendering.
 
-**Unverified.** An end-to-end run with a real exclusive-fullscreen game; macOS and Linux have no
+**Unverified.** The cause itself, and an end-to-end run with a real exclusive-fullscreen game
+(reproduce the drop before building more on it); macOS and Linux have no
 full-screen check (never quiet).

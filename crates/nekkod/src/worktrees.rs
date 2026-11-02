@@ -879,7 +879,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
     if settings.pointer("/gitManagement/removeMerged") == Some(&Value::Bool(false)) {
         return Vec::new();
     }
-    let Some(store) = ctx.sessions.clone() else { return Vec::new() };
+    let store = ctx.sessions.clone();
     let owners = |store: Arc<nekko_store::SessionStore>, running: Vec<String>| {
         let sessions = store.list();
         move |r: &str| owner_in(&sessions, &running, r)
@@ -928,7 +928,7 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
 
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
-    let store = ctx.sessions.clone().ok_or("chat worktrees need the data directory")?;
+    let store = ctx.sessions.clone();
     let running = crate::routes::running_chats(ctx);
     let root = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     let channel = channel.to_string();

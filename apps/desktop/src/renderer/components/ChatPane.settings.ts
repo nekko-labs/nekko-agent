@@ -18,6 +18,7 @@ export function chatPaneSettings(settings: AppSettings | null | undefined) {
     prompts: settings.prompts,
     workspaces: settings.workspaces,
     defaultChatMode: settings.defaultChatMode,
+    mascotEnabled: settings.mascotEnabled,
   };
 }
 

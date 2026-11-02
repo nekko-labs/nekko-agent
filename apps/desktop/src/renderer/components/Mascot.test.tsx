@@ -49,14 +49,15 @@ describe('Pixel Nekko', () => {
     expect(renderToStaticMarkup(<NekkoAvatar />)).not.toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<MiniNekko />)).not.toContain('orange-wizard-hat');
   });
-  it('puts the Spooky wizard hat on the corner mascot only', async () => {
+  it('puts the Spooky wizard hat on an enabled mascot only', async () => {
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled wizardHat />)).toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled />)).not.toContain('orange-wizard-hat');
-    // In the app: the Spooky (autumn) preset dresses the corner mascot, and nothing else.
+    // Each chat window hosts its own Nekko now (ChatMascot), so the app shell
+    // itself (nav rail, overlays) shouldn't carry a `pixel-mascot` button and
+    // the autumn preset shouldn't paint a wizard hat on anything but a chat.
     const spooky = await renderApp({ themePreset: 'autumn' } as never);
-    expect(spooky.match(/orange-wizard-hat/g)).toHaveLength(1);
-    const mascot = spooky.slice(spooky.indexOf('class="pixel-mascot'));
-    expect(mascot.slice(0, mascot.indexOf('</button>'))).toContain('orange-wizard-hat');
+    expect(spooky).not.toContain('pixel-mascot');
+    expect(spooky).not.toContain('orange-wizard-hat');
     expect(await renderApp({})).not.toContain('orange-wizard-hat');
   });
   it('wears the wizard hat smaller and higher, on the crown', () => {
@@ -67,6 +68,16 @@ describe('Pixel Nekko', () => {
     expect(eyeless).toContain('data-part="pixel-head"');
     expect(eyeless).not.toContain('pixel-eyes');
     // Its use on the Agents rail button is rendered in viewEnabled.test.ts.
+  });
+  it('translates both pixel eyes when a pupil offset is set', () => {
+    // The per-chat mascot (ChatMascot) feeds a bounded gaze vector in here so
+    // the pupils translate without new path geometry.
+    const watching = renderToStaticMarkup(<NekkoAvatar pupilOffset={{ x: 1.5, y: -0.5 }} />);
+    expect(watching).toContain('data-part="pixel-eyes"');
+    expect(watching).toContain('transform="translate(1.5 -0.5)"');
+    const resting = renderToStaticMarkup(<NekkoAvatar />);
+    expect(resting).toContain('data-part="pixel-eyes"');
+    expect(resting).not.toMatch(/<g[^>]*data-part="pixel-eyes"[^>]*transform=/);
   });
   it('keeps working feedback, greeting, and the visibility setting', () => {
     expect(renderToStaticMarkup(<MiniNekko size={16} />)).toContain('pixel-working');

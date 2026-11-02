@@ -20,7 +20,7 @@ struct RootMascot: ToolbarContent {
 /// Given a pull, it looks shocked at the refresh spinner, pulls it home and smiles.
 struct ChatMascot: View {
     var working = false
-    @ObservedObject private var pull: PawPull
+    private var pull: PawPull
     private let grabs: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -29,7 +29,7 @@ struct ChatMascot: View {
 
     init(working: Bool = false, pull: PawPull? = nil) {
         self.working = working
-        _pull = ObservedObject(wrappedValue: pull ?? PawPull())
+        self.pull = pull ?? PawPull()
         grabs = pull != nil
     }
 

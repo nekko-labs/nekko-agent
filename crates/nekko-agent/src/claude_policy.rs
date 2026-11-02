@@ -215,19 +215,17 @@ pub struct Policy(pub BTreeMap<ClaudeAuth, BTreeMap<Capability, Row>>);
 
 impl Policy {
     /// The shipped table. `api_key` and `cloud` keep every feature;
-    /// `subscription` has the four approval-gated features off; `unknown` is
-    /// the same as `subscription`.
+    /// `subscription` has three approval-gated features off; `unknown` is a
+    /// plan with plan usage off too (fail closed).
     pub fn shipped() -> Policy {
         let all_on: BTreeMap<_, _> = Capability::ALL.into_iter().map(|c| (c, Row::ENABLED)).collect();
         let plan: BTreeMap<_, _> = Capability::ALL
             .into_iter()
             .map(|c| {
                 let row = match c {
-                    Capability::InteractiveChat | Capability::PhoneRemote => Row::ENABLED,
-                    Capability::UnattendedRuns
-                    | Capability::NekkoTools
-                    | Capability::ContextNote
-                    | Capability::UsageLimits => Row::awaiting(c),
+                    // Plan usage is what the user's own Claude Code printed.
+                    Capability::InteractiveChat | Capability::PhoneRemote | Capability::UsageLimits => Row::ENABLED,
+                    Capability::UnattendedRuns | Capability::NekkoTools | Capability::ContextNote => Row::awaiting(c),
                     Capability::CostEstimate => {
                         Row { state: RowState::Unsupported, reason: Some(ReasonId::BilledToPlan) }
                     }
@@ -241,8 +239,8 @@ impl Policy {
         Policy(BTreeMap::from([
             (ClaudeAuth::ApiKey, all_on.clone()),
             (ClaudeAuth::Cloud, all_on),
-            (ClaudeAuth::Subscription, plan.clone()),
-            (ClaudeAuth::Unknown, plan),
+            (ClaudeAuth::Unknown, unknown_auth(&plan)),
+            (ClaudeAuth::Subscription, plan),
         ]))
     }
 
@@ -254,6 +252,13 @@ impl Policy {
     fn set(&mut self, auth: ClaudeAuth, cap: Capability, row: Row) {
         self.0.entry(auth).or_default().insert(cap, row);
     }
+}
+
+/// `unknown`: a plan, with plan usage held off too.
+fn unknown_auth(plan: &BTreeMap<Capability, Row>) -> BTreeMap<Capability, Row> {
+    let mut rows = plan.clone();
+    rows.insert(Capability::UsageLimits, Row::awaiting(Capability::UsageLimits));
+    rows
 }
 
 /// Which engine runs a Claude turn: Nekko's own loop, or the user's Claude Code.
@@ -392,8 +397,13 @@ mod tests {
     #[test]
     fn unknown_fails_closed() {
         let p = Policy::shipped();
-        assert_eq!(p.0[&ClaudeAuth::Unknown], p.0[&ClaudeAuth::Subscription]);
+        for cap in Capability::ALL.into_iter().filter(|c| *c != Capability::UsageLimits) {
+            assert_eq!(p.row(ClaudeAuth::Unknown, cap), p.row(ClaudeAuth::Subscription, cap), "{cap:?}");
+        }
         assert!(!p.row(ClaudeAuth::Unknown, Capability::UnattendedRuns).enabled());
+        // A plan sees what its Claude Code reported; an unread sign-in does not.
+        assert!(p.row(ClaudeAuth::Subscription, Capability::UsageLimits).enabled());
+        assert!(!p.row(ClaudeAuth::Unknown, Capability::UsageLimits).enabled());
     }
 
     #[test]

@@ -4,6 +4,13 @@ import './commandWallLayouts.css';
 
 /** How long the pointer rests on a control before its tip shows. */
 const SHOW_DELAY = 350;
+/**
+ * The warm window: once a tip has shown, sliding to the next control within
+ * this long shows its tip at once and without the fade, the way a toolbar of
+ * icons is read. Shared by every HoverTip, so it spans controls.
+ */
+const WARM_MS = 600;
+let warmUntil = 0;
 const GAP = 6;
 const MARGIN = 8;
 
@@ -26,12 +33,21 @@ export function HoverTip({ label, side = 'bottom', children, multiline = false, 
   const anchor = useRef<HTMLElement | null>(null);
   const tip = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const openRef = useRef(false);
+  const [instant, setInstant] = useState(false);
+  useEffect(() => { openRef.current = open; }, [open]);
 
-  const hide = useCallback(() => { clearTimeout(timer.current); setOpen(false); setPos(null); }, []);
+  const hide = useCallback(() => {
+    clearTimeout(timer.current);
+    if (openRef.current) warmUntil = performance.now() + WARM_MS;
+    setOpen(false); setPos(null);
+  }, []);
   const leave = useCallback(() => { clearTimeout(timer.current); timer.current = setTimeout(hide, heading ? 180 : 0); }, [hide, heading]);
   const show = useCallback((delay: number) => {
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setOpen(true), delay);
+    const warm = performance.now() < warmUntil;
+    setInstant(warm || delay === 0);
+    timer.current = setTimeout(() => setOpen(true), warm ? 0 : delay);
   }, []);
   useEffect(() => () => clearTimeout(timer.current), []);
   useEffect(() => {
@@ -74,7 +90,7 @@ export function HoverTip({ label, side = 'bottom', children, multiline = false, 
   return <>
     {trigger}
     {open && typeof document !== 'undefined' && createPortal(
-      <div ref={tip} id={id} role="tooltip" className={`hover-tip${multiline ? ' hover-tip-multiline' : ''}${heading ? ' hover-tip-details' : ''}`} data-side={side}
+      <div ref={tip} id={id} role="tooltip" className={`hover-tip${multiline ? ' hover-tip-multiline' : ''}${heading ? ' hover-tip-details' : ''}`} data-side={side} data-instant={instant || undefined}
         onPointerEnter={() => clearTimeout(timer.current)} onPointerLeave={leave}
         style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999, visibility: 'hidden' }}>
         {heading ? <><div className="hover-tip-heading">{heading}</div><pre className="hover-tip-content">{label}</pre></> : label}

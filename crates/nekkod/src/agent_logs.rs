@@ -44,7 +44,7 @@ enum Op {
 
 pub struct AgentLogs {
     sessions_dir: PathBuf,
-    store: Option<Arc<SessionStore>>,
+    store: Arc<SessionStore>,
     settings: ReadSettings,
     hub: Hub,
     terms: Mutex<HashMap<String, Term>>,
@@ -157,7 +157,7 @@ fn read_tail(path: &Path, max: usize) -> Result<Option<String>, String> {
 }
 
 impl AgentLogs {
-    pub fn new(data_dir: &Path, store: Option<Arc<SessionStore>>, settings: ReadSettings, hub: Hub) -> Arc<Self> {
+    pub fn new(data_dir: &Path, store: Arc<SessionStore>, settings: ReadSettings, hub: Hub) -> Arc<Self> {
         let (tx, rx) = mpsc::channel();
         std::thread::Builder::new()
             .name("nekkod-agent-logs".into())
@@ -236,7 +236,7 @@ impl AgentLogs {
     }
 
     fn append_status(&self, session_id: &str, workspace_id: Option<&str>, data: &str, running: bool) {
-        let session = self.store.as_ref().and_then(|s| s.get(session_id));
+        let session = self.store.get(session_id);
         if session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
             return;
         }
@@ -322,7 +322,7 @@ impl AgentLogs {
             return Ok(json!({ "info": t.info, "buffer": buffer, "cols": 80, "rows": 24 }));
         }
         let Some(buffer) = persisted else { return Ok(Value::Null) };
-        let created = self.store.as_ref().and_then(|s| s.get(&sid)).and_then(|s| s.get("createdAt").cloned());
+        let created = self.store.get(&sid).and_then(|s| s.get("createdAt").cloned());
         let info = json!({
             "id": id, "title": "Agent commands", "shell": "agent", "agentSessionId": sid, "cwd": "",
             "createdAt": created.unwrap_or(json!(0)), "running": false,
@@ -408,7 +408,7 @@ mod tests {
     use super::*;
 
     fn logs(dir: &Path) -> Arc<AgentLogs> {
-        AgentLogs::new(dir, None, Arc::new(|| json!({})), Hub::new())
+        AgentLogs::new(dir, Arc::new(SessionStore::new(dir)), Arc::new(|| json!({})), Hub::new())
     }
 
     fn temp(tag: &str) -> PathBuf {

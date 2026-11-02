@@ -56,7 +56,7 @@ describe('Agents panel header', () => {
   it('portals the + menu above the wall and opens the view menu from a group header right-click (source pin)', () => {
     const source = readFileSync(new URL('./WorkspacesView.tsx', import.meta.url), 'utf8');
     expect(source).toMatch(/newMenuOpen && newMenuPos && createPortal\(/);
-    expect(source).toMatch(/className="create-menu card fixed z-\[1000\] w-max min-w-48 p-1 shadow-lg"/);
+    expect(source).toMatch(/className="create-menu card fixed z-\[1000\] w-max min-w-48 p-1 shadow-\(--shadow-float\)"/);
     expect(source).toMatch(/onContextMenu=\{\(e\) => \{ e\.preventDefault\(\); e\.stopPropagation\(\); setViewMenu\(\{ x: e\.clientX, y: e\.clientY \}\)/);
     expect(source).toMatch(/<AgentPanelViewMenu x=\{viewMenu\.x\} y=\{viewMenu\.y\}/);
   });
@@ -101,12 +101,12 @@ describe('Agents panel header', () => {
     expect(head).toMatch(/aria-label="Search chats"[^>]*><svg[^>]*class="h-4 w-4"/);
   });
 
-  it('keeps the composer row to the composer alone in either docking position; adding lives in the toolbar', async () => {
+  it('has no shared composer row in either saved docking position; adding lives in the toolbar', async () => {
     const { loadCommandCenter } = await import('../tests/renderCommandCenter.js');
     const page = await loadCommandCenter();
     for (const side of ['top', 'bottom'] as const) {
       const html = page.render({ commandWall: { composer: { side, align: 'center' } } as never });
-      expect(html, side).toMatch(new RegExp(`<div class="wall-composer-row" data-dock="${side}-center"><div data-stub="composer"></div></div>`));
+      expect(html, side).not.toContain('wall-composer-row');
     }
     const html = page.render();
     expect(html).toMatch(/<div class="wall-add-bar" role="group" aria-label="Add to the wall">/);
@@ -120,9 +120,9 @@ describe('Agent group hierarchy', () => {
   it('uses larger primary-color labels and separated vertical groups', () => {
     const layout = stylesheet('components/commandWallLayouts.css');
     expect(renderSidebar()).toContain('agent-panel-group-label');
-    expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': '13px', color: 'var(--accent)' });
+    expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': 'var(--text-sm)', color: 'var(--accent)' });
     expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('16px');
-    expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('6px');
+    expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('4px');
     expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group')['margin-top']).toBe('0');
   });
 });

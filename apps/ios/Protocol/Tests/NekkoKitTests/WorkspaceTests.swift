@@ -26,7 +26,7 @@ final class WorkspaceTests: XCTestCase {
 final class WorkspaceStoreTests: XCTestCase {
     func testSignedAddRemoveFullListAndRefreshedSummaries() async throws {
         let computer = ProofComputer(deviceId: "id-1")
-        let store = await StoreChangeTests().pairedStore(computer)
+        let store = await StoreChangeTests.pairedStore(computer)
         store.changeSigner = SoftwareChangeSigner()
         computer.now = Int64(Date().timeIntervalSince1970 * 1000)
         computer.replies = [Channels.sessionsSummaries: [], Channels.providersList: [], Channels.settingsGet: [:], Channels.workspaceList: []]
@@ -53,7 +53,7 @@ final class WorkspaceStoreTests: XCTestCase {
 
     func testOfflineAndRelativePathsDoNotSendChanges() async throws {
         let computer = ProofComputer(deviceId: "id-1")
-        let store = await StoreChangeTests().pairedStore(computer)
+        let store = await StoreChangeTests.pairedStore(computer)
         for path in ["relative", "/absolute"] {
             do { try await store.addWorkspace(path: path); XCTFail("must refuse") } catch {}
         }

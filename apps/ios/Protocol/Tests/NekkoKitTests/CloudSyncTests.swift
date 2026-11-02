@@ -15,7 +15,8 @@ final class CloudSyncTests: XCTestCase {
     }
 
     /// Just enough of the API for the phone's calls, with the server's rules
-    /// (revisions one at a time, wraps never overwritten). Tests also play a
+    /// (revisions one at a time, wraps never overwritten, key changes and pushes
+    /// only from a sign-in that proved the current epoch). Tests also play a
     /// malicious server by editing its state or setting `rewrite`.
     final class FakeCloud: CloudHTTP, @unchecked Sendable {
         var account = "acct-1"
@@ -26,6 +27,11 @@ final class CloudSyncTests: XCTestCase {
         var seq: Int64 = 0
         /// The device the phone's token is bound to.
         var bound: String?
+        /// Each epoch's proof (the real server keeps only its hash), and the epoch the
+        /// current sign-in proved. A new sign-in gets a new token that proved nothing.
+        var proofs: [UInt32: String] = [:]
+        var proven: UInt32?
+        var sessions = 0
         /// Change an answer before the phone sees it: (method, path, body).
         var rewrite: ((String, String, inout JSONValue) -> Void)?
         let lock = NSLock()
@@ -64,7 +70,9 @@ final class CloudSyncTests: XCTestCase {
                 return (200, .object(["access_token": .string("supabase-jwt")]))
             case ("POST", "/v1/auth/session"):
                 bound = nil
-                return (201, .object(["token": .string("nk_test"), "account": me()]))
+                proven = nil
+                sessions += 1
+                return (201, .object(["token": .string("nk_test_\(sessions)"), "account": me()]))
             case ("GET", "/v1/auth/me"):
                 return (200, .object(["account": me()]))
             case ("GET", "/v1/sync/state"):
@@ -90,6 +98,7 @@ final class CloudSyncTests: XCTestCase {
                 let page = objects.filter { $0.seq > since }.sorted { $0.seq < $1.seq }
                 return (200, .object(["objects": .array(page.map(wire)), "next": .int(page.last?.seq ?? since), "more": .bool(false)]))
             case ("POST", "/v1/sync/push"):
+                guard proven != nil, proven == keyrings.keys.max() else { return (403, .object(["error": .string("needs-synced-device")])) }
                 var results: [JSONValue] = []
                 for o in b["objects"]?.array ?? [] {
                     let (c, oid, rev) = (o.str("collection") ?? "", o.str("objectId") ?? "", o.long("revision") ?? 0)
@@ -115,9 +124,18 @@ final class CloudSyncTests: XCTestCase {
                         return (200, .object(["keyId": .int(Int64(k)), "recoveryWrap": .string(ring.recovery),
                                               "wrap": bound.flatMap { ring.wraps[$0] }.map { .string($0) } ?? .null]))
                     }
+                    if method == "POST", parts.count == 5, parts[4] == "proof" {
+                        guard k == keyrings.keys.max() else { return (409, .object(["error": .string("key-epoch")])) }
+                        guard let want = proofs[k], b.str("proof") == want else { return (403, .object(["error": .string("bad-proof")])) }
+                        proven = k
+                        return (204, .null)
+                    }
                     if method == "PUT", parts.count == 6 {
+                        let selfProof = parts[5] == bound && proofs[k] != nil && b.str("proof") == proofs[k]
+                        guard selfProof || proven == k else { return (403, .object(["error": .string("needs-synced-device")])) }
                         if ring.wraps[parts[5]] != nil { return (409, .object(["error": .string("wrap-exists")])) }
                         keyrings[k]!.wraps[parts[5]] = b.str("wrap")
+                        if selfProof { proven = k }
                         return (204, .null)
                     }
                 }
@@ -149,6 +167,7 @@ final class CloudSyncTests: XCTestCase {
                                                   recipientPublic: mac.key.publicKeyX963, senderId: mac.id, sender: mac.key)
         fake.keyrings[1] = (try SyncCrypto.sealRecovery(recoveryPublic: mac.recoveryPublic, keyring: mac.keyring, account: fake.account, keyId: 1),
                             [mac.id: selfWrap])
+        fake.proofs[1] = SyncCrypto.base64url(SyncCrypto.epochProof(keyring: mac.keyring, keyId: 1))
         try writeRecord(fake, mac, devices: [(mac.id, mac.publicKey)])
         try sealChat(fake, mac, id: "s_1", title: "Plan the Kyoto trip", text: "Book the ryokan", updated: 10, rev: 1)
         try sealChat(fake, mac, id: "s_2", title: "Fix the flaky test", text: "It's a race", updated: 20, rev: 1)
@@ -200,6 +219,25 @@ final class CloudSyncTests: XCTestCase {
         // The phone added itself to the sealed device list, keeping the computer.
         XCTAssertTrue(p.devices.first { $0.thisDevice }?.trusted == true)
         XCTAssertTrue(p.devices.first { $0.id == mac.id }?.trusted == true)
+        // Restoring proved the epoch to Nekko Cloud along with the phone's own wrap.
+        XCTAssertEqual(fake.proven, 1)
+    }
+
+    func testASignInAgainProvesTheEpochBeforeChangingDevices() async throws {
+        let fake = FakeCloud()
+        let mac = try computer(fake)
+        let p = phone(fake)
+        try await p.verifyCode(email: "ada@example.com", code: "123456")
+        try await p.restore(recoveryKey: mac.recovery.text)
+        await p.signOut()
+        try await p.verifyCode(email: "ada@example.com", code: "123456")
+        XCTAssertNil(fake.proven, "a new sign-in starts unproven")
+        let laptop = SyncCrypto.SoftwareKey()
+        let code = SyncCrypto.JoinCode.generate()
+        fake.devices.append(("dev-laptop", SyncCrypto.base64url(laptop.publicKeyX963), "MacBook", SyncCrypto.base64url(code.tag(account: fake.account, publicKey: laptop.publicKeyX963))))
+        try await p.approve(deviceId: "dev-laptop", code: code.text)
+        XCTAssertEqual(fake.proven, 1)
+        XCTAssertNotNil(fake.keyrings[1]!.wraps["dev-laptop"])
     }
 
     func testRestoreRefusesToInventAMissingAccountRecord() async throws {

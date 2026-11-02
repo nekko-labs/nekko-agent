@@ -95,12 +95,16 @@ class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement
         reconnects++
     }
 
+    val paths = CopyOnWriteArrayList<Pair<String, com.nekko.protocol.NetworkPath>>()
+    override fun networkChanged(path: com.nekko.protocol.NetworkPath) { paths += "changed" to path }
+    override fun setNetworkPath(path: com.nekko.protocol.NetworkPath) { paths += "same" to path }
+
     fun goOnline() {
         status.value = RelayStatus(RelayState.ONLINE)
     }
 
-    fun sayWelcome() {
-        welcome.tryEmit(WelcomedDevice(config.deviceId, config.deviceName, "android"))
+    fun sayWelcome(protocol: Int = com.nekko.protocol.PhoneProtocol.VERSION) {
+        welcome.tryEmit(WelcomedDevice(config.deviceId, config.deviceName, "android", protocol))
         goOnline()
     }
 }

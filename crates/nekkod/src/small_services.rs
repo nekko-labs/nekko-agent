@@ -6,8 +6,6 @@
 //! `packages/host/src/update-checks.ts`), and the MCP entries other agent
 //! tools hold (`integrations:*`, `nekko-workspace`'s `integrations`).
 //! `session:watches` is in `watches.rs`.
-//!
-//! Served only with a data directory (the desktop app and the Local Web UI).
 
 use crate::routes::Ctx;
 use futures_util::future::BoxFuture;
@@ -18,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// The channels served here when the daemon knows the data directory.
+/// The channels served here.
 pub const CHANNELS: &[&str] = &[
     "pr:continueStack",
     "pr:linkStack",
@@ -224,8 +222,8 @@ pub async fn pick_folder(ctx: &Ctx) -> Result<Option<String>, String> {
 /// its running turns, compactions, image turns and background processes.
 /// Other files (tokens, tasks, remote access) stay, as in the TS host.
 async fn wipe(ctx: &Ctx) -> Result<Value, String> {
-    let Some(store) = ctx.sessions.clone() else { return Err("data:wipe needs the data directory".into()) };
-    let data_dir = store.dir().parent().map(std::path::Path::to_path_buf).ok_or("no data directory")?;
+    let store = ctx.sessions.clone();
+    let data_dir = ctx.workspace.data_dir().to_path_buf();
     // Stop what could write a chat back: turns, their admission, compactions,
     // image turns, and the processes the agent started.
     for id in crate::routes::running_chats(ctx) {
@@ -235,16 +233,13 @@ async fn wipe(ctx: &Ctx) -> Result<Value, String> {
     ctx.turns.processes.kill_all();
     // Chats, each command log first (a failure there keeps that chat).
     let logs = ctx.turns.agent_logs.clone();
-    let cleared = tokio::task::spawn_blocking(move || {
-        store.clear_with("all", |id| crate::routes::delete_agent_log(logs.as_deref(), id))
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let cleared = tokio::task::spawn_blocking(move || store.clear_with("all", |id| logs.delete_blocking(id)))
+        .await
+        .map_err(|e| e.to_string())?;
     let files = data_dir.clone();
     tokio::task::spawn_blocking(move || wipe_files(&files)).await.map_err(|e| e.to_string())??;
     ctx.accounts.clear(None);
-    let settings = ctx.settings.as_ref().ok_or("data:wipe needs the settings store")?;
-    let next = crate::settings::route(settings, "settings:reset", &[]).await?;
+    let next = crate::settings::route(&ctx.settings, "settings:reset", &[]).await?;
     cleared?;
     Ok(next)
 }
@@ -301,7 +296,7 @@ fn git_error(args: &[String], stderr: &str) -> String {
 
 impl StackHost for DaemonStacks<'_> {
     fn session(&self, id: &str) -> Option<Value> {
-        self.ctx.sessions.as_ref()?.get(id)
+        self.ctx.sessions.get(id)
     }
 
     fn workspaces(&self) -> Vec<Value> {
@@ -338,7 +333,7 @@ impl StackHost for DaemonStacks<'_> {
 
     fn save<'b>(&'b self, session: &'b mut Value) -> BoxFuture<'b, Result<(), String>> {
         Box::pin(async move {
-            let store = self.ctx.sessions.clone().ok_or("PR stacks need the data directory")?;
+            let store = self.ctx.sessions.clone();
             let mut s = session.clone();
             let saved = tokio::task::spawn_blocking(move || store.save_whole(&mut s).map(|()| s))
                 .await
@@ -480,7 +475,7 @@ impl UpdateHost for DaemonSide<'_> {
     }
 
     fn skills_catalog<'a>(&'a self) -> BoxFuture<'a, Option<Value>> {
-        Box::pin(async move { self.ctx.workspace.vaizer_catalog(true).await })
+        Box::pin(async move { Some(self.ctx.workspace.vaizer_catalog(true).await) })
     }
 
     fn emit(&self, channel: &str, payload: Value) {

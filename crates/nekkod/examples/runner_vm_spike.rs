@@ -1,8 +1,7 @@
 //! Spike only, never shipped: boots a real macOS VM through `nekko-vm` with the
 //! runner NAT as its only network, and forwards 127.0.0.1:2222 on the host to
-//! the guest's port 22 so a person can ssh in and measure. The forward exists
-//! only with the `spike` feature (decision 0022: shipped code has no
-//! host-to-guest path).
+//! the guest's port 22 so a person can ssh in and measure. Job VMs have no such
+//! forward (decision 0022); image builds use it too (decision 0038).
 //!
 //!   cargo run -p nekkod --features spike --example runner_vm_spike -- [--bundle <dir>] [--seed <iso>] [--keep]
 //!

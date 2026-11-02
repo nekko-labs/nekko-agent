@@ -24,7 +24,7 @@ describe('wall edge stability and composer handles', () => {
   it('grows the composer panel by its attachment rows instead of shrinking the editor', () => {
     // The shell stays natural-height with exactly one vertical scroll owner: the editor.
     expect(cssRule(styles, '.wall-composer > .wall-composer-body')).toMatchObject({ display: 'flex', flex: '0 0 auto', 'min-height': '0', overflow: 'visible' });
-    expect(cssRule(styles, '.wall-composer .composer-editor-wrap > [contenteditable]')).toMatchObject({ flex: '0 0 auto', 'min-height': '64px', 'overflow-y': 'auto', 'overflow-x': 'hidden', 'overflow-wrap': 'anywhere' });
+    expect(cssRule(styles, '.wall-composer .composer-editor-wrap > [contenteditable]')).toMatchObject({ flex: '0 0 auto', 'min-height': '52px', 'overflow-y': 'auto', 'overflow-x': 'hidden', 'overflow-wrap': 'anywhere' });
     // No fixed height on the panel from the dragged size: the observer sizes the editor instead.
     const panel = renderWallComposer().match(/^<div[^>]*class="panel wall-composer [^>]*>/)?.[0];
     expect(panel).toBeDefined();

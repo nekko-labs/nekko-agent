@@ -41,7 +41,7 @@ final class PawPoseTests: XCTestCase {
         XCTAssertEqual(at(PawPose(reach: 1, spinner: 0)).center, home)
     }
 
-    func testFacesFollowTheRefresh() {
+    @MainActor func testFacesFollowTheRefresh() {
         let pull = PawPull()
         XCTAssertFalse(pull.shocked)
         pull.refreshStart = Date()

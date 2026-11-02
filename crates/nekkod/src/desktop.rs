@@ -11,8 +11,7 @@
 //!   "Visible on this network" (`mdns.rs`, `networkVisibility:*`).
 //!
 //! A port of `apps/desktop/src/backend/{index,channels}.ts` and
-//! `main/local-access.ts`. Served for the desktop app only (`config.native`)
-//! with the data directory.
+//! `main/local-access.ts`. Served for the desktop app only (`config.native`).
 
 use crate::api_server::{self, ApiServer};
 use crate::cli_install::{self, AppPaths};

@@ -38,6 +38,13 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0026](0026-retire-expo-in-favor-of-native-phone-apps.md) | Retire Expo in favor of native phone apps | accepted |
 | [0028](0028-phones-read-the-monitors-and-unload-models.md) | Let phones read the hardware, the Model Server and a chat's context, and unload a model | accepted |
 | [0029](0029-one-always-on-microphone-text-follows-the-focused-chat.md) | One always-on microphone for the whole app; single-shot dictation removed; text follows the focused chat | accepted |
+| [0030](0030-a-composer-in-every-wall-window.md) | Give every wall window its own composer; retire the shared wall composer | accepted |
 | [0031](0031-a-user-with-anthropics-approval-can-turn-on-the-plan-features.md) | A user with Anthropic's own approval can turn on the Claude plan's gated features, behind a warning | accepted |
 | [0032](0032-three-layers-and-the-nekko-package.md) | Customizations, mods and custom layouts as three layers in one open `.nekko` zip format; customizations sync through encrypted sync | accepted |
 | [0033](0033-mods-may-run-agent-tools-behind-a-permission.md) | Mods may run agent tools behind `tools:run`, the tool policy (Ask by default) and picked folders | accepted |
+| [0034](0034-android-permits-cleartext-and-refuses-public-ws-in-the-app.md) | Permit cleartext app-wide on Android and refuse public `ws://` in the app, as on the iPhone | accepted |
+| [0035](0035-plan-usage-on-for-claude-plans-from-claude-codes-own-output.md) | A Claude plan shows its usage limits, read only from what the user's own Claude Code printed | accepted |
+| [0036](0036-the-relay-sees-a-derived-room-credential-never-the-pairing-secret.md) | The relay sees a room credential derived from the pairing secret, never the secret; older pairings are replaced and phones pair again | accepted |
+| [0037](0037-route-each-message-once-to-a-local-model-or-claude-code.md) | Route each message once, before the turn, to a local model or the user's Claude Code, passing it through unchanged | proposed |
+| [0038](0038-image-builder-reaches-a-build-vm-over-ssh.md) | The image builder reaches a build VM over SSH, from Apple's restore image, with no shared folder (amends 0022) | accepted |
+| [0039](0039-one-release-signing-key-signs-the-update-feed.md) | One Ed25519 release signing key signs the update feed (`latest*.yml.sig`) and the Claude policy override; the updater refuses an unsigned or wrongly signed feed once a real key is built in | accepted |

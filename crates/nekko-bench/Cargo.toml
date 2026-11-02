@@ -10,7 +10,11 @@ publish.workspace = true
 [dependencies]
 anyhow.workspace = true
 futures-util.workspace = true
+nekko-machine = { path = "../nekko-machine" }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true

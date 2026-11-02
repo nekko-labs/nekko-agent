@@ -6,7 +6,9 @@ This page explains where Nekko Agent's usage numbers come from and what they mea
 
 The app does not guess your usage. It asks the provider:
 
-- **Claude (Anthropic API key)** - Every response on an API key carries the standard `anthropic-ratelimit-requests-*`, `-input-tokens-*` and `-output-tokens-*` headers: that key's own per-minute limits. The engine daemon reads them after each turn. Nekko Agent shows no Claude plan (Pro/Max) limits: Anthropic does not let third-party apps offer them, and there is no sanctioned source to read them from. Check a plan's usage in Claude Code itself.
+- **Claude (Anthropic API key)** - Every response on an API key carries the standard `anthropic-ratelimit-requests-*`, `-input-tokens-*` and `-output-tokens-*` headers: that key's own per-minute limits. The engine daemon reads them after each turn. Nekko Agent never reads Claude plan (Pro/Max) limits with your login.
+
+- **Claude plan (your Claude Code)** - The usage your own Claude Code prints in its stream while it works (`rate_limit_event`) or for `/usage` (its `usage_report`). Nekko shows the latest one per account and never asks for it on its own, so it is only as fresh as Claude Code's last report.
 
 - **ChatGPT (Codex subscription)** - The host polls `GET https://chatgpt.com/backend-api/wham/usage` with the current Bearer token and `ChatGPT-Account-Id`. The endpoint returns optional `primary_window` and `secondary_window` usage, plus plan type and credits. These are slots, not fixed periods: a primary window can be weekly, and either slot can be absent or null. Each window's `limit_window_seconds` determines its identity and label. Reported durations of 18,000 and 604,800 seconds become `5-hour` and `7-day`, respectively, regardless of slot; other positive integer durations get explicit duration labels. Missing or invalid durations retain the usage/reset data under neutral `Primary usage` or `Secondary usage` labels; neither the slot nor time until reset is used to guess a period.
 

@@ -34,7 +34,7 @@ describe('Agents header placement', () => {
     expect(title.indexOf('data-version')).toBeLessThan(title.indexOf('id="command-titlebar-slot"'));
     expect(title.match(/<h1/g)).toHaveLength(1);
     expect(toolbar()).not.toContain('<h1');
-    expect(title).not.toContain('pr-[150px]');
+    expect(title).not.toContain('pr-38');
   });
   it.each([['settings', 'Settings'], ['models', 'Models'], ['modelserver', 'Models'], ['skills', 'Skills']])('names the %s view in the title bar, not Agents', (view, label) => {
     state.view = view;

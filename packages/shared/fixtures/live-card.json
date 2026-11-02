@@ -1,5 +1,5 @@
 {
- "about": "The Live Activity card's rules (buildCard). Run by LiveCardTests (Swift, apps/ios/Protocol) and crates/nekko-remote card tests (Rust), so change both together. Dates are seconds since 2001-01-01, ActivityKit's default JSONDecoder date form. A chat or card leaves out empty text, false, zero and missing values; read them as empty. bytes is the card's size as Swift's JSONEncoder writes it (a slash counts twice).",
+ "about": "The Live Activity card's rules (buildCard). Run by LiveCardTests (Swift, apps/ios/Protocol), crates/nekko-remote card tests (Rust) and LiveCardTest (Kotlin, apps/android/protocol, which skips the 4 KB cases), so change them together. Dates are seconds since 2001-01-01, ActivityKit's default JSONDecoder date form. A chat or card leaves out empty text, false, zero and missing values; read them as empty. bytes is the card's size as Swift's JSONEncoder writes it (a slash counts twice).",
  "now": 800000000,
  "build": [
   {

@@ -7,8 +7,7 @@
 //! lms.ts). The provider list is a setting, so writes go through
 //! `crate::settings::update` and the host hears of them. A provider signed in
 //! through OAuth gets a fresh token from `crate::oauth` ([`resolve`]); other
-//! daemon modules use [`resolve_provider`] and [`list_models`]. Owned while
-//! the daemon knows the data directory (it then owns settings and tokens).
+//! daemon modules use [`resolve_provider`] and [`list_models`].
 
 use crate::routes::Ctx;
 use nekko_remote::phone_providers;
@@ -209,7 +208,7 @@ pub async fn resolve(ctx: &Ctx, config: &Value) -> Result<Value, String> {
             "Provider is configured for subscription sign-in but has no token key. Sign in again in Settings.".into()
         );
     };
-    let oauth = ctx.oauth.as_ref().ok_or("Sign-in is not available here.")?;
+    let oauth = &ctx.oauth;
     let access = oauth.ensure_fresh(&key, false).await?;
     let account = match config.get("accountId") {
         Some(v) if !v.is_null() => Some(v.clone()),

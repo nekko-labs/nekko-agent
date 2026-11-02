@@ -34,8 +34,8 @@ pub mod vault;
 use http::{Api, HttpError, Supabase};
 use nekko_store::SessionStore;
 use nekko_sync::{
-    DeviceKey, JoinCode, Keyring, Recipient, RecoveryKey, b64_decode, b64_encode, fingerprint, object_id, open_record,
-    open_recovery, seal_record, seal_recovery, unwrap_join, unwrap_keyring, wrap_for_join, wrap_keyring,
+    DeviceKey, JoinCode, Keyring, Recipient, RecoveryKey, b64_decode, b64_encode, epoch_proof, fingerprint, object_id,
+    open_record, open_recovery, seal_record, seal_recovery, unwrap_join, unwrap_keyring, wrap_for_join, wrap_keyring,
 };
 use records::{AccountRecord, ChatRecord, Skip, TrustedDevice};
 use serde_json::{Value, json};
@@ -103,6 +103,8 @@ struct Live {
     skipped: BTreeMap<&'static str, usize>,
     pushed: usize,
     pulled: usize,
+    /// The (token, key epoch) Nekko Cloud last accepted this device's epoch proof for.
+    proven: Option<(String, u32)>,
 }
 
 pub struct Cloud {
@@ -247,6 +249,32 @@ impl Cloud {
         let out = self.vault.set(&format!("keyring:{key_id}"), &b64_encode(&raw));
         raw.zeroize();
         out
+    }
+
+    /// The epoch proof for a keyring, base64url: a one-way value Nekko Cloud
+    /// checks before it counts this sign-in as holding the epoch's keys.
+    fn proof(keyring: &Keyring, key_id: u32) -> String {
+        b64_encode(&epoch_proof(keyring, key_id))
+    }
+
+    fn mark_proven(&self, token: &str, key_id: u32) {
+        lock(&self.live).proven = Some((token.to_string(), key_id));
+    }
+
+    /// Show Nekko Cloud this sign-in holds the epoch's keyring, once per
+    /// (token, epoch). Changing keys, devices or data needs it.
+    async fn prove(&self, token: &str, key_id: u32) -> Result<(), String> {
+        if lock(&self.live).proven.as_ref().is_some_and(|(t, k)| t == token && *k == key_id) {
+            return Ok(());
+        }
+        let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
+        let body = json!({ "proof": Self::proof(&keyring, key_id) });
+        self.api
+            .send(token, reqwest::Method::POST, &format!("/v1/sync/keyrings/{key_id}/proof"), Some(body))
+            .await
+            .map_err(e)?;
+        self.mark_proven(token, key_id);
+        Ok(())
     }
 
     fn device_key(&self) -> Option<DeviceKey> {
@@ -540,6 +568,7 @@ impl Cloud {
         }
         self.vault.delete("device-key");
         self.vault.delete("join-code");
+        lock(&self.live).proven = None;
     }
 
     // ------------------------------------------------------------ keys, devices
@@ -678,6 +707,7 @@ impl Cloud {
             let blob = seal_record(&keyring, &account_id, key_id, records::ACCOUNT, &oid, revision, &record.to_bytes())
                 .map_err(|err| err.to_string())?;
             let obj = json!({ "collection": records::ACCOUNT, "objectId": oid, "revision": revision, "keyId": key_id, "blob": blob });
+            self.prove(token, key_id).await?;
             let res = self
                 .api
                 .send(token, reqwest::Method::POST, "/v1/sync/push", Some(json!({ "objects": [obj] })))
@@ -755,10 +785,15 @@ impl Cloud {
                 &token,
                 reqwest::Method::PUT,
                 "/v1/sync/keyrings/1",
-                Some(json!({ "recoveryWrap": recovery_wrap, "wraps": [{ "deviceId": device_id, "wrap": wrap }] })),
+                Some(json!({
+                    "recoveryWrap": recovery_wrap,
+                    "proof": Self::proof(&keyring, 1),
+                    "wraps": [{ "deviceId": device_id, "wrap": wrap }],
+                })),
             )
             .await
             .map_err(e)?;
+        self.mark_proven(&token, 1);
         let label = lock(&self.state).device_label.clone();
         let record = AccountRecord {
             epoch: 1,
@@ -824,15 +859,16 @@ impl Cloud {
                 &token,
                 reqwest::Method::PUT,
                 &format!("/v1/sync/keyrings/{current}/wraps/{device_id}"),
-                Some(json!({ "wrap": wrap })),
+                Some(json!({ "wrap": wrap, "proof": Self::proof(&keyring, current) })),
             )
             .await
         {
-            Ok(_) => {}
+            Ok(_) => self.mark_proven(&token, current),
             Err(err) if err.code == "wrap-exists" => {}
             Err(err) => return Err(err.message),
         }
         self.hold_epoch(current, &keyring, &record, &oid, rev)?;
+        self.prove(&token, current).await?;
         self.edit(|s| {
             s.recovery_confirmed = true;
             s.enabled = true;
@@ -967,6 +1003,7 @@ impl Cloud {
         let keyring = self.keyring(key_id).ok_or("This device has no sync keys.")?;
         let wrap = wrap_for_join(&keyring, &account_id, key_id, Recipient { id: device_id, public: &public }, &code)
             .map_err(|err| err.to_string())?;
+        self.prove(&token, key_id).await?;
         self.api
             .send(
                 &token,
@@ -997,6 +1034,7 @@ impl Cloud {
             .account_record()
             .filter(|r| r.epoch == current)
             .ok_or("This device hasn't read the account record yet.")?;
+        self.prove(&token, current).await?;
         self.api
             .send(&token, reqwest::Method::DELETE, &format!("/v1/sync/devices/{device_id}"), None)
             .await
@@ -1032,10 +1070,11 @@ impl Cloud {
                 &token,
                 reqwest::Method::PUT,
                 &format!("/v1/sync/keyrings/{next}"),
-                Some(json!({ "recoveryWrap": recovery_wrap, "wraps": wraps })),
+                Some(json!({ "recoveryWrap": recovery_wrap, "proof": Self::proof(&new, next), "wraps": wraps })),
             )
             .await
             .map_err(e)?;
+        self.mark_proven(&token, next);
         record.epoch = next;
         let oid = Self::account_oid(&new, next)?;
         self.hold_epoch(next, &new, &record, &oid, 0)?;
@@ -1047,6 +1086,11 @@ impl Cloud {
 
     async fn delete_all(&self) -> Result<Value, String> {
         let token = self.token()?;
+        // A device holding the current keys proves it; one that doesn't falls back to a fresh sign-in.
+        let _ = self.refresh().await;
+        if let Some(current) = self.remote_key().filter(|k| *k == self.key_id() && self.keyring(*k).is_some()) {
+            let _ = self.prove(&token, current).await;
+        }
         self.api.send(&token, reqwest::Method::DELETE, "/v1/sync", None).await.map_err(|err| {
             if err.code == "needs-fresh-sign-in" {
                 "To delete everything without a synced device, sign out and sign in again first.".to_string()
@@ -1133,6 +1177,7 @@ impl Cloud {
                 }
                 continue;
             }
+            self.prove(token, self.key_id()).await?;
             if !self.push(token).await? {
                 return Ok(());
             }

@@ -17,7 +17,7 @@ split-from: SPEC.md (2026-10-22)
 
 ## Group header hierarchy
 
-Implemented: project, status, date and Completed group labels use the theme's primary accent color and 13px semibold uppercase text, with accent disclosure chevrons. Vertical groups have 16px of separation and 6px between each heading and its contents, so headings stand apart from agent-card metadata. Horizontal groups retain their existing column alignment. Collapsing, project actions, drag/drop, and ungrouped lists are unchanged. No new storage, network access or permissions.
+Implemented: project, status, date and Completed group labels use the theme's primary accent color and 14px medium sentence-case text (no caps or letter spacing since the 2026-11 design pass), with accent disclosure chevrons. Vertical groups have 16px of separation and 4px between each heading and its contents, so headings stand apart from agent-card metadata. Horizontal groups retain their existing column alignment. Collapsing, project actions, drag/drop, and ungrouped lists are unchanged. No new storage, network access or permissions.
 
 Verification: regression tests and isolated matching light/dark renderer captures cover the hierarchy; packaged-app verification remains separate.
 

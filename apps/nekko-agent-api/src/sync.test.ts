@@ -35,12 +35,14 @@ function call(a: App, token: string, method: "GET" | "POST" | "PUT" | "DELETE", 
 const b64 = (n: number) => randomBytes(n).toString("base64url");
 const devicePub = () => Buffer.concat([Buffer.from([4]), randomBytes(64)]).toString("base64url");
 const oid = () => b64(32);
+// The epoch proof a device holding keyring k would send (the server only compares hashes).
+const proof = (k: number): string => vectors.epochProofs.find((p: { keyId: number }) => p.keyId === k)?.proof ?? b64(32);
 
 async function setup(a: App, token: string) {
   const dev = await call(a, token, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "iPhone" });
   expect(dev.statusCode).toBe(201);
   const deviceId = dev.json().deviceId as string;
-  const ring = await call(a, token, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId, wrap: vectors.wrap.blob }] });
+  const ring = await call(a, token, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, proof: proof(1), wraps: [{ deviceId, wrap: vectors.wrap.blob }] });
   expect(ring.statusCode).toBe(201);
   return deviceId;
 }
@@ -117,8 +119,8 @@ describe("devices and keyrings", () => {
     }
     const t = await issueToken(db, u.id);
     const d = (await call(a, t, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "ok" })).json().deviceId;
-    expect((await call(a, t, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: b64(145), wraps: [] })).statusCode).toBe(400);
-    expect((await call(a, t, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: d, wrap: b64(145) }] })).statusCode).toBe(400);
+    expect((await call(a, t, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: b64(145), proof: proof(1), wraps: [] })).statusCode).toBe(400);
+    expect((await call(a, t, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, proof: proof(1), wraps: [{ deviceId: d, wrap: b64(145) }] })).statusCode).toBe(400);
   });
 
   it("adds key epochs one at a time and only for the account's live devices", async () => {
@@ -127,10 +129,10 @@ describe("devices and keyrings", () => {
     const other = await user();
     const theirs = await setup(a, other.token);
     const mine = await setup(a, u.token);
-    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/3", { recoveryWrap: vectors.recovery.blob, wraps: [] })).json()).toEqual({ error: "key-epoch", currentKeyId: 1 });
-    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: theirs, wrap: vectors.wrap.blob }] })).json()).toEqual({ error: "unknown-device" });
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/3", { recoveryWrap: vectors.recovery.blob, proof: proof(3), wraps: [] })).json()).toEqual({ error: "key-epoch", currentKeyId: 1 });
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, proof: proof(2), wraps: [{ deviceId: theirs, wrap: vectors.wrap.blob }] })).json()).toEqual({ error: "unknown-device" });
     expect((await call(a, u.token, "GET", "/v1/sync/state")).json().currentKeyId).toBe(1);
-    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }] })).statusCode).toBe(201);
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, proof: proof(2), wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }] })).statusCode).toBe(201);
   });
 
   it("revoking a device kills its tokens and wraps, and its key can't come back", async () => {
@@ -166,16 +168,91 @@ describe("only a device holding the keys changes them", () => {
     const intruder = await issueToken(db, u.id);
     const theirs = (await call(a, intruder, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "Intruder" })).json().deviceId;
     const refused = { error: "needs-synced-device" };
-    expect((await call(a, intruder, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }, { deviceId: theirs, wrap: vectors.wrap.blob }] })).json()).toEqual(refused);
+    expect((await call(a, intruder, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, proof: proof(2), wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }, { deviceId: theirs, wrap: vectors.wrap.blob }] })).json()).toEqual(refused);
     expect((await call(a, intruder, "PUT", `/v1/sync/keyrings/1/wraps/${mine}`, { wrap: vectors.wrap.blob })).json()).toEqual(refused);
     expect((await call(a, intruder, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] })).json()).toEqual(refused);
     expect((await call(a, intruder, "DELETE", `/v1/sync/devices/${mine}`)).json()).toEqual(refused);
     // A token without any device can't either.
     const bare = await issueToken(db, u.id);
     expect((await call(a, bare, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] })).statusCode).toBe(403);
-    // A device can always remove itself, and wrap the current epoch to itself (after a restore).
-    expect((await call(a, intruder, "PUT", `/v1/sync/keyrings/1/wraps/${theirs}`, { wrap: vectors.wrap.blob })).statusCode).toBe(204);
+    // A device still waiting to join can remove itself.
     expect((await call(a, intruder, "DELETE", `/v1/sync/devices/${theirs}`)).statusCode).toBe(204);
+  });
+
+  it("wraps the current epoch to the caller's own device only with the epoch proof", async () => {
+    const a = app();
+    const u = await user();
+    const mine = await setup(a, u.token);
+    const t2 = await issueToken(db, u.id);
+    const theirs = (await call(a, t2, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "Laptop" })).json().deviceId;
+    const refused = { error: "needs-synced-device" };
+    expect((await call(a, t2, "PUT", `/v1/sync/keyrings/1/wraps/${theirs}`, { wrap: vectors.wrap.blob })).json()).toEqual(refused);
+    expect((await call(a, t2, "PUT", `/v1/sync/keyrings/1/wraps/${theirs}`, { wrap: vectors.wrap.blob, proof: b64(31) })).statusCode).toBe(400);
+    expect((await call(a, t2, "PUT", `/v1/sync/keyrings/1/wraps/${theirs}`, { wrap: vectors.wrap.blob, proof: proof(2) })).json()).toEqual(refused);
+    expect((await db.query("select count(*)::int as n from sync_key_wraps where device_id = $1", [theirs])).rows).toEqual([{ n: 0 }]);
+    // Still not keyed: no epoch, revocation, push or wipe.
+    expect((await call(a, t2, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, proof: proof(2), wraps: [{ deviceId: theirs, wrap: vectors.wrap.blob }] })).json()).toEqual(refused);
+    expect((await call(a, t2, "DELETE", `/v1/sync/devices/${mine}`)).json()).toEqual(refused);
+    expect((await call(a, t2, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] })).json()).toEqual(refused);
+    // A device that restored with the recovery key knows the proof, and is then keyed.
+    expect((await call(a, t2, "PUT", `/v1/sync/keyrings/1/wraps/${theirs}`, { wrap: vectors.wrap.blob, proof: proof(1) })).statusCode).toBe(204);
+    expect((await call(a, t2, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] })).json().results[0].status).toBe("ok");
+  });
+
+  it("does not count a token as keyed for registering a synced device's public key", async () => {
+    const a = app();
+    const u = await user();
+    const mine = await setup(a, u.token);
+    const publicKey = (await call(a, u.token, "GET", "/v1/sync/state")).json().devices[0].publicKey;
+    const t2 = await issueToken(db, u.id);
+    expect((await call(a, t2, "POST", "/v1/sync/devices", { publicKey, label: "iPhone" })).json()).toEqual({ deviceId: mine });
+    await db.query("update api_tokens set created_at = now() - interval '1 hour'", []);
+    const refused = { error: "needs-synced-device" };
+    expect((await call(a, t2, "DELETE", `/v1/sync/devices/${mine}`)).json()).toEqual(refused);
+    expect((await call(a, t2, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, proof: proof(2), wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }] })).json()).toEqual(refused);
+    expect((await call(a, t2, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] })).json()).toEqual(refused);
+    expect((await call(a, t2, "DELETE", "/v1/sync")).json()).toEqual({ error: "needs-fresh-sign-in" });
+    expect((await call(a, t2, "POST", "/v1/sync/keyrings/1/proof", { proof: proof(2) })).json()).toEqual({ error: "bad-proof" });
+    expect((await call(a, t2, "GET", "/v1/sync/state")).json().currentKeyId).toBe(1);
+    // The device itself, signed in again, proves the epoch and carries on.
+    expect((await call(a, t2, "POST", "/v1/sync/keyrings/1/proof", { proof: proof(1) })).statusCode).toBe(204);
+    expect((await call(a, t2, "POST", "/v1/sync/keyrings/1/proof", { proof: proof(1) })).statusCode).toBe(204);
+    expect((await call(a, t2, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] })).json().results[0].status).toBe("ok");
+  });
+
+  it("accepts a proof only for the current epoch, and asks for it again after a rotation", async () => {
+    const a = app();
+    const u = await user();
+    const mine = await setup(a, u.token);
+    expect((await call(a, u.token, "POST", "/v1/sync/keyrings/2/proof", { proof: proof(2) })).statusCode).toBe(404);
+    expect((await call(a, u.token, "POST", "/v1/sync/keyrings/1/proof", { proof: b64(16) })).statusCode).toBe(400);
+    expect((await call(a, u.token, "POST", "/v1/sync/keyrings/1/proof", {})).statusCode).toBe(400);
+    const t2 = await issueToken(db, u.id);
+    const d2 = (await call(a, t2, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "Laptop" })).json().deviceId;
+    expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/1/wraps/${d2}`, { wrap: vectors.wrap.blob })).statusCode).toBe(204);
+    expect((await call(a, t2, "POST", "/v1/sync/keyrings/1/proof", { proof: proof(1) })).statusCode).toBe(204);
+    // The first device starts epoch 2 for both; the second must prove epoch 2 before it writes again.
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, proof: proof(2), wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }, { deviceId: d2, wrap: vectors.wrap.blob }] })).statusCode).toBe(201);
+    const push = { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 2, blob: vectors.records[1].blob }] };
+    expect((await call(a, t2, "POST", "/v1/sync/push", push)).json()).toEqual({ error: "needs-synced-device" });
+    expect((await call(a, t2, "POST", "/v1/sync/keyrings/1/proof", { proof: proof(1) })).json()).toEqual({ error: "key-epoch", currentKeyId: 2 });
+    expect((await call(a, t2, "POST", "/v1/sync/keyrings/2/proof", { proof: proof(2) })).statusCode).toBe(204);
+    expect((await call(a, t2, "POST", "/v1/sync/push", push)).json().results[0].status).toBe("ok");
+  });
+
+  it("needs the proof to start an epoch, and a keyring without a proof hash makes no token keyed", async () => {
+    const a = app();
+    const u = await user();
+    const d = (await call(a, u.token, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "iPhone" })).json().deviceId;
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: d, wrap: vectors.wrap.blob }] })).statusCode).toBe(400);
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, proof: b64(33), wraps: [{ deviceId: d, wrap: vectors.wrap.blob }] })).statusCode).toBe(400);
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/1", { recoveryWrap: vectors.recovery.blob, proof: proof(1), wraps: [{ deviceId: d, wrap: vectors.wrap.blob }] })).statusCode).toBe(201);
+    const { rows } = await db.query<{ proof_hash: Buffer }>("select proof_hash from sync_keyrings where user_id = $1", [u.id]);
+    expect(Buffer.from(rows[0].proof_hash).equals(Buffer.from(proof(1), "base64url"))).toBe(false);
+    await db.query("update sync_keyrings set proof_hash = null", []);
+    const push = { objects: [{ collection: "chat", objectId: oid(), revision: 1, keyId: 1, blob: vectors.records[1].blob }] };
+    expect((await call(a, u.token, "POST", "/v1/sync/push", push)).statusCode).toBe(403);
+    expect((await call(a, u.token, "POST", "/v1/sync/keyrings/1/proof", { proof: proof(1) })).json()).toEqual({ error: "bad-proof" });
   });
 
   it("never overwrites a wrap, and adds wraps only to the current epoch", async () => {
@@ -189,7 +266,7 @@ describe("only a device holding the keys changes them", () => {
     expect((await call(a, u.token, "GET", "/v1/sync/keyrings/1")).json().wrap).toBe(vectors.wrap.blob);
     expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/1/wraps/${d2}`, { wrap: other })).statusCode).toBe(204);
     expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/1/wraps/${d2}`, { wrap: vectors.wrap.blob })).statusCode).toBe(409);
-    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }] })).statusCode).toBe(201);
+    expect((await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, proof: proof(2), wraps: [{ deviceId: mine, wrap: vectors.wrap.blob }] })).statusCode).toBe(201);
     const t3 = await issueToken(db, u.id);
     const d3 = (await call(a, t3, "POST", "/v1/sync/devices", { publicKey: devicePub(), label: "iPad" })).json().deviceId;
     expect((await call(a, u.token, "PUT", `/v1/sync/keyrings/1/wraps/${d3}`, { wrap: other })).json()).toEqual({ error: "key-epoch", currentKeyId: 2 });
@@ -282,7 +359,7 @@ describe("push and pull", () => {
       ],
     });
     expect(res.json().results.map((r: { status: string; revision: number }) => [r.status, r.revision])).toEqual([["conflict", 1], ["conflict", 1], ["conflict", 0]]);
-    await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, wraps: [{ deviceId: d, wrap: vectors.wrap.blob }] });
+    await call(a, u.token, "PUT", "/v1/sync/keyrings/2", { recoveryWrap: vectors.recovery.blob, proof: proof(2), wraps: [{ deviceId: d, wrap: vectors.wrap.blob }] });
     const stale = await call(a, u.token, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: x, revision: 2, keyId: 1, blob }] });
     expect(stale.json().results[0]).toEqual({ objectId: x, status: "stale-key", currentKeyId: 2 });
     const fresh = await call(a, u.token, "POST", "/v1/sync/push", { objects: [{ collection: "chat", objectId: x, revision: 2, keyId: 2, blob }] });

@@ -63,7 +63,7 @@ describe('local models and provider headings', () => {
     expect(out).toContain('data-model-name="true">Muse-Glimmer-30B<');
     expect(out).toContain('>lmstudio/lmstudio-community</span>');
     expect(out).not.toContain('data-model-name="true">lmstudio/');
-    expect(out).toMatch(/text-\[12px\] font-semibold text-ink" data-provider-heading="true">Nekko Agent engine/);
+    expect(out).toMatch(/text-xs font-semibold text-ink" data-provider-heading="true">Nekko Agent engine/);
   });
   it('keeps a cloud id with a slash as its name and price line', () => {
     const providers = [{ id: 'or', kind: 'openrouter' as const, label: 'OpenRouter', enabled: true, baseUrl: 'https://openrouter.ai/api/v1' }];

@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(CryptoKit)
+import CryptoKit
+#else
+import Crypto
+#endif
 import XCTest
 @testable import NekkoProtocol
 
@@ -31,7 +36,7 @@ extension RelayClientTests {
 
     /// A client configured as the fixture's phone, against a fake that never
     /// challenges by itself (the test feeds the fixture's sealed challenge).
-    func fixtureClient(_ f: HandshakeFixture, challengeWait: TimeInterval) -> (RelayClient, Recorder, FakeRelay) {
+    func fixtureClient(_ f: HandshakeFixture, challengeWait: TimeInterval, signer: HelloSigner? = nil) -> (RelayClient, Recorder, FakeRelay) {
         let relay = FakeRelay(key: f.keyBytes, known: [f.device.str("deviceId")!])
         relay.challenges = false
         var cfg = RelayConfig(relayUrl: "wss://relay.test", room: f.room, key: f.secret, keyBytes: f.keyBytes,
@@ -42,6 +47,7 @@ extension RelayClientTests {
         cfg.retryBase = 0.02
         cfg.retryMax = 0.08
         cfg.challengeWait = challengeWait
+        cfg.helloSigner = signer
         let c = RelayClient(config: cfg, transport: relay)
         let r = Recorder()
         r.attach(c)
@@ -63,6 +69,37 @@ extension RelayClientTests {
         XCTAssertEqual(E2E.toHex(E2E.deriveKey(secret: f.secret, room: f.room)), f.g.str("key"))
         XCTAssertEqual(try E2E.open(key: f.keyBytes, blob: f.blob), f.g["challenge"]!["frame"]!)
         XCTAssertEqual(f.g.long("protocol"), Int64(PhoneProtocol.version))
+    }
+
+    /// Protocol 5 (decision 0036): the HELLO is signed with the device key over
+    /// the shared text, and is otherwise the fixture's HELLO.
+    func testTheHelloSignsTheSharedTextWithTheDeviceKey() async throws {
+        let f = try handshakeFixture()
+        let k = try XCTUnwrap(f.g["helloKey"])
+        let text = try XCTUnwrap(k.str("text"))
+        XCTAssertEqual(HelloKey.text(deviceId: f.device.str("deviceId")!, room: f.room, challenge: f.nonce), text)
+        // The fixture's signature verifies with the fixture's key, as on the computer.
+        let fixtureKey = try P256.Signing.PublicKey(x963Representation: XCTUnwrap(Data(base64Encoded: k.str("publicKey")!)))
+        let fixtureSig = try P256.Signing.ECDSASignature(rawRepresentation: XCTUnwrap(Data(base64Encoded: k.str("sig")!)))
+        XCTAssertTrue(fixtureKey.isValidSignature(fixtureSig, for: Data(text.utf8)))
+
+        let signer = SoftwareHelloSigner()
+        let (c, r, relay) = fixtureClient(f, challengeWait: 5, signer: signer)
+        c.connect()
+        let opened = await waitOpen(relay)
+        let conn = try XCTUnwrap(opened)
+        conn.handlers.onMessage(JSONValue.object(["enc": .string(f.blob)]).serialized())
+        await r.await(.online)
+        let hello = try XCTUnwrap(relay.sync { relay.hellos.first })
+        let key = try XCTUnwrap(hello.str("helloKey").flatMap { Data(base64Encoded: $0) })
+        XCTAssertEqual(key, try signer.publicKey())
+        let sig = try P256.Signing.ECDSASignature(rawRepresentation: XCTUnwrap(hello.str("sig").flatMap { Data(base64Encoded: $0) }))
+        XCTAssertTrue(signer.key.publicKey.isValidSignature(sig, for: Data(text.utf8)))
+        var rest = try XCTUnwrap(hello.object)
+        rest.removeValue(forKey: "helloKey")
+        rest.removeValue(forKey: "sig")
+        XCTAssertEqual(JSONValue.object(rest), f.g["hello"]!)
+        c.close()
     }
 
     func testAnswersTheFixtureChallengeWithTheFixtureHelloThenNumbersRequests() async throws {
@@ -152,7 +189,7 @@ extension RelayClientTests {
         relay.sync { relay.challenges = true }
         await r.await(.online)
         // Never a legacy HELLO: every one answered a challenge.
-        XCTAssertTrue(relay.sync { relay.hellos }.allSatisfy { $0.str("challenge") != nil && $0.long("protocol") == 4 })
+        XCTAssertTrue(relay.sync { relay.hellos }.allSatisfy { $0.str("challenge") != nil && $0.long("protocol") == Int64(PhoneProtocol.version) })
         c.close()
     }
 

@@ -256,7 +256,8 @@ final class RelayClientTests: XCTestCase {
         let (c, r) = client(relay, pair: "ABCD2345")
         c.connect()
         await r.await(.online)
-        XCTAssertEqual(relay.sync { relay.urls }, ["wss://relay.test/relay?role=client&room=abcd1234&key=k%26e%2By"])
+        // The relay gets the derived credential, never the secret (a hex string, so nothing to escape).
+        XCTAssertEqual(relay.sync { relay.urls }, ["wss://relay.test/relay?role=client&room=abcd1234&key=" + E2E.relayAuth(secret: "k&e+y", room: "abcd1234")])
         XCTAssertEqual(relay.sync { relay.hellos.first?.str("pair") }, "ABCD2345")
         await sleep(0.02)
         XCTAssertEqual(r.lock.sync { r.welcomes.first?.name }, "iPhone")
