@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { PlanStep, PlanStepKind, PrInfo, Session } from '@nekko-agent/shared';
+import type { ChatMessage, PlanStep, PlanStepKind, PrInfo, Session } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
@@ -9,6 +9,7 @@ import { useStore } from '../store.js';
 import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
+import { runPrAction } from './PrCard.js';
 
 function StepMark({ status, paused }: { status: PlanStep['status']; paused: boolean }) {
   const label = status === 'active' ? (paused ? 'Paused' : 'Working') : status === 'done' ? 'Done' : status === 'skipped' ? 'Skipped' : 'Pending';
@@ -24,15 +25,45 @@ function StepMark({ status, paused }: { status: PlanStep['status']; paused: bool
 }
 
 /** One PR as a chip: number, state, and CI from the PR poller's cached rollup. */
-export function prChipLabel(url: string, info?: PrInfo): { text: string; tone: string } {
+export function prChipLabel(url: string, info?: PrInfo): { text: string; tone: string; status: PrStatus } {
   const number = info?.number ?? parsePrUrl(url)?.number;
-  if (!info) return { text: `#${number}`, tone: 'var(--ink-faint)' };
-  if (info.state === 'merged') return { text: `#${number} · Merged`, tone: 'var(--accent)' };
-  if (info.state === 'closed') return { text: `#${number} · Closed`, tone: 'var(--ink-faint)' };
+  if (!info) return { text: `#${number}`, tone: 'var(--ink-faint)', status: 'unknown' };
+  if (info.state === 'merged') return { text: `#${number} · Merged`, tone: 'var(--accent)', status: 'merged' };
+  if (info.state === 'closed') return { text: `#${number} · Closed`, tone: 'var(--ink-faint)', status: 'closed' };
   const p = info.checkProgress;
   const ci = info.checks === 'failing' ? 'CI failing' : info.checks === 'passing' ? 'CI passing' : info.checks === 'pending' ? (p?.total ? `CI ${p.completed} of ${p.total}` : 'CI running') : 'No CI';
   const tone = info.checks === 'failing' ? 'var(--danger)' : info.checks === 'passing' ? 'var(--success)' : info.checks === 'pending' ? 'var(--warning)' : 'var(--ink-faint)';
-  return { text: `#${number} · ${info.isDraft ? 'Draft' : 'Open'} · ${ci}`, tone };
+  const status: PrStatus = info.checks === 'failing' ? 'failing' : info.checks === 'passing' ? 'passing' : info.checks === 'pending' ? 'pending' : info.isDraft ? 'draft' : 'open';
+  return { text: `#${number} · ${info.isDraft ? 'Draft' : 'Open'} · ${ci}`, tone, status };
+}
+
+type PrStatus = 'draft' | 'open' | 'pending' | 'passing' | 'failing' | 'merged' | 'closed' | 'unknown';
+
+/** The dot the chip wears, matching the PR status badges elsewhere in the app. */
+function PrStatusDot({ status, tone }: { status: PrStatus; tone: string }) {
+  if (status === 'passing') return <span className="plan-sheet-status" data-pr-status="passing" style={{ color: tone }} aria-hidden><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.4" opacity="0.3" /><path d="m5 8.2 2.2 2.2L11 6.6" /></svg></span>;
+  if (status === 'failing') return <span className="plan-sheet-status" data-pr-status="failing" style={{ color: tone }} aria-hidden><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.4" opacity="0.3" /><path d="M5.5 5.5 10.5 10.5M10.5 5.5 5.5 10.5" /></svg></span>;
+  if (status === 'pending') return <span className="plan-sheet-status is-pending" data-pr-status="pending" style={{ color: tone }} aria-hidden><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="8" cy="8" r="6.4" opacity="0.3" /><path d="M8 3.6a4.4 4.4 0 0 1 4.4 4.4" /></svg></span>;
+  if (status === 'merged') return <span className="plan-sheet-status" data-pr-status="merged" style={{ color: tone }} aria-hidden><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="4" r="1.6" /><circle cx="5" cy="12" r="1.6" /><circle cx="11.5" cy="12" r="1.6" /><path d="M5 5.6v4.8M6.6 12h3.3" /><path d="M5 8.4c0 2 2 3.6 4.6 3.6" /></svg></span>;
+  return <span className="plan-sheet-dot" style={{ background: tone }} />;
+}
+
+/** The approve, decline and merge round pills that fade in when the pointer is on a PR chip. */
+function PrHoverActions({ url, info, sessionId }: { url: string; info?: PrInfo; sessionId: string }) {
+  const [busy, setBusy] = useState<'approve' | 'close' | 'merge' | null>(null);
+  if (!info || info.state !== 'open') return null;
+  const act = async (action: 'approve' | 'close' | 'merge', e: React.MouseEvent) => {
+    e.stopPropagation(); e.preventDefault();
+    if (action === 'merge' && info.stack) { window.nekko.openPath(url).catch(() => {}); return; }
+    setBusy(action);
+    try { await runPrAction(sessionId, url, action); } finally { setBusy(null); }
+  };
+  const disabled = (action: 'approve' | 'close' | 'merge') => !!busy || (action === 'merge' && info.checks === 'failing');
+  return <span className="plan-sheet-pr-actions" role="group" aria-label={`Actions for #${info.number}`}>
+    <button type="button" className="plan-sheet-pr-action" data-pr-act="approve" disabled={disabled('approve')} title="Approve" onClick={(e) => void act('approve', e)}>{busy === 'approve' ? '…' : 'Approve'}</button>
+    <button type="button" className="plan-sheet-pr-action" data-pr-act="close" disabled={disabled('close')} title="Decline" onClick={(e) => void act('close', e)}>{busy === 'close' ? '…' : 'Decline'}</button>
+    <button type="button" className="plan-sheet-pr-action" data-pr-act="merge" disabled={disabled('merge')} title={info.checks === 'failing' ? 'Merge blocked while CI is failing' : info.stack ? 'Review stack on GitHub' : 'Merge'} onClick={(e) => void act('merge', e)}>{busy === 'merge' ? '…' : info.stack ? 'Merge on GH' : 'Merge'}</button>
+  </span>;
 }
 
 function openArtifact(artifact: ChatArtifact, sessionId: string) {
@@ -82,6 +113,19 @@ function CiChips({ info }: { info: PrInfo }) {
 const KIND_LABEL: Record<PlanStepKind, string> = { explore: 'Explore', build: 'Build', verify: 'Verify', ship: 'Ship' };
 
 /** The step's place in the loop, a small caps word before its title. */
+/**
+ * A pill-shaped caret the whole plan toggles on, so the fold affordance reads
+ * as a button rather than a stray glyph. "down" points to the detail about to
+ * open; "up" asks it to fold back.
+ */
+function PlanCaret({ direction, label }: { direction: 'up' | 'down'; label: string }) {
+  return <span className="plan-sheet-caret" data-dir={direction} aria-hidden title={label}>
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      {direction === 'down' ? <path d="m4 6 4 4 4-4" /> : <path d="m4 10 4-4 4 4" />}
+    </svg>
+  </span>;
+}
+
 function Kind({ kind, current }: { kind?: PlanStepKind; current?: boolean }) {
   if (!kind) return null;
   return <span className="plan-sheet-kind" data-plan-kind={kind} data-current={current || undefined}>{KIND_LABEL[kind]}</span>;
@@ -131,7 +175,7 @@ function SubagentSummary({ children }: { children: Child[] }) {
  * checks, PRs and files. Finished steps squeeze to their title and open while
  * the pointer or keyboard focus is anywhere on the sheet.
  */
-export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen = false }: {
+export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen = true }: {
   sessionId: string;
   session: Session | null;
   streaming: boolean;
@@ -142,15 +186,47 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   /** Start with the whole plan showing rather than folded. */
   initiallyOpen?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(!initiallyOpen);
+  // The whole plan is open by default; the user folds it to one line when they
+  // want the chrome out of the way.
+  const [collapsed, setCollapsed] = useState(initiallyOpen === false);
   // These chips are pull requests, so the condition holds wherever they would draw.
   const prsShown = useShown('pr-status', { pr: true });
-  const messages = session?.messages;
   const sessions = useStore((s) => s.sessions);
   const providers = useStore((s) => s.providers);
-  useLiveRunsVersion();
-  const working = streaming || !!getLiveRun(sessionId) || !!session?.activeRun;
-  const plan = useMemo(() => sheetPlan(session, providers, working), [session, providers, working]);
+  const liveVersion = useLiveRunsVersion();
+  const live = getLiveRun(sessionId);
+  const working = streaming || !!live || !!session?.activeRun;
+  // Mid-turn, the saved `messages` don't yet show tool calls from the in-flight
+  // reply. Fold the live tools in as a synthetic trailing assistant message so a
+  // Claude Agent chat's TodoWrite plan updates while the agent is still writing
+  // it, not only when the turn ends. The real server-side `agentPlan` already
+  // updates per call via `session_meta`.
+  const planSession = useMemo(() => {
+    if (!session || !live?.tools.length) return session;
+    const synth: ChatMessage = {
+      id: '__live__',
+      role: 'assistant',
+      content: live.text,
+      toolCalls: live.tools,
+      createdAt: live.startedAt,
+    };
+    // Treat each live tool call as succeeded so `claudeCodeOwnPlan` can read it:
+    // results stream to the renderer but are kept inside `liveRun.blocks`, not
+    // inside the saved `toolResult` field the plan reader looks at.
+    const synthResults: ChatMessage[] = live.tools.map((call, i) => ({
+      id: '__live_r_' + i,
+      role: 'user',
+      content: '',
+      toolResult: { toolCallId: call.id, output: '', isError: false },
+      createdAt: live.startedAt + i,
+    }));
+    return { ...session, messages: [...(session.messages ?? []), synth, ...synthResults] };
+    // liveVersion is the subscription signal, so changes to `live.tools`
+    // reach the memo even when the array reference stays stable between ticks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, liveVersion]);
+  const messages = planSession?.messages;
+  const plan = useMemo(() => sheetPlan(planSession, providers, working), [planSession, providers, working]);
   const childSessions = useMemo(() => (sessions ?? []).filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
   const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions), [messages, plan, basePath, childSessions]);
   if (!plan?.length) return null;
@@ -172,7 +248,16 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
     const id = checker ?? [...links].find(([, own]) => own.prs.includes(pr.url))?.[0] ?? current?.id;
     if (id) ci.set(id, [...(ci.get(id) ?? []), pr]);
   }
-  const prChip = (url: string) => { const { text, tone } = prChipLabel(url, prInfo.get(url)); return <button key={url} type="button" className="plan-sheet-chip" data-plan-chip="pr" title={prInfo.get(url)?.title ?? url} onClick={() => open(url)}><span className="plan-sheet-dot" style={{ background: tone }} />{text}</button>; };
+  const prChip = (url: string) => {
+    const info = prInfo.get(url);
+    const { text, tone, status } = prChipLabel(url, info);
+    return <span key={url} className="plan-sheet-pr" data-plan-pr={info?.number ?? 'unknown'}>
+      <button type="button" className="plan-sheet-chip" data-plan-chip="pr" title={info?.title ?? url} onClick={() => open(url)}>
+        <PrStatusDot status={status} tone={tone} />{text}
+      </button>
+      <PrHoverActions url={url} info={info} sessionId={sessionId} />
+    </span>;
+  };
   const artifactChip = (artifact: ChatArtifact) => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? artifact.live.host + artifact.live.route : artifact.filename}</button>;
   const kids = (own?: PlanStepLinks) => (own?.subagents ?? []).map(id => childById.get(id)).filter((c): c is Child => !!c);
   const position = plan.indexOf(current) + 1;
@@ -198,7 +283,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
           <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
           <Pass step={current} />
           <span className="shrink-0 tabular-nums text-2xs text-ink-faint">{position} of {plan.length}</span>
-          <span aria-hidden className="ctl-caret">▴</span>
+          <PlanCaret direction="down" label="Show the whole plan" />
         </span>
       </button>
       {chips.length > 0 && <div className="plan-sheet-chips plan-sheet-fold-chips">{chips}</div>}
@@ -211,7 +296,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         <span className="font-semibold text-ink-soft">Plan</span>
         <span className="tabular-nums">{progress.done + progress.skipped} of {progress.total} done</span>
         <span className="flex-1" />
-        <span aria-hidden className="ctl-caret">▾</span>
+        <PlanCaret direction="up" label="Fold the plan" />
       </button>
     </div>
     <ol className="plan-sheet-steps">

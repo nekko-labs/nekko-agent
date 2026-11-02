@@ -75,10 +75,13 @@ export function ModelPicker({
   placeholder?: string;
   /**
    * The specific model id Claude Code reported in its `system/init` for this
-   * chat (`session.claudeCodeContext.model`). Claude Code picks from the user's
-   * plan, so this is "Opus 4.7" or "Opus 5.5" rather than the generic "opus"
-   * alias we send on `--model`. The chip reads it as the label; the picker's
-   * list stays the alias list because that is what Claude Code will accept.
+   * chat (`session.claudeCodeContext.model`). When the chat was pinned to
+   * `opus`/`sonnet`/`haiku`, Claude Code resolves that to the plan's current
+   * default (e.g. `claude-opus-4-7` -> we read it here so the chip reads the
+   * concrete version); when the chat was pinned to a concrete id (`claude-
+   * opus-5-5`), this is the same string and the chip just confirms it.
+   * Claude Code accepts both aliases and concrete ids on `--model`, so the
+   * picker lists both.
    */
   resolvedModelId?: string;
   /** Under the list, for what belongs with the model (Simple keeps effort here). */
