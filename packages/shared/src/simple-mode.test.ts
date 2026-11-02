@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SIMPLE_ITEMS, agentMonitorRelevant, localModelRunning, parseSimpleChoices, simpleAreas, simpleOptions, simpleShown, simpleVisibility } from './simple-mode.js';
+import { SIMPLE_ITEMS, agentMonitorRelevant, localModelHost, localModelRunning, parseSimpleChoices, simpleAreas, simpleOptions, simpleShown, simpleVisibility } from './simple-mode.js';
 
 describe('simple mode catalogue', () => {
   it('has unique ids', () => {
@@ -75,6 +75,9 @@ describe('simple mode catalogue', () => {
     const idle = { running: true, resident: [] };
     expect(localModelRunning(idle, [idle, null])).toBe(false);
     expect(localModelRunning(null, [idle, { running: true, resident: [{}] }])).toBe(true);
+    expect(localModelHost(null, [idle, { running: true, resident: [{}] }])).toBe(1);
+    expect(localModelHost({ running: true, resident: [{}] }, [{ running: true, resident: [{}] }])).toBe('here');
+    expect(localModelHost(idle, [idle, null])).toBeNull();
   });
 
   it('reads a local model only from a running engine that holds one', () => {

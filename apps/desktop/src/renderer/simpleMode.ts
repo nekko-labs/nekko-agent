@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { useStore } from './store.js';
-import { localModelRunning, parseSimpleChoices, simpleShown, type SimpleChoices, type SimpleContext, type SimpleVisibility } from '@nekko-agent/shared';
+import { localModelHost, localModelRunning, parseSimpleChoices, simpleShown, type SimpleChoices, type SimpleContext, type SimpleVisibility } from '@nekko-agent/shared';
 
 /*
  * Simple and Expert (decision 0041, spec desktop/desktop-simple-and-expert-modes). Simple is
@@ -62,6 +62,8 @@ export function shownNow(id: string, context?: SimpleContext): boolean {
 // screen is listening.
 const localListeners = new Set<() => void>();
 let localLoaded = false;
+/** The connected computer the hardware monitor follows; null reads this one. */
+let localHost: { id: string; name: string; loaded: number } | null = null;
 let localTimer: ReturnType<typeof setInterval> | undefined;
 const readLocal = () => {
   const linked = (useStore.getState?.().computers ?? []).filter((c) => c.state === 'online' && c.read);
@@ -71,7 +73,13 @@ const readLocal = () => {
     ...linked.map((c) => window.nekko.computerEngineStatus(c.id).catch(() => null)),
   ]).then(([here, ...connected]) => {
     const next = localModelRunning(here, connected);
-    if (next !== localLoaded) { localLoaded = next; for (const l of localListeners) l(); }
+    const at = localModelHost(here, connected);
+    const host = typeof at === 'number'
+      ? { id: linked[at].id, name: linked[at].name, loaded: connected[at]?.resident?.length ?? 0 }
+      : null;
+    const moved = host?.id !== localHost?.id || host?.loaded !== localHost?.loaded;
+    if (moved) localHost = host;
+    if (next !== localLoaded || moved) { localLoaded = next; for (const l of localListeners) l(); }
   });
 };
 const subscribeLocal = (fn: () => void) => {
@@ -86,6 +94,11 @@ const subscribeLocal = (fn: () => void) => {
 /** Whether a local model is running on this computer or a connected one. */
 export function useLocalModelLoaded(): boolean {
   return useSyncExternalStore(subscribeLocal, () => localLoaded, () => false);
+}
+
+/** The connected computer a model runs on, when none runs here. */
+export function useLocalModelHost() {
+  return useSyncExternalStore(subscribeLocal, () => localHost, () => null);
 }
 
 /** Whether a listed control is on screen now, in the current mode. `context` says what is true of this chat. */

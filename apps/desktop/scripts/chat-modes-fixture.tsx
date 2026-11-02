@@ -50,6 +50,7 @@ const bridge: any = {
   getUsageSummary: async () => ({ totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, byProvider: {}, bySession: {}, bySessionCost: {}, daily: [] }),
   pendingInput: async () => ({}), runningSessions: async () => [], listTasks: async () => [], listShells: async () => [], listChanges: async () => Array.from({ length: scene.changes ?? 0 }, (_, i) => ({ path: `src/file-${i}.ts`, original: 'a\nb\n', current: 'a\nc\nd\n' })),
   computerEngineStatus: async () => ({ running: true, resident: [{ id: 'qwen3-coder-30b' }] }),
+  computerStats: async () => ({ system: { cpuPct: 12, cpuCores: 16, memUsedMB: 8000, memTotalMB: 64000 }, gpu: null }),
   claudeBackgroundTasks: async () => (scene.agents ? { alpha: scene.agents } : {}),
   listSessionPrs: async () => (scene.pr ? [{ url: prUrl, owner: 'fixture', repo: 'app', number: 42, title: 'Key the cache on the lockfile', state: 'open', isDraft: false, additions: 12, deletions: 3, changedFiles: 3, checks: 'passing' }] : []), listFiles: async () => [],
   previewContext: async () => ({ contextWindow: 200000, items: [

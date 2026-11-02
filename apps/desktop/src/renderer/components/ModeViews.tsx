@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formatTemperature, temperatureTone } from '@nekko-agent/shared';
-import { useExpertMode, useShown } from '../simpleMode.js';
+import { useExpertMode, useLocalModelHost, useShown } from '../simpleMode.js';
 import { ChatIcon, CodeIcon, CubeIcon } from '../icons.js';
 import { useFloatingMenu } from './floatingMenu.js';
 import { hardwareRows, LocalModels } from './MonitorsDock.js';
-import { useMonitors, useResourceSample } from './ResourceMonitor.js';
+import { useMonitors, useResourceSample, watchComputer } from './ResourceMonitor.js';
 
 /*
  * Simple and Expert (decision 0041, spec desktop/desktop-simple-and-expert-modes).
@@ -159,7 +159,16 @@ function useLoadedCount(): number | null {
  */
 export function ExpertMonitor() {
   const dials = useDials();
-  const loaded = useLoadedCount();
+  const host = useLocalModelHost();
+  const localCount = useLoadedCount();
+  const loaded = host ? host.loaded : localCount;
+  const hostId = host?.id;
+  // The dials follow the machine the model runs on, never this one beside its count.
+  useEffect(() => {
+    if (!hostId) return;
+    watchComputer(hostId);
+    return () => watchComputer(null);
+  }, [hostId]);
   const { open, setOpen, anchor, pop, style } = usePopover(360, 560);
   return (
     <div className="shrink-0 border-b border-line px-3 py-1" data-expert-monitor>
@@ -170,7 +179,7 @@ export function ExpertMonitor() {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Monitor: ${dials.map((d) => `${d.label} ${d.value}`).join(', ')}, ${loaded ?? 0} models loaded`}
+        aria-label={`Monitor: ${dials.map((d) => `${d.label} ${d.value}`).join(', ')}, ${loaded ?? 0} models loaded${host ? ` on ${host.name}` : ''}`}
       >
         {dials.length === 0
           ? <span className="flex h-10 items-center text-2xs text-ink-faint">Hardware monitors are off in Settings.</span>
@@ -178,7 +187,7 @@ export function ExpertMonitor() {
         <span className="ml-auto flex shrink-0 flex-col items-center gap-0.5 pl-2">
           <CubeIcon className="h-4 w-4 text-accent" />
           <span className="text-2xs font-semibold tabular-nums text-ink">{loaded ?? '–'}</span>
-          <span className="text-2xs text-ink-soft">Loaded</span>
+          <span className="max-w-24 truncate text-2xs text-ink-soft">{host ? `Loaded on ${host.name}` : 'Loaded'}</span>
         </span>
       </button>
       {open && createPortal(
@@ -186,7 +195,7 @@ export function ExpertMonitor() {
           <div className="mb-2 text-xs font-semibold text-ink">Hardware</div>
           <div className="mb-3 grid grid-cols-4 gap-3">{dials.map((d) => <RingDial key={d.label} {...d} size={60} />)}</div>
           <div className="mb-1 text-xs font-semibold text-ink">Loaded models</div>
-          <LocalModels />
+          {host ? <p className="text-xs text-ink-soft">{host.loaded} on {host.name}</p> : <LocalModels />}
         </div>,
         document.body,
       )}

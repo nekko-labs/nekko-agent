@@ -100,6 +100,16 @@ export function localModelRunning(engine: SimpleEngine, connected: readonly Simp
 }
 
 /**
+ * The machine the hardware monitor reads: this device if a model runs here,
+ * else the index of the first connected computer running one, else null.
+ */
+export function localModelHost(engine: SimpleEngine, connected: readonly SimpleEngine[] = []): 'here' | number | null {
+  if (localModelRunning(engine)) return 'here';
+  const at = connected.findIndex((e) => localModelRunning(e));
+  return at < 0 ? null : at;
+}
+
+/**
  * Whether Simple's Agent Monitor button means anything: a sub-agent of this
  * chat is running, or its Claude Code has background tasks. Queued messages
  * and artifacts stay out: the first are already above the message box, and the

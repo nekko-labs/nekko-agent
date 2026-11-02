@@ -69,6 +69,8 @@ app.whenReady().then(async () => {
     await scene({ mode: 'simple', local: false, changes: 0, long: false, remote: true });
     for (let i = 0; i < 30 && !(await has('[data-expert-monitor]')); i++) await sleep(200);
     check('Simple: a local model on a connected computer brings the strip', await has('[data-expert-monitor]'));
+    await sleep(600);
+    check('The strip names that computer and its model count, not this one\'s', /1\s*Loaded on Studio/.test(await text('[data-expert-monitor]')));
     await capture('a2b-simple-remote-model');
     await scene({ mode: 'expert', local: false, changes: 0, long: false });
     check('Expert with no local model: no hardware strip, no Changes', !(await has('[data-expert-monitor]')) && !(await has('[data-agent-companion="diff"]')));
