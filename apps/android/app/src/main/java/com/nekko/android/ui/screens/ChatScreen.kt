@@ -215,7 +215,8 @@ private fun ChatScreenContent(
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
     // Read with the chat and after each turn: Changes shows only with something in it.
-    LaunchedEffect(vm.sessionId, chat.running, changesAllowed) { if (changesAllowed && !chat.running) vm.loadChanges() }
+    // A short turn can start and end between two frames, so `running` alone may never appear to change.
+    LaunchedEffect(vm.sessionId, chat.running, chat.blocks.size, changesAllowed) { if (changesAllowed && !chat.running) vm.loadChanges() }
     val changesLoad by vm.changes.collectAsStateWithLifecycle()
     val changedFiles = changesLoad.changes?.let { it.files.size + it.omittedFiles } ?: 0
     val hardware by vm.hardware.state.collectAsStateWithLifecycle()

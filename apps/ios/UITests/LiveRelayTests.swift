@@ -145,7 +145,8 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(step.waitForExistence(timeout: computerWait), "the write step shows in the chat")
         sleep(2)
         app.buttons["More"].tap()
-        app.buttons["Changes"].tap()
+        // It says how many files changed, and only shows once there are some.
+        app.buttons["1 file changed"].tap()
         let note = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "nekko-itest-note.txt", "new file, 2 added")).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: computerWait), "the changed file reaches the phone")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Read only")).firstMatch.exists)
@@ -558,12 +559,12 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-1-simple")
         auditAccessibility(app, "modes-simple")
 
-        // Expert: the minimal monitor in the row under the title, and the context gauge.
+        // Expert: the context gauge. The hardware stays away here too until a local model runs.
         let expert = app.buttons["Expert: every control"]
         XCTAssertTrue(expert.waitForExistence(timeout: 5))
         expert.tap()
         let panel = app.buttons["chat.monitor"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the minimal monitor")
+        XCTAssertFalse(panel.waitForExistence(timeout: 5), "Expert has no monitor without a local model")
         XCTAssertTrue(app.buttons["chat.context"].exists, "Expert shows the context gauge")
 
         // The effort dropdown: pick High on the slider, and it says so.
@@ -578,6 +579,16 @@ final class LiveRelayTests: XCTestCase {
         // A popover goes with a tap outside it.
         app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
         XCTAssertTrue(modelEffort.waitForExistence(timeout: 5))
+
+        // A local model loads: the minimal monitor joins the row under the title.
+        app.terminate()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-expertMode", "YES", "-uiTestLocalModel"]
+        app.launch()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer again")
+        let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the chat is still in the list")
+        row.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 15), "the monitor shows while a local model runs")
 
         // A reading or two: the panel reads every 3 seconds.
         RunLoop.current.run(until: Date().addingTimeInterval(4))
@@ -607,11 +618,11 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-4-monitor")
         app.buttons["Done"].firstMatch.tap()
 
-        // Back to Simple: the panel goes.
+        // Back to Simple: the panel stays while the local model runs.
         let simple = app.buttons["Simple: everyday controls"]
         XCTAssertTrue(simple.waitForExistence(timeout: 5))
         simple.tap()
-        XCTAssertTrue(waitGone(panel, 10), "Simple mode hides the monitor")
+        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the monitor stays in Simple while a local model runs")
     }
 
     /// The plan sheet (#1474): the agent's `update_plan` shows behind the

@@ -144,7 +144,8 @@ class LiveRelayTest {
             send("write a note")
             Thread.sleep(3_000)
             waitGone(hasContentDescription("Stop"), 30_000)
-            tap(hasContentDescription("Changes"))
+            // The button says how many files changed, and only shows once there are some.
+            tap(hasContentDescription("1 file changed"))
             waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 45_000)
             waitFor(hasText("Read only", substring = true))
             shot("8-changes")
