@@ -628,11 +628,12 @@ async function measureMemory({ appUrl, mock, api, ids }) {
   const workingAfterMs = Date.now() - t;
   const streamsStarted = mock.state.streamsStarted - before;
   await sleep(500);
-  writeFileSync(join(OUT, 'memory-wall.png'), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   const onBoard = await cdp.evaluate(`[...document.querySelectorAll('.panel')].filter((p) => p.checkVisibility()).map((p) => p.firstElementChild?.querySelector('span.truncate')?.textContent ?? null)`);
   log(`GPU board: ${beams} of ${working.length} windows working after ${workingAfterMs} ms (${streamsStarted} replies started); on the board ${JSON.stringify(onBoard)}`);
   const tiles = await tileMemory(cdp);
   const overdraw = await layerOverdraw(cdp);
+  // After the reads: a capture before them added about 220 MB to the tile figure on this board.
+  writeFileSync(join(OUT, 'memory-wall.png'), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   for (const id of working) await api('chat:abort', id);
   await app.close();
   return {
