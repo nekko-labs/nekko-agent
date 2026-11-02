@@ -85,6 +85,7 @@
  "engine:settings",
  "engine:status",
  "engine:uninstall",
+ "engine:unloadAll",
  "file:read",
  "file:write",
  "files:list",

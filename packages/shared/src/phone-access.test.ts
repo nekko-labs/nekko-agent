@@ -218,14 +218,17 @@ describe('settings from a phone', () => {
 });
 
 describe('chat options from a phone', () => {
-  it('allows the model, completing and organising, not tools or isolation', () => {
+  it('allows every run setting, checking the closed ones', () => {
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { providerId: 'p', modelId: 'm' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { archivedAt: 123 }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 'xhigh' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 'ludicrous' }]))).toBe('value-invalid');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 3 }]))).toBe('value-invalid');
-    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { disabledTools: [] }]))).toBe('option-denied');
-    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { executionMode: 'local' }]))).toBe('option-denied');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { disabledTools: [] }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { executionMode: 'local' }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { workMode: 'design', autoModel: true }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { autoModel: 'yes' }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { unattended: true }]))).toBe('option-denied');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', null]))).toBe('value-invalid');
   });
 
