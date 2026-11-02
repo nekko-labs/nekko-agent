@@ -244,9 +244,15 @@ final class LiveRelayTests: XCTestCase {
         settle()
         test.tap()
         let result = app.staticTexts["settings.notify.testResult"]
-        XCTAssertTrue(result.waitForExistence(timeout: 20), "the test reports which path it took")
-        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        // A slow simulator can drop the first-run prompt, and then iOS asks here instead.
+        // Not a fixed wait: the banner checked below is only up for a few seconds.
+        let deadline = Date().addingTimeInterval(20)
+        while !result.exists, Date() < deadline {
+            if springboard.buttons["Allow"].exists { springboard.buttons["Allow"].tap() }
+        }
+        XCTAssertTrue(result.exists, "the test reports which path it took")
+        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
         let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Test notification")).firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 10), "the test notification shows over the app")
         let bannerShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
