@@ -143,9 +143,11 @@ export const PHONE_CHANNELS = [
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
+  'chat:interruptQueued',
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'chat:steer',
   'context:preview',
   'device:signOut',
   'engine:status',
@@ -399,8 +401,10 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
+  'chat:interruptQueued',
   'chat:queue',
   'chat:send',
+  'chat:steer',
   'model:unload',
   'session:create',
   'session:delete',
@@ -674,6 +678,8 @@ export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as
 
 /** `chat:queue` payload fields a phone may set (a plain string is text). */
 export const PHONE_QUEUE_KEYS = ['clientMessageId', 'images', 'skill', 'text'] as const;
+/** The model a phone may name when it interrupts with a queued prompt. */
+export const PHONE_BRAIN_KEYS = ['modelId', 'providerId'] as const;
 
 /**
  * Chat modes a phone may choose, for new chats or for one chat. YOLO is
@@ -908,6 +914,21 @@ export function screenPhoneCall(
       }
       return {};
     }
+    case 'chat:steer':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'string' || !args[1].trim()) throw new PhoneAccessError('value-invalid', 'message');
+      return {};
+    case 'chat:interruptQueued': {
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'number' || !Number.isInteger(args[1]) || args[1] < 0) throw new PhoneAccessError('value-invalid', 'queue index');
+      const brain = args[2];
+      if (brain === undefined || brain === null) return {};
+      if (!isObj(brain)) throw new PhoneAccessError('value-invalid', 'model');
+      for (const key of Object.keys(brain)) {
+        if (!(PHONE_BRAIN_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+      }
+      return {};
+    }
     case 'task:runNow':
     case 'workflow:run':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', channel === 'task:runNow' ? 'task id' : 'workflow id');
@@ -1032,6 +1053,7 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'skills:runnable':
       return Array.isArray(result) ? result.map((s) => pick(s, PHONE_SKILL_VIEW)) : [];
     case 'session:get':
+    case 'chat:steer':
       return phoneSessionView(result);
     case 'changes:list':
       return phoneChangesView(result);
@@ -1305,6 +1327,7 @@ export function phoneAccessPolicy() {
     monitorView: { ...PHONE_MONITOR_VIEW },
     monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
+    brainKeys: [...PHONE_BRAIN_KEYS],
     expertMonitor: {
       systemView: [...PHONE_SYSTEM_VIEW],
       tempsView: [...PHONE_TEMPS_VIEW],

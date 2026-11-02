@@ -592,6 +592,8 @@ fun ChatScreen(
                     prompts = prompts,
                     queuedPrompts = chat.queuedPrompts,
                     onEditQueued = vm::editQueued,
+                    onNextStep = vm::sendQueuedAtNextStep,
+                    onInterrupt = vm::interruptQueued,
                     onNewAgent = onNewChat,
                     onTerminal = vm::openTerminals,
                 )

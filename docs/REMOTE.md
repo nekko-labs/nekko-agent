@@ -1,6 +1,6 @@
 # Phone remote control
 
-Drive the Nekko Agent running on your computer from your phone: start and manage chats, watch and steer
+Drive the Nekko Agent running on your computer from your phone: start and manage chats, watch and guide
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
 
@@ -229,6 +229,9 @@ both need the update; an older app cannot connect to an updated computer.
 > **Beyond the chat** (iPhone): the phone is a remote for the agent, not a second desktop.
 > - **Edit the queue:** a follow-up sent while a reply runs waits under **Queued** with Edit and
 >   Remove. An edit only lands if that prompt hasn't started yet; otherwise nothing changes.
+> - **Don't wait:** while the reply runs, each queued message also has **Next step** (the agent reads
+>   it at its next step and keeps going) and **Interrupt** (the reply stops and this starts now).
+>   Next step is text only, so a message with photos or a skill offers Interrupt.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
 > - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.

@@ -122,7 +122,7 @@ function RunDashboard({ run, onOpenChat }: { run: TrainingRun; onOpenChat: (sess
 
       <p className="text-xs leading-snug text-(--ink-faint)">
         A data-scientist agent trains a model for this purpose: it runs experiments (each dot in the maze), keeps the best one,
-        and saves the trained model plus its harness files as artifacts. Watch it live below, or steer it with a hint.
+        and saves the trained model plus its harness files as artifacts. Watch it live below, or guide it with a hint.
       </p>
 
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-(--ink-soft)">
@@ -223,7 +223,7 @@ function NewRunForm({
       <div>
         <h1 className="view-title">New training run</h1>
         <p className="mt-1 text-xs text-(--ink-soft)">
-          Say what the model is for; the agent handles the rest. Every attempt shows up live in the idea maze, and you can steer it mid-run.
+          Say what the model is for; the agent handles the rest. Every attempt shows up live in the idea maze, and you can guide it mid-run.
         </p>
       </div>
 
