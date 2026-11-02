@@ -1,6 +1,7 @@
 package com.nekko.android.ui.components
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Computer
@@ -45,7 +46,34 @@ fun computerIconRes(name: String?): Int? = when (name) {
 }
 
 /** A picker's spoken name for an icon. */
-fun computerIconLabel(name: String): String = if (name == "gpu") "GPU" else name.replaceFirstChar { it.uppercase() }
+@StringRes
+fun computerIconLabel(name: String): Int = when (name) {
+    "laptop" -> R.string.computer_icon_name_laptop
+    "desktop" -> R.string.computer_icon_name_desktop
+    "tower" -> R.string.computer_icon_name_tower
+    "mini" -> R.string.computer_icon_name_mini
+    "server" -> R.string.computer_icon_name_server
+    "rack" -> R.string.computer_icon_name_rack
+    "cloud" -> R.string.computer_icon_name_cloud
+    "gpu" -> R.string.computer_icon_name_gpu
+    "chip" -> R.string.computer_icon_name_chip
+    "home" -> R.string.computer_icon_name_home
+    "office" -> R.string.computer_icon_name_office
+    "lab" -> R.string.computer_icon_name_lab
+    "bolt" -> R.string.computer_icon_name_bolt
+    "moon" -> R.string.computer_icon_name_moon
+    "sun" -> R.string.computer_icon_name_sun
+    "star" -> R.string.computer_icon_name_star
+    "flame" -> R.string.computer_icon_name_flame
+    "leaf" -> R.string.computer_icon_name_leaf
+    "globe" -> R.string.computer_icon_name_globe
+    "cube" -> R.string.computer_icon_name_cube
+    "rocket" -> R.string.computer_icon_name_rocket
+    "shield" -> R.string.computer_icon_name_shield
+    "terminal" -> R.string.computer_icon_name_terminal
+    "cat" -> R.string.computer_icon_name_cat
+    else -> R.string.computer_icon_none
+}
 
 /** A computer's icon beside its name, or nothing at all when it has none. Decorative: the name says which. */
 @Composable

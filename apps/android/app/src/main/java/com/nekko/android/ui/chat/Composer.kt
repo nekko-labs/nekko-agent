@@ -509,7 +509,7 @@ private fun QueueList(
             }
         }
         if (onInterrupt != null && prompts.getOrNull(i) != null) {
-            TextButton(onClick = { run { onInterrupt(i) } }, modifier = Modifier.padding(start = 20.dp).heightIn(min = 36.dp).testTag("queue.interrupt.$i")) { Text("Interrupt and send now") }
+            TextButton(onClick = { run { onInterrupt(i) } }, modifier = Modifier.padding(start = 20.dp).heightIn(min = 36.dp).testTag("queue.interrupt.$i")) { Text(stringResource(R.string.chat_interrupt_send_now)) }
         }
     }
     editing?.let { i ->

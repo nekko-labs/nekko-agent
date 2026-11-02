@@ -196,18 +196,20 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 }
             }
             if (active) {
-                SectionHeader("Icon")
+                SectionHeader(stringResource(R.string.computer_icon))
                 NCard(Modifier.padding(horizontal = 16.dp)) {
                     val online = s.conn == RelayState.ONLINE
+                    val changeIcon = stringResource(R.string.computer_icon_change)
+                    val iconName = stringResource(c.icon?.let(::computerIconLabel) ?: R.string.computer_icon_none)
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(enabled = online, role = Role.Button, onClickLabel = "Change the icon") { pickingIcon = true }.heightIn(min = 48.dp)
-                            .semantics(mergeDescendants = true) { stateDescription = c.icon?.let(::computerIconLabel) ?: "None" }.testTag("computer.icon"),
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(enabled = online, role = Role.Button, onClickLabel = changeIcon) { pickingIcon = true }.heightIn(min = 48.dp)
+                            .semantics(mergeDescendants = true) { stateDescription = iconName }.testTag("computer.icon"),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Shown on every device", style = MaterialTheme.typography.bodyMedium, color = if (online) p.ink else p.inkFaint, modifier = Modifier.weight(1f))
-                        if (c.icon == null) Text("None", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft) else ComputerIcon(c.icon, size = 20.dp, tint = p.ink)
+                        Text(stringResource(R.string.computer_icon_shown), style = MaterialTheme.typography.bodyMedium, color = if (online) p.ink else p.inkFaint, modifier = Modifier.weight(1f))
+                        if (c.icon == null) Text(iconName, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft) else ComputerIcon(c.icon, size = 20.dp, tint = p.ink)
                     }
-                    if (!online) Text("Connect to change this.", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+                    if (!online) Text(stringResource(R.string.computer_icon_connect), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                     iconError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
                 }
                 val models = s.providers.filter { it.enabled }.flatMap { s.models[it.id].orEmpty() }
@@ -328,28 +330,29 @@ private fun IconDialog(current: String?, onDismiss: () -> Unit, onPick: (String)
     val p = Nekko.palette
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Icon") },
+        title = { Text(stringResource(R.string.computer_icon)) },
         text = {
             FlowRow(Modifier.verticalScroll(rememberScrollState()).testTag("computer.iconPicker"), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 (listOf("") + COMPUTER_ICONS).forEach { name ->
                     val on = name == current.orEmpty()
+                    val label = stringResource(if (name.isEmpty()) R.string.computer_icon_none else computerIconLabel(name))
                     Box(
                         Modifier.size(48.dp).clip(RoundedCornerShape(10.dp))
                             .background(if (on) p.accentSoft else p.surface2)
                             .clickable(role = Role.Button) { onPick(name) }
                             .semantics {
-                                contentDescription = if (name.isEmpty()) "None" else computerIconLabel(name)
+                                contentDescription = label
                                 selected = on
                             }
                             .testTag("computer.icon.${name.ifEmpty { "none" }}"),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (name.isEmpty()) Text("None", style = MaterialTheme.typography.labelSmall, color = p.ink) else ComputerIcon(name, size = 24.dp, tint = p.ink)
+                        if (name.isEmpty()) Text(label, style = MaterialTheme.typography.labelSmall, color = p.ink) else ComputerIcon(name, size = 24.dp, tint = p.ink)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
     )
 }
 

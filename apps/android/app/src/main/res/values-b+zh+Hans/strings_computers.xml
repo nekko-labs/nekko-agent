@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A computer's icon, and interrupting from the queue. -->
+<resources>
+    <string name="computer_icon">图标</string>
+    <string name="computer_icon_none">无</string>
+    <string name="computer_icon_shown">在所有设备上显示</string>
+    <string name="computer_icon_connect">连接后即可更改。</string>
+    <string name="computer_icon_change">更改图标</string>
+    <string name="chat_interrupt_send_now">中断并立即发送</string>
+    <string name="computer_icon_name_laptop">笔记本电脑</string>
+    <string name="computer_icon_name_desktop">台式机</string>
+    <string name="computer_icon_name_tower">塔式机</string>
+    <string name="computer_icon_name_mini">迷你主机</string>
+    <string name="computer_icon_name_server">服务器</string>
+    <string name="computer_icon_name_rack">机架</string>
+    <string name="computer_icon_name_cloud">云</string>
+    <string name="computer_icon_name_gpu">GPU</string>
+    <string name="computer_icon_name_chip">芯片</string>
+    <string name="computer_icon_name_home">家</string>
+    <string name="computer_icon_name_office">办公室</string>
+    <string name="computer_icon_name_lab">实验室</string>
+    <string name="computer_icon_name_bolt">闪电</string>
+    <string name="computer_icon_name_moon">月亮</string>
+    <string name="computer_icon_name_sun">太阳</string>
+    <string name="computer_icon_name_star">星星</string>
+    <string name="computer_icon_name_flame">火焰</string>
+    <string name="computer_icon_name_leaf">树叶</string>
+    <string name="computer_icon_name_globe">地球</string>
+    <string name="computer_icon_name_cube">立方体</string>
+    <string name="computer_icon_name_rocket">火箭</string>
+    <string name="computer_icon_name_shield">盾牌</string>
+    <string name="computer_icon_name_terminal">终端</string>
+    <string name="computer_icon_name_cat">猫</string>
+</resources>
