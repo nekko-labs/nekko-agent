@@ -163,6 +163,11 @@ class BeyondChatTest {
         chat.interruptQueued(0)
     }
 
+    @Test fun `only run settings that are set read back`() {
+        val read = com.nekko.protocol.RunOption.values(buildJsonObject { put("autoModel", true); put("title", "x"); put("offline", JsonNull) })
+        assertEquals(setOf("autoModel"), read.keys)
+    }
+
     @Test fun `forks before a prompt with its text, or after a reply`() = runTest {
         val c = computer()
         val chat = chat(c)

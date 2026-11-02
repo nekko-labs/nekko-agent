@@ -277,6 +277,8 @@ data class Session(
     val clientMessageIds: List<String> = emptyList(),
     /** A turn is running on the computer (`activeRun`): a prompt sent now waits in its queue. */
     val running: Boolean = false,
+    /** The chat's run settings ([RunOption]). */
+    val runOptions: Map<String, JsonElement> = emptyMap(),
 ) {
     companion object {
         fun from(e: JsonElement?): Session? {
@@ -297,6 +299,7 @@ data class Session(
                 mode = PcSettings.ChatMode.of(o.str("mode")),
                 clientMessageIds = o["clientMessageIds"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 running = o["activeRun"].let { it != null && it !is JsonNull },
+                runOptions = RunOption.values(o),
             )
         }
     }

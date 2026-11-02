@@ -373,6 +373,8 @@ public struct Session: Equatable, Sendable {
     public var effort: String?
     /// The plan the agent wrote for this chat (`update_plan`, or Claude Code's own plan calls).
     public var agentPlan: [PlanStep] = []
+    /// The chat's run settings (`RunOption`).
+    public var runOptions: [String: JSONValue] = [:]
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -388,7 +390,8 @@ public struct Session: Equatable, Sendable {
             clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
             running: v["activeRun"].map { !$0.isNull } ?? false,
             effort: v.str("effort"),
-            agentPlan: PlanStep.list(v["agentPlan"]))
+            agentPlan: PlanStep.list(v["agentPlan"]),
+            runOptions: RunOption.values(of: v))
     }
 }
 
