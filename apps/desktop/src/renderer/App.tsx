@@ -313,13 +313,15 @@ export function App() {
               </button>
             ))}
             </div>
-            </div>
-            <div className="rail-space-after" aria-hidden="true" />
-            {/* Not a destination: it opens the Send feedback sheet over the current view. */}
+            {/* Not a destination: it opens the Send feedback sheet over the current view,
+                so a divider sets it apart below the last destination. */}
+            <div className="rail-divider" aria-hidden="true" />
             <button className="nav-item rail-feedback" aria-label={t('nav.feedback')} title={t('nav.feedback')} onClick={openFeedback} data-testid="rail-feedback">
               <span className="grid h-10 w-10 shrink-0 place-items-center text-ink-faint"><FeedbackIcon className="h-[18px] w-[18px]" /></span>
               <span className="rail-label text-sm font-medium">{t('nav.feedback')}</span>
             </button>
+            </div>
+            <div className="rail-space-after" aria-hidden="true" />
           </div>
         </nav>
 
