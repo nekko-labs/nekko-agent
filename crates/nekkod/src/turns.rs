@@ -1375,7 +1375,22 @@ impl Turns {
                 persist(store, session, incognito).await;
             }
             match nekko_harness::Session::spawn(spec) {
-                Ok(child) => slot.session = Some(child),
+                Ok(mut child) => {
+                    // How many background tasks it runs, for the chat to show between turns.
+                    let harness = Arc::downgrade(&self.harness);
+                    let hub = lock(&self.wakes).get(&session_id).map(|(_, hub)| hub.clone());
+                    let id = session_id.clone();
+                    child.on_background_change(move |n| {
+                        if let Some(h) = harness.upgrade() {
+                            h.note_background(&id, n);
+                        }
+                        if let Some(hub) = &hub {
+                            let event = json!({ "type": "claude_code_background", "sessionId": id, "tasks": n });
+                            hub.publish("agent:event", event, false);
+                        }
+                    });
+                    slot.session = Some(child);
+                }
                 Err(e) => return fail(&format!("Could not start Claude Code: {e}"), &history),
             }
         }

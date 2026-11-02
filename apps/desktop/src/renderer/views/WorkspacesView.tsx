@@ -9,7 +9,7 @@ import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { StatusIcon, WorkspaceCard, agentStatusOfLane, type AgentStatus } from '../components/WorkspaceCard.js';
+import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
@@ -206,6 +206,20 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
   const [doneMenu, setDoneMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  // The chat whose card title is a text field, from the pencil or the menu's Rename.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const renameChat = async (id: string, typed: string | null) => {
+    setRenamingId(null);
+    const title = chatRenameTitle(typed, sessions.find((s) => s.id === id)?.title);
+    if (!title) return;
+    try {
+      const saved = await window.nekko.setSessionOptions(id, { title });
+      if (!saved) throw new Error('Chat no longer exists');
+      // An open pane's header shows its own copy of the chat.
+      window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id, session: saved } }));
+      await refreshSessions();
+    } catch (e) { useStore.getState().pushToast('error', `Could not rename the chat: ${e instanceof Error ? e.message : String(e)}`); }
+  };
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
@@ -762,7 +776,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
-                        draggable={reorderable || !!s || !!entry.t}
+                        draggable={(reorderable || !!s || !!entry.t) && !(s && s.id === renamingId)}
                         {...{ [CARD_ATTR]: entry.key }}
                         onDragStart={(e) => {
                           if (reorderable) startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id });
@@ -797,6 +811,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                             setMobileNav(false);
                           }}
                           onClose={() => (w ? archiveWorkspace(w.id) : s ? archiveChat(s.id) : undefined)}
+                          renaming={!!s && s.id === renamingId}
+                          onRenameStart={s ? () => setRenamingId(s.id) : undefined}
+                          onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
                         {kids.map((kid) => (
@@ -880,6 +897,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
+          <ContextAction disabled={menu.ids.length !== 1} onClick={() => { setRenamingId(menu.ids[0]); setMenu(null); }}>Rename</ContextAction>
           <ContextAction onClick={() => void runAction('complete',menu.ids)}>Mark as completed</ContextAction>
           <ContextAction onClick={() => setMenu({...menu, model:true})}>Change model</ContextAction>
           <ContextAction disabled={!menu.ids.some(id => statuses.has(id))} onClick={() => void runAction('stop',menu.ids)}>Stop{menu.ids.length > 1 ? ' all' : ''}</ContextAction>

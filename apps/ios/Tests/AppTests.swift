@@ -1475,3 +1475,15 @@ final class LastFolderPrefsTests: XCTestCase {
         XCTAssertEqual(again.lastFolder["studio"], "personal")
     }
 }
+
+final class WidgetLanguageTests: XCTestCase {
+    /// The Live Activity runs in the extension, which resolves its language on its own: without
+    /// English declared there, an English-first phone got its second language.
+    func testTheExtensionFollowsAnEnglishFirstPhone() throws {
+        let url = try XCTUnwrap(Bundle.main.builtInPlugInsURL?.appendingPathComponent("NekkoWidgets.appex"))
+        let widgets = try XCTUnwrap(Bundle(url: url))
+        XCTAssertEqual(Bundle.preferredLocalizations(from: widgets.localizations, forPreferences: ["en-US", "ja-US"]).first, "en")
+        XCTAssertEqual(Bundle.preferredLocalizations(from: widgets.localizations, forPreferences: ["en-US"]).first, "en")
+        XCTAssertEqual(Bundle.preferredLocalizations(from: widgets.localizations, forPreferences: ["ja-JP", "en-US"]).first, "ja")
+    }
+}
