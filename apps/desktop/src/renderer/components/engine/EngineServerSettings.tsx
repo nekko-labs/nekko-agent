@@ -131,6 +131,14 @@ export function EngineServerSettings({
           />
         </Field>
 
+        <Field label="Let connected computers use these models" hint="Off, computers connected to this one can't run your local models. They can still run agents here, and this setting can only be changed on this computer.">
+          <Toggle value={draft.shareWithComputers !== false} onChange={(v) => setDraft({ ...draft, shareWithComputers: v })} label="Let connected computers use these models" />
+        </Field>
+
+        <Field label="Connected devices choose model settings" hint="On, a connected computer or phone can set context, temperature and how a model loads. Off, this server's saved settings are used, and they can only be changed here.">
+          <Toggle value={draft.clientModelSettings !== false} onChange={(v) => setDraft({ ...draft, clientModelSettings: v })} label="Connected devices choose model settings" />
+        </Field>
+
         <Field label="Load on demand" hint="A request for a model that is not loaded loads it, the way LM Studio does.">
           <Toggle value={draft.jitLoad} onChange={(v) => setDraft({ ...draft, jitLoad: v })} label="Load on demand" />
         </Field>
