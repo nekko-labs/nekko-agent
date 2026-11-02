@@ -1,5 +1,6 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,7 +49,7 @@ import com.nekko.android.ui.theme.Nekko
 /** "Step 2 of 3" over each first-run screen. */
 @Composable
 internal fun StepLabel(step: Int) {
-    Text("Step $step of 3", style = MaterialTheme.typography.labelLarge, color = Nekko.palette.inkSoft)
+    Text(stringResource(R.string.chats_step_of, step), style = MaterialTheme.typography.labelLarge, color = Nekko.palette.inkSoft)
 }
 
 /** A first-run page: Skip at the top when offered, the content scrolling, the buttons pinned at the bottom. */
@@ -57,7 +58,7 @@ private fun FirstRunPage(onSkip: (() -> Unit)?, buttons: @Composable () -> Unit,
     val p = Nekko.palette
     Column(Modifier.fillMaxSize().background(p.paper).statusBarsPadding().navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterEnd) {
-            if (onSkip != null) TextButton(onClick = onSkip, modifier = Modifier.testTag("firstRun.skip")) { Text("Skip") }
+            if (onSkip != null) TextButton(onClick = onSkip, modifier = Modifier.testTag("firstRun.skip")) { Text(stringResource(R.string.chats_skip)) }
         }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
@@ -76,7 +77,7 @@ fun FirstRunIntro(onContinue: () -> Unit, onSkip: () -> Unit) {
     FirstRunPage(
         onSkip = onSkip,
         buttons = {
-            Button(onClick = onContinue, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("firstRun.continue")) { Text("Continue") }
+            Button(onClick = onContinue, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("firstRun.continue")) { Text(stringResource(R.string.chats_continue)) }
         },
     ) {
         StepLabel(1)
@@ -85,16 +86,16 @@ fun FirstRunIntro(onContinue: () -> Unit, onSkip: () -> Unit) {
             Image(painterResource(R.drawable.splash_mark), contentDescription = null, modifier = Modifier.requiredSize(196.dp))
         }
         Text(
-            "Your agent, in your pocket",
+            stringResource(R.string.chats_intro_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = p.ink,
             modifier = Modifier.semantics { heading() },
         )
-        Text("Nekko Agent runs on your computer. This app lets you drive it from anywhere.", style = MaterialTheme.typography.bodyLarge, color = p.inkSoft)
-        Point(Icons.Filled.Forum, "Follow chats as they stream", "Watch your computer work, and start new chats from here.")
-        Point(Icons.Filled.VerifiedUser, "Approve tools and answer questions", "When the agent needs you, you decide.")
-        Point(Icons.Filled.Lock, "Private by design", "Everything is end-to-end encrypted between this phone and your computer.")
+        Text(stringResource(R.string.chats_intro_body), style = MaterialTheme.typography.bodyLarge, color = p.inkSoft)
+        Point(Icons.Filled.Forum, stringResource(R.string.chats_intro_follow_title), stringResource(R.string.chats_intro_follow_text))
+        Point(Icons.Filled.VerifiedUser, stringResource(R.string.chats_intro_approve_title), stringResource(R.string.chats_intro_approve_text))
+        Point(Icons.Filled.Lock, stringResource(R.string.chats_intro_private_title), stringResource(R.string.chats_intro_private_text))
     }
 }
 
@@ -122,33 +123,34 @@ fun FirstRunNotifications(computer: String, asking: Boolean, onAllow: () -> Unit
         onSkip = null,
         buttons = {
             Button(onClick = onAllow, enabled = !asking, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("firstRun.allowNotifications")) {
-                Text("Allow notifications")
+                Text(stringResource(R.string.chats_allow_notifications))
             }
-            TextButton(onClick = onNotNow, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("firstRun.notNow")) { Text("Not now") }
+            TextButton(onClick = onNotNow, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("firstRun.notNow")) { Text(stringResource(R.string.chats_not_now)) }
         },
     ) {
         StepLabel(3)
         Text(
-            "Know when your computer needs you",
+            stringResource(R.string.chats_notify_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = p.ink,
             modifier = Modifier.semantics { heading() },
         )
         Text(
-            "A notification when a tool waits for your approval, when the agent asks a question, and when a reply finishes or fails.",
+            stringResource(R.string.chats_notify_body),
             style = MaterialTheme.typography.bodyLarge,
             color = p.inkSoft,
         )
+        val previewDesc = stringResource(R.string.chats_notify_preview_desc)
         Column(
-            Modifier.clearAndSetSemantics { contentDescription = "Preview: an approval with Deny, and a finished reply." },
+            Modifier.clearAndSetSemantics { contentDescription = previewDesc },
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            NotificationPreview("Needs your approval", "$computer · Open Nekko to see it.", deny = true)
-            NotificationPreview("Reply ready", "$computer · Open Nekko to see it.", deny = false)
+            NotificationPreview(stringResource(R.string.chats_notify_needs_approval), stringResource(R.string.chats_notify_preview_text, computer), deny = true)
+            NotificationPreview(stringResource(R.string.chats_notify_reply_ready), stringResource(R.string.chats_notify_preview_text, computer), deny = false)
         }
         Text(
-            "Notifications say only what happened, never what your chats say. You can change them in Settings.",
+            stringResource(R.string.chats_notify_footer),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkSoft,
         )
@@ -169,7 +171,7 @@ private fun NotificationPreview(title: String, text: String, deny: Boolean) {
             }
             Column(Modifier.weight(1f)) {
                 Row {
-                    Text("Nekko Agent · now", style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
+                    Text(stringResource(R.string.chats_notify_now), style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
                 }
                 Text(title, style = MaterialTheme.typography.titleSmall, color = p.ink)
                 Text(text, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
@@ -177,7 +179,7 @@ private fun NotificationPreview(title: String, text: String, deny: Boolean) {
         }
         if (deny) {
             Row(Modifier.padding(start = 38.dp)) {
-                Text("Deny", style = MaterialTheme.typography.labelLarge, color = p.danger, modifier = Modifier.width(80.dp))
+                Text(stringResource(R.string.chats_deny), style = MaterialTheme.typography.labelLarge, color = p.danger, modifier = Modifier.width(80.dp))
             }
         }
     }

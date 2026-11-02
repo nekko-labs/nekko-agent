@@ -27,7 +27,7 @@ step-up. The only channels the iPhone uses and Android doesn't are `machine:summ
 | 10 | **The agent's work as rows**: subagent groups, watches (`session:watches`), desktop-style status icons | `AgentRows.swift`, `AgentRowViews.swift`, `ChatStatusIcon.swift` | Done 2026-10-31 (`AgentRows.kt`, `AgentRowViews.kt`, `ChatStatusIcon`) | M |
 | 11 | **Chat list view menu**: grouping, draggable / reorderable groups | `ChatListLayout.swift` | Done 2026-10-31 (`ChatListLayout.kt`, view menu in `ChatsScreen`) | M |
 | 12 | **Always-on dictation**: segments at pauses, "Nekko, …" voice commands, Hold to talk, first-open video | `VoiceSegmenter`, `VoiceCommands`, `HoldToTalk`, `VoiceRunner`, `VoiceIntroView` | One 30 s recording per tap | L |
-| 13 | **Languages and theme presets** (T201a remainder) | String Catalogs (7 languages), `ThemePresets.swift` | Only the mode strings are translated; presets drawn as mode + accent | L (mechanical) |
+| 13 | **Languages and theme presets** (T201a remainder) | String Catalogs (7 languages), `ThemePresets.swift` | Done 2026-11-02 (string resources in seven languages, `ThemePresets.kt`, Appearance → Theme and Language) | L (mechanical) |
 | 14 | **A computer's page** (`machine:summary`, round trip, tiles) | `ComputerViews.swift`, `MachineModel.swift` | Done 2026-10-31 (`ComputerScreen`, `MachineController`, `Machine.kt`) | M |
 | 15 | **Nekko Cloud machines** | `CloudViews.swift`, `CloudSync.swift`, `CloudDeviceKey.swift` | None | L |
 | 16 | **First run** (three steps, notification permission after pairing) | `FirstRunView.swift` | None | S |

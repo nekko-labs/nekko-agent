@@ -24,7 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
-import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, RunnerSettings, RunnerView } from './runners.js';
+import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -331,6 +331,12 @@ export const IpcChannels = {
    * makes it the endpoint a Slack app or a git provider webhook posts to.
    */
   workflowEvent: 'workflow:event',
+  /** The CI runner image builder (T226), served by nekkod; never by a phone. */
+  runnerImageStatus: 'runner:imageStatus',
+  runnerImagePlan: 'runner:imagePlan',
+  runnerImageBuild: 'runner:imageBuild',
+  runnerImageResume: 'runner:imageResume',
+  runnerImageCancel: 'runner:imageCancel',
   /** CI runners (T213), served by nekkod's runner supervisor; never by a phone. */
   runnerList: 'runner:list',
   runnerConnect: 'runner:connect',
@@ -410,6 +416,7 @@ export const IpcChannels = {
   claudePolicy: 'claude:policy',
   claudeCapability: 'claude:capability',
   claudePlanUsage: 'claude:planUsage',
+  claudeBackgroundTasks: 'claude:backgroundTasks',
   claudeCodeStatus: 'claude:codeStatus',
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
@@ -472,6 +479,8 @@ export const IpcEvents = {
   backgroundUpdated: 'background:updated',
   trainingUpdated: 'training:updated',
   workflowsUpdated: 'workflows:updated',
+  /** The image builder's `ImageView`, after any change. */
+  runnerImageChanged: 'runner:imageChanged',
   /** Every runner's `RunnerView`, after any change. */
   runnerChanged: 'runner:changed',
   /** The GitHub connect moved on: a `GithubSetupView`. */
@@ -1085,6 +1094,12 @@ export interface NekkoApi {
   listWorkflowSkillDefs(): Promise<import('./skills.js').SkillDef[]>;
   /** Offer an event to every listening workflow; returns the runs it started. */
   dispatchWorkflowEvent(event: WorkflowEvent): Promise<WorkflowRun[]>;
+  /** Builds the runner VM image on this Mac. Rejects with a sentence, like the runner calls. */
+  imageStatus(): Promise<ImageView>;
+  imagePlan(): Promise<ImagePlan>;
+  buildImage(req: ImageBuildRequest): Promise<ImageView>;
+  resumeImage(): Promise<ImageView>;
+  cancelImage(): Promise<ImageView>;
   /** CI runners on this Mac. Rejects where the daemon serves none (not macOS, or an older daemon). */
   listRunners(): Promise<RunnerView[]>;
   connectRunner(req: ConnectRequest): Promise<RunnerView>;
@@ -1211,6 +1226,8 @@ export interface NekkoApi {
   getClaudeCapability(providerId: string, capability: import('./claude-policy.js').ClaudeCapability): Promise<import('./claude-policy.js').ClaudeCapabilityStatus>;
   /** Plan usage for a Claude provider: none today; example data in the dev-only preview. */
   getClaudePlanUsage(providerId: string): Promise<import('./claude-policy.js').ClaudePlanUsageStatus>;
+  /** How many background tasks each Claude Agent chat's Claude Code still runs, by chat id (chats with none are left out). */
+  claudeBackgroundTasks(): Promise<Record<string, number>>;
   /**
    * Whether the user's Claude Code is installed and signed in; records it for
    * `providerId`'s policy rows. Before a provider is saved, `account` names the
@@ -1276,6 +1293,7 @@ export interface NekkoApi {
   onTrainingUpdated(cb: (runs: TrainingRun[]) => void): () => void;
   /** Fires when a workflow is edited or any run advances a step. */
   onWorkflowsUpdated(cb: (snapshot: WorkflowsSnapshot) => void): () => void;
+  onImageChanged(cb: (view: ImageView) => void): () => void;
   onRunnersChanged(cb: (views: RunnerView[]) => void): () => void;
   onGithubSetupChanged(cb: (view: GithubSetupView) => void): () => void;
   /** Fires when subscription limits are captured or polled for any token key. */

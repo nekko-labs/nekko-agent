@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -54,7 +56,7 @@ fun DictationSection(deps: SettingsDeps) {
     val choice by prefs.flow(Dictation.ENGINE).collectAsStateWithLifecycle()
     val language by prefs.flow(Dictation.LANGUAGE).collectAsStateWithLifecycle()
     val c by deps.repo.state.collectAsStateWithLifecycle()
-    val name = c.active?.name ?: "your computer"
+    val name = c.active?.name ?: stringResource(R.string.your_computer)
     val online = c.conn == RelayState.ONLINE
 
     // Whether the computer's Whisper is ready, asked when this screen shows.
@@ -65,7 +67,7 @@ fun DictationSection(deps: SettingsDeps) {
         }.getOrNull()
     }
 
-    SectionHeader("Dictation")
+    SectionHeader(stringResource(R.string.settings_dictation))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             Row(
@@ -77,28 +79,28 @@ fun DictationSection(deps: SettingsDeps) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Microphone in chats", style = MaterialTheme.typography.bodyLarge, color = p.ink)
-                    Text("Speak a message; it goes in the box and you press Send", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                    Text(stringResource(R.string.settings_mic), style = MaterialTheme.typography.bodyLarge, color = p.ink)
+                    Text(stringResource(R.string.settings_mic_detail), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                 }
                 Switch(checked = on, onCheckedChange = null)
             }
             if (on) {
                 HorizontalDivider(color = p.line, modifier = Modifier.padding(vertical = 4.dp))
-                Text("Turn speech into text with", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
+                Text(stringResource(R.string.settings_speech_with), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
                 Column(Modifier.selectableGroup()) {
                     EngineRow(
-                        "$name when ready",
-                        "Nekko Voice (Whisper) on $name, end-to-end encrypted. Otherwise this phone.",
+                        stringResource(R.string.settings_engine_computer_first, name),
+                        stringResource(R.string.settings_engine_computer_first_detail, name),
                         choice == EngineChoice.COMPUTER_FIRST,
                     ) { prefs.set(Dictation.ENGINE, EngineChoice.COMPUTER_FIRST) }
                     EngineRow(
-                        "$name only",
-                        "The audio only ever goes to $name. Up to 30 seconds at a time.",
+                        stringResource(R.string.settings_engine_computer_only, name),
+                        stringResource(R.string.settings_engine_computer_only_detail, name),
                         choice == EngineChoice.COMPUTER_ONLY,
                     ) { prefs.set(Dictation.ENGINE, EngineChoice.COMPUTER_ONLY) }
                     EngineRow(
-                        "This phone",
-                        "Android’s speech recognizer. Depending on the phone, the audio may go to Google.",
+                        stringResource(R.string.settings_engine_phone),
+                        stringResource(R.string.settings_engine_phone_detail),
                         choice == EngineChoice.PHONE,
                     ) { prefs.set(Dictation.ENGINE, EngineChoice.PHONE) }
                 }
@@ -107,8 +109,8 @@ fun DictationSection(deps: SettingsDeps) {
                         value = language,
                         onValueChange = { prefs.set(Dictation.LANGUAGE, it.trim().take(16)) },
                         singleLine = true,
-                        label = { Text("Phone recognizer language") },
-                        placeholder = { Text("The phone’s own, or e.g. it-IT") },
+                        label = { Text(stringResource(R.string.settings_recognizer_language)) },
+                        placeholder = { Text(stringResource(R.string.settings_recognizer_language_hint)) },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     )
                 }
@@ -117,9 +119,9 @@ fun DictationSection(deps: SettingsDeps) {
         if (on && choice != EngineChoice.PHONE) {
             val status = when {
                 c.active == null -> null
-                pc == null -> "Checking Nekko Voice on $name…"
-                pc!!.ready -> "Nekko Voice is ready on $name."
-                else -> pc!!.whyNot(name) + if (choice == EngineChoice.COMPUTER_FIRST) " This phone’s recognizer is used meanwhile." else ""
+                pc == null -> stringResource(R.string.settings_voice_checking, name)
+                pc!!.ready -> stringResource(R.string.settings_voice_ready, name)
+                else -> pc!!.whyNot(name) + if (choice == EngineChoice.COMPUTER_FIRST) " " + stringResource(R.string.settings_voice_meanwhile) else ""
             }
             status?.let {
                 Text(
@@ -131,7 +133,7 @@ fun DictationSection(deps: SettingsDeps) {
             }
         }
         Text(
-            "Saved on this phone. Nothing is recorded until you tap the microphone, the audio is kept in memory only, and dictated text is never sent without you pressing Send. $name uses the language set in its own Nekko Voice settings.",
+            stringResource(R.string.settings_dictation_footer, name),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
@@ -157,6 +159,6 @@ private fun EngineRow(title: String, detail: String, selected: Boolean, onClick:
             Text(title, style = MaterialTheme.typography.bodyLarge, color = p.ink)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
-        if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = p.accent, modifier = Modifier.size(20.dp))
+        if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.settings_selected), tint = p.accent, modifier = Modifier.size(20.dp))
     }
 }

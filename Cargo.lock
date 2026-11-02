@@ -1950,6 +1950,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "block2",
+ "ed25519-dalek",
  "futures-util",
  "nekko-net",
  "objc2",

@@ -13,8 +13,7 @@ cuda = ["nekko-decide/cuda"]
 # Developer-only settings (`npm run dev`'s daemon, stage-daemon.mjs): the Claude
 # policy preview. Never on in the release build the app packages.
 dev-tools = []
-# The runner VM spike example only: the NAT's host-to-guest port forward
-# (127.0.0.1:2222 -> guest:22). Never on in any shipped build (decision 0022).
+# Builds the runner VM spike example, which job code never reaches (decision 0022).
 spike = []
 
 [dependencies]

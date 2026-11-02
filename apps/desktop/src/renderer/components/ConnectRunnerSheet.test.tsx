@@ -8,7 +8,7 @@ vi.mock('./primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { AccountStep, ConfirmStep, ConnectBody, ForkStep, ModeStep, WaitingStep, confirmFork, emptyConnectForm, sheetScreen, stepError, submitConnect, submitSetup, type AccountChoice } from './ConnectRunnerSheet.js';
+import { AccountStep, ConfirmStep, ConnectBody, ForkStep, WaitingStep, confirmFork, emptyConnectForm, sheetScreen, stepError, submitConnect, submitSetup, type AccountChoice } from './ConnectRunnerSheet.js';
 
 const PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----';
 const form = (over: Partial<ConnectForm> = {}): ConnectForm => ({
@@ -16,7 +16,7 @@ const form = (over: Partial<ConnectForm> = {}): ConnectForm => ({
 });
 const view: RunnerView = {
   config: { id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac', settings: { ...DEFAULT_RUNNER_SETTINGS } },
-  state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 },
+  state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, repos: [], forkApprovalOpen: false,
   host: { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false },
   recent: [],
 };
@@ -121,8 +121,8 @@ const accounts: GithubAccounts = { login: 'ermish', accounts: [
 ] };
 const account = (over: Partial<GithubAccounts> = {}, choice: AccountChoice = { login: 'nekko-labs', kind: 'org', canGroup: true }) =>
   renderToStaticMarkup(<AccountStep accounts={{ ...accounts, ...over }} choice={choice} error={null} busy={false} onChoice={() => {}} onContinue={() => {}} onManual={() => {}} />);
-const confirm = (status: GithubSetupView, picked: string[], allowPublic = false) =>
-  renderToStaticMarkup(<ConfirmStep status={status} picks={{ repos: picked, allowPublic, label: '' }} error={null} busy={false} onTick={() => {}} onAllowPublic={() => {}} onLabel={() => {}} onContinue={() => {}} onRecheck={() => {}} onCancel={() => {}} />);
+const confirm = (status: GithubSetupView, picked: string[], allowPublic = false, error: string | null = null, busy = false) =>
+  renderToStaticMarkup(<ConfirmStep status={status} picks={{ repos: picked, allowPublic, label: '' }} error={error} busy={busy} onTick={() => {}} onAllowPublic={() => {}} onLabel={() => {}} onContinue={() => {}} onRecheck={() => {}} onCancel={() => {}} />);
 /** The named button's opening tag. */
 const button = (html: string, name: string) => html.match(new RegExp(`<button[^>]*>(?:(?!</button>).)*${name}`))?.[0] ?? '';
 
@@ -171,8 +171,12 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     const html = confirm(setup(), ['nekko-labs/app']);
     for (const s of ['GitHub is connected', 'This Mac will serve these repos:', 'nekko-labs/app', 'nekko-labs/site', 'Private', 'Add repos on GitHub', 'Advanced: runner label']) expect(html).toContain(s);
     expect(html.match(/type="checkbox"/g)).toHaveLength(2);
-    expect(button(html, 'Continue')).not.toContain('disabled=""');
+    expect(button(html, 'Continue to Mac setup')).not.toContain('disabled=""');
     expect(button(html, 'Cancel')).not.toBe('');
+  });
+
+  it('cancel_waits_for_a_connect_in_flight', () => {
+    expect(button(confirm(setup(), ['nekko-labs/app'], false, null, true), 'Cancel')).toContain('disabled=""');
   });
 
   it('a_personal_account_picks_one_repo_by_radio', () => {
@@ -182,7 +186,7 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     expect(defaultRepoPicks(v)).toEqual([]);
     expect(defaultRepoPicks({ ...v, repos: [repo('ermish/a')] })).toEqual(['ermish/a']);
     expect(tickRepo(v, ['ermish/a'], 'ermish/b', true)).toEqual({ picked: ['ermish/b'], error: null });
-    expect(toSetupRequest(v, { repos: ['ermish/b'], allowPublic: false, label: '' })).toMatchObject({ scope: { kind: 'repo', owner: 'ermish', repo: 'b' }, repos: [], enabled: true });
+    expect(toSetupRequest(v, { repos: ['ermish/b'], allowPublic: false, label: '' })).toMatchObject({ scope: { kind: 'repo', owner: 'ermish', repo: 'b' }, repos: [], enabled: false });
   });
 
   it('a_free_orgs_app_serves_one_repo_too', () => {
@@ -218,7 +222,7 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     expect(toSetupRequest(v, { repos: picked, allowPublic: true, label: '' })).toMatchObject({ allowPublic: true, enabled: false });
     // Only a ticked public repo counts: no warning, and it stays allowed off.
     expect(confirm(v, ['nekko-labs/app'])).not.toContain('Public repo.');
-    expect(toSetupRequest(v, { repos: ['nekko-labs/app'], allowPublic: true, label: '' })).toMatchObject({ allowPublic: false, enabled: true });
+    expect(toSetupRequest(v, { repos: ['nekko-labs/app'], allowPublic: true, label: '' })).toMatchObject({ allowPublic: false, enabled: false });
   });
 
   it('nothing_ticked_cannot_continue', () => {
@@ -228,36 +232,34 @@ describe('ConnectRunnerSheet GitHub steps', () => {
 
   it('confirm_builds_an_org_request_that_reuses_the_stored_key', () => {
     const req = toSetupRequest(setup(), { repos: ['nekko-labs/app'], allowPublic: false, label: ' mine ' });
-    expect(req).toEqual({ provider: 'github', scope: { kind: 'org', org: 'nekko-labs' }, appId: 12, installationId: 34, repos: ['nekko-labs/app'], allowPublic: false, label: 'mine', enabled: true });
+    expect(req).toEqual({ provider: 'github', scope: { kind: 'org', org: 'nekko-labs' }, appId: 12, installationId: 34, repos: ['nekko-labs/app'], allowPublic: false, label: 'mine', enabled: false });
     expect(req).not.toHaveProperty('privateKeyPem');
   });
 
-  it('mode_step_comes_last_and_an_org_with_no_groups_gets_the_way_out', () => {
+  it('an_org_with_no_groups_gets_the_way_out_on_confirm', () => {
     const noGroups = 'This org cannot create runner groups. Connect a single repo instead.';
-    const mode = (error: string | null) => renderToStaticMarkup(<ModeStep status={setup()} priority="doNotDisturb" error={error} busy={false} onPriority={() => {}} onBack={() => {}} onSubmit={() => {}} />);
-    for (const s of ['How should this Mac help?', 'Start runner']) expect(mode(null)).toContain(s);
-    expect(mode(null)).not.toContain('Delete the app on GitHub');
-    expect(mode(noGroups)).toContain(noGroups);
-    expect(mode(noGroups)).toContain('Delete the app on GitHub');
+    expect(confirm(setup(), ['nekko-labs/app'])).not.toContain('Delete the app on GitHub');
+    const html = confirm(setup(), ['nekko-labs/app'], false, noGroups);
+    expect(html).toContain(noGroups);
+    expect(html).toContain('Delete the app on GitHub');
   });
 
   it('fork_step_links_the_setting_and_keeps_the_runner_off', () => {
     const html = renderToStaticMarkup(<ForkStep url="https://github.com/o/r/settings/actions" busy={false} onOpen={() => {}} onLeaveOff={() => {}} onConfirmed={() => {}} />);
-    for (const s of ['the runner stays off', 'Require approval for all external contributors', 'Open Actions settings', 'Leave it off', 'It is on, start the runner']) expect(html).toContain(s);
+    for (const s of ['the runner stays off', 'Require approval for all external contributors', 'Open Actions settings', 'Leave it off', 'It is on, continue to Mac setup']) expect(html).toContain(s);
   });
 
   it('the_screen_follows_the_daemon_and_the_manual_link', () => {
-    const screen = (over: Partial<Parameters<typeof sheetScreen>[0]>) => sheetScreen({ status: IDLE_GITHUB_SETUP, manual: false, moding: false, submitting: false, approval: null, ...over });
+    const screen = (over: Partial<Parameters<typeof sheetScreen>[0]>) => sheetScreen({ status: IDLE_GITHUB_SETUP, manual: false, submitting: false, approval: null, ...over });
     expect(screen({})).toBe('account');
     expect(screen({ manual: true })).toBe('manual');
     expect(screen({ manual: true, status: setup({ step: 'install' }) })).toBe('manual');
     expect(screen({ status: setup({ step: 'create' }) })).toBe('waiting');
     expect(screen({ status: setup({ step: 'install' }) })).toBe('waiting');
     expect(screen({ status: setup() })).toBe('confirm');
-    expect(screen({ status: setup(), moding: true })).toBe('mode');
     expect(screen({ status: setup({ step: 'failed', error: 'x' }) })).toBe('account');
-    // Connecting ends the daemon's setup, while the sheet still sets the mode and fork approval.
-    expect(screen({ submitting: true })).toBe('mode');
+    // Connecting ends the daemon's setup, while the sheet still settles fork approval.
+    expect(screen({ submitting: true })).toBe('confirm');
     // Connecting ends the daemon's setup; the fork step must outlive that.
     expect(screen({ approval: { done: false, url: 'u', runnerId: 'r1' } })).toBe('fork');
   });
@@ -266,60 +268,47 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     const publicSetup = setup({ repos: [repo('nekko-labs/site', false)] });
     const picks = { repos: ['nekko-labs/site'], allowPublic: true, label: '' };
     const deps = (over = {}) => ({
-      connectRunner: vi.fn(async () => view), updateRunner: vi.fn(async () => view), setRunnerEnabled: vi.fn(async () => view),
-      setForkApproval: vi.fn(async () => ({ done: true, url: 'u' })), pushToast: vi.fn(), ...over,
+      connectRunner: vi.fn(async () => view), setForkApproval: vi.fn(async () => ({ done: true, url: 'u' })), ...over,
     });
 
-    it('a_private_repo_starts_on_and_skips_fork_approval', async () => {
+    it('a_private_repo_connects_off_and_skips_fork_approval', async () => {
       const d = deps();
-      const res = await submitSetup(setup(), { repos: ['nekko-labs/app'], allowPublic: false, label: '' }, 'balanced', d);
-      expect(d.connectRunner).toHaveBeenCalledWith(expect.objectContaining({ enabled: true }));
-      expect(d.updateRunner).toHaveBeenCalledWith('r1', { priority: 'balanced' });
+      const res = await submitSetup(setup(), { repos: ['nekko-labs/app'], allowPublic: false, label: '' }, d);
+      expect(d.connectRunner).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
       expect(d.setForkApproval).not.toHaveBeenCalled();
-      expect(d.setRunnerEnabled).not.toHaveBeenCalled();
       expect(res).toEqual({ view, approval: null });
     });
 
-    it('a_public_repo_connects_off_and_turns_on_once_approval_is_set', async () => {
+    it('a_public_repo_connects_off_and_settles_approval_before_mac_setup', async () => {
       const d = deps();
-      const res = await submitSetup(publicSetup, picks, 'doNotDisturb', d);
+      const res = await submitSetup(publicSetup, picks, d);
       expect(d.connectRunner).toHaveBeenCalledWith(expect.objectContaining({ enabled: false, allowPublic: true }));
       expect(d.setForkApproval).toHaveBeenCalledWith({ runnerId: 'r1' });
-      expect(d.setRunnerEnabled).toHaveBeenCalledWith('r1', true);
       expect(res).toEqual({ view, approval: null });
     });
 
-    it('approval_not_set_leaves_the_runner_off_and_returns_the_link', async () => {
+    it('approval_not_set_returns_the_link', async () => {
       const d = deps({ setForkApproval: vi.fn(async () => ({ done: false, url: 'https://github.com/o/r/settings/actions' })) });
-      const res = await submitSetup(publicSetup, picks, 'doNotDisturb', d);
-      expect(d.setRunnerEnabled).not.toHaveBeenCalled();
+      const res = await submitSetup(publicSetup, picks, d);
       expect(res).toEqual({ view, approval: { done: false, url: 'https://github.com/o/r/settings/actions', runnerId: 'r1' } });
     });
 
-    it('a_failed_approval_call_leaves_the_runner_off_and_says_so', async () => {
+    it('a_failed_approval_call_stops_at_the_fork_step_before_mac_setup', async () => {
       const d = deps({ setForkApproval: () => Promise.reject(new Error('The daemon is busy.')) });
-      const res = await submitSetup(publicSetup, picks, 'doNotDisturb', d);
-      expect(d.setRunnerEnabled).not.toHaveBeenCalled();
-      expect(d.pushToast).toHaveBeenCalledWith('error', expect.stringContaining('The daemon is busy.'));
-      expect(res).toEqual({ view, approval: null });
+      const res = await submitSetup(publicSetup, picks, d);
+      expect(res).toEqual({ view, approval: { done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions', runnerId: 'r1' } });
     });
 
     it('a_refused_connect_is_the_daemons_sentence', async () => {
       const d = deps({ connectRunner: () => Promise.reject(new Error('This org cannot create runner groups.')) });
-      expect(await submitSetup(setup(), { repos: ['nekko-labs/app'], allowPublic: false, label: '' }, 'doNotDisturb', d)).toEqual({ error: 'This org cannot create runner groups.' });
+      expect(await submitSetup(setup(), { repos: ['nekko-labs/app'], allowPublic: false, label: '' }, d)).toEqual({ error: 'This org cannot create runner groups.' });
     });
   });
 
-  it('saying_approval_is_on_settles_it_before_starting_the_runner', async () => {
-    const calls: string[] = [];
-    const deps = {
-      setForkApproval: vi.fn(async () => { calls.push('settle'); return { done: true, url: '' }; }),
-      setRunnerEnabled: vi.fn(async () => { calls.push('enable'); return view; }),
-    };
-    expect(await confirmFork('r1', deps)).toBe(view);
-    expect(deps.setForkApproval).toHaveBeenCalledWith({ runnerId: 'r1', confirmed: true });
-    expect(deps.setRunnerEnabled).toHaveBeenCalledWith('r1', true);
-    expect(calls).toEqual(['settle', 'enable']);
+  it('saying_approval_is_on_only_settles_it', async () => {
+    const setForkApproval = vi.fn(async () => ({ done: true, url: '' }));
+    await confirmFork('r1', { setForkApproval });
+    expect(setForkApproval).toHaveBeenCalledWith({ runnerId: 'r1', confirmed: true });
   });
 
   it('no_em_dash_in_the_new_steps', () => {

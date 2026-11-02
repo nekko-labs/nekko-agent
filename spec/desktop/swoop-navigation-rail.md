@@ -33,3 +33,27 @@ when their height changes. Hover over painted wings, keyboard focus, and pinning
 must all open the rail; mobile keeps its existing navigation. Renderer-only,
 with no new permissions, network requests, settings, or data access. This section
 supersedes the historical morph, fill, and label-motion details above.
+
+## Tapered ends and Send feedback under the destinations (2026-11-02)
+
+Implemented; 19 rail geometry and source tests and the desktop typecheck pass, with
+before/after rest captures of the full App fixture in a hidden off-screen renderer.
+The open state was checked by its path data only (the hidden Windows renderer does
+not animate the rail open, on `main` as well); packaged builds are unverified.
+User intent: cut off the outline's ends that ran on as hairlines to the top and
+bottom of the rail with rounded caps, and have the shape just taper out of the edge
+of the window and back into it. Send feedback looked out of place alone at the
+bottom of the rail, so it moves up under the last destination, set apart.
+
+- **Outline:** the shape starts at the wall up to 160px above the first destination
+  (less when there is not that much room), swells to the icon column 10px above it,
+  runs beside the destinations, and tapers back into the wall below the last row,
+  mirroring the upper taper (at least 120px where there is room). Nothing runs on
+  past either taper: no hairline, no rounded cap. Open, the same path widens with
+  the rail, as before.
+- **Send feedback** sits inside the shape directly below the last destination
+  (Settings by default), after a 1px divider with 16px of space above it and 12px
+  below, more than the 7px row gap, so it reads as separate from the destinations.
+  It is still a button that opens the Send feedback sheet, not a destination: it
+  never takes the active tile and is not part of the drag-to-reorder list.
+- Renderer-only. No host calls, settings, permissions or network use change.

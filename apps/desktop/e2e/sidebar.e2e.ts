@@ -125,7 +125,7 @@ for (const theme of ['light', 'dark'] as const) for (const width of [1200, 400])
       expect(await state<boolean>(`(i) => i.state().sessions.some((s) => s.id === 'active' && s.archivedAt)`)).toBe(true);
       // The confirmation toast sits over the sidebar's lower rows for 5 s; dismiss it
       // as a user would, or a slow runner's next click lands on it (#1131).
-      const toast = page.locator('.fade-in.card', { hasText: 'Chat completed.' });
+      const toast = page.locator('[data-toast]', { hasText: 'Chat completed.' });
       await toast.click();
       await expect(toast).toHaveCount(0);
     });

@@ -183,6 +183,7 @@ impl Table {
             &["claude:planUsage"],
             handler!(|ctx, channel, args| crate::claude_policy::plan_usage_route(ctx, &args).await),
         );
+        t.add(&["claude:backgroundTasks"], handler!(|ctx, channel, args| Ok(ctx.turns.harness.background_tasks())));
         t.add(
             &["claude:codeStatus"],
             handler!(|ctx, channel, args| crate::claude_policy::code_status_route(ctx, &args).await),
@@ -526,6 +527,11 @@ impl Table {
         t.add(
             crate::runner::github_setup::CHANNELS,
             handler!(|ctx, channel, args| ctx.runners.route(channel, &args).await),
+        );
+        #[cfg(unix)]
+        t.add(
+            crate::runner::image::CHANNELS,
+            handler!(|ctx, channel, args| ctx.runners.image_route(channel, &args).await),
         );
         t.add(crate::telemetry::CHANNELS, handler!(|ctx, channel, args| crate::telemetry::route(channel, &args).await));
         t.add(
