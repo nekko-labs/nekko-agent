@@ -684,7 +684,8 @@ pub fn message_page(session: &Value, before: Option<&str>, limit: Option<f64>) -
     let all = session.get("messages").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
     let at = |id: &str| all.iter().position(|m| m.get("id").and_then(Value::as_str) == Some(id));
     let end = before.and_then(at).unwrap_or(if before.is_some() { 0 } else { all.len() });
-    let limit = limit.filter(|n| *n >= 1.0).map_or(policy().session_messages, |n| n as usize).min(policy().session_messages);
+    let limit =
+        limit.filter(|n| *n >= 1.0).map_or(policy().session_messages, |n| n as usize).min(policy().session_messages);
     let start = end.saturating_sub(limit);
     json!({ "messages": all[start..end], "omittedMessages": start })
 }
@@ -1597,7 +1598,11 @@ mod tests {
         fn rig(access: DeviceAccess, key: Option<&SigningKey>) -> Rig {
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: key.map(public), computer: false });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access, key: key.map(public), computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let classes =
                 Classes { read: vec!["tasks:list".into()], change: vec!["task:runNow".into()], ..Classes::default() };
@@ -1725,7 +1730,11 @@ mod tests {
         #[test]
         fn a_classed_channel_off_the_allowlist_is_still_refused() {
             let devices = Arc::new(MemDevices::default());
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access: ON, key: None, computer: false });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access: ON, key: None, computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let classes =
                 Classes { read: vec!["file:read".into()], change: vec!["file:write".into()], ..Classes::default() };
@@ -1826,7 +1835,11 @@ mod tests {
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
             let access = DeviceAccess { read: false, change: true };
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)), computer: false });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)), computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let gated = gate(host(calls.clone(), secrets()), devices.clone());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
@@ -1872,7 +1885,11 @@ mod tests {
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
             let access = DeviceAccess { read: true, change: true };
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)), computer: false });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)), computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let gated = gate(host(calls.clone(), secrets()), devices.clone());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
@@ -1932,7 +1949,11 @@ mod tests {
         ) -> Rig {
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: key.map(public), computer: false });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access, key: key.map(public), computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let (seen, mode, default) = (calls.clone(), mode.map(str::to_string), default.to_string());
             let host: Dispatcher = Arc::new(move |channel: String, args: Value| {
@@ -1981,10 +2002,12 @@ mod tests {
             }
         }
 
-        fn with_device(device: PhoneDevice) -> (Arc<MemDevices>, Arc<Mutex<Vec<(String, Value)>>>, PhoneDispatcher) {
+        type Calls = Arc<Mutex<Vec<(String, Value)>>>;
+
+        fn with_device(device: PhoneDevice) -> (Arc<MemDevices>, Calls, PhoneDispatcher) {
             let devices = Arc::new(MemDevices::default());
             devices.devices.lock().unwrap().insert("d1".into(), device);
-            let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+            let calls: Calls = Arc::default();
             let gated = gate(host(calls.clone(), secrets()), devices.clone());
             (devices, calls, gated)
         }
@@ -2048,7 +2071,11 @@ mod tests {
             assert!(ask(&computer, "agent:replay", json!(["s1"])).unwrap_err().contains("read-off"));
             assert!(ask(&computer, "session:get", json!(["s1"])).unwrap_err().contains("read-off"));
             assert!(ask(&computer, "chat:compact", json!(["s1"])).unwrap_err().contains("change-off"));
-            assert!(ask(&computer, "chat:send", json!([{ "sessionId": "s1", "text": "hi" }])).unwrap_err().contains("change-off"));
+            assert!(
+                ask(&computer, "chat:send", json!([{ "sessionId": "s1", "text": "hi" }]))
+                    .unwrap_err()
+                    .contains("change-off")
+            );
             assert!(calls.lock().unwrap().is_empty());
             assert_eq!(ask(&computer, "device:access", json!([])).unwrap(), json!({ "read": false, "change": false }));
             assert_eq!(devices.log.lock().unwrap().iter().filter(|(_, e)| !e.ok).count(), 2);
@@ -2069,7 +2096,8 @@ mod tests {
         #[test]
         fn a_computer_reads_tool_output_whole_and_a_phone_does_not() {
             let long = "x".repeat(9_000);
-            let chat = json!({ "id": "s1", "messages": [{ "id": "m", "role": "tool", "toolResult": { "output": long } }] });
+            let chat =
+                json!({ "id": "s1", "messages": [{ "id": "m", "role": "tool", "toolResult": { "output": long } }] });
             let whole = computer_session_view(chat.clone());
             assert_eq!(whole["messages"][0]["toolResult"]["output"].as_str().unwrap().len(), 9_000);
             assert!(session_view(chat)["messages"][0]["toolResult"]["output"].as_str().unwrap().len() < 9_000);
@@ -2078,9 +2106,12 @@ mod tests {
         #[test]
         fn a_chat_too_large_for_a_frame_is_cut_rather_than_refused() {
             let long = "x".repeat(6_000_000);
-            let chat = json!({ "id": "s1", "messages": [{ "id": "m", "role": "tool", "toolResult": { "output": long } }] });
+            let chat =
+                json!({ "id": "s1", "messages": [{ "id": "m", "role": "tool", "toolResult": { "output": long } }] });
             let view = computer_session_view(chat);
-            assert!(view["messages"][0]["toolResult"]["output"].as_str().unwrap().len() <= COMPUTER_FALLBACK_CHARS + 16);
+            assert!(
+                view["messages"][0]["toolResult"]["output"].as_str().unwrap().len() <= COMPUTER_FALLBACK_CHARS + 16
+            );
         }
 
         #[test]
@@ -2088,7 +2119,10 @@ mod tests {
             let messages: Vec<Value> = (0..10).map(|i| json!({ "id": format!("m{i}") })).collect();
             let chat = json!({ "messages": messages });
             let page = message_page(&chat, Some("m5"), Some(3.0));
-            assert_eq!(page["messages"].as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect::<Vec<_>>(), ["m2", "m3", "m4"]);
+            assert_eq!(
+                page["messages"].as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect::<Vec<_>>(),
+                ["m2", "m3", "m4"]
+            );
             assert_eq!(page["omittedMessages"], 2);
             assert_eq!(message_page(&chat, None, Some(2.0))["messages"][1]["id"], "m9");
             assert_eq!(message_page(&chat, Some("gone"), None)["messages"], json!([]));
@@ -2117,7 +2151,11 @@ mod tests {
         fn an_unclassed_channel_fails_closed() {
             // On the allowlist but in no class (a feature PR that forgot to class it): refused.
             let devices = Arc::new(MemDevices::default());
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access: ON, key: None, computer: false });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access: ON, key: None, computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let gated = gate_with(host(calls.clone(), secrets()), devices, Classes::default());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
@@ -2354,7 +2392,11 @@ mod tests {
                 );
                 // Another device's challenge is not this one's.
                 let other = PhoneCall { device_id: "phone-2".into(), proof: None, step_up: None };
-                s.r.devices.devices.lock().unwrap().insert("phone-2".into(), PhoneDevice { access: ON, key: None, computer: false });
+                s.r.devices
+                    .devices
+                    .lock()
+                    .unwrap()
+                    .insert("phone-2".into(), PhoneDevice { access: ON, key: None, computer: false });
                 let theirs = s.r.rt.block_on((s.r.gated)(other, "security:challenge".into(), json!([]))).unwrap();
                 let a = assert_with(&s.fido, theirs["challenge"].as_str().unwrap(), 1);
                 assert_eq!(s.raise(Some(a)), refused("step-up-invalid", YOLO));
@@ -2434,7 +2476,11 @@ mod tests {
             fn exit_rig(access: DeviceAccess, quit_from_phone: Option<bool>) -> Rig {
                 let devices = Arc::new(MemDevices::default());
                 *devices.now.lock().unwrap() = NOW;
-                devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: None, computer: false });
+                devices
+                    .devices
+                    .lock()
+                    .unwrap()
+                    .insert("phone-1".into(), PhoneDevice { access, key: None, computer: false });
                 let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
                 let seen = calls.clone();
                 let host: Dispatcher = Arc::new(move |channel: String, args: Value| {

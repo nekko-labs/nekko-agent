@@ -172,7 +172,8 @@ async fn one_daemon_pairs_with_another_and_calls_across() {
     assert_eq!(status["enabled"], true, "{status}");
     let (_, pairing) = post(host.port, "remote:pairing", json!([]), Some(TOKEN)).await;
     let (_, grant) = post(host.port, "remote:pairComputer", json!([]), Some(TOKEN)).await;
-    let link = json!({ "relayUrl": url, "room": pairing["room"], "key": pairing["key"], "pair": grant["code"], "alts": [] });
+    let link =
+        json!({ "relayUrl": url, "room": pairing["room"], "key": pairing["key"], "pair": grant["code"], "alts": [] });
 
     let mut window = Window::open(laptop.port).await;
     let paired = window.call("computers:pair", json!([link])).await.unwrap();
@@ -231,7 +232,8 @@ async fn a_phone_link_is_refused_with_what_to_do() {
     post(host.port, "remote:enable", json!([url]), Some(TOKEN)).await;
     let (_, pairing) = post(host.port, "remote:pairing", json!([]), Some(TOKEN)).await;
     let (_, grant) = post(host.port, "remote:pair", json!([]), Some(TOKEN)).await;
-    let link = json!({ "relayUrl": url, "room": pairing["room"], "key": pairing["key"], "pair": grant["code"], "alts": [] });
+    let link =
+        json!({ "relayUrl": url, "room": pairing["room"], "key": pairing["key"], "pair": grant["code"], "alts": [] });
     let mut window = Window::open(laptop.port).await;
     let refused = window.call("computers:pair", json!([link])).await.unwrap_err();
     assert!(refused.contains("for a phone"), "{refused}");

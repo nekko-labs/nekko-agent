@@ -324,7 +324,7 @@ export const PHONE_ALWAYS_DENIED = {
 
 /**
  * What a paired computer may do beyond a phone (connected computers, decision
- * 0038). It adds to the phone classes and never removes from them. The class
+ * 0040). It adds to the phone classes and never removes from them. The class
  * comes from the pairing grant (`remote:pairComputer`) and stays on the device
  * record, so nothing in a HELLO can set it. Credentials and the machine's own
  * administration stay refused: these lists are all a computer gains.

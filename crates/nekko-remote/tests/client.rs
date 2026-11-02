@@ -5,7 +5,7 @@ use futures_util::{SinkExt, StreamExt};
 use nekko_remote::agent::{AgentCore, Out};
 use nekko_remote::client::{Client, Config, State};
 use nekko_remote::e2e;
-use nekko_remote::hello::{os_random, Random};
+use nekko_remote::hello::{Random, os_random};
 use nekko_remote::phone::Devices;
 use nekko_remote::{Link, LinkHandle, RemoteService, Verifier, system_clock};
 use p256::ecdsa::SigningKey;
@@ -89,7 +89,8 @@ async fn host() -> Host {
                         .collect::<Vec<_>>()
                 };
                 let first = core.on_relay(&json!({ "type": "client-open", "cid": "c1" }).to_string(), &verify);
-                let hello: Vec<String> = first.into_iter().filter_map(|o| if let Out::Send(f) = o { Some(f) } else { None }).collect();
+                let hello: Vec<String> =
+                    first.into_iter().filter_map(|o| if let Out::Send(f) = o { Some(f) } else { None }).collect();
                 for data in relay_to_client(hello) {
                     sink.send(Message::text(data)).await.unwrap();
                 }

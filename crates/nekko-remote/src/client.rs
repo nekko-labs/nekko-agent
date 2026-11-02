@@ -439,7 +439,11 @@ async fn session(shared: &Arc<Shared>, route: &str, more: bool, mut stopped: wat
         return End::Offline;
     }
     let url = client_url(route, &shared.cfg.room, &shared.cfg.secret);
-    let open = if more && crate::route::relay_route(route) != crate::route::Route::Internet { OPEN_TIMEOUT } else { HANDSHAKE };
+    let open = if more && crate::route::relay_route(route) != crate::route::Route::Internet {
+        OPEN_TIMEOUT
+    } else {
+        HANDSHAKE
+    };
     let dial = tokio::time::timeout(open, tokio_tungstenite::connect_async(url.as_str()));
     let ws = tokio::select! {
         r = dial => r,
