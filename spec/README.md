@@ -97,7 +97,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Stay out of the way of full-screen apps (games)](desktop/stay-out-of-the-way-of-full-screen-apps.md) (3 KB)
 - [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (3 KB)
-- [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (4 KB)
+- [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (5 KB)
 - [Wall model controls and drafting layout](desktop/wall-model-controls-and-drafting-layout.md) (3 KB)
 - [Wall new-chat details placement](desktop/wall-new-chat-details-placement.md) (1 KB)
 - [Wall push and navigation shoulders](desktop/wall-push-and-navigation-shoulders.md) (1 KB)
@@ -144,7 +144,7 @@ Providers, local models, the Model Server, training.
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (5 KB)
-- [Models & providers](models/models-providers.md) (45 KB)
+- [Models & providers](models/models-providers.md) (46 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
@@ -226,7 +226,7 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (3 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (11 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (12 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
 - [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (14 KB)

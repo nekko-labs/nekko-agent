@@ -95,6 +95,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### Website dot wave runs below the hero again (2026-11-02)
+Area: renderer
+Result: no effect (a small drop in the lowest sample, with plenty of headroom)
+Conditions: Windows 11, Firefox (installed build) headless via WebDriver BiDi, 1440×900, Dark look, rAF callbacks counted over 1 s at every 500px of scroll (20 positions), one run per side, sequential.
+
+| Metric (rAF/s) | Before (wave paused past the hero) | After (wave running) |
+|---|---|---|
+| Lowest position | 167 | 153 |
+| Panels stretch (y 1500 to 3500) | 309 to 321 | 262 to 288 |
+
+Why: #1442 stopped the wave once the hero left the screen; the panels over it are already solid (no backdrop blur), so redrawing at 20 fps behind them costs little. A real-GPU Firefox was not measured. Source: this PR.
+
 ### Empty-agent wave: full-pane tiled canvas instead of a bounded texture (2026-11-02)
 Area: renderer
 Result: no effect (within sample noise; a small focused GPU-process increase)
