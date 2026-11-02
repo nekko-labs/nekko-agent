@@ -8,7 +8,9 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
 
-**Its safety is weaker than a phone's.** A phone asks for Face ID or the passcode before a change. A computer does not ask per change: the check is that computer's own screen lock. Raising a chat to a more permissive mode asks for a click. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. It still can't touch provider keys, sign-ins or remote-access settings.
+**Treat a connected computer like sitting at this one.** A phone asks for Face ID or the passcode before a change. A computer does not: the check is its own screen lock. It can start a chat in YOLO mode, and an agent in YOLO mode can do anything your account can on this computer, including reading files and keys. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. What the computer can't do directly is call the app's own settings for provider keys, sign-ins and remote access, open a terminal, or attach a file from this computer to a chat.
+
+If you turn on step-up (Settings, Security), raising a chat's mode from a computer is refused until you confirm it on this computer.
 
 ## How it works
 

@@ -500,7 +500,7 @@ async fn session(shared: &Arc<Shared>, route: &str, more: bool, mut stopped: wat
                     },
                     Some(Ok(Message::Close(frame))) => {
                         let (code, reason) = frame.map_or((1006, String::new()), |f| (f.code.into(), f.reason.to_string()));
-                        return on_close(code, &reason, welcomed);
+                        return on_close(code, &reason, welcomed, route.starts_with("wss://"));
                     }
                     Some(Ok(_)) => {}
                     Some(Err(_)) | None => return if welcomed { End::Lost } else { End::Failed },
@@ -534,12 +534,15 @@ fn on_raw(shared: &Arc<Shared>, raw: &str, route: &str, away: &mut bool) -> Opti
 }
 
 /// The relay's close rules: 4001 this device was removed, 1008 "bad pairing key"
-/// the same, 1008 "agent offline" poll until the computer is back.
-fn on_close(code: u16, reason: &str, welcomed: bool) -> End {
+/// the same, 1008 "agent offline" poll until the computer is back. A close is
+/// not sealed, so on `ws://` from a socket that never reached the computer
+/// (anyone can answer on a LAN address) it only fails this route.
+fn on_close(code: u16, reason: &str, welcomed: bool, tls: bool) -> End {
     let r = reason.to_lowercase();
-    if code == 4001 {
+    let believed = welcomed || tls;
+    if code == 4001 && believed {
         End::Denied("kicked".into())
-    } else if code == 1008 && r.contains("bad pairing key") {
+    } else if code == 1008 && r.contains("bad pairing key") && believed {
         End::Denied("bad-key".into())
     } else if code == 1008 && r.contains("agent offline") {
         End::Offline
@@ -556,11 +559,17 @@ mod tests {
 
     #[test]
     fn close_codes_follow_the_phones_rules() {
-        assert!(matches!(on_close(4001, "", true), End::Denied(r) if r == "kicked"));
-        assert!(matches!(on_close(1008, "Bad pairing key", false), End::Denied(r) if r == "bad-key"));
-        assert!(matches!(on_close(1008, "agent offline", false), End::Offline));
-        assert!(matches!(on_close(1006, "", true), End::Lost));
-        assert!(matches!(on_close(1006, "", false), End::Failed));
+        assert!(matches!(on_close(4001, "", true, false), End::Denied(r) if r == "kicked"));
+        assert!(matches!(on_close(1008, "Bad pairing key", false, true), End::Denied(r) if r == "bad-key"));
+        assert!(matches!(on_close(1008, "agent offline", false, false), End::Offline));
+        assert!(matches!(on_close(1006, "", true, false), End::Lost));
+        assert!(matches!(on_close(1006, "", false, false), End::Failed));
+    }
+
+    #[test]
+    fn a_stranger_on_a_lan_address_cannot_end_the_link() {
+        assert!(matches!(on_close(4001, "", false, false), End::Failed));
+        assert!(matches!(on_close(1008, "bad pairing key", false, false), End::Failed));
     }
 
     #[test]

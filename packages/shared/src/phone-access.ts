@@ -330,6 +330,12 @@ export const PHONE_ALWAYS_DENIED = {
  * administration stay refused: these lists are all a computer gains.
  */
 export const COMPUTER_ACCESS = {
+  /**
+   * Phone channels a computer does not get. A phone's change proof means Face
+   * ID; a computer signs with no presence check, so what a phone reaches behind
+   * that prompt, a shell above all, is not the computer's by inheritance.
+   */
+  refused: ['providers:saveSealed', 'providers:setEnabled', 'ssh:open', 'terminal:close', 'terminal:create', 'terminal:open', 'terminal:signal', 'workspace:addByPath'],
   read: ['agent:replay', 'chat:running', 'session:images', 'session:page'],
   agent: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'chat:cancelCompaction', 'chat:compact', 'chat:dequeue', 'session:setAttachments', 'session:truncate'],
   sendKeys: ['clientMessageId', 'images', 'modelId', 'providerId', 'regenerate', 'resume', 'sessionId', 'skill', 'text', 'videos'],
