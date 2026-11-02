@@ -510,7 +510,13 @@ export type AgentEvent =
    * so anything showing it should re-read it. Emitted mid-turn, which is why it
    * is an event rather than something a listener polls for.
    */
-  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice };
+  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice }
+  /**
+   * A Claude Agent chat's Claude Code now runs `tasks` background tasks (shell
+   * commands, sub-agents). It keeps working after the turn's `done` and wakes
+   * on its own when one finishes, so the chat says so meanwhile.
+   */
+  | { type: 'claude_code_background'; sessionId: string; tasks: number };
 
 /**
  * What a session is waiting on a person for, right now.

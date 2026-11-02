@@ -148,6 +148,8 @@ pub struct Session {
     peeked: Option<String>,
     /// Background tasks Claude Code says are running (`background_tasks_changed`).
     background: usize,
+    /// Told the new count whenever it changes ([`Session::on_background_change`]).
+    on_background: Option<Box<dyn Fn(usize) + Send + Sync>>,
     /// Whether this child has reported a `command_lifecycle` for a message.
     reports_commands: bool,
     stderr: Arc<Mutex<VecDeque<String>>>,
@@ -206,6 +208,7 @@ impl Session {
             lines,
             peeked: None,
             background: 0,
+            on_background: None,
             reports_commands: false,
             stderr,
             claude_session_id,
@@ -245,6 +248,12 @@ impl Session {
         self.background > 0
     }
 
+    /// Hear the number of background tasks each time it changes, and 0 when
+    /// the child ends with some still counted (they end with it).
+    pub fn on_background_change(&mut self, f: impl Fn(usize) + Send + Sync + 'static) {
+        self.on_background = Some(Box::new(f));
+    }
+
     fn note(&mut self, line: &str) {
         if !line.contains("background_tasks_changed") {
             return;
@@ -252,7 +261,16 @@ impl Session {
         if let Ok(v) = serde_json::from_str::<Value>(line)
             && v.get("subtype").and_then(Value::as_str) == Some("background_tasks_changed")
         {
-            self.background = v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len);
+            self.set_background(v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len));
+        }
+    }
+
+    fn set_background(&mut self, n: usize) {
+        if n != self.background {
+            self.background = n;
+            if let Some(f) = &self.on_background {
+                f(n);
+            }
         }
     }
 
@@ -275,6 +293,7 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.kill_tree();
+        self.set_background(0);
     }
 }
 

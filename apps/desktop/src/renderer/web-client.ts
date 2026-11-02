@@ -690,6 +690,7 @@ function makeWebClient(): NekkoApi {
     getClaudePolicy: () => call(IpcChannels.claudePolicy) as Promise<ClaudePolicyStatus>,
     getClaudeCapability: (providerId, capability) => call(IpcChannels.claudeCapability, providerId, capability) as Promise<ClaudeCapabilityStatus>,
     getClaudePlanUsage: (providerId) => call(IpcChannels.claudePlanUsage, providerId) as Promise<ClaudePlanUsageStatus>,
+    claudeBackgroundTasks: () => call(IpcChannels.claudeBackgroundTasks) as Promise<Record<string, number>>,
     getClaudeCodeStatus: (providerId, account) => call(IpcChannels.claudeCodeStatus, providerId, account) as Promise<ClaudeCodeStatus>,
     getMcpStatus: () => call(IpcChannels.mcpStatus),
     detectHypergate: (port) => call(IpcChannels.mcpHypergate, port),

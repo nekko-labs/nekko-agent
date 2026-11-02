@@ -18,7 +18,11 @@
 //! - Between turns the child is watched ([`Harness::idle`]): Claude Code
 //!   wakes on its own when a background command or sub-agent finishes, and
 //!   that work becomes a Nekko turn (turns.rs `wake`), so its permission
-//!   prompts have a turn to wait in and the chat shows it working.
+//!   prompts have a turn to wait in and the chat shows it working. A wake-up
+//!   reads the child that woke whatever flags it was launched with.
+//! - The number of background tasks each child runs is published as it
+//!   changes (`claude_code_background`) and kept for `claude:backgroundTasks`,
+//!   so the chat can say Claude Code is still working after a turn's Done.
 //!
 //! The turn itself (events, transcript, Stop and Steer) runs in turns.rs
 //! (`claude_code_turn`) over [`nekko_harness::run_turn`].
@@ -104,6 +108,9 @@ pub struct Harness {
     /// own stream (`rate_limit_event`, `/usage`), by provider id. Shown only
     /// where the `usage_limits` policy row allows (`claude:planUsage`).
     plan_usage: Mutex<HashMap<String, serde_json::Value>>,
+    /// Background tasks each chat's Claude Code still runs, by chat id
+    /// (`claude:backgroundTasks`); a chat with none is not listed.
+    background: Mutex<HashMap<String, usize>>,
 }
 
 #[derive(Debug, Clone)]
@@ -194,6 +201,22 @@ impl Harness {
     /// What a provider's Claude Code last reported about plan usage, if anything.
     pub fn plan_usage(&self, provider_id: &str) -> Option<serde_json::Value> {
         lock(&self.plan_usage).get(provider_id).cloned()
+    }
+
+    /// A chat's Claude Code now runs `n` background tasks.
+    pub fn note_background(&self, session_id: &str, n: usize) {
+        let mut all = lock(&self.background);
+        if n == 0 {
+            all.remove(session_id);
+        } else {
+            all.insert(session_id.to_string(), n);
+        }
+    }
+
+    /// `claude:backgroundTasks`: how many background tasks each chat's Claude
+    /// Code runs, for the chats that run any.
+    pub fn background_tasks(&self) -> serde_json::Value {
+        serde_json::json!(*lock(&self.background))
     }
 
     /// The chat's slot (made on first use).

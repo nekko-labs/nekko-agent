@@ -117,7 +117,7 @@ enum Kind {
 fn kind_of(event_type: &str) -> Kind {
     match event_type {
         "done" | "error" => Kind::End,
-        "session_meta" | "compaction" => Kind::Meta,
+        "session_meta" | "compaction" | "claude_code_background" => Kind::Meta,
         "tool_approval_required" | "question" => Kind::Wait,
         "question_resolved" | "steered" => Kind::Resume,
         _ => Kind::Stream,

@@ -138,7 +138,7 @@ Providers, local models, the Model Server, training.
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (4 KB)
-- [Models & providers](models/models-providers.md) (44 KB)
+- [Models & providers](models/models-providers.md) (45 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)

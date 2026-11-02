@@ -1,5 +1,6 @@
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
+import { ClaudeBackgroundTasks, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
@@ -595,6 +596,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const [session, setSession] = useState<Session | null>(() => getCachedSession(sessionId) ?? null);
   const [liveConnectivity, setLiveConnectivity] = useState<import('@nekko-agent/shared').ConnectivityNotice[]>(() => rememberedConnectivityNotices(sessionId));
   useEffect(() => { setLiveConnectivity(rememberedConnectivityNotices(sessionId)); }, [sessionId]);
+  const claudeBackground = useClaudeBackgroundTasks(sessionId);
   // Seed the composer from whatever was parked for this chat, so an unsent
   // message survives a tab switch or a restart.
   const [draft, setDraft] = useState(() => loadDraft(sessionId)?.text ?? '');
@@ -2597,6 +2599,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   persisted={!streaming && !![...(session?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.turnStats}
                   blocked={errorNotice ? 'Needs attention' : approval ? 'Waiting for approval' : question ? 'Waiting for your answer' : null}
                 />
+                {!streaming && <ClaudeBackgroundTasks tasks={claudeBackground} />}
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />

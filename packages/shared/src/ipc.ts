@@ -396,6 +396,7 @@ export const IpcChannels = {
   claudePolicy: 'claude:policy',
   claudeCapability: 'claude:capability',
   claudePlanUsage: 'claude:planUsage',
+  claudeBackgroundTasks: 'claude:backgroundTasks',
   claudeCodeStatus: 'claude:codeStatus',
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
@@ -1185,6 +1186,8 @@ export interface NekkoApi {
   getClaudeCapability(providerId: string, capability: import('./claude-policy.js').ClaudeCapability): Promise<import('./claude-policy.js').ClaudeCapabilityStatus>;
   /** Plan usage for a Claude provider: none today; example data in the dev-only preview. */
   getClaudePlanUsage(providerId: string): Promise<import('./claude-policy.js').ClaudePlanUsageStatus>;
+  /** How many background tasks each Claude Agent chat's Claude Code still runs, by chat id (chats with none are left out). */
+  claudeBackgroundTasks(): Promise<Record<string, number>>;
   /**
    * Whether the user's Claude Code is installed and signed in; records it for
    * `providerId`'s policy rows. Before a provider is saved, `account` names the

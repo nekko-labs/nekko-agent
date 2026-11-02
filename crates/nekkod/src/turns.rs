@@ -1342,26 +1342,10 @@ impl Turns {
         if user.is_none() && !wake {
             return fail("There is no message to send.", &history);
         }
-        let paths: Vec<PathBuf> =
-            workspaces.iter().filter_map(|w| str_at(w, "path")).filter(|p| !p.is_empty()).map(PathBuf::from).collect();
-        let Some((cwd, rest)) = paths.split_first() else {
-            return fail("A Claude subscription chat needs a workspace folder to run in.", &history);
-        };
         // The provider's Claude Code account. Its sessions live in its own
         // folder, so one saved under another account (the chat switched) is
         // not resumed: the next launch starts a new Claude Code session.
         let account = provider_account(provider).map(str::to_string);
-        let config_dir = match nekko_harness::account_config_dir(account.as_deref()) {
-            Ok(dir) => dir,
-            Err(e) => return fail(&e, &history),
-        };
-        let wanted = Wanted {
-            cwd: cwd.clone(),
-            add_dirs: rest.to_vec(),
-            model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
-            permission_mode: permission_mode(mode),
-            config_dir,
-        };
         let same_account = |s: &Value| str_at(s, "claudeCodeAccount") == account.as_deref();
         let set_account = |obj: &mut serde_json::Map<String, Value>| match &account {
             Some(a) => obj.insert("claudeCodeAccount".into(), json!(a)),
@@ -1369,44 +1353,89 @@ impl Turns {
         };
 
         // One turn per chat at a time: the slot stays taken until the end.
-        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && wanted.matches(&s.spec));
-        if wake && !reuse {
-            // The child that woke is gone or out of date: nothing to read.
-            return;
-        }
-        if !reuse {
-            slot.session = None;
-            let bin = match nekko_harness::locate(None).await {
-                Ok(bin) => bin,
-                Err(e) => return fail(&e, &history),
-            };
-            let stored = {
-                let s = lock(session);
-                str_at(&s, "claudeCodeSessionId").filter(|_| same_account(&s)).map(str::to_string)
-            };
-            let mut spec = wanted.launch(bin, stored.as_deref());
-            // Every permission prompt goes to Nekko through the bridge; with
-            // no bridge Claude Code does not start (fail closed).
-            match self.harness.prepare_bridge(&session_id, &paths) {
-                Ok(config) => spec.mcp_config = Some(config),
-                Err(e) => return fail(&e, &history),
+        // A wake-up reads the child that woke, whatever it was launched with:
+        // a change of model, mode or folders since applies at the user's next
+        // message. Nothing here may fail a wake-up, or the line the child left
+        // unread wakes it again at once.
+        if wake {
+            if !slot.session.as_mut().is_some_and(|s| s.alive()) {
+                // Gone: dropped, so the idle watch ends instead of waking again.
+                slot.session = None;
+                return;
             }
-            spec.permission_prompt_tool = Some(BRIDGE_TOOL.into());
-            if let SessionStart::New(id) = &spec.session {
-                // Saved before the launch, so a crash mid-turn still resumes.
-                if let Some(obj) = lock(session).as_object_mut() {
-                    obj.insert("claudeCodeSessionId".into(), json!(id));
-                    set_account(obj);
+        } else {
+            let paths: Vec<PathBuf> = workspaces
+                .iter()
+                .filter_map(|w| str_at(w, "path"))
+                .filter(|p| !p.is_empty())
+                .map(PathBuf::from)
+                .collect();
+            let Some((cwd, rest)) = paths.split_first() else {
+                return fail("A Claude subscription chat needs a workspace folder to run in.", &history);
+            };
+            let config_dir = match nekko_harness::account_config_dir(account.as_deref()) {
+                Ok(dir) => dir,
+                Err(e) => return fail(&e, &history),
+            };
+            let wanted = Wanted {
+                cwd: cwd.clone(),
+                add_dirs: rest.to_vec(),
+                model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+                permission_mode: permission_mode(mode),
+                config_dir,
+            };
+            let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && wanted.matches(&s.spec));
+            if !reuse {
+                slot.session = None;
+                let bin = match nekko_harness::locate(None).await {
+                    Ok(bin) => bin,
+                    Err(e) => return fail(&e, &history),
+                };
+                let stored = {
+                    let s = lock(session);
+                    str_at(&s, "claudeCodeSessionId").filter(|_| same_account(&s)).map(str::to_string)
+                };
+                let mut spec = wanted.launch(bin, stored.as_deref());
+                // Every permission prompt goes to Nekko through the bridge; with
+                // no bridge Claude Code does not start (fail closed).
+                match self.harness.prepare_bridge(&session_id, &paths) {
+                    Ok(config) => spec.mcp_config = Some(config),
+                    Err(e) => return fail(&e, &history),
                 }
-                persist(store, session, incognito).await;
-            }
-            match nekko_harness::Session::spawn(spec) {
-                Ok(child) => slot.session = Some(child),
-                Err(e) => return fail(&format!("Could not start Claude Code: {e}"), &history),
+                spec.permission_prompt_tool = Some(BRIDGE_TOOL.into());
+                if let SessionStart::New(id) = &spec.session {
+                    // Saved before the launch, so a crash mid-turn still resumes.
+                    if let Some(obj) = lock(session).as_object_mut() {
+                        obj.insert("claudeCodeSessionId".into(), json!(id));
+                        set_account(obj);
+                    }
+                    persist(store, session, incognito).await;
+                }
+                match nekko_harness::Session::spawn(spec) {
+                    Ok(mut child) => {
+                        // How many background tasks it runs, for the chat to show between turns.
+                        let harness = Arc::downgrade(&self.harness);
+                        let hub = lock(&self.wakes).get(&session_id).map(|(_, hub)| hub.clone());
+                        let id = session_id.clone();
+                        child.on_background_change(move |n| {
+                            if let Some(h) = harness.upgrade() {
+                                h.note_background(&id, n);
+                            }
+                            if let Some(hub) = &hub {
+                                let event = json!({ "type": "claude_code_background", "sessionId": id, "tasks": n });
+                                hub.publish("agent:event", event, false);
+                            }
+                        });
+                        slot.session = Some(child);
+                    }
+                    Err(e) => return fail(&format!("Could not start Claude Code: {e}"), &history),
+                }
             }
         }
         let Some(child) = slot.session.as_mut() else { return };
         let resumed = matches!(child.spec.session, SessionStart::Resume(_));
+        // The model the child runs: the chat's own, except on a wake-up after a change.
+        let model_id = child.spec.model.clone();
         let mut mapper = Mapper::new(session_id.clone());
         let input = TurnInput {
             content: if wake { None } else { user.as_ref().map(nekko_harness::user_content) },
@@ -1453,7 +1482,7 @@ impl Turns {
         }
         if let Some(reported) = mapper.context() {
             let mut s = lock(session);
-            let context = claude_code_context(s.get("claudeCodeContext"), reported, model, wanted.model.clone());
+            let context = claude_code_context(s.get("claudeCodeContext"), reported, model, model_id);
             if let Some(obj) = s.as_object_mut() {
                 obj.insert("claudeCodeContext".into(), context);
             }

@@ -429,6 +429,7 @@ const api: NekkoApi = {
   getClaudePolicy: () => inv(IpcChannels.claudePolicy),
   getClaudeCapability: (providerId, capability) => inv(IpcChannels.claudeCapability, providerId, capability),
   getClaudePlanUsage: (providerId) => inv(IpcChannels.claudePlanUsage, providerId),
+  claudeBackgroundTasks: () => inv(IpcChannels.claudeBackgroundTasks),
   getClaudeCodeStatus: (providerId, account) => inv(IpcChannels.claudeCodeStatus, providerId, account),
   getMcpStatus: () => inv(IpcChannels.mcpStatus),
   detectHypergate: (port?: number) => inv(IpcChannels.mcpHypergate, port),
