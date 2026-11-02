@@ -59,14 +59,17 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
     public var platform: String?
     /// Other addresses of the same relay, from the pairing link (TASKS.md IO-20).
     public var alts: [String]
+    /// Its `machineIcon`, learned from `app:info` once connected. Nil shows nothing.
+    public var icon: String?
 
-    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = []) {
+    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = [], icon: String? = nil) {
         self.id = id
         self.name = name
         self.relayUrl = relayUrl
         self.pairedAt = pairedAt
         self.platform = platform
         self.alts = alts
+        self.icon = icon
     }
 
     /// Pairings saved before routes existed have no `alts`.
@@ -78,6 +81,7 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         pairedAt = try c.decode(Int64.self, forKey: .pairedAt)
         platform = try c.decodeIfPresent(String.self, forKey: .platform)
         alts = try c.decodeIfPresent([String].self, forKey: .alts) ?? []
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
     }
 
     /// Every address, best first (the order the client tries them).
@@ -1026,6 +1030,8 @@ public final class ComputersStore {
             hostVersion = appInfo.version
             quitFromPhone = appInfo.quitFromPhone
             learnPlatform(appInfo.platform)
+            // A failed read says nothing about the icon; an answer without one clears it.
+            if r.4 != nil, let id = activeId { learnIcon(appInfo.machineIcon, for: id) }
             summariesLoading = false
             summariesLoaded = true
             savedListAt = nil
@@ -1167,6 +1173,13 @@ public final class ComputersStore {
         pcSettings = PcSettings.from(try await call(raising: Channels.settingsUpdate, [patch]))
     }
 
+    /// Set the active computer's icon, there, so every device shows the same one: a name from `computerIcons`, or "" for none.
+    public func setMachineIcon(_ name: String) async throws {
+        guard let id = activeId else { return }
+        try await updatePcSettings(PcSettings.patch(icon: name))
+        learnIcon(name.isEmpty ? nil : name, for: id)
+    }
+
     // MARK: Internals
 
     private func setArchived(_ sessionId: String, _ at: Int64?) {
@@ -1232,6 +1245,12 @@ public final class ComputersStore {
         // First connection names the computer after its OS, unless the user renamed it.
         if computers[i].name == defaultComputerName { computers[i].name = osName(platform) }
         computers[i].platform = platform
+        saveIndex()
+    }
+
+    private func learnIcon(_ icon: String?, for id: String) {
+        guard let i = computers.firstIndex(where: { $0.id == id }), computers[i].icon != icon else { return }
+        computers[i].icon = icon
         saveIndex()
     }
 

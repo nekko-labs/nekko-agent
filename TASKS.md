@@ -25,6 +25,7 @@ A desktop connects to other computers the way a phone does, and shows every agen
 - [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys and the phone section done 2026-11-02. Left: controls for model loading on any client, and for disabled tools, memory and privacy on phones.
 - [x] **CC7, A host with no window (2026-11-02).** `nekko-agent computer serve`, `link`, `list`, `revoke`.
 - [ ] **CC8, Pair without pasting.** Discovery, relay lobby, comparison code.
+- [x] **CC9, Computer icons on phones (2026-11-02).** `scripts/computer-icons.mjs` renders the desktop's glyphs into an SVG imageset per icon (template, vector kept) and an Android vector drawable per icon; `scripts/computer-icons.test.mjs` keeps `COMPUTER_ICONS`, both phones' lists and the assets equal. Each phone keeps `machineIcon` from `app:info` on the computer's record, shows it beside the name in lists and switchers, and sets it from the computer's page with `settings:update`. No gate change: the key was already phone-settable and needs no proof.
 
 ## Model scheduler (#1462, added 2026-11-01)
 

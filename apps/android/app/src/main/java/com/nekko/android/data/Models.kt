@@ -33,6 +33,8 @@ data class Computer(
     val platform: String? = null,
     /** Other addresses of the same relay, from the pairing link (AN-28). */
     val alts: List<String> = emptyList(),
+    /** Its `machineIcon`, learned from app:info once connected. Null shows nothing. */
+    val icon: String? = null,
 )
 
 /** Secret half of a pairing, kept in [SecureStore] only. */
@@ -102,6 +104,7 @@ internal object StoredJson {
                 put("pairedAt", c.pairedAt)
                 c.platform?.let { put("platform", it) }
                 if (c.alts.isNotEmpty()) put("alts", buildJsonArray { c.alts.forEach { add(JsonPrimitive(it)) } })
+                c.icon?.let { put("icon", it) }
             })
         }
     }.toString()
@@ -117,6 +120,7 @@ internal object StoredJson {
                 pairedAt = (o["pairedAt"] as? JsonPrimitive)?.longOrNull ?: 0,
                 platform = o.str("platform"),
                 alts = (o["alts"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
+                icon = o.str("icon"),
             )
         }
     }
