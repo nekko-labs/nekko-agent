@@ -2074,6 +2074,16 @@ impl ToolRunner for TurnTools {
         }
         self.guarded(call).await
     }
+
+    /// What the user sent mid-turn stays in the queue, where they can still
+    /// interrupt with it, until this boundary reads it.
+    async fn before_step(&self) {
+        let id = str_at(&lock(&self.session), "id").unwrap_or_default().to_string();
+        let store = self.store.clone();
+        let taken = tokio::task::spawn_blocking(move || store.take_queued_text(&id)).await;
+        let texts = taken.ok().and_then(Result::ok).unwrap_or_default();
+        lock(&self.shared.steering).extend(texts.iter().map(|t| Turns::steering_message(t)));
+    }
 }
 
 impl TurnTools {

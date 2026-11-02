@@ -56,8 +56,6 @@ public struct QueuedPrompt: Equatable, Sendable {
     /// A skill's text is its instructions: it can be removed, not edited.
     public var editable: Bool { skillName == nil }
 
-    /// The agent takes only text at its next step: photos and skills wait for their turn.
-    public var canTakeAtNextStep: Bool { skillName == nil && images == 0 }
 
     public static func list(_ v: JSONValue?) -> [QueuedPrompt] {
         (v?.array ?? []).compactMap { q in

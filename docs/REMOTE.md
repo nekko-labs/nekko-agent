@@ -237,11 +237,11 @@ both need the update; an older app cannot connect to an updated computer.
 > backed up, and are deleted when you forget the computer or a chat is deleted on it.
 >
 > **Beyond the chat** (iPhone): the phone is a remote for the agent, not a second desktop.
-> - **Edit the queue:** a follow-up sent while a reply runs waits under **Queued** with Edit and
->   Remove. An edit only lands if that prompt hasn't started yet; otherwise nothing changes.
-> - **Don't wait:** while the reply runs, each queued message also has **Next step** (the agent reads
->   it at its next step and keeps going) and **Interrupt** (the reply stops and this starts now).
->   Next step is text only, so a message with photos or a skill offers Interrupt.
+> - **Message a running agent:** a message sent while a reply runs waits under **Queued** with Edit
+>   and Remove, and the agent reads it at its next step. A message with photos or a skill, or one
+>   for a Claude Code chat, runs when the reply ends. An edit only lands if that prompt hasn't
+>   started yet; otherwise nothing changes.
+> - **Don't wait:** **Interrupt and send now** stops the reply and starts that message at once.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
 > - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.

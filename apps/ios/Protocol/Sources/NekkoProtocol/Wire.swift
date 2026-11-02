@@ -30,8 +30,6 @@ public enum Channels {
     public static let chatSend = "chat:send"
     public static let chatAbort = "chat:abort"
     public static let chatQueue = "chat:queue"
-    /// Text the running agent reads at its next step, without stopping.
-    public static let chatSteer = "chat:steer"
     /// Stop the reply and start the queued prompt at an index.
     public static let chatInterruptQueued = "chat:interruptQueued"
     public static let chatPending = "chat:pending"

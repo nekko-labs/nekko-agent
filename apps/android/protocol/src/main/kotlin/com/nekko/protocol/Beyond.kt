@@ -50,8 +50,6 @@ data class QueuedPrompt(
     /** A skill's text is its instructions: it can be removed, not edited. */
     val editable: Boolean get() = skillName == null
 
-    /** The agent takes only text at its next step: photos and skills wait for their turn. */
-    val canTakeAtNextStep: Boolean get() = skillName == null && images == 0
 
     companion object {
         fun list(v: JsonElement?): List<QueuedPrompt> = v.arr().orEmpty().mapNotNull { q ->

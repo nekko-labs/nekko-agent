@@ -394,27 +394,6 @@ class ChatController(
         }
     }
 
-    /**
-     * Give the running agent the queued prompt at [index] at its next step, keeping
-     * its work. It leaves the queue first, through the check an edit gets, so it
-     * can't run twice. A refused send puts it back in line.
-     */
-    suspend fun sendQueuedAtNextStep(index: Int, expect: String) {
-        if (env().conn != RelayState.ONLINE) throw RelayException(RECONNECT_TO_EDIT_QUEUE)
-        try {
-            caller.call(Channels.CHAT_EDIT_QUEUED, JsonPrimitive(sessionId), JsonPrimitive(index), QueuedPrompt.edit(expect, null))
-            try {
-                caller.call(Channels.CHAT_STEER, JsonPrimitive(sessionId), JsonPrimitive(expect))
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                runCatching { caller.call(Channels.CHAT_QUEUE, JsonPrimitive(sessionId), JsonPrimitive(expect)) }
-                throw e
-            }
-        } finally {
-            withContext(NonCancellable) { reload() }
-        }
-    }
-
     /** Stop the reply and start the queued prompt at [index] on this chat's model. */
     suspend fun interruptQueued(index: Int) {
         if (env().conn != RelayState.ONLINE) throw RelayException(RECONNECT_TO_EDIT_QUEUE)

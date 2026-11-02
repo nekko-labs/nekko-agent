@@ -41,8 +41,6 @@ object Channels {
     const val CHAT_SEND = "chat:send"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
-    /** Text the running agent reads at its next step, without stopping. */
-    const val CHAT_STEER = "chat:steer"
     /** Stop the reply and start the queued prompt at an index. */
     const val CHAT_INTERRUPT_QUEUED = "chat:interruptQueued"
     const val CHAT_PENDING = "chat:pending"
