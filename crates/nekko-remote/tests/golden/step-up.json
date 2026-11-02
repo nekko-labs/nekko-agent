@@ -14,7 +14,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -22,7 +22,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -47,7 +47,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEUCIQCtkKx8yoHtyCvg1w3EALeYOC79phIxRkCQeFu3-TXiIAIgbSAuRd278ZqXEJTm8VP5BXePrpjq6h3OVVelqmh6RrM"
+    "signature": "MEQCIAHB0LrhMR4lRHBxbeiCXdiA76_td1lL8frK-7bzWY31AiBoLtveGb-CKeWAuELicB8Zxe8wGnizTZRh9S0W3GDwlg"
    },
    "expect": {
     "result": "ok",
@@ -62,7 +62,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 6,
        "name": "YubiKey",
        "kind": "security-key",
@@ -71,7 +71,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -108,7 +108,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -116,7 +116,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -141,7 +141,7 @@
     "credentialId": "AgICAgICAgICAgICAgICAg",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4BAAAAAA",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEQCIAKPQEgStbhNl4-mVVbBmqsd0WbIgR2tIU_hnvIAkWfXAiAWXFP8R94qHUn2fmCjtXawUjNmYwChL6hP5RhTIriPMg"
+    "signature": "MEYCIQDbFvi7pIsTeceEVepYRNcGgb4juONPjUUzodusY3YNrQIhAKRrh3HetnZUYg0Ou-5WHbtXHh9TGd9slJJw2OaycGXN"
    },
    "expect": {
     "result": "ok",
@@ -156,7 +156,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -164,7 +164,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -202,7 +202,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -210,7 +210,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -235,7 +235,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQ1FrSkNRa0pDUWtKQ1FrSkNRa0pDUWtKIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEYCIQC3ZCPkk-UCkzvBC7wDAi4FcgEdo7utGjUQpjAlpt_NRgIhAPb7ZkJ6o97AnGojnrJQyobeo41Lyfq1nfIU_o14ji07"
+    "signature": "MEQCIAf6wDdywyDYPO0qf53bq5SobrInmDLX8PhvAcKlOTWvAiB9o0ILXMa4I9eXVhGCzkuveQ4Sl4a-n-kalXm8xXPr3Q"
    },
    "expect": {
     "result": "step-up-invalid",
@@ -250,7 +250,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -258,7 +258,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -293,7 +293,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -301,7 +301,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -326,7 +326,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEQCIBd927RXEO3frkhhQ2hm8TP7DfT6gUeiX2jExWYN-c6gAiBqAY4lT7XOIatm4Cx9SrPRr7HkZV2OzaS_XltB_k99TA"
+    "signature": "MEQCIAk2c_9Nc0VNa-J9pQj58PF84BI9x0mJZ-Eh91TckpwZAiA9prFCvSWFnEqlEKQT8-NP1DmPfLA56cmI2YWT2Ct47w"
    },
    "expect": {
     "result": "step-up-stale",
@@ -341,7 +341,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -349,7 +349,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -384,7 +384,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -392,7 +392,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -417,7 +417,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEUCIQDM8n24Tx98xaAMSwK3Hrd2DTUaaVI4qYPmtzywp1XthgIgXix4KO54lu_HVEzwndGgb13sNCsKvSKesFGB2v4UQgQ"
+    "signature": "MEQCIHsy5MXhH1Gmbiv_zPMrFeFos_pSsyYPHtxRApukzYQeAiBH8TCYyCvRUco4vUUjj3NTyvqKRHKzDCasQosm0JAfyw"
    },
    "expect": {
     "result": "step-up-replayed",
@@ -432,7 +432,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -440,7 +440,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -475,7 +475,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -483,7 +483,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -508,7 +508,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABQ",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEUCIQCLLfI1Wl1xQpazp_5Sv4A6-xGUHsqCaZdENfCuWoSIzQIgDMVWRR4G6hfbFCFdZpD_nx_-BZRbHC9yoTPo5cFv9xA"
+    "signature": "MEQCIBT4i5pl0_kadLy4_PQ962cD4P9pPylEKL5RJO1RjBVFAiAk-OHmx4sUvJ7s_-ibrpqsQZ3RFLjhkPewCYu6oJEYPQ"
    },
    "expect": {
     "result": "step-up-invalid",
@@ -523,7 +523,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -532,7 +532,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -568,7 +568,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -576,7 +576,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -601,7 +601,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEUCIQDojRGXiEZZGpWlfQF9lBxvZPgqwDSqPqxsFFRk8m3HCAIgaysvfR3JJczbWV_H8OgLoMWKDJq2ScsVsDCyNdfJYv8"
+    "signature": "MEUCIQDlKYEjKena7PSWzpQMst8wIIjn3ChFb5vb5rbq1qQTKwIgVZQUDB_oD1IjUrwsokCPyWfGGEvg4D4H_PFtKKwE_ZY"
    },
    "expect": {
     "result": "step-up-invalid",
@@ -616,7 +616,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -624,7 +624,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -659,7 +659,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -667,7 +667,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -692,7 +692,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUiLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
-    "signature": "MEQCIQDG4f6yoXhdHVpgmvHG6lHEisZs1RF1MNJWZBH7jQkEEwIfJ8AVqCgGjFngYo7zkLCUpG_cJmlySCYCgDcR8T3n5w"
+    "signature": "MEYCIQCus_mSHa1_7DBWVzZbvmDF5gh42pEwSFlW_pjJLSj_LwIhAPdGFAt_JSwTTmQ5gix5pm1spEF2-IX1aEwSGcaKkJIv"
    },
    "expect": {
     "result": "step-up-invalid",
@@ -707,7 +707,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -715,7 +715,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -750,7 +750,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -758,7 +758,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -783,7 +783,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "OTd-EurT0c84fHRXoWxVCuKjKA_4e9JicJQv7-fUadgFAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEQCIBklPlNLF1jIhSOJ7OJCAzludtR-Wo78A582ROYO3ms5AiB1F9RWgnLWOqg1lGLDYdLCI7T8Zj_q0MRrIDw7JpZTzg"
+    "signature": "MEQCIHoWasBDAt_U8giedzimUxY0Gya5nVsY3xEtEc9cahBqAiBPGe6tvXVBclL_fZdQP9iGxZrOeSiRkRaNtBYrr3TUmw"
    },
    "expect": {
     "result": "step-up-invalid",
@@ -798,7 +798,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -806,7 +806,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -841,7 +841,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -849,7 +849,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -874,7 +874,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4EAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEQCIG5twc3s-_N5_TSG45vwcpoU4HbiBi4sT8qRBbXNRpLUAiBBg_rPYBlcGdMJhm4q-Fyt_j9C1XmiiFXOlAMJhEEeLA"
+    "signature": "MEYCIQCu7e0q6rrifVHIKXTpssmKIJxLWqdmDXPOW4_yvODM2wIhAJhuy9NoI33ge1he4fbzMx_yTrE2JiwWeT4nXL4sPIGz"
    },
    "expect": {
     "result": "step-up-invalid",
@@ -889,7 +889,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -897,7 +897,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -932,7 +932,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -940,7 +940,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -965,7 +965,7 @@
     "credentialId": "AQEBAQEBAQEBAQEBAQEBAQ",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEUCIBZMCCdIVH1xbyj0foAhz4zdJzq6fy86GbtvyOT7CHLWAiEA2CU4bM8lI0b3MsAlurB8ZAsI_h2SRdMw7K_r0HffzBs"
+    "signature": "MEQCIC6hfDn40AZ3ND9tR7shtDQCxzcJcZnOkNDMx0vd3VZzAiAlHYKshT05cHQtCJyCjvCVIKYbFxn9ohOmhMHg-KvCmg"
    },
    "expect": {
     "result": "step-up-invalid",
@@ -980,7 +980,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -988,7 +988,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1023,7 +1023,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1031,7 +1031,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1056,7 +1056,7 @@
     "credentialId": "AwMDAwMDAwMDAwMDAwMDAw",
     "authenticatorData": "IVFUxYKo-rQ5Mno5PvMiXR1brV-uvVIBnlC6s50ULq4FAAAABg",
     "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIIiwib3JpZ2luIjoibmVra28tYXBwOi8vZGVza3RvcCIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
-    "signature": "MEQCIAXXRvbuSYFvVPDc-OznV6HLmdWm857THIQ8-voh8AxsAiB5Q3zfXkQjTN_MJq45dXAsgSHP63iwEzxCBiNfmy_D2Q"
+    "signature": "MEUCIFEp2r9PENU27vpHQ7mNOxA32Y6Ep87DEL4Fwg4-pXMxAiEAoPOr8Xkmg-KoeKpVpPOiz9VeK_xfw6IYPAv-ITFJoGc"
    },
    "expect": {
     "result": "step-up-invalid",
@@ -1071,7 +1071,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1079,7 +1079,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1114,7 +1114,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1122,7 +1122,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1157,7 +1157,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1165,7 +1165,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1200,7 +1200,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1208,7 +1208,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1245,7 +1245,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1253,7 +1253,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1288,7 +1288,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1296,7 +1296,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1327,7 +1327,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1335,7 +1335,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1367,7 +1367,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1375,7 +1375,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1406,7 +1406,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1414,7 +1414,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1446,7 +1446,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1454,7 +1454,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1485,7 +1485,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1493,7 +1493,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1525,7 +1525,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1533,7 +1533,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1564,7 +1564,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1572,7 +1572,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1602,7 +1602,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1610,7 +1610,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1642,7 +1642,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1650,7 +1650,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1680,7 +1680,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1688,7 +1688,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1720,7 +1720,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1728,7 +1728,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1760,7 +1760,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1768,7 +1768,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1801,7 +1801,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1809,7 +1809,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1840,7 +1840,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1848,7 +1848,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1882,7 +1882,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1890,7 +1890,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -1922,7 +1922,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -1930,7 +1930,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -1964,7 +1964,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -1972,7 +1972,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -2004,7 +2004,7 @@
     "credentials": [
      {
       "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-      "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+      "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
       "counter": 5,
       "name": "YubiKey",
       "kind": "security-key",
@@ -2012,7 +2012,7 @@
      },
      {
       "id": "AgICAgICAgICAgICAgICAg",
-      "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+      "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
       "counter": 0,
       "name": "Touch ID",
       "kind": "passkey",
@@ -2040,7 +2040,7 @@
      "credentials": [
       {
        "id": "AQEBAQEBAQEBAQEBAQEBAQ",
-       "publicKey": "BNEr3EF24DkKm6OrNVCfO7eZF8f0mdS62WvBNDT36ON+Tn7Ws2SHooAdY8fb7QrmJ4OIB+AMGyWW/Nm/pAk7oDk=",
+       "publicKey": "BH+x3MeQdUiPkXUWqYp2ZOALpqC0Q9XmSumyhf3PHfuBvlyuggkFbs7+BS2DPBmztLtqqnTXSi+SXGooCA3Te9k=",
        "counter": 5,
        "name": "YubiKey",
        "kind": "security-key",
@@ -2048,7 +2048,7 @@
       },
       {
        "id": "AgICAgICAgICAgICAgICAg",
-       "publicKey": "BLopO26eSbY7h5IsNBO7Dqs7XA1Aqv4jRPOyPLwg5bAzr3GbXrzYBa6C0LXj28PhBiEi+oakU2rWZoLs5c1Z49g=",
+       "publicKey": "BDbtfjKBeE1AmMuf0ejBwcf7n7HnXIEPQioTikbl6qMa4r2I0QWY6+hxJIVkx/F6o9k4Ak0ntnFa+5I/sc9ESXw=",
        "counter": 0,
        "name": "Touch ID",
        "kind": "passkey",
@@ -2096,28 +2096,28 @@
  ],
  "recovery": {
   "codes": [
-   "57llw-t53zr",
-   "jrsj3-q2v3c",
-   "7p7jv-uofns",
-   "b72ul-xdjj7",
-   "uo36l-iqxj5",
-   "qjpjm-avs6d",
-   "rsp5l-vj5vp",
-   "silxu-n2sfz",
-   "7ch6o-opo7s",
-   "imars-5kux2"
+   "lqmdw-pvdqs",
+   "j2ode-vbpos",
+   "ewiua-spjsx",
+   "2cuzr-4z7z4",
+   "vj2fg-h2tjy",
+   "yrycp-7blrv",
+   "7f54u-tuuiu",
+   "rgjlg-qkj7s",
+   "em7b4-o74nu",
+   "gsg7c-7deth"
   ],
   "hashes": [
-   "de7068f14fa25e6c0db35e4decfaa1d406280fddcfc33f0eaa9524267f8ca6b0",
-   "2f8640f3b9d2a6a9f039a88190a228f4afed6c4288a6ea9e0501ed0bf0507060",
-   "a0b8590949fae893344f198339d03a967b749e93376aa7db087da58ca1a97435",
-   "3f062bdcc8e75dc2d29ce2e2771bc181ab27c7eebbd2a93c3e6f19c8a5c19db3",
-   "d5e9ee370d73d47f9829db9669f477832c67ce4626148b6cc1b9db0483e4fd43",
-   "10630106dd65f672a277709ac81e972eb78515a8f13a33e1b1ece70d723d5a7e",
-   "bfe99fd6d9ac754b61c75b0d7d8e532d19b69e10003954d41f0aade6539a0844",
-   "58b78105a6efcdac52a4f178eed7e2132447af23b00ded4115f20b010db1ad81",
-   "1a842cf98f888fe93a306ea44e9a2de0e52addbe8137252b044ca6693b0549e0",
-   "87f88f94e2e4d4edd5c6ef3b68ad0ccc3c20e9e7051bd1878965cad575f094e7"
+   "d5933988791e5dae40e2ea96537b23e2c6f8f04d9476b93cc274efa8bc192aaf",
+   "fdb01cf62913675124314e79e20f1d56f6976762c0361606e544124c0312c50e",
+   "244fda5a1e2de0dc4e0f2dc1f451e2110632556d0cbd120b19253a329f9edc69",
+   "a7f86c8015ef384fbe545cfb27dde636a26a46f9ed8b05ce927949bede3dc5e0",
+   "bbc31110288ea09502e1490d12de505bb30257a453329542c9d8677cc7302fa5",
+   "e7346e8063b31b37a059e757ac56a2d4bdb4e17c37394d3390ab41688f522e3a",
+   "123f44b227f011fdec5a6e496d617dccaa3d3003ed3e8b319c8925a09335695b",
+   "71562240d1b68767e32709cd1b9097e2a763b043e2748ddcd28796e5ad62c93b",
+   "bd70f28a8347fce4b0aa3e5a6cc046f59624f6f964305d1f7f256ce4700323e9",
+   "f94ae910d61162baeec2235f316d7a8db9f8bdc51ef9ab6d329d0ad4e344729e"
   ]
  }
 }
