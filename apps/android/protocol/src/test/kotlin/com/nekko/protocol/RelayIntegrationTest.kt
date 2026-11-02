@@ -31,15 +31,13 @@ import java.util.concurrent.TimeUnit
 
 /**
  * The Android relay client against the real thing: the relay (apps/relay-server/dist),
- * a headless agent (apps/local-web-ui/dist in relay-agent mode, TS loop) and a fake
+ * a headless agent (apps/local-web-ui/dist in relay-agent mode, on nekkod) and a fake
  * OpenAI-compatible model. Proves the phone path end to end: enrollment with
  * the one-time code, the host's channels, a streamed chat turn, a guarded tool
- * call approved from the phone, and denial of strangers and a spent code.
- * The TS agent never sends a challenge, so this also covers the legacy
- * (protocol 3) HELLO after [RelayConfig.challengeWaitMs]; the challenged
- * handshake is covered by RelayClientTest against the shared golden file.
+ * call approved from the phone, and denial of strangers and a spent code. The
+ * host key is pinned from the pairing link the agent prints, as a phone pins it.
  *
- * Opt-in. Needs a root build (shared, core, host, server, relay) and Node:
+ * Opt-in. Needs a root build (shared, core, host, server, relay), nekkod and Node:
  *   NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegrationTest*'
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -52,6 +50,7 @@ class RelayIntegrationTest {
         private lateinit var keyBytes: ByteArray
         private var relayUrl = ""
         @Volatile private var pairCode = ""
+        @Volatile private var hostKey = ""
 
         private fun freePort() = ServerSocket(0).use { it.localPort }
 
@@ -88,10 +87,12 @@ class RelayIntegrationTest {
             Thread {
                 agent.inputStream.bufferedReader().forEachLine { line ->
                     Regex("pairing code \\(10 min\\): ([A-Z2-9]+)").find(line)?.let { pairCode = it.groupValues[1] }
+                    Regex("pairing link: (\\S+)").find(line)?.let { hostKey = Pairing.parse(it.groupValues[1])?.hostKey.orEmpty() }
                 }
             }.apply { isDaemon = true }.start()
-            repeat(150) { if (pairCode.isEmpty()) Thread.sleep(100) }
+            repeat(150) { if (hostKey.isEmpty()) Thread.sleep(100) }
             assertTrue("agent printed a pairing code", Regex("^[A-Z2-9]{8}$").matches(pairCode))
+            assertTrue("agent printed a link with its host key", hostKey.isNotEmpty())
         }
 
         private fun Process.drain() = Thread { inputStream.bufferedReader().forEachLine { } }.apply { isDaemon = true }.start()
@@ -108,7 +109,7 @@ class RelayIntegrationTest {
 
     private fun client(pair: String? = null, deviceId: String = UUID.randomUUID().toString()) = RelayClient(
         RelayConfig(
-            relayUrl, room, key, keyBytes, deviceId, "Android itest", pairCode = pair, requestTimeoutMs = 30_000,
+            relayUrl, room, key, keyBytes, hostKey, deviceId, "Android itest", pairCode = pair, requestTimeoutMs = 30_000,
             helloSigner = signers.getOrPut(deviceId) { SoftwareHelloSigner.generate() },
         ),
         OkHttpTransport(), scope,

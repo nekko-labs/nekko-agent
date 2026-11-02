@@ -57,7 +57,7 @@ final class ComputersTests: XCTestCase {
         let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
-        field.typeText("relay=wss://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff")
+        field.typeText("relay=wss://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&host=BJ7go4GGB9flqEQfjn77eO%2BWT5J%2Bxi8WJkMUlZycp%2BJNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE%3D")
         app.buttons["Pair"].tap()
         if app.buttons["Not now"].waitForExistence(timeout: 3) { app.buttons["Not now"].tap() }
         // Onboarded, pairing asks iOS for notifications straight away; answer it here

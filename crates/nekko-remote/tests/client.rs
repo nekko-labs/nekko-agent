@@ -20,7 +20,14 @@ use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 struct NoLink;
 struct NoHandle;
 impl Link for NoLink {
-    fn connect(&self, _: &str, _: &str, _: &str, _: Verifier) -> Arc<dyn LinkHandle> {
+    fn connect(
+        &self,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: nekko_remote::client::SigningKey,
+        _: Verifier,
+    ) -> Arc<dyn LinkHandle> {
         Arc::new(NoHandle)
     }
 }
@@ -49,6 +56,12 @@ struct Host {
     close: tokio::sync::broadcast::Sender<(u16, String)>,
     /// Send the client this host event.
     event: tokio::sync::broadcast::Sender<(String, Value)>,
+    /// The host key the client pins.
+    pinned: String,
+    /// Frames that reached the host.
+    heard: Arc<std::sync::atomic::AtomicUsize>,
+    /// Send the client this frame under the room key, as anyone ever paired can.
+    forge: tokio::sync::broadcast::Sender<Value>,
     _dir: tempfile::TempDir,
 }
 
@@ -57,28 +70,43 @@ fn signing_key(seed: u8) -> SigningKey {
 }
 
 async fn host() -> Host {
+    host_signed_with(None).await
+}
+
+/// A host signing challenges with `impostor` in place of its own key.
+async fn host_signed_with(impostor: Option<SigningKey>) -> Host {
     let dir = tempfile::tempdir().unwrap();
     let random: Random = os_random();
     let svc = RemoteService::new(dir.path(), random, system_clock(), Box::new(NoLink));
     svc.enable(&json!("ws://127.0.0.1:1")).unwrap();
     let pairing = svc.pairing();
     let (room, secret) = (pairing["room"].as_str().unwrap().to_string(), pairing["key"].as_str().unwrap().to_string());
+    let pinned = pairing["hostKey"].as_str().unwrap().to_string();
+    let saved: Value = serde_json::from_slice(&std::fs::read(dir.path().join("remote.json")).unwrap()).unwrap();
+    let real = nekko_remote::proof::parse_key_text(saved["hostKey"].as_str().unwrap()).unwrap();
+    let host_key = impostor.unwrap_or(real);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("ws://{}", listener.local_addr().unwrap());
     let calls: Arc<Mutex<Vec<(String, String, Value)>>> = Arc::default();
+    let heard: Arc<std::sync::atomic::AtomicUsize> = Arc::default();
+    let (forge, _) = tokio::sync::broadcast::channel::<Value>(4);
     let (close, _) = tokio::sync::broadcast::channel::<(u16, String)>(4);
     let (event, _) = tokio::sync::broadcast::channel::<(String, Value)>(4);
     let (s, k, seen, closing, events, service) =
         (room.clone(), secret.clone(), calls.clone(), close.clone(), event.clone(), svc.clone());
+    let (ears, forger) = (heard.clone(), forge.clone());
     tokio::spawn(async move {
         loop {
             let Ok((tcp, _)) = listener.accept().await else { return };
             let (s, k, seen, mut closing, mut events, service) =
                 (s.clone(), k.clone(), seen.clone(), closing.subscribe(), events.subscribe(), service.clone());
+            let (host_key, ears, mut forged) = (host_key.clone(), ears.clone(), forger.subscribe());
             tokio::spawn(async move {
                 let Ok(ws) = tokio_tungstenite::accept_async(tcp).await else { return };
                 let (mut sink, mut stream) = ws.split();
-                let mut core = AgentCore::new(e2e::derive_key(&k, &s), Box::new(e2e::random_iv));
+                let room_key = e2e::derive_key(&k, &s);
+                let host = nekko_remote::agent::Host { room: s.clone(), key: host_key };
+                let mut core = AgentCore::new(e2e::derive_key(&k, &s), host, Box::new(e2e::random_iv));
                 let svc = service.clone();
                 let verify = move |h: &Value| svc.verify(h);
                 let relay_to_client = |frames: Vec<String>| {
@@ -105,6 +133,11 @@ async fn host() -> Host {
                             while matches!(stream.next().await, Some(Ok(_))) {}
                             return;
                         }
+                        f = forged.recv() => {
+                            let Ok(f) = f else { return };
+                            let sealed = json!({ "enc": e2e::seal_with_iv(&room_key, &f, e2e::random_iv()) });
+                            sink.send(Message::text(sealed.to_string())).await.unwrap();
+                        }
                         e = events.recv() => {
                             let Ok((channel, payload)) = e else { return };
                             for data in relay_to_client(core.on_event(&channel, &payload)) {
@@ -116,6 +149,7 @@ async fn host() -> Host {
                                 if matches!(msg, Some(Ok(_))) { continue; }
                                 return;
                             };
+                            ears.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                             let frame = json!({ "type": "c", "cid": "c1", "data": text.as_str() }).to_string();
                             for out in core.on_relay(&frame, &verify) {
                                 let replies = match out {
@@ -129,7 +163,7 @@ async fn host() -> Host {
                                         } else {
                                             Ok(json!({ "echo": args }))
                                         };
-                                        vec![core.reply(&cid, id, result)]
+                                        core.reply(&cid, id, result).into_iter().collect()
                                     }
                                 };
                                 for data in relay_to_client(replies) {
@@ -142,7 +176,7 @@ async fn host() -> Host {
             });
         }
     });
-    Host { svc, room, secret, url, calls, close, event, _dir: dir }
+    Host { svc, room, secret, pinned, url, calls, close, event, heard, forge, _dir: dir }
 }
 
 fn config(h: &Host, code: Option<String>) -> Config {
@@ -150,6 +184,7 @@ fn config(h: &Host, code: Option<String>) -> Config {
         routes: vec![h.url.clone()],
         room: h.room.clone(),
         secret: h.secret.clone(),
+        host_key: h.pinned.clone(),
         device_id: "macbook".into(),
         name: "MacBook".into(),
         key: signing_key(7),
@@ -245,15 +280,49 @@ async fn another_key_on_the_same_device_is_refused() {
 }
 
 #[tokio::test]
-async fn being_removed_stops_the_link_for_good() {
+async fn a_close_is_not_a_removal_but_a_sealed_refusal_is() {
     let h = host().await;
     let code = h.svc.pair_computer()["code"].as_str().unwrap().to_string();
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let client = Client::start(config(&h, Some(code)), tx);
     settled(&client, |s| *s == State::Online).await;
+    // Anyone holding the room credential can get the relay to send this.
     h.close.send((4001, "removed".into())).unwrap();
-    assert_eq!(settled(&client, |s| matches!(s, State::Denied(_))).await, State::Denied("kicked".into()));
+    settled(&client, |s| *s == State::Connecting).await;
+    settled(&client, |s| *s == State::Online).await;
+    // Really removed: the redial hears it sealed.
+    h.svc.revoke(&json!("macbook")).unwrap();
+    h.close.send((4001, "removed".into())).unwrap();
+    assert_eq!(settled(&client, |s| matches!(s, State::Denied(_))).await, State::Denied("revoked".into()));
     assert!(client.call("app:info", json!([])).await.is_err());
+}
+
+#[tokio::test]
+async fn an_impostor_with_the_room_secret_hears_nothing() {
+    let h = host_signed_with(Some(signing_key(11))).await;
+    let code = h.svc.pair_computer()["code"].as_str().unwrap().to_string();
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let client = Client::start(config(&h, Some(code)), tx);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(client.status().state, State::Connecting);
+    assert_eq!(h.heard.load(std::sync::atomic::Ordering::SeqCst), 0, "not even a HELLO, let alone the code");
+    client.stop();
+}
+
+#[tokio::test]
+async fn the_room_key_can_forge_no_refusal_and_no_reply() {
+    let h = host().await;
+    let code = h.svc.pair_computer()["code"].as_str().unwrap().to_string();
+    let (tx, mut events) = tokio::sync::mpsc::unbounded_channel();
+    let client = Client::start(config(&h, Some(code)), tx);
+    settled(&client, |s| *s == State::Online).await;
+    h.forge.send(json!({ "type": "denied", "reason": "revoked" })).unwrap();
+    h.forge.send(json!({ "type": "event", "channel": "agent:event", "payload": { "forged": true } })).unwrap();
+    // A call after them proves they were read and ignored.
+    assert_eq!(client.call("app:info", json!([])).await.unwrap()["echo"], json!([]));
+    assert_eq!(client.status().state, State::Online);
+    assert!(events.try_recv().is_err());
+    client.stop();
 }
 
 #[tokio::test]

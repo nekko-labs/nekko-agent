@@ -120,8 +120,8 @@ final class StepUpCallsTests: XCTestCase {
         let store = ComputersStore(store: MemoryStore(), makeConnection: { _ in computer }, deviceName: { "iPhone" },
                                    deriveKey: { _, _ in Data(repeating: 7, count: 32) }, newId: { "id-1" })
         store.load()
-        _ = await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
-                                         key: "00112233445566778899aabbccddeeff", pair: "ABCD2345"))
+        _ = try! await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
+                                          key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: "ABCD2345"))
         store.changeSigner = SoftwareChangeSigner()
         return store
     }
@@ -269,7 +269,7 @@ final class StepUpCallsTests: XCTestCase {
 @MainActor
 final class SafetyExitTests: XCTestCase {
     let link = PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
-                           key: "00112233445566778899aabbccddeeff", pair: "ABCD2345")
+                           key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: "ABCD2345")
     var connections: [FakeConnection] = []
     var secure = MemoryStore()
     var replies: [String: ([JSONValue]) throws -> JSONValue] = [:]
@@ -302,7 +302,7 @@ final class SafetyExitTests: XCTestCase {
 
     func online(_ s: ComputersStore) async -> String {
         s.load()
-        let id = await s.pair(link)
+        let id = try! await s.pair(link)
         connections[0].online()
         await settle()
         return id
@@ -346,15 +346,34 @@ final class SafetyExitTests: XCTestCase {
         XCTAssertEqual(last.calls.map { $0.0 }, [Channels.deviceSignOut], "nothing else is read")
         XCTAssertNil(last.config.pairCode)
         XCTAssertEqual(last.config.room, link.room)
+        XCTAssertEqual(last.config.hostKey, testHostKey)
         XCTAssertTrue(last.closed)
         XCTAssertTrue(s.pendingSignOuts.isEmpty)
         XCTAssertNil(secure.get("nekko.pendingSignOuts"))
     }
 
+    /// Saved before the host key, this sign-out could only be dialed unpinned, and no computer would answer it.
+    func testASignOutFromBeforeTheHostKeyIsDroppedNotDialed() async throws {
+        let s = makeStore()
+        let id = await online(s)
+        connections[0].status(RelayStatus(.offline))
+        await settle()
+        await s.signOut(id)
+        let saved = try XCTUnwrap(secure.get("nekko.pendingSignOuts"))
+        let list = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(saved.utf8)) as? [[String: Any]])
+        XCTAssertEqual(list.first?["hostKey"] as? String, testHostKey)
+        let old = list.map { $0.filter { $0.key != "hostKey" } }
+        secure.set("nekko.pendingSignOuts", String(decoding: try JSONSerialization.data(withJSONObject: old), as: UTF8.self))
+        let before = connections.count
+        await s.flushSignOuts(timeout: 0.05)
+        XCTAssertEqual(connections.count, before)
+        XCTAssertTrue(s.pendingSignOuts.isEmpty)
+    }
+
     func testAPhoneTheComputerNeverWelcomedHasNothingToSend() async throws {
         let s = makeStore()
         s.load()
-        let id = await s.pair(link) // never online: the pairing code was never used
+        let id = try await s.pair(link) // never online: the pairing code was never used
         let heard = await s.signOut(id)
         XCTAssertFalse(heard)
         XCTAssertTrue(s.pendingSignOuts.isEmpty)

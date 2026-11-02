@@ -42,7 +42,7 @@ final class BeyondTests: XCTestCase {
             now: { 1_000 },
             summariesDebounce: 0.01)
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.online()
         await settle()

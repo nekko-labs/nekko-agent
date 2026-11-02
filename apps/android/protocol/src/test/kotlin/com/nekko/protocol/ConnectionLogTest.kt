@@ -42,6 +42,8 @@ class ConnectionLogTest {
         assertTrue(ask(ts, RelayState.CONNECTING).first().startsWith("Tailscale is on"))
         assertTrue(ask("ws://relay.example:4400", RelayState.CONNECTING).first().contains("not encrypted"))
         assertTrue(ask("wss://relay.example", RelayState.OFFLINE).first().contains("isn’t connected to it"))
+        val badKey = ConnectionAdvice.advise("wss://relay.example", "Mac", RelayState.OFFLINE, null, RelayStatus.BAD_KEY, phoneOnTailnet = false, debug = false)
+        assertEquals(ConnectionAdvice.advise("wss://relay.example", "Mac", RelayState.DENIED, DenyReason.BAD_KEY, null, phoneOnTailnet = false, debug = false), badKey)
         assertTrue(ask("wss://relay.example", RelayState.DENIED, DenyReason.BAD_CODE).first().contains("10 minutes"))
         assertTrue(ask("wss://relay.example", RelayState.DENIED, DenyReason.REVOKED).first().contains("removed this phone"))
         assertTrue(ask("wss://relay.example", RelayState.CONNECTING, detail = "TLS certificate not trusted").any { it.contains("certificate") })

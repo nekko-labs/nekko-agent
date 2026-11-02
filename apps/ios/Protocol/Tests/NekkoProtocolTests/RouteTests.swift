@@ -134,7 +134,8 @@ extension RelayClientTests {
     static let tailnetRoute = "ws://studio.tail1234.ts.net:4400"
 
     func twoRoutes(_ relay: FakeRelay, prober: FakeProber? = nil, dwell: TimeInterval = 0.05) -> (RelayClient, Recorder) {
-        var cfg = RelayConfig(relayUrl: Self.tailnetRoute, room: "abcd1234", key: "k", keyBytes: key, deviceId: "dev-1", deviceName: "iPhone")
+        var cfg = RelayConfig(relayUrl: Self.tailnetRoute, room: "abcd1234", key: "k", hostKey: relay.computer.publicKey, keyBytes: key,
+                              deviceId: "dev-1", deviceName: "iPhone")
         cfg.alternates = [Self.lanRoute]
         cfg.handshakeTimeout = 2
         cfg.requestTimeout = 5
@@ -244,14 +245,52 @@ extension RelayClientTests {
         c.close()
     }
 
-    func testAnOfflineComputerIsNotARouteFailure() async {
+    func testAnOfflineComputerIsNotARouteFailureOnceItHasAnswered() async throws {
         let relay = FakeRelay(key: key, known: ["dev-1"])
-        relay.refuseNext = (1008, "room not paired (agent offline)")
         let (c, r) = twoRoutes(relay)
         c.connect()
+        await r.await({ $0.state == .online && $0.route == Self.lanRoute })
+        let conn = try XCTUnwrap(relay.sync { relay.current })
+        conn.plain(["type": "agent-offline"])
         let s = await r.await(.offline)
         XCTAssertEqual(s?.route, Self.lanRoute, "the relay answered on the LAN; the computer is away, not the path")
+        XCTAssertEqual(relay.sync { relay.urls.count }, 1)
+        conn.challenge()
         await r.await({ $0.state == .online && $0.route == Self.lanRoute })
+        conn.drop(1008, "room not paired (agent offline)")
+        await r.await(.offline)
+        await r.await({ $0.state == .online && $0.route == Self.lanRoute })
+        c.close()
+    }
+
+    /// Anyone can answer on a plain LAN address, so before a welcome it can't say the computer is away.
+    func testAPlainLanRouteThatSaysOfflineBeforeAWelcomeIsLeft() async {
+        let closes = FakeRelay(key: key, known: ["dev-1"])
+        closes.refuseNext = (1008, "room not paired (agent offline)")
+        let frames = FakeRelay(key: key, known: ["dev-1"])
+        frames.sayOffline = ["192.168.1.20:4400"]
+        for relay in [closes, frames] {
+            let (c, r) = twoRoutes(relay)
+            c.connect()
+            await r.await({ $0.state == .online && $0.route == Self.tailnetRoute })
+            XCTAssertFalse(r.lock.sync { r.statuses.contains { $0.state == .offline } })
+            c.close()
+        }
+    }
+
+    func testAgentOnlineCanNotHoldAPlainLanRoute() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        relay.challenges = false
+        let (c, _) = client(relay, challengeWait: 0.1, url: Self.lanRoute)
+        c.connect()
+        let opened = await waitOpen(relay)
+        let conn = try XCTUnwrap(opened)
+        for _ in 0..<40 where conn.isOpen {
+            conn.plain(["type": "agent-online"])
+            await sleep(0.03)
+        }
+        XCTAssertFalse(conn.isOpen, "dropped while it was still talking")
+        await waitForDials(relay, 2)
         c.close()
     }
 }
@@ -262,6 +301,7 @@ final class PairingFixtureTests: XCTestCase {
             let relayUrl: String
             let room: String
             let key: String
+            let hostKey: String?
             let pair: String?
             let alts: [String]
         }
@@ -277,7 +317,7 @@ final class PairingFixtureTests: XCTestCase {
         XCTAssertGreaterThan(cases.count, 5)
         for c in cases {
             let got = Pairing.parse(c.input).map {
-                Case.Link(relayUrl: $0.relayUrl, room: $0.room, key: $0.key, pair: $0.pair, alts: $0.alts)
+                Case.Link(relayUrl: $0.relayUrl, room: $0.room, key: $0.key, hostKey: $0.hostKey, pair: $0.pair, alts: $0.alts)
             }
             XCTAssertEqual(got, c.link, c.input)
         }

@@ -30,7 +30,6 @@ import com.nekko.android.ui.settings.AboutSection
 import com.nekko.android.ui.settings.SettingsDeps
 import com.nekko.android.ui.theme.NekkoTheme
 import com.nekko.protocol.Channels
-import com.nekko.protocol.PairingLink
 import com.nekko.protocol.PhoneProtocol
 import com.nekko.protocol.RelayConfig
 import com.nekko.protocol.RelayState
@@ -98,7 +97,7 @@ class RouteChecksTest {
             },
         )
         runBlocking {
-            val id = repo.pair(PairingLink("wss://studio.tail1234.ts.net", "a1b2c3d4e5f60718", "00112233445566778899aabbccddeeff", alts = listOf("wss://relay.example.dev")))
+            val id = repo.pair(testPairing("wss://studio.tail1234.ts.net", alts = listOf("wss://relay.example.dev")))
             repo.rename(id, "Studio Mac")
             repo.load()
         }

@@ -86,8 +86,13 @@ pub struct RelayAgent {
 pub fn agent_url(relay_url: &str, room: &str, secret: &str, access: Option<&str>) -> String {
     let base = relay_url.strip_suffix('/').unwrap_or(relay_url);
     let key = e2e::relay_auth(secret, room);
-    let mut url =
-        format!("{base}/relay?role=agent&room={}&key={}", encode_uri_component(room), encode_uri_component(&key));
+    // `proto` tells the relay to take push registrations only from welcomed devices.
+    let mut url = format!(
+        "{base}/relay?role=agent&room={}&key={}&proto={}",
+        encode_uri_component(room),
+        encode_uri_component(&key),
+        crate::hello::PROTOCOL_VERSION
+    );
     if let Some(a) = access {
         url.push_str(&format!("&access={}", encode_uri_component(a)));
     }
@@ -109,9 +114,11 @@ pub fn encode_uri_component(s: &str) -> String {
 
 pub struct Spawn {
     pub url: String,
-    /// The pairing secret and room the E2E key is derived from.
+    /// The pairing secret and room the room key is derived from.
     pub secret: String,
     pub room: String,
+    /// The key this computer proves itself with, which its devices pinned.
+    pub host_key: crate::client::SigningKey,
     pub verify: Verifier,
     pub dispatch: PhoneDispatcher,
     pub events: Events,
@@ -157,6 +164,12 @@ impl LinkHandle for RelayAgent {
         }
     }
 
+    fn set_reads(&self, device_id: &str, reads: bool) {
+        if let Some(core) = lock(&self.shared.core).as_mut() {
+            core.set_reads(device_id, reads);
+        }
+    }
+
     fn connected_devices(&self) -> Vec<String> {
         lock(&self.shared.core).as_ref().map(AgentCore::connected_devices).unwrap_or_default()
     }
@@ -171,14 +184,15 @@ impl LinkHandle for RelayAgent {
 }
 
 async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool>) {
-    let Spawn { url, secret, room, verify, dispatch, mut events, terminals, summaries } = spec;
+    let Spawn { url, secret, room, host_key, verify, dispatch, mut events, terminals, summaries } = spec;
+    let host = crate::agent::Host { room: room.clone(), key: host_key };
     let derive = tokio::task::spawn_blocking(move || e2e::derive_key(&secret, &room));
     let key = tokio::select! {
         k = derive => match k { Ok(k) => k, Err(_) => return },
         _ = stopped.changed() => return,
     };
     let iv: crate::agent::IvSource = Box::new(e2e::random_iv);
-    *lock(&shared.core) = Some(AgentCore::new(key, iv).with_terminals(terminals));
+    *lock(&shared.core) = Some(AgentCore::new(key, host, iv).with_terminals(terminals));
     const ID: &str = "phone-relay";
     let host = url
         .parse::<tokio_tungstenite::tungstenite::http::Uri>()
@@ -350,8 +364,9 @@ fn on_text(
                 let (shared, dispatch) = (shared.clone(), dispatch.clone());
                 tokio::spawn(async move {
                     let result = dispatch(PhoneCall { device_id, proof, step_up }, channel, args).await;
-                    if let Some(core) = lock(&shared.core).as_mut() {
-                        let frame = core.reply(&cid, id, result);
+                    if let Some(core) = lock(&shared.core).as_mut()
+                        && let Some(frame) = core.reply(&cid, id, result)
+                    {
                         shared.send_all(vec![frame]);
                     }
                 });

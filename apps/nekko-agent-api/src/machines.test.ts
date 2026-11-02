@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createECDH, randomBytes } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { issueToken } from "./auth.js";
@@ -58,11 +58,18 @@ describe("machines", () => {
     expect(body.machine.state).toBe("running");
     expect(body.machine.scope).toEqual({ ...DEFAULT_SCOPE, repos: ["nekko-labs/nekko-agent"] });
     expect(body.machine.egress).toContain("github.com");
-    expect(body.pairingLink).toMatch(/^nekko-agent-pair:\?relay=wss%3A%2F%2Frelay\.test&room=[a-z0-9]{20}&key=[0-9a-f]{32}&pair=[A-Z2-9]{8}$/);
+    expect(body.pairingLink).toMatch(/^nekko-agent-pair:\?relay=wss%3A%2F%2Frelay\.test&room=[a-z0-9]{20}&key=[0-9a-f]{32}&host=[A-Za-z0-9%]+&pair=[A-Z2-9]{8}$/);
     // The machine got the same room, key and code in its environment, and the scope.
     const [, spec] = [...driver.machines.values()].map((m) => [m.state, m.spec] as const)[0];
     expect(spec.env.NEKKO_ROOM).toBe(body.machine.room);
     expect(body.pairingLink).toContain(`key=${spec.env.NEKKO_PAIR_KEY}`);
+    // The link pins the key the machine holds, and the two are one key pair.
+    const pinned = Buffer.from(decodeURIComponent(/host=([^&]+)/.exec(body.pairingLink)![1]), "base64");
+    const secret = Buffer.from(spec.env.NEKKO_HOST_KEY, "base64");
+    expect(secret).toHaveLength(32);
+    const ecdh = createECDH("prime256v1");
+    ecdh.setPrivateKey(secret);
+    expect(ecdh.getPublicKey().equals(pinned)).toBe(true);
     expect(spec.env.NEKKO_PAIR_CODE).toBe(body.pairingCode);
     expect(JSON.parse(spec.env.NEKKO_CLOUD_SCOPE)).toEqual(body.machine.scope);
     expect(spec.env.NEKKO_SANDBOX).toBe("workspace-jail");

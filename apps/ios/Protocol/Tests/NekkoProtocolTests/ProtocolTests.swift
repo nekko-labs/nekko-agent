@@ -115,6 +115,18 @@ final class PairingTests: XCTestCase {
         XCTAssertNil(Pairing.parse("relay=wss://x&room=%ZZ&key=\(key)"))
     }
 
+    func testPinsOnlyAWellFormedHostKey() {
+        let good = String(repeating: "A", count: 87) + "="
+        let parsed = { (host: String) in Pairing.parse("relay=wss://x&room=\(self.room)&key=\(self.key)&host=\(host)") }
+        XCTAssertEqual(parsed(good)?.hostKey, good)
+        XCTAssertNil(Pairing.parse("relay=wss://x&room=\(room)&key=\(key)")?.hostKey)
+        for bad in [String(good.dropLast()), String(repeating: "A", count: 88), good + "=", "A" + good, "not-a-key"] {
+            let link = parsed(bad)
+            XCTAssertNotNil(link, "a bad key loses the key, not the link: \(bad)")
+            XCTAssertNil(link?.hostKey, bad)
+        }
+    }
+
     func testNeverPrintsTheSecret() {
         let l = PairingLink(relayUrl: "wss://r", room: room, key: key, pair: "ABCD2345")
         XCTAssertFalse(String(describing: l).contains(key))

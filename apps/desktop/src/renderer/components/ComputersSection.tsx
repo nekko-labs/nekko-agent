@@ -10,6 +10,7 @@ const STATE_LABEL: Record<ComputerState, string> = {
   online: 'Connected',
   offline: 'Offline',
   denied: 'Removed by that computer. Connect it again.',
+  stale: "That computer's pairing changed. Connect it again.",
   update: 'Needs an update',
 };
 
@@ -18,6 +19,7 @@ const STATE_COLOR: Record<ComputerState, string> = {
   online: 'var(--success)',
   offline: 'var(--ink-faint)',
   denied: 'var(--danger)',
+  stale: 'var(--danger)',
   update: 'var(--warning)',
 };
 

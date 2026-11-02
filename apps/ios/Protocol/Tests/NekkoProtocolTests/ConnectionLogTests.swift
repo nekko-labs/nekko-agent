@@ -46,6 +46,15 @@ final class ConnectionLogTests: XCTestCase {
         XCTAssertTrue(cert.contains { $0.contains("certificate") })
     }
 
+    func testARefusedPairingKeySaysPairAgainWhileThePhoneKeepsTrying() {
+        for state in [RelayState.offline, .connecting] {
+            let advice = ConnectionAdvice.advise(route: .internet, relayHost: "h", computer: "Studio", state: state, denied: nil,
+                                                 detail: RelayStatus.badPairingKey, tailscaleOn: true)
+            XCTAssertEqual(advice, ConnectionAdvice.advise(route: .internet, relayHost: "h", computer: "Studio", state: .denied, denied: .badKey,
+                                                           detail: nil, tailscaleOn: true))
+        }
+    }
+
     func testAGoneRelayNameSaysPairAgainNotCheckTheInternet() {
         let gone = ConnectionAdvice.advise(route: .internet, relayHost: "relay.example", computer: "Studio", state: .connecting,
                                            denied: nil, detail: RelayStatus.hostNotFound, tailscaleOn: false)

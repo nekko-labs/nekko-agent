@@ -61,6 +61,17 @@ class E2ETest {
         assertThrows(IllegalArgumentException::class.java) { E2E.openText(key, "AAAA") }
     }
 
+    @Test fun `both ends of an exchange derive one key and nobody else does`() {
+        val (a, b, c) = listOf(Ephemeral(), Ephemeral(), Ephemeral())
+        val ab = a.sessionKey(b.public, "x")!!
+        assertArrayEquals(ab, b.sessionKey(a.public, "x"))
+        assertEquals(E2E.KEY_BYTES, ab.size)
+        assertNotEquals(E2E.toHex(ab), E2E.toHex(a.sessionKey(c.public, "x")!!))
+        assertNotEquals("bound to the transcript", E2E.toHex(ab), E2E.toHex(a.sessionKey(b.public, "y")!!))
+        assertEquals(null, a.sessionKey("not a point", "x"))
+        assertEquals(null, a.sessionKey(Base64.getEncoder().encodeToString(ByteArray(65) { 4 }), "x"))
+    }
+
     @Test fun `hex helpers round trip and refuse garbage`() {
         val b = byteArrayOf(0, 1, 127, -128, -1)
         assertArrayEquals(b, E2E.fromHex(E2E.toHex(b)))

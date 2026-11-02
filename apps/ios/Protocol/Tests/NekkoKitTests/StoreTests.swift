@@ -3,6 +3,9 @@ import XCTest
 @testable import NekkoKit
 @testable import NekkoProtocol
 
+/// A computer's public key as a pairing link carries it.
+let testHostKey = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
+
 final class MemoryStore: SecureStore, @unchecked Sendable {
     let lock = NSLock()
     var values: [String: String] = [:]
@@ -137,13 +140,14 @@ final class StoreTests: XCTestCase {
         s.load()
         XCTAssertTrue(s.ready)
         XCTAssertNil(s.activeId)
-        let id = await s.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: room, key: key, pair: "ABCD2345"))
+        let id = try await s.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: room, key: key, hostKey: testHostKey, pair: "ABCD2345"))
         XCTAssertEqual(id, "id-1")
         let c = try XCTUnwrap(connections.last)
         XCTAssertEqual(c.config.pairCode, "ABCD2345")
         XCTAssertEqual(c.config.deviceName, "Philip’s iPhone")
         XCTAssertEqual(c.config.platform, "ios")
         XCTAssertEqual(c.config.keyBytes, Data(repeating: 7, count: 32))
+        XCTAssertEqual(c.config.hostKey, testHostKey)
         XCTAssertTrue(c.connected)
         XCTAssertEqual(s.conn, .connecting)
         // Secrets only in the secure store, and not in the index.
@@ -171,12 +175,13 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s2.activeId, id)
         XCTAssertNil(connections.last?.config.pairCode)
         XCTAssertEqual(connections.last?.config.deviceId, c.config.deviceId, "same device id")
+        XCTAssertEqual(connections.last?.config.hostKey, testHostKey, "the pin is kept with the secret")
     }
 
     func testVersionPushKindsDismissalsAndTheTestNotification() async throws {
         let s = makeStore()
         s.load()
-        _ = await s.pair(PairingLink(relayUrl: "wss://relay.example", room: room, key: key, pair: nil))
+        _ = try await s.pair(PairingLink(relayUrl: "wss://relay.example", room: room, key: key, hostKey: testHostKey, pair: nil))
         let c = try XCTUnwrap(connections.last)
         XCTAssertEqual(s.protocolCheck, .same, "unknown until welcomed")
         c.welcomeProtocol = 1
@@ -227,12 +232,12 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(s.relayDelivers)
     }
 
-    func testRepairingAKnownComputerKeepsItsIdAndName() async {
+    func testRepairingAKnownComputerKeepsItsIdAndName() async throws {
         let s = makeStore()
         s.load()
-        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, pair: "AAAA2222"))
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey, pair: "AAAA2222"))
         s.rename(id, to: "  Studio  ")
-        let again = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, pair: "BBBB3333"))
+        let again = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey, pair: "BBBB3333"))
         XCTAssertEqual(again, id)
         XCTAssertEqual(s.computers.map(\.name), ["Studio"])
     }
@@ -240,7 +245,7 @@ final class StoreTests: XCTestCase {
     func testEventsTrackActivityAppearanceAndRefreshTheList() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.online()
         await settle()
@@ -262,7 +267,7 @@ final class StoreTests: XCTestCase {
 
     func testSummaryInvalidationsDuringPendingCallReadFinalWatchCount() async throws {
         let s = makeStore()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.online()
         await settle()
@@ -296,7 +301,7 @@ final class StoreTests: XCTestCase {
 
     func testSummaryReconnectDiscardsPendingReplyAndDirtyRetry() async throws {
         let s = makeStore()
-        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         let old = try XCTUnwrap(connections.last)
         old.online()
         await settle()
@@ -343,32 +348,91 @@ final class StoreTests: XCTestCase {
         s.disconnect()
     }
 
-    /// A pairing saved by an older app predates the derived relay credential (decision 0036):
-    /// the computer has replaced its secret, so the phone asks for a fresh QR instead of dialing.
-    func testAPairingFromBeforeDerivedRelayCredentialsAsksToPairAgain() async throws {
+    /// A pairing saved by an older app predates the derived relay credential (decision 0036)
+    /// or the host key (decision 0041): the computer no longer answers on it and a key first
+    /// seen now could be anyone's, so the phone asks for a fresh QR instead of dialing.
+    func testAPairingFromAnOlderVersionIsNotDialed() async throws {
+        let stale: [(String, ([String: Any]) -> [String: Any])] = [
+            ("no version", { $0.filter { $0.key != "v" } }),
+            ("version 2", { $0.filter { $0.key != "hostKey" }.merging(["v": 2]) { $1 } }),
+            ("version 2 with a key", { $0.merging(["v": 2]) { $1 } }),
+            ("no host key", { $0.filter { $0.key != "hostKey" } }),
+        ]
+        for (name, change) in stale {
+            let s = makeStore()
+            s.load()
+            let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+            let saved = try XCTUnwrap(secure.get(ComputersStore.secretKey(id)))
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(saved.utf8)) as? [String: Any])
+            XCTAssertEqual(object["v"] as? Int, E2E.pairingVersion)
+            secure.set(ComputersStore.secretKey(id), String(decoding: try JSONSerialization.data(withJSONObject: change(object)), as: UTF8.self))
+
+            let before = connections.count
+            let again = makeStore()
+            again.load()
+            await settle()
+            await again.runChecks()
+            XCTAssertEqual(connections.count, before, "\(name): no connection on the old pairing")
+            XCTAssertEqual(again.conn, .denied, name)
+            XCTAssertEqual(again.denied, .badKey, name)
+        }
+    }
+
+    func testALinkCanNotReplaceAPin() async throws {
         let s = makeStore()
         s.load()
-        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
-        let saved = try XCTUnwrap(secure.get(ComputersStore.secretKey(id)))
-        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(saved.utf8)) as? [String: Any])
-        XCTAssertEqual(object["v"] as? Int, E2E.pairingVersion)
-        object.removeValue(forKey: "v")
-        secure.set(ComputersStore.secretKey(id), String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self))
-
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        let saved = secure.get(ComputersStore.secretKey(id))
         let before = connections.count
-        let again = makeStore()
-        again.load()
+        let other = String(repeating: "A", count: 87) + "="
+        do {
+            try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: other))
+            XCTFail("a link replaced the pin")
+        } catch {
+            XCTAssertEqual(error as? PairingRefusal, .differentComputer)
+            XCTAssertEqual(error.localizedDescription, "This link names a different computer than the one you paired with. Forget that computer first if it was reset.")
+        }
+        XCTAssertEqual(secure.get(ComputersStore.secretKey(id)), saved)
+        XCTAssertEqual(connections.count, before)
+        // The same computer again is fine, and a rotated pairing is another room.
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: "ffffffff", key: key, hostKey: other))
+        XCTAssertEqual(s.computers.count, 2)
+    }
+
+    /// The relay's refusal isn't sealed: the phone stays paired and keeps its prompts, and the words reach the UI.
+    func testARefusedPairingKeyIsNotADenial() async throws {
+        let s = makeStore()
+        s.load()
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        let c = try XCTUnwrap(connections.last)
+        c.status(RelayStatus(.offline, detail: RelayStatus.badPairingKey))
         await settle()
-        XCTAssertEqual(connections.count, before, "no connection on the old pairing")
-        XCTAssertEqual(again.conn, .denied)
-        XCTAssertEqual(again.denied, .badKey)
+        XCTAssertEqual(s.conn, .offline)
+        XCTAssertEqual(s.connDetail, RelayStatus.badPairingKey)
+        XCTAssertNil(s.denied)
+    }
+
+    func testALinkWithoutAHostKeyCanNotPair() async throws {
+        let s = makeStore()
+        s.load()
+        let link = try XCTUnwrap(Pairing.parse("relay=wss://relay.example.com&room=\(room)&key=\(key)&pair=ABCD2345"))
+        do {
+            try await s.pair(link)
+            XCTFail("paired with a computer that can't prove itself")
+        } catch {
+            XCTAssertEqual(error as? PairingRefusal, .noHostKey)
+            XCTAssertEqual(error.localizedDescription, "Update Nekko Agent on your computer, then make a new pairing code.")
+        }
+        XCTAssertTrue(s.computers.isEmpty)
+        XCTAssertTrue(connections.isEmpty)
     }
 
     func testDenialAndForget() async throws {
         let s = makeStore()
         s.load()
-        let a = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
-        let b = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        let a = try await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key, hostKey: testHostKey))
+        let b = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: testHostKey))
         XCTAssertEqual(s.activeId, b)
         connections.last!.status(RelayStatus(.denied, detail: "revoked", denied: .revoked))
         await settle()
@@ -387,13 +451,13 @@ final class StoreTests: XCTestCase {
     func testSwitchingComputersTellsTheOldOneToStopTheCard() async throws {
         let s = makeStore()
         s.load()
-        _ = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
+        _ = try await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key, hostKey: testHostKey))
         let first = try XCTUnwrap(connections.last)
         first.online()
         s.cardLevel = .standard
         await settle()
         XCTAssertEqual(first.cards.last?.str("level"), "standard")
-        _ = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        _ = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: testHostKey))
         XCTAssertFalse(connections.last === first, "the switch did not wait")
         await settle()
         XCTAssertEqual(first.cards.last?.str("level"), "none")
@@ -404,7 +468,7 @@ final class StoreTests: XCTestCase {
     func testTheConnectionLogFollowsTheActiveComputer() async throws {
         let s = makeStore()
         s.load()
-        let a = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
+        let a = try await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key, hostKey: testHostKey))
         connections.last!.status(RelayStatus(.connecting, detail: "handshake timed out"))
         connections.last!.status(RelayStatus(.connecting, detail: "handshake timed out"))
         connections.last!.status(RelayStatus(.online))
@@ -413,7 +477,7 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.connectionLog.entries[1].repeats, 2)
         s.connect(a)
         XCTAssertEqual(s.connectionLog.entries.count, 4, "reconnecting the same computer keeps its history")
-        _ = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        _ = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: testHostKey))
         XCTAssertEqual(s.connectionLog.entries.map(\.state), [.connecting], "another computer starts its own")
         XCTAssertFalse(s.connectionLog.text(relayHost: "b", route: .internet).contains(room))
     }
@@ -421,7 +485,7 @@ final class StoreTests: XCTestCase {
     func testChatOperationsCallTheComputerWithPhoneKeysOnly() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.replies[Channels.sessionCreate] = { _ in ["id": "new", "title": ""] }
         c.replies[Channels.settingsUpdate] = { _ in ["defaultChatMode": "yolo"] }
@@ -488,7 +552,7 @@ final class ChatModelTests: XCTestCase {
             return c
         }, deviceName: { "iPhone" }, deriveKey: { _, _ in Data(repeating: 1, count: 32) })
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff"))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff", hostKey: testHostKey))
         conns[0].online()
         for _ in 0..<50 { await Task.yield() }
         try await Task.sleep(nanoseconds: 30_000_000)
