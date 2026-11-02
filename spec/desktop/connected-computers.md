@@ -34,6 +34,13 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 
 **How ids stay out of the way.** A chat, folder or provider on another computer has the id `@<computerId>:<rawId>`, opaque to the window. The engine sends a call carrying one to that computer and qualifies what comes back. A channel that may cross is listed in `federation::ROUTED`; a foreign id on any other is refused, so a new channel can't reach the local store with one. Another computer's events travel on a stream only the desktop window's socket hears, never this computer's phones, API server or automation. The CLI's API and the Local Web UI see this computer only.
 
+## Start and monitor
+
+`[implemented 2026-11-02; picker and engine tested, not yet on real machines]`
+
+- **Run on.** New chat gets a *Run on* row once a computer is connected, as on the iPhone. Choosing one swaps the model list to that computer's models and subscriptions, and the folder list to its folders, and picks its first model so starting there is still one click. A computer that is offline, or that allows watching only, can't be chosen. A chat started there has one working folder; supporting folders stay a local feature for now.
+- **Monitors.** A switch in the dock points the Hardware monitor at a connected computer. Local models and Utilization still read this one.
+
 ## What a computer may do
 
 `COMPUTER_ACCESS` adds to what a phone may do: reading tool output whole, older messages (`session:page`), a running turn so far (`agent:replay`), compacting, truncating, taking back a queued message, and accepting changes. A chat too large for one relay frame has its tool text cut. The host's Read and Change switches, activity list and revocation work as for a phone, and a mode raise still needs a signed proof, plus step-up where it is on.

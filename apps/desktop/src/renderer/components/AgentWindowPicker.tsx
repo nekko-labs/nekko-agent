@@ -1,3 +1,5 @@
+import type { ModelInfo } from '@nekko-agent/shared';
+import { computerBlock } from './ComputerChip.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isArchived } from '@nekko-agent/shared';
@@ -17,6 +19,8 @@ export type AgentWindowSelection = {
   modelId?: string;
   /** Folders for a new chat: the first is its primary working folder, the rest supporting. */
   workspaceIds?: string[];
+  /** Run it on this connected computer instead of this one. */
+  computerId?: string;
 };
 
 export interface AgentWindowPickerProps {
@@ -104,6 +108,30 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
   // back in the row above it, so the pick is visible rather than buried.
   const [modelListOpen, setModelListOpen] = useState(false);
   const [pickedFolders, setPickedFolders] = useState<string[] | null>(null);
+  const computers = useStore((s) => s.computers);
+  const catalogs = useStore((s) => s.computerCatalogs);
+  const [runOn, setRunOn] = useState<string | null>(null);
+  // That computer's first model, so starting there is still one click.
+  const [remoteModels, setRemoteModels] = useState<ModelInfo[]>([]);
+  const remoteProviders = useMemo(() => (runOn ? catalogs[runOn]?.providers ?? [] : []).filter((p) => p.enabled), [runOn, catalogs]);
+  useEffect(() => {
+    const first = remoteProviders[0];
+    if (!first) return setRemoteModels([]);
+    let live = true;
+    void window.nekko.listModels(first.id).then((list) => {
+      if (!live) return;
+      setRemoteModels(list);
+      if (list[0]) setChoice({ providerId: first.id, modelId: list[0].id });
+    }).catch(() => live && setRemoteModels([]));
+    return () => { live = false; };
+  }, [remoteProviders]);
+  const chooseComputer = (id: string | null) => {
+    setRunOn(id);
+    // Another computer's models and folders mean nothing here, and the other way round.
+    setChoice(null);
+    setPickedFolders(null);
+    setRemoteModels([]);
+  };
   const adding = useRef(false);
   const surface = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -111,9 +139,9 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
     surface.current?.querySelector<HTMLButtonElement>('.agent-window-picker__option')?.focus({ preventScroll: true });
     return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
   }, []);
-  const enabledProviders = useMemo(() => providers.filter((p) => p.enabled), [providers]);
+  const enabledProviders = useMemo(() => (runOn ? remoteProviders : providers.filter((p) => p.enabled)), [runOn, remoteProviders, providers]);
   const availableSessions = sessions.filter((s) => !isArchived(s));
-  const folders = settings?.workspaces ?? [];
+  const folders = (runOn ? catalogs[runOn]?.workspaces : settings?.workspaces) ?? [];
 
   // Defaults, so a new chat is one click: the saved default model, else the
   // model already active, else the active provider's first; and the current
@@ -125,10 +153,10 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
     : activeProviderEnabled && activeProviderModel
       ? { providerId: activeProviderId, modelId: activeProviderModel }
       : null;
-  const model = choice ?? defaultModel;
-  const modelName = model?.modelId === AUTO_MODEL_ID ? 'Auto' : models.find((m) => m.id === model?.modelId && m.providerId === model?.providerId)?.name ?? model?.modelId;
-  const providerLabel = providers.find((p) => p.id === model?.providerId)?.label;
-  const savedDefaults = defaultFolderIds(settings?.defaultWorkspaceIds, folders);
+  const model = choice ?? (runOn ? null : defaultModel);
+  const modelName = model?.modelId === AUTO_MODEL_ID ? 'Auto' : (runOn ? remoteModels : models).find((m) => m.id === model?.modelId && m.providerId === model?.providerId)?.name ?? model?.modelId;
+  const providerLabel = enabledProviders.find((p) => p.id === model?.providerId)?.label;
+  const savedDefaults = runOn ? [] : defaultFolderIds(settings?.defaultWorkspaceIds, folders);
   const fallbackFolder = folders.find((f) => f.id === activeProjectId) ?? folders[0];
   const initialFolders = savedDefaults.length ? savedDefaults : fallbackFolder ? [fallbackFolder.id] : [];
   const chosenFolders = (pickedFolders ?? initialFolders).filter((id) => folders.some((f) => f.id === id));
@@ -141,7 +169,7 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
   };
   const start = () => {
     if (!model) return;
-    void add({ kind: 'chat', chatType: 'multimodal', ...(model.providerId ? { providerId: model.providerId } : {}), modelId: model.modelId, workspaceIds: chosenFolders });
+    void add({ kind: 'chat', chatType: 'multimodal', ...(model.providerId ? { providerId: model.providerId } : {}), modelId: model.modelId, workspaceIds: chosenFolders, ...(runOn ? { computerId: runOn } : {}) });
   };
 
   const add = async (selection: AgentWindowSelection) => {
@@ -189,6 +217,23 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
       )}
       {category === 'chat' && (
         <div className="agent-window-picker__steps">
+          {computers.length > 0 && (
+            <section className="agent-window-picker__step" aria-labelledby="awp-step-computer">
+              <h3 id="awp-step-computer">Run on</h3>
+              <div className="agent-window-picker__folders" role="radiogroup" aria-labelledby="awp-step-computer">
+                <button type="button" role="radio" aria-checked={!runOn} disabled={pending} onClick={() => chooseComputer(null)}>
+                  <span className="agent-window-picker__check" data-on={!runOn || undefined}>{!runOn && <CheckIcon className="h-3 w-3" />}</span>
+                  <span className="agent-window-picker__folder-text"><strong>This computer</strong></span>
+                </button>
+                {computers.map((c) => (
+                  <button type="button" key={c.id} role="radio" aria-checked={runOn === c.id} disabled={pending || c.state !== 'online' || !c.change} title={computerBlock(c) ?? undefined} onClick={() => chooseComputer(c.id)}>
+                    <span className="agent-window-picker__check" data-on={runOn === c.id || undefined}>{runOn === c.id && <CheckIcon className="h-3 w-3" />}</span>
+                    <span className="agent-window-picker__folder-text"><strong>{c.name}</strong>{computerBlock(c) && <span>{computerBlock(c)}</span>}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           <section className="agent-window-picker__step" aria-labelledby="awp-step-model">
             <h3 id="awp-step-model"><span className="agent-window-picker__step-num">1</span>Model and effort</h3>
             <button type="button" className="agent-window-picker__summary" disabled={pending} aria-expanded={modelListOpen} aria-controls="awp-model-list" onClick={() => setModelListOpen((o) => !o)}>
@@ -201,7 +246,7 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
             {modelListOpen && (
               <fieldset id="awp-model-list" className="agent-window-picker__models" disabled={pending}>
                 <legend className="agent-window-picker__sr-only">Choose a chat model</legend>
-                <ModelPicker expanded readOnly open providers={enabledProviders} providerId={model?.providerId ?? activeProviderId} models={!model || model.providerId === activeProviderId ? models : []} modelId={model?.modelId ?? null} needsChoice={!model} onOpenChange={() => {}} onProvider={() => {}} onModel={(providerId, modelId) => { setChoice({ providerId, modelId }); useStore.getState().rememberModel(providerId, modelId); setModelListOpen(false); }} />
+                <ModelPicker expanded readOnly open providers={enabledProviders} providerId={model?.providerId ?? (runOn ? remoteProviders[0]?.id ?? null : activeProviderId)} models={runOn ? remoteModels : !model || model.providerId === activeProviderId ? models : []} modelId={model?.modelId ?? null} needsChoice={!model} onOpenChange={() => {}} onProvider={() => {}} onModel={(providerId, modelId) => { setChoice({ providerId, modelId }); useStore.getState().rememberModel(providerId, modelId); setModelListOpen(false); }} />
               </fieldset>
             )}
             <EffortSlider modelId={model?.modelId} />

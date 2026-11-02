@@ -10,7 +10,7 @@ import { AutomationsPane } from './AutomationsPane.js';
 import { InsightsBox, type Vitals } from './InsightsBox.js';
 import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
-import { useMonitors, useResourceSample } from './ResourceMonitor.js';
+import { MonitorComputerSwitch, useMonitors, useResourceSample } from './ResourceMonitor.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
 import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, SlidersIcon, CloseIcon, MinimizeIcon, CubeIcon, PanelIcon } from '../icons.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
@@ -221,6 +221,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
       <header className="monitors-dock__toolbar">
         <strong>Monitors</strong>
         <span className="monitors-dock__count">{selectedMonitors.length} of {MONITORS.length}</span>
+        <MonitorComputerSwitch />
         <span role="status" aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>{reorderAnnouncement}</span>
         <div className="monitors-dock__configure" ref={configureRef}>
           <button type="button" ref={configureButton} aria-expanded={configure} onClick={() => setConfigure((v) => !v)} title="Configure monitors" aria-label="Configure monitors"><SlidersIcon className="monitors-dock__icon" /> Configure</button>

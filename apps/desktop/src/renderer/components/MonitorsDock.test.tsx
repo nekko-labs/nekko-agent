@@ -10,7 +10,7 @@ vi.mock('../accountEmails.js', async (orig) => ({ ...(await orig<typeof import('
 vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
 const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null }));
-vi.mock('./ResourceMonitor.js', () => ({ useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
+vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
 import { LocalModels, MonitorsDock, MonitorsToggle } from './MonitorsDock.js';
 function render(minimized = false) {
   const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: false, insights: false, hardware: true, localModels: false }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };

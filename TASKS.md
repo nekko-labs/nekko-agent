@@ -14,7 +14,7 @@ A desktop connects to other computers the way a phone does, and shows every agen
 - [x] **CC1, Link and host class (2026-11-02).** Rust relay client, `computers.rs`, the computer access class, Settings > Computers. Decision [0040](docs/decisions/0040-a-desktop-is-a-paired-device-with-its-own-class.md), [spec](spec/desktop/connected-computers.md).
 - [x] **CC2, Federation (2026-11-02).** Qualified ids, routing, rewriting, merged summaries, offline cache.
 - [x] **CC3, See and drive (2026-11-02).** Per-computer catalogs, chips, Group by Computer, offline states, icons. Notifications still name the chat only.
-- [ ] **CC4, Start and monitor.** *Run on*, Monitors switcher, Keep this computer awake.
+- [ ] **CC4, Start and monitor.** *Run on* and the Hardware monitor's switch done 2026-11-02. Left: Local models and Utilization following the switch, Keep this computer awake.
 - [ ] **CC5, Model sources.** The model tunnel, generated provider rows, two Model Server settings.
 - [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys, the phone sheet.
 - [ ] **CC7, A host with no window.** `nekko computer serve`, `link`, `revoke`.
