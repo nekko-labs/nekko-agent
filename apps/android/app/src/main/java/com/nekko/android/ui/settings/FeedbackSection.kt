@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -18,12 +20,12 @@ import com.nekko.android.ui.components.SectionHeader
 @Composable
 fun FeedbackSection(@Suppress("UNUSED_PARAMETER") deps: SettingsDeps) {
     var open by rememberSaveable { mutableStateOf(false) }
-    SectionHeader("Feedback")
+    SectionHeader(stringResource(R.string.settings_feedback))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             SettingsRow(
-                title = "Send feedback",
-                detail = "A bug or an idea, to the team that makes Nekko Agent",
+                title = stringResource(R.string.settings_send_feedback),
+                detail = stringResource(R.string.settings_send_feedback_detail),
                 icon = Icons.Filled.Feedback,
                 onClick = { open = true },
             )

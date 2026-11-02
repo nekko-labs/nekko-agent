@@ -46,8 +46,8 @@ class Notices(private val context: Context) {
         if (!allowed()) return
         val notification = NotificationCompat.Builder(context, if (n.needsYou) CHANNEL_NEEDS_YOU else CHANNEL_REPLIES)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(n.title)
-            .setContentText(n.text)
+            .setContentTitle(title(n))
+            .setContentText(text(n))
             .setCategory(if (n.needsYou) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_STATUS)
             .setPriority(if (n.needsYou) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             // Text is already free of content; PRIVATE still hides it on a secure lock screen.
@@ -57,7 +57,7 @@ class Notices(private val context: Context) {
             .apply {
                 // Deny is safe to answer unseen (nothing runs), so it skips the app lock;
                 // Allow needs the command in view, so it is only in the chat.
-                if (n.canDeny) addAction(0, "Deny", deny(n.sessionId, n.callId!!))
+                if (n.canDeny) addAction(0, context.getString(R.string.chat_notice_deny), deny(n.sessionId, n.callId!!))
             }
             .build()
         if (n.needsYou) needsYou[E2E.activityTag(n.sessionId)] = n.sessionId else needsYou.values.remove(n.sessionId)
@@ -93,8 +93,8 @@ class Notices(private val context: Context) {
         if (!allowed()) return false
         val notification = NotificationCompat.Builder(context, CHANNEL_NEEDS_YOU)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Test from Nekko Agent")
-            .setContentText("Notifications from $computer will look like this.")
+            .setContentTitle(context.getString(R.string.chat_notice_test_title))
+            .setContentText(context.getString(R.string.chat_notice_test_text, computer))
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -124,23 +124,23 @@ class Notices(private val context: Context) {
     fun keepAlive(status: KeepAlive.Status, card: LiveCardState? = null, level: LiveLevel = LiveLevel.NONE): Notification {
         val focused = card?.focused
         if (card == null || focused == null || level == LiveLevel.NONE) {
-            return base(status.chip)
-                .setContentTitle("Staying connected")
-                .setContentText(status.line)
+            return base(chip(status))
+                .setContentTitle(context.getString(R.string.chat_notice_staying_connected))
+                .setContentText(line(status))
                 .setContentIntent(openApp())
                 .build()
         }
-        val generic = LiveCards.generic(focused.state)
+        val generic = generic(focused.state)
         val others = card.chats.size - 1 + card.more
-        val count = if (others > 0) "+$others more" else null
-        val chip = if (focused.state == LiveChatState.NEEDS_YOU) "Needs you" else status.chip
+        val count = if (others > 0) context.getString(R.string.chat_card_more, others) else null
+        val chip = if (focused.state == LiveChatState.NEEDS_YOU) generic(LiveChatState.NEEDS_YOU) else chip(status)
         fun minimal() = base(chip)
             .setContentTitle(generic)
-            .setContentText(count ?: status.line)
+            .setContentText(count ?: line(status))
         val b = if (level == LiveLevel.MINIMAL) {
             minimal().setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         } else {
-            val text = focused.step.ifEmpty { generic }
+            val text = step(focused.step).ifEmpty { generic }
             base(chip)
                 .setContentTitle(focused.short.ifEmpty { generic })
                 .setContentText(text)
@@ -159,16 +159,16 @@ class Notices(private val context: Context) {
                 // Allow needs an unlocked phone (Android 12+); below that it stays in the chat. Deny is safe unseen.
                 if (level != LiveLevel.MINIMAL && Build.VERSION.SDK_INT >= 31) {
                     b.addAction(
-                        NotificationCompat.Action.Builder(0, "Allow", CardReceiver.intent(context, CardReceiver.ALLOW, focused.id, callId))
+                        NotificationCompat.Action.Builder(0, context.getString(R.string.chat_card_allow), CardReceiver.intent(context, CardReceiver.ALLOW, focused.id, callId))
                             .setAuthenticationRequired(true)
                             .build(),
                     )
                 }
-                b.addAction(0, "Deny", deny(focused.id, callId))
+                b.addAction(0, context.getString(R.string.chat_notice_deny), deny(focused.id, callId))
             }
-            focused.state == LiveChatState.WORKING -> b.addAction(0, "Stop", CardReceiver.intent(context, CardReceiver.STOP, focused.id))
+            focused.state == LiveChatState.WORKING -> b.addAction(0, context.getString(R.string.chat_card_stop), CardReceiver.intent(context, CardReceiver.STOP, focused.id))
         }
-        if (others > 0) b.addAction(0, "Next", CardReceiver.intent(context, CardReceiver.NEXT, focused.id))
+        if (others > 0) b.addAction(0, context.getString(R.string.chat_card_next), CardReceiver.intent(context, CardReceiver.NEXT, focused.id))
         return b.build()
     }
 
@@ -181,6 +181,65 @@ class Notices(private val context: Context) {
         .setOnlyAlertOnce(true)
         .setCategory(NotificationCompat.CATEGORY_SERVICE)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+
+    /** [LiveCards.generic] in the phone's language. */
+    private fun generic(state: LiveChatState): String = context.getString(
+        when (state) {
+            LiveChatState.NEEDS_YOU -> R.string.chat_card_needs_you
+            LiveChatState.WORKING -> R.string.chat_card_working
+            LiveChatState.WATCHING -> R.string.chat_card_watching
+            LiveChatState.DONE -> R.string.chat_card_done
+            LiveChatState.FAILED -> R.string.chat_card_failed
+        },
+    )
+
+    /** A card step in the phone's language when it is one of [LiveCards]' own words; a tool label or question stays as it is. */
+    private fun step(step: String): String = when (step) {
+        "Writing…" -> context.getString(R.string.chat_card_writing)
+        "Thinking…" -> context.getString(R.string.chat_card_thinking)
+        else -> LiveChatState.entries.firstOrNull { LiveCards.generic(it) == step }?.let(::generic) ?: step
+    }
+
+    /** [EventNotice]'s title in the phone's language: it is English, by the event's kind. */
+    private fun title(n: EventNotice): String = context.getString(
+        when (n.event) {
+            PhoneEvent.FINISHED -> R.string.chat_notice_reply_ready
+            PhoneEvent.FAILED -> R.string.chat_notice_reply_failed
+            PhoneEvent.NEEDS_INPUT -> R.string.chat_notice_question_waiting
+            PhoneEvent.APPROVAL -> R.string.chat_notice_approval_needed
+        },
+    )
+
+    /**
+     * [EventNotice]'s line in the phone's language. Its two fixed forms are
+     * recognised by building them again; "chat · computer" has no words of its own.
+     */
+    private fun text(n: EventNotice): String {
+        val hidden = EventNotice.of(n.sessionId, n.event, null, "", hideContent = true).text
+        if (n.text == hidden) return context.getString(R.string.chat_notice_open_to_see)
+        val computer = n.text.removePrefix(A_CHAT_ON)
+        if (computer != n.text && EventNotice.of(n.sessionId, n.event, null, computer, hideContent = false).text == n.text) {
+            return context.getString(R.string.chat_notice_a_chat_on, computer)
+        }
+        return n.text
+    }
+
+    /** The keep-alive line in the phone's language, from the count and computer [KeepAlive.line] put in it. */
+    private fun line(status: KeepAlive.Status): String {
+        if (status == KeepAlive.FINISHING) return context.getString(R.string.chat_notice_finishing_up)
+        val m = KEEP_ALIVE_LINE.matchEntire(status.line) ?: return status.line
+        val busy = m.groupValues[1].toIntOrNull() ?: return status.line
+        val computer = m.groupValues[2]
+        if (KeepAlive.line(busy, computer) != status.line) return status.line
+        return if (busy == 1) context.getString(R.string.chat_notice_running_one, computer) else context.getString(R.string.chat_notice_running_other, busy, computer)
+    }
+
+    /** The Live Update's chip in the phone's language: "Running" or "N running". */
+    private fun chip(status: KeepAlive.Status): String {
+        if (status.chip == KeepAlive.chip(1)) return context.getString(R.string.chat_notice_chip_running)
+        val busy = status.chip.substringBefore(' ').toIntOrNull() ?: return status.chip
+        return if (KeepAlive.chip(busy) == status.chip) context.getString(R.string.chat_notice_chip_n_running, busy) else status.chip
+    }
 
     private fun openChat(sessionId: String): PendingIntent {
         // The same deep link as nekko-agent://chat/<id>; it goes through the app lock like any other.
@@ -206,14 +265,14 @@ class Notices(private val context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannels(
             listOf(
-                NotificationChannel(CHANNEL_NEEDS_YOU, "Approvals and questions", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "A chat on your computer is waiting for you"
+                NotificationChannel(CHANNEL_NEEDS_YOU, context.getString(R.string.chat_channel_needs_you), NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = context.getString(R.string.chat_channel_needs_you_description)
                 },
-                NotificationChannel(CHANNEL_REPLIES, "Replies", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "A reply on your computer finished or failed"
+                NotificationChannel(CHANNEL_REPLIES, context.getString(R.string.chat_channel_replies), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = context.getString(R.string.chat_channel_replies_description)
                 },
-                NotificationChannel(CHANNEL_CONNECTION, "Connection", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Shown while the app stays connected for a running chat"
+                NotificationChannel(CHANNEL_CONNECTION, context.getString(R.string.chat_channel_connection), NotificationManager.IMPORTANCE_LOW).apply {
+                    description = context.getString(R.string.chat_channel_connection_description)
                     setShowBadge(false)
                 },
             ),
@@ -262,6 +321,12 @@ class Notices(private val context: Context) {
         }
 
         const val TAG_TEST = "test"
+
+        /** The start of [EventNotice]'s line for a chat without a title. */
+        private const val A_CHAT_ON = "A chat on "
+
+        /** [KeepAlive.line]: "1 chat running on Mac", "3 chats running on Mac". */
+        private val KEEP_ALIVE_LINE = Regex("""(\d+) chats? running on (.+)""", RegexOption.DOT_MATCHES_ALL)
 
         const val CHANNEL_NEEDS_YOU = "needs_you"
         const val CHANNEL_REPLIES = "replies"

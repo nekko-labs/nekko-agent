@@ -4,6 +4,10 @@ plugins {
 }
 
 android {
+    // The app's languages (values-<lang>/) as Android's per-app language list (Settings → Apps → Language).
+    androidResources {
+        generateLocaleConfig = true
+    }
     namespace = "com.nekko.android"
     // Current AndroidX (core 1.19, Compose 1.12, lifecycle 2.11) requires compiling
     // against API 37.2. targetSdk stays 36, so runtime behaviour is unchanged.

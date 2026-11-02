@@ -4,6 +4,9 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.foundation.selection.selectable
 import com.nekko.protocol.LiveLevel
 import com.nekko.android.connection.LiveCards
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 
 import android.Manifest
@@ -62,6 +65,7 @@ import com.nekko.android.ui.theme.Nekko
 fun ConnectionSection(deps: SettingsDeps) {
     val p = Nekko.palette
     val context = LocalContext.current
+    val res = LocalResources.current
     val lock = LocalAppLock.current
     val keep by deps.phonePrefs.flow(KeepAlive.ENABLED).collectAsStateWithLifecycle()
     val cardLevel by deps.phonePrefs.flow(LiveCards.LEVEL).collectAsStateWithLifecycle()
@@ -94,32 +98,32 @@ fun ConnectionSection(deps: SettingsDeps) {
         }
     }
 
-    SectionHeader("Connection")
+    SectionHeader(stringResource(R.string.settings_connection))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             SwitchRow(
-                title = "Stay connected while a chat runs",
-                detail = "Keeps a notification up until the reply is done",
+                title = stringResource(R.string.settings_stay_connected),
+                detail = stringResource(R.string.settings_stay_connected_detail),
                 checked = keep,
                 onChange = { deps.phonePrefs.set(KeepAlive.ENABLED, it) },
             )
             if (keep) {
                 // The Lock Screen card (the iPhone's Live Activity levels): what that notification shows.
-                Text("Lock Screen card", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
+                Text(stringResource(R.string.settings_card_title), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
                 // Stored at the app's first start (LiveCards.firstLevel); Minimal until then.
                 val current = cardLevel ?: LiveLevel.MINIMAL
                 for ((level, title, detail) in listOf(
-                    Triple(LiveLevel.NONE, "Counts only", "How many chats are running, nothing else"),
-                    Triple(LiveLevel.MINIMAL, "Minimal", "What the chat that needs you is doing, with Stop and Deny. No chat text"),
-                    Triple(LiveLevel.STANDARD, "Standard", "Adds the chat's name, its live step and Allow"),
-                    Triple(LiveLevel.DETAILED, "Detailed", "Adds the first line of the latest reply"),
+                    Triple(LiveLevel.NONE, R.string.settings_card_counts, R.string.settings_card_counts_detail),
+                    Triple(LiveLevel.MINIMAL, R.string.settings_card_minimal, R.string.settings_card_minimal_detail),
+                    Triple(LiveLevel.STANDARD, R.string.settings_card_standard, R.string.settings_card_standard_detail),
+                    Triple(LiveLevel.DETAILED, R.string.settings_card_detailed, R.string.settings_card_detailed_detail),
                 )) {
-                    RadioRow(title, detail, selected = current == level, tag = "settings.card.${level.wire}") { deps.phonePrefs.set(LiveCards.LEVEL, level) }
+                    RadioRow(stringResource(title), stringResource(detail), selected = current == level, tag = "settings.card.${level.wire}") { deps.phonePrefs.set(LiveCards.LEVEL, level) }
                 }
                 Text(
                     when (current) {
-                        LiveLevel.NONE, LiveLevel.MINIMAL -> "No chat text leaves your computer for the lock screen."
-                        else -> "Chat names and steps show when the phone is unlocked; a locked phone that hides sensitive content shows the Minimal words. Allow asks you to unlock first."
+                        LiveLevel.NONE, LiveLevel.MINIMAL -> stringResource(R.string.settings_card_footer_private)
+                        else -> stringResource(R.string.settings_card_footer_text)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = p.inkSoft,
@@ -128,11 +132,11 @@ fun ConnectionSection(deps: SettingsDeps) {
             }
             HorizontalDivider(color = p.line)
             // Notify me about (the iPhone's IO-30): one switch per kind, while the app is out of sight.
-            Text("Notify me about", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
+            Text(stringResource(R.string.settings_notify_me), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
             for ((key, title, detail) in listOf(
-                Triple(Notices.NEEDS_YOU, "Approvals and questions", "A tool waits for your Allow, or the agent asks you something"),
-                Triple(Notices.FINISHED, "Finished replies", "A reply on your computer is ready"),
-                Triple(Notices.FAILED, "Failed replies", "A reply ended with an error"),
+                Triple(Notices.NEEDS_YOU, R.string.settings_notify_needs_you, R.string.settings_notify_needs_you_detail),
+                Triple(Notices.FINISHED, R.string.settings_notify_finished, R.string.settings_notify_finished_detail),
+                Triple(Notices.FAILED, R.string.settings_notify_failed, R.string.settings_notify_failed_detail),
             )) {
                 val on = when (key) {
                     Notices.NEEDS_YOU -> needsYou
@@ -140,8 +144,8 @@ fun ConnectionSection(deps: SettingsDeps) {
                     else -> failed
                 }
                 SwitchRow(
-                    title = title,
-                    detail = detail,
+                    title = stringResource(title),
+                    detail = stringResource(detail),
                     checked = on,
                     onChange = { want ->
                         deps.phonePrefs.set(key, want)
@@ -151,20 +155,20 @@ fun ConnectionSection(deps: SettingsDeps) {
             }
             TextButton(
                 onClick = {
-                    val name = deps.repo.state.value.active?.name ?: "your computer"
+                    val name = deps.repo.state.value.active?.name ?: res.getString(R.string.your_computer)
                     testNote = if (notices?.postTest(name) == true) {
-                        "Shown by the app. Until Nekko Agent can push to Android, notifications arrive while the app is open or running in the background."
+                        res.getString(R.string.settings_test_shown)
                     } else {
-                        "Notifications are off for Nekko on this phone. Allow them below."
+                        res.getString(R.string.settings_test_off)
                     }
                 },
                 modifier = Modifier.padding(start = 4.dp).testTag("settings.testNotification"),
-            ) { Text("Send a test notification") }
+            ) { Text(stringResource(R.string.settings_send_test)) }
             testNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) }
             HorizontalDivider(color = p.line)
             SwitchRow(
-                title = "Keep the chat list when offline",
-                detail = "Chat titles and folders as last seen, never what they say. Not backed up; off deletes it",
+                title = stringResource(R.string.settings_keep_list),
+                detail = stringResource(R.string.settings_keep_list_detail),
                 checked = keepList,
                 onChange = { on ->
                     (context.applicationContext as? NekkoApp)?.setKeepChatList(on) ?: deps.phonePrefs.set(ChatListFiles.ENABLED, on)
@@ -172,8 +176,8 @@ fun ConnectionSection(deps: SettingsDeps) {
             )
             HorizontalDivider(color = p.line)
             SwitchRow(
-                title = "Keep recent chats to read offline",
-                detail = "The last 20 chats you opened, without their photos. Not backed up; off deletes them",
+                title = stringResource(R.string.settings_keep_chats),
+                detail = stringResource(R.string.settings_keep_chats_detail),
                 checked = keepChats,
                 onChange = { on ->
                     (context.applicationContext as? NekkoApp)?.setKeepTranscripts(on) ?: deps.phonePrefs.set(OfflineFileStore.KEEP_TRANSCRIPTS, on)
@@ -182,7 +186,7 @@ fun ConnectionSection(deps: SettingsDeps) {
         }
         if (notify && !allowed) {
             Notice(
-                "Notifications are off for Nekko, so you won’t hear when a chat finishes or needs you.",
+                stringResource(R.string.settings_notifications_off),
                 Tone.WARNING,
                 Modifier.padding(top = 10.dp),
             )
@@ -193,18 +197,18 @@ fun ConnectionSection(deps: SettingsDeps) {
                 } else {
                     openSystem(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
                 }
-            }) { Text("Allow notifications") }
+            }) { Text(stringResource(R.string.settings_allow_notifications)) }
         }
         if (restricted) {
             Notice(
-                "Android restricts Nekko in the background, so it disconnects soon after you leave the app. Allow background use in the app’s battery settings.",
+                stringResource(R.string.settings_restricted),
                 Tone.WARNING,
                 Modifier.padding(top = 10.dp),
             )
-            TextButton(onClick = { openSystem(appDetails(context)) }) { Text("Open app settings") }
+            TextButton(onClick = { openSystem(appDetails(context)) }) { Text(stringResource(R.string.settings_open_app_settings)) }
         }
         Text(
-            "Saved on this phone. Nekko reconnects by itself when your phone changes network. Notifications say only what happened and in which chat, never the reply or the command; with the app lock on they don’t name the chat either.",
+            stringResource(R.string.settings_connection_footer),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),

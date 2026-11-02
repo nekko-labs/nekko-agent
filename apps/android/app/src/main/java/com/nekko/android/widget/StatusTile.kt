@@ -23,9 +23,9 @@ class StatusTile : TileService() {
         val tile = qsTile ?: return
         val s = StatusStore(this).load()
         tile.label = getString(R.string.app_name)
-        if (Build.VERSION.SDK_INT >= 29) tile.subtitle = s.headline
+        if (Build.VERSION.SDK_INT >= 29) tile.subtitle = s.headline(this)
         tile.state = if (s.tileActive) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        tile.contentDescription = s.tileDescription
+        tile.contentDescription = s.tileDescription(this)
         tile.icon = Icon.createWithResource(this, R.drawable.ic_tile_status)
         tile.updateTile()
     }

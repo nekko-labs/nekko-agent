@@ -1,5 +1,7 @@
 package com.nekko.android.ui.chat
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,12 +54,12 @@ fun WaitingList(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
             Text(
-                if (items.size == 1) "Waiting to send" else "${items.size} waiting to send",
+                if (items.size == 1) stringResource(R.string.chat_waiting_to_send_one) else stringResource(R.string.chat_waiting_to_send_other, items.size),
                 style = MaterialTheme.typography.labelLarge,
                 color = p.inkSoft,
                 modifier = Modifier.padding(start = 6.dp).weight(1f).semantics { heading() },
             )
-            if (online && sendingId == null) TextButton(onClick = onSendNow, modifier = Modifier.testTag("outbox.sendNow")) { Text("Send now") }
+            if (online && sendingId == null) TextButton(onClick = onSendNow, modifier = Modifier.testTag("outbox.sendNow")) { Text(stringResource(R.string.chat_send_now)) }
         }
         items.forEach { item ->
             val sending = item.id == sendingId
@@ -67,9 +69,9 @@ fun WaitingList(
                     if (sending) {
                         CircularProgressIndicator(Modifier.padding(horizontal = 12.dp).size(18.dp), strokeWidth = 2.dp, color = p.accent)
                     } else {
-                        TextButton(onClick = { onEdit(item.id) }, modifier = Modifier.testTag("outbox.edit")) { Text("Edit") }
+                        TextButton(onClick = { onEdit(item.id) }, modifier = Modifier.testTag("outbox.edit")) { Text(stringResource(R.string.chat_edit)) }
                         IconButton(onClick = { onDelete(item.id) }, modifier = Modifier.testTag("outbox.delete")) {
-                            Icon(Icons.Filled.Close, contentDescription = "Delete waiting prompt", tint = p.inkSoft)
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_delete_waiting), tint = p.inkSoft)
                         }
                     }
                 }
@@ -87,7 +89,7 @@ fun RefusalNote(reason: String, onDismiss: () -> Unit) {
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(p.surface2).padding(start = 12.dp).testTag("outbox.refusal"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Not sent: $reason", style = MaterialTheme.typography.bodySmall, color = p.danger, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
-        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Dismiss", tint = p.inkSoft) }
+        Text(stringResource(R.string.chat_not_sent, reason), style = MaterialTheme.typography.bodySmall, color = p.danger, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
+        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_dismiss), tint = p.inkSoft) }
     }
 }

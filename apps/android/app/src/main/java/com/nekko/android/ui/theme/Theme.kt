@@ -109,6 +109,28 @@ fun Palette.withAccent(argb: Long?, dark: Boolean): Palette {
     )
 }
 
+/**
+ * A desktop preset over the palette (the iPhone's `Palette.make`): its accent
+ * when the computer sends none (System, Light and Dark keep Nekko's), and, in
+ * the mode it was drawn for, its paper, surfaces, ink and line.
+ */
+fun Palette.withPreset(preset: ThemePreset?, accent: Long?, dark: Boolean): Palette {
+    var p = withAccent(accent ?: preset?.takeIf { !it.isBasic }?.accent, dark)
+    // A preset's surfaces only fit the mode it was drawn for.
+    if (preset == null || (preset.mode == ThemePreset.Mode.DARK) != dark) return p
+    fun c(v: Long?, old: Color) = v?.let { Color(it) } ?: old
+    p = p.copy(
+        paper = c(preset.paper, p.paper),
+        surface = c(preset.surface, p.surface),
+        surface2 = c(preset.surface2, p.surface2),
+        ink = c(preset.ink, p.ink),
+        inkSoft = c(preset.inkSoft, p.inkSoft),
+        inkFaint = c(preset.inkFaint, p.inkFaint),
+        line = c(preset.line, p.line),
+    )
+    return if (dark) p.copy(userInk = c(preset.ink, p.userInk)) else p
+}
+
 /** WCAG 2 contrast ratio between two colours (1..21). */
 fun contrast(a: Color, b: Color): Float {
     val (x, y) = a.luminance() to b.luminance()
@@ -136,8 +158,8 @@ private val typography = Typography().let { t ->
 
 /** Material 3 with the Nekko palette; dynamic color is deliberately off. */
 @Composable
-fun NekkoTheme(dark: Boolean = isSystemInDarkTheme(), accent: Long? = null, content: @Composable () -> Unit) {
-    val p = (if (dark) DarkPalette else LightPalette).withAccent(accent, dark)
+fun NekkoTheme(dark: Boolean = isSystemInDarkTheme(), accent: Long? = null, preset: ThemePreset? = null, content: @Composable () -> Unit) {
+    val p = (if (dark) DarkPalette else LightPalette).withPreset(preset, accent, dark)
     val scheme = if (dark) {
         darkColorScheme(
             primary = p.accent, onPrimary = p.accentInk, primaryContainer = p.accentSoft, onPrimaryContainer = p.ink,

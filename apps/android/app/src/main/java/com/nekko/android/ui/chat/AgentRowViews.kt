@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -63,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.nekko.android.R
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Activity
 import com.nekko.protocol.AgentRows
@@ -154,12 +156,15 @@ fun StepMark(status: ToolStatus) {
     }
 }
 
-fun statusName(s: ToolStatus) = when (s) {
-    ToolStatus.RUNNING -> "running"
-    ToolStatus.WAITING -> "waiting for you"
-    ToolStatus.OK -> "done"
-    ToolStatus.ERROR -> "failed"
-}
+@Composable
+fun statusName(s: ToolStatus) = stringResource(
+    when (s) {
+        ToolStatus.RUNNING -> R.string.chat_status_running
+        ToolStatus.WAITING -> R.string.chat_status_waiting_for_you
+        ToolStatus.OK -> R.string.chat_status_done
+        ToolStatus.ERROR -> R.string.chat_status_failed
+    },
+)
 
 /** A tool's output as a code well under its row, with the phone's notes under it. */
 @Composable
@@ -170,7 +175,7 @@ fun OutputWell(output: String, modifier: Modifier = Modifier) {
     Column(modifier.padding(start = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SelectionContainer {
             Text(
-                body.ifEmpty { "(no output)" },
+                body.ifEmpty { stringResource(R.string.chat_no_output) },
                 style = Nekko.mono,
                 color = p.ink,
                 maxLines = 40,
@@ -225,8 +230,8 @@ fun ToolRow(b: Block.Tool) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         RowHead(
             onClick = if (hasOutput) ({ open = !open }) else null,
-            description = "${b.label}, ${statusName(b.status)}",
-            state = if (!hasOutput) null else if (open) "Output shown" else "Output hidden",
+            description = stringResource(R.string.chat_label_status, b.label, statusName(b.status)),
+            state = if (!hasOutput) null else if (open) stringResource(R.string.chat_output_shown) else stringResource(R.string.chat_output_hidden),
             mark = { StepMark(b.status) },
             trailing = { if (hasOutput) Chevron(open) },
         ) { m ->
@@ -240,9 +245,10 @@ fun ToolRow(b: Block.Tool) {
 @Composable
 private fun ThenLine(text: String) {
     val p = Nekko.palette
+    val thenWord = stringResource(R.string.chat_then)
     Text(
         buildAnnotatedString {
-            withStyle(SpanStyle(color = p.inkSoft)) { append("then") }
+            withStyle(SpanStyle(color = p.inkSoft)) { append(thenWord) }
             withStyle(SpanStyle(color = p.inkFaint)) { append(" · $text") }
         },
         style = MaterialTheme.typography.bodySmall,
@@ -311,11 +317,12 @@ fun WatchWakeRow(wake: AgentRows.Wake, content: String, at: Long?) {
     var open by rememberSaveable(content) { mutableStateOf(false) }
     val then = AgentRows.thenSummary(wake.prompt)
     val detail = if (wake.detail.isEmpty()) "" else " (${wake.detail})"
+    val triggered = stringResource(R.string.chat_watch_triggered)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         RowHead(
             onClick = { open = !open },
-            description = "Watch triggered, ${wake.trigger}. ${wake.detail}",
-            state = if (open) "Wake-up text shown" else "Wake-up text hidden",
+            description = stringResource(R.string.chat_watch_triggered_description, wake.trigger, wake.detail),
+            state = if (open) stringResource(R.string.chat_wake_text_shown) else stringResource(R.string.chat_wake_text_hidden),
             mark = { Mark(Icons.Filled.Bolt, p.accent) },
             trailing = {
                 if (at != null && at > 0) {
@@ -325,7 +332,7 @@ fun WatchWakeRow(wake: AgentRows.Wake, content: String, at: Long?) {
         ) { m ->
             Text(
                 buildAnnotatedString {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Medium)) { append("Watch triggered") }
+                    withStyle(SpanStyle(fontWeight = FontWeight.Medium)) { append(triggered) }
                     append(" · ${wake.trigger}$detail")
                 },
                 style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = m,
@@ -354,18 +361,20 @@ fun SubagentRow(b: Block.Tool, ctx: AgentContext) {
     val child = AgentRows.subagentChild(b.input, ctx.children)
     val model = AgentRows.subagentModel(b.input, child, ctx.children, ctx.modelId)
     val title = AgentRows.subagentTitle(b.input)
-    val detail = when (state) {
-        AgentRows.SubagentStatus.WORKING -> "working"
-        AgentRows.SubagentStatus.WAITING -> if (b.output == null) "waiting" else "waiting for you"
-        AgentRows.SubagentStatus.COMPLETED -> "done"
-        AgentRows.SubagentStatus.FAILED -> "failed"
-        AgentRows.SubagentStatus.STOPPED -> "stopped"
-    }
+    val detail = stringResource(
+        when (state) {
+            AgentRows.SubagentStatus.WORKING -> R.string.chat_status_working
+            AgentRows.SubagentStatus.WAITING -> if (b.output == null) R.string.chat_status_waiting else R.string.chat_status_waiting_for_you
+            AgentRows.SubagentStatus.COMPLETED -> R.string.chat_status_done
+            AgentRows.SubagentStatus.FAILED -> R.string.chat_status_failed
+            AgentRows.SubagentStatus.STOPPED -> R.string.chat_status_stopped
+        },
+    )
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         RowHead(
             onClick = { open = !open },
-            description = "Subagent $title, $detail",
-            state = if (open) "Task shown" else "Task hidden",
+            description = stringResource(R.string.chat_subagent_description, title, detail),
+            state = if (open) stringResource(R.string.chat_task_shown) else stringResource(R.string.chat_task_hidden),
             mark = {
                 when (state) {
                     AgentRows.SubagentStatus.WORKING -> RunningDots()
@@ -414,16 +423,17 @@ fun SubagentGroup(blocks: List<Block.Tool>, ctx: AgentContext) {
     val states = blocks.map { subagentState(it, ctx) }
     val working = states.count { it == AgentRows.SubagentStatus.WORKING }
     val waiting = states.count { it == AgentRows.SubagentStatus.WAITING }
-    val n = if (blocks.size == 1) "1 subagent" else "${blocks.size} subagents"
+    val n = if (blocks.size == 1) stringResource(R.string.chat_subagents_one) else stringResource(R.string.chat_subagents_other, blocks.size)
     val headline = when {
-        working > 0 -> "$n · $working working"
-        waiting > 0 -> "$n · $waiting waiting"
-        else -> "$n · done"
+        working > 0 -> stringResource(R.string.chat_subagents_working, n, working)
+        waiting > 0 -> stringResource(R.string.chat_subagents_waiting, n, waiting)
+        else -> stringResource(R.string.chat_subagents_done, n)
     }
+    val modelSuffix = ctx.modelId?.let { stringResource(R.string.chat_model_suffix, it) } ?: ""
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         RowHead(
             onClick = null,
-            description = headline + (ctx.modelId?.let { ", model $it" } ?: ""),
+            description = headline + modelSuffix,
             mark = { if (working > 0) RunningDots() else Mark(Icons.Outlined.AccountTree, p.accent) },
             trailing = { ctx.modelId?.let { RowChip(AgentRows.shortModelName(it), accent = true) } },
         ) { m ->

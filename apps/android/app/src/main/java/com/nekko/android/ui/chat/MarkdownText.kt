@@ -1,5 +1,8 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import android.content.ClipData
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -216,7 +219,7 @@ private fun Marker(list: MarkdownList, depth: Int, number: Int, item: MarkdownLi
         val done = task == MarkdownListItem.Task.DONE
         Icon(
             if (done) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
-            contentDescription = if (done) "Done" else "Not done",
+            contentDescription = if (done) stringResource(R.string.chat_task_done) else stringResource(R.string.chat_task_not_done),
             tint = if (done) style.done else style.faint,
             modifier = Modifier.padding(top = 3.dp).size(18.dp),
         )
@@ -247,11 +250,12 @@ private fun TableView(table: MarkdownTable, style: MarkdownStyle, previews: Chat
     var menu by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     val actions = rememberTableActions(table)
+    val actionsLabel = stringResource(R.string.chat_table_actions)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box {
             Box(
                 Modifier.horizontalScroll(rememberScrollState())
-                    .combinedClickable(onClick = {}, onLongClick = { menu = true }, onLongClickLabel = "Table actions")
+                    .combinedClickable(onClick = {}, onLongClick = { menu = true }, onLongClickLabel = actionsLabel)
                     .testTag("markdown.table"),
             ) {
                 TableGrid(
@@ -265,7 +269,7 @@ private fun TableView(table: MarkdownTable, style: MarkdownStyle, previews: Chat
             if (table.isLarge) {
                 TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("markdown.table.expand")) {
                     Icon(Icons.Filled.OpenInFull, contentDescription = null, tint = style.soft, modifier = Modifier.size(16.dp))
-                    Text("Expand", style = MaterialTheme.typography.labelMedium, color = style.soft, modifier = Modifier.padding(start = 6.dp))
+                    Text(stringResource(R.string.chat_expand), style = MaterialTheme.typography.labelMedium, color = style.soft, modifier = Modifier.padding(start = 6.dp))
                 }
             }
             actions.note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = style.faint, modifier = Modifier.padding(start = 8.dp)) }
@@ -283,6 +287,7 @@ private class TableActions(val markdown: () -> Unit, val text: () -> Unit, val s
 private fun rememberTableActions(table: MarkdownTable): TableActions {
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     lateinit var actions: TableActions
     fun copy(s: String, note: String) {
@@ -295,8 +300,8 @@ private fun rememberTableActions(table: MarkdownTable): TableActions {
     }
     actions = remember(table) {
         TableActions(
-            markdown = { copy(table.markdown, "Copied as Markdown") },
-            text = { copy(table.tabSeparated, "Copied as text") },
+            markdown = { copy(table.markdown, resources.getString(R.string.chat_copied_as_markdown)) },
+            text = { copy(table.tabSeparated, resources.getString(R.string.chat_copied_as_text)) },
             share = {
                 val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, table.markdown)
                 context.startActivity(Intent.createChooser(send, null))
@@ -308,9 +313,9 @@ private fun rememberTableActions(table: MarkdownTable): TableActions {
 
 @Composable
 private fun TableActionItems(actions: TableActions, done: () -> Unit) {
-    DropdownMenuItem(text = { Text("Copy as Markdown") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { done(); actions.markdown() })
-    DropdownMenuItem(text = { Text("Copy as text") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { done(); actions.text() })
-    DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = { done(); actions.share() })
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_as_markdown)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { done(); actions.markdown() })
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_as_text)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { done(); actions.text() })
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_share)) }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = { done(); actions.share() })
 }
 
 /**
@@ -322,8 +327,9 @@ private fun TableActionItems(actions: TableActions, done: () -> Unit) {
 private fun TableGrid(table: MarkdownTable, style: MarkdownStyle, previews: ChatPreviews?, cards: List<ChatPreviewLink>, cellCap: Dp, modifier: Modifier = Modifier) {
     val columns = table.header.size
     val text = MaterialTheme.typography.bodyMedium.copy(color = style.ink)
-    val spoken = remember(table) {
-        "Table, $columns columns, ${table.rows.size} rows. " + table.rows.indices.joinToString(". ") { table.accessibilityRow(it) }
+    val intro = stringResource(R.string.chat_table_spoken, columns, table.rows.size)
+    val spoken = remember(table, intro) {
+        "$intro " + table.rows.indices.joinToString(". ") { table.accessibilityRow(it) }
     }
     Layout(
         content = {
@@ -418,11 +424,11 @@ private fun TableScreen(table: MarkdownTable, previews: ChatPreviews?, cards: Li
             topBar = {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                    title = { Text("Table") },
-                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("markdown.table.done")) { Icon(Icons.Filled.Close, contentDescription = "Done") } },
+                    title = { Text(stringResource(R.string.chat_format_table)) },
+                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("markdown.table.done")) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_done)) } },
                     actions = {
                         Box {
-                            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.Share, contentDescription = "Table actions") }
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.chat_table_actions)) }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { TableActionItems(actions) { menu = false } }
                         }
                     },
@@ -515,7 +521,7 @@ internal fun CodeBlock(language: String, code: String, style: MarkdownStyle) {
             }) {
                 Icon(
                     if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                    contentDescription = if (copied) "Copied" else "Copy code",
+                    contentDescription = if (copied) stringResource(R.string.chat_copied) else stringResource(R.string.chat_copy_code),
                     tint = style.soft,
                     modifier = Modifier.size(16.dp),
                 )

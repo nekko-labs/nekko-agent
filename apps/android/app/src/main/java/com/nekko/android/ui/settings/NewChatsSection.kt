@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -67,11 +69,11 @@ fun NewChatsSection(deps: SettingsDeps) {
     val active = c.active
     val phonePick = remember(modelsPref, active?.id) { active?.let { defaults.model(it.id) } }
 
-    SectionHeader("New chats")
+    SectionHeader(stringResource(R.string.settings_new_chats))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             SettingsRow(
-                title = "Computer",
+                title = stringResource(R.string.settings_fact_computer),
                 detail = computerDetail(c, computerPref.ifEmpty { null }),
                 icon = Icons.Filled.Computer,
                 onClick = if (c.computers.size > 1) ({ dialog = "computer" }) else null,
@@ -79,7 +81,7 @@ fun NewChatsSection(deps: SettingsDeps) {
             if (active != null) {
                 HorizontalDivider(color = p.line)
                 SettingsRow(
-                    title = "Model on ${active.name}",
+                    title = stringResource(R.string.settings_model_on, active.name),
                     detail = modelDetail(c, phonePick),
                     icon = Icons.Filled.Memory,
                     onClick = { dialog = "model" },
@@ -87,7 +89,7 @@ fun NewChatsSection(deps: SettingsDeps) {
             }
         }
         Text(
-            "Saved on this phone. New chat opens with these; the computer’s own default model is not changed.",
+            stringResource(R.string.settings_new_chats_footer),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
@@ -102,18 +104,20 @@ fun NewChatsSection(deps: SettingsDeps) {
     }
 }
 
+@Composable
 private fun computerDetail(c: ComputersState, pref: String?): String {
     val chosen = c.computers.firstOrNull { it.id == pref }
     return when {
-        c.computers.isEmpty() -> "None paired yet"
+        c.computers.isEmpty() -> stringResource(R.string.settings_computers_none)
         chosen != null -> chosen.name
         c.computers.size == 1 -> c.computers.first().name
-        else -> "The one used last"
+        else -> stringResource(R.string.settings_used_last)
     }
 }
 
+@Composable
 internal fun modelDetail(c: ComputersState, pick: ModelPick?): String {
-    if (pick == null) return "Same as the computer’s default"
+    if (pick == null) return stringResource(R.string.settings_same_as_default)
     val provider = c.providers.firstOrNull { it.id == pick.providerId }
     val name = c.models[pick.providerId]?.firstOrNull { it.id == pick.modelId }?.name ?: pick.modelId
     return if (provider != null) "$name · ${provider.label}" else name
@@ -123,14 +127,14 @@ internal fun modelDetail(c: ComputersState, pick: ModelPick?): String {
 private fun ComputerDialog(c: ComputersState, pref: String?, onPick: (String?) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Default computer") },
+        title = { Text(stringResource(R.string.settings_default_computer)) },
         text = {
             Column(Modifier.selectableGroup()) {
-                Choice("The one used last", "Opens on whichever computer you used most recently", pref == null) { onPick(null) }
+                Choice(stringResource(R.string.settings_used_last), stringResource(R.string.settings_used_last_detail), pref == null) { onPick(null) }
                 c.computers.forEach { pc -> Choice(pc.name, null, pc.id == pref) { onPick(pc.id) } }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_close)) } },
     )
 }
 
@@ -152,13 +156,13 @@ private fun ModelDialog(deps: SettingsDeps, c: ComputersState, current: ModelPic
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Default model on ${c.active?.name ?: "this computer"}") },
+        title = { Text(stringResource(R.string.settings_default_model_on, c.active?.name ?: stringResource(R.string.settings_this_computer_lower))) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).selectableGroup()) {
-                Choice("Same as the computer’s default", "Follows the default set in Nekko Agent on the computer", current == null) { onPick(null) }
+                Choice(stringResource(R.string.settings_same_as_default), stringResource(R.string.settings_same_as_default_detail), current == null) { onPick(null) }
                 when {
-                    !online -> Text("Connect to the computer to choose one of its models.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(8.dp))
-                    groups.isEmpty() -> Text("No model providers are switched on on the computer.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(8.dp))
+                    !online -> Text(stringResource(R.string.settings_connect_to_choose), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(8.dp))
+                    groups.isEmpty() -> Text(stringResource(R.string.settings_no_providers_on), style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(8.dp))
                     else -> groups.forEach { g ->
                         Text(
                             g.provider.label,
@@ -168,10 +172,10 @@ private fun ModelDialog(deps: SettingsDeps, c: ComputersState, current: ModelPic
                         )
                         val list = g.models
                         when {
-                            g.error != null -> Text("Couldn’t list its models.", style = MaterialTheme.typography.bodySmall, color = p.danger, modifier = Modifier.padding(start = 8.dp))
+                            g.error != null -> Text(stringResource(R.string.settings_couldnt_list), style = MaterialTheme.typography.bodySmall, color = p.danger, modifier = Modifier.padding(start = 8.dp))
                             list == null -> Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                                Text("Asking your computer…", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                                Text(stringResource(R.string.settings_asking_computer), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                             }
                             else -> list.forEach { m ->
                                 val k = ModelPick(g.provider.id, m.id)
@@ -182,7 +186,7 @@ private fun ModelDialog(deps: SettingsDeps, c: ComputersState, current: ModelPic
                 }
                 if (current != null && ModelChoice.phonePickMissing(current, groups)) {
                     Text(
-                        "The saved model (${current.modelId}) isn’t offered by the computer any more; new chats use the computer’s default.",
+                        stringResource(R.string.settings_saved_model_missing, current.modelId),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.warning,
                         modifier = Modifier.padding(8.dp),
@@ -190,7 +194,7 @@ private fun ModelDialog(deps: SettingsDeps, c: ComputersState, current: ModelPic
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_close)) } },
     )
 }
 
@@ -212,6 +216,6 @@ private fun Choice(title: String, detail: String?, selected: Boolean, onClick: (
             Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
         }
-        if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = p.accent, modifier = Modifier.size(18.dp))
+        if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.settings_selected), tint = p.accent, modifier = Modifier.size(18.dp))
     }
 }

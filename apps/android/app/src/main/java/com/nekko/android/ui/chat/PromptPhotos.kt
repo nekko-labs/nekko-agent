@@ -1,5 +1,7 @@
 package com.nekko.android.ui.chat
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.foundation.Image
@@ -43,7 +45,7 @@ fun PromptPhotos(thumbs: List<String>, tint: Color, tile: Color) {
         thumbs.forEachIndexed { i, url ->
             val bitmap by produceState<ImageBitmap?>(null, url) { value = PhotoDecoder.decode(url) }
             val shape = RoundedCornerShape(10.dp)
-            val label = if (url.isEmpty()) "Photo ${i + 1}, on the computer" else "Photo ${i + 1}"
+            val label = if (url.isEmpty()) stringResource(R.string.chat_photo_on_computer, i + 1) else stringResource(R.string.chat_photo_n, i + 1)
             val b = bitmap
             if (b != null) {
                 Image(

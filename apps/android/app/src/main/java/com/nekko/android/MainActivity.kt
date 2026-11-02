@@ -62,7 +62,7 @@ class MainActivity : FragmentActivity() {
                 val bars = if (look.dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
-            NekkoTheme(dark = look.dark, accent = look.accent) {
+            NekkoTheme(dark = look.dark, accent = look.accent, preset = look.preset) {
                 CompositionLocalProvider(LocalAuthenticator provides authenticator, LocalAppLock provides app.appLock) {
                     LockGate(app.appLock, authenticator) {
                         NekkoNavHost(

@@ -1,5 +1,10 @@
 package com.nekko.android.ui.settings
 
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalResources
+import androidx.annotation.StringRes
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -62,6 +67,7 @@ import kotlinx.serialization.json.contentOrNull
 fun PcSettingsSection(deps: SettingsDeps) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val res = LocalResources.current
     val c by deps.repo.state.collectAsStateWithLifecycle()
     val active = c.active ?: return
     val online = c.conn == RelayState.ONLINE
@@ -85,9 +91,9 @@ fun PcSettingsSection(deps: SettingsDeps) {
                 // mode needs a confirmation this phone can't sign yet) leaves the old choice selected.
                 // The repository's remote has already reworded refusals into what to do.
                 if ((e as? RelayException)?.refusal?.asksForStepUp == true) {
-                    stepUp = PendingStepUp(stepUpAction(patch, active.name)) { proof -> deps.repo.updatePcSettings(patch, proof) }
+                    stepUp = PendingStepUp(stepUpAction(patch, active.name, res)) { proof -> deps.repo.updatePcSettings(patch, proof) }
                 } else {
-                    error = e.message?.takeIf { it.isNotBlank() } ?: "${active.name} didn’t save that."
+                    error = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.settings_didnt_save, active.name)
                 }
             } finally {
                 busy = false
@@ -102,11 +108,11 @@ fun PcSettingsSection(deps: SettingsDeps) {
     val enabled = online && !busy && pc.known
 
     if (!pc.known) {
-        SectionHeader("On ${active.name}")
+        SectionHeader(stringResource(R.string.settings_on_computer, active.name))
         Column(Modifier.padding(horizontal = 16.dp)) {
             Text(
-                if (online) "Reading ${active.name}’s settings…"
-                else "${active.name} is offline. Its chat mode, chat action and delete confirmation show here once it’s connected.",
+                if (online) stringResource(R.string.settings_reading_settings, active.name)
+                else stringResource(R.string.settings_pc_offline_unknown, active.name),
                 style = MaterialTheme.typography.bodySmall,
                 color = p.inkFaint,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
@@ -115,15 +121,15 @@ fun PcSettingsSection(deps: SettingsDeps) {
         return
     }
 
-    SectionHeader("On ${active.name}")
+    SectionHeader(stringResource(R.string.settings_on_computer, active.name))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
-            Text("Chat mode for new chats", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
+            Text(stringResource(R.string.settings_chat_mode_new), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
             Column(Modifier.selectableGroup()) {
                 ChatMode.entries.forEach { m ->
                     Choice(
-                        title = modeTitle(m),
-                        detail = modeDetail(m),
+                        title = stringResource(modeTitleRes(m)),
+                        detail = stringResource(modeDetailRes(m)),
                         selected = pc.effectiveMode == m,
                         enabled = enabled,
                         danger = m == ChatMode.YOLO,
@@ -135,12 +141,12 @@ fun PcSettingsSection(deps: SettingsDeps) {
                 }
             }
             HorizontalDivider(color = p.line, modifier = Modifier.padding(vertical = 4.dp))
-            Text("Long-press a chat to", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
+            Text(stringResource(R.string.settings_long_press), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, modifier = Modifier.padding(start = 12.dp, top = 6.dp))
             Column(Modifier.selectableGroup()) {
-                Choice("Complete it", "Moves it to Completed on ${active.name}; nothing is deleted", pc.effectiveAction == ChatAction.COMPLETE, enabled) {
+                Choice(stringResource(R.string.settings_complete_it), stringResource(R.string.settings_complete_it_detail, active.name), pc.effectiveAction == ChatAction.COMPLETE, enabled) {
                     if (pc.effectiveAction != ChatAction.COMPLETE) save(PcSettings.patch(action = ChatAction.COMPLETE))
                 }
-                Choice("Delete it", "Removes it from ${active.name} for good", pc.effectiveAction == ChatAction.DELETE, enabled) {
+                Choice(stringResource(R.string.settings_delete_it), stringResource(R.string.settings_delete_it_detail, active.name), pc.effectiveAction == ChatAction.DELETE, enabled) {
                     if (pc.effectiveAction != ChatAction.DELETE) save(PcSettings.patch(action = ChatAction.DELETE))
                 }
             }
@@ -155,16 +161,16 @@ fun PcSettingsSection(deps: SettingsDeps) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Confirm before deleting", style = MaterialTheme.typography.bodyLarge, color = p.ink)
-                    Text("Ask first, here and on ${active.name}", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                    Text(stringResource(R.string.settings_confirm_delete), style = MaterialTheme.typography.bodyLarge, color = p.ink)
+                    Text(stringResource(R.string.settings_confirm_delete_detail, active.name), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                 }
                 Switch(checked = pc.confirmDelete, onCheckedChange = null, enabled = enabled)
             }
         }
         error?.let { Notice(it, Tone.DANGER, Modifier.padding(top = 10.dp)) }
         Text(
-            if (online) "Saved on ${active.name}, the same settings as in Nekko Agent there. Each chat can still change its own mode."
-            else "${active.name} is offline. Connect to change its settings.",
+            if (online) stringResource(R.string.settings_pc_footer_online, active.name)
+            else stringResource(R.string.settings_pc_footer_offline, active.name),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
@@ -174,27 +180,50 @@ fun PcSettingsSection(deps: SettingsDeps) {
     if (askYolo) {
         AlertDialog(
             onDismissRequest = { askYolo = false },
-            title = { Text("Use YOLO for new chats?") },
+            title = { Text(stringResource(R.string.settings_yolo_title)) },
             text = {
-                Text("New chats on ${active.name} will run commands and edit files without asking you first. Your deny rules still block. You can switch back here or on ${active.name} at any time.")
+                Text(stringResource(R.string.settings_yolo_text, active.name))
             },
             confirmButton = {
                 TextButton(onClick = {
                     askYolo = false
                     save(PcSettings.patch(mode = ChatMode.YOLO))
-                }) { Text("Use YOLO", color = p.danger) }
+                }) { Text(stringResource(R.string.settings_use_yolo), color = p.danger) }
             },
-            dismissButton = { TextButton(onClick = { askYolo = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { askYolo = false }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
 }
 
-/** What the step-up sheet says the change is (*Switch new chats on Studio to YOLO*). */
+/** What the step-up sheet says the change is (*Switch new chats on Studio to YOLO*), in the phone's language. */
+internal fun stepUpAction(patch: JsonObject, computer: String, res: Resources): String {
+    val mode = ChatMode.of((patch["defaultChatMode"] as? JsonPrimitive)?.contentOrNull)
+    return if (mode != null) res.getString(R.string.settings_step_up_switch, computer, res.getString(modeTitleRes(mode)))
+    else res.getString(R.string.settings_step_up_change, computer)
+}
+
+/** The same in English, as the JVM tests read it. */
 internal fun stepUpAction(patch: JsonObject, computer: String): String {
     val mode = ChatMode.of((patch["defaultChatMode"] as? JsonPrimitive)?.contentOrNull)
     return if (mode != null) "Switch new chats on $computer to ${modeTitle(mode)}" else "Change $computer’s settings"
 }
 
+@StringRes
+internal fun modeTitleRes(m: ChatMode) = when (m) {
+    ChatMode.ASK -> R.string.settings_mode_ask
+    ChatMode.GUARDRAILS -> R.string.settings_mode_guardrails
+    ChatMode.YOLO -> R.string.settings_mode_yolo
+}
+
+/** [modeDetail] as a string resource. */
+@StringRes
+internal fun modeDetailRes(m: ChatMode) = when (m) {
+    ChatMode.ASK -> R.string.settings_mode_ask_detail
+    ChatMode.GUARDRAILS -> R.string.settings_mode_guardrails_detail
+    ChatMode.YOLO -> R.string.settings_mode_yolo_detail
+}
+
+/** English; on screen use [modeTitleRes]. */
 internal fun modeTitle(m: ChatMode) = when (m) {
     ChatMode.ASK -> "Ask"
     ChatMode.GUARDRAILS -> "Guardrails"
@@ -226,6 +255,6 @@ private fun Choice(title: String, detail: String, selected: Boolean, enabled: Bo
             Text(title, style = MaterialTheme.typography.bodyLarge, color = if (danger) p.danger else p.ink)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
-        if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = p.accent, modifier = Modifier.size(20.dp))
+        if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.settings_selected), tint = p.accent, modifier = Modifier.size(20.dp))
     }
 }

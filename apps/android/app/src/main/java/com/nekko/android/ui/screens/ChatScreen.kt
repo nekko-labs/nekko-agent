@@ -1,5 +1,7 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import com.nekko.android.voice.DictationController
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -14,6 +16,7 @@ import java.io.File
 import com.nekko.android.ui.chat.MicUi
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -138,7 +141,7 @@ import com.nekko.android.ui.chat.RefusalNote
 import com.nekko.android.ui.chat.RenameChatDialog
 import com.nekko.android.ui.security.PendingStepUp
 import com.nekko.android.ui.security.StepUpSheet
-import com.nekko.android.ui.settings.modeTitle
+import com.nekko.android.ui.settings.modeTitleRes
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
@@ -170,7 +173,7 @@ fun ChatScreen(
     val expert by vm.expert.collectAsStateWithLifecycle()
     val hardware by vm.hardware.state.collectAsStateWithLifecycle()
     val computers by vm.computers.collectAsStateWithLifecycle()
-    val computerName = computers.active?.name ?: "your computer"
+    val computerName = computers.active?.name ?: stringResource(R.string.chats_your_computer)
     var showModelEffort by remember { mutableStateOf(false) }
     var showMonitor by remember { mutableStateOf(false) }
     // Expert re-reads the hardware every 3 s, only while it is on, this chat is on screen and the computer is reachable.
@@ -206,11 +209,14 @@ fun ChatScreen(
     val list = rememberLazyListState()
     val prompts by vm.prompts.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val res = LocalResources.current
+    val editInNewChat = stringResource(R.string.chats_edit_in_new_chat)
+    val forkFromHere = stringResource(R.string.chats_fork_from_here)
     // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
     // everything up to the next prompt. Streaming blocks aren't saved yet, so they offer Copy only.
     val forkAction: (Block) -> ForkAction? = { block ->
         if ((block is Block.User || (block is Block.Assistant && !block.streaming)) && vm.canFork(block)) {
-            ForkAction(if (block is Block.User) "Edit in a new chat" else "Fork from here") {
+            ForkAction(if (block is Block.User) editInNewChat else forkFromHere) {
                 scope.launch {
                     try {
                         val (id, draft) = vm.fork(block)
@@ -218,7 +224,7 @@ fun ChatScreen(
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        android.widget.Toast.makeText(context, e.message ?: "Couldn’t fork the chat.", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(context, e.message ?: res.getString(R.string.chats_fork_failed), android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -301,7 +307,7 @@ fun ChatScreen(
     if (showRename) {
         RenameChatDialog(chat.title, onDismiss = { showRename = false }) { title ->
             showRename = false
-            chatAction("Couldn’t rename this chat.") { vm.rename(title) }
+            chatAction(res.getString(R.string.chats_rename_this_failed)) { vm.rename(title) }
         }
     }
     if (showMode) {
@@ -314,9 +320,9 @@ fun ChatScreen(
                     throw e
                 } catch (e: Exception) {
                     if ((e as? RelayException)?.refusal?.asksForStepUp == true) {
-                        modeStepUp = PendingStepUp("Switch this chat on $computerName to ${modeTitle(mode)}") { proof -> vm.setMode(mode, proof) }
+                        modeStepUp = PendingStepUp(res.getString(R.string.chats_mode_step_up, computerName, res.getString(modeTitleRes(mode)))) { proof -> vm.setMode(mode, proof) }
                     } else {
-                        android.widget.Toast.makeText(context, e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t change this chat’s mode.", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(context, e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_mode_failed), android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -360,12 +366,12 @@ fun ChatScreen(
                     actions = {
                         if (changesAllowed) {
                             IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
-                                Icon(Icons.Filled.Difference, contentDescription = "Changes")
+                                Icon(Icons.Filled.Difference, contentDescription = stringResource(R.string.chats_changes))
                             }
                         }
                         Box {
                             IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_more))
                             }
                             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                                 DropdownMenuItem(
@@ -376,14 +382,14 @@ fun ChatScreen(
                                     modifier = Modifier.testTag("chat.git"),
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Files") },
+                                    text = { Text(stringResource(R.string.chats_files)) },
                                     leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openFiles() },
                                     enabled = chat.savedAt == null,
                                     modifier = Modifier.testTag("chat.files"),
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Terminals") },
+                                    text = { Text(stringResource(R.string.chats_terminals)) },
                                     leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
                                     onClick = { showMenu = false; vm.openTerminals() },
                                     enabled = chat.savedAt == null,
@@ -391,31 +397,31 @@ fun ChatScreen(
                                 )
                                 HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text("Chat mode") },
+                                    text = { Text(stringResource(R.string.chats_chat_mode)) },
                                     leadingIcon = { Icon(Icons.Filled.Shield, contentDescription = null) },
                                     onClick = { showMenu = false; showMode = true },
                                     enabled = online,
                                     modifier = Modifier.testTag("chat.toolMode"),
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Rename") },
+                                    text = { Text(stringResource(R.string.chats_rename)) },
                                     leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
                                     onClick = { showMenu = false; showRename = true },
                                     enabled = online,
                                     modifier = Modifier.testTag("chat.rename"),
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(if (pinned) "Unpin" else "Pin") },
+                                    text = { Text(stringResource(if (pinned) R.string.chats_unpin else R.string.chats_pin)) },
                                     leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
-                                    onClick = { showMenu = false; chatAction("Couldn’t change this chat.") { vm.setPinned(!pinned) } },
+                                    onClick = { showMenu = false; chatAction(res.getString(R.string.chats_change_this_failed)) { vm.setPinned(!pinned) } },
                                     enabled = online,
                                     modifier = Modifier.testTag("chat.pin"),
                                 )
                                 if (completedAt == null) {
                                     DropdownMenuItem(
-                                        text = { Text("Complete") },
+                                        text = { Text(stringResource(R.string.chats_complete)) },
                                         leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
-                                        onClick = { showMenu = false; chatAction("Couldn’t complete this chat.") { vm.complete() } },
+                                        onClick = { showMenu = false; chatAction(res.getString(R.string.chats_complete_this_failed)) { vm.complete() } },
                                         enabled = online,
                                         modifier = Modifier.testTag("chat.complete"),
                                     )
@@ -427,7 +433,7 @@ fun ChatScreen(
                     navigationIcon = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back))
                             }
                             ModeToggle(expert, vm::setExpert, compact = pane != null)
                         }
@@ -463,7 +469,7 @@ fun ChatScreen(
                 when {
                     !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
                     keyed.isEmpty() && chat.error == null -> Text(
-                        "Ask your computer to do something. It can use its folders, tools and models.",
+                        stringResource(R.string.chats_chat_empty),
                         style = MaterialTheme.typography.bodyLarge,
                         color = p.inkSoft,
                         textAlign = TextAlign.Center,
@@ -478,8 +484,8 @@ fun ChatScreen(
                         if (chat.omittedMessages > 0) {
                             item(key = "omitted") {
                                 Text(
-                                    if (chat.omittedMessages == 1) "1 earlier message is on the computer."
-                                    else "${chat.omittedMessages} earlier messages are on the computer.",
+                                    if (chat.omittedMessages == 1) stringResource(R.string.chats_omitted_one)
+                                    else stringResource(R.string.chats_omitted_other, chat.omittedMessages),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = p.inkFaint,
                                     textAlign = TextAlign.Center,
@@ -516,7 +522,7 @@ fun ChatScreen(
                                 val rate = chat.rate
                                 if (!chat.running && rate != null) {
                                     Text(
-                                        String.format(Locale.US, "%.1f tokens/s", rate),
+                                        stringResource(R.string.chats_tokens_per_second, String.format(Locale.US, "%.1f", rate)),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = p.inkFaint,
                                     )
@@ -544,7 +550,7 @@ fun ChatScreen(
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            restoreError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t restore this chat."
+                            restoreError = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_restore_this_failed)
                         } finally {
                             restoring = false
                         }
@@ -560,7 +566,7 @@ fun ChatScreen(
                     // The phone's saved copy (OF-5): read-only until the computer answers.
                     chat.savedAt?.let { at ->
                         Text(
-                            savedCopyNote(at, computerName),
+                            savedCopyNote(at, computerName, template = stringResource(R.string.chats_saved_copy_note)),
                             style = MaterialTheme.typography.bodySmall,
                             color = p.inkSoft,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp).testTag("chat.savedCopy"),
@@ -673,12 +679,12 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = p.success, modifier = Modifier.size(16.dp))
             Text(
-                "This chat is completed. Restore it to keep going.",
+                stringResource(R.string.chats_completed_bar),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.inkSoft,
                 modifier = Modifier.weight(1f),
             )
-            Button(onClick = onRestore, enabled = !restoring) { Text(if (restoring) "Restoring…" else "Restore") }
+            Button(onClick = onRestore, enabled = !restoring) { Text(stringResource(if (restoring) R.string.chats_restoring else R.string.chats_restore)) }
         }
     }
 }
@@ -721,6 +727,7 @@ private fun rememberMic(d: DictationController?): MicUi? {
 @Composable
 private fun rememberAttach(vm: ChatViewModel): AttachUi {
     val context = LocalContext.current
+    val res = LocalResources.current
     val lock = LocalAppLock.current
     val state by vm.photos.state.collectAsStateWithLifecycle()
     // Where the camera app was asked to write; survives the activity being recreated meanwhile.
@@ -760,7 +767,7 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
                     lock?.returned()
                     shot = null
                     vm.photos.begin(1)
-                    vm.photos.failed("No camera app on this phone.")
+                    vm.photos.failed(res.getString(R.string.chats_no_camera))
                 }
             }
         },

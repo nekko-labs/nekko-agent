@@ -1,5 +1,8 @@
 package com.nekko.android.ui.screens
 
+import androidx.annotation.StringRes
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.ui.platform.testTag
@@ -65,6 +68,7 @@ import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.util.ago
+import com.nekko.android.util.localAgo
 import com.nekko.protocol.Pairing
 import com.nekko.protocol.RelayState
 import kotlinx.coroutines.launch
@@ -82,22 +86,22 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Computers") },
+                title = { Text(stringResource(R.string.settings_computers)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back)) }
                 },
             )
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             Text(
-                "Run Nekko Agent on your computer and run it from here: start chats, follow runs, approve what it wants to do.",
+                stringResource(R.string.settings_computers_intro),
                 style = MaterialTheme.typography.bodyLarge,
                 color = p.inkSoft,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
-            if (s.computers.isNotEmpty()) SectionHeader("Paired")
+            if (s.computers.isNotEmpty()) SectionHeader(stringResource(R.string.settings_paired))
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 s.computers.forEach { c ->
                     ComputerCard(
@@ -113,15 +117,15 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
                 Button(onClick = onPair, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 4.dp)) {
                     Icon(Icons.Filled.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
-                    Text(if (s.computers.isEmpty()) "Pair a computer" else "Pair another computer")
+                    Text(if (s.computers.isEmpty()) stringResource(R.string.settings_pair_computer) else stringResource(R.string.settings_pair_another))
                 }
             }
-            SectionHeader("How it works")
+            SectionHeader(stringResource(R.string.settings_how_it_works))
             NCard(Modifier.padding(horizontal = 16.dp)) {
-                Step(1, "On your computer, open Nekko Agent → Settings → Remote access and turn it on.")
-                Step(2, "Choose “Pair a device” and scan the QR with this app. The code works once and expires in 10 minutes.")
-                Step(3, "Your computer dials out to a relay; it never opens a port. Everything is end-to-end encrypted with a key only your devices hold.")
-                Step(4, "Remove this phone any time from the same screen on your computer. It loses access immediately.")
+                Step(1, stringResource(R.string.settings_how_1))
+                Step(2, stringResource(R.string.settings_how_2))
+                Step(3, stringResource(R.string.settings_how_3))
+                Step(4, stringResource(R.string.settings_how_4))
             }
             Spacer(Modifier.size(32.dp))
         }
@@ -131,13 +135,13 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
         var name by remember(c.id) { mutableStateOf(c.name) }
         AlertDialog(
             onDismissRequest = { renaming = null },
-            title = { Text("Rename computer") },
+            title = { Text(stringResource(R.string.settings_rename_computer)) },
             text = {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(40) },
                     singleLine = true,
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.settings_name)) },
                 )
             },
             confirmButton = {
@@ -147,36 +151,36 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
                         renaming = null
                     },
                     enabled = name.isNotBlank(),
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.settings_save)) }
             },
-            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
 
     forgetting?.let { c ->
         AlertDialog(
             onDismissRequest = { forgetting = null },
-            title = { Text("Forget ${c.name}?") },
+            title = { Text(stringResource(R.string.settings_forget_title, c.name)) },
             text = {
-                Text("This phone deletes the pairing key. To be safe, also remove the phone on your computer (Settings → Remote access).")
+                Text(stringResource(R.string.settings_forget_text))
             },
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch { repo.forget(c.id) }
                     forgetting = null
-                }) { Text("Forget", color = p.danger) }
+                }) { Text(stringResource(R.string.settings_forget), color = p.danger) }
             },
-            dismissButton = { TextButton(onClick = { forgetting = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { forgetting = null }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
 }
 
-private enum class CardState(val label: String, val tone: Tone) {
-    ONLINE("Online", Tone.SUCCESS),
-    CONNECTING("Connecting…", Tone.WARNING),
-    OFFLINE("Offline", Tone.WARNING),
-    DENIED("Not paired", Tone.DANGER),
-    IDLE("Not connected", Tone.FAINT),
+private enum class CardState(@StringRes val label: Int, val tone: Tone) {
+    ONLINE(R.string.settings_state_online, Tone.SUCCESS),
+    CONNECTING(R.string.settings_state_connecting_dots, Tone.WARNING),
+    OFFLINE(R.string.settings_state_offline_short, Tone.WARNING),
+    DENIED(R.string.settings_state_not_paired, Tone.DANGER),
+    IDLE(R.string.settings_state_idle, Tone.FAINT),
 }
 
 @Composable
@@ -203,7 +207,7 @@ private fun ComputerCard(
     NCard {
         // The name opens the computer's page (its details, models, hardware and round trip).
         Row(
-            Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClickLabel = "Open ${c.name}", onClick = onOpen).testTag("computer.open"),
+            Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClickLabel = stringResource(R.string.settings_open_computer, c.name), onClick = onOpen).testTag("computer.open"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -218,13 +222,16 @@ private fun ComputerCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Dot(state.tone)
                     Text(
-                        "${state.label} · ${Pairing.relayHost(c.relayUrl)} · paired ${ago(c.pairedAt).let { if (it == "now") "just now" else "$it ago" }}",
+                        ago(c.pairedAt).let {
+                            if (it == "now") stringResource(R.string.settings_card_line_now, stringResource(state.label), Pairing.relayHost(c.relayUrl))
+                            else stringResource(R.string.settings_card_line_ago, stringResource(state.label), Pairing.relayHost(c.relayUrl), localAgo(c.pairedAt))
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkSoft,
                     )
                 }
             }
-            if (active) Pill("Active", Tone.ACCENT)
+            if (active) Pill(stringResource(R.string.settings_active), Tone.ACCENT)
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
         }
         if (active && s.lastError != null && state == CardState.ONLINE) {
@@ -235,15 +242,15 @@ private fun ComputerCard(
                 active && state == CardState.DENIED -> Button(onClick = onPair, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                     Icon(Icons.Filled.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
-                    Text("Pair again")
+                    Text(stringResource(R.string.settings_pair_again))
                 }
                 active -> OutlinedButton(onClick = onUse, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                     Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(8.dp))
-                    Text("Reconnect")
+                    Text(stringResource(R.string.settings_reconnect))
                 }
                 else -> Button(onClick = onUse, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text("Use this computer")
+                    Text(stringResource(R.string.settings_use_this_computer))
                 }
             }
             Box {
@@ -251,21 +258,21 @@ private fun ComputerCard(
                     onClick = { menu = true },
                     modifier = Modifier.size(48.dp).clip(CircleShape).background(p.surface2),
                 ) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More options for ${c.name}", tint = p.inkSoft)
+                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.settings_more_options_for, c.name), tint = p.inkSoft)
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text("Details") },
+                        text = { Text(stringResource(R.string.settings_details)) },
                         leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
                         onClick = { menu = false; onOpen() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Rename") },
+                        text = { Text(stringResource(R.string.settings_rename)) },
                         leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
                         onClick = { menu = false; onRename() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Forget this computer", color = p.danger) },
+                        text = { Text(stringResource(R.string.settings_forget_this_computer), color = p.danger) },
                         leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = p.danger) },
                         onClick = { menu = false; onForget() },
                     )

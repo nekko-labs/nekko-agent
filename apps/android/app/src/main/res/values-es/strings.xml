@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="widget_description">Cuántos chats te necesitan y cuántos están trabajando. Solo cifras, nunca lo que dicen.</string>
+    <string name="shortcut_new_chat">Chat nuevo</string>
+    <string name="shortcut_new_chat_long">Chat nuevo en tu computadora</string>
+</resources>

@@ -1,5 +1,7 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,8 +46,9 @@ fun NearbyCard() {
     DisposableEffect(browser) { onDispose { browser.stop() } }
     val state by browser.state.collectAsState()
 
+    val lookingDesc = stringResource(R.string.chats_nearby_looking_desc)
     NCard {
-        Text("On this network", style = MaterialTheme.typography.titleSmall, color = p.ink)
+        Text(stringResource(R.string.chats_nearby_title), style = MaterialTheme.typography.titleSmall, color = p.ink)
         state.found.forEach { c ->
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) {},
@@ -56,7 +59,7 @@ fun NearbyCard() {
                 Column {
                     Text(c.name, style = MaterialTheme.typography.bodyLarge, color = p.ink)
                     Text(
-                        c.relayUrl?.let { "Runs its own relay: ${Pairing.relayHost(it)}" } ?: "On this network",
+                        c.relayUrl?.let { stringResource(R.string.chats_nearby_own_relay, Pairing.relayHost(it)) } ?: stringResource(R.string.chats_nearby_title),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkSoft,
                     )
@@ -65,29 +68,29 @@ fun NearbyCard() {
         }
         if (state.phase == NearbyBrowser.Phase.LOOKING) {
             Row(
-                Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Looking on this network" },
+                Modifier.heightIn(min = 48.dp).semantics { contentDescription = lookingDesc },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                Text("Looking…", color = p.inkSoft)
+                Text(stringResource(R.string.chats_nearby_looking), color = p.inkSoft)
             }
         } else {
             OutlinedButton(onClick = { browser.start() }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(if (state.looked || state.found.isNotEmpty()) "Look again" else "Look on this network")
+                Text(stringResource(if (state.looked || state.found.isNotEmpty()) R.string.chats_nearby_look_again else R.string.chats_nearby_look))
             }
         }
         when {
             state.phase == NearbyBrowser.Phase.FAILED ->
-                Notice("Couldn’t look on this network. Check that Wi-Fi is on, then try again.", Tone.DANGER)
+                Notice(stringResource(R.string.chats_nearby_failed), Tone.DANGER)
             state.looked && state.found.isEmpty() && state.phase == NearbyBrowser.Phase.IDLE -> Text(
-                "No computers found. On the computer, turn on Settings → Remote access → Visible on this network. Some Wi-Fi networks (offices, hotels) block this; the code always works.",
+                stringResource(R.string.chats_nearby_none),
                 style = MaterialTheme.typography.bodySmall,
                 color = p.inkSoft,
             )
         }
         Text(
-            "Finding a computer doesn’t pair with it. On the computer you want: Settings → Remote access → Pair a device, then scan its code.",
+            stringResource(R.string.chats_nearby_footer),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
         )

@@ -1,5 +1,8 @@
 package com.nekko.android.ui.settings
 
+import androidx.annotation.StringRes
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +41,14 @@ import com.nekko.protocol.StepUpMethod
 import kotlinx.coroutines.CancellationException
 
 /** What a kind of method is called on screen. */
+@StringRes
+fun stepUpMethodLabelRes(m: StepUpMethod): Int = when (m) {
+    StepUpMethod.SECURITY_KEY -> R.string.settings_method_key
+    StepUpMethod.PASSKEY -> R.string.settings_method_passkey
+    StepUpMethod.TOTP -> R.string.settings_method_totp
+}
+
+/** The same in English, as the JVM tests read it. */
 fun stepUpMethodLabel(m: StepUpMethod): String = when (m) {
     StepUpMethod.SECURITY_KEY -> "Security key"
     StepUpMethod.PASSKEY -> "Passkey"
@@ -51,6 +62,14 @@ private fun stepUpMethodIcon(m: StepUpMethod): ImageVector = when (m) {
 }
 
 /** The line under Settings → Security's step-up card for what the computer said. */
+@Composable
+private fun stepUpStatusText(computer: String, c: StepUpChallenge?): String = when {
+    c == null -> stringResource(R.string.settings_step_up_shows_once, computer)
+    c.required -> stringResource(R.string.settings_step_up_on_line)
+    else -> stringResource(R.string.settings_step_up_off_line, computer)
+}
+
+/** The same in English, as the JVM tests read it. */
 internal fun stepUpStatusLine(computer: String, c: StepUpChallenge?): String = when {
     c == null -> "Shows once $computer is connected."
     c.required -> "On: raising a chat’s mode from this phone asks for one of these."
@@ -87,11 +106,11 @@ fun StepUpMethodsCard(deps: SettingsDeps) {
         if (active != null) {
             NCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Step-up on ${active.name}", style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.weight(1f))
-                    status?.let { Pill(if (it.required) "On" else "Off", if (it.required) Tone.SUCCESS else Tone.FAINT) }
+                    Text(stringResource(R.string.settings_step_up_on, active.name), style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.weight(1f))
+                    status?.let { Pill(if (it.required) stringResource(R.string.settings_on) else stringResource(R.string.settings_off), if (it.required) Tone.SUCCESS else Tone.FAINT) }
                 }
                 Text(
-                    error ?: stepUpStatusLine(active.name, status),
+                    error ?: stepUpStatusText(active.name, status),
                     style = MaterialTheme.typography.bodySmall,
                     color = p.inkFaint,
                 )
@@ -100,7 +119,7 @@ fun StepUpMethodsCard(deps: SettingsDeps) {
                     StepUpController.KIND_ORDER.forEach { kind -> MethodRow(kind, kind in s.methods) }
                     if (s.methods.any { it.isFido2 } && !s.offersKey) {
                         Text(
-                            "Keys and passkeys can’t answer from this phone yet, so the phone asks for a code. Keep an authenticator app set up on ${active.name}.",
+                            stringResource(R.string.settings_keys_cant_answer, active.name),
                             style = MaterialTheme.typography.bodySmall,
                             color = p.inkFaint,
                         )
@@ -108,7 +127,7 @@ fun StepUpMethodsCard(deps: SettingsDeps) {
                 }
             }
             Text(
-                "Add or remove methods on ${active.name} in Settings → Security there. Each computer keeps its own, so a key is touched once per computer; a key that holds only a few passkeys can run out of room.",
+                stringResource(R.string.settings_step_up_footer, active.name),
                 style = MaterialTheme.typography.bodySmall,
                 color = p.inkFaint,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
@@ -127,7 +146,7 @@ private fun MethodRow(kind: StepUpMethod, registered: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(stepUpMethodIcon(kind), contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(20.dp))
-        Text(stepUpMethodLabel(kind), style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
-        Text(if (registered) "Registered" else "None", style = MaterialTheme.typography.bodySmall, color = if (registered) p.success else p.inkFaint)
+        Text(stringResource(stepUpMethodLabelRes(kind)), style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+        Text(if (registered) stringResource(R.string.settings_registered) else stringResource(R.string.settings_none), style = MaterialTheme.typography.bodySmall, color = if (registered) p.success else p.inkFaint)
     }
 }

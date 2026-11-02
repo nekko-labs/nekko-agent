@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -26,37 +28,37 @@ fun AutomationsUsageSection(deps: SettingsDeps) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         NCard {
             SettingsRow(
-                title = "Providers",
-                detail = c.providers.takeIf { it.isNotEmpty() }?.let { list -> "${list.count { it.enabled }} of ${list.size} on · add one with a sealed key" }
-                    ?: "Add one with a key sealed to the computer",
+                title = stringResource(R.string.settings_providers),
+                detail = c.providers.takeIf { it.isNotEmpty() }?.let { list -> stringResource(R.string.settings_providers_count, list.count { it.enabled }, list.size) }
+                    ?: stringResource(R.string.settings_providers_none),
                 icon = Icons.Filled.Key,
                 onClick = { deps.open(Routes.PROVIDERS) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
-                title = "Files",
-                detail = "Saved folders, browse and edit small text files",
+                title = stringResource(R.string.settings_files),
+                detail = stringResource(R.string.settings_files_detail),
                 icon = Icons.Filled.FolderOpen,
                 onClick = { deps.open(Routes.FILES) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
-                title = "Logs",
-                detail = "The app's, the engine's and each chat's, read only",
+                title = stringResource(R.string.settings_logs),
+                detail = stringResource(R.string.settings_logs_detail),
                 icon = Icons.AutoMirrored.Filled.ReceiptLong,
                 onClick = { deps.open(Routes.LOGS) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
-                title = "Automations",
-                detail = if (c.pcSettings.automationsPaused) "Paused · Run now still works" else "Tasks and workflows, Run now",
+                title = stringResource(R.string.settings_automations),
+                detail = if (c.pcSettings.automationsPaused) stringResource(R.string.settings_automations_paused) else stringResource(R.string.settings_automations_detail),
                 icon = Icons.Filled.Schedule,
                 onClick = { deps.open(Routes.AUTOMATIONS) },
             )
             HorizontalDivider(color = Nekko.palette.line)
             SettingsRow(
-                title = "Usage and limits",
-                detail = "What the providers used, and each plan's limits",
+                title = stringResource(R.string.settings_usage),
+                detail = stringResource(R.string.settings_usage_detail),
                 icon = Icons.Filled.DataUsage,
                 onClick = { deps.open(Routes.USAGE) },
             )

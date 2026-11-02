@@ -1,5 +1,8 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import com.nekko.protocol.Draft
 
 import androidx.compose.foundation.background
@@ -159,6 +162,7 @@ fun Composer(
     var plusOpen by remember { mutableStateOf(false) }
     // The Markdown editing (MD-6): the selection the toolbar acts on, and the formatting toolbar's switch (*Aa*).
     val context = LocalContext.current
+    val resources = LocalResources.current
     val draft = remember { MarkdownDraft() }
     val setText: (String) -> Unit = {
         text = it
@@ -211,7 +215,7 @@ fun Composer(
                     skillName = armed?.name
                     promptId = armedPrompt?.id
                     attach?.restore?.invoke(sentPhotos)
-                    error = e.message ?: "Couldn’t send that."
+                    error = e.message ?: resources.getString(R.string.chat_send_failed)
                 } finally {
                     sending = false
                 }
@@ -229,7 +233,7 @@ fun Composer(
                 when (val st = m.state) {
                     is MicState.Recording -> RecordingBar(st)
                     is MicState.Transcribing -> Text(
-                        if (st.engine == Engine.COMPUTER) "Transcribing on ${m.computerName}…" else "Transcribing…",
+                        if (st.engine == Engine.COMPUTER) stringResource(R.string.chat_transcribing_on, m.computerName) else stringResource(R.string.chat_transcribing),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkSoft,
                         modifier = Modifier.padding(horizontal = 4.dp),
@@ -251,8 +255,8 @@ fun Composer(
                 text = SkillMenu.afterPick(text)
                 error = null
             }
-            skill?.let { SkillChip("/${it.name}", Icons.Filled.Extension, "Remove skill /${it.name}") { skillName = null } }
-            prompt?.let { SkillChip("/${it.name}", Icons.Filled.Bookmark, "Remove saved prompt /${it.name}") { promptId = null } }
+            skill?.let { SkillChip("/${it.name}", Icons.Filled.Extension, stringResource(R.string.chat_remove_skill, it.name)) { skillName = null } }
+            prompt?.let { SkillChip("/${it.name}", Icons.Filled.Bookmark, stringResource(R.string.chat_remove_saved_prompt, it.name)) { promptId = null } }
             if (attach != null && (photos.isNotEmpty() || addingPhotos)) PhotoStrip(photos, attach.state.adding, attach.onRemove)
             val note = blocked ?: error ?: mic?.error ?: attach?.state?.error
             if (note != null) {
@@ -278,6 +282,7 @@ fun Composer(
                 if (focused && toolbarOn) MarkdownToolbar(draft, text, setText)
                 PastedChip(draft, text, setText)
                 val fieldValue = draft.valueFor(text)
+                val messageLabel = stringResource(R.string.chat_message)
                 BasicTextField(
                     value = fieldValue,
                     // Against the current value, not this composition's: a paste or a toolbar edit may have just replaced it.
@@ -294,15 +299,15 @@ fun Composer(
                         .onFocusChanged { focused = it.hasFocus }
                         .markdownKeys(draft, { text }, setText)
                         .markdownPaste(context, draft, { text }, setText)
-                        .semantics { contentDescription = "Message" },
+                        .semantics { contentDescription = messageLabel },
                     decorationBox = { inner ->
                         if (text.isEmpty()) {
                             Text(
                                 when {
-                                    skill != null -> "Add details for /${skill.name} (optional)"
-                                    running -> "Queue a follow-up…"
-                                    skills.isNotEmpty() -> "Message, / for skills"
-                                    else -> "Message your computer"
+                                    skill != null -> stringResource(R.string.chat_add_details_for, skill.name)
+                                    running -> stringResource(R.string.chat_queue_follow_up)
+                                    skills.isNotEmpty() -> stringResource(R.string.chat_message_slash_skills)
+                                    else -> stringResource(R.string.chat_message_your_computer)
                                 },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = p.inkFaint,
@@ -352,7 +357,7 @@ fun Composer(
                     ) {
                         Icon(
                             Icons.Filled.TextFormat,
-                            contentDescription = if (toolbarOn) "Hide formatting" else "Show formatting",
+                            contentDescription = if (toolbarOn) stringResource(R.string.chat_hide_formatting) else stringResource(R.string.chat_show_formatting),
                             tint = if (toolbarOn) p.accent else p.inkSoft,
                         )
                     }
@@ -370,12 +375,12 @@ fun Composer(
                         modifier = Modifier.size(48.dp),
                     ) {
                         if (showStop) {
-                            Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                            Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.chat_stop))
                         } else {
                             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = when {
-                                sendsLater != null -> "Send when online"
-                                running -> "Queue"
-                                else -> "Send"
+                                sendsLater != null -> stringResource(R.string.chat_send_when_online)
+                                running -> stringResource(R.string.chat_queue)
+                                else -> stringResource(R.string.chat_send)
                             })
                         }
                     }
@@ -389,6 +394,7 @@ fun Composer(
 @Composable
 private fun SkillList(skills: List<SkillSummary>, prompts: List<SavedPrompt>, onPickPrompt: (SavedPrompt) -> Unit, onPick: (SkillSummary) -> Unit) {
     val p = Nekko.palette
+    val menuLabel = stringResource(R.string.chat_saved_prompts_and_skills)
     Column(
         Modifier
             .fillMaxWidth()
@@ -397,13 +403,13 @@ private fun SkillList(skills: List<SkillSummary>, prompts: List<SavedPrompt>, on
             .background(p.surface)
             .border(1.dp, p.line, RoundedCornerShape(12.dp))
             .verticalScroll(rememberScrollState())
-            .semantics { contentDescription = "Saved prompts and skills on your computer" },
+            .semantics { contentDescription = menuLabel },
     ) {
         prompts.forEach { pr ->
             Column(Modifier.fillMaxWidth().clickable { onPickPrompt(pr) }.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("/${pr.name}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink)
-                    Text("Saved prompt", style = MaterialTheme.typography.labelSmall, color = p.inkFaint)
+                    Text(stringResource(R.string.chat_saved_prompt), style = MaterialTheme.typography.labelSmall, color = p.inkFaint)
                 }
                 if (pr.body.isNotBlank()) {
                     Text(pr.body, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -466,6 +472,7 @@ private fun QueueList(
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var editing by remember { mutableStateOf<Int?>(null) }
     var draft by remember { mutableStateOf("") }
     fun run(work: suspend () -> Unit) {
@@ -476,7 +483,7 @@ private fun QueueList(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                onError(e.message ?: "Couldn’t change the queue.")
+                onError(e.message ?: resources.getString(R.string.chat_queue_change_failed))
             }
         }
     }
@@ -486,7 +493,7 @@ private fun QueueList(
         run { edit(index, q.text, text) }
     }
     Text(
-        if (queued.size == 1) "1 prompt queued after this run" else "${queued.size} prompts queued after this run",
+        if (queued.size == 1) stringResource(R.string.chat_queued_one) else stringResource(R.string.chat_queued_other, queued.size),
         style = MaterialTheme.typography.bodySmall,
         color = p.inkFaint,
     )
@@ -496,11 +503,11 @@ private fun QueueList(
             Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(14.dp))
             Text(q, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (editable) {
-                TextButton(onClick = { draft = prompts[i].text; editing = i }, modifier = Modifier.heightIn(min = 36.dp)) { Text("Edit") }
+                TextButton(onClick = { draft = prompts[i].text; editing = i }, modifier = Modifier.heightIn(min = 36.dp)) { Text(stringResource(R.string.chat_edit)) }
             }
             if (onEdit != null && prompts.getOrNull(i) != null) {
                 IconButton(onClick = { act(i, null) }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = "Remove queued prompt", tint = p.inkSoft, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_remove_queued), tint = p.inkSoft, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -519,12 +526,12 @@ private fun QueueList(
     editing?.let { i ->
         AlertDialog(
             onDismissRequest = { editing = null },
-            title = { Text("Edit queued prompt") },
+            title = { Text(stringResource(R.string.chat_edit_queued)) },
             text = { OutlinedTextField(draft, { draft = it }, minLines = 2, maxLines = 8, modifier = Modifier.fillMaxWidth().testTag("queue.edit")) },
             confirmButton = {
-                TextButton(onClick = { editing = null; act(i, draft) }, enabled = draft.isNotBlank()) { Text("Save") }
+                TextButton(onClick = { editing = null; act(i, draft) }, enabled = draft.isNotBlank()) { Text(stringResource(R.string.chat_save)) }
             },
-            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text(stringResource(R.string.chat_cancel)) } },
         )
     }
 }
@@ -554,7 +561,7 @@ private fun PlusButton(open: Boolean, onClick: () -> Unit) {
         ),
         modifier = Modifier.size(48.dp),
     ) {
-        Icon(Icons.Filled.Add, contentDescription = "Add")
+        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.chat_add))
     }
 }
 
@@ -581,7 +588,7 @@ private fun PlusMenu(
     ) {
         if (onNewAgent != null) {
             DropdownMenuItem(
-                text = { Text("New agent", color = p.ink) },
+                text = { Text(stringResource(R.string.chat_new_agent), color = p.ink) },
                 leadingIcon = { Icon(Icons.Filled.AddComment, contentDescription = null, tint = p.inkSoft) },
                 onClick = onNewAgent,
                 modifier = Modifier.testTag("composer.newAgent"),
@@ -589,7 +596,7 @@ private fun PlusMenu(
         }
         if (onTerminal != null) {
             DropdownMenuItem(
-                text = { Text("Terminal", color = p.ink) },
+                text = { Text(stringResource(R.string.chat_terminal), color = p.ink) },
                 leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null, tint = p.inkSoft) },
                 onClick = onTerminal,
                 modifier = Modifier.testTag("composer.terminal"),
@@ -598,17 +605,17 @@ private fun PlusMenu(
         if ((onNewAgent != null || onTerminal != null) && (onDictate != null || attach != null)) HorizontalDivider(color = p.line)
         if (onDictate != null) {
             DropdownMenuItem(
-                text = { Text("Dictate", color = p.ink) },
+                text = { Text(stringResource(R.string.chat_dictate), color = p.ink) },
                 leadingIcon = { Icon(Icons.Filled.Mic, contentDescription = null, tint = p.inkSoft) },
                 onClick = onDictate,
             )
         }
         if (attach != null) {
             val hint: @Composable (() -> Unit)? = if (full) {
-                { Text("${PhotoTray.MAX_PHOTOS} max", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+                { Text(stringResource(R.string.chat_photos_max, PhotoTray.MAX_PHOTOS), style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
             } else null
             DropdownMenuItem(
-                text = { Text("Image from files", color = if (full) p.inkFaint else p.ink) },
+                text = { Text(stringResource(R.string.chat_image_from_files), color = if (full) p.inkFaint else p.ink) },
                 leadingIcon = { Icon(Icons.Filled.AttachFile, contentDescription = null, tint = if (full) p.inkFaint else p.inkSoft) },
                 trailingIcon = hint,
                 enabled = !full,
@@ -616,7 +623,7 @@ private fun PlusMenu(
             )
             attach.onTakePhoto?.let { take ->
                 DropdownMenuItem(
-                    text = { Text("Take photo", color = if (full) p.inkFaint else p.ink) },
+                    text = { Text(stringResource(R.string.chat_take_photo), color = if (full) p.inkFaint else p.ink) },
                     leadingIcon = { Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = if (full) p.inkFaint else p.inkSoft) },
                     enabled = !full,
                     onClick = { onPicked(); take() },
@@ -645,10 +652,11 @@ private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, 
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         photos.forEachIndexed { i, photo ->
+            val removeLabel = stringResource(R.string.chat_remove_photo, i + 1)
             Box(Modifier.size(64.dp)) {
                 Image(
                     photo.preview,
-                    contentDescription = "Photo ${i + 1}",
+                    contentDescription = stringResource(R.string.chat_photo_n, i + 1),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, p.line, RoundedCornerShape(10.dp)),
                 )
@@ -658,7 +666,7 @@ private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, 
                         .size(40.dp)
                         .clip(CircleShape)
                         .clickable { onRemove(photo.id) }
-                        .semantics { contentDescription = "Remove photo ${i + 1}" },
+                        .semantics { contentDescription = removeLabel },
                     contentAlignment = Alignment.TopEnd,
                 ) {
                     Box(Modifier.padding(3.dp).size(20.dp).clip(CircleShape).background(p.ink.copy(alpha = 0.72f)), contentAlignment = Alignment.Center) {
@@ -667,9 +675,10 @@ private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, 
                 }
             }
         }
+        val addingLabel = stringResource(R.string.chat_adding_photo)
         repeat(adding) {
             Box(
-                Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(p.surface2).semantics { contentDescription = "Adding photo" },
+                Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(p.surface2).semantics { contentDescription = addingLabel },
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(20.dp))
@@ -706,8 +715,8 @@ private fun MicButton(mic: MicUi, onText: (String) -> Unit) {
     ) {
         when {
             busy -> CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(20.dp))
-            recording -> Icon(Icons.Filled.Stop, contentDescription = "Stop dictating")
-            else -> Icon(Icons.Filled.Mic, contentDescription = "Dictate")
+            recording -> Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.chat_stop_dictating))
+            else -> Icon(Icons.Filled.Mic, contentDescription = stringResource(R.string.chat_dictate))
         }
     }
 }
@@ -722,7 +731,7 @@ private fun RecordingBar(st: MicState.Recording) {
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(p.danger))
         Text(
-            if (st.engine == Engine.COMPUTER) "Listening · ${Dictation.clock(st.samples)}" else "Listening…",
+            if (st.engine == Engine.COMPUTER) stringResource(R.string.chat_listening_clock, Dictation.clock(st.samples)) else stringResource(R.string.chat_listening),
             style = MaterialTheme.typography.bodySmall,
             color = p.ink,
         )
@@ -732,6 +741,6 @@ private fun RecordingBar(st: MicState.Recording) {
             trackColor = p.surface2,
             modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)),
         )
-        Text("Tap ■ when done", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        Text(stringResource(R.string.chat_tap_when_done), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
     }
 }
