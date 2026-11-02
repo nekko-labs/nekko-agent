@@ -394,16 +394,16 @@ impl Computers {
         }
     }
 
-    /// A computer's models, subscriptions and folders, for its pickers. Answers
-    /// from memory while it is away.
+    /// A computer's providers and folders, for its pickers (a provider's models
+    /// come through `models:list`). Answers from memory while it is away.
     async fn catalog(&self, id: &str) -> Result<Value, String> {
         let client = self.client(id).ok().filter(|c| c.status().state == State::Online);
         if let Some(c) = client {
-            let providers = c.call("providers:list", json!([])).await.map_err(|e| e.to_string())?;
-            let models = c.call("models:list", json!([])).await.map_err(|e| e.to_string())?;
+            let mut providers = c.call("providers:list", json!([])).await.map_err(|e| e.to_string())?;
             let mut workspaces = c.call("workspace:list", json!([])).await.map_err(|e| e.to_string())?;
+            federation::qualify_chats(id, &mut providers);
             federation::qualify_chats(id, &mut workspaces);
-            let catalog = json!({ "providers": providers, "models": models, "workspaces": workspaces });
+            let catalog = json!({ "providers": providers, "workspaces": workspaces });
             lock(&self.seen).entry(id.to_string()).or_default().catalog = Some(catalog.clone());
             self.keep(id);
             return Ok(catalog);

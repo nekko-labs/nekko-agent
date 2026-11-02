@@ -31,6 +31,8 @@ pub const ROUTED: &[&str] = &[
     "files:read",
     "files:search",
     "files:write",
+    "limits:get",
+    "models:list",
     "pr:sessionList",
     "session:delete",
     "session:fork",
@@ -47,8 +49,8 @@ pub const ROUTED: &[&str] = &[
 /// These answer when the whole turn is over.
 pub const LONG: &[&str] = &["chat:send", "chat:interruptQueued", "chat:compact"];
 
-/// The keys that hold a chat's or a folder's id, in replies and events.
-const ID_KEYS: &[&str] = &["sessionId", "parentSessionId", "workspaceId", "newSessionId"];
+/// The keys that hold a chat's, a folder's or a provider's id, in replies and events.
+const ID_KEYS: &[&str] = &["sessionId", "parentSessionId", "workspaceId", "newSessionId", "providerId"];
 
 /// The local form of an id on `computer`.
 pub fn qualify(computer: &str, raw: &str) -> String {
@@ -63,7 +65,7 @@ pub fn split(id: &str) -> Option<(&str, &str)> {
 /// The chat or folder a call is about: its first argument, or that argument's id field.
 fn subject(args: &[Value]) -> Option<&str> {
     let first = args.first()?;
-    first.as_str().or_else(|| ["sessionId", "workspaceId"].iter().find_map(|k| first.get(k)?.as_str()))
+    first.as_str().or_else(|| ["sessionId", "workspaceId", "providerId"].iter().find_map(|k| first.get(k)?.as_str()))
 }
 
 /// Where a call goes.

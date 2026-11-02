@@ -1,3 +1,5 @@
+import { computerIdOf } from '@nekko-agent/shared';
+import { ComputerChip } from './ComputerChip.js';
 import { terminalExcerpt } from './terminalExcerpt.js';
 import { HOME, applyWallDrop, heldSize, sameTarget, wallDropTargetAt, type Rect, type WallDropTarget } from '../wallDrag.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -326,6 +328,7 @@ export function CommandWall({
   addContent?: React.ReactNode;
 }) {
   const workspaces = useStore((s) => s.workspaces);
+  const computers = useStore((s) => s.computers);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   // The window picked up off the board, and where it would land right now.
@@ -749,6 +752,7 @@ export function CommandWall({
     const session = pane.kind === 'chat' ? sessionById.get(pane.refId) : undefined;
     const terminal = pane.kind === 'terminal' ? terminalById.get(pane.refId) : undefined;
     const project = projects.find((p) => p.id === (session?.workspaceId ?? terminal?.workspaceId));
+    const computer = computers.find((c) => c.id === computerIdOf(session?.id));
     let status: { label: string; tone: string; live?: boolean } | null = null;
     let needsYou = false;
     let agentStatus: AgentStatus | undefined;
@@ -863,6 +867,7 @@ export function CommandWall({
             <>
               {/* The project only when there is more than one to tell apart:
                   on a one-project wall it is the same word on every strip. */}
+              {computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} />}
               {project && projects.length > 1 && !density && <span className="chip hidden shrink-0 text-2xs sm:inline">{project.name}</span>}
             </>
           }

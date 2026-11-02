@@ -413,6 +413,7 @@ const api: NekkoApi = {
   renameComputer: (id, name) => inv(IpcChannels.computersRename, id, name),
   setComputerColor: (id, color) => inv(IpcChannels.computersSetColor, id, color),
   forgetComputer: (id) => inv(IpcChannels.computersForget, id),
+  computerCatalog: (id) => inv(IpcChannels.computersCatalog, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
   renameRemoteDevice: (deviceId, name) => inv(IpcChannels.remoteRename, deviceId, name),
