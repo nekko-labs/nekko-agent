@@ -30,6 +30,10 @@ public enum Channels {
     public static let chatSend = "chat:send"
     public static let chatAbort = "chat:abort"
     public static let chatQueue = "chat:queue"
+    /// Text the running agent reads at its next step, without stopping.
+    public static let chatSteer = "chat:steer"
+    /// Stop the reply and start the queued prompt at an index.
+    public static let chatInterruptQueued = "chat:interruptQueued"
     public static let chatPending = "chat:pending"
     public static let chatAnswer = "chat:answer"
     public static let toolApprove = "tool:approve"
@@ -884,7 +888,8 @@ public enum AgentEvent: Equatable, Sendable {
         case "retry": return .retry(sessionId: sid)
         case "done": return .done(sessionId: sid, messageId: v.str("messageId"))
         case "error": return .error(sessionId: sid, message: v.str("message") ?? "Something went wrong.")
-        case "session_meta": return .sessionMeta(sessionId: sid)
+        // A message taken at the next step joined the transcript.
+        case "session_meta", "steered": return .sessionMeta(sessionId: sid)
         default: return .other(sessionId: sid, type: type)
         }
     }

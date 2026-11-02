@@ -7,9 +7,11 @@
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
+  "chat:interruptQueued",
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "chat:steer",
   "context:preview",
   "device:signOut",
   "engine:status",
@@ -212,8 +214,10 @@
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
+  "chat:interruptQueued",
   "chat:queue",
   "chat:send",
+  "chat:steer",
   "model:unload",
   "session:create",
   "session:delete",
@@ -504,6 +508,10 @@
  "queueEditKeys": [
   "expect",
   "text"
+ ],
+ "brainKeys": [
+  "modelId",
+  "providerId"
  ],
  "expertMonitor": {
   "systemView": [

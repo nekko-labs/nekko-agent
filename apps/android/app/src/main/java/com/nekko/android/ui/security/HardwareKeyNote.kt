@@ -1,5 +1,7 @@
 package com.nekko.android.ui.security
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,8 +29,6 @@ const val UNTESTED_HARDWARE_KEY_NOTE =
 /** Where "let us know" goes: the public issue tracker. */
 const val UNTESTED_NOTE_ISSUES_URL = "https://github.com/nekko-labs/nekko-agent/issues/new"
 
-/** The part of the note that reads as a link. */
-private const val LINK_TEXT = "let us know"
 
 /**
  * [UNTESTED_HARDWARE_KEY_NOTE] as a small caption: not a dialog, never in the
@@ -39,12 +39,19 @@ private const val LINK_TEXT = "let us know"
 fun HardwareKeyNote(modifier: Modifier = Modifier) {
     val p = Nekko.palette
     val uri = LocalUriHandler.current
-    val text = remember(p.accent) {
+    // The note in the phone's language ([UNTESTED_HARDWARE_KEY_NOTE] in English), and the part of it that reads as a link.
+    val note = stringResource(R.string.settings_hw_note)
+    val link = stringResource(R.string.settings_hw_note_link)
+    val text = remember(p.accent, note, link) {
         buildAnnotatedString {
-            val at = UNTESTED_HARDWARE_KEY_NOTE.indexOf(LINK_TEXT)
-            append(UNTESTED_HARDWARE_KEY_NOTE.substring(0, at))
-            withStyle(SpanStyle(color = p.accent, textDecoration = TextDecoration.Underline)) { append(LINK_TEXT) }
-            append(UNTESTED_HARDWARE_KEY_NOTE.substring(at + LINK_TEXT.length))
+            val at = note.indexOf(link)
+            if (at < 0) {
+                append(note)
+            } else {
+                append(note.substring(0, at))
+                withStyle(SpanStyle(color = p.accent, textDecoration = TextDecoration.Underline)) { append(link) }
+                append(note.substring(at + link.length))
+            }
         }
     }
     Text(
@@ -53,7 +60,7 @@ fun HardwareKeyNote(modifier: Modifier = Modifier) {
         color = p.inkFaint,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClickLabel = "Report an issue") {
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.settings_report_issue)) {
                 runCatching { uri.openUri(UNTESTED_NOTE_ISSUES_URL) }
             }
             .padding(horizontal = 4.dp, vertical = 8.dp),

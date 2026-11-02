@@ -1,6 +1,7 @@
 package com.nekko.android.ui.git
 
 import android.text.format.DateUtils
+import androidx.annotation.StringRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -78,6 +79,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -96,6 +99,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.luminance
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.R
 import com.nekko.android.git.GitController
 import com.nekko.android.git.GitState
 import com.nekko.android.ui.chat.DiffLine
@@ -197,8 +201,8 @@ private fun Page(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        if (close) Icon(Icons.Filled.Close, contentDescription = "Close")
-                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        if (close) Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_close))
+                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.tools_back))
                     }
                 },
                 actions = { actions() },
@@ -219,20 +223,21 @@ private fun StatusPage(git: GitController, onClose: () -> Unit, open: (GitPage) 
         "Git", onClose, close = true,
         actions = {
             IconButton(onClick = { scope.launch { git.load(refresh = true) } }, enabled = s.busy == null) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh))
             }
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             val status = s.status
             when {
-                s.error != null && status == null -> Empty("Couldn’t read git", s.error!!, "Try again") { scope.launch { git.load(refresh = true) } }
-                status != null && !status.repo -> Empty("Not a git repository", "This chat’s folder isn’t in a git repository.")
+                s.error != null && status == null -> Empty(stringResource(R.string.tools_git_cant_read), s.error!!, stringResource(R.string.tools_try_again)) { scope.launch { git.load(refresh = true) } }
+                status != null && !status.repo -> Empty(stringResource(R.string.tools_git_not_repo), stringResource(R.string.tools_git_not_repo_body))
                 !s.loaded -> CircularProgressIndicator(color = Nekko.palette.accent, modifier = Modifier.align(Alignment.Center))
                 else -> StatusList(git, s, open, onAbort = { confirmAbort = true })
             }
             if (s.busy != null) {
-                Box(Modifier.fillMaxSize().background(Nekko.palette.paper.copy(alpha = 0.5f)).semantics { contentDescription = "Working" }) {
+                val working = stringResource(R.string.tools_git_working)
+                Box(Modifier.fillMaxSize().background(Nekko.palette.paper.copy(alpha = 0.5f)).semantics { contentDescription = working }) {
                     CircularProgressIndicator(color = Nekko.palette.accent, modifier = Modifier.align(Alignment.Center))
                 }
             }
@@ -241,12 +246,12 @@ private fun StatusPage(git: GitController, onClose: () -> Unit, open: (GitPage) 
     if (confirmAbort) {
         AlertDialog(
             onDismissRequest = { confirmAbort = false },
-            title = { Text("Abort the merge?") },
-            text = { Text("The folder goes back to how it was before the merge started.") },
+            title = { Text(stringResource(R.string.tools_git_abort_title)) },
+            text = { Text(stringResource(R.string.tools_git_abort_body)) },
             confirmButton = {
-                TextButton(onClick = { confirmAbort = false; scope.launch { git.abortMerge() } }) { Text("Abort merge", color = Nekko.palette.danger) }
+                TextButton(onClick = { confirmAbort = false; scope.launch { git.abortMerge() } }) { Text(stringResource(R.string.tools_git_abort_merge), color = Nekko.palette.danger) }
             },
-            dismissButton = { TextButton(onClick = { confirmAbort = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmAbort = false }) { Text(stringResource(R.string.tools_cancel)) } },
         )
     }
 }
@@ -266,7 +271,7 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
                         Column(Modifier.weight(1f)) {
                             Text(st.position, style = MaterialTheme.typography.titleMedium, color = p.ink, fontFamily = FontFamily.Monospace)
                             Text(
-                                listOfNotNull(st.drift ?: "Up to date with its upstream", st.worktree?.let { "worktree $it" }).joinToString(" · "),
+                                listOfNotNull(st.drift ?: stringResource(R.string.tools_git_up_to_date), st.worktree?.let { stringResource(R.string.tools_git_worktree, it) }).joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall, color = p.inkSoft,
                             )
                         }
@@ -279,10 +284,10 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
                     TextButton(onClick = { scope.launch { git.push() } }, enabled = enabled, modifier = Modifier.testTag("git.push")) {
                         Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Push")
+                        Text(stringResource(R.string.tools_git_push))
                     }
                     if (s.merging) {
-                        TextButton(onClick = onAbort, enabled = enabled) { Text("Abort merge", color = p.danger) }
+                        TextButton(onClick = onAbort, enabled = enabled) { Text(stringResource(R.string.tools_git_abort_merge), color = p.danger) }
                     }
                 }
             }
@@ -290,26 +295,26 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
         s.notice?.let { n ->
             item(key = "notice") { Notice(n.text, if (n.ok) Tone.SUCCESS else Tone.DANGER, Modifier.testTag("git.notice")) }
         }
-        files(this, "Staged", s.staged, staged = true, enabled, open,
+        files(this, R.string.tools_git_staged, s.staged, staged = true, enabled, open,
             toggle = { f -> scope.launch { git.unstage(listOf(f.path)) } }, all = { scope.launch { git.unstageAll() } })
-        files(this, "Changes", s.unstaged, staged = false, enabled, open,
+        files(this, R.string.tools_git_changes, s.unstaged, staged = false, enabled, open,
             toggle = { f -> scope.launch { git.stage(listOf(f.path)) } }, all = { scope.launch { git.stageAll() } })
         if (!s.hasChanges) {
-            item(key = "clean") { Text("No changes to commit.", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft) }
+            item(key = "clean") { Text(stringResource(R.string.tools_git_no_changes), style = MaterialTheme.typography.bodyMedium, color = p.inkSoft) }
         }
         item(key = "commit") { CommitBox(git, s) }
         item(key = "links") {
             Card {
-                Link(Icons.Filled.History, "History") { open(GitPage.History) }
+                Link(Icons.Filled.History, stringResource(R.string.tools_git_history)) { open(GitPage.History) }
                 HorizontalDivider(color = p.line)
-                Link(Icons.Filled.AccountTree, "Branches") { open(GitPage.Branches) }
+                Link(Icons.Filled.AccountTree, stringResource(R.string.tools_git_branches)) { open(GitPage.Branches) }
                 HorizontalDivider(color = p.line)
-                Link(Icons.AutoMirrored.Filled.CompareArrows, "Compare") { open(GitPage.Compare) }
+                Link(Icons.AutoMirrored.Filled.CompareArrows, stringResource(R.string.tools_git_compare)) { open(GitPage.Compare) }
                 HorizontalDivider(color = p.line)
-                Link(Icons.AutoMirrored.Filled.MergeType, "Open a pull request", Modifier.testTag("git.openPr")) { open(GitPage.CreatePr) }
+                Link(Icons.AutoMirrored.Filled.MergeType, stringResource(R.string.tools_git_open_pr), Modifier.testTag("git.openPr")) { open(GitPage.CreatePr) }
             }
             Text(
-                "Changes from this phone ask for your fingerprint or screen lock, and show in this phone’s activity on the computer.",
+                stringResource(R.string.tools_git_phone_changes),
                 style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp),
             )
         }
@@ -318,7 +323,7 @@ private fun StatusList(git: GitController, s: GitState, open: (GitPage) -> Unit,
 
 private fun files(
     scope: LazyListScope,
-    title: String,
+    @StringRes title: Int,
     diff: GitDiff,
     staged: Boolean,
     enabled: Boolean,
@@ -327,42 +332,45 @@ private fun files(
     all: () -> Unit,
 ) {
     if (diff.files.isEmpty() && diff.omittedFiles == 0) return
-    val action = if (staged) "Unstage" else "Stage"
-    scope.item(key = "h-$title") {
+    val action = if (staged) R.string.tools_git_unstage else R.string.tools_git_stage
+    val allAction = if (staged) R.string.tools_git_unstage_all else R.string.tools_git_stage_all
+    val id = if (staged) "Staged" else "Changes"
+    scope.item(key = "h-$id") {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "${title.uppercase()} (${diff.files.size + diff.omittedFiles})",
+                stringResource(R.string.tools_git_section_count, stringResource(title).uppercase(), diff.files.size + diff.omittedFiles),
                 style = MaterialTheme.typography.labelMedium, color = Nekko.palette.inkFaint, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f).semantics { heading() },
             )
-            TextButton(onClick = all, enabled = enabled, modifier = Modifier.testTag(if (staged) "git.unstageAll" else "git.stageAll")) { Text("$action all") }
+            TextButton(onClick = all, enabled = enabled, modifier = Modifier.testTag(if (staged) "git.unstageAll" else "git.stageAll")) { Text(stringResource(allAction)) }
         }
     }
     // By position: a conflicted file can be listed twice (once per side of the merge).
-    scope.itemsIndexed(diff.files, key = { i, f -> "$title:$i:${f.path}" }) { _, f ->
+    scope.itemsIndexed(diff.files, key = { i, f -> "$id:$i:${f.path}" }) { _, f ->
         val p = Nekko.palette
+        val actionLabel = stringResource(action)
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(12.dp))
                 .clickable { open(GitPage.File(f)) }
-                .semantics { customActions = listOf(CustomAccessibilityAction(action) { toggle(f); true }) }
+                .semantics { customActions = listOf(CustomAccessibilityAction(actionLabel) { toggle(f); true }) }
                 .padding(start = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             FileRow(f, Modifier.weight(1f).padding(vertical = 10.dp))
-            TextButton(onClick = { toggle(f) }, enabled = enabled) { Text(action) }
+            TextButton(onClick = { toggle(f) }, enabled = enabled) { Text(actionLabel) }
         }
     }
     if (diff.omittedFiles > 0) {
-        scope.item(key = "o-$title") {
+        scope.item(key = "o-$id") {
             Text(
-                "${diff.omittedFiles} more ${if (diff.omittedFiles == 1) "file" else "files"}. See them on your computer.",
+                stringResource(if (diff.omittedFiles == 1) R.string.tools_git_more_files_one else R.string.tools_git_more_files_other, diff.omittedFiles),
                 style = MaterialTheme.typography.bodySmall, color = Nekko.palette.inkFaint,
             )
         }
     }
     if (diff.hiddenFiles > 0) {
-        scope.item(key = "s-$title") {
-            Text("Files that may hold secrets are listed but never shown on a phone.", style = MaterialTheme.typography.bodySmall, color = Nekko.palette.inkFaint)
+        scope.item(key = "s-$id") {
+            Text(stringResource(R.string.tools_git_secrets_listed), style = MaterialTheme.typography.bodySmall, color = Nekko.palette.inkFaint)
         }
     }
 }
@@ -372,11 +380,11 @@ private fun CommitBox(git: GitController, s: GitState) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     Card {
-        Text("COMMIT", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+        Text(stringResource(R.string.tools_git_commit).uppercase(), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
         OutlinedTextField(
             value = s.message,
             onValueChange = git::setMessage,
-            label = { Text("Commit message") },
+            label = { Text(stringResource(R.string.tools_git_commit_message)) },
             minLines = 2,
             maxLines = 8,
             enabled = s.busy == null,
@@ -391,18 +399,18 @@ private fun CommitBox(git: GitController, s: GitState) {
             ) {
                 Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Write message")
+                Text(stringResource(R.string.tools_git_write_message))
             }
             Spacer(Modifier.weight(1f))
             Button(onClick = { scope.launch { git.commit() } }, enabled = s.canCommit, modifier = Modifier.testTag("git.commit")) {
                 Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Commit")
+                Text(stringResource(R.string.tools_git_commit))
             }
         }
         val note = when {
-            s.messageFromCutDiff -> "The change was too big to show the model in full; check the message."
-            s.staged.files.isEmpty() -> "Stage the files to commit first. Write message asks your computer’s model, which uses its tokens."
+            s.messageFromCutDiff -> stringResource(R.string.tools_git_cut_diff_note)
+            s.staged.files.isEmpty() -> stringResource(R.string.tools_git_stage_first_note)
             else -> null
         }
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
@@ -427,10 +435,10 @@ private fun FileRow(file: GitFile, modifier: Modifier = Modifier) {
         Column(Modifier.weight(1f)) {
             // Wraps rather than truncates: the path is the only way to tell files apart.
             Text(file.path, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, color = p.ink)
-            file.oldPath?.let { Text("from $it", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = p.inkFaint) }
+            file.oldPath?.let { Text(stringResource(R.string.tools_git_from, it), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = p.inkFaint) }
         }
         when {
-            file.hidden -> Icon(Icons.Filled.VisibilityOff, contentDescription = "Not shown on phones", tint = p.inkFaint, modifier = Modifier.size(18.dp))
+            file.hidden -> Icon(Icons.Filled.VisibilityOff, contentDescription = stringResource(R.string.tools_git_not_shown), tint = p.inkFaint, modifier = Modifier.size(18.dp))
             !file.binary -> {
                 Text("+${file.additions}", style = MaterialTheme.typography.labelMedium, color = p.success)
                 Text("−${file.deletions}", style = MaterialTheme.typography.labelMedium, color = p.danger)
@@ -448,12 +456,12 @@ private fun FilePage(file: GitFile, onBack: () -> Unit) {
             item { FileRow(file) }
             item {
                 when {
-                    file.hidden -> Note("May hold secrets, so it isn’t shown on phones.")
-                    file.binary -> Note("Not a text file.")
-                    file.hunks.isEmpty() -> Note(if (file.truncated) "Too big to show here. See it on your computer." else "No line changes to show.")
+                    file.hidden -> Note(stringResource(R.string.tools_git_may_hold_secrets))
+                    file.binary -> Note(stringResource(R.string.tools_git_not_text))
+                    file.hunks.isEmpty() -> Note(stringResource(if (file.truncated) R.string.tools_git_too_big else R.string.tools_git_no_line_changes))
                     else -> Column {
                         Hunks(file.hunks)
-                        if (file.truncated) Note("Cut short for a phone. See the rest on your computer.", Modifier.padding(top = 8.dp))
+                        if (file.truncated) Note(stringResource(R.string.tools_git_cut_short), Modifier.padding(top = 8.dp))
                     }
                 }
             }
@@ -465,11 +473,12 @@ private fun FilePage(file: GitFile, onBack: () -> Unit) {
 private fun Hunks(hunks: List<PhoneChanges.Hunk>) {
     val p = Nekko.palette
     val shape = RoundedCornerShape(10.dp)
+    val skipped = stringResource(R.string.tools_git_lines_skipped)
     Column(Modifier.fillMaxWidth().background(p.code, shape).border(1.dp, p.line, shape).horizontalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
         hunks.forEachIndexed { i, h ->
             if (i > 0) {
                 Text("⋯", fontFamily = FontFamily.Monospace, color = p.inkFaint,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp).semantics { contentDescription = "Unchanged lines skipped" })
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp).semantics { contentDescription = skipped })
             }
             h.lines.forEach { DiffLine(it) }
         }
@@ -502,13 +511,13 @@ private fun HistoryPage(git: GitController, onBack: () -> Unit, open: (GitPage) 
         loaded = true
     }
     LaunchedEffect(Unit) { if (commits.isEmpty()) load(0) }
-    Page("History", onBack) { padding ->
+    Page(stringResource(R.string.tools_git_history), onBack) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(commits, key = { i, c -> "$i:${c.sha}" }) { _, c -> CommitRow(c) { open(GitPage.Commit(c)) } }
-            if (more && commits.isNotEmpty()) item { TextButton(onClick = { scope.launch { load(commits.size) } }) { Text("Load more") } }
+            if (more && commits.isNotEmpty()) item { TextButton(onClick = { scope.launch { load(commits.size) } }) { Text(stringResource(R.string.tools_git_load_more)) } }
             error?.let { item { Notice(it, Tone.DANGER) } }
             if (!loaded) item { CircularProgressIndicator(color = p.accent) }
-            if (loaded && commits.isEmpty() && error == null) item { Text("No commits yet.", color = p.inkSoft) }
+            if (loaded && commits.isEmpty() && error == null) item { Text(stringResource(R.string.tools_git_no_commits), color = p.inkSoft) }
         }
     }
 }
@@ -516,14 +525,15 @@ private fun HistoryPage(git: GitController, onBack: () -> Unit, open: (GitPage) 
 @Composable
 private fun CommitRow(commit: GitCommit, onClick: () -> Unit) {
     val p = Nekko.palette
+    val context = LocalContext.current
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(commit.subject.ifEmpty { "(no message)" }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(commit.subject.ifEmpty { stringResource(R.string.tools_git_no_message) }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                listOfNotNull(commit.short, commit.author.ifEmpty { null }, commit.whenMs?.let { relative(it) }, if (commit.isMerge) "merge" else null).joinToString(" · "),
+                listOfNotNull(commit.short, commit.author.ifEmpty { null }, commit.whenMs?.let { relative(context, it) }, if (commit.isMerge) stringResource(R.string.tools_git_merge) else null).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall, color = p.inkSoft,
             )
         }
@@ -562,10 +572,10 @@ private fun CommitPage(git: GitController, commit: GitCommit, onBack: () -> Unit
     }
 }
 
-private fun diffFiles(scope: LazyListScope, d: GitDiff, open: ((GitPage) -> Unit)?, where: String = "your computer") {
+private fun diffFiles(scope: LazyListScope, d: GitDiff, open: ((GitPage) -> Unit)?, onGitHub: Boolean = false) {
     scope.item(key = "files-h") {
         Text(
-            "${d.files.size + d.omittedFiles} FILES · +${d.additions} −${d.deletions}",
+            stringResource(R.string.tools_git_files_heading, d.files.size + d.omittedFiles, d.additions, d.deletions),
             style = MaterialTheme.typography.labelMedium, color = Nekko.palette.inkFaint, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 8.dp).semantics { heading() },
         )
@@ -578,7 +588,7 @@ private fun diffFiles(scope: LazyListScope, d: GitDiff, open: ((GitPage) -> Unit
         ) { FileRow(f, Modifier.weight(1f)) }
     }
     if (d.omittedFiles > 0) {
-        scope.item(key = "files-o") { Text("${d.omittedFiles} more files. See them on $where.", style = MaterialTheme.typography.bodySmall, color = Nekko.palette.inkFaint) }
+        scope.item(key = "files-o") { Text(stringResource(if (onGitHub) R.string.tools_git_more_files_github else R.string.tools_git_more_files_other, d.omittedFiles), style = MaterialTheme.typography.bodySmall, color = Nekko.palette.inkFaint) }
     }
 }
 
@@ -600,10 +610,10 @@ private fun BranchesPage(git: GitController, onBack: () -> Unit) {
     }
     LaunchedEffect(Unit) { load() }
     Page(
-        "Branches", onBack,
+        stringResource(R.string.tools_git_branches), onBack,
         actions = {
             IconButton(onClick = { newName = ""; naming = true }, enabled = s.busy == null, modifier = Modifier.testTag("git.newBranch")) {
-                Icon(Icons.Filled.Add, contentDescription = "New branch")
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.tools_git_new_branch))
             }
         },
     ) { padding ->
@@ -611,13 +621,13 @@ private fun BranchesPage(git: GitController, onBack: () -> Unit) {
             val b = branches
             when {
                 b != null -> {
-                    item { Label("ON THIS COMPUTER") }
+                    item { Label(stringResource(R.string.tools_git_on_this_computer).uppercase()) }
                     items(b.local, key = { "l:${it.name}" }) { br -> BranchRow(br, s.busy == null) { switching = br } }
                     if (b.remoteOnly.isNotEmpty()) {
-                        item { Label("ON THE REMOTE ONLY") }
+                        item { Label(stringResource(R.string.tools_git_remote_only).uppercase()) }
                         items(b.remoteOnly, key = { "r:${it.name}" }) { br -> BranchRow(br, s.busy == null) { switching = br } }
                     }
-                    if (b.omitted > 0) item { Text("${b.omitted} more branches. See them on your computer.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
+                    if (b.omitted > 0) item { Text(stringResource(R.string.tools_git_more_branches, b.omitted), style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
                 }
                 error != null -> item { Notice(error!!, Tone.DANGER) }
                 else -> item { CircularProgressIndicator(color = p.accent) }
@@ -628,21 +638,21 @@ private fun BranchesPage(git: GitController, onBack: () -> Unit) {
     switching?.let { br ->
         AlertDialog(
             onDismissRequest = { switching = null },
-            title = { Text("Switch to ${br.localName}?") },
-            text = { Text("Git refuses if uncommitted changes would be lost.") },
-            confirmButton = { TextButton(onClick = { switching = null; scope.launch { git.switchTo(br.localName); load() } }) { Text("Switch") } },
-            dismissButton = { TextButton(onClick = { switching = null }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.tools_git_switch_title, br.localName)) },
+            text = { Text(stringResource(R.string.tools_git_switch_body)) },
+            confirmButton = { TextButton(onClick = { switching = null; scope.launch { git.switchTo(br.localName); load() } }) { Text(stringResource(R.string.tools_git_switch)) } },
+            dismissButton = { TextButton(onClick = { switching = null }) { Text(stringResource(R.string.tools_cancel)) } },
         )
     }
     if (naming) {
         AlertDialog(
             onDismissRequest = { naming = false },
-            title = { Text("New branch") },
+            title = { Text(stringResource(R.string.tools_git_new_branch)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Starts from the commit you’re on.")
+                    Text(stringResource(R.string.tools_git_new_branch_body))
                     OutlinedTextField(
-                        newName, { newName = it }, label = { Text("Name") }, singleLine = true,
+                        newName, { newName = it }, label = { Text(stringResource(R.string.tools_git_name)) }, singleLine = true,
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                         modifier = Modifier.testTag("git.branchName"),
                     )
@@ -653,9 +663,9 @@ private fun BranchesPage(git: GitController, onBack: () -> Unit) {
                     val name = newName.trim()
                     naming = false
                     if (name.isNotEmpty()) scope.launch { git.switchTo(name, create = true); load() }
-                }, enabled = newName.isNotBlank()) { Text("Create and switch") }
+                }, enabled = newName.isNotBlank()) { Text(stringResource(R.string.tools_git_create_switch)) }
             },
-            dismissButton = { TextButton(onClick = { naming = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { naming = false }) { Text(stringResource(R.string.tools_cancel)) } },
         )
     }
 }
@@ -671,12 +681,12 @@ private fun BranchRow(br: GitBranch, enabled: Boolean, onSwitch: () -> Unit) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(br.name, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, color = p.ink)
             val detail = listOfNotNull(
-                br.subject.ifEmpty { null }, if (br.gone) "upstream gone" else null,
-                if (br.ahead > 0) "${br.ahead} ahead" else null, if (br.behind > 0) "${br.behind} behind" else null,
+                br.subject.ifEmpty { null }, if (br.gone) stringResource(R.string.tools_git_upstream_gone) else null,
+                if (br.ahead > 0) stringResource(R.string.tools_git_ahead, br.ahead) else null, if (br.behind > 0) stringResource(R.string.tools_git_behind, br.behind) else null,
             ).joinToString(" · ")
             if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (br.current) Icon(Icons.Filled.Check, contentDescription = "Current", tint = p.accent)
+        if (br.current) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.tools_git_current), tint = p.accent)
     }
 }
 
@@ -699,29 +709,29 @@ private fun ComparePage(git: GitController, onBack: () -> Unit, open: (GitPage) 
         base = b.compareBase
         head = b.current ?: names.firstOrNull().orEmpty()
     }
-    Page("Compare", onBack) { padding ->
+    Page(stringResource(R.string.tools_git_compare), onBack) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Card {
-                    BranchPicker("Base", base, names) { base = it }
-                    BranchPicker("Compare", head, names) { head = it }
+                    BranchPicker(stringResource(R.string.tools_git_base), base, names) { base = it }
+                    BranchPicker(stringResource(R.string.tools_git_compare), head, names) { head = it }
                     Button(
                         onClick = { scope.launch {
                             try { result = git.compare(base, head); error = null } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
                         } },
                         enabled = base.isNotEmpty() && head.isNotEmpty() && base != head,
                         modifier = Modifier.testTag("git.compare"),
-                    ) { Text("Compare") }
+                    ) { Text(stringResource(R.string.tools_git_compare)) }
                 }
             }
             result?.let { r ->
                 item {
                     Text(
-                        "${r.ahead} ${if (r.ahead == 1) "commit" else "commits"} on ${r.head} not on ${r.base} · ${r.behind} behind",
+                        stringResource(if (r.ahead == 1) R.string.tools_git_compare_summary_one else R.string.tools_git_compare_summary_other, r.ahead, r.head, r.base, r.behind),
                         style = MaterialTheme.typography.bodySmall, color = p.inkSoft,
                     )
                 }
-                item { Label("COMMITS") }
+                item { Label(stringResource(R.string.tools_git_commits_heading).uppercase()) }
                 itemsIndexed(r.commits, key = { i, c -> "c:$i:${c.sha}" }) { _, c -> CommitRow(c) { open(GitPage.Commit(c)) } }
                 diffFiles(this, r.diff, open)
             }
@@ -765,44 +775,44 @@ private fun CreatePrPage(git: GitController, onBack: () -> Unit) {
     var opened by remember { mutableStateOf<String?>(null) }
     var tried by remember { mutableStateOf(false) }
     Page(
-        "New pull request", onBack,
+        stringResource(R.string.tools_git_new_pr), onBack,
         actions = {
             if (opened == null) {
                 TextButton(
                     onClick = { scope.launch { tried = true; opened = git.createPr(title, body, base.trim().ifEmpty { null }, draft) } },
                     enabled = title.isNotBlank() && s.busy == null,
                     modifier = Modifier.testTag("pr.create"),
-                ) { Text("Open") }
+                ) { Text(stringResource(R.string.tools_git_open)) }
             }
         },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val url = opened
             if (url != null) {
-                item { Notice("Pull request opened.", Tone.SUCCESS) }
-                item { Card { Link(Icons.AutoMirrored.Filled.OpenInNew, "Open on GitHub") { uri.openUri(url) } } }
+                item { Notice(stringResource(R.string.tools_git_pr_opened), Tone.SUCCESS) }
+                item { Card { Link(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(url) } } }
             } else {
                 item {
                     Card {
-                        OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true, enabled = s.busy == null,
+                        OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.tools_git_title)) }, singleLine = true, enabled = s.busy == null,
                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                             modifier = Modifier.fillMaxWidth().testTag("pr.title"))
-                        OutlinedTextField(body, { body = it }, label = { Text("Description") }, minLines = 3, maxLines = 10, enabled = s.busy == null,
+                        OutlinedTextField(body, { body = it }, label = { Text(stringResource(R.string.tools_git_description)) }, minLines = 3, maxLines = 10, enabled = s.busy == null,
                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences), modifier = Modifier.fillMaxWidth())
                     }
                 }
                 item {
                     Card {
-                        OutlinedTextField(base, { base = it }, label = { Text("Base branch") }, singleLine = true, enabled = s.busy == null,
-                            placeholder = { Text("The repository’s default") },
+                        OutlinedTextField(base, { base = it }, label = { Text(stringResource(R.string.tools_git_base_branch)) }, singleLine = true, enabled = s.busy == null,
+                            placeholder = { Text(stringResource(R.string.tools_git_repo_default)) },
                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                             modifier = Modifier.fillMaxWidth())
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Draft", style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.weight(1f))
+                            Text(stringResource(R.string.tools_git_draft), style = MaterialTheme.typography.bodyLarge, color = p.ink, modifier = Modifier.weight(1f))
                             Switch(draft, { draft = it }, enabled = s.busy == null)
                         }
                     }
-                    Text("Opened from the branch the chat is on. Push it first if it isn’t on GitHub yet.",
+                    Text(stringResource(R.string.tools_git_pr_from_branch),
                         style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
                 }
                 val n = s.notice
@@ -829,14 +839,14 @@ private fun PrPage(git: GitController, pr: PullRequest, onBack: () -> Unit, clos
                 Card {
                     Text(current.title, style = MaterialTheme.typography.titleMedium, color = p.ink)
                     Text(current.summary, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
-                    Link(Icons.AutoMirrored.Filled.OpenInNew, "Open on GitHub") { uri.openUri(current.url) }
+                    Link(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(current.url) }
                 }
             }
             item {
                 Card {
-                    Link(Icons.Filled.Checklist, "Checks", Modifier.testTag("pr.checks")) { open(GitPage.PrChecks(current.url)) }
+                    Link(Icons.Filled.Checklist, stringResource(R.string.tools_git_checks), Modifier.testTag("pr.checks")) { open(GitPage.PrChecks(current.url)) }
                     HorizontalDivider(color = p.line)
-                    Link(Icons.Filled.Difference, "Files changed", Modifier.testTag("pr.files")) { open(GitPage.PrFiles(current.url)) }
+                    Link(Icons.Filled.Difference, stringResource(R.string.tools_git_files_changed), Modifier.testTag("pr.files")) { open(GitPage.PrFiles(current.url)) }
                 }
             }
             if (current.actions.isNotEmpty()) {
@@ -849,7 +859,7 @@ private fun PrPage(git: GitController, pr: PullRequest, onBack: () -> Unit, clos
                             }
                         }
                     }
-                    Text("Asks for your fingerprint or screen lock. GitHub’s own rules (reviews, required checks) still apply.",
+                    Text(stringResource(R.string.tools_git_pr_actions_note),
                         style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
                 }
             }
@@ -861,7 +871,7 @@ private fun PrPage(git: GitController, pr: PullRequest, onBack: () -> Unit, clos
     confirm?.let { a ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("${a.label} #${current.number}?") },
+            title = { Text(stringResource(R.string.tools_git_pr_action_title, a.label, current.number)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = null
@@ -871,7 +881,7 @@ private fun PrPage(git: GitController, pr: PullRequest, onBack: () -> Unit, clos
                     }
                 }) { Text(a.label, color = if (a == PrAction.CLOSE) p.danger else p.accent) }
             },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.tools_cancel)) } },
         )
     }
 }
@@ -888,14 +898,14 @@ private fun PrChecksPage(git: GitController, url: String, onBack: () -> Unit) {
     }
     LaunchedEffect(url) { load() }
     Page(
-        "Checks", onBack,
-        actions = { IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") } },
+        stringResource(R.string.tools_git_checks), onBack,
+        actions = { IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) } },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val l = list
             when {
                 l != null -> {
-                    if (l.items.isEmpty()) item { Text("No checks on this pull request.", color = p.inkSoft) }
+                    if (l.items.isEmpty()) item { Text(stringResource(R.string.tools_git_no_checks), color = p.inkSoft) }
                     itemsIndexed(l.items, key = { i, c -> "$i:${c.name}" }) { _, c ->
                         val (icon, tint) = when (c.state) {
                             PrCheck.State.PASS -> Icons.Filled.CheckCircle to p.success
@@ -914,10 +924,10 @@ private fun PrChecksPage(git: GitController, url: String, onBack: () -> Unit) {
                                 Text(listOfNotNull(c.state.label, c.workflow, c.description).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            if (c.link != null) Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "Open ${c.name}", tint = p.inkFaint, modifier = Modifier.size(18.dp))
+                            if (c.link != null) Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = stringResource(R.string.tools_git_open_named, c.name), tint = p.inkFaint, modifier = Modifier.size(18.dp))
                         }
                     }
-                    if (l.omitted > 0) item { Text("${l.omitted} more checks on GitHub.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
+                    if (l.omitted > 0) item { Text(stringResource(R.string.tools_git_more_checks, l.omitted), style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
                 }
                 error != null -> item { Notice(error!!, Tone.DANGER) }
                 else -> item { CircularProgressIndicator(color = p.accent) }
@@ -934,11 +944,11 @@ private fun PrFilesPage(git: GitController, url: String, onBack: () -> Unit, ope
     LaunchedEffect(url) {
         try { diff = git.prDiff(url) } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
     }
-    Page("Files changed", onBack) { padding ->
+    Page(stringResource(R.string.tools_git_files_changed), onBack) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val d = diff
             when {
-                d != null -> diffFiles(this, d, open, where = "GitHub")
+                d != null -> diffFiles(this, d, open, onGitHub = true)
                 error != null -> item { Notice(error!!, Tone.DANGER) }
                 else -> item { CircularProgressIndicator(color = p.accent) }
             }
@@ -992,9 +1002,9 @@ private fun Empty(title: String, body: String, action: String? = null, onAction:
     }
 }
 
-private fun relative(ms: Long): String {
+private fun relative(context: android.content.Context, ms: Long): String {
     val now = System.currentTimeMillis()
-    if (now - ms in 0 until DateUtils.MINUTE_IN_MILLIS) return "just now"
+    if (now - ms in 0 until DateUtils.MINUTE_IN_MILLIS) return context.getString(R.string.tools_git_just_now)
     return DateUtils.getRelativeTimeSpanString(ms, now, DateUtils.MINUTE_IN_MILLIS).toString()
 }
 

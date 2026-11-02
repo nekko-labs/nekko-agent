@@ -21,7 +21,8 @@ function stubs() {
   const log = join(root, 'calls.log');
   const stub = (name, body = '') =>
     writeFileSync(join(bin, name), `#!/bin/bash\necho "${name} $*" >> '${log}'\n${body}\n`, { mode: 0o755 });
-  stub('diskutil');
+  // FAKE_SEED_LATE: the volume lands on its mount point at the first mount, as it does at boot.
+  stub('diskutil', `if [ "$1" = mount ] && [ -n "\${FAKE_SEED_LATE:-}" ]; then echo QUJD > "$FAKE_SEED_LATE"; fi`);
   stub('chown');
   stub('shutdown');
   stub('id', 'echo 501');
@@ -54,7 +55,7 @@ function seed(files) {
   return s;
 }
 
-function run({ seed: files, env = {}, prepare } = {}) {
+function run({ seed: files, env = {}, prepare, late } = {}) {
   stubs();
   const seedDir = files ? seed(files) : join(root, 'missing');
   prepare?.(seedDir);
@@ -68,6 +69,7 @@ function run({ seed: files, env = {}, prepare } = {}) {
       NEKKO_SEED_WAIT: '1',
       NEKKO_LOGIN_WAIT: '1',
       NEKKO_POLL: '0.1',
+      ...(late && { FAKE_SEED_LATE: join(seedDir, 'jit-config') }),
       ...env,
     },
   });
@@ -134,7 +136,6 @@ test('runner_failure_still_shuts_down', () => {
 
 test('unexpected_seed_contents_shut_down_without_running', () => {
   const cases = [
-    {},
     { 'jit-config': 'a', 'gitlab-runner.toml': 'b' },
     { other: 'a' },
     { '.hidden': 'a', 'jit-config': 'b' },
@@ -166,6 +167,16 @@ test('no_seed_stays_up_and_runs_nothing', () => {
   const { status, calls, out } = run();
   assert.equal(status, 0);
   assert.ok(calls.includes('diskutil mount readOnly NEKKOSEED'));
+  assert.ok(!calls.some((c) => c.startsWith('launchctl') || c.startsWith('shutdown')));
+  assert.match(out, /no seed: no runner, staying up/);
+});
+
+test('an_empty_mount_point_is_not_a_seed_yet', () => {
+  startsRunSh(run({ seed: {}, late: true }).calls);
+});
+
+test('a_seed_that_stays_empty_is_no_seed', () => {
+  const { calls, out } = run({ seed: {} });
   assert.ok(!calls.some((c) => c.startsWith('launchctl') || c.startsWith('shutdown')));
   assert.match(out, /no seed: no runner, staying up/);
 });

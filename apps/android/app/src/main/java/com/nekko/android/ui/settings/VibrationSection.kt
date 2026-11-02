@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,12 +31,12 @@ import com.nekko.android.ui.theme.Nekko
 fun VibrationSection(deps: SettingsDeps) {
     val p = Nekko.palette
     val rows = listOf(
-        Triple(PhoneEvent.APPROVAL, "Needs your approval", "Two firm pulses"),
-        Triple(PhoneEvent.NEEDS_INPUT, "Asks you a question", "One long pulse"),
-        Triple(PhoneEvent.FINISHED, "Reply finished", "One short tap"),
-        Triple(PhoneEvent.FAILED, "Reply failed", "Three short taps"),
+        Triple(PhoneEvent.APPROVAL, R.string.settings_vib_approval, R.string.settings_vib_approval_detail),
+        Triple(PhoneEvent.NEEDS_INPUT, R.string.settings_vib_question, R.string.settings_vib_question_detail),
+        Triple(PhoneEvent.FINISHED, R.string.settings_vib_finished, R.string.settings_vib_finished_detail),
+        Triple(PhoneEvent.FAILED, R.string.settings_vib_failed, R.string.settings_vib_failed_detail),
     )
-    SectionHeader("Vibration")
+    SectionHeader(stringResource(R.string.settings_vibration))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             rows.forEachIndexed { i, (event, title, detail) ->
@@ -55,8 +57,8 @@ fun VibrationSection(deps: SettingsDeps) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(title, style = MaterialTheme.typography.bodyLarge, color = p.ink)
-                        Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                        Text(stringResource(title), style = MaterialTheme.typography.bodyLarge, color = p.ink)
+                        Text(stringResource(detail), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                     }
                     Switch(checked = on, onCheckedChange = null)
                 }
@@ -64,9 +66,9 @@ fun VibrationSection(deps: SettingsDeps) {
         }
         Text(
             if (deps.haptics?.available == false) {
-                "This device has no vibration motor, so these switches have no effect here."
+                stringResource(R.string.settings_vib_no_motor)
             } else {
-                "Saved on this phone. Only while Nekko Agent is open, never in silent mode or Do Not Disturb. A sub-agent finishing doesn’t buzz; its approvals and questions do."
+                stringResource(R.string.settings_vib_footer)
             },
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,

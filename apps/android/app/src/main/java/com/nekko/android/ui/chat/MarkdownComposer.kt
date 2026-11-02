@@ -1,5 +1,7 @@
 package com.nekko.android.ui.chat
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
@@ -216,7 +218,7 @@ internal fun Modifier.markdownPaste(context: Context, draft: MarkdownDraft, text
     return filterTextContextMenuComponents { it.key != TextContextMenuKeys.PasteKey }
         .appendTextContextMenuComponents {
             if (!clipboard.hasPrimaryClip()) return@appendTextContextMenuComponents
-            item(PasteKey, "Paste") {
+            item(PasteKey, context.getString(R.string.chat_paste)) {
                 read()?.let { (plain, html) ->
                     val at = draft.insert(text(), plain, setText)
                     val markdown = if (html != null) RichPaste.markdown(html, plain) else plain
@@ -224,12 +226,12 @@ internal fun Modifier.markdownPaste(context: Context, draft: MarkdownDraft, text
                 }
                 close()
             }
-            item(PasteMarkdownKey, "Paste as Markdown") {
+            item(PasteMarkdownKey, context.getString(R.string.chat_paste_as_markdown)) {
                 read()?.let { (plain, html) -> draft.insert(text(), RichPaste.markdown(html, plain), setText) }
                 draft.pasted = null
                 close()
             }
-            item(PastePlainKey, "Paste as plain text") {
+            item(PastePlainKey, context.getString(R.string.chat_paste_as_plain_text)) {
                 read()?.let { (plain, _) -> draft.insert(text(), plain, setText) }
                 draft.pasted = null
                 close()
@@ -259,8 +261,8 @@ internal fun PastedChip(draft: MarkdownDraft, text: String, setText: (String) ->
             .testTag("composer.useFormatting"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Pasted as text · ", style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
-        Text("Use formatting", style = MaterialTheme.typography.labelMedium, color = p.accent, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.chat_pasted_as_text) + " · ", style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
+        Text(stringResource(R.string.chat_use_formatting), style = MaterialTheme.typography.labelMedium, color = p.accent, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -279,6 +281,24 @@ private val ICONS: Map<MarkdownAction, ImageVector> = mapOf(
     MarkdownAction.QUOTE to Icons.Filled.FormatQuote,
     MarkdownAction.FENCE to Icons.Filled.DataObject,
     MarkdownAction.TABLE to Icons.Filled.TableChart,
+)
+
+/** The toolbar buttons' names, as [MarkdownAction.label] says them in English. */
+private val LABELS: Map<MarkdownAction, Int> = mapOf(
+    MarkdownAction.BOLD to R.string.chat_format_bold,
+    MarkdownAction.ITALIC to R.string.chat_format_italic,
+    MarkdownAction.STRIKE to R.string.chat_format_strike,
+    MarkdownAction.CODE to R.string.chat_format_code,
+    MarkdownAction.LINK to R.string.chat_format_link,
+    MarkdownAction.HEADING to R.string.chat_format_heading,
+    MarkdownAction.BULLET to R.string.chat_format_bullet,
+    MarkdownAction.ORDERED to R.string.chat_format_ordered,
+    MarkdownAction.TASK to R.string.chat_format_task,
+    MarkdownAction.INDENT to R.string.chat_format_indent,
+    MarkdownAction.OUTDENT to R.string.chat_format_outdent,
+    MarkdownAction.QUOTE to R.string.chat_format_quote,
+    MarkdownAction.FENCE to R.string.chat_format_fence,
+    MarkdownAction.TABLE to R.string.chat_format_table,
 )
 
 /**
@@ -307,20 +327,21 @@ internal fun MarkdownToolbar(draft: MarkdownDraft, text: String, setText: (Strin
                 onClick = { MarkdownEditing.addRow(text, draft.selection(text))?.let { draft.apply(it, setText) } },
                 contentPadding = PaddingValues(horizontal = 8.dp),
                 modifier = Modifier.heightIn(min = 40.dp),
-            ) { Text("Add row") }
+            ) { Text(stringResource(R.string.chat_add_row)) }
             TextButton(
                 onClick = { MarkdownEditing.addColumn(text, draft.selection(text))?.let { draft.apply(it, setText) } },
                 contentPadding = PaddingValues(horizontal = 8.dp),
                 modifier = Modifier.heightIn(min = 40.dp),
-            ) { Text("Add column") }
+            ) { Text(stringResource(R.string.chat_add_column)) }
         }
         for (action in MarkdownAction.entries) {
             val on = action.toggles && MarkdownEditing.isActive(action, text, sel)
+            val label = stringResource(LABELS.getValue(action))
             Box(
                 Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(if (on) p.accent.copy(alpha = 0.16f) else Color.Transparent)
                     .clickable { draft.apply(MarkdownEditing.apply(action, text, draft.selection(text)), setText) }
                     .semantics {
-                        contentDescription = action.label
+                        contentDescription = label
                         role = Role.Button
                         if (action.toggles) selected = on
                     }

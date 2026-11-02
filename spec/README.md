@@ -175,7 +175,7 @@ Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
-- [CI runners](automation/ci-runners.md) (49 KB)
+- [CI runners](automation/ci-runners.md) (50 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
@@ -225,7 +225,7 @@ Architecture, speed contract, distribution, builds and startup.
 
 Brand, website, onboarding and the mascot.
 
-- [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (2 KB)
+- [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (3 KB)
 - [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (11 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)

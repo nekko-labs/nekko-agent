@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_appearance.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="appearance_title">Apariencia</string>
+    <string name="appearance_theme">Tema</string>
+    <string name="appearance_language">Idioma</string>
+    <string name="appearance_match_computer">Igual que mi computadora</string>
+    <string name="appearance_match_phone">Igual que este teléfono</string>
+    <string name="appearance_match_phone_detail">Claro u oscuro, según el teléfono</string>
+    <string name="appearance_light">Claro</string>
+    <string name="appearance_dark">Oscuro</string>
+    <string name="appearance_presets">Temas del escritorio</string>
+    <string name="appearance_experimental">Experimental</string>
+    <string name="appearance_done">Listo</string>
+    <string name="appearance_computer_waiting">Esperando a %1$s; mientras tanto usa el ajuste del teléfono</string>
+    <string name="appearance_computer_dark">%1$s está en oscuro</string>
+    <string name="appearance_computer_light">%1$s está en claro</string>
+    <string name="appearance_computer_system">%1$s sigue a su sistema; el teléfono usa el suyo</string>
+    <string name="appearance_footer_computer">Guardado en este teléfono. La app sigue el tema, el color de acento y los colores de %1$s, y cambia en cuanto los cambias allí.</string>
+    <string name="appearance_footer">Guardado en este teléfono. Los temas del escritorio, con el contraste propio de este teléfono.</string>
+</resources>

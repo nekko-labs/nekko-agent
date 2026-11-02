@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onLongClick
@@ -64,6 +65,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nekko.android.R
 import com.nekko.android.ui.previews.PreviewCards
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.AgentRows
@@ -130,6 +132,9 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
     var open by rememberSaveable(b.id) { mutableStateOf(false) }
     val reasoning = b.reasoning
     val thinkingOnly = b.streaming && b.text.isEmpty() && !reasoning.isNullOrEmpty()
+    val expanded = stringResource(R.string.chat_expanded)
+    val collapsed = stringResource(R.string.chat_collapsed)
+    val writing = stringResource(R.string.chat_writing)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!reasoning.isNullOrEmpty()) {
             Row(
@@ -138,16 +143,16 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
                     .clickable(role = Role.Button) { open = !open }
                     .heightIn(min = 48.dp)
                     .padding(horizontal = 4.dp)
-                    .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
+                    .semantics { stateDescription = if (open) expanded else collapsed },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(Icons.Filled.Psychology, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
                 Text(
                     when {
-                        thinkingOnly && !open -> "Thinking…"
-                        open -> "Hide reasoning"
-                        else -> "Show reasoning"
+                        thinkingOnly && !open -> stringResource(R.string.chat_thinking)
+                        open -> stringResource(R.string.chat_hide_reasoning)
+                        else -> stringResource(R.string.chat_show_reasoning)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = p.inkFaint,
@@ -175,11 +180,11 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
             CircularProgressIndicator(
                 color = p.accent,
                 strokeWidth = 2.dp,
-                modifier = Modifier.size(18.dp).semantics { contentDescription = "Writing" },
+                modifier = Modifier.size(18.dp).semantics { contentDescription = writing },
             )
         }
         if (b.interrupted) {
-            Text("Stopped before finishing.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+            Text(stringResource(R.string.chat_stopped_before_finishing), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
     }
 }
@@ -201,7 +206,9 @@ fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<Purp
         else Purpose.headline(purpose, calls.map { it.copy(failed = false) }, running).detail
     var chosen by rememberSaveable(blocks.firstOrNull()?.id) { mutableStateOf<Boolean?>(null) }
     val open = chosen ?: (h.failed > 0)
-    val count = if (calls.size == 1) "1 call" else "${calls.size} calls"
+    val count = if (calls.size == 1) stringResource(R.string.chat_calls_one) else stringResource(R.string.chat_calls_other, calls.size)
+    val callsShown = stringResource(R.string.chat_calls_shown)
+    val callsHidden = stringResource(R.string.chat_calls_hidden)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
             Modifier
@@ -211,7 +218,7 @@ fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<Purp
                 .heightIn(min = 36.dp)
                 .semantics(mergeDescendants = true) {
                     contentDescription = listOf(h.headline, h.detail, count).filter { it.isNotEmpty() }.joinToString(", ")
-                    stateDescription = if (open) "Calls shown" else "Calls hidden"
+                    stateDescription = if (open) callsShown else callsHidden
                 },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -231,7 +238,7 @@ fun PurposeGroupCard(purpose: ToolPurpose, blocks: List<Block>, calls: List<Purp
                         if (quiet.isNotEmpty()) {
                             Text(quiet, style = Nekko.mono, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                         }
-                        if (h.failed > 0) Text("${h.failed} failed", style = Nekko.mono, color = p.danger)
+                        if (h.failed > 0) Text(stringResource(R.string.chat_n_failed, h.failed), style = Nekko.mono, color = p.danger)
                     }
                 }
             }
@@ -257,17 +264,17 @@ private fun LongPressMenu(text: String, fork: ForkAction?, content: @Composable 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     if (fork == null) {
-        content(Modifier.onLongPress(text, "Copy message") { copy(scope, clipboard, context, text) })
+        content(Modifier.onLongPress(text, stringResource(R.string.chat_copy_message)) { copy(scope, clipboard, context, text) })
         return
     }
     var open by remember { mutableStateOf(false) }
     Box {
         content(
-            Modifier.onLongPress(text, "Copy or fork") { open = true }
+            Modifier.onLongPress(text, stringResource(R.string.chat_copy_or_fork)) { open = true }
                 .semantics { customActions = listOf(CustomAccessibilityAction(fork.label) { fork.run(); true }) },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Copy") }, onClick = { open = false; copy(scope, clipboard, context, text) })
+            DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy)) }, onClick = { open = false; copy(scope, clipboard, context, text) })
             DropdownMenuItem(text = { Text(fork.label) }, onClick = { open = false; fork.run() }, modifier = Modifier.testTag("message.fork"))
         }
     }
@@ -310,5 +317,5 @@ private fun Modifier.onLongPress(text: String, label: String, action: () -> Unit
 private fun copy(scope: CoroutineScope, clipboard: Clipboard, context: Context, text: String) {
     scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Message", text))) }
     // Android 13+ shows its own copied confirmation.
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, context.getString(R.string.chat_copied), Toast.LENGTH_SHORT).show()
 }

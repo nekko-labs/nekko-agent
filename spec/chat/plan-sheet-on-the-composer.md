@@ -45,7 +45,7 @@ Issue: [#1317](https://github.com/nekko-labs/nekko-agent/issues/1317).
 - **Passes.** When a finished step is set active again (a Verify step sending the work back to Build), the plan counts another pass on it, shown as "Pass 2" with a loop arrow.
 - **Where sub-agents and task links land.** The app places them, not the model: a sub-agent on the step being worked when its chat was created (else the last step worked before then), a task link (Linear, Jira, GitHub issue, Trello, Asana, ClickUp, Todoist) on the step being worked when it appeared in the chat. Anything from before the first step, such as the task the chat was started from, goes on the first step. A link already shown on an earlier step is not repeated.
 - **Agent Monitor on the wall.** Wall windows no longer open the Agent Monitor rail, and the floating sub-agents chip only shows on a window without a plan: the plan sheet carries both. The Agent tab keeps its Agent Monitor.
-- **Change plan is gone**, with its prompt. Telling the agent to change course is an ordinary message (or Ctrl+Enter to steer a running reply).
+- **Change plan is gone**, with its prompt. Telling the agent to change course is an ordinary message (or Ctrl+Enter to send it at the running reply's next step).
 
 Verification: `planStepLinks.test.ts` (placement by time, first-step fallback, task-link parsing), `PlanRail.test.tsx` (folded line, kind, pass, sub-agent count and per-step chips), `plan-step-kind.test.ts` and the `nekko-turn` Rust test (kinds and passes). Hidden, off-screen Electron captures (`wall-composers-sandbox.cjs`) check the folded line, the sub-agent count, the Linear chip, the tuck behind the composer, and the open plan's per-step chips. Not checked in a packaged build.
 
