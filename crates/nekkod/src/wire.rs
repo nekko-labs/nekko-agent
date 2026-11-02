@@ -192,6 +192,13 @@ async fn route_from(
     channel: &str,
     args: Vec<Value>,
 ) -> Result<Value, String> {
+    if crate::computers::CHANNELS.contains(&channel) {
+        // The window only: the paths an agent can reach never see another computer.
+        if !matches!(surface, crate::security::Surface::Desktop) {
+            return Err(format!("{channel} is only available in the desktop app."));
+        }
+        return ctx.computers.route(channel, &args).await;
+    }
     if crate::security::CHANNELS.contains(&channel) {
         let (security, ch) = (ctx.security.clone(), channel.to_string());
         // security.json is a file: off the async workers.

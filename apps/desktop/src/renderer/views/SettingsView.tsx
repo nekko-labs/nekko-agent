@@ -8,9 +8,10 @@ import { UpdateProgress, useUpdater } from '../components/UpdateBanner.js';
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
+import { ComputersSection } from '../components/ComputersSection.js';
 import { SecuritySettings } from '../components/security/SecuritySettings.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
@@ -49,6 +50,7 @@ const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
 export const SETTINGS_GROUPS = [
   { id: 'general', label: 'General', icon: SunIcon },
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
+  { id: 'computers', label: 'Computers', icon: ComputerIcon },
   { id: 'style', label: 'Style', icon: SlidersIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
@@ -292,6 +294,9 @@ export function SettingsView() {
               <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
               {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
               <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="computers">
+              <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="style">
               <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
