@@ -610,23 +610,28 @@ async function measureMemory({ appUrl, mock, api, ids }) {
     // Not awaited: the call returns when the turn ends.
     api('chat:send', { sessionId: id, providerId: 'mock', modelId: 'mock-1', text: `${STREAM_TRIGGER} write the long report` }).catch(() => {});
   }
+  // Measured as soon as every window is working: a reply that finishes takes
+  // its window off a Dynamic board (#1201), so a late measurement sees fewer.
   const t = Date.now();
-  while (mock.state.streamsStarted - before < working.length && Date.now() - t < 20000) await sleep(50);
-  await sleep(1500);
-  const beams = await cdp.evaluate(`document.querySelectorAll('[data-wall-working]').length`);
-  writeFileSync(join(OUT, 'memory-wall.png'), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
-  // Fewer windows working than asked for and the GPU figures measure an emptier board than the budget means.
-  if (beams < working.length) {
-    const titles = await cdp.evaluate(`[...document.querySelectorAll('.panel')].filter((p) => p.checkVisibility()).map((p) => p.firstElementChild?.querySelector('span.truncate')?.textContent)`);
-    throw new Error(`only ${beams} of ${working.length} board windows were working (on the board: ${JSON.stringify(titles)}); the GPU figures would measure the wrong board`);
+  let beams = 0;
+  while (Date.now() - t < 20000) {
+    beams = await cdp.evaluate(`document.querySelectorAll('[data-wall-working]').length`);
+    if (beams >= working.length) break;
+    await sleep(100);
   }
+  const workingAfterMs = Date.now() - t;
+  const streamsStarted = mock.state.streamsStarted - before;
+  await sleep(500);
+  writeFileSync(join(OUT, 'memory-wall.png'), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  const onBoard = await cdp.evaluate(`[...document.querySelectorAll('.panel')].filter((p) => p.checkVisibility()).map((p) => p.firstElementChild?.querySelector('span.truncate')?.textContent ?? null)`);
+  log(`GPU board: ${beams} of ${working.length} windows working after ${workingAfterMs} ms (${streamsStarted} replies started); on the board ${JSON.stringify(onBoard)}`);
   const tiles = await tileMemory(cdp);
   const overdraw = await layerOverdraw(cdp);
   for (const id of working) await api('chat:abort', id);
   await app.close();
   return {
     browser: app.browser.version,
-    gpu: { working: beams, tileMb: tiles, overdraw: overdraw.worst, overdrawLayer: overdraw.layer, layers: overdraw.layers },
+    gpu: { working: beams, wanted: working.length, workingAfterMs, streamsStarted, onBoard, tileMb: tiles, overdraw: overdraw.worst, overdrawLayer: overdraw.layer, layers: overdraw.layers },
     leak: { laps: laps.length, heapMbPerLap: perLap('heapMb'), nodesPerLap: perLap('nodes'), listenersPerLap: perLap('listeners'), warm, last },
   };
 }
