@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Db } from "./db.js";
+import { emailHash, isSuppressed } from "./retention.js";
 
 export const CONFIRM_FROM = "Nekko Agent <hello@mail.nekkoagent.com>";
 export const CONFIRM_REPLY_TO = "hello@nekkoagent.com";
@@ -60,6 +61,10 @@ export async function sendConfirmation(
     return false;
   }
   const token = randomBytes(32).toString("base64url");
+  // Never email an address that unsubscribed. A failed check throws, so it
+  // sends nothing rather than risk it.
+  const target = await db.query<{ email: string }>("select email from signups where id = $1", [signupId]);
+  if (!target.rows[0] || (await isSuppressed(db, target.rows[0].email))) return false;
   const { rows } = await db.query<{ email: string; name: string | null; unsubscribe_token: string; prev: string | null }>(
     `update signups s set
        confirm_token_hash = $2,
@@ -133,19 +138,25 @@ export async function confirmSignup(db: Db, token: string): Promise<ConfirmResul
   return rows.length ? "confirmed" : "invalid";
 }
 
-/** Unsubscribes the row the token belongs to. Idempotent; false for an unknown token. */
+/**
+ * Unsubscribes the address the token belongs to: puts it on the suppression
+ * list and deletes its signup row, in one transaction (both or neither).
+ * Idempotent: an already-used token answers true. False for an unknown token.
+ */
 export async function unsubscribe(db: Db, token: string): Promise<boolean> {
   if (!token || token.length > 100) return false;
-  const { rows } = await db.query(
-    `update signups set
-       status = 'unsubscribed',
-       updated_at = case when status = 'unsubscribed' then updated_at else now() end,
-       confirm_token_hash = null, confirm_expires_at = null
-     where unsubscribe_token = $1
-     returning id`,
-    [token],
-  );
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const { rows } = await tx.query<{ email: string }>("select email from signups where unsubscribe_token = $1", [token]);
+    if (!rows.length) {
+      const used = await tx.query("select 1 from used_unsubscribe_tokens where token_hash = $1", [hashToken(token)]);
+      return used.rows.length > 0;
+    }
+    await tx.query("insert into email_suppressions (email_hash) values ($1) on conflict do nothing", [emailHash(rows[0].email)]);
+    await tx.query("insert into used_unsubscribe_tokens (token_hash) values ($1) on conflict do nothing", [hashToken(token)]);
+    // Every list row for the address goes: they asked not to hear from us.
+    await tx.query("delete from signups where lower(email) = lower($1)", [rows[0].email]);
+    return true;
+  });
 }
 
 /** The small branded page the confirm and unsubscribe links land on. */

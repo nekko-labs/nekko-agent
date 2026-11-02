@@ -4,6 +4,7 @@ import { CONFIRM_FROM, CONFIRM_REPLY_TO, CONFIRM_SUBJECT, resendMailer, type Ema
 import type { Db } from "./db.js";
 import { migrate } from "./migrate.js";
 import { buildServer } from "./server.js";
+import { purgeSignups } from "./retention.js";
 import { pgliteDb } from "./test-db.js";
 
 const ORIGIN = "https://nekkoagent.com";
@@ -108,8 +109,11 @@ describe("signup confirmation", () => {
     expect(get.body).toContain("unsubscribed");
     const post = await app.inject({ method: "POST", url: link(sent[1], "/v1/signups/unsubscribe"), payload: "List-Unsubscribe=One-Click", headers: { "content-type": "application/x-www-form-urlencoded" } });
     expect(post.statusCode).toBe(200);
-    expect(await status("ada@example.com")).toBe("unsubscribed");
-    expect(await status("bob@example.com")).toBe("unsubscribed");
+    // Rows are gone; only the hashed opt-out remains.
+    expect((await db.query("select count(*)::int as n from signups", [])).rows).toEqual([{ n: 0 }]);
+    expect((await db.query("select count(*)::int as n from email_suppressions", [])).rows).toEqual([{ n: 2 }]);
+    // Clicking the same link again still answers "unsubscribed".
+    expect((await app.inject({ method: "GET", url: link(sent[0], "/v1/signups/unsubscribe") })).statusCode).toBe(200);
     // The confirm link stops working too.
     expect((await app.inject({ method: "GET", url: link(sent[0], "/v1/signups/confirm") })).statusCode).toBe(400);
     expect((await app.inject({ method: "GET", url: "/v1/signups/unsubscribe?token=nope" })).statusCode).toBe(404);
@@ -132,6 +136,50 @@ describe("signup confirmation", () => {
     fail = false;
     await signup(app, "ada@example.com");
     expect(sent).toHaveLength(1);
+  });
+});
+
+describe("retention", () => {
+  it("never emails an address that unsubscribed, even if it signs up again", async () => {
+    const app = server();
+    await signup(app, "ada@example.com");
+    await app.inject({ method: "GET", url: link(sent[0], "/v1/signups/unsubscribe") });
+    await signup(app, "ADA@example.com ");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("deletes unconfirmed sign-ups after 30 days and nothing else", async () => {
+    const app = server();
+    for (const e of ["old@example.com", "new@example.com", "conf@example.com", "inv@example.com"]) await signup(app, e);
+    await app.inject({ method: "GET", url: link(sent[2], "/v1/signups/confirm") });
+    await db.query("update signups set status = 'invited' where email = 'inv@example.com'", []);
+    await db.query("update signups set created_at = now() - interval '31 days' where email <> 'new@example.com'", []);
+    await db.query("update signups set created_at = now() - interval '29 days' where email = 'new@example.com'", []);
+    expect(await purgeSignups(db)).toEqual({ unconfirmed: 1, unsubscribed: 0 });
+    const { rows } = await db.query<{ email: string }>("select email from signups order by email", []);
+    expect(rows.map((r) => r.email)).toEqual(["conf@example.com", "inv@example.com", "new@example.com"]);
+  });
+
+  it("removes rows marked unsubscribed but keeps them suppressed", async () => {
+    const app = server();
+    await signup(app, "old@example.com");
+    await db.query("update signups set status = 'unsubscribed', confirmation_sent_at = null", []);
+    expect(await purgeSignups(db)).toEqual({ unconfirmed: 0, unsubscribed: 1 });
+    await signup(app, "old@example.com");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("deletes nothing when a run fails partway", async () => {
+    await signup(server(), "old@example.com");
+    await db.query("update signups set created_at = now() - interval '31 days', status = 'unsubscribed'", []);
+    // The second delete fails after the first statements ran.
+    const failing: Db = { ...db, transaction: (fn) => db.transaction((tx) => fn({ ...tx, query: async (text, params) => {
+      if (text.includes("status = 'pending'")) throw new Error("boom");
+      return tx.query(text, params);
+    } })) };
+    await expect(purgeSignups(failing)).rejects.toThrow("boom");
+    expect((await db.query("select count(*)::int as n from signups", [])).rows).toEqual([{ n: 1 }]);
+    expect((await db.query("select count(*)::int as n from email_suppressions", [])).rows).toEqual([{ n: 0 }]);
   });
 });
 

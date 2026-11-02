@@ -38,6 +38,12 @@ hostname).
   HTML page. Only the newest email's link works.
 - `GET|POST /v1/signups/unsubscribe?token=`: one-click unsubscribe from the
   link in every email, and RFC 8058 `List-Unsubscribe-Post` from mail apps.
+  Unsubscribing deletes the address's signup rows and keeps only a SHA-256 of
+  it in `email_suppressions`, which no email is ever sent to (a later signup
+  saves but gets no email).
+- Retention: every 6 hours (and on start) pending signups never confirmed
+  within 30 days, and any row marked `unsubscribed`, are deleted in one
+  transaction; confirmed, invited and joined rows are never touched.
   Links point at `PUBLIC_URL` (default `https://nekko-agent-api.fly.dev`).
 - `/v1/sync/*`: end-to-end encrypted sync for Pro and Team (see
   [docs/SYNC-ENCRYPTION.md](../../docs/SYNC-ENCRYPTION.md)). Bearer `nk_` tokens
