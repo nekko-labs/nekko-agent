@@ -2736,6 +2736,70 @@
 .plan-sheet-glyph { display: inline-grid; place-items: center; color: var(--ink-faint); }
 .plan-sheet-glyph.is-running { color: var(--success); }
 .plan-sheet-dot { width: 6px; height: 6px; border-radius: 50%; }
+/* The small CI/state icon on a PR chip. `is-pending` spins so a watcher can see
+ * the checks are still running even if the colour reads the same as another
+ * state's tone. */
+.plan-sheet-status { display: inline-grid; place-items: center; width: 12px; height: 12px; flex-shrink: 0; }
+.plan-sheet-status.is-pending svg { animation: plan-sheet-spin 1.4s linear infinite; transform-origin: 50% 50%; }
+@keyframes plan-sheet-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .plan-sheet-status.is-pending svg { animation: none; } }
+
+/* A PR wears its three actions as rounded pills: Approve, Decline, Merge.
+ * They fade in when the pointer or keyboard focus is on the chip (or its
+ * actions), so a resting PR stays a chip and never shouts. */
+.plan-sheet-pr { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.plan-sheet-pr-actions { display: inline-flex; align-items: center; gap: 4px; opacity: 0; transform: translateX(-4px); pointer-events: none; transition: opacity 120ms ease, transform 120ms ease; }
+@media (hover: hover) {
+  .plan-sheet-pr:hover .plan-sheet-pr-actions,
+  .plan-sheet-pr:focus-within .plan-sheet-pr-actions { opacity: 1; transform: none; pointer-events: auto; }
+}
+.plan-sheet-pr:focus-within .plan-sheet-pr-actions { opacity: 1; transform: none; pointer-events: auto; }
+.plan-sheet-pr-action {
+  flex-shrink: 0; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink-soft);
+  padding: 0 8px; font-size: var(--text-2xs); line-height: 18px; font-weight: 500;
+  transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease;
+}
+.plan-sheet-pr-action:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.plan-sheet-pr-action[data-pr-act="approve"]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--success) 45%, var(--line)); color: var(--success); }
+.plan-sheet-pr-action[data-pr-act="close"]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); color: var(--danger); }
+.plan-sheet-pr-action[data-pr-act="merge"]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); color: var(--accent); }
+.plan-sheet-pr-action:disabled { opacity: 0.4; }
+@media (prefers-reduced-motion: reduce) { .plan-sheet-pr-actions { transition: none; } }
+
+/* A noticeable fold affordance: a rounded pill that reads as a button and
+ * rotates its chevron to point to what tapping it will do. */
+.plan-sheet-caret {
+  display: inline-grid; place-items: center; width: 20px; height: 20px;
+  border-radius: 999px; background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink-soft);
+  transition: background-color 120ms ease, color 120ms ease, transform 180ms ease;
+}
+.plan-sheet-fold:hover .plan-sheet-caret,
+.plan-sheet-toggle:hover .plan-sheet-caret,
+.plan-sheet-fold:focus-visible .plan-sheet-caret,
+.plan-sheet-toggle:focus-visible .plan-sheet-caret {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) { .plan-sheet-caret { transition: none; } }
+
+/* Each step is its own card: the ink-faint divider between steps was easy to
+ * lose against sub-agent and PR chips. A soft surface-tinted panel per step
+ * reads as a row that groups its chips with its title. */
+.plan-sheet-steps { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+.plan-sheet-step {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 10px;
+  padding: 6px 10px;
+  grid-template-columns: 14px minmax(0, 1fr);
+  column-gap: 10px;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.plan-sheet-step[data-plan-step="active"] { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.plan-sheet-step[data-plan-step="done"] { background: color-mix(in srgb, var(--surface) 40%, transparent); border-color: color-mix(in srgb, var(--line) 55%, transparent); }
+.plan-sheet-steps .plan-sheet-more > div { padding-left: 24px; padding-top: 2px; }
 @media (max-width: 640px) { .plan-sheet-dock { width: 92%; } }
 @media (prefers-reduced-motion: reduce) { .plan-sheet, .plan-sheet-more { animation: none; transition: none; } }
 @media (prefers-reduced-motion: reduce) { .composer-question { transform: none !important; transition: opacity 150ms ease; } }
