@@ -21,8 +21,8 @@ app.whenReady().then(async () => {
     await sleep(400);
     fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
   };
-  const card = title => `[...document.querySelectorAll('div[role="button"]')].find(c => c.getAttribute('title') === ${JSON.stringify(title)})`;
-  const centre = async (selector) => run(`(() => { const r = (${selector})?.getBoundingClientRect(); return r ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null; })()`);
+  const cardTitle = title => title;
+  const centreByTitle = async (title) => run(`(() => { const el = [...document.querySelectorAll('div[role="button"]')].find(c => c.getAttribute('title') === ${JSON.stringify(title)}); const r = el?.getBoundingClientRect(); return r ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null; })()`);
   const key = async (keyCode) => { win.webContents.sendInputEvent({ type: 'keyDown', keyCode }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode }); await sleep(250); };
   const field = `document.querySelector('input[aria-label="Chat title"]')`;
   try {
@@ -33,7 +33,7 @@ app.whenReady().then(async () => {
     await run(`(() => { const f = layoutFixture; window.renames = []; f.bridge.setSessionOptions = async (id, p) => { renames.push({ id, ...p }); const s = f.records.find(s => s.id === id); Object.assign(s, p); return { ...s }; }; })()`);
 
     // The pencil shows beside the X on hover.
-    const first = await centre(card('Persist quota history'));
+    const first = await centreByTitle(cardTitle('Persist quota history'));
     check('the chat cards are listed', first);
     if (first) win.webContents.sendInputEvent({ type: 'mouseMove', x: first.x, y: first.y });
     await capture('rename-hover');
