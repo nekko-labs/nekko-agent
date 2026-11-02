@@ -8,6 +8,8 @@
 //! relay -> agent : { type:'c', cid, data }        (data = the client's raw frame)
 //! agent -> relay : { type:'d', cid, data }        (unicast to one client)
 //! agent -> relay : { type:'kick', cid }           (relay closes that client)
+//! agent -> relay : { type:'welcomed', cid, deviceId } (sent before the sealed welcome;
+//!                  only this may register for pushes, which the relay can't read)
 //! agent -> relay : { type:'notify', kind, tag?, deviceId?, title, body } (content-free push trigger)
 //! agent -> relay : { type:'dismiss', tag }        (a needs-you push was handled)
 //! agent -> relay : { type:'push-remove', deviceId }
@@ -116,6 +118,8 @@ struct Conn {
     bound: Option<String>,
     /// The highest `seq` accepted on this connection.
     seq: u64,
+    /// The owner's Read switch: without it a connection gets no events.
+    reads: bool,
 }
 
 /// Who this agent is: the room it serves and the key its devices pinned.
@@ -295,6 +299,11 @@ impl AgentCore {
         list.into_iter().map(|(cid, _)| cid.clone()).collect()
     }
 
+    /// Welcomed connections allowed to read, for events.
+    fn readers(&self) -> Vec<String> {
+        self.welcomed().into_iter().filter(|cid| self.conns[cid].reads).collect()
+    }
+
     /// The relay socket closed: every connection is gone with it.
     pub fn reset(&mut self) {
         let before = self.connected_devices();
@@ -351,9 +360,7 @@ impl AgentCore {
             };
         }
         match e2e::open(&self.key, enc) {
-            Some(Value::Object(f)) if f.get("type").and_then(Value::as_str) == Some("hello") => {
-                self.older_app(cid, f, verify)
-            }
+            Some(Value::Object(f)) if f.get("type").and_then(Value::as_str) == Some("hello") => self.older_app(cid),
             _ => Vec::new(),
         }
     }
@@ -380,18 +387,24 @@ impl AgentCore {
         f.insert("clientEph".into(), json!(theirs));
         let mut reply = verify(&Value::Object(f));
         let welcomed = reply.get("type").and_then(Value::as_str) == Some("welcome");
+        let mut out = Vec::new();
         if welcomed {
+            let device = reply.pointer("/device/id").map(nekko_js::display);
+            let reads = reply.pointer("/device/access/read") != Some(&Value::Bool(false));
             let conn = self.conn(cid);
-            conn.device = reply.pointer("/device/id").map(nekko_js::display);
+            conn.device = device.clone();
             conn.session = Some(key.clone());
             conn.bound = issued;
             conn.seq = 0;
+            conn.reads = reads;
             // The phone compares this with its own and says which side to update.
             if let Some(o) = reply.as_object_mut() {
                 o.insert("protocol".into(), json!(crate::hello::PROTOCOL_VERSION));
             }
+            // First: a phone registers for pushes as soon as it hears the welcome.
+            out.push(Out::Send(frame(json!({ "type": "welcomed", "cid": cid, "deviceId": device }))));
         }
-        let mut out = vec![Out::Send(self.sealed(&key, cid, &reply))];
+        out.push(Out::Send(self.sealed(&key, cid, &reply)));
         if !welcomed {
             out.push(Out::Send(frame(json!({ "type": "kick", "cid": cid }))));
         }
@@ -399,15 +412,10 @@ impl AgentCore {
     }
 
     /// A HELLO under the room key: an app from before this computer's protocol,
-    /// or someone holding the room secret. Neither is welcomed, whatever it claims.
-    fn older_app(
-        &mut self,
-        cid: &str,
-        mut f: serde_json::Map<String, Value>,
-        verify: &dyn Fn(&Value) -> Value,
-    ) -> Vec<Out> {
-        f.insert("protocol".into(), json!(hello_protocol(&f).min(crate::hello::SESSION_PROTOCOL - 1)));
-        let reply = verify(&Value::Object(f));
+    /// or someone holding the room secret. Neither is welcomed, whatever it
+    /// claims, and it reaches no registry or log: anyone ever paired can send one.
+    fn older_app(&mut self, cid: &str) -> Vec<Out> {
+        let reply = json!({ "type": "denied", "reason": "update-required" });
         vec![Out::Send(self.send_room(cid, &reply)), Out::Send(frame(json!({ "type": "kick", "cid": cid })))]
     }
 
@@ -498,7 +506,7 @@ impl AgentCore {
             out.extend(self.cards.on_event(payload, now).into_iter().map(frame));
         }
         let event = json!({ "type": "event", "channel": channel, "payload": payload });
-        for cid in self.welcomed() {
+        for cid in self.readers() {
             out.extend(self.send_to(&cid, &event));
         }
         out
@@ -506,7 +514,7 @@ impl AgentCore {
 
     /// Welcomed connections whose device is attached to `terminal`.
     fn viewers_of(&self, terminal: &str) -> Vec<String> {
-        self.welcomed()
+        self.readers()
             .into_iter()
             .filter(|cid| self.conns[cid].device.as_deref().is_some_and(|d| self.terminals.attached(d, terminal)))
             .collect()
@@ -668,13 +676,24 @@ impl AgentCore {
     /// Kick the device's live connections and keep its push token, so the
     /// phone is still told about chats when remote access comes back
     /// (`remote:stop`). Only an intentional disconnect (revoke, sign out)
-    /// drops push.
-    pub fn disconnect_device(&self, device_id: &str) -> Vec<String> {
-        self.welcomed()
-            .into_iter()
-            .filter(|cid| self.conns[cid].device.as_deref() == Some(device_id))
-            .map(|cid| frame(json!({ "type": "kick", "cid": cid })))
-            .collect()
+    /// drops push. The connections end here first: a kick is only a request to
+    /// the relay, and a relay that ignores it must get nothing more to pass on.
+    pub fn disconnect_device(&mut self, device_id: &str) -> Vec<String> {
+        let before = self.connected_devices();
+        let cids: Vec<String> =
+            self.welcomed().into_iter().filter(|cid| self.conns[cid].device.as_deref() == Some(device_id)).collect();
+        for cid in &cids {
+            self.conns.remove(cid);
+        }
+        self.forget_gone(before);
+        cids.into_iter().map(|cid| frame(json!({ "type": "kick", "cid": cid }))).collect()
+    }
+
+    /// The owner changed a device's Read switch.
+    pub fn set_reads(&mut self, device_id: &str, reads: bool) {
+        for conn in self.conns.values_mut().filter(|c| c.device.as_deref() == Some(device_id)) {
+            conn.reads = reads;
+        }
     }
 
     /// A device's end of the handshake on a new connection, for tests: opens
@@ -978,7 +997,7 @@ mod tests {
             let c = open(core, key, cid);
             let (frame, session) = answer(cid, &c, hello());
             let out = core.on_relay(&frame, &welcome_all);
-            let (_, reply) = open_frame(&session, &out[0]);
+            let (_, reply) = open_frame(&session, out.last().unwrap());
             assert_eq!(reply["type"], "welcome", "{reply}");
             assert_eq!(reply["protocol"], json!(crate::hello::PROTOCOL_VERSION));
             (c["challenge"].as_str().unwrap().to_string(), session)
@@ -999,18 +1018,54 @@ mod tests {
         fn a_hello_under_the_room_key_is_never_welcomed_whatever_it_claims() {
             let (mut core, key) = core();
             let c = open(&mut core, &key, "c1");
-            let seen: std::sync::Mutex<Vec<Value>> = Default::default();
-            let verify = |h: &Value| {
-                seen.lock().unwrap().push(h.clone());
-                json!({ "type": "denied", "reason": "update-required" })
-            };
+            let never = |_: &Value| -> Value { panic!("a registry check for a frame anyone ever paired can send") };
             let claim = json!({ "type": "hello", "deviceId": "phone-1", "protocol": 99, "challenge": c["challenge"] });
-            let out = core.on_relay(&client(&key, "c1", claim), &verify);
-            assert_eq!(seen.lock().unwrap()[0]["protocol"], json!(crate::hello::SESSION_PROTOCOL - 1));
+            let out = core.on_relay(&client(&key, "c1", claim), &never);
             assert_eq!(open_frame(&key, &out[0]).1["reason"], "update-required");
             let kick = json!({ "type": "kick", "cid": "c1" }).to_string();
             assert_eq!(out[1], Out::Send(kick));
             assert!(core.connected_devices().is_empty());
+        }
+
+        #[test]
+        fn a_kicked_connection_hears_nothing_more_whatever_the_relay_does() {
+            let (mut core, key) = core();
+            welcomed(&mut core, &key, "c1");
+            let frames = core.kick_device("phone-1");
+            assert!(frames[0].contains(r#""type":"kick""#), "{frames:?}");
+            assert!(core.connected_devices().is_empty());
+            // The relay never closed it: no event goes to it, and no request is taken from it.
+            assert!(core.on_event("tasks:updated", &json!({})).is_empty());
+            let (c, session) = welcomed(&mut core, &key, "c2");
+            core.kick_device("phone-1");
+            let out = core.on_relay(&client(&session, "c2", req(1, json!(1), &c)), &welcome_all);
+            assert!(out.is_empty(), "{out:?}");
+        }
+
+        #[test]
+        fn the_relay_hears_who_was_welcomed_before_the_phone_does() {
+            let (mut core, key) = core();
+            let c = open(&mut core, &key, "c1");
+            let (frame, _) = answer("c1", &c, hello());
+            let out = core.on_relay(&frame, &welcome_all);
+            let want = json!({ "type": "welcomed", "cid": "c1", "deviceId": "phone-1" }).to_string();
+            assert_eq!(out[0], Out::Send(want));
+            assert_eq!(out.len(), 2);
+        }
+
+        #[test]
+        fn a_device_with_read_off_gets_no_events() {
+            let (mut core, key) = core();
+            let off = |h: &Value| json!({ "type": "welcome", "device": { "id": h["deviceId"], "access": { "read": false, "change": true } } });
+            let c = open(&mut core, &key, "c1");
+            core.on_relay(&answer("c1", &c, hello()).0, &off);
+            assert_eq!(core.connected_devices(), vec!["phone-1"]);
+            assert!(core.on_event("tasks:updated", &json!({})).is_empty());
+            // The switch applies to the live connection, both ways.
+            core.set_reads("phone-1", true);
+            assert_eq!(core.on_event("tasks:updated", &json!({})).len(), 1);
+            core.set_reads("phone-1", false);
+            assert!(core.on_event("tasks:updated", &json!({})).is_empty());
         }
 
         #[test]

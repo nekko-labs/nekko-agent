@@ -86,8 +86,13 @@ pub struct RelayAgent {
 pub fn agent_url(relay_url: &str, room: &str, secret: &str, access: Option<&str>) -> String {
     let base = relay_url.strip_suffix('/').unwrap_or(relay_url);
     let key = e2e::relay_auth(secret, room);
-    let mut url =
-        format!("{base}/relay?role=agent&room={}&key={}", encode_uri_component(room), encode_uri_component(&key));
+    // `proto` tells the relay to take push registrations only from welcomed devices.
+    let mut url = format!(
+        "{base}/relay?role=agent&room={}&key={}&proto={}",
+        encode_uri_component(room),
+        encode_uri_component(&key),
+        crate::hello::PROTOCOL_VERSION
+    );
     if let Some(a) = access {
         url.push_str(&format!("&access={}", encode_uri_component(a)));
     }
@@ -156,6 +161,12 @@ impl LinkHandle for RelayAgent {
         if let Some(core) = core.as_mut() {
             let frames = core.disconnect_device(device_id);
             self.shared.send_all(frames);
+        }
+    }
+
+    fn set_reads(&self, device_id: &str, reads: bool) {
+        if let Some(core) = lock(&self.shared.core).as_mut() {
+            core.set_reads(device_id, reads);
         }
     }
 

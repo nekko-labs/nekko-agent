@@ -376,14 +376,17 @@ class ComputersRepository(
     suspend fun pair(link: PairingLink): String {
         val hostKey = link.hostKey ?: throw RelayException(Pairing.NEEDS_HOST_KEY)
         val keyHex = E2E.toHex(deriveKey(link.key, link.room))
-        // Paired again after signing out: the old sign-out must never reach the new pairing.
-        signOuts.cancel(link.relayUrl, link.room)
         val id = lock.withLock {
             // Re-scanning a computer we already know keeps its id and name.
             val list = _state.value.computers
             val existing = list.lastOrNull { c ->
                 c.relayUrl == link.relayUrl && StoredJson.decodeSecret(store.get(secretKey(c.id)))?.room == link.room
             }
+            // Rotating a pairing changes the room, so a new key here is not the same computer.
+            val pinned = existing?.let { StoredJson.decodeSecret(store.get(secretKey(it.id))) }?.pin
+            if (pinned != null && pinned != hostKey) throw RelayException(Pairing.DIFFERENT_COMPUTER)
+            // Paired again after signing out: the old sign-out must never reach the new pairing.
+            signOuts.cancel(link.relayUrl, link.room)
             val id = existing?.id ?: newId()
             store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair, hostKey)))
             // The computer's routes may have changed since (another Wi-Fi, LAN addresses on or off).

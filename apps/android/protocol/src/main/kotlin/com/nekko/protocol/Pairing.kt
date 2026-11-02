@@ -38,6 +38,9 @@ object Pairing {
     /** A link from a computer too old to name its host key: a first-seen key is never trusted. */
     const val NEEDS_HOST_KEY = "Update Nekko Agent on your computer, then make a new pairing code."
 
+    /** A link for a pinned room that names another key: rotating a pairing changes the room, so it isn't that computer. */
+    const val DIFFERENT_COMPUTER = "This link names a different computer than the one you paired with. Forget that computer first if it was reset."
+
     fun parse(input: String): PairingLink? {
         val raw = input.trim()
         if (raw.isEmpty()) return null

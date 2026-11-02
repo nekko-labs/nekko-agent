@@ -42,7 +42,7 @@ enum class RelayState {
     ONLINE,
     /** Relay reachable but the computer isn't connected to it. */
     OFFLINE,
-    /** The computer refused this device. Terminal until re-paired. */
+    /** The computer refused this device, in a sealed frame. Terminal until re-paired. */
     DENIED,
 }
 
@@ -61,7 +61,15 @@ enum class DenyReason(val wire: String) {
 data class WelcomedDevice(val id: String, val name: String, val platform: String, val protocol: Int = 1)
 
 /** [route] is the relay address in use or being dialed (one of the computer's routes); set on every status but idle. */
-data class RelayStatus(val state: RelayState, val detail: String? = null, val denied: DenyReason? = null, val route: String? = null)
+data class RelayStatus(val state: RelayState, val detail: String? = null, val denied: DenyReason? = null, val route: String? = null) {
+    companion object {
+        /**
+         * [detail] while the relay closes on a bad pairing key. A close isn't sealed,
+         * so this is a hint and never a denial: the phone keeps polling, and says to pair again.
+         */
+        const val BAD_KEY = "bad pairing key"
+    }
+}
 
 /**
  * A call failed. [refusal] is set when the computer refused the channel from a phone.
@@ -185,7 +193,17 @@ class RelayConfig(
  *
  * A socket with no genuine challenge within [RelayConfig.challengeWaitMs] of
  * opening (or of `agent-online`) is dropped as a failed route, so nothing, the
- * pairing code included, ever goes to a computer that did not prove itself.
+ * pairing code included, ever goes to a computer that did not prove itself. A
+ * HELLO with no `welcome` within [RelayConfig.handshakeTimeoutMs] goes the same
+ * way, so a replayed challenge can't park the phone.
+ *
+ * Only a sealed `denied` ends the link. Anyone holding the room credential can
+ * take the agent role and kick, so a close is never terminal: a 4001 is a failed
+ * route, and the redial gets the sealed answer if the removal was real. A bad
+ * pairing key is polled like an offline computer, with [RelayStatus.BAD_KEY] as
+ * its detail. On a plain LAN address, before a welcome, nothing unsealed is taken
+ * at its word ([believed]): `agent-offline` and every close just fail the route,
+ * and `agent-online` is ignored.
  *
  * Replies come back as `{type:'res'}` and `{type:'event', channel, payload}`.
  * Reconnects with backoff until closed. A port of the Expo client with the same
@@ -533,14 +551,15 @@ class RelayClient(
         }
         failPending("connection lost")
         if (synchronized(lock) { stopped } || state == RelayState.DENIED) return
-        // A close isn't sealed: on a plain LAN address, before the computer has
-        // answered, anyone can send one, so it only fails this route.
-        val url = route
-        val believed = wasWelcomed || url.startsWith("wss://") || RelayRoute.of(url) != RelayRoute.LAN
+        // A close isn't sealed, so it never ends the link: a kick falls through to a failed route.
+        val believed = believed(wasWelcomed)
         when {
-            believed && code == 4001 -> deny(DenyReason.KICKED)
-            believed && code == 1008 && reason.contains("bad pairing key", ignoreCase = true) -> deny(DenyReason.BAD_KEY)
-            code == 1008 && reason.contains("agent offline", ignoreCase = true) -> {
+            believed && code == 1008 && reason.contains(RelayStatus.BAD_KEY, ignoreCase = true) -> {
+                // Maybe the computer rotated its pairing: say so, and keep polling.
+                setStatus(RelayStatus(RelayState.OFFLINE, RelayStatus.BAD_KEY))
+                scheduleRetry(RelayStatus.BAD_KEY, offline = true)
+            }
+            believed && code == 1008 && reason.contains("agent offline", ignoreCase = true) -> {
                 // The relay answered on this route: the computer is away, not the path.
                 setStatus(RelayStatus(RelayState.OFFLINE))
                 scheduleRetry(null, offline = true)
@@ -549,35 +568,50 @@ class RelayClient(
         }
     }
 
+    /**
+     * Whether something unsealed on this route can be taken at its word: on a
+     * plain LAN address, before the computer has answered, anyone can send it.
+     */
+    private fun believed(wasWelcomed: Boolean): Boolean {
+        val url = route
+        return wasWelcomed || url.startsWith("wss://") || RelayRoute.of(url) != RelayRoute.LAN
+    }
+
     /** Wait for the computer's challenge on [c]. Without a genuine one in time, drop the socket as a failed route. */
     private fun awaitChallenge(c: WsConnection, afterOpen: Boolean) {
-        val gen: Long
         synchronized(lock) {
             if (conn !== c || stopped) return
             // The challenge beat onOpen here and is already answered.
             if (afterOpen && helloOn === c) return
-            cancelWaitLocked()
-            gen = waitGen
-            waitJob = scope.launch {
-                delay(config.challengeWaitMs)
-                onChallengeTimeout(c, gen)
-            }
+            armWaitLocked(c, config.challengeWaitMs, "no challenge from the computer")
         }
     }
 
-    private fun onChallengeTimeout(c: WsConnection, gen: Long) {
+    /** Give [c] [ms] to reach its welcome, else drop it as a failed route. Call with [lock] held. */
+    private fun armWaitLocked(c: WsConnection, ms: Long, detail: String) {
+        cancelWaitLocked()
+        val gen = waitGen
+        waitJob = scope.launch {
+            delay(ms)
+            dropRoute(c, detail, gen)
+        }
+    }
+
+    /** Give up on [c] and count its route as failed; with [gen], only while that wait is still the current one. */
+    private fun dropRoute(c: WsConnection, detail: String, gen: Long? = null) {
         synchronized(lock) {
-            if (conn !== c || waitGen != gen || welcomed || stopped) return
-            waitJob = null
+            if (conn !== c || stopped || (gen != null && (waitGen != gen || welcomed))) return
             conn = null
             endHandshakeLocked()
+            cancelWaitLocked()
         }
-        runCatching { c.close(1000, "no challenge") }
+        // conn is already null, so this socket's late onClosed is ignored.
+        runCatching { c.close(1000, detail) }
         failPending("connection lost")
-        routeFailed("no challenge from the computer")
+        routeFailed(detail)
     }
 
-    /** Stop waiting for a challenge. Call with [lock] held. */
+    /** Stop the wait on this socket. Call with [lock] held. */
     private fun cancelWaitLocked() {
         waitGen++
         waitJob?.cancel(); waitJob = null
@@ -605,7 +639,7 @@ class RelayClient(
         val wasOnline: Boolean
         synchronized(lock) {
             if (conn !== c) return
-            cancelWaitLocked()
+            armWaitLocked(c, config.handshakeTimeoutMs, "no welcome from the computer")
             wasOnline = welcomed
             // A new handshake: requests wait for its welcome; calls in flight stay pending.
             welcomed = false
@@ -653,14 +687,19 @@ class RelayClient(
         }
         when (env.str("type")) {
             "agent-offline" -> {
-                synchronized(lock) {
-                    endHandshakeLocked()
-                    cancelWaitLocked()
+                val away = synchronized(lock) {
+                    believed(welcomed).also {
+                        if (it) {
+                            endHandshakeLocked()
+                            cancelWaitLocked()
+                        }
+                    }
                 }
-                setStatus(RelayStatus(RelayState.OFFLINE))
+                if (away) setStatus(RelayStatus(RelayState.OFFLINE)) else dropRoute(c, "agent offline")
             }
             "dismiss" -> env.str("tag")?.takeIf { DISMISS_TAG.matches(it) }?.let { _dismissals.tryEmit(it) }
-            "agent-online" -> if (!synchronized(lock) { welcomed }) {
+            // Not on a route where a stranger could resend it to keep restarting the wait.
+            "agent-online" -> if (synchronized(lock) { !welcomed && believed(false) }) {
                 // The computer (re)joined after us: it challenges this socket again.
                 setStatus(RelayStatus(RelayState.CONNECTING))
                 awaitChallenge(c, afterOpen = false)
@@ -735,7 +774,8 @@ class RelayClient(
             retryJob = scope.launch {
                 delay(delayMs)
                 synchronized(lock) { retryJob = null }
-                dial()
+                // What an offline poll is about stays said while it dials again.
+                dial(detail.takeIf { offline })
             }
         }
         if (!offline) setStatus(RelayStatus(RelayState.CONNECTING, detail))

@@ -169,6 +169,7 @@ fn state_text(s: &State) -> &'static str {
         State::Offline | State::Stopped => "offline",
         State::Denied(r) if r == "update-required" => "update",
         State::Denied(_) => "denied",
+        State::Stale => "stale",
     }
 }
 
@@ -600,7 +601,7 @@ impl Computers {
         let (tx, _events) = tokio::sync::mpsc::unbounded_channel();
         let client = Client::start(cfg.clone(), tx);
         let mut rx = client.watch();
-        let settled = rx.wait_for(|s| matches!(s.state, State::Online | State::Denied(_)));
+        let settled = rx.wait_for(|s| matches!(s.state, State::Online | State::Denied(_) | State::Stale));
         let reached = tokio::time::timeout(PAIR_LIMIT, settled).await.is_ok();
         let status = client.status();
         if !reached || status.state != State::Online {

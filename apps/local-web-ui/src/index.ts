@@ -66,15 +66,20 @@ async function main() {
   const relayUrl = env('RELAY_URL');
   const relayRoom = env('ROOM');
   if (relayUrl && relayRoom) {
+    const key = env('PAIR_KEY') || randomUUID().slice(0, 8);
+    const pairCode = env('PAIR_CODE') || undefined;
+    const hostKey = env('HOST_KEY') || undefined;
+    // They travel by `remote:attach`, not the environment every tool inherits.
+    for (const name of ['PAIR_KEY', 'PAIR_CODE', 'HOST_KEY']) delete process.env[`NEKKO_${name}`];
     await runRelayAgent({
       relayUrl,
       room: relayRoom,
-      key: env('PAIR_KEY') || randomUUID().slice(0, 8),
+      key,
       dataDir: DATA_DIR,
       here: __dirname,
       // A Nekko Cloud machine: its pairing code was minted by Nekko Cloud, and its scope says what it may see.
-      pairCode: env('PAIR_CODE') || undefined,
-      hostKey: env('HOST_KEY') || undefined,
+      pairCode,
+      hostKey,
       scope: parseCloudScope(env('CLOUD_SCOPE')),
     });
     return;

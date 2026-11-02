@@ -237,6 +237,62 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `a link naming another key can't replace a pin, and changes nothing`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        runCurrent()
+        val saved = store.map.getValue(ComputersRepository.secretKey(id))
+        val other = "BOP1gt+CoYqr5jok7MgkOauZwgSpTkR8Ovnv3COa0MOKvPmEMS6F5LxxwDO04wlYFPkXGCIRdpyrSqvy1UtLGj8="
+        val signOuts = com.nekko.android.data.SignOutOutbox(store)
+        signOuts.add(com.nekko.android.data.PendingSignOut(link.relayUrl, room, key, "00", TEST_HOST_KEY, "dev", 0))
+
+        val e = runCatching { repo.pair(link.copy(hostKey = other, pair = "NEW999")) }.exceptionOrNull()
+        assertEquals("This link names a different computer than the one you paired with. Forget that computer first if it was reset.", e?.message)
+        runCurrent()
+        assertEquals("the pin and the code stay", saved, store.map[ComputersRepository.secretKey(id)])
+        assertEquals("nothing dialed", 1, remotes.created.size)
+        assertEquals("a queued sign-out stays", 1, signOuts.list().size)
+
+        assertEquals("the same key pairs again", id, repo.pair(link.copy(pair = "NEW999")))
+        runCurrent()
+        repo.forget(id)
+        runCurrent()
+        assertTrue("once forgotten, the link is a new pairing", repo.pair(link.copy(hostKey = other)).isNotEmpty())
+        runCurrent()
+        assertTrue("rotating changes the room", repo.pair(link.copy(room = "0123456789abcdef", hostKey = TEST_HOST_KEY)).isNotEmpty())
+    }
+
+    @Test
+    fun `a pairing with no pin yet takes the link's key`() = runTest {
+        val store = FakeStore()
+        val repo = repo(store)
+        val id = repo.pair(link)
+        runCurrent()
+        store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(secretOf(store, id) - "hostKey").toString()
+        assertEquals(id, repo.pair(link))
+        runCurrent()
+        assertEquals(TEST_HOST_KEY, secretOf(store, id)["hostKey"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a bad pairing key asks to pair again without being a denial`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.OFFLINE, com.nekko.protocol.RelayStatus.BAD_KEY)
+        runCurrent()
+        assertTrue(repo.state.value.badKey)
+        assertNull(repo.state.value.denied)
+        assertEquals(RelayState.OFFLINE, repo.state.value.conn)
+        remotes.last.goOnline()
+        runCurrent()
+        assertFalse(repo.state.value.badKey)
+    }
+
+    @Test
     fun `a link without a host key can't pair`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()

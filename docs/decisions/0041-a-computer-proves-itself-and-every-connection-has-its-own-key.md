@@ -46,14 +46,30 @@ phones, because a computer's agent-class calls need no proof.
 5. **The room secret gets a device onto the relay and no further.** It still
    derives the relay credential and the key that carries the challenge. That
    key opens nothing else: a device ignores any frame under it but a challenge,
-   so it can forge no refusal and no reply, and the computer refuses any HELLO
-   under it with `update-required`, whatever it claims.
+   so it can forge no sealed refusal and no reply, and the computer refuses any
+   HELLO under it with `update-required`, whatever it claims.
 6. **Older pairings are replaced.** `pairing: 3` in `remote.json`. The first start
    makes a new room, secret and host key and keeps the device list, as decision
    0036 did, so a secret a revoked device kept dies with the upgrade. Every
    device pairs again once. Nekko Cloud mints the key pair with the machine and
    puts the public half in its link (`NEKKO_HOST_KEY`), so no path needs a
    first-seen key.
+
+7. **Nothing unsealed ends a device's link.** Closes come from the relay, and
+   anyone holding the room credential can cause one, so a 4001 or a "bad pairing
+   key" is a failed route: a real removal arrives as a sealed refusal on the next
+   dial. On a plain LAN address, before a welcome, "agent offline" fails the route
+   too, because anyone can answer there. A device gives up on a HELLO that gets no
+   welcome, since a challenge can be replayed.
+8. **Revoking ends the session on the computer.** A kick is only a request to the
+   relay, so the connection, and its key, go first. A relay that ignores it has
+   nothing more to pass on.
+9. **Only a welcomed device registers for pushes.** The Live Activity card carries
+   chat text in the clear, so a room credential alone must not get it. The agent
+   names who it welcomed (`welcomed`, before the sealed welcome), and the relay
+   takes `register-*` only from that connection, under that device id.
+10. **A link can't move a pin.** Pairing again with the same room and a different
+    host key is refused. A real reset changes the room.
 
 ## Consequences
 
@@ -65,12 +81,21 @@ phones, because a computer's agent-class calls need no proof.
 - A reply still in flight when a connection is challenged again is dropped: it
   has no key to go out under. The caller times out or retries.
 - **What this leaves.** The room credential is still shared, so a revoked device
-  that kept it can still reach the relay. It can knock the real computer offline
-  for the two seconds it takes to redial, and while connected as the agent send
-  content-free notifications and Live Activity text to phones through the relay.
-  It can't read or forge anything sealed. *Sign out all phones* replaces the
-  room and shuts it out for good, at the cost of every device pairing again.
-  Per-device relay credentials would close this and are a change to the relay,
-  left out here.
+  that kept it can still reach the relay. Where it can also take the agent role (a
+  relay with no enrollment gate, or any valid access token), it can knock the real
+  computer offline while it stays, register for pushes as a device it invents, and
+  send phones content-free notifications or Live Activity text. It can't read or
+  forge anything sealed. *Sign out all phones* replaces the room and shuts it out,
+  at the cost of every device pairing again. Per-device relay credentials would
+  close this and are a change to the relay, left out here.
+- The relay's replies aren't numbered, so a malicious relay can replay or reorder
+  events within a connection, and move an in-flight reply to another paired device
+  by reopening a cid. Display-level only: it can't read them.
+- The first update leaves the old room abandoned. A protocol 5 app keeps dialing
+  it, sees only "offline", and a revoked device with the old secret can claim it,
+  so ship the computer and the phone apps close together.
+- A Nekko Cloud machine created before this has no way to give out a host key:
+  its link was only ever shown once. Delete it and make a new one.
 - A host key that leaks can pose as the computer. It lives where the pairing
-  secret and device registry already do; rotating replaces it.
+  secret and device registry already do, so a device with terminal or agent access
+  could have read it, and revoking doesn't replace it; rotating does.

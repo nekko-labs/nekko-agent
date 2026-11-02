@@ -51,6 +51,8 @@ pub trait LinkHandle: Send + Sync {
     fn disconnect_device(&self, device_id: &str) {
         self.kick_device(device_id);
     }
+    /// The owner's Read switch for a device's live connections: events stop or resume.
+    fn set_reads(&self, _device_id: &str, _reads: bool) {}
     /// Device ids with a welcomed live connection.
     fn connected_devices(&self) -> Vec<String>;
     fn is_online(&self) -> bool;
@@ -129,7 +131,8 @@ impl RemoteService {
     /// a host key to pin. `None` when the pairing is already current or there
     /// is none.
     fn upgraded_pairing(&self, cfg: &JsObj) -> Option<JsObj> {
-        let current = cfg.get("pairing").and_then(Value::as_u64) == Some(PAIRING_VERSION);
+        let readable = s(cfg.get("hostKey")).and_then(crate::proof::parse_key_text).is_some();
+        let current = cfg.get("pairing").and_then(Value::as_u64) == Some(PAIRING_VERSION) && readable;
         if current || !nekko_js::truthy(cfg.get("secret")) {
             return None;
         }
@@ -512,6 +515,12 @@ impl RemoteService {
             return Err("remote:setAccess: no device with that id".into());
         }
         self.save(&cfg.with("devices", Some(Value::Array(devices.clone()))))?;
+        drop(_io);
+        if let (Some(read), Some(h), Some(id)) =
+            (patch.get("read").and_then(Value::as_bool), self.handle(), device_id.as_str())
+        {
+            h.set_reads(id, read);
+        }
         Ok(Value::Array(devices))
     }
 
@@ -634,7 +643,8 @@ impl crate::phone::Devices for RemoteService {
                 std::iter::repeat_n(if keep { c } else { '_' }, if keep { 1 } else { c.len_utf16() })
             })
             .collect();
-        Some(self.file.parent()?.join("attachments").join(dir))
+        let dir = nekko_js::slice16(&dir, 64);
+        Some(self.file.parent()?.join("attachments").join(if dir.is_empty() { "chat" } else { dir }))
     }
 
     fn device(&self, id: &str) -> Option<crate::phone::PhoneDevice> {

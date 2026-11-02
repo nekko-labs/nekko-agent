@@ -197,7 +197,7 @@ private fun ComputerCard(
     val active = s.activeId == c.id
     val state = when {
         !active -> CardState.IDLE
-        s.denied != null || s.conn == RelayState.DENIED -> CardState.DENIED
+        s.denied != null || s.conn == RelayState.DENIED || s.badKey -> CardState.DENIED
         s.conn == RelayState.ONLINE -> CardState.ONLINE
         s.conn == RelayState.OFFLINE -> CardState.OFFLINE
         s.conn == RelayState.CONNECTING -> CardState.CONNECTING

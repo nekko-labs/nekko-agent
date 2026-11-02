@@ -621,13 +621,14 @@ public final class ComputersStore {
     }
 
     /// Save a scanned/pasted pairing and connect. Returns the computer's id.
-    /// Throws `PairingRefusal` for a link with no host key.
+    /// Throws `PairingRefusal` for a link with no host key, or one that would replace a pin.
     @discardableResult
     public func pair(_ link: PairingLink) async throws -> String {
         guard let hostKey = link.hostKey else { throw PairingRefusal.noHostKey }
-        let keyHex = E2E.toHex(await deriveKey(link.key, link.room))
         // Re-scanning a computer we already know keeps its id and name.
         let existing = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
+        if let pinned = existing.flatMap({ secret($0.id)?.pinned }), pinned != hostKey { throw PairingRefusal.differentComputer }
+        let keyHex = E2E.toHex(await deriveKey(link.key, link.room))
         let id = existing?.id ?? newId()
         saveSecret(id, ComputerSecret(room: link.room, key: link.key, keyHex: keyHex, pair: link.pair, hostKey: hostKey, v: E2E.pairingVersion))
         if existing == nil {
@@ -947,6 +948,8 @@ public final class ComputersStore {
         let ms = Int((Date().timeIntervalSince(start) * 1000).rounded())
         switch s?.state {
         case .online?: return ProbeStep(ok: true, ms: ms, detail: "\(computer) answered")
+        case .offline? where s?.detail == RelayStatus.badPairingKey:
+            return ProbeStep(ok: false, ms: ms, detail: "Refused: \(DenyReason.badKey.rawValue)")
         case .offline?: return ProbeStep(ok: true, ms: ms, detail: "The relay answered; \(computer) isn’t connected to it")
         case .denied?: return ProbeStep(ok: false, ms: ms, detail: "Refused: \(s?.denied?.rawValue ?? "denied")")
         default: return ProbeStep(ok: false, ms: ms, detail: "No answer in \(Int(timeout)) s")

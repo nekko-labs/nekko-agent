@@ -280,14 +280,20 @@ async fn another_key_on_the_same_device_is_refused() {
 }
 
 #[tokio::test]
-async fn being_removed_stops_the_link_for_good() {
+async fn a_close_is_not_a_removal_but_a_sealed_refusal_is() {
     let h = host().await;
     let code = h.svc.pair_computer()["code"].as_str().unwrap().to_string();
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let client = Client::start(config(&h, Some(code)), tx);
     settled(&client, |s| *s == State::Online).await;
+    // Anyone holding the room credential can get the relay to send this.
     h.close.send((4001, "removed".into())).unwrap();
-    assert_eq!(settled(&client, |s| matches!(s, State::Denied(_))).await, State::Denied("kicked".into()));
+    settled(&client, |s| *s == State::Connecting).await;
+    settled(&client, |s| *s == State::Online).await;
+    // Really removed: the redial hears it sealed.
+    h.svc.revoke(&json!("macbook")).unwrap();
+    h.close.send((4001, "removed".into())).unwrap();
+    assert_eq!(settled(&client, |s| matches!(s, State::Denied(_))).await, State::Denied("revoked".into()));
     assert!(client.call("app:info", json!([])).await.is_err());
 }
 

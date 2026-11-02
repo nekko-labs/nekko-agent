@@ -268,6 +268,8 @@ fn the_relay_agent_sends_the_same_frames() {
             }
             format!("{} {said}", f["cid"])
         };
+        // The relay's own frame, which the record's relay never needed.
+        sent.retain(|f| !f.contains(r#""type":"welcomed""#));
         let got: Vec<String> = sent
             .iter()
             .map(|f| {
@@ -278,6 +280,25 @@ fn the_relay_agent_sends_the_same_frames() {
             .collect();
         let want: Vec<String> = want.iter().map(|f| opened(f, &key)).collect();
         assert_eq!(got, want, "step {i}: {input}");
+        // A kick ends the connection here, and the record goes on using it, so
+        // the device says hello again.
+        if let Some(id) = input.get("kick").and_then(Value::as_str) {
+            for cid in sent.iter().filter_map(|f| serde_json::from_str::<Value>(f).ok()).filter(|f| f["type"] == "kick")
+            {
+                let cid = s(&cid["cid"]).to_string();
+                let open = json!({ "type": "client-open", "cid": cid }).to_string();
+                let Some(Out::Send(first)) = core.on_relay(&open, &verify).into_iter().next() else {
+                    panic!("step {i}")
+                };
+                let f: Value = serde_json::from_str(&first).unwrap();
+                let d: Value = serde_json::from_str(s(&f["data"])).unwrap();
+                let challenge = e2e::open(&key, s(&d["enc"])).unwrap();
+                let hello = json!({ "type": "hello", "deviceId": id });
+                let (data, session) = answer_challenge(s(&g["room"]), &challenge, hello);
+                core.on_relay(&json!({ "type": "c", "cid": cid, "data": data }).to_string(), &verify);
+                sessions.insert(cid.clone(), (session, s(&challenge["challenge"]).to_string(), 0));
+            }
+        }
         let connected: Vec<&str> = step["connected"].as_array().unwrap().iter().map(s).collect();
         assert_eq!(core.connected_devices(), connected, "step {i} connected");
     }
@@ -797,7 +818,7 @@ fn the_relay_handshake_matches_the_phones() {
     // The device's answer is welcomed, and the agent passes on the exchange it ran.
     let relay = |data: String| json!({ "type": "c", "cid": "c1", "data": data }).to_string();
     let welcome = core.on_relay(&relay(g["helloFrame"].to_string()), &verify);
-    assert_eq!(welcome.len(), 1, "{welcome:?}");
+    assert_eq!(welcome.len(), 2, "the relay hears it, then the device: {welcome:?}");
     assert_eq!(core.connected_devices(), vec![device.clone()]);
     let heard = seen.lock().unwrap().clone().unwrap();
     assert_eq!(heard["hostEph"], g["hostEph"]["publicKey"]);

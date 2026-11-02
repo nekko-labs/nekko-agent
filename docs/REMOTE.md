@@ -545,7 +545,7 @@ included, newest first, with why one was refused (Change off, no fresh Face ID o
 key). Your computer keeps the newest 200 per phone; rotating the secret clears them.
 
 **Older phone apps.** A phone app too old to check your computer can't connect. It is told to
-update, your computer writes that to its log, and one line goes in that phone's activity.
+update.
 
 **Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
 provider keys or other credentials, remote access itself (pairing more devices, revoking,
@@ -570,7 +570,8 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
 | Revoked device replays old creds | The agent refuses its handshake and sends it nothing. It can't read other devices' traffic or pose as your computer. It gets back in only with a fresh one-time pairing code from the computer's owner |
-| Revoked device kept the pairing secret | That still gets it onto the relay. There it can knock your computer offline for the few seconds a redial takes, and send content-free notifications or Live Activity text to your phones. It can't read or forge anything sealed. **Sign out all phones** shuts it out of the room for good, and every device pairs again |
+| Revoked device kept the pairing secret | That still gets it onto the relay, where it can't read or forge anything sealed or register for your notifications. On a relay that lets it connect as the computer too, it can knock your computer offline while it stays, and send content-free notifications or Live Activity text to your phones. **Sign out all phones** shuts it out of the room for good, and every device pairs again |
+| Someone sends a fake "you were removed" | Nothing unsealed ends a device's link. A close from the relay only makes it retry, and a real removal arrives sealed on the next connection |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
 | Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals outside a chat, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
 | Someone records the relay's traffic and plays it back | Every connection starts with a fresh random challenge from your computer that the phone's sealed hello must answer, once; every request after it carries that challenge and a number that only goes up. A replayed hello or request is dropped and never runs. (Phone apps from before this are accepted for one release, see *Older phone apps*.) |

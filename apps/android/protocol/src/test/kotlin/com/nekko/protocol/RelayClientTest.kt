@@ -59,6 +59,10 @@ class RelayClientTest {
         var welcomeProtocol: Int? = null
         /** Challenge each connection and hold HELLOs and requests to it. */
         var challenges = true
+        /** The computer answers HELLOs; off, it plays a replayed challenge with nobody behind it. */
+        var answersHello = true
+        /** What a device it doesn't know is told. */
+        var unknownReason = "unknown-device"
         /** What signs the challenges; another key than the pinned one plays someone who only holds the room secret. */
         var signer: HelloSigner = hostSigner
         /** Requests the computer dropped for a bad seq or challenge. */
@@ -93,6 +97,7 @@ class RelayClientTest {
                         hellos += frame
                         val answered = frame["challenge"]?.jsonPrimitive?.content
                         if (answered == null || answered != issued) { challenge(); return true }
+                        if (!answersHello) return true
                         issued = null
                         welcomedWith = answered
                         lastSeq = 0
@@ -102,7 +107,7 @@ class RelayClientTest {
                             id in known -> null
                             pair != null && pair == code -> { known += id; code = null; null }
                             pair != null -> "bad-code"
-                            else -> "unknown-device"
+                            else -> unknownReason
                         }
                         if (reply == null) push(buildJsonObject {
                             put("type", "welcome")
@@ -160,13 +165,13 @@ class RelayClientTest {
 
     private fun CoroutineScope.launchSoon(block: () -> Unit) = async { delay(5); block() }
 
-    private fun client(relay: FakeRelay, pair: String? = null, id: String = "dev-1", transport: WsTransport = relay, url: String = "wss://relay.test/", challengeWaitMs: Long = 2_000) = RelayClient(
+    private fun client(relay: FakeRelay, pair: String? = null, id: String = "dev-1", transport: WsTransport = relay, url: String = "wss://relay.test/", challengeWaitMs: Long = 2_000, handshakeTimeoutMs: Long = 10_000) = RelayClient(
         RelayConfig(
             relayUrl = url, room = room, key = "k&ey", keyBytes = key, hostKey = hostKey,
             deviceId = id, deviceName = "Pixel", pairCode = pair,
             // Generous: the first test on a cold JVM also pays for crypto setup, and no test here
             // waits for these to expire, so they only bound how long a real failure takes.
-            handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            handshakeTimeoutMs = handshakeTimeoutMs, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
             challengeWaitMs = challengeWaitMs,
         ),
         transport, scope,
@@ -709,7 +714,7 @@ class RelayClientTest {
         assertEquals(DenyReason.BAD_CODE, c.await(RelayState.DENIED).denied)
     }
 
-    @Test fun `revocation mid-connection (kick 4001) is terminal and fails in-flight calls`() = runBlocking {
+    @Test fun `a kick is not terminal, and fails in-flight calls`() = runBlocking {
         val relay = FakeRelay(known = mutableSetOf("dev-1"))
         relay.answer = { null } // never answer
         val c = client(relay)
@@ -717,37 +722,146 @@ class RelayClientTest {
         c.await(RelayState.ONLINE)
         val inflight = async { runCatching { c.call(Channels.CHAT_PENDING) } }
         delay(50)
-        relay.current!!.drop(4001, "kicked by agent")
-        assertEquals(DenyReason.KICKED, c.await(RelayState.DENIED).denied)
+        val first = relay.current!!
+        first.drop(4001, "kicked by agent") // anyone with the room credential can send this
         assertTrue(inflight.await().exceptionOrNull() is RelayException)
+        until("the redial") { relay.current !== first && relay.hellos.size == 2 }
+        c.await(RelayState.ONLINE)
+        c.close()
     }
 
-    @Test fun `a bad pairing key is terminal`() = runBlocking {
+    @Test fun `a real removal is a kick, then a sealed denied on the redial`() = runBlocking {
         val relay = FakeRelay(known = mutableSetOf("dev-1"))
-        relay.refuseNext = 1008 to "bad pairing key"
         val c = client(relay)
         c.connect()
-        assertEquals(DenyReason.BAD_KEY, c.await(RelayState.DENIED).denied)
+        c.await(RelayState.ONLINE)
+        relay.known.clear()
+        relay.unknownReason = "revoked"
+        relay.current!!.drop(4001, "kicked by agent")
+        assertEquals(DenyReason.REVOKED, c.await(RelayState.DENIED).denied)
+        assertEquals(2, relay.urls.size)
+        delay(150)
+        assertEquals("the sealed denial is terminal", 2, relay.urls.size)
+    }
+
+    @Test fun `a bad pairing key keeps polling and says so, and a good answer clears it`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.refuseNext = 1008 to "Bad pairing key"
+        val c = client(relay)
+        c.connect()
+        val s = c.await(RelayState.OFFLINE)
+        assertEquals(RelayStatus.BAD_KEY, s.detail)
+        assertNull("never a denial", s.denied)
+        val online = c.await(RelayState.ONLINE)
+        assertNull(online.detail)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `a bad pairing key stays said while it dials again`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.refuseNext = 1008 to "bad pairing key"
+        relay.challenges = false
+        val c = client(relay, challengeWaitMs = 10_000)
+        c.connect()
+        c.await(RelayState.OFFLINE)
+        val dialing = c.awaitStatus { it.state == RelayState.CONNECTING }
+        assertEquals(RelayStatus.BAD_KEY, dialing.detail)
+        c.close()
     }
 
     @Test fun `a close on a LAN address before the computer answered only fails the route`() = runBlocking {
-        for (close in listOf(4001 to "kicked by agent", 1008 to "bad pairing key")) {
+        for (close in listOf(4001 to "kicked by agent", 1008 to "bad pairing key", 1008 to "room not paired (agent offline)")) {
             val relay = FakeRelay(known = mutableSetOf("dev-1"))
             relay.refuseNext = close
-            val c = client(relay, url = "ws://192.168.1.20:4400")
+            val c = twoRoutes(relay)
             c.connect()
-            assertEquals(RelayState.ONLINE, c.await(RelayState.ONLINE).state)
+            val s = c.awaitStatus { it.state != RelayState.CONNECTING }
+            assertEquals(close.second, RelayState.ONLINE, s.state)
+            assertEquals(close.second, tailnetRoute, s.route)
             c.close()
         }
     }
 
-    @Test fun `a kick on a LAN address after the welcome is believed`() = runBlocking {
+    @Test fun `an unsealed agent-offline on a LAN address before a welcome fails the route`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.challenges = false
+        val c = twoRoutes(relay)
+        c.connect()
+        until("the LAN socket") { relay.current != null }
+        delay(50)
+        val lan = relay.current!!
+        relay.challenges = true
+        lan.plain(buildJsonObject { put("type", "agent-offline") })
+        assertEquals("a stranger can't hold the phone here", tailnetRoute, c.await(RelayState.ONLINE).route)
+        assertFalse(lan.open)
+        c.close()
+    }
+
+    @Test fun `after the welcome a LAN address is believed about the computer going away`() = runBlocking {
         val relay = FakeRelay(known = mutableSetOf("dev-1"))
         val c = client(relay, url = "ws://192.168.1.20:4400")
         c.connect()
         c.await(RelayState.ONLINE)
-        relay.current!!.drop(4001, "kicked by agent")
-        assertEquals(DenyReason.KICKED, c.await(RelayState.DENIED).denied)
+        relay.current!!.plain(buildJsonObject { put("type", "agent-offline") })
+        c.await(RelayState.OFFLINE)
+        assertTrue(relay.current!!.open)
+        relay.current!!.plain(buildJsonObject { put("type", "agent-online") })
+        relay.current!!.challenge()
+        c.await(RelayState.ONLINE)
+
+        relay.current!!.drop(1008, "bad pairing key")
+        assertEquals(RelayStatus.BAD_KEY, c.await(RelayState.OFFLINE).detail)
+        c.close()
+    }
+
+    @Test fun `repeating agent-online on a LAN address can't hold the route`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.challenges = false
+        val c = client(relay, url = "ws://192.168.1.20:4400", challengeWaitMs = 300)
+        c.connect()
+        until("the socket") { relay.current != null }
+        val first = relay.current!!
+        withTimeout(5_000) {
+            while (first.open) {
+                first.plain(buildJsonObject { put("type", "agent-online") })
+                delay(50)
+            }
+        }
+        c.close()
+    }
+
+    @Test fun `a HELLO that gets no welcome fails the route`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.answersHello = false // a replayed challenge: genuine, and nobody behind it
+        val c = client(relay, handshakeTimeoutMs = 150)
+        c.connect()
+        until("the HELLO") { relay.hellos.isNotEmpty() }
+        val first = relay.current!!
+        until("the socket dropped") { !first.open }
+        relay.answersHello = true
+        c.await(RelayState.ONLINE)
+        assertTrue(relay.urls.size >= 2)
+
+        delay(300)
+        assertEquals("a welcome ends the wait", RelayState.ONLINE, c.state)
+        assertTrue(relay.current!!.open)
+        c.close()
+    }
+
+    @Test fun `a new challenge gives the HELLO a new wait`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.answersHello = false
+        val c = client(relay, handshakeTimeoutMs = 1_000)
+        c.connect()
+        until("the HELLO") { relay.hellos.isNotEmpty() }
+        val first = relay.current!!
+        delay(600)
+        first.challenge()
+        delay(600)
+        assertTrue("past the first wait, inside the second", first.open)
+        until("the socket dropped") { !first.open }
+        c.close()
     }
 
     @Test fun `an offline computer is polled, then the handshake completes`() = runBlocking {
@@ -990,11 +1104,12 @@ class RelayClientTest {
 
     @Test fun `an offline computer is not a route failure`() = runBlocking {
         val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.unreachable["192.168.1.20:4400"] = false
         relay.refuseNext = 1008 to "room not paired (agent offline)"
         val c = twoRoutes(relay)
         c.connect()
-        assertEquals("the relay answered on the LAN; the computer is away, not the path", lanRoute, c.await(RelayState.OFFLINE).route)
-        c.awaitOn(lanRoute)
+        assertEquals("the relay answered on the tailnet; the computer is away, not the path", tailnetRoute, c.await(RelayState.OFFLINE).route)
+        c.awaitOn(tailnetRoute)
         c.close()
     }
 

@@ -378,6 +378,41 @@ final class StoreTests: XCTestCase {
         }
     }
 
+    func testALinkCanNotReplaceAPin() async throws {
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        let saved = secure.get(ComputersStore.secretKey(id))
+        let before = connections.count
+        let other = String(repeating: "A", count: 87) + "="
+        do {
+            try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: other))
+            XCTFail("a link replaced the pin")
+        } catch {
+            XCTAssertEqual(error as? PairingRefusal, .differentComputer)
+            XCTAssertEqual(error.localizedDescription, "This link names a different computer than the one you paired with. Forget that computer first if it was reset.")
+        }
+        XCTAssertEqual(secure.get(ComputersStore.secretKey(id)), saved)
+        XCTAssertEqual(connections.count, before)
+        // The same computer again is fine, and a rotated pairing is another room.
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: "ffffffff", key: key, hostKey: other))
+        XCTAssertEqual(s.computers.count, 2)
+    }
+
+    /// The relay's refusal isn't sealed: the phone stays paired and keeps its prompts, and the words reach the UI.
+    func testARefusedPairingKeyIsNotADenial() async throws {
+        let s = makeStore()
+        s.load()
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        let c = try XCTUnwrap(connections.last)
+        c.status(RelayStatus(.offline, detail: RelayStatus.badPairingKey))
+        await settle()
+        XCTAssertEqual(s.conn, .offline)
+        XCTAssertEqual(s.connDetail, RelayStatus.badPairingKey)
+        XCTAssertNil(s.denied)
+    }
+
     func testALinkWithoutAHostKeyCanNotPair() async throws {
         let s = makeStore()
         s.load()

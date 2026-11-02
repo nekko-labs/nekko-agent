@@ -343,6 +343,48 @@ extension RelayClientTests {
         c.close()
     }
 
+    /// A replayed challenge is genuine, and nobody is behind it.
+    func testAHelloThatGetsNoWelcomeFailsTheRoute() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        relay.silent = true
+        let (c, r) = client(relay, handshakeTimeout: 0.05)
+        c.connect()
+        await waitForDials(relay, 2)
+        XCTAssertGreaterThanOrEqual(relay.sync { relay.hellos.count }, 1, "the first socket got its HELLO")
+        XCTAssertNotEqual(c.state, .online)
+        relay.sync { relay.silent = false }
+        await r.await(.online)
+        c.close()
+    }
+
+    func testANewChallengeRestartsTheWaitForTheWelcome() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        relay.silent = true
+        let (c, r) = client(relay, handshakeTimeout: 0.4)
+        c.connect()
+        await sleep(0.25)
+        let conn = try XCTUnwrap(relay.sync { relay.current })
+        conn.challenge()
+        await sleep(0.25)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 1, "the second HELLO has its own time")
+        XCTAssertEqual(relay.sync { relay.hellos.count }, 2)
+        await waitForDials(relay, 2)
+        relay.sync { relay.silent = false }
+        await r.await(.online)
+        c.close()
+    }
+
+    func testAWelcomeCancelsTheWaitForIt() async {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        let (c, r) = client(relay, handshakeTimeout: 0.05)
+        c.connect()
+        await r.await(.online)
+        await sleep(0.15)
+        XCTAssertEqual(c.state, .online)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 1)
+        c.close()
+    }
+
     func testUpdateRequiredIsATerminalDenial() async throws {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         let (c, r) = client(relay)

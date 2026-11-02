@@ -7,6 +7,7 @@ import com.nekko.protocol.Appearance
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.RelayStatus
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SessionSummary
@@ -91,6 +92,9 @@ data class ComputersState(
     val hostProtocol: Int? = null,
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
+
+    /** The relay keeps closing on a bad pairing key: not a denial (it isn't sealed), but worth asking to pair again. */
+    val badKey: Boolean get() = connDetail == RelayStatus.BAD_KEY && conn != RelayState.IDLE
 
     /** Which side to update when the phone and the computer speak different versions. */
     val protocolCheck: ProtocolCheck get() = ProtocolCheck.compare(hostProtocol)

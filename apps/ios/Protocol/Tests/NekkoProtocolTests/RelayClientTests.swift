@@ -38,6 +38,10 @@ final class RelayClientTests: XCTestCase {
         var challenges = true
         /// Sign challenges with this instead of the host key: someone who only holds the room secret.
         var forger: P256.Signing.PrivateKey?
+        /// Hosts (host:port) that say `agent-offline` as a socket opens, instead of a challenge.
+        var sayOffline: Set<String> = []
+        /// Take every HELLO and never answer: a replayed challenge, with nobody behind it.
+        var silent = false
         /// Requests dropped for a stale seq or a wrong challenge.
         var rejected: [JSONValue] = []
         var answer: (JSONValue) -> JSONValue? = { req in
@@ -67,6 +71,7 @@ final class RelayClientTests: XCTestCase {
             let handlers: WsHandlers
             let refuse: (Int, String)?
             var hang = false
+            var hostPort = ""
             /// The challenge this socket was last sent; nil once answered or when the fake never challenged it.
             var issued: TestComputer.Issued?
             /// This connection's key, from the last HELLO that opened.
@@ -95,7 +100,11 @@ final class RelayClientTests: XCTestCase {
                     self._open = true
                     self.lock.unlock()
                     self.handlers.onOpen()
-                    if self.relay.sync({ self.relay.challenges }) { self.challenge() }
+                    if self.relay.sync({ self.relay.sayOffline.contains(self.hostPort) }) {
+                        self.plain(["type": "agent-offline"])
+                    } else if self.relay.sync({ self.relay.challenges }) {
+                        self.challenge()
+                    }
                 }
             }
 
@@ -130,6 +139,7 @@ final class RelayClientTests: XCTestCase {
                         session = key
                         self.issued = nil // each challenge is used once
                     }
+                    if relay.sync({ relay.silent }) { return true }
                     if frame.str("type") != "hello" || frame.str("challenge") != issued.nonce {
                         challenge()
                         return true
@@ -212,6 +222,7 @@ final class RelayClientTests: XCTestCase {
                 let down = unreachable[hostPort]
                 let c = Conn(relay: self, handlers: handlers, refuse: down == false ? (1006, "connection refused") : refuseNext)
                 c.hang = down == true
+                c.hostPort = hostPort
                 if down == nil { refuseNext = nil }
                 current = c
                 return c
@@ -263,10 +274,10 @@ final class RelayClientTests: XCTestCase {
 
     func client(_ relay: FakeRelay, pair: String? = nil, id: String = "dev-1", retryBase: TimeInterval = 0.02,
                 retryMax: TimeInterval = 0.08, challengeWait: TimeInterval = 0.2,
-                url: String = "wss://relay.test/") -> (RelayClient, Recorder) {
+                url: String = "wss://relay.test/", handshakeTimeout: TimeInterval = 2) -> (RelayClient, Recorder) {
         var cfg = RelayConfig(relayUrl: url, room: "abcd1234", key: "k&e+y", hostKey: relay.computer.publicKey,
                               keyBytes: key, deviceId: id, deviceName: "iPhone", pairCode: pair)
-        cfg.handshakeTimeout = 2
+        cfg.handshakeTimeout = handshakeTimeout
         cfg.challengeWait = challengeWait
         cfg.requestTimeout = 2
         cfg.retryBase = retryBase
@@ -364,7 +375,7 @@ final class RelayClientTests: XCTestCase {
         XCTAssertEqual(s?.denied, .badCode)
     }
 
-    func testKickIsTerminalAndFailsInFlightCalls() async {
+    func testAKickFailsInFlightCallsButIsNotTerminal() async {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         relay.answer = { _ in nil } // never answer
         let (c, r) = client(relay)
@@ -375,41 +386,81 @@ final class RelayClientTests: XCTestCase {
         }
         await sleep(0.05)
         relay.sync { relay.current }!.drop(4001, "kicked by agent")
-        let s = await r.await(.denied)
-        XCTAssertEqual(s?.denied, .kicked)
         let e = await inflight.value
         XCTAssertNotNil(e as? RelayError)
+        // A close isn't sealed: anyone with the room credential can send one.
+        await r.await(.online)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 2)
+        XCTAssertFalse(r.lock.sync { r.statuses.contains { $0.state == .denied } })
+        c.close()
     }
 
-    func testABadPairingKeyIsTerminal() async {
+    func testAKickThenASealedDenialOnTheRedialIsTerminal() async {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        let (c, r) = client(relay)
+        c.connect()
+        await r.await(.online)
+        relay.sync { _ = relay.known.remove("dev-1") }
+        relay.sync { relay.current }!.drop(4001, "kicked by agent")
+        let s = await r.await(.denied)
+        XCTAssertEqual(s?.denied, .unknownDevice)
+        await sleep(0.15)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 2, "the sealed denial stops the client")
+    }
+
+    func testABadPairingKeyIsPolledAndSaysWhy() async {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         relay.refuseNext = (1008, "bad pairing key")
         let (c, r) = client(relay)
         c.connect()
-        let s = await r.await(.denied)
-        XCTAssertEqual(s?.denied, .badKey)
+        let s = await r.await(.offline)
+        XCTAssertEqual(s?.detail, RelayStatus.badPairingKey)
+        XCTAssertNil(s?.denied)
+        // The redial keeps the words, or the banner would flicker every poll.
+        await r.await({ $0.state == .connecting && $0.detail == RelayStatus.badPairingKey })
+        await r.await(.online)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 2)
+        c.close()
     }
 
     func testACloseOnALANAddressBeforeTheComputerAnsweredOnlyFailsTheRoute() async {
-        for close in [(4001, "kicked by agent"), (1008, "bad pairing key")] {
+        for close in [(4001, "kicked by agent"), (1008, "bad pairing key"), (1008, "room not paired (agent offline)")] {
             let relay = FakeRelay(key: key, known: ["dev-1"])
             relay.refuseNext = close
             let (c, r) = client(relay, url: "ws://192.168.1.20:4400")
             c.connect()
             await r.await(.online)
             XCTAssertNil(c.status.denied)
+            XCTAssertFalse(r.lock.sync { r.statuses.contains { $0.state == .offline } }, close.1)
             c.close()
         }
     }
 
-    func testAKickOnALANAddressAfterTheWelcomeIsBelieved() async {
+    func testAKickOnALANAddressAfterTheWelcomeOnlyFailsTheRoute() async {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         let (c, r) = client(relay, url: "ws://192.168.1.20:4400")
         c.connect()
         await r.await(.online)
         relay.sync { relay.current }!.drop(4001, "kicked by agent")
-        let s = await r.await(.denied)
-        XCTAssertEqual(s?.denied, .kicked)
+        await r.await(.online)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 2)
+        c.close()
+    }
+
+    /// Off a plain LAN address the relay's word stands: the phone waits on this socket.
+    func testAgentOfflineIsTakenAtItsWordWhereTheRouteCanBeTrusted() async {
+        for (url, host) in [("wss://relay.test", "relay.test"), ("ws://studio.tail1234.ts.net:4400", "studio.tail1234.ts.net:4400"),
+                            ("ws://127.0.0.1:4400", "127.0.0.1:4400")] {
+            let relay = FakeRelay(key: key, known: ["dev-1"])
+            relay.sayOffline = [host]
+            let (c, r) = client(relay, url: url)
+            c.connect()
+            await r.await(.offline)
+            await sleep(0.1)
+            XCTAssertEqual(relay.sync { relay.urls.count }, 1, url)
+            XCTAssertEqual(c.state, .offline, url)
+            c.close()
+        }
     }
 
     func testAnOfflineComputerIsPolledThenTheHandshakeCompletes() async {

@@ -38,8 +38,16 @@ public struct PairingLink: Equatable, Sendable, CustomStringConvertible {
 public enum PairingRefusal: Error, Equatable, LocalizedError {
     /// The link has no `host`: never trust a first-seen key (decision 0041).
     case noHostKey
+    /// The room is paired and this link pins another key. Rotating a pairing
+    /// changes the room, so this is never a real re-pair.
+    case differentComputer
 
-    public var errorDescription: String? { "Update Nekko Agent on your computer, then make a new pairing code." }
+    public var errorDescription: String? {
+        switch self {
+        case .noHostKey: return "Update Nekko Agent on your computer, then make a new pairing code."
+        case .differentComputer: return "This link names a different computer than the one you paired with. Forget that computer first if it was reset."
+        }
+    }
 }
 
 public enum Pairing {

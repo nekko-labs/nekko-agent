@@ -45,6 +45,14 @@ export function scopeSettings(scope: CloudScope): Record<string, unknown> {
   return scope.privacyShield === false ? {} : { privacyMode: 'shield' };
 }
 
+/**
+ * A minted code pairs a new machine once. Every later boot must leave it dead, or
+ * it lets a device that was removed back in. The list keeps revoked devices.
+ */
+export function armsMintedCode(devices: unknown[]): boolean {
+  return devices.length === 0;
+}
+
 export async function runRelayAgent(opts: {
   relayUrl: string;
   room: string;
@@ -76,12 +84,17 @@ export async function runRelayAgent(opts: {
       if (i === 99) console.warn(`[nekko-agent] relay not reachable yet${status.error ? ` (${status.error})` : ''}; still trying in the background.`);
       await new Promise((r) => setTimeout(r, 100));
     }
-    const grant = await daemonRequest<{ code: string }>(daemon, 'remote:pair', ...(opts.pairCode ? [opts.pairCode] : []));
     console.log(`\nNekko Agent relay-agent → ${opts.relayUrl}`);
-    console.log(`   room=${opts.room}  key=${opts.key}`);
-    console.log(`   one-time pairing code (10 min): ${grant.code}`);
-    const { hostKey } = await daemonRequest<{ hostKey?: string }>(daemon, 'remote:pairing');
-    console.log(`   pairing link: ${pairingLink('<ui-origin>/', { relayUrl: opts.relayUrl, room: opts.room, key: opts.key, hostKey, pair: grant.code })}`);
+    if (!opts.pairCode) {
+      const grant = await daemonRequest<{ code: string }>(daemon, 'remote:pair');
+      const { hostKey } = await daemonRequest<{ hostKey?: string }>(daemon, 'remote:pairing');
+      console.log(`   room=${opts.room}  key=${opts.key}`);
+      console.log(`   one-time pairing code (10 min): ${grant.code}`);
+      console.log(`   pairing link: ${pairingLink('<ui-origin>/', { relayUrl: opts.relayUrl, room: opts.room, key: opts.key, hostKey, pair: grant.code })}`);
+    } else if (armsMintedCode(await daemonRequest<unknown[]>(daemon, 'remote:devices'))) {
+      // Machine logs are kept by the host, so the code and key aren't printed.
+      await daemonRequest(daemon, 'remote:pair', opts.pairCode);
+    }
     console.log(`   serving this machine's model + tools to paired devices (data: ${opts.dataDir})\n`);
   } catch (e) {
     await daemon.stop();

@@ -39,7 +39,7 @@ export const RELAY_PAIRING_VERSION = 3;
 
 /** A one-use P-256 key for a connection's key exchange. */
 export function ephemeralKeys(): Promise<CryptoKeyPair> {
-  return crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']) as Promise<CryptoKeyPair>;
+  return crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']) as Promise<CryptoKeyPair>;
 }
 
 /** A public key as frames carry it: X9.63 uncompressed, base64. */

@@ -7,7 +7,13 @@ type RelaySide = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
 
 /// The agent's next frame, and what it seals when it is a data frame.
 async fn next_agent_frame(agent: &mut RelaySide, key: &Phones) -> (Value, Option<Value>) {
-    let f = next_json(agent, Duration::from_secs(20)).await.expect("an agent frame");
+    let f = loop {
+        let f = next_json(agent, Duration::from_secs(20)).await.expect("an agent frame");
+        // For the relay alone, which this test doesn't gate on.
+        if f["type"] != "welcomed" {
+            break f;
+        }
+    };
     let sealed = (f["type"] == "d")
         .then(|| serde_json::from_str::<Value>(f["data"].as_str().unwrap()).unwrap())
         .and_then(|d| key.open(f["cid"].as_str().unwrap_or_default(), d["enc"].as_str().unwrap()));
@@ -120,7 +126,7 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     .unwrap();
     // The relay gets a credential derived from the secret, never the secret.
     let auth = nekko_remote::e2e::relay_auth(&secret, &room);
-    assert_eq!(path, format!("/relay?role=agent&room={room}&key={auth}"));
+    assert_eq!(path, format!("/relay?role=agent&room={room}&key={auth}&proto=6"));
     assert!(!path.contains(&secret));
     let key = Phones::new(&room, &secret);
     // A current phone: its HELLO answers the connection's challenge and is

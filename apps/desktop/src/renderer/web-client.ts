@@ -102,6 +102,19 @@ function makeWebClient(): NekkoApi {
   let key = p.get('key');
   let hostKey = p.get('host');
   let pairCode: string | null = p.get('pair');
+  const savedPin = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('nekko_relay') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  if (relayUrl && room && key && savedPin?.room === room && savedPin.hostKey && savedPin.hostKey !== hostKey) {
+    // A link can't replace the computer this browser pinned (decision 0041). A reset gets a new room.
+    alert('This link names a different computer than the one you paired with. Forget that computer first if it was reset.');
+    relayUrl = room = key = hostKey = pairCode = null;
+    history.replaceState(null, '', location.pathname);
+  }
   if (relayUrl && room && key) {
     // Persist creds and scrub them from the address bar/history right away.
     localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, hostKey, v: RELAY_PAIRING_VERSION }));
@@ -190,6 +203,11 @@ function makeWebClient(): NekkoApi {
       challenge = c.challenge;
       seq = 0;
       relay?.send(JSON.stringify({ eph, enc: await seal(sealedTo, hello) }));
+      // A replayed challenge gets a HELLO nobody can read: don't wait for ever.
+      const sent = relay;
+      setTimeout(() => {
+        if (!welcomed && relay === sent) sent?.close();
+      }, 15_000);
     };
     const onDenied = (reason: string) => {
       // Kicked out of the registry (revoked, or a stale/used pairing link).
@@ -248,10 +266,12 @@ function makeWebClient(): NekkoApi {
       };
       relay.onclose = (ev) => {
         welcomed = false;
-        if (ev.code === 4001) return; // kicked (revoked) → don't reconnect-loop
-        // The computer holds another pairing secret (it replaced it): pair again.
-        if (ev.code === 1008 && /bad pairing key/i.test(ev.reason)) return onDenied('pair-again');
-        setTimeout(() => void connect(), 1000);
+        // A close isn't sealed, so it ends nothing: a real removal comes back as a
+        // sealed refusal on the next dial. The relay refusing this pairing may mean
+        // the computer was reset, so say so, and keep trying at an easier pace.
+        const refused = ev.code === 1008 && /bad pairing key/i.test(ev.reason);
+        if (refused) sessionStorage.setItem('nekko_relay_denied', 'pair-again');
+        setTimeout(() => void connect(), refused ? 15_000 : 1000);
       };
     };
     void connect();
