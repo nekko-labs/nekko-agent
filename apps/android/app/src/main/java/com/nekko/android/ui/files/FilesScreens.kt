@@ -777,7 +777,7 @@ private fun PhoneLogPage(repo: ComputersRepository, onBack: () -> Unit) {
                 .putExtra(Intent.EXTRA_SUBJECT, subject)
                 .putExtra(Intent.EXTRA_TEXT, text)
             context.startActivity(Intent.createChooser(send, null))
-        }, modifier = Modifier.testTag("log.share")) { Icon(Icons.Filled.Share, contentDescription = "Share") }
+        }, modifier = Modifier.testTag("log.share")) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.simple_share)) }
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).background(p.code).testTag("log.view")) {
             item { Note("Since the app started: times, states and the relay's host, no keys or messages.", Modifier.padding(12.dp)) }

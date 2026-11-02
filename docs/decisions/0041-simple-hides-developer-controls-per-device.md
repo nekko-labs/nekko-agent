@@ -26,6 +26,10 @@ Option 3, controls only, per device:
 - The mode and the choices are saved on each device and never synced. A new install starts in Simple.
 - On the desktop the switch moves to the title bar, because it changes the whole app.
 
+## Update 2026-11-03
+
+Philip reframed what Simple is for: "when you want a cleaner, more focused view, not just non-dev mode", and "having details only show when relevant is key here". So a control can also wait for what makes it relevant, in both modes: a monitor for a running local model, Changes for changed files, PR status for a pull request, the computer controls for a connected computer. Monitors gain a fourth value, `auto`, shown in Settings as When running, Always and Hide. The controls-not-pages rule keeps one exception: Settings > Computers stays out of Simple until a computer is connected, and the first one is paired from Expert.
+
 ## Consequences
 
 - The 2026-10-24/25 specs that kept effort and the context gauge in both modes are superseded: both default to Expert only.

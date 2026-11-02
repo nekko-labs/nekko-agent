@@ -106,4 +106,5 @@
     <string name="simple_part_settings">設定</string>
     <string name="simple_part_trip">旅行を計画</string>
     <string name="simple_part_monitors">モニター · ハードウェアと読み込み済みモデル</string>
+    <string name="simple_share">共有</string>
 </resources>

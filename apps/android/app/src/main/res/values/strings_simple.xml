@@ -106,4 +106,5 @@
     <string name="simple_part_settings">Settings</string>
     <string name="simple_part_trip">Plan the trip</string>
     <string name="simple_part_monitors">Monitors · hardware and loaded models</string>
+    <string name="simple_share">Share</string>
 </resources>

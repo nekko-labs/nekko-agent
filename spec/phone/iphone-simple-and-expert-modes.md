@@ -50,7 +50,7 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `model`
   - `effort`
   - `context`
-  - `ph-policy`
+  - `asks`
   - `thinking`
   - `ph-git`
   - `terminal`
@@ -113,7 +113,7 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `hardware`: the monitor panel; polling stops while hidden.
   - `model` and `effort`: their halves of the composer's control and of its sheet, More > Model, and the New chat chips. The control goes when both are hidden. A chat with no model still shows the picker.
   - `context`: the ring and count.
-  - `ph-policy`: More > Tool policy and the New chat Tools chip. A hidden choice keeps its saved or default value.
+  - `asks`: More > Tool policy in Expert, the plain control under the message box in Simple, and the New chat Tools chip. A hidden choice keeps its saved or default value.
   - `thinking`: the reasoning fold, tool step rows, sub-agent and purpose groups. They are hidden outright; there is no per-turn fold yet. *Working…* still shows while a reply runs.
   - `ph-git`: More > Git, More > Commit or open a PR, the PR chip above the composer, and the plan sheet's PR chips.
   - `terminal`: More > Terminals and + > Terminal.
@@ -131,13 +131,25 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `model`, `effort` and `context`: each is its own part of the row under the message box, and the row goes when all three do. A chat with no model still shows the picker. Effort also leaves New chat, which then uses the computer's default.
   - `thinking`: the Show reasoning toggle, and the tool step rows and step cards, which are left out (Android has no per-turn fold). Allow and Deny cards still show.
   - `ph-git`: the PR chip and its sheet. More > Git stays, since it is the only way to the Git screen.
-  - `ph-policy`: Chat mode in More.
+  - `asks`: Chat mode in More, and the plain control under the message box in Simple.
   - `terminal`: Terminal in the + menu and Terminals in More.
   - `ph-monitors`: the Monitors row at the bottom of the chats list. The foldable Monitors pane and screen stay.
 - **Steps in Simple (2026-10-28):** each turn folds to one line with its time when known (*Took 3 steps · 14s*), and **Show steps** opens it.
 - **Touch targets:** the slim row's switch and gauges keep a 34 dp look with 48 dp touch areas.
 - **Verified:** `ChatModesTest` (5 tests) passes on a headless arm64 emulator after platform-tools moved to r37 (2026-10-28).
 - **The preview** starts on Simple. A row just changed is ringed in the accent colour for a moment.
+
+## Contextual relevance (2026-11-03)
+
+Philip's rule, recorded in the [desktop spec](../desktop/desktop-simple-and-expert-modes.md): a control that means nothing right now is not on screen. On both phones, through `SimpleMode.swift` and `SimpleMode.kt`, with the same ids and rules as `simple-mode.ts`:
+
+- **Asks first** (`asks`, replacing `ph-policy`, Show by default): in Simple the tool policy is a plain control beside the model under the message box, *Asks first*, *Asks when it matters* or *Works on its own*, with the same values and the same step-up as before. Expert keeps it in More. New chat shows it in the same words.
+- **Effort** stays inside the model dropdown in Simple: the dial leaves the control under the message box unless the model's half is hidden.
+- **Changes** (Show by default) needs changed files, in both modes, and says how many. The phone reads `changes:list` when a chat opens and after each turn. iPhone: *3 files changed* in More. Android: the header icon with a count badge, spoken as *3 files changed*, because the bar has no room for the words.
+- **PR status** (`pr-status`, Show by default) needs a PR: the PR chip, its sheet, and the iPhone plan sheet's PR chips. `ph-git` keeps the rest: More > Git and Commit or open a PR on the iPhone, and More > Git on Android, which is new there.
+- **Monitors** (`hardware`, `ph-monitors`) are off by default in both modes and appear only while a local model runs on the computer the phone is connected to. **Always** pins them on. A model on a further computer that one is linked to is not reported to a phone: `computers:*` answers the desktop window only.
+- **Run settings** (`run-settings`, Expert only): main's offline, incognito, Git branch and tool style choices, in the model dropdown.
+- **Strings:** every new string is in the seven languages. On Android, everything this branch had in English moved to `strings_simple.xml`.
 
 ## Not yet
 
