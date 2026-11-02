@@ -48,6 +48,8 @@ pub struct Ctx {
     pub automation: Arc<crate::automation::Automation>,
     /// Phone remote access (`remote:*`) and the relay agent.
     pub remote: Arc<crate::remote::Remote>,
+    /// Links to other computers (`computers:*`), answered in wire.rs for the window only.
+    pub computers: Arc<crate::computers::Computers>,
     /// Settings → Security and the step-up check on the desktop's and the
     /// Local Web UI's guarded calls (`security:*`, SK-4/SK-5). Reached from the
     /// wire only (wire.rs), never through `route`, so a phone cannot call it.
