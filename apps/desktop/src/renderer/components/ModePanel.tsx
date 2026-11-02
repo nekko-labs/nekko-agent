@@ -11,9 +11,10 @@ import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
   BoltIcon, BrainIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
-  ExternalIcon, FileIcon, FolderIcon, GaugeIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
+  ExternalIcon, FileIcon, FolderIcon, GaugeIcon, InfoIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
   RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
 } from '../icons.js';
+import { HoverTip } from './HoverTip.js';
 
 const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
 export const CODE_MODE_DOCS = 'https://nekkoagent.com/docs/code-mode';
@@ -260,6 +261,17 @@ export function ModePanel({
     else if (saving) { e.stopPropagation(); setSaving(null); }
   };
 
+  /** The title line of a per-chat setting: name on the left, info icon that reveals the row's old explanation copy. */
+  const title = (label: string, tip: string, extra?: ReactNode) => (
+    <span className="mode-t">
+      {label}
+      <HoverTip label={tip} multiline side="top">
+        <button type="button" className="mode-info" aria-label={`What ${label.toLowerCase()} does`} tabIndex={0}><InfoIcon /></button>
+      </HoverTip>
+      {extra}
+    </span>
+  );
+
   const { enabled: toolsOn, usable: toolsUsable } = toolCounts(session, tools);
   const mcpServers = settings?.mcpServers ?? [];
   const workspaces = settings?.workspaces ?? [];
@@ -322,21 +334,18 @@ export function ModePanel({
         </div>;
 
   const FLY_TITLE: Record<Fly, [string, ReactNode]> = { tools: ['Tools', <WrenchIcon />], mcp: ['MCP servers', <ServerIcon />], connectors: ['Connectors', <PlugIcon />], skills: ['Skills', <SparkleIcon />] };
-  const flyRow = (f: Fly, icon: ReactNode, title: string, meta: string) => (<>
+  const flyRow = (f: Fly, icon: ReactNode, label: string, meta: string, tip?: string) => (<>
     <button ref={(el) => { anchors.current[f] = el; }} className={`mode-row mode-row-btn ${fly === f ? 'is-open' : ''}`} aria-expanded={fly === f} aria-haspopup="dialog" data-mode-fly={f} onClick={() => toggleFly(f)}>
       <span className="mode-ic">{icon}</span>
-      <span className="mode-t min-w-0 flex-1">{title}</span>
+      <span className="mode-t min-w-0 flex-1">
+        {label}
+        {tip && <HoverTip label={tip} multiline side="top"><span role="button" tabIndex={0} className="mode-info" aria-label={`What ${label.toLowerCase()} does`} onClick={(e) => e.stopPropagation()}><InfoIcon /></span></HoverTip>}
+      </span>
       <span className="mode-meta">{meta}</span>
       <ChevronIcon className={`mode-chev ${narrow && fly === f ? 'rotate-90' : ''}`} />
     </button>
     {narrow && fly === f && <div className="mode-inline-fly">{flyBody(f)}</div>}
   </>);
-  const soon = (icon: ReactNode, title: string, sub: string) => (
-    <div className="mode-row is-disabled" aria-disabled="true">
-      <span className="mode-ic">{icon}</span>
-      <span className="min-w-0 flex-1"><span className="mode-t">{title} <span className="mode-badge">Coming soon</span></span><span className="mode-s">{sub}</span></span>
-    </div>
-  );
   const sw = (on: boolean, onClick: () => void, label: string, disabled = false) => (
     <button role="switch" aria-checked={on} aria-label={label} className="mode-switch" disabled={disabled} onClick={onClick} />
   );
@@ -395,34 +404,38 @@ export function ModePanel({
         </div>
 
         <div className="mode-scroll"><div className="mode-grid">
-          <section className="mode-col" aria-label="Environment and model">
+          <section className="mode-col" aria-label="Environment and Nekko router">
             <p className="mode-sec"><CubeIcon /> Environment</p>
             <div className="mode-row is-stacked">
               <span className="mode-ic">{sandbox ? <CubeIcon /> : <LaptopIcon />}</span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Run on</span><span className="mode-s">{sandbox ? 'A local container. Only scoped files and bash; host previews, hooks and MCP are off.' : 'Your machine, with your shell, apps and credentials.'}</span></span>
+              <span className="min-w-0 flex-1">{title('Run on', sandbox ? 'A local container. Only scoped files and bash; host previews, hooks and MCP are off.' : 'Your machine, with your shell, apps and credentials.')}</span>
               {tiles<'local' | 'sandbox'>('Run on', sandbox ? 'sandbox' : 'local', [['local', 'Local machine', <LaptopIcon />, { 'data-execution': 'local' }], ['sandbox', 'Sandbox', <CubeIcon />, { 'data-execution': 'sandbox' }]],
                 (v) => void (v === 'sandbox' ? (sandbox ? onSandboxSetup() : actions.setExecution('sandbox')) : sandbox && actions.setExecution(session.gitIsolation === false ? 'unified' : 'worktree')))}
             </div>
             <div className={`mode-row ${sandbox ? 'is-disabled' : ''}`}>
               <span className="mode-ic"><WorktreeIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Use worktrees</span>
-                <span className="mode-s">{sandbox ? 'Not needed in Sandbox, which already works on a copy.' : <>Edits land in a separate Git checkout, so your branch stays clean. <a href={WORKTREE_DOCS} onClick={(e) => { e.preventDefault(); void window.nekko.openPath(WORKTREE_DOCS); }}>What's a worktree? <ExternalIcon className="inline h-2.5 w-2.5" /></a></>}</span>
-              </span>
+              <span className="min-w-0 flex-1">{title('Use worktrees', sandbox ? 'Not needed in Sandbox, which already works on a copy.' : 'Edits land in a separate Git checkout, so your branch stays clean.',
+                sandbox ? null : <a className="mode-info-link" href={WORKTREE_DOCS} aria-label="What's a worktree?" onClick={(e) => { e.preventDefault(); void window.nekko.openPath(WORKTREE_DOCS); }}><ExternalIcon className="inline h-2.5 w-2.5" /></a>)}</span>
               {sw(execution === 'worktree', () => void actions.setExecution(execution === 'worktree' ? 'unified' : 'worktree'), 'Use worktrees', sandbox)}
             </div>
             {sandbox && <button className="mode-link" onClick={onSandboxSetup}>Sandbox setup</button>}
 
-            <p className="mode-sec is-sub"><DialIcon /> Model</p>
-            <div className="mode-row is-stacked">
+            <p className="mode-sec is-sub"><RouteIcon /> Nekko router <HoverTip label="How your chats pick their model: where models run (local, cloud, or Fusion), and how much thinking effort to spend." multiline side="top"><button type="button" className="mode-info" aria-label="What Nekko router does" tabIndex={0}><InfoIcon /></button></HoverTip></p>
+            <div className="mode-row is-stacked is-nested">
               <span className="mode-ic">{scope === 'cloud' ? <CloudIcon /> : scope === 'local' ? <LaptopIcon /> : <RouteIcon />}</span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Models run</span><span className="mode-s">{MODEL_SCOPE_DESC[scope ?? 'any']}</span></span>
+              <span className="min-w-0 flex-1">{title('Models run', MODEL_SCOPE_DESC[scope ?? 'any'])}</span>
               {tiles<ModelScope | 'any'>('Models run', scope ?? 'any', [['cloud', 'Cloud only', <CloudIcon />, { 'data-model-scope': 'cloud' }], ['fusion', 'Fusion', <RouteIcon />, { 'data-model-scope': 'fusion' }], ['local', 'Local only', <LaptopIcon />, { 'data-model-scope': 'local' }]],
                 (v) => void actions.setModelScope(v === scope ? null : v as ModelScope))}
             </div>
-            {soon(<RouteIcon />, 'Model router', 'Picks the model for each turn from what the task needs.')}
+            <div className="mode-row is-disabled is-nested" aria-disabled="true">
+              <span className="mode-ic"><RouteIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">Model router <span className="mode-badge">Coming soon</span>
+                <HoverTip label="Picks the model for each turn from what the task needs." multiline side="top"><button type="button" className="mode-info" aria-label="What Model router does" tabIndex={0}><InfoIcon /></button></HoverTip>
+              </span></span>
+            </div>
             <div className="mode-row is-stacked">
               <span className="mode-ic"><GaugeIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Effort</span><span className="mode-s">How long the model thinks before acting. Your choice is remembered for new chats on this computer. Recommended: {EFFORT_LABEL[modelDefaultEffort(modelId)]}.</span></span>
+              <span className="min-w-0 flex-1">{title('Effort', `How long the model thinks before acting. Your choice is remembered for new chats on this computer. Recommended: ${EFFORT_LABEL[modelDefaultEffort(modelId)]}.`)}</span>
               {tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, o === 'xhigh' ? 'X-high' : EFFORT_LABEL[o], <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
                 (v) => void actions.setEffort(v))}
             </div>
@@ -432,19 +445,17 @@ export function ModePanel({
             <p className="mode-sec"><LockIcon /> Privacy</p>
             <div className="mode-row">
               <span className="mode-ic"><IncognitoIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Incognito</span><span className="mode-s">This chat is not saved to your history.</span></span>
+              <span className="min-w-0 flex-1">{title('Incognito', 'This chat is not saved to your history.')}</span>
               {sw(!!session.incognito, () => void actions.toggle('incognito'), 'Incognito')}
             </div>
             <div className="mode-row">
               <span className="mode-ic">{session.offline ? <GlobeOffIcon /> : <GlobeIcon />}</span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Internet access</span>
-                <span className="mode-s">{session.offline ? 'Blocked: online tools, connectors and MCP are off. Shell commands are not network-sandboxed.' : isCloudModel ? 'On. A cloud model needs the internet; pick a local model to block it.' : 'Web tools, connectors and MCP can reach the internet.'}</span>
-              </span>
+              <span className="min-w-0 flex-1">{title('Internet access', session.offline ? 'Blocked: online tools, connectors and MCP are off. Shell commands are not network-sandboxed.' : isCloudModel ? 'On. A cloud model needs the internet; pick a local model to block it.' : 'Web tools, connectors and MCP can reach the internet.')}</span>
               {sw(!session.offline, () => void actions.toggle('offline'), 'Internet access', isCloudModel && !session.offline)}
             </div>
             <div className="mode-row">
               <span className="mode-ic"><FolderIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Folders</span><span className="mode-s">What the agent can read and write. The first is where it works.</span>
+              <span className="min-w-0 flex-1">{title('Folders', 'What the agent can read and write. The first is where it works.')}
                 <span className="mode-folders">
                   {folders.map(({ id, folder }) => (
                     <span key={id} className="mode-chip" title={folder?.path}><span>{folder?.name ?? id}</span>
@@ -457,7 +468,7 @@ export function ModePanel({
             </div>
             <div className="mode-row is-stacked">
               <span className="mode-ic"><ShieldIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Approvals</span><span className="mode-s">{sandbox ? 'Sandbox always asks first.' : `${APPROVAL_DESC[approvals]} Guardrails is recommended for general use.`}</span></span>
+              <span className="min-w-0 flex-1">{title('Approvals', sandbox ? 'Sandbox always asks first.' : `${APPROVAL_DESC[approvals]} Guardrails is recommended for general use.`)}</span>
               {tiles<ChatMode>('Approvals', approvals, [['ask', 'Ask', <HandIcon />, { 'data-chat-mode': 'ask' }], ['guardrails', 'Guardrails', <ShieldCheckIcon />, { 'data-chat-mode': 'guardrails' }], ['yolo', 'YOLO', <YoloIcon />, { 'data-chat-mode': 'yolo' }]],
                 (v) => void (!sandbox && actions.setApprovals(v)))}
             </div>
@@ -468,18 +479,22 @@ export function ModePanel({
 
           <section className="mode-col" aria-label="Approach">
             <p className="mode-sec"><CompassIcon /> Approach</p>
-            {flyRow('skills', <SparkleIcon />, 'Skills', workMode.label)}
-            <p className="mode-s mode-under">{workMode.id === 'default' ? 'No extra skills. Pick a work mode to bring its skills along.' : `${workMode.description} Applies ${WORK_MODES.find((m) => m.id === workMode.id)!.skills.map((n) => `/${n}`).join(', ')}.`}</p>
-            {soon(<DocTextIcon />, 'System prompt', 'Pick a saved prompt per chat and open it to edit.')}
+            {flyRow('skills', <SparkleIcon />, 'Skills', workMode.label, workMode.id === 'default' ? 'No extra skills. Pick a work mode to bring its skills along.' : `${workMode.description} Applies ${WORK_MODES.find((m) => m.id === workMode.id)!.skills.map((n) => `/${n}`).join(', ')}.`)}
+            <div className="mode-row is-disabled" aria-disabled="true">
+              <span className="mode-ic"><DocTextIcon /></span>
+              <span className="min-w-0 flex-1"><span className="mode-t">System prompt <span className="mode-badge">Coming soon</span>
+                <HoverTip label="Pick a saved prompt per chat and open it to edit." multiline side="top"><button type="button" className="mode-info" aria-label="What System prompt does" tabIndex={0}><InfoIcon /></button></HoverTip>
+              </span></span>
+            </div>
             <div className={`mode-row is-stacked ${sandbox ? 'is-disabled' : ''}`}>
               <span className="mode-ic"><ListIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Project rules</span><span className="mode-s">{sandbox ? 'Off in Sandbox, which reads nothing from your folders.' : GUIDANCE_DESC[current.guidance ?? 'rules']}</span></span>
+              <span className="min-w-0 flex-1">{title('Project rules', sandbox ? 'Off in Sandbox, which reads nothing from your folders.' : GUIDANCE_DESC[current.guidance ?? 'rules'])}</span>
               {tiles<GuidanceLevel>('Project rules', current.guidance ?? 'rules', [['rules', 'Rules', <ListIcon />, { 'data-guidance': 'rules' }], ['root', 'Root files', <FileIcon />, { 'data-guidance': 'root' }], ['off', 'Off', <CloseIcon />, { 'data-guidance': 'off' }]],
                 (v) => void (!sandbox && actions.setGuidance(v)))}
             </div>
             <div className={`mode-row is-stacked ${sandbox || session.incognito ? 'is-disabled' : ''}`}>
               <span className="mode-ic"><BrainIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Memory</span><span className="mode-s">{sandbox ? 'Off in Sandbox.' : session.incognito ? 'Off while incognito: an incognito chat reads no memory notes.' : MEMORY_DESC[current.memory ?? 'all']}</span></span>
+              <span className="min-w-0 flex-1">{title('Memory', sandbox ? 'Off in Sandbox.' : session.incognito ? 'Off while incognito: an incognito chat reads no memory notes.' : MEMORY_DESC[current.memory ?? 'all'])}</span>
               {tiles<ChatMemory>('Memory', current.memory ?? 'all', [['all', 'Everything', <BrainIcon />, { 'data-memory': 'all' }], ['project', 'Project', <FolderIcon />, { 'data-memory': 'project' }], ['off', 'Off', <CloseIcon />, { 'data-memory': 'off' }]],
                 (v) => void (!sandbox && actions.setMemory(v)))}
             </div>

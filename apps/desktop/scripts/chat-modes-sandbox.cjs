@@ -131,6 +131,9 @@ app.whenReady().then(async () => {
     await sleep(300);
     check('a wall window in Simple offers effort in the model menu', await has('[data-effort-in-model-menu] [data-effort]'));
     await capture('a11-simple-wall-window-model-menu');
+    await scene({ mode: 'expert', local: false, changes: 0, long: false, wall: true });
+    await sleep(1600);
+    check('a wall window in Expert carries effort beside the model', await has('[data-effort-index]'));
     // Back to the original evidence: a nearly full chat with models resident.
     await run(`localStorage.removeItem('fixture.scene'); localStorage.setItem('nekko.chatMode','simple'); localStorage.removeItem('nekko.planRail'); location.reload()`).catch(() => {});
     await sleep(300);

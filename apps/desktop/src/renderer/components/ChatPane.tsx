@@ -2529,8 +2529,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />}
-    {/* On the wall in Expert effort is in the Mode panel; the bar keeps just the model. */}
-    {showEffort && !effortInMenu && !(wallWindow && expertMode) && (detailsShown || cleanStart) && <EffortSlider {...effortProps} />}
+    {/* In Expert effort rides the composer on every surface, as on the phones; in Simple it is in the model menu. */}
+    {showEffort && !effortInMenu && (wallWindow || detailsShown || cleanStart) && <EffortSlider {...effortProps} />}
     </div>
   );
 
