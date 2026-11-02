@@ -863,6 +863,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     slot.polled_at = now;
                     match call(self.provider.status(&r.record, slot.runner_id)).await {
                         Ok(RunnerStatus::Busy) => {
+                            r.start_failures = 0;
                             slot.busy_since = Some(now);
                             slot.idle_since = None;
                             slot.set_state(SlotState::Running, now);
@@ -874,6 +875,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                             continue;
                         }
                         Ok(RunnerStatus::Idle) => {
+                            r.start_failures = 0;
                             slot.online = true;
                             slot.set_state(SlotState::Ready, now);
                         }
@@ -987,9 +989,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         .await;
         match made {
             Ok(handle) => {
-                let r = &mut self.runners[ri];
-                r.start_failures = 0;
-                r.slots.push(Slot {
+                self.runners[ri].slots.push(Slot {
                     name,
                     runner_id: minted.runner_id,
                     handle,
@@ -1066,6 +1066,13 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 Err(e) => self.runners[ri].note(e),
             }
         }
+        // A guest that shut down on its own ran its one job, even if no poll saw it busy, unless its
+        // runner never connected: the provider forgets a spent JIT runner but lists an unused one offline.
+        let own_stop = stopped == Stopped::Guest && slot.stop.is_none();
+        let never_connected = own_stop
+            && !slot.online
+            && slot.busy_since.is_none()
+            && matches!(call(self.provider.status(&record, slot.runner_id)).await, Ok(RunnerStatus::Offline));
         let dir = self.vms_dir().join(&slot.name);
         if let Err(e) = tokio::fs::remove_dir_all(&dir).await
             && e.kind() != std::io::ErrorKind::NotFound
@@ -1073,9 +1080,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             eprintln!("runner: cannot remove {}: {e}", dir.display());
         }
         self.remove(record.clone(), slot.runner_id, slot.name.clone(), now).await;
-        // A guest that shut down on its own ran its one job, even if no poll saw it busy.
-        let ran = slot.busy_since.is_some() || (stopped == Stopped::Guest && slot.stop.is_none());
-        if !ran {
+        if never_connected {
+            self.start_failed(ri, "it powered off before its runner connected".into(), now);
+            return;
+        }
+        if slot.busy_since.is_none() && !own_stop {
             return;
         }
         let (result, reason, rerun) = match (&slot.stop, &stopped) {

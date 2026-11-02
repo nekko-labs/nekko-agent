@@ -5,6 +5,7 @@ import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
 import { registerFeedback } from "./feedback.js";
 import { registerMachines, type MachinesOptions } from "./machines.js";
+import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from "./confirmations.js";
 import { parseSignup, recordSignup } from "./signups.js";
 import { registerSync } from "./sync.js";
 
@@ -26,9 +27,14 @@ export interface ServerOptions {
   feedbackRateLimit?: { max: number; windowMs: number };
   /** Nekko Cloud machines (decision 0017); without it the /v1/machines routes are absent. */
   machines?: MachinesOptions;
+  /** Sends signup confirmation emails; without it signups still save and the email is skipped. */
+  mailer?: Mailer;
+  /** This service's public origin, for the links in emails. */
+  publicUrl?: string;
   logger?: boolean;
 }
 
+export const DEFAULT_PUBLIC_URL = "https://nekko-agent-api.fly.dev";
 export const DEFAULT_ORIGINS = ["https://nekkoagent.com", "https://www.nekkoagent.com"];
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
@@ -79,11 +85,40 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
 
     const parsed = parseSignup(body);
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
-    await recordSignup(opts.db, parsed.value);
+    const { id } = await recordSignup(opts.db, parsed.value);
+    // A failed email never fails the signup: the row is saved, and signing up
+    // again tomorrow retries.
+    await sendConfirmation(opts.db, id, opts.mailer, opts.publicUrl ?? DEFAULT_PUBLIC_URL, (m) => req.log.info(m))
+      .catch((e) => req.log.error(e, "confirmation email failed"));
     // Same answer for new and repeat signups, so the form can't be used to
     // check whether an address is already on the list.
     return reply.code(202).send({ ok: true });
   });
+
+  app.get("/v1/signups/confirm", async (req, reply) => {
+    const token = String((req.query as Record<string, unknown>).token ?? "");
+    reply.type("text/html; charset=utf-8").header("cache-control", "no-store").header("referrer-policy", "no-referrer");
+    if ((await confirmSignup(opts.db, token)) === "confirmed") {
+      return page("You're on the list", "<p>Thanks for confirming. We'll email you when your Nekko Agent beta invite is ready.</p>");
+    }
+    return reply.code(400).send(page("This link has expired",
+      "<p>Confirm links work once and last 7 days. If you already confirmed, you're all set. Otherwise sign up again on nekkoagent.com for a fresh link.</p>"));
+  });
+
+  // One click: opening the link unsubscribes. POST is RFC 8058's one-click
+  // from mail apps' own Unsubscribe button.
+  const unsubscribeRoute = async (req: { query: unknown }, reply: import("fastify").FastifyReply) => {
+    const token = String((req.query as Record<string, unknown>).token ?? "");
+    reply.type("text/html; charset=utf-8").header("cache-control", "no-store").header("referrer-policy", "no-referrer");
+    if (await unsubscribe(opts.db, token)) {
+      return page("You're unsubscribed", "<p>We won't email you again. Changed your mind? Sign up again on nekkoagent.com.</p>");
+    }
+    return reply.code(404).send(page("Link not recognised", "<p>Email hello@nekkoagent.com and we'll remove you by hand.</p>"));
+  };
+  // Mail apps post a form body ("List-Unsubscribe=One-Click"); the token is in the URL.
+  app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_req, body, done) => done(null, body));
+  app.get("/v1/signups/unsubscribe", unsubscribeRoute);
+  app.post("/v1/signups/unsubscribe", unsubscribeRoute);
 
   // In its own scope so the limiter covers the sync routes only. It also
   // slows anyone guessing tokens, since a 401 counts like any other answer.

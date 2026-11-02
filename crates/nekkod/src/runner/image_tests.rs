@@ -733,3 +733,20 @@ fn the_lockdown_wrapper_is_a_real_daemon_and_stops_the_guest() {
     assert!(c.contains("provision.sh") && c.contains("shutdown -h now"));
     assert!(c.contains("/var/log/nekko-provision.log"));
 }
+
+#[test]
+fn a_test_boot_passes_only_if_the_runner_ran() {
+    let ran = "starting the GitHub Actions runner\nrunner exited with 0\nshutting down\n";
+    assert_eq!(test_boot_verdict(Some(&Stopped::Guest), ran), Ok(()));
+    // A guest also powers off when it cannot read its seed.
+    let bad_seed = "unexpected seed contents\nshutting down\n";
+    assert!(test_boot_verdict(Some(&Stopped::Guest), bad_seed).unwrap_err().contains("does not show the runner"));
+    assert!(test_boot_verdict(Some(&Stopped::Guest), "").unwrap_err().contains("does not show the runner"));
+    assert!(test_boot_verdict(Some(&Stopped::Signal), ran).unwrap_err().contains("did not end cleanly"));
+    assert!(test_boot_verdict(None, ran).unwrap_err().contains("did not power off"));
+}
+
+#[test]
+fn the_boot_script_logs_what_the_test_boot_looks_for() {
+    assert!(include_str!("../../../../scripts/runner-image/nekko-runner-boot.sh").contains(RUNNER_RAN));
+}

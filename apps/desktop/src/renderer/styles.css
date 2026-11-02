@@ -615,7 +615,15 @@
   top: 5%; bottom: 5%;
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
-.rail-feedback { pointer-events: auto; }
+.rail-feedback { pointer-events: auto; flex-shrink: 0; }
+/* Sets Send feedback apart from the destinations above it: more air than the
+   row gap on both sides, and a hairline that widens with the rail. */
+.rail-divider {
+  flex-shrink: 0;
+  height: 1px;
+  margin: 16px 8px 12px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+}
 .rail-space-before { flex: 1 1 0; }
 .rail-space-after { flex: 4 1 0; }
 .rail-group { position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
@@ -2297,10 +2305,12 @@
   color: var(--ink);
   line-height: 1.6;
 }
-/* A readable measure: prose stops at about 68 characters however wide the
-   window gets, and documents read the same way. Code blocks, tables and
-   diagrams keep the full width; they scroll on their own. */
-:is(.msg-ai, .md-doc) :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+/* A readable measure for documents: prose stops at about 68 characters however
+   wide the window gets. Code blocks, tables and diagrams keep the full width;
+   they scroll on their own. Chat replies (.msg-ai) are not capped: with only
+   their prose stopped at 68ch, a wide pane showed text ending halfway across
+   under a table or code block that ran the whole width. */
+.md-doc :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
   max-width: 68ch;
 }
 :is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
