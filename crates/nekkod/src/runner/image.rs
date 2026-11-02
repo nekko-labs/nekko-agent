@@ -49,6 +49,8 @@ const IPSW: &str = "restore.ipsw";
 const PROOF_FILE: &str = "usr/local/share/nekko-runner-image.json";
 const PROVISION_LOG: &str = "private/var/log/nekko-provision.log";
 const BOOT_LOG: &str = "private/var/log/nekko-runner-boot.log";
+/// What the boot script logs when the runner hands back.
+const RUNNER_RAN: &str = "runner exited with";
 const UPDATE_MACOS: &str = "Update this Mac to macOS 27 to set it up here.";
 const NO_XCODE: &str = "No Xcode on this Mac. Install Xcode, or choose macOS only.";
 const NO_FIRST_BOOT: &str = "This copy of Nekko cannot build a VM on its own. Update Nekko, or bring your own image.";
@@ -721,6 +723,17 @@ fn read_on(mounts: &Path, file: &str) -> Option<String> {
     Some(String::from_utf8_lossy(&raw).into_owned())
 }
 
+/// `None` means the guest was still up at the limit. Stopping proves little alone: a guest also
+/// powers off on a seed it could not read.
+fn test_boot_verdict(stopped: Option<&Stopped>, log: &str) -> Result<(), String> {
+    match stopped {
+        Some(Stopped::Guest) if log.contains(RUNNER_RAN) => Ok(()),
+        Some(Stopped::Guest) => Err("The test boot's log does not show the runner running.".into()),
+        Some(other) => Err(format!("The test boot did not end cleanly: {other:?}")),
+        None => Err(format!("The test boot did not power off within {} min.", TEST_BOOT_LIMIT.as_secs() / 60)),
+    }
+}
+
 fn proof_on(mounts: &Path) -> Proof {
     Proof { image: read_on(mounts, PROOF_FILE), log: read_on(mounts, PROVISION_LOG).unwrap_or_default() }
 }
@@ -1224,19 +1237,17 @@ impl BuildHost for RealBuildHost {
             handle.kill();
             let _ = timeout(Duration::from_secs(10), &mut handle.done).await;
         }
-        if !matches!(stopped, Ok(Ok(Stopped::Guest))) {
-            let log = self.with_disk(&clone, |m| read_on(m, BOOT_LOG)).await;
-            if let (Ok(Some(log)), Ok(mut file)) = (log, self.log_file()) {
-                let _ = writeln!(file, "{log}");
-            }
+        let stopped = stopped.ok().map(|r| r.unwrap_or_else(|_| Stopped::Error("the VM helper went away".into())));
+        let log = self.with_disk(&clone, |m| read_on(m, BOOT_LOG)).await.unwrap_or_else(Some).unwrap_or_default();
+        let verdict = test_boot_verdict(stopped.as_ref(), &log);
+        if verdict.is_err()
+            && let Ok(mut file) = self.log_file()
+        {
+            let _ = writeln!(file, "{log}");
         }
         remove_any(&clone).await?;
         remove_any(&seed).await?;
-        match stopped {
-            Ok(Ok(Stopped::Guest)) => Ok(()),
-            Ok(other) => Err(format!("The test boot did not end cleanly: {other:?}")),
-            Err(_) => Err(format!("The test boot did not power off within {} min.", TEST_BOOT_LIMIT.as_secs() / 60)),
-        }
+        verdict
     }
 
     async fn clone_bundle(&self, from: &Path, to: &Path) -> Result<(), String> {
