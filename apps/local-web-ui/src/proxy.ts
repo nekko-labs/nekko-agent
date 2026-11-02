@@ -8,7 +8,7 @@ import type { RequestSecurityOptions } from './request-security.js';
  * The public side of the Local Web UI in front of nekkod.
  *
  * Channel calls are re-sent to the daemon's `POST /api/:channel` with the
- * daemon's own per-launch token; sockets (`/api/events`, `/api/ws`,
+ * daemon's own per-launch token; sockets (`/api/events`,
  * `/api/term/:id`) are checked here exactly as `createApiSecurityHook` checks
  * HTTP, then spliced to the daemon byte for byte, so a terminal's binary frames
  * cost one extra loopback copy and nothing else. The public token, Host and
@@ -59,7 +59,8 @@ export function forwardCall(upstream: Upstream, channel: string, body: string): 
 
 /** The socket routes the daemon serves. */
 export function isSocketRoute(pathname: string): boolean {
-  return pathname === '/api/events' || pathname === '/api/ws' || /^\/api\/term\/[^/]+$/.test(pathname);
+  // Never `/api/ws`: that socket is the desktop window's, and it reaches paired computers.
+  return pathname === '/api/events' || /^\/api\/term\/[^/]+$/.test(pathname);
 }
 
 /**

@@ -24,6 +24,7 @@ mod claude_plan;
 mod claude_policy;
 mod cli_install;
 mod compaction;
+mod computers;
 mod config;
 mod connections;
 mod connectivity;
@@ -209,6 +210,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let catalog = catalog::new(&settings, cfg.hugging_face_url.clone());
     let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(data_dir.clone(), hub.clone()));
+    let computers = computers::Computers::new(data_dir.clone(), hub.clone());
     // Nekko Cloud sign-in and end-to-end encrypted sync. A chat a turn is
     // running in is never overwritten from the cloud; the turns are known
     // once the context below is built.
@@ -348,6 +350,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         workspace: Arc::new(workspace::Workspace::new(data_dir.clone(), cfg.github_api_url.as_deref())),
         automation: automation.clone(),
         remote: remote.clone(),
+        computers: computers.clone(),
         security: Arc::new(security::Security::new(Some(remote.security_store()), nekko_remote::system_clock())),
         sandboxes,
         compactions,
@@ -433,6 +436,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     remote.start();
+    computers.start();
     {
         // A chat's turn, approvals and answers go through the router, as the UI's do.
         let ctx = ctx.clone();
@@ -506,6 +510,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     #[cfg(unix)]
     after.runners.shutdown().await;
     remote.stop();
+    computers.stop();
     messaging.stop();
     engine.shutdown();
     // The servers this daemon started (Ollama) go down with it.

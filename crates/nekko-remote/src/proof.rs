@@ -19,8 +19,9 @@
 //! vector is `tests/golden/change-proof.json`, also read by the iPhone's
 //! NekkoProtocol tests.
 
-use p256::ecdsa::signature::Verifier;
-use p256::ecdsa::{Signature, VerifyingKey};
+use base64::Engine;
+use p256::ecdsa::signature::{Signer, Verifier};
+use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -149,6 +150,17 @@ pub fn verify(key: &VerifyingKey, payload: &str, sig: &[u8]) -> bool {
         Ok(sig) => key.verify(payload.as_bytes(), &sig).is_ok(),
         Err(_) => false,
     }
+}
+
+/// A signature as a proof carries it: the raw 64-byte r||s in base64.
+pub fn sign(key: &SigningKey, payload: &str) -> String {
+    let sig: Signature = key.sign(payload.as_bytes());
+    base64::engine::general_purpose::STANDARD.encode(sig.to_bytes())
+}
+
+/// A device key's public half as [`parse_key`] reads it: X9.63 P-256 in base64.
+pub fn public_key(key: &SigningKey) -> String {
+    base64::engine::general_purpose::STANDARD.encode(key.verifying_key().to_encoded_point(false).as_bytes())
 }
 
 /// What a replay check remembers of a proof: sha256 of the signed text. Not

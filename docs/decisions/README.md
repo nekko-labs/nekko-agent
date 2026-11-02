@@ -48,3 +48,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0037](0037-route-each-message-once-to-a-local-model-or-claude-code.md) | Route each message once, before the turn, to a local model or the user's Claude Code, passing it through unchanged | proposed |
 | [0038](0038-image-builder-reaches-a-build-vm-over-ssh.md) | The image builder reaches a build VM over SSH, from Apple's restore image, with no shared folder (amends 0022) | accepted |
 | [0039](0039-one-release-signing-key-signs-the-update-feed.md) | One Ed25519 release signing key signs the update feed (`latest*.yml.sig`) and the Claude policy override; the updater refuses an unsigned or wrongly signed feed once a real key is built in | accepted |
+| [0040](0040-a-desktop-is-a-paired-device-with-its-own-class.md) | A desktop is a paired device, with its own access class | accepted |

@@ -378,6 +378,13 @@ export const IpcChannels = {
   messagingStatus: 'messaging:status',
   remotePairing: 'remote:pairing',
   remotePair: 'remote:pair',
+  remotePairComputer: 'remote:pairComputer',
+  computersList: 'computers:list',
+  computersPair: 'computers:pair',
+  computersRename: 'computers:rename',
+  computersSetColor: 'computers:setColor',
+  computersForget: 'computers:forget',
+  computersCall: 'computers:call',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -485,6 +492,8 @@ export const IpcEvents = {
   /** The GitHub connect moved on: a `GithubSetupView`. */
   runnerGithubChanged: 'runner:githubChanged',
   limitsUpdated: 'limits:updated',
+  /** A connected computer's state changed, or the list did. */
+  computersUpdated: 'computers:updated',
   /** The look a paired phone mirrors changed: the theme fields of the settings, never anything else. */
   appearanceUpdated: 'appearance:updated',
   downloadsUpdated: 'downloads:updated',
@@ -1158,6 +1167,15 @@ export interface NekkoApi {
   getRemotePairing(): Promise<import('./remote.js').RemotePairing | null>;
   /** Mint a short-lived single-use pairing code for enrolling a new device. */
   startRemotePairing(): Promise<import('./remote.js').PairingGrant>;
+  /** A pairing code that enrolls a computer, not a phone. */
+  startComputerPairing(): Promise<import('./remote.js').PairingGrant>;
+  listComputers(): Promise<import('./computers.js').ComputerStatus[]>;
+  /** Connect to a computer with its pairing link. Rejects with what to do next. */
+  pairComputer(link: import('./computers.js').ComputerPairingLink): Promise<import('./computers.js').ComputerStatus>;
+  renameComputer(id: string, name: string): Promise<import('./computers.js').ComputerStatus[]>;
+  setComputerColor(id: string, color: number): Promise<import('./computers.js').ComputerStatus[]>;
+  forgetComputer(id: string): Promise<import('./computers.js').ComputerStatus[]>;
+  onComputersUpdated(cb: () => void): () => void;
   listRemoteDevices(): Promise<import('./remote.js').RemoteDevice[]>;
   revokeRemoteDevice(deviceId: string): Promise<import('./remote.js').RemoteDevice[]>;
   renameRemoteDevice(deviceId: string, name: string): Promise<import('./remote.js').RemoteDevice[]>;

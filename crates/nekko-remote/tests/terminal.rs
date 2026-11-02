@@ -129,7 +129,11 @@ fn rig(access: DeviceAccess) -> Rig {
     let phones = Arc::new(Phones::default());
     *phones.now.lock().unwrap() = NOW;
     for id in ["phone-1", "phone-2"] {
-        phones.devices.lock().unwrap().push((id.into(), PhoneDevice { access, key: Some(public.clone()) }));
+        phones
+            .devices
+            .lock()
+            .unwrap()
+            .push((id.into(), PhoneDevice { access, key: Some(public.clone()), computer: false }));
     }
     let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
     let terminals = PhoneTerminals::new();

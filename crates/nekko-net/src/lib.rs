@@ -29,6 +29,7 @@ pub const IDS: &[&str] = &[
     "cloud-sync",
     "feedback",
     "phone-relay",
+    "connected-computers",
     "local-relay",
     "network-visibility",
     "api-server",

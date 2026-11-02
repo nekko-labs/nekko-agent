@@ -169,7 +169,12 @@ impl RemoteService {
         }
         let mut st = lock(&self.state);
         let now = (self.clock)();
-        let grant = self.live_grant(&st);
+        // A code only pairs what it was minted for, so a link can't change a
+        // device's class: not a new device's, nor a paired one's, on re-pairing.
+        let computer = hello_frame.get("platform").and_then(Value::as_str) == Some(hello::COMPUTER_PLATFORM);
+        let is_computer = |d: &Value| d.get("kind").and_then(Value::as_str) == Some(hello::COMPUTER_PLATFORM);
+        let same_class = known(&cfg).is_none_or(|d| is_computer(&d) == computer);
+        let grant = self.live_grant(&st).filter(|g| g.computer == computer && same_class);
         let code_ok = grant.as_ref().is_some_and(|g| {
             hello_frame.get("pair").and_then(Value::as_str) == Some(g.code.as_str()) && g.expires_at > now
         });
@@ -186,6 +191,9 @@ impl RemoteService {
             let mut device = device.clone();
             if let Some(o) = device.as_object_mut() {
                 o.remove("legacyProtocol");
+                if *enrolled && computer {
+                    o.insert("kind".into(), json!(hello::COMPUTER_PLATFORM));
+                }
             }
             let id = device.get("id").cloned();
             let mut devices: Vec<Value> =
@@ -367,6 +375,15 @@ impl RemoteService {
     /// the phone in its pairing link). A preset code must be 8 to 16 characters
     /// of the pairing alphabet; anything else is ignored and a random one is made.
     pub fn pair_with(&self, preset: &Value) -> Value {
+        self.mint(preset, false)
+    }
+
+    /// `remote:pairComputer`: a one-time code that enrolls a computer, not a phone.
+    pub fn pair_computer(&self) -> Value {
+        self.mint(&Value::Null, true)
+    }
+
+    fn mint(&self, preset: &Value, computer: bool) -> Value {
         let preset = preset
             .as_str()
             .filter(|c| (8..=16).contains(&c.len()) && c.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()));
@@ -374,7 +391,7 @@ impl RemoteService {
             Some(c) => c.to_string(),
             None => hello::new_pairing_code(&self.random, 8),
         };
-        let grant = Grant { code, expires_at: (self.clock)() + PAIRING_TTL_MS };
+        let grant = Grant { code, expires_at: (self.clock)() + PAIRING_TTL_MS, computer };
         let v = grant.value();
         lock(&self.state).grant = Some(grant);
         v
@@ -555,6 +572,7 @@ impl RemoteService {
             "remote:status" => Ok(self.status()),
             "remote:pairing" => Ok(self.pairing()),
             "remote:pair" => Ok(self.pair_with(arg(0))),
+            "remote:pairComputer" => Ok(self.pair_computer()),
             "remote:devices" => Ok(self.devices()),
             "remote:revoke" => self.revoke(arg(0)),
             "remote:rename" => self.rename(arg(0), arg(1)),
@@ -570,6 +588,18 @@ impl RemoteService {
 /// Change key from `remote.json`, its activity in `remote-activity.json`
 /// beside it.
 impl crate::phone::Devices for RemoteService {
+    fn attachments_of(&self, chat: &str) -> Option<PathBuf> {
+        // The folder name `attachment:import` writes (`safe_session` in remote_image.rs).
+        let dir: String = chat
+            .chars()
+            .flat_map(|c| {
+                let keep = c.is_ascii_alphanumeric() || c == '_' || c == '-';
+                std::iter::repeat_n(if keep { c } else { '_' }, if keep { 1 } else { c.len_utf16() })
+            })
+            .collect();
+        Some(self.file.parent()?.join("attachments").join(dir))
+    }
+
     fn device(&self, id: &str) -> Option<crate::phone::PhoneDevice> {
         let _io = lock(&self.io);
         let cfg = self.load();
@@ -579,6 +609,7 @@ impl crate::phone::Devices for RemoteService {
         Some(crate::phone::PhoneDevice {
             access: crate::phone::DeviceAccess::of(&d),
             key: d.get("changeKey").and_then(Value::as_str).map(String::from),
+            computer: d.get("kind").and_then(Value::as_str) == Some(hello::COMPUTER_PLATFORM),
         })
     }
 
@@ -706,6 +737,7 @@ pub const CHANNELS: &[&str] = &[
     "remote:status",
     "remote:pairing",
     "remote:pair",
+    "remote:pairComputer",
     "remote:devices",
     "remote:revoke",
     "remote:rename",

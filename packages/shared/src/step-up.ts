@@ -40,7 +40,7 @@ export const STEP_UP_DESKTOP_GUARDED = {
   /** Turn remote access on, change the relay or the connection. */
   remoteAccess: ['remote:enable', 'remote:attach'],
   /** Pair a device, rotate the secret (*Sign out all phones*). */
-  pairing: ['remote:pair', 'remote:rotate'],
+  pairing: ['remote:pair', 'remote:pairComputer', 'remote:rotate'],
   /** Change what a phone may do (Read / Change switches, *Lock phones*). */
   phoneAccess: ['remote:setAccess'],
   /** Add, show or change a provider key or account. */

@@ -11,7 +11,7 @@ owner:
 A desktop connects to other computers the way a phone does, and shows every agent they run in one place. Where the agent runs and where the model runs are separate choices. [Design](docs/superpowers/specs/2026-11-02-connected-computers-design.md), [plan](docs/superpowers/plans/2026-11-02-connected-computers.md). Prefix **CC**.
 
 - [ ] **CC0, Messages during a run.** Queued, Next step and Interrupt on all clients; the word steer leaves the app and docs.
-- [ ] **CC1, Link and host class.** Rust relay client, `computers.rs`, the computer access class, Settings > Computers.
+- [ ] **CC1, Link and host class.** Rust relay client, `computers.rs`, the computer access class, Settings > Computers. Decision [0040](docs/decisions/0040-a-desktop-is-a-paired-device-with-its-own-class.md), [spec](spec/desktop/connected-computers.md).
 - [ ] **CC2, Federation.** Qualified ids, routing, rewriting, merged summaries, offline cache.
 - [ ] **CC3, See and drive.** Per-computer catalogs, chips, Group by Computer, offline states, icons.
 - [ ] **CC4, Start and monitor.** *Run on*, Monitors switcher, Keep this computer awake.

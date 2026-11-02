@@ -44,6 +44,7 @@ pub const WINDOW_ONLY: &[&str] = &[
     "cli:installStatus",
     "cli:install",
     "integrations:target",
+    "remote:pairComputer",
     "localRelay:status",
     "localRelay:start",
     "localRelay:stop",

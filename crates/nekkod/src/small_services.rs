@@ -146,7 +146,8 @@ pub fn app_info(facts: &AppFacts) -> Value {
     let version =
         facts.version.clone().or_else(|| std::env::var("NEKKO_VERSION").ok()).unwrap_or_else(|| "0.0.0".into());
     let edition = facts.edition.clone().unwrap_or_else(|| "web".into());
-    json!({ "version": version, "platform": crate::admission::platform(), "edition": edition })
+    let hostname = gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string();
+    json!({ "version": version, "platform": crate::admission::platform(), "edition": edition, "hostname": hostname })
 }
 
 // ---- app:quit ----
@@ -649,7 +650,12 @@ mod tests {
         let desktop = app_info(&AppFacts { version: Some("1.2.3".into()), edition: Some("desktop".into()) });
         assert_eq!(
             desktop,
-            json!({ "version": "1.2.3", "platform": crate::admission::platform(), "edition": "desktop" })
+            json!({
+                "version": "1.2.3",
+                "platform": crate::admission::platform(),
+                "edition": "desktop",
+                "hostname": desktop["hostname"],
+            })
         );
         assert_eq!(app_info(&AppFacts::default())["edition"], "web");
     }

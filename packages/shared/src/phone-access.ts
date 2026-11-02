@@ -323,6 +323,25 @@ export const PHONE_ALWAYS_DENIED = {
 };
 
 /**
+ * What a paired computer may do beyond a phone (connected computers, decision
+ * 0040). It adds to the phone classes and never removes from them. The class
+ * comes from the pairing grant (`remote:pairComputer`) and stays on the device
+ * record, so nothing in a HELLO can set it. Credentials and the machine's own
+ * administration stay refused: these lists are all a computer gains.
+ */
+export const COMPUTER_ACCESS = {
+  /**
+   * Phone channels a computer does not get. A phone's change proof means Face
+   * ID; a computer signs with no presence check, so what a phone reaches behind
+   * that prompt, a shell above all, is not the computer's by inheritance.
+   */
+  refused: ['providers:saveSealed', 'providers:setEnabled', 'ssh:open', 'terminal:close', 'terminal:create', 'terminal:open', 'terminal:signal', 'workspace:addByPath'],
+  read: ['agent:replay', 'chat:running', 'session:images', 'session:page'],
+  agent: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'chat:cancelCompaction', 'chat:compact', 'chat:dequeue', 'session:setAttachments', 'session:truncate'],
+  sendKeys: ['clientMessageId', 'images', 'modelId', 'providerId', 'regenerate', 'resume', 'sessionId', 'skill', 'text', 'videos'],
+} as const;
+
+/**
  * IO-33 access classes. A paired phone's *Read* and *Change* switches
  * (Settings → Remote access → What phones can do, `RemoteDevice.access`)
  * decide whether it may call the channels listed here: a read-class call is
@@ -1328,6 +1347,7 @@ export function phoneAccessPolicy() {
     monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
     brainKeys: [...PHONE_BRAIN_KEYS],
+    computerAccess: COMPUTER_ACCESS,
     expertMonitor: {
       systemView: [...PHONE_SYSTEM_VIEW],
       tempsView: [...PHONE_TEMPS_VIEW],

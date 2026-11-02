@@ -407,6 +407,12 @@ const api: NekkoApi = {
   getMessagingStatus: () => inv(IpcChannels.messagingStatus),
   getRemotePairing: () => inv(IpcChannels.remotePairing),
   startRemotePairing: () => inv(IpcChannels.remotePair),
+  startComputerPairing: () => inv(IpcChannels.remotePairComputer),
+  listComputers: () => inv(IpcChannels.computersList),
+  pairComputer: (link) => inv(IpcChannels.computersPair, link),
+  renameComputer: (id, name) => inv(IpcChannels.computersRename, id, name),
+  setComputerColor: (id, color) => inv(IpcChannels.computersSetColor, id, color),
+  forgetComputer: (id) => inv(IpcChannels.computersForget, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
   renameRemoteDevice: (deviceId, name) => inv(IpcChannels.remoteRename, deviceId, name),
@@ -494,6 +500,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, e: { sessionId: string }) => cb(e);
     bus.on(IpcEvents.changesUpdated, listener);
     return () => bus.removeListener(IpcEvents.changesUpdated, listener);
+  },
+  onComputersUpdated: (cb) => {
+    const listener = () => cb();
+    bus.on(IpcEvents.computersUpdated, listener);
+    return () => bus.removeListener(IpcEvents.computersUpdated, listener);
   },
   onTasksUpdated: (cb) => {
     const listener = (_: unknown, tasks: import('@nekko-agent/shared').AutomationTask[]) => cb(tasks);
