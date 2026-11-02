@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from 'react';
-import { parseSimpleChoices, simpleShown, type SimpleChoices, type SimpleVisibility } from '@nekko-agent/shared';
+import { localModelRunning, parseSimpleChoices, simpleShown, type SimpleChoices, type SimpleContext, type SimpleVisibility } from '@nekko-agent/shared';
 
 /*
  * Simple and Expert (decision 0040, spec desktop/desktop-simple-and-expert-modes). Simple is
- * the everyday app: developer controls stay out of sight. Expert shows every
- * control. Settings > Simple mode chooses, per control, whether it shows in
- * both modes, in Expert only, or nowhere. Both are kept on this computer and
+ * the cleaner, more focused view; Expert shows every control. In both, a
+ * control that means nothing right now stays out of sight. Settings > Simple
+ * mode chooses where each control shows. Both are kept on this computer and
  * shared by every window; a new install starts in Simple.
  */
 
@@ -53,18 +53,18 @@ export function useSimpleChoices(): [SimpleChoices, (id: string, v: SimpleVisibi
 
 /** Whether a listed control is on screen now, read once (for menus that mount when opened). */
 export function shownNow(id: string): boolean {
-  return typeof window === 'undefined' || simpleShown(id, readExpert(), readChoices(), localLoaded);
+  return typeof window === 'undefined' || simpleShown(id, readExpert(), readChoices(), { localModel: localLoaded });
 }
 
-// Whether the Model Server holds a local model: monitors then show in Simple
-// too. Read every 10 s, only while something on screen is listening.
+// Whether a local model is running: monitors show only then, unless pinned.
+// Read every 10 s, only while something on screen is listening.
 const localListeners = new Set<() => void>();
 let localLoaded = false;
 let localTimer: ReturnType<typeof setInterval> | undefined;
 const readLocal = () => {
   window.nekko?.engineStatus?.()
     .then((s) => {
-      const next = !!s?.running && (s.resident?.length ?? 0) > 0;
+      const next = localModelRunning(s);
       if (next !== localLoaded) { localLoaded = next; for (const l of localListeners) l(); }
     })
     .catch(() => {});
@@ -83,10 +83,10 @@ export function useLocalModelLoaded(): boolean {
   return useSyncExternalStore(subscribeLocal, () => localLoaded, () => false);
 }
 
-/** Whether a listed control is on screen now, in the current mode. */
-export function useShown(id: string): boolean {
+/** Whether a listed control is on screen now, in the current mode. `context` says what is true of this chat. */
+export function useShown(id: string, context?: SimpleContext): boolean {
   const [expert] = useExpertMode();
   const [choices] = useSimpleChoices();
-  const local = useLocalModelLoaded();
-  return simpleShown(id, expert, choices, local);
+  const localModel = useLocalModelLoaded();
+  return simpleShown(id, expert, choices, { localModel, ...context });
 }

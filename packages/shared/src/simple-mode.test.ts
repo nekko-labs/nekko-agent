@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { SIMPLE_ITEMS, parseSimpleChoices, simpleAreas, simpleShown, simpleVisibility } from './simple-mode.js';
+import { SIMPLE_ITEMS, agentMonitorRelevant, localModelRunning, parseSimpleChoices, simpleAreas, simpleOptions, simpleShown, simpleVisibility } from './simple-mode.js';
 
 describe('simple mode catalogue', () => {
   it('has unique ids', () => {
     expect(new Set(SIMPLE_ITEMS.map((i) => i.id)).size).toBe(SIMPLE_ITEMS.length);
   });
 
-  it('shows only the model, effort, context and suggestions in Simple by default', () => {
+  it('shows only the everyday controls in Simple when nothing is going on', () => {
     const shown = SIMPLE_ITEMS.filter((i) => simpleShown(i.id, false)).map((i) => i.id);
-    expect(shown).toEqual(['model', 'effort', 'context', 'suggest']);
-    expect(SIMPLE_ITEMS.every((i) => simpleShown(i.id, true))).toBe(true);
+    expect(shown).toEqual(['model', 'effort', 'asks', 'context', 'suggest']);
+  });
+
+  it('shows every control in Expert except what waits for something', () => {
+    const off = SIMPLE_ITEMS.filter((i) => !simpleShown(i.id, true)).map((i) => i.id);
+    expect(off).toEqual(['changes', 'hardware', 'pr-status', 'mon-hw', 'ph-monitors']);
+    const all = { localModel: true, changes: true, pr: true, agents: true };
+    expect(SIMPLE_ITEMS.every((i) => simpleShown(i.id, true, {}, all))).toBe(true);
   });
 
   it('applies the three choices in each mode', () => {
@@ -19,12 +25,62 @@ describe('simple mode catalogue', () => {
     expect(simpleShown('effort', true, { effort: 'hide' })).toBe(false);
   });
 
-  it('shows monitors in Simple while a local model is loaded, unless hidden', () => {
-    expect(simpleShown('hardware', false, {}, true)).toBe(true);
-    expect(simpleShown('mon-hw', false, {}, true)).toBe(true);
-    expect(simpleShown('hardware', false, {}, false)).toBe(false);
-    expect(simpleShown('hardware', false, { hardware: 'hide' }, true)).toBe(false);
-    expect(simpleShown('stats', false, {}, true)).toBe(false);
+  it('keeps monitors off in both modes until a local model runs', () => {
+    for (const id of ['hardware', 'mon-hw', 'ph-monitors']) for (const expert of [false, true]) {
+      expect(simpleShown(id, expert)).toBe(false);
+      expect(simpleShown(id, expert, {}, { localModel: true })).toBe(true);
+    }
+    expect(simpleShown('stats', false, {}, { localModel: true })).toBe(false);
+  });
+
+  it('lets Show pin a monitor on and Hide keep it off, whatever is running', () => {
+    expect(simpleShown('hardware', false, { hardware: 'show' })).toBe(true);
+    expect(simpleShown('hardware', true, { hardware: 'show' })).toBe(true);
+    expect(simpleShown('hardware', false, { hardware: 'hide' }, { localModel: true })).toBe(false);
+  });
+
+  it('shows Changes only with changed files, in both modes', () => {
+    for (const expert of [false, true]) {
+      expect(simpleShown('changes', expert)).toBe(false);
+      expect(simpleShown('changes', expert, {}, { changes: true })).toBe(true);
+    }
+    expect(simpleShown('changes', false, { changes: 'expert' }, { changes: true })).toBe(false);
+    expect(simpleShown('changes', true, { changes: 'hide' }, { changes: true })).toBe(false);
+  });
+
+  it('shows PR status only with a pull request, and keeps the rest of git for Expert', () => {
+    expect(simpleShown('pr-status', false)).toBe(false);
+    expect(simpleShown('pr-status', false, {}, { pr: true })).toBe(true);
+    expect(simpleShown('ph-git', false, {}, { pr: true })).toBe(false);
+    expect(simpleShown('ph-git', true)).toBe(true);
+  });
+
+  it('shows the Agent Monitor in Simple only while agents work, and always in Expert', () => {
+    expect(simpleShown('agent-monitor', false)).toBe(false);
+    expect(simpleShown('agent-monitor', false, {}, { agents: true })).toBe(true);
+    expect(simpleShown('agent-monitor', true)).toBe(true);
+    expect(simpleShown('agent-monitor', false, { 'agent-monitor': 'show' })).toBe(true);
+    expect(simpleShown('agent-monitor', true, { 'agent-monitor': 'hide' }, { agents: true })).toBe(false);
+  });
+
+  it('reads a local model only from a running engine that holds one', () => {
+    expect(localModelRunning(null)).toBe(false);
+    expect(localModelRunning({ running: true, resident: [] })).toBe(false);
+    expect(localModelRunning({ running: false, resident: [{}] })).toBe(false);
+    expect(localModelRunning({ running: true, resident: [{}] })).toBe(true);
+  });
+
+  it('calls the Agent Monitor relevant for running sub-agents or background tasks only', () => {
+    expect(agentMonitorRelevant({ runningSubAgents: 0, backgroundTasks: 0 })).toBe(false);
+    expect(agentMonitorRelevant({ runningSubAgents: 1, backgroundTasks: 0 })).toBe(true);
+    expect(agentMonitorRelevant({ runningSubAgents: 0, backgroundTasks: 2 })).toBe(true);
+  });
+
+  it('offers When running in place of Expert only on monitors', () => {
+    expect(simpleOptions(SIMPLE_ITEMS.find((i) => i.id === 'hardware')!)).toEqual(['auto', 'show', 'hide']);
+    expect(simpleOptions(SIMPLE_ITEMS.find((i) => i.id === 'cost')!)).toEqual(['show', 'expert', 'hide']);
+    expect(parseSimpleChoices({ hardware: 'expert', cost: 'auto' })).toEqual({});
+    expect(parseSimpleChoices({ hardware: 'show' })).toEqual({ hardware: 'show' });
   });
 
   it('shows ids it does not know', () => {

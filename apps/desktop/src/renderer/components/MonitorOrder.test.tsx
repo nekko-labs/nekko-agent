@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { cssRule, cssValue, stylesheet } from '../tests/css.js';
 import { DEFAULT_WALL_STATE, sanitizeMonitorsDock } from '../commandWall.js';
 vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
+vi.mock('../simpleMode.js', async (original) => ({ ...(await original<object>()), useShown: () => true }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => ({ byToken: {}, answered: new Set() }) }));
 vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));

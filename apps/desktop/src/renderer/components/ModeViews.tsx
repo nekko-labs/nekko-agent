@@ -8,11 +8,11 @@ import { hardwareRows, LocalModels } from './MonitorsDock.js';
 import { useMonitors, useResourceSample } from './ResourceMonitor.js';
 
 /*
- * Simple and Expert (decision 0030, spec desktop/desktop-simple-and-expert-modes).
- * Simple is the everyday app: developer controls stay out of sight. Expert
- * shows every control. Settings > Simple mode chooses, per control, whether it
- * shows in both modes, in Expert only, or nowhere. Both are kept on this
- * computer and shared by every window; a new install starts in Simple.
+ * Simple and Expert (decision 0040, spec desktop/desktop-simple-and-expert-modes).
+ * Simple is the cleaner, more focused view; Expert shows every control. In
+ * both, a control that means nothing right now stays out of sight. Settings >
+ * Simple mode chooses where each control shows. Both are kept on this computer
+ * and shared by every window; a new install starts in Simple.
  */
 
 export { useExpertMode, useShown, useSimpleChoices } from '../simpleMode.js';
