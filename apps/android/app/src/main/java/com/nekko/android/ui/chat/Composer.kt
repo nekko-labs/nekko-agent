@@ -118,6 +118,10 @@ fun Composer(
     queuedPrompts: List<QueuedPrompt> = emptyList(),
     /** Change ([text]) or remove (null) the queued prompt at an index, checked against what was shown. */
     onEditQueued: (suspend (index: Int, expect: String, text: String?) -> Unit)? = null,
+    /** Give the running agent a queued prompt at its next step. */
+    onNextStep: (suspend (index: Int, expect: String) -> Unit)? = null,
+    /** Stop the reply and start a queued prompt. */
+    onInterrupt: (suspend (index: Int) -> Unit)? = null,
     /** **+** → New agent, as on the desktop; null leaves it out. */
     onNewAgent: (() -> Unit)? = null,
     /** **+** → Terminal: the chat's terminals; null leaves it out. */
@@ -219,7 +223,7 @@ fun Composer(
         HorizontalDivider(color = p.line)
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (queued.isNotEmpty()) {
-                QueueList(queued, queuedPrompts, onEditQueued) { error = it }
+                QueueList(queued, queuedPrompts, onEditQueued, if (running) onNextStep else null, if (running) onInterrupt else null) { error = it }
             }
             mic?.let { m ->
                 when (val st = m.state) {
@@ -456,18 +460,18 @@ private fun QueueList(
     queued: List<String>,
     prompts: List<QueuedPrompt>,
     onEdit: (suspend (Int, String, String?) -> Unit)?,
+    onNextStep: (suspend (Int, String) -> Unit)?,
+    onInterrupt: (suspend (Int) -> Unit)?,
     onError: (String?) -> Unit,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<Int?>(null) }
     var draft by remember { mutableStateOf("") }
-    fun act(index: Int, text: String?) {
-        val q = prompts.getOrNull(index) ?: return
-        val edit = onEdit ?: return
+    fun run(work: suspend () -> Unit) {
         scope.launch {
             try {
-                edit(index, q.text, text)
+                work()
                 onError(null)
             } catch (e: CancellationException) {
                 throw e
@@ -475,6 +479,11 @@ private fun QueueList(
                 onError(e.message ?: "Couldn’t change the queue.")
             }
         }
+    }
+    fun act(index: Int, text: String?) {
+        val q = prompts.getOrNull(index) ?: return
+        val edit = onEdit ?: return
+        run { edit(index, q.text, text) }
     }
     Text(
         if (queued.size == 1) "1 prompt queued after this run" else "${queued.size} prompts queued after this run",
@@ -492,6 +501,17 @@ private fun QueueList(
             if (onEdit != null && prompts.getOrNull(i) != null) {
                 IconButton(onClick = { act(i, null) }, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Filled.Close, contentDescription = "Remove queued prompt", tint = p.inkSoft, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+        val prompt = prompts.getOrNull(i)
+        if (prompt != null && (onNextStep != null || onInterrupt != null)) {
+            Row(Modifier.padding(start = 20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (onNextStep != null && prompt.canTakeAtNextStep) {
+                    TextButton(onClick = { run { onNextStep(i, prompt.text) } }, modifier = Modifier.heightIn(min = 36.dp).testTag("queue.nextStep.$i")) { Text("Next step") }
+                }
+                if (onInterrupt != null) {
+                    TextButton(onClick = { run { onInterrupt(i) } }, modifier = Modifier.heightIn(min = 36.dp).testTag("queue.interrupt.$i")) { Text("Interrupt") }
                 }
             }
         }

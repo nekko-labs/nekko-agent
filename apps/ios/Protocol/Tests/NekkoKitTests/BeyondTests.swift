@@ -10,6 +10,8 @@ final class BeyondTests: XCTestCase {
     let room = "a1b2c3d4e5f60718"
     let key = "00112233445566778899aabbccddeeff"
     var connections: [FakeConnection] = []
+    var refuseSteer = false
+    var interruptTimesOut = false
     var queue: [JSONValue] = ["first", ["text": "with a photo", "images": [""]], ["text": "Review.\n\nnow", "skill": ["name": "review", "input": "now"]]]
 
     func session() -> JSONValue {
@@ -72,6 +74,18 @@ final class BeyondTests: XCTestCase {
                 if let text = args[2].str("text") { self.queue[0] = .string(text) } else { self.queue.removeFirst() }
                 return ["id": "s1", "queue": .array(self.queue)]
             },
+            Channels.chatSteer: { args in
+                if self.refuseSteer { throw RelayError("Not allowed from a paired phone (channel-denied): chat:steer", fromComputer: true) }
+                return self.session()
+            },
+            Channels.chatQueue: { args in
+                self.queue.append(args[1])
+                return self.session()
+            },
+            Channels.chatInterruptQueued: { args in
+                if self.interruptTimesOut { throw RelayError("The computer didn't answer in time.") }
+                return .null
+            },
             Channels.sessionFork: { _ in ["id": "s_fork", "title": "New chat"] },
             Channels.tasksList: { _ in [["id": "t1", "title": "Nightly tests", "kind": "recurring", "intervalMs": 86_400_000, "status": "active",
                                          "runCount": 3, "lastResult": "All 40 passed.", "lastRunAt": 5]] },
@@ -128,6 +142,62 @@ final class BeyondTests: XCTestCase {
             XCTAssertEqual(error.localizedDescription, ChatModel.reconnectToEditQueue)
         }
         XCTAssertEqual(c.callsTo(Channels.chatEditQueued).count, before)
+    }
+
+    func testNextStepTakesThePromptOffTheQueueThenSendsIt() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        XCTAssertEqual(chat.queuedPrompts.map(\.canTakeAtNextStep), [true, false, false], "text only: photos and skills wait their turn")
+
+        try await chat.sendQueuedAtNextStep(0, expect: "first")
+        XCTAssertEqual(c.callsTo(Channels.chatEditQueued).last, [.string("s1"), .int(0), ["expect": "first"]])
+        XCTAssertEqual(c.callsTo(Channels.chatSteer).last, [.string("s1"), .string("first")])
+        XCTAssertFalse(chat.queued.contains("first"))
+    }
+
+    func testNextStepOnAMovedQueueSendsNothing() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        do {
+            try await chat.sendQueuedAtNextStep(0, expect: "already started")
+            XCTFail("a stale prompt is refused")
+        } catch let e as RelayError {
+            XCTAssertTrue(e.fromComputer)
+        }
+        XCTAssertTrue(c.callsTo(Channels.chatSteer).isEmpty)
+    }
+
+    func testAComputerTooOldForNextStepKeepsThePromptQueued() async throws {
+        let (s, c) = try await makeStore()
+        refuseSteer = true
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        do {
+            try await chat.sendQueuedAtNextStep(0, expect: "first")
+            XCTFail("the refusal reaches the phone")
+        } catch {}
+        XCTAssertEqual(c.callsTo(Channels.chatQueue).last, [.string("s1"), .string("first")])
+        XCTAssertTrue(chat.queued.contains("first"))
+    }
+
+    func testInterruptNamesThePromptAndTheChatsModel() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        try await chat.interruptQueued(1)
+        let args = try XCTUnwrap(c.callsTo(Channels.chatInterruptQueued).last)
+        XCTAssertEqual(Array(args.prefix(2)), [.string("s1"), .int(1)])
+        XCTAssertNotNil(args[2].str("modelId"))
+    }
+
+    func testAnInterruptThatOutlastsTheRequestIsNotAnError() async throws {
+        let (s, _) = try await makeStore()
+        interruptTimesOut = true
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        try await chat.interruptQueued(0)
     }
 
     func testForksBeforeAPromptWithItsTextOrAfterAReply() async throws {

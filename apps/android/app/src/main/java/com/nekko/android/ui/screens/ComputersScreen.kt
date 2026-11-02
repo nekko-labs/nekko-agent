@@ -92,7 +92,7 @@ fun ComputersScreen(repo: ComputersRepository, onBack: () -> Unit, onPair: () ->
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             Text(
-                "Run Nekko Agent on your computer and steer it from here: start chats, follow runs, approve what it wants to do.",
+                "Run Nekko Agent on your computer and run it from here: start chats, follow runs, approve what it wants to do.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = p.inkSoft,
                 modifier = Modifier.padding(horizontal = 16.dp),

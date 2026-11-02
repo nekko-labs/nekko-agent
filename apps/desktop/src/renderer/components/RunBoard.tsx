@@ -326,9 +326,8 @@ export function IdeaMaze({ run }: { run: TrainingRun }) {
 
 /**
  * Guidance composer: fold a course-correction into the run's next iteration. Not a
- * chat, one steer at a time, queued as a pending hint and consumed on the next
- * iteration. `title`/`helper`/`buttonLabel` let a surface frame it its own way
- * (a goal run frames it as "Steer the mission").
+ * chat, one hint at a time, queued as a pending hint and consumed on the next
+ * iteration. `title`/`helper`/`buttonLabel` let a surface frame it its own way.
  */
 export function HintComposer({
   run,

@@ -122,6 +122,8 @@ class ChatViewModel(
 
     /** Change or remove a queued prompt before it runs (AN-29); the computer checks it still reads [expect]. */
     suspend fun editQueued(index: Int, expect: String, text: String?) = controller.editQueued(index, expect, text)
+    suspend fun sendQueuedAtNextStep(index: Int, expect: String) = controller.sendQueuedAtNextStep(index, expect)
+    suspend fun interruptQueued(index: Int) = controller.interruptQueued(index)
 
     /** Whether [block] is saved, so the chat can be forked from it. */
     fun canFork(block: Block): Boolean = controller.isSaved(block)

@@ -234,6 +234,26 @@ describe('chat options from a phone', () => {
     expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', attachedPaths: ['/etc/passwd'] }]))).toBe('option-denied');
   });
 
+  it('lets a phone send at the next step and interrupt, and checks what it sends', () => {
+    expect(code(() => screenPhoneCall('chat:steer', ['s', 'look at the tests first']))).toBe('ok');
+    expect(code(() => screenPhoneCall('chat:steer', ['', 'hi']))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:steer', ['s', '   ']))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:steer', ['s', 5]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 0]))).toBe('ok');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 1, { providerId: 'p', modelId: 'm' }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', -1]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 1.5]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 0, { providerId: 'p', yolo: true }]))).toBe('option-denied');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 0, 'p']))).toBe('value-invalid');
+  });
+
+  it('answers chat:steer with the same view as session:get', () => {
+    const messages = Array.from({ length: 400 }, (_, i) => ({ id: String(i), role: 'user', content: 'x'.repeat(9000) }));
+    const view = redactPhoneResult('chat:steer', { id: 's', messages }) as { messages: unknown[] };
+    expect(view).toEqual(redactPhoneResult('session:get', { id: 's', messages }));
+    expect(view.messages.length).toBeLessThan(400);
+  });
+
   it('lets an outbox id through on chat:send and chat:queue, only a short id', () => {
     const id = '6f1c2a9e-7b1d-4c35-9a52-2b8f0f6f8d11';
     expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', clientMessageId: id }]))).toBe('ok');

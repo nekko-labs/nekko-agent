@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -59,12 +60,26 @@ class BeyondChatTest {
                 if (text != null) queue[0] = JsonPrimitive(text) else queue.removeAt(0)
                 buildJsonObject { put("id", "s1") }
             }
+            Channels.CHAT_STEER -> {
+                if (refuseSteer) throw RelayException("Not allowed from a paired phone (channel-denied): chat:steer", fromComputer = true)
+                session()
+            }
+            Channels.CHAT_QUEUE -> {
+                queue.add(c.args[1])
+                session()
+            }
+            Channels.CHAT_INTERRUPT_QUEUED -> {
+                if (interruptTimesOut) throw RelayException("chat:interruptQueued: timed out", afterSend = true)
+                JsonNull
+            }
             Channels.SESSION_FORK -> buildJsonObject { put("id", "s_fork"); put("title", "New chat") }
             else -> JsonArray(emptyList())
         }
     }
 
     private var conn = RelayState.ONLINE
+    private var refuseSteer = false
+    private var interruptTimesOut = false
     private fun TestScope.chat(c: FakeCaller) =
         ChatController("s1", c, backgroundScope, { ChatEnv(conn, null, RemoteDefaults("p", "m"), "Mac") })
 
@@ -98,6 +113,54 @@ class BeyondChatTest {
             assertEquals(ChatController.RECONNECT_TO_EDIT_QUEUE, e.message)
         }
         assertEquals(before, c.calls.count { it.channel == Channels.CHAT_EDIT_QUEUED })
+    }
+
+    @Test fun `next step takes the prompt off the queue, then sends it`() = runTest {
+        val c = computer()
+        val chat = chat(c)
+        chat.reload()
+        val ui = ChatController.project(chat.state.value, ChatEnv(RelayState.ONLINE))
+        assertEquals("text only: photos and skills wait their turn", listOf(true, false, false), ui.queuedPrompts.map { it.canTakeAtNextStep })
+
+        chat.sendQueuedAtNextStep(0, "first")
+        assertEquals("""["s1",0,{"expect":"first"}]""", JsonArray(c.calls.last { it.channel == Channels.CHAT_EDIT_QUEUED }.args).toString())
+        assertEquals("""["s1","first"]""", JsonArray(c.calls.last { it.channel == Channels.CHAT_STEER }.args).toString())
+    }
+
+    @Test fun `next step on a moved queue sends nothing`() = runTest {
+        val c = computer()
+        val chat = chat(c)
+        chat.reload()
+        assertTrue(runCatching { chat.sendQueuedAtNextStep(0, "already started") }.exceptionOrNull() is RelayException)
+        assertEquals(0, c.calls.count { it.channel == Channels.CHAT_STEER })
+    }
+
+    @Test fun `a computer too old for next step keeps the prompt queued`() = runTest {
+        refuseSteer = true
+        val c = computer()
+        val chat = chat(c)
+        chat.reload()
+        assertTrue(runCatching { chat.sendQueuedAtNextStep(0, "first") }.exceptionOrNull() is RelayException)
+        assertEquals("""["s1","first"]""", JsonArray(c.calls.last { it.channel == Channels.CHAT_QUEUE }.args).toString())
+    }
+
+    @Test fun `interrupt names the prompt and the chat's model`() = runTest {
+        val c = computer()
+        val chat = chat(c)
+        chat.reload()
+        chat.interruptQueued(1)
+        val args = c.calls.last { it.channel == Channels.CHAT_INTERRUPT_QUEUED }.args
+        assertEquals("s1", args[0].jsonPrimitive.content)
+        assertEquals("1", args[1].jsonPrimitive.content)
+        assertTrue(args[2].jsonObject.containsKey("modelId"))
+    }
+
+    @Test fun `an interrupt that outlasts the request is not an error`() = runTest {
+        interruptTimesOut = true
+        val c = computer()
+        val chat = chat(c)
+        chat.reload()
+        chat.interruptQueued(0)
     }
 
     @Test fun `forks before a prompt with its text, or after a reply`() = runTest {

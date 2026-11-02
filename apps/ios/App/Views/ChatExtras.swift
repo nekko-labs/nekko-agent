@@ -42,6 +42,19 @@ struct QueueList: View {
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Queued: \(q.shown)")
+                if chat.running {
+                    HStack(spacing: 16) {
+                        if q.canTakeAtNextStep {
+                            textButton("Next step", hint: "The agent reads this at its next step and keeps going", id: "chat.queue.nextStep") {
+                                try await chat.sendQueuedAtNextStep(i, expect: q.text)
+                            }
+                        }
+                        textButton("Interrupt", hint: "Stops the reply and sends this now", id: "chat.queue.interrupt") {
+                            try await chat.interruptQueued(i)
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
             }
             if let failed {
                 Label(failed, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
@@ -57,6 +70,21 @@ struct QueueList: View {
                 try await chat.editQueued(e.index, expect: e.prompt.text, text: text)
             }
         }
+    }
+
+    private func textButton(_ label: LocalizedStringKey, hint: LocalizedStringKey, id: String, _ run: @escaping () async throws -> Void) -> some View {
+        Button {
+            failed = nil
+            Task {
+                do { try await run() } catch { failed = error.localizedDescription }
+            }
+        } label: {
+            Text(label).font(.footnote.weight(.semibold)).foregroundStyle(palette.accent)
+                .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(hint)
+        .accessibilityIdentifier(id)
     }
 
     private func iconButton(_ label: String, _ icon: String, _ color: Color, _ run: @escaping () -> Void) -> some View {
