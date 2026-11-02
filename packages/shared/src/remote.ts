@@ -2,17 +2,19 @@
  * Remote access (phone remote control) over the relay.
  *
  * Security model, in one paragraph: the local agent dials OUT to a relay and
- * claims a room with a pairing secret; devices (phones) present the same secret
- * to the relay (transport auth) and all payloads are end-to-end encrypted with a
- * key derived from that secret, so the relay only ever routes ciphertext. On top
- * of that transport, every device must complete an application-level HELLO
- * handshake with the agent: known + not-revoked devices are welcomed, brand-new
- * devices are enrolled only with a short-lived single-use pairing code, a
- * revoked device comes back only the same way (a fresh code from the owner),
- * and everything else is denied. The agent unicasts responses and events per device
- * (never broadcast), so a revoked device receives nothing even while it still
- * holds the old link. Rotating the secret is the cryptographic kill switch: it
- * re-keys the room and forces every device to re-pair.
+ * claims a room with a pairing secret; devices (phones) present a credential
+ * derived from the same secret to the relay. That secret gets a device onto the
+ * relay and no further. Each connection then runs a key exchange the agent signs
+ * with its host key, which the device pinned from its pairing link, so all
+ * payloads are sealed under a key only that connection's two ends hold (decision
+ * 0041) and the relay only ever routes ciphertext. Every device must complete an
+ * application-level HELLO handshake with the agent: known + not-revoked devices
+ * are welcomed, brand-new devices are enrolled only with a short-lived
+ * single-use pairing code, a revoked device comes back only the same way (a
+ * fresh code from the owner), and everything else is denied. A revoked device
+ * that kept its old link can't pose as the computer or read anyone's traffic.
+ * It can still reach the relay, so rotating the secret remains the way to shut
+ * it out of the room: it forces every device to re-pair.
  */
 
 /** A phone/browser paired to this machine for remote control. */
@@ -80,6 +82,8 @@ export interface RemotePairing {
   relayUrl: string;
   room: string;
   key: string;
+  /** The computer's public key, which a device pins (X9.63 P-256, base64). */
+  hostKey?: string;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -106,26 +110,54 @@ export interface RemotePairing {
  *   pairing code and must sign every later HELLO with it. Anything older is
  *   refused with `update-required`, and a device without an enrolled key with
  *   `bad-key` (pair again).
+ * 6 (2026-11-02): the computer proves itself and each connection has its own
+ *   key (decision 0041). The challenge carries the computer's ephemeral key
+ *   (`eph`) and its host key's signature (`sig`) of `hostText`; the device
+ *   checks that against the host key pinned from its link, and answers
+ *   `{eph, enc}`: its own ephemeral key beside the HELLO sealed under
+ *   `sessionKey`. Everything after is sealed under that key. Anything older is
+ *   refused with `update-required`.
  */
-export const REMOTE_PROTOCOL_VERSION = 5;
+export const REMOTE_PROTOCOL_VERSION = 6;
 
 /** The first protocol whose HELLO is signed with a device key (crates/nekko-remote `HELLO_KEY_PROTOCOL`). */
 export const REMOTE_HELLO_KEY_PROTOCOL = 5;
 
 /**
  * What a HELLO signs with the device key (ECDSA P-256 SHA-256, raw r||s):
- * `nekko-hello-v1`, the deviceId, the room and the challenge, one per line.
+ * `nekko-hello-v2`, the deviceId, the room, the challenge and both ephemeral
+ * keys, one per line, so a signature is good for this one exchange.
  */
-export function helloText(deviceId: string, room: string, challenge: string): string {
-  return ['nekko-hello-v1', deviceId, room, challenge].join(String.fromCharCode(10));
+export function helloText(deviceId: string, room: string, challenge: string, hostEph: string, clientEph: string): string {
+  return ['nekko-hello-v2', deviceId, room, challenge, hostEph, clientEph].join(String.fromCharCode(10));
 }
 
-/** `helloKey` (X9.63 public key, base64) and `sig` (raw r||s, base64) for a HELLO answering `challenge`. */
-export async function helloProof(keys: CryptoKeyPair, deviceId: string, room: string, challenge: string): Promise<{ helloKey: string; sig: string }> {
+/** What a computer signs with its host key in a challenge. */
+export function hostText(room: string, challenge: string, hostEph: string): string {
+  return ['nekko-host-v1', room, challenge, hostEph].join(String.fromCharCode(10));
+}
+
+/** The HKDF info of a connection's key. */
+export function sessionInfo(room: string, challenge: string, hostEph: string, clientEph: string): string {
+  return ['nekko-session-v1', room, challenge, hostEph, clientEph].join(String.fromCharCode(10));
+}
+
+/** Whether `sig` is the pinned host key's signature of this challenge. Anything malformed is false. */
+export async function challengeIsGenuine(hostKey: string, room: string, c: { challenge: string; eph: string; sig: string }): Promise<boolean> {
+  const fromB64 = (s: string) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
+  try {
+    const key = await crypto.subtle.importKey('raw', fromB64(hostKey), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, fromB64(c.sig), new TextEncoder().encode(hostText(room, c.challenge, c.eph)));
+  } catch {
+    return false;
+  }
+}
+
+/** `helloKey` (X9.63 public key, base64) and `sig` (raw r||s, base64) for a HELLO in this exchange. */
+export async function helloProof(keys: CryptoKeyPair, deviceId: string, room: string, challenge: string, hostEph: string, clientEph: string): Promise<{ helloKey: string; sig: string }> {
   const raw = new Uint8Array(await crypto.subtle.exportKey('raw', keys.publicKey));
-  const sig = new Uint8Array(
-    await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, keys.privateKey, new TextEncoder().encode(helloText(deviceId, room, challenge))),
-  );
+  const text = helloText(deviceId, room, challenge, hostEph, clientEph);
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, keys.privateKey, new TextEncoder().encode(text)));
   const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
   return { helloKey: b64(raw), sig: b64(sig) };
 }
@@ -138,6 +170,10 @@ export interface RemoteChallenge {
   type: 'challenge';
   /** 18 random bytes, base64. */
   challenge: string;
+  /** The computer's half of the key exchange, X9.63 P-256, base64. */
+  eph: string;
+  /** The host key's signature of `hostText`, raw r||s, base64. */
+  sig: string;
 }
 
 /** First sealed frame a device sends after connecting. */
@@ -154,7 +190,7 @@ export interface RemoteHello {
   challenge?: string;
   /** From protocol 5: the device's P-256 public key, X9.63 uncompressed, base64. */
   helloKey?: string;
-  /** From protocol 5: `helloKey`'s signature of `helloText(deviceId, room, challenge)`, raw r||s, base64. */
+  /** From protocol 5: `helloKey`'s signature of `helloText`, raw r||s, base64. */
   sig?: string;
 }
 

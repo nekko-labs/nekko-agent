@@ -54,9 +54,25 @@ class PairingTest {
             assertEquals(input, s("room"), got?.room)
             assertEquals(input, s("key"), got?.key)
             assertEquals(input, s("pair"), got?.pair)
+            assertEquals(input, s("hostKey"), got?.hostKey)
             val alts = (w["alts"] as kotlinx.serialization.json.JsonArray).map { (it as kotlinx.serialization.json.JsonPrimitive).content }
             assertEquals(input, alts, got?.alts)
         }
+    }
+
+    @Test fun `reads the host key out of its percent-encoding`() {
+        val host = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
+        val slashes = host.replace("B", "/")
+        assertEquals(host, Pairing.parse("relay=wss://r&room=$room&key=$key&host=${enc(host)}")!!.hostKey)
+        assertEquals(slashes, Pairing.parse("relay=wss://r&room=$room&key=$key&host=${enc(slashes)}")!!.hostKey)
+    }
+
+    @Test fun `a link without a usable host key has none`() {
+        val host = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
+        assertNull(Pairing.parse("relay=wss://r&room=$room&key=$key")!!.hostKey)
+        assertNull("a bare + reads as a space", Pairing.parse("relay=wss://r&room=$room&key=$key&host=$host")!!.hostKey)
+        assertNull("one character short", Pairing.parse("relay=wss://r&room=$room&key=$key&host=${enc(host.drop(1))}")!!.hostKey)
+        assertNull("no padding", Pairing.parse("relay=wss://r&room=$room&key=$key&host=${enc(host.dropLast(1))}")!!.hostKey)
     }
 
     @Test fun `never prints the secret`() {

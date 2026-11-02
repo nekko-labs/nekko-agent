@@ -69,6 +69,8 @@ object ConnectionAdvice {
         debug: Boolean,
     ): List<String> {
         val host = RelayHint.host(relayUrl)
+        val badKey = "The pairing key no longer matches $computer, usually because remote access was turned off and on there. Pair again."
+        if (detail == RelayStatus.BAD_KEY) return listOf(badKey)
         return when (state) {
             RelayState.ONLINE, RelayState.IDLE -> emptyList()
             RelayState.DENIED -> listOf(
@@ -77,8 +79,7 @@ object ConnectionAdvice {
                         "$computer removed this phone. Pair again: Settings → Remote access → Pair a device on the computer."
                     DenyReason.BAD_CODE ->
                         "That pairing code was used or expired (codes last 10 minutes and work once). Make a new one on $computer."
-                    DenyReason.BAD_KEY ->
-                        "The pairing key no longer matches $computer, usually because remote access was turned off and on there. Pair again."
+                    DenyReason.BAD_KEY -> badKey
                     DenyReason.UPDATE_REQUIRED ->
                         "$computer only accepts phones on the newest Nekko Agent. Update this app to connect to it."
                     else -> "$computer doesn’t know this phone. Pair again from Settings → Remote access on the computer."

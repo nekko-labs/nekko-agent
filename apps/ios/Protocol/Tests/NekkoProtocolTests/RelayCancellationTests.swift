@@ -8,8 +8,8 @@ struct RelayCancellationTests {
     let key = E2E.randomBytes(32)
 
     func client(_ relay: RelayClientTests.FakeRelay) -> RelayClient {
-        var cfg = RelayConfig(relayUrl: "wss://relay.test/", room: "abcd1234", key: "k&e+y", keyBytes: key, deviceId: "dev-1",
-                              deviceName: "iPhone", pairCode: nil)
+        var cfg = RelayConfig(relayUrl: "wss://relay.test/", room: "abcd1234", key: "k&e+y", hostKey: relay.computer.publicKey,
+                              keyBytes: key, deviceId: "dev-1", deviceName: "iPhone", pairCode: nil)
         cfg.handshakeTimeout = 2
         cfg.requestTimeout = 60
         cfg.retryBase = 0.02

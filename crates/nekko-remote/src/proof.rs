@@ -163,6 +163,28 @@ pub fn public_key(key: &SigningKey) -> String {
     base64::engine::general_purpose::STANDARD.encode(key.verifying_key().to_encoded_point(false).as_bytes())
 }
 
+/// A new key from `random`.
+pub fn new_key(random: &crate::hello::Random) -> SigningKey {
+    loop {
+        let mut bytes = [0u8; 32];
+        random(&mut bytes);
+        // Zero or past the curve's order: about one draw in 2^32.
+        if let Ok(key) = SigningKey::from_slice(&bytes) {
+            return key;
+        }
+    }
+}
+
+/// A key as it is stored: its private scalar in base64.
+pub fn key_text(key: &SigningKey) -> String {
+    base64::engine::general_purpose::STANDARD.encode(key.to_bytes())
+}
+
+/// A stored key ([`key_text`]).
+pub fn parse_key_text(text: &str) -> Option<SigningKey> {
+    SigningKey::from_slice(&b64(text)?).ok()
+}
+
 /// What a replay check remembers of a proof: sha256 of the signed text. Not
 /// the signature, which ECDSA lets anyone re-encode (s and n - s both verify).
 pub fn fingerprint(payload: &str) -> [u8; 32] {

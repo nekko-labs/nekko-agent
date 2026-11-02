@@ -1,5 +1,5 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
-import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import { AGENT_REPLAY, IpcChannels, IpcEvents, challengeIsGenuine, deriveKey, ephemeralKeys, publicKeyText, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, sessionInfo, sessionKey, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
@@ -100,10 +100,24 @@ function makeWebClient(): NekkoApi {
   let relayUrl = p.get('relay');
   let room = p.get('room');
   let key = p.get('key');
+  let hostKey = p.get('host');
   let pairCode: string | null = p.get('pair');
+  const savedPin = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('nekko_relay') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  if (relayUrl && room && key && savedPin?.room === room && savedPin.hostKey && savedPin.hostKey !== hostKey) {
+    // A link can't replace the computer this browser pinned (decision 0041). A reset gets a new room.
+    alert('This link names a different computer than the one you paired with. Forget that computer first if it was reset.');
+    relayUrl = room = key = hostKey = pairCode = null;
+    history.replaceState(null, '', location.pathname);
+  }
   if (relayUrl && room && key) {
     // Persist creds and scrub them from the address bar/history right away.
-    localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, v: RELAY_PAIRING_VERSION }));
+    localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, hostKey, v: RELAY_PAIRING_VERSION }));
     try {
       history.replaceState(null, '', location.pathname);
     } catch {
@@ -113,7 +127,7 @@ function makeWebClient(): NekkoApi {
     try {
       const saved = JSON.parse(localStorage.getItem('nekko_relay') || 'null');
       if (saved?.relay && saved?.room && saved?.key && saved.v !== RELAY_PAIRING_VERSION) {
-        // Saved before the computer replaced its pairing secret (decision 0036): pair again.
+        // Saved before the computer's last change of pairing (decisions 0036, 0041): pair again.
         localStorage.removeItem('nekko_relay');
         sessionStorage.setItem('nekko_relay_denied', 'pair-again');
         alert('Nekko Agent changed how devices connect. Pair this device again from Settings → Remote access on your computer.');
@@ -121,6 +135,7 @@ function makeWebClient(): NekkoApi {
         relayUrl = saved.relay;
         room = saved.room;
         key = saved.key;
+        hostKey = saved.hostKey ?? null;
         // Native pairing screen stores the one-time code alongside the creds
         // (there's no URL to carry it after the reload).
         if (saved.pair) pairCode = saved.pair;
@@ -162,25 +177,37 @@ function makeWebClient(): NekkoApi {
     let nextId = 1;
     let relay: WebSocket | null = null;
     let welcomed = false;
-    // E2E key shared with the agent; the relay only carries ciphertext.
+    // The room key only carries the computer's challenge. It proves nothing:
+    // every device ever paired held it. The pinned host key's signature does.
     const keyP = deriveKey(key, room);
-    const sendSealed = async (frame: unknown) => {
-      relay?.send(JSON.stringify({ enc: await seal(await keyP, frame) }));
-    };
+    // This connection's key, from the exchange the challenge starts.
+    let session: CryptoKey | null = null;
     // This browser's device key: every HELLO is signed with it (protocol 5, decision 0036).
     const helloKeysP = loadHelloKeys();
     // The connection's challenge and request counter (relay replay protection).
     let challenge: string | null = null;
     let seq = 0;
     let sendQueue: Promise<void> = Promise.resolve();
-    const sendHello = async (nonce: string) => {
-      challenge = nonce;
-      seq = 0;
-      const proof = await helloProof(await helloKeysP, deviceId!, room!, nonce);
-      await sendSealed({
-        type: 'hello', deviceId, name: deviceName, platform, protocol: REMOTE_PROTOCOL_VERSION, challenge: nonce, ...proof,
+    const answer = async (c: { challenge: string; eph: string; sig: string }) => {
+      if (!hostKey || !(await challengeIsGenuine(hostKey, room!, c))) return;
+      const ours = await ephemeralKeys();
+      const eph = await publicKeyText(ours.publicKey);
+      const sealedTo = await sessionKey(ours.privateKey, c.eph, sessionInfo(room!, c.challenge, c.eph, eph));
+      const proof = await helloProof(await helloKeysP, deviceId!, room!, c.challenge, c.eph, eph);
+      const hello = {
+        type: 'hello', deviceId, name: deviceName, platform, protocol: REMOTE_PROTOCOL_VERSION, challenge: c.challenge, ...proof,
         ...(pairCode ? { pair: pairCode } : {}),
-      });
+      };
+      welcomed = false;
+      session = sealedTo;
+      challenge = c.challenge;
+      seq = 0;
+      relay?.send(JSON.stringify({ eph, enc: await seal(sealedTo, hello) }));
+      // A replayed challenge gets a HELLO nobody can read: don't wait for ever.
+      const sent = relay;
+      setTimeout(() => {
+        if (!welcomed && relay === sent) sent?.close();
+      }, 15_000);
     };
     const onDenied = (reason: string) => {
       // Kicked out of the registry (revoked, or a stale/used pairing link).
@@ -190,16 +217,12 @@ function makeWebClient(): NekkoApi {
       else alert(`This device can't reach the paired computer (${reason}). Pair it again from Settings → Remote access.`);
     };
     const handle = async (frame: any) => {
-      if (frame.type === 'challenge' && typeof frame.challenge === 'string') {
-        // A new connection, or the computer restarted the handshake: answer it.
-        welcomed = false;
-        await sendHello(frame.challenge);
-      } else if (frame.type === 'welcome') {
+      if (frame.type === 'welcome') {
         welcomed = true;
         pairCode = null; // enrollment done; never resend the code
         sessionStorage.removeItem('nekko_relay_denied');
         // Drop a stored one-time code so it never leaks or gets replayed.
-        localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, v: RELAY_PAIRING_VERSION }));
+        localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, hostKey, v: RELAY_PAIRING_VERSION }));
       } else if (frame.type === 'denied') {
         onDenied(String(frame.reason || 'denied'));
       } else if (frame.type === 'res' && pending.has(frame.id)) {
@@ -214,9 +237,10 @@ function makeWebClient(): NekkoApi {
     const authP = relayAuth(key, room);
     const connect = async () => {
       welcomed = false;
+      session = null;
       const auth = await authP;
       relay = new WebSocket(`${relayUrl.replace(/\/$/, '')}/relay?role=client&room=${encodeURIComponent(room)}&key=${encodeURIComponent(auth)}`);
-      // The computer seals a challenge to each new connection; the HELLO answers it.
+      // The computer sends each new connection a signed challenge; the HELLO answers it.
       relay.onmessage = async (ev) => {
         let env: any;
         try {
@@ -226,7 +250,14 @@ function makeWebClient(): NekkoApi {
         }
         if (env.enc) {
           try {
-            handle(await open(await keyP, env.enc));
+            if (session) return handle(await open(session, env.enc));
+          } catch {
+            /* a new challenge, or tampered: read below */
+          }
+          try {
+            // Under the room key only a challenge counts: anyone ever paired could have sealed this.
+            const frame = await open<any>(await keyP, env.enc);
+            if (frame.type === 'challenge') await answer(frame);
           } catch {
             /* tampered / wrong key */
           }
@@ -235,10 +266,12 @@ function makeWebClient(): NekkoApi {
       };
       relay.onclose = (ev) => {
         welcomed = false;
-        if (ev.code === 4001) return; // kicked (revoked) → don't reconnect-loop
-        // The computer holds another pairing secret (it replaced it): pair again.
-        if (ev.code === 1008 && /bad pairing key/i.test(ev.reason)) return onDenied('pair-again');
-        setTimeout(() => void connect(), 1000);
+        // A close isn't sealed, so it ends nothing: a real removal comes back as a
+        // sealed refusal on the next dial. The relay refusing this pairing may mean
+        // the computer was reset, so say so, and keep trying at an easier pace.
+        const refused = ev.code === 1008 && /bad pairing key/i.test(ev.reason);
+        if (refused) sessionStorage.setItem('nekko_relay_denied', 'pair-again');
+        setTimeout(() => void connect(), refused ? 15_000 : 1000);
       };
     };
     void connect();
@@ -263,7 +296,7 @@ function makeWebClient(): NekkoApi {
         pending.set(id, { resolve, reject });
         // Sealed and sent one at a time, so requests leave in seq order.
         const sent = sendQueue.then(async () => {
-          const enc = await seal(await keyP, { type: 'req', id, seq: ++seq, challenge, channel, args });
+          const enc = await seal(session!, { type: 'req', id, seq: ++seq, challenge, channel, args });
           relay!.send(JSON.stringify({ enc }));
         });
         sendQueue = sent.catch(() => {});

@@ -52,7 +52,6 @@ import com.nekko.protocol.PaneContent
 import com.nekko.protocol.PaneLayout
 import com.nekko.protocol.PaneMode
 import com.nekko.protocol.PaneSide
-import com.nekko.protocol.PairingLink
 import com.nekko.protocol.RelayConfig
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RelayStatus
@@ -388,7 +387,7 @@ class ChatModesTest {
             deriveKey = { _, _ -> ByteArray(32) },
         )
         runBlocking {
-            val id = repo.pair(PairingLink("wss://relay.example.dev", "a1b2c3d4e5f60718", "00112233445566778899aabbccddeeff"))
+            val id = repo.pair(testPairing())
             repo.rename(id, "Studio Mac")
         }
         return repo

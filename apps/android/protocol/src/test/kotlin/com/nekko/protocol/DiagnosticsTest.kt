@@ -89,6 +89,9 @@ class DiagnosticsTest {
     @Test fun `the hello reads the throwaway connection's first answer`() {
         assertEquals(ProbeStep(true, 9, "Mac answered"), Diagnostics.helloStep(RelayStatus(RelayState.ONLINE), "Mac", 9, 8_000))
         assertEquals("The relay answered; Mac isn’t connected to it", Diagnostics.helloStep(RelayStatus(RelayState.OFFLINE), "Mac", 9, 8_000).detail)
+        val badKey = Diagnostics.helloStep(RelayStatus(RelayState.OFFLINE, RelayStatus.BAD_KEY), "Mac", 9, 8_000)
+        assertFalse(badKey.ok)
+        assertEquals("Refused: bad-key", badKey.detail)
         assertEquals(ProbeStep(false, 9, "Refused: revoked"), Diagnostics.helloStep(RelayStatus(RelayState.DENIED, denied = DenyReason.REVOKED), "Mac", 9, 8_000))
         assertEquals(ProbeStep(false, 8_000, "No answer in 8 s"), Diagnostics.helloStep(null, "Mac", 8_000, 8_000))
     }

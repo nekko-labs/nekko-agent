@@ -445,6 +445,10 @@ struct ConnectionBanner: View {
                         palette.warning, "power")
             }
         }
+        if store.connDetail == RelayStatus.badPairingKey {
+            return ("The pairing key no longer matches \(name). Pair again from Settings → Remote access on the computer." + waitingNote,
+                    palette.danger, "lock.slash")
+        }
         switch store.conn {
         case .online, .idle:
             return nil

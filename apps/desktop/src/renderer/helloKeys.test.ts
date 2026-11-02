@@ -14,13 +14,13 @@ describe('the browser device key', () => {
     const b = await loadHelloKeys(store);
     const raw = async (k: CryptoKeyPair) => new Uint8Array(await crypto.subtle.exportKey('raw', k.publicKey));
     expect(await raw(b)).toEqual(await raw(a));
-    const proof = await helloProof(b, 'dev-1', 'room-1', 'nonce');
+    const proof = await helloProof(b, 'dev-1', 'room-1', 'nonce', 'host-half', 'client-half');
     const sig = Uint8Array.from(atob(proof.sig), (c) => c.charCodeAt(0));
     const ok = await crypto.subtle.verify(
       { name: 'ECDSA', hash: 'SHA-256' },
       a.publicKey,
       sig,
-      new TextEncoder().encode(helloText('dev-1', 'room-1', 'nonce')),
+      new TextEncoder().encode(helloText('dev-1', 'room-1', 'nonce', 'host-half', 'client-half')),
     );
     expect(ok).toBe(true);
   });

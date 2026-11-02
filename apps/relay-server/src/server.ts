@@ -26,6 +26,11 @@ import {
  *     { type:'c', cid, data } and the agent unicasts { type:'d', cid, data }.
  *     No client ever receives another client's traffic.
  *   - the agent may { type:'kick', cid } to force-close a client (revocation).
+ *   - { type:'welcomed', cid, deviceId } says a device passed the sealed handshake.
+ *     An agent that connects with `proto` sends it, and in that room only such a
+ *     connection may register for pushes, under that device id: the room
+ *     credential alone is held by every device ever paired, and the card
+ *     carries chat text.
  *   - { type:'client-open'|'client-close', cid } keep the agent's view current.
  *   - push: clients register tokens per device, optionally with the `kinds`
  *     they want ('needs-you' | 'finished' | 'failed'), and the relay answers
@@ -99,6 +104,10 @@ interface Room {
   /** Push tokens registered by paired devices, keyed by deviceId. */
   pushTokens: Map<string, { token: string; platform: 'ios' | 'android'; app?: string; kinds?: string[] }>;
   pushOwners: Map<string, string>;
+  /** The agent names who it welcomed, so registering needs that (`welcomed`). */
+  gated: boolean;
+  /** Connection to the device the agent welcomed on it. */
+  welcomed: Map<string, string>;
   /** Live Activity push tokens: tag → deviceId → token. */
   activities: Map<string, Map<string, { token: string; app?: string; at: number }>>;
   /** The Live Activity card per device (`register-card`). */
@@ -170,7 +179,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     let r = rooms.get(code);
     if (!r) {
       if (rooms.size >= limits.maxRooms) return null;
-      r = { agent: null, clients: new Map(), keyHash: null, pushTokens: new Map(), pushOwners: new Map(), activities: new Map(), cards: new Map() };
+      r = { agent: null, clients: new Map(), keyHash: null, pushTokens: new Map(), pushOwners: new Map(), gated: false, welcomed: new Map(), activities: new Map(), cards: new Map() };
       rooms.set(code, r);
     }
     return r;
@@ -243,6 +252,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
           return;
         }
         r.keyHash = hash;
+        if (q.proto) r.gated = true;
         if (r.agent) r.agent.close(1000, 'replaced by a newer agent');
         r.agent = socket;
         for (const [cid, c] of r.clients) {
@@ -269,7 +279,12 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
             }
             case 'kick': {
               const c = r.clients.get(String(ctrl.cid));
+              r.welcomed.delete(String(ctrl.cid));
               if (c) c.close(4001, 'kicked by agent');
+              return;
+            }
+            case 'welcomed': {
+              if (r.clients.has(String(ctrl.cid)) && typeof ctrl.deviceId === 'string') r.welcomed.set(String(ctrl.cid), ctrl.deviceId);
               return;
             }
             case 'notify': {
@@ -357,8 +372,11 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
           }
         });
         socket.on('close', () => {
-          if (r.agent === socket) r.agent = null;
-          for (const c of r.clients.values()) safeSend(c, { type: 'agent-offline' });
+          // A replaced agent's late close says nothing: its successor is online.
+          if (r.agent === socket) {
+            r.agent = null;
+            for (const c of r.clients.values()) safeSend(c, { type: 'agent-offline' });
+          }
           cleanup(code);
         });
       } else {
@@ -385,6 +403,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
           if (!allow(bucket, limits)) return;
           const s = data.toString();
           const ctrl = controlFrame(s);
+          if (typeof ctrl?.type === 'string' && ctrl.type.startsWith('register-') && r.gated && r.welcomed.get(cid) !== ctrl.deviceId) return;
           if (ctrl?.type === 'register-push') {
             const deviceId = typeof ctrl.deviceId === 'string' ? ctrl.deviceId : '';
             const token = typeof ctrl.token === 'string' ? ctrl.token : '';
@@ -469,6 +488,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
         });
         socket.on('close', () => {
           r.clients.delete(cid);
+          r.welcomed.delete(cid);
           for (const [deviceId, owner] of r.pushOwners) {
             if (owner === cid) r.pushOwners.delete(deviceId);
           }

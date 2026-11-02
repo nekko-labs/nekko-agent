@@ -7,6 +7,7 @@ import com.nekko.protocol.Appearance
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.RelayStatus
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SessionSummary
@@ -45,9 +46,14 @@ data class ComputerSecret(
     val keyHex: String,
     /** Present until the computer welcomes us once. */
     val pair: String? = null,
-    /** [com.nekko.protocol.E2E.PAIRING_VERSION] when saved; older pairings must pair again (decision 0036). */
+    /** The computer's public key, pinned from the pairing link; older pairings have none (decision 0041). */
+    val hostKey: String? = null,
+    /** [com.nekko.protocol.E2E.PAIRING_VERSION] when saved; older pairings must pair again (decisions 0036, 0041). */
     val version: Int = com.nekko.protocol.E2E.PAIRING_VERSION,
 ) {
+    /** The key to dial with; null when this pairing must be made again, since a first-seen key is never trusted. */
+    val pin: String? get() = hostKey.takeIf { version >= com.nekko.protocol.E2E.PAIRING_VERSION }
+
     /** Never print the secret. */
     override fun toString(): String = "ComputerSecret(room=$room, pair=${pair != null})"
 }
@@ -86,6 +92,9 @@ data class ComputersState(
     val hostProtocol: Int? = null,
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
+
+    /** The relay keeps closing on a bad pairing key: not a denial (it isn't sealed), but worth asking to pair again. */
+    val badKey: Boolean get() = connDetail == RelayStatus.BAD_KEY && conn != RelayState.IDLE
 
     /** Which side to update when the phone and the computer speak different versions. */
     val protocolCheck: ProtocolCheck get() = ProtocolCheck.compare(hostProtocol)
@@ -130,6 +139,7 @@ internal object StoredJson {
         put("key", s.key)
         put("keyHex", s.keyHex)
         s.pair?.let { put("pair", it) }
+        s.hostKey?.let { put("hostKey", it) }
         put("v", s.version)
     }.toString()
 
@@ -140,6 +150,7 @@ internal object StoredJson {
             key = o.str("key") ?: return null,
             keyHex = o.str("keyHex") ?: return null,
             pair = o.str("pair"),
+            hostKey = o.str("hostKey"),
             // Saved before the relay credential was derived: 1.
             version = (o["v"] as? JsonPrimitive)?.intOrNull ?: 1,
         )

@@ -719,6 +719,9 @@ pub fn session_view(session: Value) -> Value {
     session_view_cut(session, policy().session_text_chars)
 }
 
+/// The most files a computer can import into one chat.
+const MAX_COMPUTER_IMPORTS: usize = 256;
+
 /// What a paired computer reads of a chat: the phone's view with tool output
 /// whole, cut only when the chat would not fit in one relay frame.
 pub fn computer_session_view(session: Value) -> Value {
@@ -1138,20 +1141,52 @@ impl Gate {
             self.record(who, channel, Err("change-off".to_string()));
             return Some(Err(denied("change-off", channel).to_string()));
         }
-        let checked = if send {
-            keys_within(args.get(0).unwrap_or(&Value::Null), &p.computer_send_keys, "chat:send options")
-        } else if channel == "session:setAttachments" {
-            self.attachments_inside(args)
-        } else {
-            Ok(())
+        let mut args = args.clone();
+        let checked = match channel {
+            "chat:send" => self.computer_send(&mut args).await,
+            "session:setAttachments" => self.attachments_inside(&args),
+            "attachment:import" => self.room_for_import(&args),
+            "changes:accept" | "changes:acceptAll" => self.changes_allowed(channel).await,
+            _ => Ok(()),
         };
         if let Err(d) = checked {
             self.record(who, channel, Err(d.code.to_string()));
             return Some(Err(d.to_string()));
         }
-        let result = (self.run)(channel.to_string(), args.clone()).await;
+        let result = (self.run)(channel.to_string(), args).await;
         self.record(who, channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
         Some(result)
+    }
+
+    /// A computer's `chat:send`: its keys, and a skill expanded from this
+    /// computer's own, as a phone's is. An unknown skill is refused.
+    async fn computer_send(&self, args: &mut Value) -> Result<(), Denied> {
+        keys_within(args.get(0).unwrap_or(&Value::Null), &policy().computer_send_keys, "chat:send options")?;
+        let Some(skill) = args.get(0).and_then(|o| o.get("skill")).filter(|s| !s.is_null()) else { return Ok(()) };
+        let skill = phone_skill(skill)?;
+        let runnable = (self.run)("skills:runnable".to_string(), json!([])).await;
+        let runnable = runnable.map_err(|_| denied("skill-unknown", skill.name.clone()))?;
+        args[0] = expand_skill(&skill, &runnable, &args[0])?;
+        Ok(())
+    }
+
+    /// The owner's switch for phones and computers alike (Settings → Remote access).
+    async fn changes_allowed(&self, channel: &str) -> Result<(), Denied> {
+        let settings = (self.run)("settings:get".to_string(), json!([])).await;
+        match settings {
+            Ok(s) if s.get("phoneChanges") == Some(&Value::Bool(true)) => Ok(()),
+            _ => Err(denied("turned-off", channel)),
+        }
+    }
+
+    /// One import is capped at 50 MB; this caps how many a chat can pile up.
+    fn room_for_import(&self, args: &Value) -> Result<(), Denied> {
+        let chat = args.get(0).and_then(Value::as_str).unwrap_or_default();
+        let held = self.devices.attachments_of(chat).and_then(|d| std::fs::read_dir(d).ok()).map_or(0, Iterator::count);
+        if held >= MAX_COMPUTER_IMPORTS {
+            return Err(denied("too-many", "attachment:import"));
+        }
+        Ok(())
     }
 
     /// A turn reads every attached path as given, with no tool call and no
@@ -1588,7 +1623,7 @@ mod tests {
         json!({
             "theme": "dark", "defaultModelId": "m1", "defaultChatMode": "ask", "sandboxMode": "workspace",
             "providers": [{ "id": "p", "apiKey": "sk-secret" }], "hfToken": "hf_secret",
-            "guardrails": [], "hooks": [{ "command": "curl" }],
+            "guardrails": [], "hooks": [{ "command": "curl" }], "phoneChanges": true,
             "voice": { "enabled": true, "language": "en", "modelPath": "/m.bin" },
         })
     }
@@ -2282,6 +2317,44 @@ mod tests {
                 o[bad] = json!(true);
                 assert!(send(o).unwrap_err().contains("option-denied"), "{bad}");
             }
+        }
+
+        #[test]
+        fn a_computers_skill_is_expanded_here_and_an_unknown_one_refused() {
+            let (_, calls, computer) = with_device(COMPUTER);
+            let send =
+                |skill: Value| ask(&computer, "chat:send", json!([{ "sessionId": "s1", "text": "x", "skill": skill }]));
+            assert!(send(json!({ "name": "no-such-skill" })).unwrap_err().contains("skill-unknown"));
+            assert!(send(json!({ "name": "x", "template": "instructions" })).unwrap_err().contains("value-invalid"));
+            assert!(!calls.lock().unwrap().iter().any(|(c, _)| c == "chat:send"));
+        }
+
+        #[test]
+        fn accepting_changes_follows_the_owners_switch() {
+            for (on, allowed) in [(json!(true), true), (json!(false), false), (Value::Null, false)] {
+                let devices = Arc::new(MemDevices::default());
+                devices.devices.lock().unwrap().insert("d1".into(), COMPUTER);
+                let host: Dispatcher = Arc::new(move |channel, _| {
+                    let out = if channel == "settings:get" { json!({ "phoneChanges": on }) } else { Value::Null };
+                    Box::pin(std::future::ready(Ok(out)))
+                });
+                let computer = gate(host, devices);
+                let out = ask(&computer, "changes:acceptAll", json!(["s1"]));
+                assert_eq!(out.is_ok(), allowed, "{out:?}");
+            }
+        }
+
+        #[test]
+        fn a_computer_can_only_pile_up_so_many_imports() {
+            let dir = tempfile::tempdir().unwrap();
+            let (devices, _, computer) = with_device(COMPUTER);
+            *devices.attachments.lock().unwrap() = Some(dir.path().to_path_buf());
+            let import = || ask(&computer, "attachment:import", json!(["s1", "a.txt", "data:text/plain;base64,AA"]));
+            assert!(import().is_ok());
+            for i in 0..MAX_COMPUTER_IMPORTS {
+                std::fs::write(dir.path().join(i.to_string()), "x").unwrap();
+            }
+            assert!(import().unwrap_err().contains("too-many"));
         }
 
         #[test]

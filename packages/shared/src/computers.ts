@@ -26,6 +26,7 @@ export type ComputerState =
   | 'offline'
   /** It removed this computer. */
   | 'denied'
+  | 'stale'
   /** Its build is too old for computers. */
   | 'update';
 

@@ -81,6 +81,9 @@ const REPLAY_MAX_BYTES: usize = 4 * 1024 * 1024;
 /// that died without its `done` cannot hide the next one from the sidebar.
 const QUIET: Duration = Duration::from_secs(30);
 
+/// The most running chats kept for one other computer.
+const MAX_REMOTE_TURNS: usize = 256;
+
 #[derive(Default)]
 struct Sessions {
     seq: u64,
@@ -157,8 +160,20 @@ impl Hub {
         self.remote.subscribe()
     }
 
-    /// An agent event from another computer, its ids already qualified.
+    /// An agent event from another computer, its ids already qualified. A
+    /// computer only gets so many running chats kept here, or one that makes
+    /// up ids could grow this process without end.
     pub fn publish_remote(&self, payload: Value) {
+        if let Some(id) = payload.get("sessionId").and_then(Value::as_str)
+            && let Some((computer, _)) = crate::federation::split(id)
+        {
+            let s = self.lock();
+            let mine = format!("@{computer}:");
+            if !s.turns.contains_key(id) && s.turns.keys().filter(|k| k.starts_with(&mine)).count() >= MAX_REMOTE_TURNS
+            {
+                return;
+            }
+        }
         let frame: Utf8Bytes = serde_json::json!({ "channel": "agent:event", "payload": payload }).to_string().into();
         self.track_agent(frame, &payload, &self.remote);
     }
@@ -330,6 +345,20 @@ mod tests {
         assert!(window.try_recv().is_ok());
         assert!(local.try_recv().is_err(), "phones, the API server and automation listen here");
         assert_eq!(hub.replay(&["@gomi1234:s1".into()]).len(), 1, "a window that opens it mid-turn still catches up");
+    }
+
+    #[test]
+    fn a_computer_gets_only_so_many_running_chats_kept() {
+        let hub = Hub::new();
+        let event = |id: String| serde_json::json!({ "type": "text", "sessionId": id, "delta": "x" });
+        for i in 0..MAX_REMOTE_TURNS + 50 {
+            hub.publish_remote(event(format!("@hostile1:s{i}")));
+        }
+        assert_eq!(hub.lock().turns.len(), MAX_REMOTE_TURNS);
+        // One running already carries on, and another computer has its own room.
+        hub.publish_remote(event("@hostile1:s0".into()));
+        hub.publish_remote(event("@gomi1234:s1".into()));
+        assert_eq!(hub.lock().turns.len(), MAX_REMOTE_TURNS + 1);
     }
 
     fn summaries(hub: &Hub, events: &[Value]) -> Vec<bool> {

@@ -17,6 +17,7 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 
 - **Settings > Computers** lists the computers this one reaches, with their state and how each is reached. **Add a computer** takes a pairing link. **Make a link**, under *Let a computer connect to this one*, makes one that works once, for 10 minutes. It needs Phone pairing set up, which chooses how other devices reach the computer.
 - Connecting works one way. Pairing the MacBook to `gomi` lets the MacBook drive `gomi`, never the reverse.
+- The link carries the computer's public key, which this computer pins. It proves itself on every connection, and each connection has its own key (decision [0041](../../docs/decisions/0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md)). A link without that key, from a computer not yet updated, says to update it and make a new one.
 - A phone's link refuses a computer and a computer's link refuses a phone, with what to do next.
 - A computer stays paired across restarts of either side and reconnects by itself: nearest route first (LAN, tailnet, relay), retrying as a phone does. Revoking it on the host stops the link for good.
 - Removing a computer signs it out of the other computer when that computer can hear, and deletes what was kept here. Its agents keep running there.

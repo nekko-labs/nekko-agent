@@ -484,7 +484,7 @@ struct CloudMachinesSection: View {
         defer { busy = false }
         do {
             let made = try await cloud.createMachine(name: "Nekko Cloud", region: "nrt", scope: CloudSync.MachineScope())
-            let id = await store.pair(made.link)
+            let id = try await store.pair(made.link)
             store.rename(id, to: made.machine.name)
             cloud.link(made.machine, computer: id)
         } catch { self.error = error.localizedDescription }

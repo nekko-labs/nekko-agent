@@ -52,7 +52,7 @@ function sortable(e: Entry): SortableCard {
 
 /** One group the panel shows: a project, a status, a date range, or all of it. */
 /** Beside a computer's group heading, which already names it. */
-const COMPUTER_STATE_WORD: Record<ComputerStatus['state'], string> = { online: '', connecting: 'connecting', offline: 'offline', denied: 'removed', update: 'needs an update' };
+const COMPUTER_STATE_WORD: Record<ComputerStatus['state'], string> = { online: '', connecting: 'connecting', offline: 'offline', denied: 'removed', stale: 'needs pairing again', update: 'needs an update' };
 
 /** The group heading for agents on this computer. */
 function thisComputerName(): string {

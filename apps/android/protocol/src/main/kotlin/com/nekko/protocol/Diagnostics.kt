@@ -149,7 +149,9 @@ object Diagnostics {
     /** The hello's result from the throwaway connection's first settled state (null: no answer in time). */
     fun helloStep(state: RelayStatus?, computer: String, ms: Int, timeoutMs: Long): ProbeStep = when (state?.state) {
         RelayState.ONLINE -> ProbeStep(true, ms, "$computer answered")
-        RelayState.OFFLINE -> ProbeStep(true, ms, "The relay answered; $computer isn’t connected to it")
+        RelayState.OFFLINE ->
+            if (state.detail == RelayStatus.BAD_KEY) ProbeStep(false, ms, "Refused: ${DenyReason.BAD_KEY.wire}")
+            else ProbeStep(true, ms, "The relay answered; $computer isn’t connected to it")
         RelayState.DENIED -> ProbeStep(false, ms, "Refused: ${state.denied?.wire ?: "denied"}")
         else -> ProbeStep(false, ms, "No answer in ${(timeoutMs / 1000.0).roundToInt()} s")
     }

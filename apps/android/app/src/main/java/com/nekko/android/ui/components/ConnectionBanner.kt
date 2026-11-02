@@ -98,8 +98,9 @@ fun ConnectionBanner(
     // This phone stopped remote access: the computer kicked every phone, which is not a reason to pair again.
     val stopped = s.remoteStoppedAt != null
     val denied = !stopped && (s.denied != null || s.conn == RelayState.DENIED)
+    val badKey = !stopped && !denied && s.badKey
     // Pairing again can't help an app that is too old for the computer.
-    val repair = denied && s.denied != DenyReason.UPDATE_REQUIRED
+    val repair = badKey || (denied && s.denied != DenyReason.UPDATE_REQUIRED)
     // The route in use or being dialed (AN-28): one of the computer's addresses.
     val route = s.route ?: active.relayUrl
     // An address the phone can never reach: say why instead of "Connecting…" forever.
@@ -112,6 +113,7 @@ fun ConnectionBanner(
         stopped && s.conn != RelayState.ONLINE ->
             Tone.WARNING to stringResource(R.string.chats_banner_stopped, active.name)
         denied -> Tone.DANGER to stringResource(deniedCopyRes(s.denied))
+        badKey -> Tone.DANGER to stringResource(deniedCopyRes(DenyReason.BAD_KEY))
         s.conn == RelayState.ONLINE -> Tone.SUCCESS to stringResource(R.string.chats_banner_online, active.name)
         hint != null -> Tone.DANGER to RelayHint.message(hint, active.name)
         tailnetHint != null -> Tone.WARNING to tailnetHint
@@ -149,7 +151,7 @@ fun ConnectionBanner(
         ) {
             Dot(tone)
             Column(Modifier.weight(1f)) {
-                Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied) 5 else 2, overflow = TextOverflow.Ellipsis)
+                Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied || badKey) 5 else 2, overflow = TextOverflow.Ellipsis)
                 if (s.conn == RelayState.ONLINE && !denied) {
                     Text(
                         stringResource(R.string.chats_encrypted_via, Pairing.relayHost(route)),

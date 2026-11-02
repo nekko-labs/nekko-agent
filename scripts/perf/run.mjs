@@ -652,10 +652,12 @@ async function layerOverdraw(cdp) {
           let a = this.parentElement;
           while (a && getComputedStyle(a).overflow === 'visible') a = a.parentElement;
           const r = a ? a.getBoundingClientRect() : { width: innerWidth, height: innerHeight };
+          // A clip with no area is off screen, so there is nothing to overdraw.
+          if (!(r.width * r.height)) return null;
           // A pseudo-element (::after) is named by the element it belongs to.
           const host = this.tagName.startsWith('::') ? this.parentElement : this;
           const name = host.tagName.toLowerCase() + '.' + String(host.getAttribute('class') ?? '').trim().split(' ').filter(Boolean).slice(0, 3).join('.');
-          return { area: Math.max(1, r.width * r.height), what: host === this ? name : name + this.tagName.toLowerCase() };
+          return { area: r.width * r.height, what: host === this ? name : name + this.tagName.toLowerCase() };
         }`,
       })).result.value;
     } catch { continue; }

@@ -184,8 +184,8 @@ final class StoreChangeTests: XCTestCase {
         let store = ComputersStore(store: MemoryStore(), makeConnection: { _ in computer }, deviceName: { "iPhone" },
                                    deriveKey: { _, _ in Data(repeating: 7, count: 32) }, newId: { "id-1" })
         store.load()
-        _ = await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
-                                         key: "00112233445566778899aabbccddeeff", pair: "ABCD2345"))
+        _ = try await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
+                                             key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: "ABCD2345"))
         do {
             _ = try await store.call(change: "file:write", ["s1"])
             XCTFail("no signer")
@@ -204,8 +204,8 @@ final class StoreChangeTests: XCTestCase {
         let store = ComputersStore(store: MemoryStore(), makeConnection: { _ in computer }, deviceName: { "iPhone" },
                                    deriveKey: { _, _ in Data(repeating: 7, count: 32) }, newId: { "id-1" })
         store.load()
-        _ = await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
-                                         key: "00112233445566778899aabbccddeeff", pair: "ABCD2345"))
+        _ = try! await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
+                                          key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: "ABCD2345"))
         return store
     }
 

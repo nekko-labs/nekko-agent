@@ -61,6 +61,8 @@ pub struct Paired {
 struct Secrets {
     room: String,
     secret: String,
+    /// The computer's public key, pinned from the pairing link.
+    host_key: String,
     device_id: String,
     /// The device's P-256 private key, hex.
     device_key: String,
@@ -167,6 +169,7 @@ fn state_text(s: &State) -> &'static str {
         State::Offline | State::Stopped => "offline",
         State::Denied(r) if r == "update-required" => "update",
         State::Denied(_) => "denied",
+        State::Stale => "stale",
     }
 }
 
@@ -325,6 +328,7 @@ impl Computers {
             routes: ordered_routes(&p.relay_url, &p.alts),
             room: s.room,
             secret: s.secret,
+            host_key: s.host_key,
             device_id: s.device_id,
             name: this_name(),
             key,
@@ -556,6 +560,10 @@ impl Computers {
         if relay_url.is_empty() || room.is_empty() || secret.is_empty() || code.is_empty() {
             return Err("This link has no pairing code. Make a new one on the other computer.".into());
         }
+        let host_key = text("hostKey");
+        if nekko_remote::proof::parse_key(&host_key).is_none() {
+            return Err("Update Nekko Agent on the other computer, then make a new link.".into());
+        }
         if let Some(problem) = nekko_remote::route::relay_url_problem(&relay_url) {
             return Err(problem);
         }
@@ -584,6 +592,7 @@ impl Computers {
             routes: ordered_routes(&relay_url, &alts),
             room: room.clone(),
             secret: secret.clone(),
+            host_key: host_key.clone(),
             device_id: device_id.clone(),
             name: this_name(),
             key,
@@ -592,7 +601,7 @@ impl Computers {
         let (tx, _events) = tokio::sync::mpsc::unbounded_channel();
         let client = Client::start(cfg.clone(), tx);
         let mut rx = client.watch();
-        let settled = rx.wait_for(|s| matches!(s.state, State::Online | State::Denied(_)));
+        let settled = rx.wait_for(|s| matches!(s.state, State::Online | State::Denied(_) | State::Stale));
         let reached = tokio::time::timeout(PAIR_LIMIT, settled).await.is_ok();
         let status = client.status();
         if !reached || status.state != State::Online {
@@ -613,7 +622,7 @@ impl Computers {
         let name: String = name.chars().take(60).collect();
         let platform = info.get("platform").and_then(Value::as_str).map(str::to_string);
         let at = nekko_remote::system_clock()();
-        let secrets = Secrets { room, secret, device_id, device_key: key_text };
+        let secrets = Secrets { room, secret, host_key, device_id, device_key: key_text };
         self.vault.set(&id, &serde_json::to_string(&secrets).map_err(|e| e.to_string())?)?;
         let color = lock(&self.list).len() as u32;
         let paired = Paired { id: id.clone(), name, platform, relay_url, alts, paired_at: at, color };
@@ -733,6 +742,7 @@ mod tests {
                 &serde_json::to_string(&Secrets {
                     room: "r00m".into(),
                     secret: "s3cret".into(),
+                    host_key: "h0stkey".into(),
                     device_id: "d".into(),
                     device_key: "k3y".into(),
                 })
@@ -763,7 +773,8 @@ mod tests {
     async fn pairing_refuses_a_link_it_cant_use() {
         let dir = tempfile::tempdir().unwrap();
         let c = computers(dir.path());
-        let link = |relay: &str, pair: &str| json!({ "relayUrl": relay, "room": "abcd1234", "key": "0123456789abcdef", "pair": pair, "alts": [] });
+        let host_key = nekko_remote::proof::public_key(&new_key().unwrap().0);
+        let link = |relay: &str, pair: &str| json!({ "relayUrl": relay, "room": "abcd1234", "key": "0123456789abcdef", "hostKey": host_key, "pair": pair, "alts": [] });
         let e = c.route("computers:pair", &[link("ws://100.100.1.1:4400", "")]).await.unwrap_err();
         assert!(e.contains("no pairing code"), "{e}");
         let e = c.route("computers:pair", &[link("ws://example.com", "ABCD2345")]).await.unwrap_err();

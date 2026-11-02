@@ -52,7 +52,7 @@ final class ThemeLanguageTests: XCTestCase {
         let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
-        field.typeText("relay=wss://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff")
+        field.typeText("relay=wss://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&host=BJ7go4GGB9flqEQfjn77eO%2BWT5J%2Bxi8WJkMUlZycp%2BJNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE%3D")
         app.buttons[pair].firstMatch.tap()
         if app.buttons[notNow].waitForExistence(timeout: 3) { app.buttons[notNow].tap() }
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
