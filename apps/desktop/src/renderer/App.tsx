@@ -120,6 +120,14 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  useEffect(() => {
+    const { refreshComputers, refreshSessions: refreshChats } = useStore.getState();
+    void refreshComputers();
+    return window.nekko.onComputersUpdated?.(() => {
+      void refreshComputers();
+      void refreshChats();
+    });
+  }, []);
   useEffect(() => startSessionSummaryRefresh(refreshSessions), [refreshSessions]);
   // Take only the streams of the chats this window shows (agentSubscription.ts);
   // every chat's start, waits and end still arrive for the sidebar and board.

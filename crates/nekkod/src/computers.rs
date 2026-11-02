@@ -25,6 +25,7 @@ pub const CHANNELS: &[&str] = &[
     "computers:forget",
     "computers:call",
     "computers:catalog",
+    "computers:setIcon",
 ];
 
 /// The event a window refreshes on: a link's state changed, or the list did.
@@ -76,6 +77,8 @@ struct Seen {
     #[serde(skip)]
     access: Option<Value>,
     catalog: Option<Value>,
+    /// Its `machineIcon`.
+    icon: Option<String>,
 }
 
 pub struct Computers {
@@ -300,6 +303,8 @@ impl Computers {
         let mut running = client.call("chat:running", json!([])).await.unwrap_or(json!([]));
         let pending = client.call("chat:pending", json!([])).await.unwrap_or(json!({}));
         let access = client.call("device:access", json!([])).await.ok();
+        let info = client.call("app:info", json!([])).await.unwrap_or(Value::Null);
+        let icon = info.get("machineIcon").and_then(Value::as_str).filter(|i| !i.is_empty()).map(str::to_string);
         federation::qualify_chats(id, &mut summaries);
         for chat in running.as_array_mut().into_iter().flatten() {
             if let Some(raw) = chat.as_str() {
@@ -324,6 +329,7 @@ impl Computers {
                 running.as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect();
             s.pending = pending;
             s.access = access;
+            s.icon = icon;
         }
         self.keep(id);
         self.hub.publish(UPDATED, json!({}), false);
@@ -338,7 +344,7 @@ impl Computers {
             let Some(s) = seen.get(id) else { return };
             let keep: Vec<&Value> =
                 s.summaries.iter().filter(|c| c.get("incognito") != Some(&Value::Bool(true))).collect();
-            json!({ "summaries": keep, "catalog": s.catalog })
+            json!({ "summaries": keep, "catalog": s.catalog, "icon": s.icon })
         };
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
@@ -394,16 +400,16 @@ impl Computers {
         }
     }
 
-    /// A computer's models, subscriptions and folders, for its pickers. Answers
-    /// from memory while it is away.
+    /// A computer's providers and folders, for its pickers (a provider's models
+    /// come through `models:list`). Answers from memory while it is away.
     async fn catalog(&self, id: &str) -> Result<Value, String> {
         let client = self.client(id).ok().filter(|c| c.status().state == State::Online);
         if let Some(c) = client {
-            let providers = c.call("providers:list", json!([])).await.map_err(|e| e.to_string())?;
-            let models = c.call("models:list", json!([])).await.map_err(|e| e.to_string())?;
+            let mut providers = c.call("providers:list", json!([])).await.map_err(|e| e.to_string())?;
             let mut workspaces = c.call("workspace:list", json!([])).await.map_err(|e| e.to_string())?;
+            federation::qualify_chats(id, &mut providers);
             federation::qualify_chats(id, &mut workspaces);
-            let catalog = json!({ "providers": providers, "models": models, "workspaces": workspaces });
+            let catalog = json!({ "providers": providers, "workspaces": workspaces });
             lock(&self.seen).entry(id.to_string()).or_default().catalog = Some(catalog.clone());
             self.keep(id);
             return Ok(catalog);
@@ -425,6 +431,9 @@ impl Computers {
             if let (Some(a), Some(o)) = (seen.get(&p.id).and_then(|s| s.access.as_ref()), v.as_object_mut()) {
                 o.insert("read".into(), a.get("read").cloned().unwrap_or(json!(true)));
                 o.insert("change".into(), a.get("change").cloned().unwrap_or(json!(true)));
+            }
+            if let (Some(i), Some(o)) = (seen.get(&p.id).and_then(|s| s.icon.as_ref()), v.as_object_mut()) {
+                o.insert("icon".into(), json!(i));
             }
             v
         };
@@ -556,6 +565,13 @@ impl Computers {
                 self.client(id)?.call(channel, arg(2).clone()).await.map_err(|e| e.to_string())
             }
             "computers:catalog" => self.catalog(id).await,
+            "computers:setIcon" => {
+                // It lives on that machine, so every device that connects shows the same one.
+                let client = self.client(id)?;
+                client.call("settings:update", json!([{ "machineIcon": arg(1) }])).await.map_err(|e| e.to_string())?;
+                self.refreshed(id).await;
+                Ok(self.list())
+            }
             _ => Err(format!("No handler for {channel}")),
         }
     }

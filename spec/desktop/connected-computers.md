@@ -22,6 +22,18 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 - Removing a computer signs it out of the other computer when that computer can hear, and deletes what was kept here. Its agents keep running there.
 - **Connections** has a *Connected computers* row. Off, or with All connections off, every link closes within 30 seconds and the computers read as offline.
 
+## Agents from every computer
+
+`[implemented 2026-11-02; engine proved with two real daemons and a scripted model, window checked with fixtures, not yet on real machines]`
+
+- **One list.** Every connected computer's agents appear in the Agents panel beside the local ones, live. The list paints from what each computer last said, so a slow or dead machine never holds it up, and an offline computer's agents stay visible.
+- **Where it runs.** A card on another computer names it on its provider line, and its wall window names it on the title strip. An approval's button reads *Approve on gomi*. A local agent shows nothing: with a second computer, the absence reads as "here". Show > Computer turns the card label off.
+- **Group by Computer** in the view menu, shown once a computer is connected. Activity stays the default. Group by Project keeps same-named projects on two computers apart, since they are different checkouts.
+- **Offline and watching only.** The composer says why it can't send (*gomi is offline*, *gomi allows watching only*), and a message that can't go stays in the box. The run carries on over there, and reconnecting catches up on a reply under way.
+- **Icons.** A computer can have one of 24 icons, set under Settings > Computers. It lives in that machine's own settings (`machineIcon`), so every desktop connected to it shows the same one. With none set, nothing shows. Cards and group headings show it; Show > Computer icons turns that off. Phones don't show them yet.
+
+**How ids stay out of the way.** A chat, folder or provider on another computer has the id `@<computerId>:<rawId>`, opaque to the window. The engine sends a call carrying one to that computer and qualifies what comes back. A channel that may cross is listed in `federation::ROUTED`; a foreign id on any other is refused, so a new channel can't reach the local store with one. Another computer's events travel on a stream only the desktop window's socket hears, never this computer's phones, API server or automation. The CLI's API and the Local Web UI see this computer only.
+
 ## What a computer may do
 
 `COMPUTER_ACCESS` adds to what a phone may do: reading tool output whole, older messages (`session:page`), a running turn so far (`agent:replay`), compacting, truncating, taking back a queued message, and accepting changes. A chat too large for one relay frame has its tool text cut. The host's Read and Change switches, activity list and revocation work as for a phone, and a mode raise still needs a signed proof, plus step-up where it is on.
