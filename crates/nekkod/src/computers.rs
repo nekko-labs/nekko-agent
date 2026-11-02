@@ -26,6 +26,8 @@ pub const CHANNELS: &[&str] = &[
     "computers:call",
     "computers:catalog",
     "computers:setIcon",
+    "computers:createSession",
+    "computers:stats",
 ];
 
 /// The event a window refreshes on: a link's state changed, or the list did.
@@ -565,6 +567,16 @@ impl Computers {
                 self.client(id)?.call(channel, arg(2).clone()).await.map_err(|e| e.to_string())
             }
             "computers:catalog" => self.catalog(id).await,
+            "computers:stats" => {
+                let client = self.client(id)?;
+                let system = client.call("system:stats", json!([])).await.unwrap_or(Value::Null);
+                let gpu = client.call("gpu:stats", json!([])).await.unwrap_or(Value::Null);
+                Ok(json!({ "system": system, "gpu": gpu }))
+            }
+            "computers:createSession" => {
+                let folder = arg(1).as_str().and_then(federation::split).map(|(_, raw)| json!(raw));
+                self.forward(id, "session:create", folder.into_iter().collect()).await
+            }
             "computers:setIcon" => {
                 // It lives on that machine, so every device that connects shows the same one.
                 let client = self.client(id)?;

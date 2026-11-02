@@ -315,6 +315,12 @@ async fn a_window_runs_a_chat_on_another_computer_and_sees_it_stream() {
     let after = window.call("session:get", json!([chat])).await.unwrap();
     assert!(after["messages"].to_string().contains("Hello from gomi"), "{after}");
 
+    // A new chat there, from here.
+    let made = window.call("computers:createSession", json!([id])).await.unwrap();
+    assert!(made["id"].as_str().unwrap().starts_with(&format!("@{id}:")), "{made}");
+    let (_, there) = post(host, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    assert_eq!(there.as_array().unwrap().len(), 2, "{there}");
+
     // A foreign id never reaches a channel that isn't routed.
     let refused = window.call("workspace:remove", json!([chat])).await.unwrap_err();
     assert!(refused.contains("Do this on that computer"), "{refused}");
