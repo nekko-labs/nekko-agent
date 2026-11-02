@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   activeModelId: null as string | null,
   activeProjectId: 'f2' as string | null,
   settings: { workspaces: [{ id: 'f1', name: 'one', path: '/one' }, { id: 'f2', name: 'two', path: '/two' }] } as Record<string, unknown> | null,
+  computers: [] as Array<Record<string, unknown>>,
+  computerCatalogs: {} as Record<string, { providers: Array<Record<string, unknown>>; workspaces: Array<Record<string, unknown>> }>,
 }));
 vi.mock('../store.js', () => ({ useStore: Object.assign((select: (s: typeof state) => unknown) => select(state), { getState: () => ({ rememberModel, refreshSettings: vi.fn(async () => {}), pushToast: vi.fn() }) }) }));
 vi.mock('./agent-console/ModelPicker.js', () => ({ ModelPicker: () => null }));
@@ -25,9 +27,12 @@ vi.mock('react', async (original) => {
 });
 afterEach(() => vi.clearAllMocks());
 
+/** The computer the next `picker()` runs on, and that computer's models. */
+const runOn = { current: null as string | null, models: [] as Array<{ id: string; providerId: string; name: string }> };
+
 function picker(category: 'chat' | 'media' | 'terminal' | null = null, choice: { providerId: string; modelId: string } | null = null, pending = false, error: string | null = null, onAdd = vi.fn(async () => {}), listOpen = false, folders: string[] | null = null) {
-  const setters = [vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn()];
-  [category, choice, pending, error, listOpen, folders].forEach((value, i) => vi.mocked(useState).mockReturnValueOnce([value, setters[i]] as never));
+  const setters = [vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+  [category, choice, pending, error, listOpen, folders, runOn.current, runOn.models].forEach((value, i) => vi.mocked(useState).mockReturnValueOnce([value, setters[i]] as never));
   vi.mocked(useRef).mockReturnValueOnce({ current: false }).mockReturnValueOnce({ current: null });
   const onClose = vi.fn();
   const tree = AgentWindowPicker({ onAdd, onClose });
@@ -42,6 +47,51 @@ function picker(category: 'chat' | 'media' | 'terminal' | null = null, choice: {
   const button = (label: string) => elements.find((e) => e.type === 'button' && text(e.props.children).includes(label))!;
   return { elements, setters, onAdd, onClose, button };
 }
+
+describe('Run on', () => {
+  const gomi = { id: 'gomi1234', name: 'gomi', state: 'online', change: true };
+  afterEach(() => {
+    state.computers = [];
+    state.computerCatalogs = {};
+    runOn.current = null;
+    runOn.models = [];
+  });
+
+  it('is not there with nothing connected', () => {
+    const { elements } = picker('chat');
+    expect(elements.some((e) => e.props.role === 'radiogroup')).toBe(false);
+  });
+
+  it('offers this computer, and a connected one', () => {
+    state.computers = [gomi, { ...gomi, id: 'off12345', name: 'studio', state: 'offline' }];
+    const { button, elements } = picker('chat');
+    expect(elements.some((e) => e.props.role === 'radiogroup')).toBe(true);
+    expect(button('This computer').props['aria-checked']).toBe(true);
+    expect(button('gomi').props.disabled).toBe(false);
+    expect(button('studio').props.disabled).toBe(true);
+  });
+
+  it("shows that computer's folders, never this one's, and starts the chat there", async () => {
+    state.computers = [gomi];
+    state.computerCatalogs = { gomi1234: { providers: [{ id: '@gomi1234:p1', enabled: true, label: 'Model Server' }], workspaces: [{ id: '@gomi1234:w1', name: 'router', path: 'C:\\code\\router' }] } };
+    runOn.current = 'gomi1234';
+    runOn.models = [{ id: 'qwen', providerId: '@gomi1234:p1', name: 'Qwen' }];
+    const onAdd = vi.fn(async () => {});
+    const { button, elements } = picker('chat', { providerId: '@gomi1234:p1', modelId: 'qwen' }, false, null, onAdd);
+    const folderNames = elements.filter((e) => e.props.role === 'checkbox').map((e) => e.props.title);
+    expect(folderNames).toEqual(['C:\\code\\router']);
+    button('Start').props.onClick();
+    await Promise.resolve();
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ computerId: 'gomi1234', providerId: '@gomi1234:p1', workspaceIds: ['@gomi1234:w1'] }));
+  });
+
+  it('keeps Start off until that computer has a model', () => {
+    state.computers = [gomi];
+    state.computerCatalogs = { gomi1234: { providers: [], workspaces: [] } };
+    runOn.current = 'gomi1234';
+    expect(picker('chat').button('Start').props.disabled).toBe(true);
+  });
+});
 
 describe('anchored window dropdown', () => {
   it('clamps to narrow and short viewports without reserving wall space', () => {
