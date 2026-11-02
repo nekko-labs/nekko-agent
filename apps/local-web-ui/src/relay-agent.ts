@@ -1,3 +1,4 @@
+import { pairingLink } from '@nekko-agent/shared';
 import { daemonRequest, startNekkod } from 'nekko-agent/engine';
 
 /**
@@ -52,6 +53,8 @@ export async function runRelayAgent(opts: {
   here: string;
   /** A pairing code minted elsewhere (a Nekko Cloud machine's), used instead of a random one. */
   pairCode?: string;
+  /** A host key minted elsewhere (a Nekko Cloud machine's), whose public half is in its link. */
+  hostKey?: string;
   /** A Nekko Cloud machine's scope, applied before the relay is joined. */
   scope?: CloudScope | null;
 }): Promise<void> {
@@ -64,7 +67,7 @@ export async function runRelayAgent(opts: {
       const settings = scopeSettings(opts.scope);
       if (Object.keys(settings).length) await daemonRequest(daemon, 'settings:update', settings);
     }
-    await daemonRequest(daemon, 'remote:attach', { relayUrl: opts.relayUrl, room: opts.room, secret: opts.key });
+    await daemonRequest(daemon, 'remote:attach', { relayUrl: opts.relayUrl, room: opts.room, secret: opts.key, hostKey: opts.hostKey });
     // A printed code is a promise that the agent is in the room: wait for the
     // relay connection, so a device that connects at once is answered.
     for (let i = 0; i < 100; i++) {
@@ -77,7 +80,8 @@ export async function runRelayAgent(opts: {
     console.log(`\nNekko Agent relay-agent → ${opts.relayUrl}`);
     console.log(`   room=${opts.room}  key=${opts.key}`);
     console.log(`   one-time pairing code (10 min): ${grant.code}`);
-    console.log(`   pairing link: <ui-origin>/?relay=${encodeURIComponent(opts.relayUrl)}&room=${opts.room}&key=${opts.key}&pair=${grant.code}`);
+    const { hostKey } = await daemonRequest<{ hostKey?: string }>(daemon, 'remote:pairing');
+    console.log(`   pairing link: ${pairingLink('<ui-origin>/', { relayUrl: opts.relayUrl, room: opts.room, key: opts.key, hostKey, pair: grant.code })}`);
     console.log(`   serving this machine's model + tools to paired devices (data: ${opts.dataDir})\n`);
   } catch (e) {
     await daemon.stop();

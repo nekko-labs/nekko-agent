@@ -48,10 +48,10 @@ changes. Design: [connected computers](../superpowers/specs/2026-11-02-connected
   sandbox against the paired computer: they keep it out of the paths that need no
   agent, leave an activity trail, and hold when the host is in Ask mode with
   step-up on. `docs/REMOTE.md` says so.
-- **The host isn't authenticated, and revoking doesn't re-key.** Every device in a
-  room holds the same secret, so a revoked device that keeps it can pose as the
-  host on the relay. A per-device key from an ECDH with a host key pinned in the
-  link closes this; it is a protocol change, tracked apart.
+- **The host wasn't authenticated.** Every device in a room held the same secret,
+  so a revoked device that kept it could pose as the host on the relay. Closed by
+  [decision 0041](0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md):
+  a host key pinned in the link and a key for each connection.
 - A prompt-injected agent on the client that reaches the OS key store item could
   use the link. That is closed on a signed macOS build and open on Windows, where
   Credential Manager has no per-app rule.

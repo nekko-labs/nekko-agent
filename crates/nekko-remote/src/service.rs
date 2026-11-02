@@ -5,15 +5,17 @@
 //! request; new devices enroll only with a short-lived code; revoking a
 //! device kicks it live. This process is the file's only writer.
 
+use crate::client::SigningKey;
 use crate::hello::{self, Grant, PAIRING_TTL_MS, Random, Verdict};
 use crate::jsobj::JsObj;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
 
-/// How the stored pairing reaches the relay: 2 is a room credential derived
-/// from the secret (decision 0036). Anything else is replaced at start.
-const PAIRING_VERSION: u64 = 2;
+/// How the stored pairing works: 2 is a room credential derived from the secret
+/// (decision 0036), 3 adds the host key devices pin (decision 0041). Anything
+/// else is replaced at start, so a secret a revoked device kept dies with it.
+const PAIRING_VERSION: u64 = 3;
 
 /// Validates a device's HELLO, answering with the sealed reply.
 pub type Verifier = Arc<dyn Fn(&Value) -> Value + Send + Sync>;
@@ -29,7 +31,14 @@ pub fn system_clock() -> Clock {
 
 /// What connects the agent to a relay (`connectRelayAgent`).
 pub trait Link: Send + Sync {
-    fn connect(&self, relay_url: &str, room: &str, key: &str, verify: Verifier) -> Arc<dyn LinkHandle>;
+    fn connect(
+        &self,
+        relay_url: &str,
+        room: &str,
+        key: &str,
+        host_key: SigningKey,
+        verify: Verifier,
+    ) -> Arc<dyn LinkHandle>;
 }
 
 /// A running relay agent (`RelayAgentHandle`).
@@ -103,6 +112,7 @@ impl RemoteService {
                     .with("relayUrl", get("relayUrl"))
                     .with("room", get("room"))
                     .with("secret", get("secret"))
+                    .with("hostKey", get("hostKey"))
                     .with("pairing", get("pairing"))
                     .with("devices", or(get("devices"), json!([])))
                     // Relay replay protection: phones from before protocol 4
@@ -114,10 +124,10 @@ impl RemoteService {
         }
     }
 
-    /// A room and secret from before relay credentials were derived
-    /// (decision 0036) were sent to the relay as they are: replace them, keeping
-    /// the paired devices, so phones pair again with a secret the relay never
-    /// saw. `None` when the pairing is already current or there is none.
+    /// A room and secret from an older pairing: replaced, keeping the paired
+    /// devices, so phones pair again with a secret no revoked device holds and
+    /// a host key to pin. `None` when the pairing is already current or there
+    /// is none.
     fn upgraded_pairing(&self, cfg: &JsObj) -> Option<JsObj> {
         let current = cfg.get("pairing").and_then(Value::as_u64) == Some(PAIRING_VERSION);
         if current || !nekko_js::truthy(cfg.get("secret")) {
@@ -127,8 +137,13 @@ impl RemoteService {
             cfg.clone()
                 .with("room", Some(json!(hello::new_room_code(&self.random))))
                 .with("secret", Some(json!(hello::new_room_secret(&self.random))))
+                .with("hostKey", Some(self.new_host_key()))
                 .with("pairing", Some(json!(PAIRING_VERSION))),
         )
+    }
+
+    fn new_host_key(&self) -> Value {
+        json!(crate::proof::key_text(&crate::proof::new_key(&self.random)))
     }
 
     fn save(&self, cfg: &JsObj) -> Result<(), String> {
@@ -144,9 +159,8 @@ impl RemoteService {
     }
 
     /// The HELLO check the agent runs for every connection. The agent has
-    /// already checked the HELLO's challenge. A phone app older than device
-    /// keys (protocol below [`hello::HELLO_KEY_PROTOCOL`], including apps from
-    /// before relay replay protection) is refused with `update-required`;
+    /// already checked the HELLO's challenge. A phone app older than this
+    /// protocol ([`hello::SESSION_PROTOCOL`]) is refused with `update-required`;
     /// otherwise the HELLO must be signed with the device's key
     /// ([`hello::check_hello_key`]) before the registry is consulted, and a
     /// device that enrolls with the live code keeps the key it signed with
@@ -159,10 +173,10 @@ impl RemoteService {
             let id = hello_frame.get("deviceId")?;
             Self::devices_of(cfg).into_iter().find(|d| d.get("id") == Some(id) && !nekko_js::truthy(d.get("revoked")))
         };
-        if protocol < hello::HELLO_KEY_PROTOCOL {
+        if protocol < hello::SESSION_PROTOCOL {
             if let Some(d) = known(&cfg) {
                 let id = d.get("id").map(nekko_js::display).unwrap_or_default();
-                eprintln!("nekkod: refused phone {id}: its app predates device keys; it needs an update");
+                eprintln!("nekkod: refused phone {id}: its app can't check this computer; it needs an update");
                 self.record_locked(&id, self.legacy_entry(false));
             }
             return json!({ "type": "denied", "reason": "update-required" });
@@ -244,7 +258,11 @@ impl RemoteService {
         else {
             return;
         };
-        st.handle = Some(self.link.connect(url, room, key, self.verifier()));
+        let Some(host_key) = s(cfg.get("hostKey")).and_then(crate::proof::parse_key_text) else {
+            eprintln!("nekkod: remote access has no usable host key; rotate the pairing to make one");
+            return;
+        };
+        st.handle = Some(self.link.connect(url, room, key, host_key, self.verifier()));
     }
 
     /// The running agent, out of the lock: its own lock is taken while the
@@ -292,6 +310,7 @@ impl RemoteService {
             Some(s) => s.clone(),
             None => json!(hello::new_room_secret(&self.random)),
         };
+        let host_key = prev.get("hostKey").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| self.new_host_key());
         let cfg = prev
             .with("enabled", Some(json!(true)))
             // Turned on again at the computer: the banner about a phone's stop goes.
@@ -299,6 +318,7 @@ impl RemoteService {
             .with("relayUrl", Some(relay_url.clone()))
             .with("room", Some(room))
             .with("secret", Some(secret))
+            .with("hostKey", Some(host_key))
             .with("pairing", Some(json!(PAIRING_VERSION)));
         self.save(&cfg)?;
         self.connect(&mut lock(&self.state), &cfg);
@@ -306,10 +326,11 @@ impl RemoteService {
         Ok(self.status_of(self.handle(), &cfg))
     }
 
-    /// `attach({ relayUrl, room, secret })`: join a room someone else chose
-    /// (relay-agent mode, `NEKKO_RELAY_URL` + `NEKKO_ROOM` + `NEKKO_PAIR_KEY`),
-    /// keeping the devices already paired. Internal: not an IPC channel the
-    /// UI has, and a phone may not call any `remote:` channel.
+    /// `attach({ relayUrl, room, secret, hostKey? })`: join a room someone else
+    /// chose (relay-agent mode, `NEKKO_RELAY_URL` + `NEKKO_ROOM` + `NEKKO_PAIR_KEY`,
+    /// and `NEKKO_HOST_KEY` when whoever chose it wrote the link), keeping the
+    /// devices already paired. Internal: not an IPC channel the UI has, and a
+    /// phone may not call any `remote:` channel.
     pub fn attach(&self, opts: &Value) -> Result<Value, String> {
         let relay_url = opts.get("relayUrl").cloned().unwrap_or(Value::Null);
         if let Some(problem) = crate::route::relay_url_problem(relay_url.as_str().unwrap_or("")) {
@@ -320,12 +341,21 @@ impl RemoteService {
             return Err("remote:attach needs a room and a secret".into());
         };
         let _io = lock(&self.io);
-        let cfg = self
-            .load()
+        let prev = self.load();
+        let host_key = match (text("hostKey"), prev.get("hostKey").filter(|v| !v.is_null())) {
+            (Some(k), _) if k.as_str().and_then(crate::proof::parse_key_text).is_none() => {
+                return Err("remote:attach: that host key can't be read".into());
+            }
+            (Some(k), _) => k,
+            (None, Some(k)) => k.clone(),
+            (None, None) => self.new_host_key(),
+        };
+        let cfg = prev
             .with("enabled", Some(json!(true)))
             .with("relayUrl", Some(relay_url))
             .with("room", Some(room))
             .with("secret", Some(secret))
+            .with("hostKey", Some(host_key))
             .with("pairing", Some(json!(PAIRING_VERSION)));
         self.save(&cfg)?;
         self.connect(&mut lock(&self.state), &cfg);
@@ -363,7 +393,13 @@ impl RemoteService {
         if !t("enabled") || !t("relayUrl") || !t("room") || !t("secret") {
             return Value::Null;
         }
-        json!({ "relayUrl": cfg.get("relayUrl"), "room": cfg.get("room"), "key": cfg.get("secret") })
+        let host_key = s(cfg.get("hostKey")).and_then(crate::proof::parse_key_text);
+        json!({
+            "relayUrl": cfg.get("relayUrl"),
+            "room": cfg.get("room"),
+            "key": cfg.get("secret"),
+            "hostKey": host_key.map(|k| crate::proof::public_key(&k)),
+        })
     }
 
     pub fn pair(&self) -> Value {
@@ -523,6 +559,7 @@ impl RemoteService {
         let cfg = prev
             .with("room", Some(json!(room)))
             .with("secret", Some(json!(secret)))
+            .with("hostKey", Some(self.new_host_key()))
             .with("pairing", Some(json!(PAIRING_VERSION)))
             .with("devices", Some(json!([])));
         self.save(&cfg)?;

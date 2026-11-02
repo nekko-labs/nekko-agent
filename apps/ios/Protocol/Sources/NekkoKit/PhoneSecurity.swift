@@ -65,6 +65,8 @@ struct PendingSignOut: Codable, Equatable {
     var room: String
     var key: String
     var keyHex: String
+    /// Nil on a record from before protocol 6, which no computer would answer.
+    var hostKey: String?
     var at: Int64
 }
 

@@ -46,7 +46,7 @@ import org.junit.Test
 class ComputersRepositoryTest {
     private val room = "a1b2c3d4e5f60718"
     private val key = "00112233445566778899aabbccddeeff"
-    private val link = PairingLink("wss://relay.example.dev", room, key, pair = "ABC123")
+    private val link = PairingLink("wss://relay.example.dev", room, key, pair = "ABC123", hostKey = TEST_HOST_KEY)
     private val derived = ByteArray(32) { it.toByte() }
 
     private val forgotten = mutableListOf<String>()
@@ -175,7 +175,7 @@ class ComputersRepositoryTest {
         repo.connect(a)
         runCurrent()
         assertTrue("reconnecting the same computer keeps its history", repo.connectionLog.value.size > states.size)
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
         runCurrent()
         assertEquals("another computer starts its own", listOf(RelayState.CONNECTING), repo.connectionLog.value.map { it.state }.distinct())
     }
@@ -185,7 +185,7 @@ class ComputersRepositoryTest {
         val store = FakeStore()
         val id = repo(store).pair(link)
         runCurrent()
-        assertEquals(2, secretOf(store, id)["v"]!!.jsonPrimitive.content.toInt())
+        assertEquals(3, secretOf(store, id)["v"]!!.jsonPrimitive.content.toInt())
         // As an older app saved it: no version.
         val old = secretOf(store, id).filterKeys { it != "v" }
         store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(old).toString()
@@ -203,6 +203,64 @@ class ComputersRepositoryTest {
         runCurrent()
         assertEquals(1, remotes.created.size)
         assertEquals(RelayState.CONNECTING, again.state.value.conn)
+    }
+
+    @Test
+    fun `a pairing saved at version 2 is not dialed, with or without a host key`() = runTest {
+        val store = FakeStore()
+        val id = repo(store).pair(link)
+        runCurrent()
+        val saved = secretOf(store, id)
+        for (old in listOf(saved - "hostKey", saved)) {
+            store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(old + ("v" to JsonPrimitive(2))).toString()
+            val remotes = FakeRemotes()
+            val again = repo(store, remotes)
+            again.load()
+            runCurrent()
+            assertTrue("no connection below the pinned version", remotes.created.isEmpty())
+            assertEquals(com.nekko.protocol.DenyReason.BAD_KEY, again.state.value.denied)
+        }
+    }
+
+    @Test
+    fun `a pairing saved with no host key is not dialed, whatever its version`() = runTest {
+        val store = FakeStore()
+        val id = repo(store).pair(link)
+        runCurrent()
+        store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(secretOf(store, id) - "hostKey").toString()
+        val remotes = FakeRemotes()
+        val again = repo(store, remotes)
+        again.load()
+        runCurrent()
+        assertTrue(remotes.created.isEmpty())
+        assertEquals(RelayState.DENIED, again.state.value.conn)
+    }
+
+    @Test
+    fun `a link without a host key can't pair`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val e = runCatching { repo.pair(link.copy(hostKey = null)) }.exceptionOrNull()
+        assertEquals("Update Nekko Agent on your computer, then make a new pairing code.", e?.message)
+        runCurrent()
+        assertTrue("nothing dialed", remotes.created.isEmpty())
+        assertTrue("nothing saved", repo.state.value.computers.isEmpty())
+        assertTrue(store.map.isEmpty())
+    }
+
+    @Test
+    fun `the pinned host key reaches the dial and survives the spent code`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        runCurrent()
+        assertEquals(TEST_HOST_KEY, remotes.last.config.hostKey)
+        remotes.last.sayWelcome()
+        runCurrent()
+        assertNull(secretOf(store, id)["pair"])
+        assertEquals(TEST_HOST_KEY, secretOf(store, id)["hostKey"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -254,7 +312,7 @@ class ComputersRepositoryTest {
         assertEquals(com.nekko.protocol.PhoneProtocol.VERSION - 1, repo.state.value.hostProtocol)
         assertEquals(com.nekko.protocol.ProtocolCheck.UPDATE_COMPUTER, repo.state.value.protocolCheck)
 
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
         assertNull("another computer hasn't said yet", repo.state.value.hostProtocol)
         remotes.last.sayWelcome()
         runCurrent()
@@ -804,7 +862,7 @@ class ComputersRepositoryTest {
         }
         val repo = repo(signer = signer)
         repo.pair(link)
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
         repo.forget(repo.state.value.computers.first().id)
         assertEquals("another computer still knows the key", 0, forgot)
         repo.forget(repo.state.value.computers.single().id)
@@ -915,7 +973,7 @@ class ComputersRepositoryTest {
         val first = repo.pair(link)
         repo.drafts.set("s1", com.nekko.protocol.Draft("half a thought"))
         runCurrent()
-        val second = repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        val second = repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
         assertTrue("the other computer starts with none", repo.drafts.drafts.value.isEmpty())
         repo.connect(first)
         assertEquals("half a thought", repo.drafts.draft("s1").text)

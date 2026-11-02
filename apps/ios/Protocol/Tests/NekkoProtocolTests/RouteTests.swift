@@ -134,7 +134,8 @@ extension RelayClientTests {
     static let tailnetRoute = "ws://studio.tail1234.ts.net:4400"
 
     func twoRoutes(_ relay: FakeRelay, prober: FakeProber? = nil, dwell: TimeInterval = 0.05) -> (RelayClient, Recorder) {
-        var cfg = RelayConfig(relayUrl: Self.tailnetRoute, room: "abcd1234", key: "k", keyBytes: key, deviceId: "dev-1", deviceName: "iPhone")
+        var cfg = RelayConfig(relayUrl: Self.tailnetRoute, room: "abcd1234", key: "k", hostKey: relay.computer.publicKey, keyBytes: key,
+                              deviceId: "dev-1", deviceName: "iPhone")
         cfg.alternates = [Self.lanRoute]
         cfg.handshakeTimeout = 2
         cfg.requestTimeout = 5
@@ -262,6 +263,7 @@ final class PairingFixtureTests: XCTestCase {
             let relayUrl: String
             let room: String
             let key: String
+            let hostKey: String?
             let pair: String?
             let alts: [String]
         }
@@ -277,7 +279,7 @@ final class PairingFixtureTests: XCTestCase {
         XCTAssertGreaterThan(cases.count, 5)
         for c in cases {
             let got = Pairing.parse(c.input).map {
-                Case.Link(relayUrl: $0.relayUrl, room: $0.room, key: $0.key, pair: $0.pair, alts: $0.alts)
+                Case.Link(relayUrl: $0.relayUrl, room: $0.room, key: $0.key, hostKey: $0.hostKey, pair: $0.pair, alts: $0.alts)
             }
             XCTAssertEqual(got, c.link, c.input)
         }

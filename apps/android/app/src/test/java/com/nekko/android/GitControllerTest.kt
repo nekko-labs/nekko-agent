@@ -171,7 +171,7 @@ class GitControllerTest {
     @Test fun `git changes are signed and the computer's switch still applies`() = runTest {
         var changeOn = true
         val signer = SoftwareChangeSigner.generate()
-        val config = RelayConfig("wss://relay.example.dev", "room", "key", ByteArray(32), "phone-1", "Pixel Test")
+        val config = RelayConfig("wss://relay.example.dev", "room", "key", ByteArray(32), TEST_HOST_KEY, "phone-1", "Pixel Test")
         val remote = FakeRemote(config) { c ->
             val p = c.proof ?: throw RelayException("Not allowed from a paired phone (proof-required): ${c.channel}")
             val text = ChangeProof.payload("phone-1", c.channel, JsonArray(c.args), p["ts"]!!.jsonPrimitive.content.toLong())

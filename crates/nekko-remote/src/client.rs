@@ -4,9 +4,11 @@
 //!
 //! The first welcome enrolls the device with the pairing code, then registers
 //! its key as the Change key. Every HELLO and every guarded call is signed with
-//! that key, so a stolen transcript of frames is good for nothing.
+//! that key, so a stolen transcript of frames is good for nothing. The computer
+//! proves itself with the host key pinned from the pairing link, and each
+//! connection has its own key, so the room secret alone gets nobody anywhere.
 
-use crate::e2e::{self, Key};
+use crate::e2e::{self, Ephemeral, Key};
 use crate::hello;
 use crate::phone::policy;
 use crate::socket::encode_uri_component;
@@ -37,6 +39,8 @@ pub struct Config {
     pub routes: Vec<String>,
     pub room: String,
     pub secret: String,
+    /// The computer's public key, pinned from the pairing link.
+    pub host_key: String,
     pub device_id: String,
     /// What the other computer calls this one.
     pub name: String,
@@ -98,6 +102,8 @@ struct Conn {
     welcomed: bool,
     challenge: Option<String>,
     seq: u64,
+    /// The key only this connection's two ends hold.
+    session: Option<Key>,
 }
 
 type Waiters = HashMap<u64, oneshot::Sender<Result<Value, CallError>>>;
@@ -229,11 +235,8 @@ impl Shared {
 
     /// Number a request and send it, under the lock so seqs leave in order.
     fn send_request(&self, mut frame: Value) -> bool {
-        let Some(key) = self.key() else { return false };
         let mut conn = lock(&self.conn);
-        if !conn.welcomed {
-            return false;
-        }
+        let Some(key) = conn.session.clone().filter(|_| conn.welcomed) else { return false };
         conn.seq += 1;
         if let Some(o) = frame.as_object_mut() {
             o.insert("seq".into(), json!(conn.seq));
@@ -241,14 +244,6 @@ impl Shared {
         }
         let sealed = json!({ "enc": e2e::seal_with_iv(&key, &frame, e2e::random_iv()) }).to_string();
         conn.out.as_ref().is_some_and(|out| out.send(sealed).is_ok())
-    }
-
-    fn send_sealed(&self, frame: &Value) {
-        let Some(key) = self.key() else { return };
-        let sealed = json!({ "enc": e2e::seal_with_iv(&key, frame, e2e::random_iv()) }).to_string();
-        if let Some(out) = &lock(&self.conn).out {
-            let _ = out.send(sealed);
-        }
     }
 
     /// The signed Change proof a guarded channel needs, beside its arguments.
@@ -263,17 +258,30 @@ impl Shared {
         Some(json!({ "ts": ts, "sig": crate::proof::sign(&self.cfg.key, &text) }))
     }
 
-    /// Answer a challenge with a HELLO signed for this room and this nonce only.
-    fn hello(&self, nonce: &str) {
-        {
-            let mut conn = lock(&self.conn);
-            conn.welcomed = false;
-            conn.seq = 0;
-            conn.challenge = Some(nonce.to_string());
-        }
+    /// A challenge under the room key, which proves nothing: only the pinned
+    /// key's signature does. Answered with this device's half of the exchange
+    /// and a HELLO only the signer can read, signed for this exchange alone.
+    fn on_challenge(&self, frame: &Value) {
         let cfg = &self.cfg;
-        let text = hello::hello_text(&cfg.device_id, &cfg.room, nonce);
-        let mut frame = json!({
+        let text = |k: &str| frame.get(k).and_then(Value::as_str).filter(|v| !v.is_empty());
+        let (Some(nonce), Some(host_eph), Some(sig)) = (text("challenge"), text("eph"), text("sig")) else { return };
+        let signed = hello::host_text(&cfg.room, nonce, host_eph);
+        let genuine = crate::proof::parse_key(&cfg.host_key)
+            .zip(crate::proof::b64(sig))
+            .is_some_and(|(key, sig)| crate::proof::verify(&key, &signed, &sig));
+        if !genuine {
+            return;
+        }
+        let ours = Ephemeral::new(&hello::os_random());
+        let info = hello::session_info(&cfg.room, nonce, host_eph, &ours.public);
+        let Some(key) = ours.session_key(host_eph, &info) else { return };
+        // While online this means the computer reset the handshake; calls in
+        // flight stay pending, since their replies may still arrive.
+        if self.status.borrow().state == State::Online {
+            self.set_state(State::Connecting, None);
+        }
+        let signed = hello::hello_text(&cfg.device_id, &cfg.room, nonce, host_eph, &ours.public);
+        let mut hello = json!({
             "type": "hello",
             "deviceId": cfg.device_id,
             "name": cfg.name,
@@ -281,26 +289,25 @@ impl Shared {
             "protocol": hello::PROTOCOL_VERSION,
             "challenge": nonce,
             "helloKey": crate::proof::public_key(&cfg.key),
-            "sig": crate::proof::sign(&cfg.key, &text),
+            "sig": crate::proof::sign(&cfg.key, &signed),
         });
-        if let (Some(code), Some(o)) = (lock(&self.pair).clone(), frame.as_object_mut()) {
+        if let (Some(code), Some(o)) = (lock(&self.pair).clone(), hello.as_object_mut()) {
             o.insert("pair".into(), json!(code));
         }
-        self.send_sealed(&frame);
+        let sealed = json!({ "eph": ours.public, "enc": e2e::seal_with_iv(&key, &hello, e2e::random_iv()) });
+        let mut conn = lock(&self.conn);
+        conn.welcomed = false;
+        conn.seq = 0;
+        conn.challenge = Some(nonce.to_string());
+        conn.session = Some(key);
+        if let Some(out) = &conn.out {
+            let _ = out.send(sealed.to_string());
+        }
     }
 
     /// One decrypted frame. `Some` ends the socket.
     fn on_frame(self: &Arc<Self>, frame: &Value, route: &str) -> Option<End> {
         match frame.get("type").and_then(Value::as_str) {
-            Some("challenge") => {
-                let nonce = frame.get("challenge").and_then(Value::as_str).filter(|n| !n.is_empty())?;
-                // While online it means the computer reset the handshake; calls in
-                // flight stay pending, since their replies may still arrive.
-                if self.status.borrow().state == State::Online {
-                    self.set_state(State::Connecting, None);
-                }
-                self.hello(nonce);
-            }
             Some("welcome") => {
                 lock(&self.conn).welcomed = true;
                 *lock(&self.pair) = None;
@@ -500,7 +507,8 @@ async fn session(shared: &Arc<Shared>, route: &str, more: bool, mut stopped: wat
                     },
                     Some(Ok(Message::Close(frame))) => {
                         let (code, reason) = frame.map_or((1006, String::new()), |f| (f.code.into(), f.reason.to_string()));
-                        return on_close(code, &reason, welcomed, route.starts_with("wss://"));
+                        let private = crate::route::relay_route(route) != crate::route::Route::Lan;
+                        return on_close(code, &reason, welcomed, route.starts_with("wss://") || private);
                     }
                     Some(Ok(_)) => {}
                     Some(Err(_)) | None => return if welcomed { End::Lost } else { End::Failed },
@@ -513,15 +521,24 @@ async fn session(shared: &Arc<Shared>, route: &str, more: bool, mut stopped: wat
 fn on_raw(shared: &Arc<Shared>, raw: &str, route: &str, away: &mut bool) -> Option<End> {
     let env: Value = serde_json::from_str(raw).ok()?;
     if let Some(enc) = env.get("enc").and_then(Value::as_str) {
-        // Wrong key or tampered: dropped silently, as the agent does.
+        let session = lock(&shared.conn).session.clone();
+        if let Some(frame) = session.and_then(|key| e2e::open(&key, enc)) {
+            *away = false;
+            return shared.on_frame(&frame, route);
+        }
+        // Under the room key only a challenge counts: anyone ever paired could
+        // have sealed this. Wrong key or tampered: dropped, as the agent does.
         let frame = e2e::open(&shared.key()?, enc)?;
-        *away = false;
-        return shared.on_frame(&frame, route);
+        if frame.get("type").and_then(Value::as_str) == Some("challenge") {
+            *away = false;
+            shared.on_challenge(&frame);
+        }
+        return None;
     }
     match env.get("type").and_then(Value::as_str) {
         Some("agent-offline") => {
             let mut conn = lock(&shared.conn);
-            (conn.welcomed, conn.challenge, conn.seq) = (false, None, 0);
+            (conn.welcomed, conn.challenge, conn.seq, conn.session) = (false, None, 0, None);
             *away = true;
         }
         Some("agent-online") => {
@@ -535,11 +552,12 @@ fn on_raw(shared: &Arc<Shared>, raw: &str, route: &str, away: &mut bool) -> Opti
 
 /// The relay's close rules: 4001 this device was removed, 1008 "bad pairing key"
 /// the same, 1008 "agent offline" poll until the computer is back. A close is
-/// not sealed, so on `ws://` from a socket that never reached the computer
-/// (anyone can answer on a LAN address) it only fails this route.
-fn on_close(code: u16, reason: &str, welcomed: bool, tls: bool) -> End {
+/// not sealed, so on a plain LAN address from a socket that never reached the
+/// computer (anyone can answer there) it only fails this route. `secured` says
+/// the path is not that: TLS, or a tailnet.
+fn on_close(code: u16, reason: &str, welcomed: bool, secured: bool) -> End {
     let r = reason.to_lowercase();
-    let believed = welcomed || tls;
+    let believed = welcomed || secured;
     if code == 4001 && believed {
         End::Denied("kicked".into())
     } else if code == 1008 && r.contains("bad pairing key") && believed {

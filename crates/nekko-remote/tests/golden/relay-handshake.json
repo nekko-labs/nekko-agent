@@ -1,9 +1,9 @@
 {
-  "$comment": "Relay v2 replay protection (protocol 4) and device-key HELLOs (protocol 5), shared by the computer (crates/nekko-remote, tests/golden.rs), the iPhone (apps/ios/Protocol, RelayClientTests) and Android (apps/android/protocol, RelayClientTest). The agent seals `challenge.frame` to a connection when the relay announces it (client-open); the phone opens it and answers with exactly `hello` (its own deviceId, name and platform; pair only when enrolling); every request after the welcome carries the same challenge and a seq that starts at 1 and goes up by one (`requests`). `legacyHello` is what a phone sends to a computer that never challenged it. Sealed with AES-256-GCM under PBKDF2-SHA256(secret, \"nekko-relay:\" + room, 100000), IV first, base64. `helloKey` is a device key (P-256, private scalar hex, public X9.63 base64), the text a HELLO answering `challenge` signs (nekko-hello-v1, deviceId, room, challenge joined by newlines) and one valid raw r||s signature of it; a phone with a device key adds `helloKey` (its public key) and `sig` to `hello`, which is otherwise exactly as here.",
+  "$comment": "Relay v2 handshake (protocol 6, decision 0041), shared by the computer (crates/nekko-remote, tests/golden.rs, which rewrites every derived value here with UPDATE_GOLDEN=1), the iPhone (apps/ios/Protocol, RelayHandshakeTests), Android (apps/android/protocol, RelayClientTest) and the browser (packages/shared, remote-hello.golden.test.ts). The agent seals `challenge.frame` under the room key (PBKDF2-SHA256(secret, \"nekko-relay:\" + room, 100000), AES-256-GCM, IV first, base64) when the relay announces a connection; `sig` is the host key's ECDSA P-256 SHA-256 signature of `hostText`, raw r||s, base64. The device checks that against the host key pinned from its link, makes an ephemeral P-256 key and derives `sessionKey`: HKDF-SHA256(ECDH(ephemeral, challenge.frame.eph), zero salt, `sessionInfo`, 32 bytes). It answers with `helloFrame`: `{eph, enc}`, its public half beside `hello` sealed under that key. `helloKey` is a device key; a HELLO's `sig` is its signature of `helloKey.text`. Every frame after that is sealed under the session key, and every request carries the challenge and a seq that starts at 1 and goes up by one (`requests`). Keys are P-256: private scalar hex, public X9.63 base64.",
   "secret": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
   "room": "a1b2c3d4e5f60718",
   "key": "df7d9b2ebbe22078543ea07b5a227d92f6eba4d7fa6ca5655f5b919de40f949a",
-  "protocol": 5,
+  "protocol": 6,
   "device": {
     "deviceId": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
     "name": "Test phone",
@@ -13,24 +13,21 @@
     "nonceBytes": "05101b26313c47525d68737e89949faab5c0",
     "frame": {
       "type": "challenge",
-      "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA"
+      "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA",
+      "eph": "BOP1gt+CoYqr5jok7MgkOauZwgSpTkR8Ovnv3COa0MOKvPmEMS6F5LxxwDO04wlYFPkXGCIRdpyrSqvy1UtLGj8=",
+      "sig": "lKmETNfxvEXe3I9VPmbAC3YErqRznmLY04UKeNur5XoKUS5KddN5BySDcfilViSmKSruxGANBxy4j+Qvhi3Hhg=="
     },
-    "blob": "AQQHCg0QExYZHB8ig2jWMpy5Ls/VKNFZJlm2vyEI2D8KcTpQXsCrXhq4lqap1hJwYSJzzUgkbhNXCdT0y1ylg11UmfdtUfz6XmF7Ob5WiZDnHSmqIUzk"
+    "blob": "AQQHCg0QExYZHB8ig2jWMpy5Ls/VKNFZJlm2vyEI2D8KcTpQXsCrXhq4lqap1hJwYSJzzUgkbhNXCdT0y1ylg11UmfdtUa1St3kbvy3qWqoglCutvFiCldTK4U9yPlUkfqNE/GK/PLyM9VxWiwhLOYiE6+czYoYmAw2Z1gplUTS5+jyOsLSJNR1UUfY1AS6AGSGFy33nJHzntjiyRDUaZ8B3jh+QYrqIHdSYUuwIuAR+rCTp/0i28cGR7IJ4Q2vwZK5VVgq5vMa2siRDhXXa2iZxroC8pEYMMIg+Rq3TwOx4xP8BR4KXAnNz9vJgOU20T28d5bn+wxFbeNIVIgSBf1+ESJj2bO3URhmOOHN2xFwxWgQYP2Jvskk="
   },
   "hello": {
     "type": "hello",
     "deviceId": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
     "name": "Test phone",
     "platform": "android",
-    "protocol": 5,
-    "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA"
-  },
-  "legacyHello": {
-    "type": "hello",
-    "deviceId": "6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b",
-    "name": "Test phone",
-    "platform": "android",
-    "protocol": 3
+    "protocol": 6,
+    "challenge": "BRAbJjE8R1JdaHN+iZSfqrXA",
+    "helloKey": "BAyQHUI8gxyoXifHPCY7oTJyG7nXqExPA4CypnVv1gEzHIhwI03sh4UEwXQUT6SxS2amUWkWBtgXPlW9N+OBVp4=",
+    "sig": "SFu6+7AGwJMEe/fvTXMg6SIGwUntPt0Ujgox4zw58d4ItdP3v3BI1VYG6/jK4ciG8pT3im+Mszzb3R18QyxxuQ=="
   },
   "requests": [
     {
@@ -55,7 +52,26 @@
   "helloKey": {
     "privateKeyHex": "2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
     "publicKey": "BAyQHUI8gxyoXifHPCY7oTJyG7nXqExPA4CypnVv1gEzHIhwI03sh4UEwXQUT6SxS2amUWkWBtgXPlW9N+OBVp4=",
-    "text": "nekko-hello-v1\n6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b\na1b2c3d4e5f60718\nBRAbJjE8R1JdaHN+iZSfqrXA",
-    "sig": "8ZPI7jKmbu35tB/WoFQI2Twkky7wKYH1pifCSdPk7oUHiSd2gGF2i/0+CWJc9hcEsEuukLgkSRUML34tJdjdoA=="
+    "text": "nekko-hello-v2\n6f1c2b3a-4d5e-4f60-8a7b-9c0d1e2f3a4b\na1b2c3d4e5f60718\nBRAbJjE8R1JdaHN+iZSfqrXA\nBOP1gt+CoYqr5jok7MgkOauZwgSpTkR8Ovnv3COa0MOKvPmEMS6F5LxxwDO04wlYFPkXGCIRdpyrSqvy1UtLGj8=\nBIGgVoeNJwgPzsGyf3XUd5Wi3xHNUaF4/PIthJJW5R1yA4Vfh8ATBLyylG0kaJvC7cHRO2G4ps1ndige9sVHz4w=",
+    "sig": "SFu6+7AGwJMEe/fvTXMg6SIGwUntPt0Ujgox4zw58d4ItdP3v3BI1VYG6/jK4ciG8pT3im+Mszzb3R18QyxxuQ=="
+  },
+  "hostKey": {
+    "privateKeyHex": "d169b4d7aad9dcdff3abee4a5f7cb7380024c8332af9e01a4fb039df090f8db7",
+    "publicKey": "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
+  },
+  "hostEph": {
+    "privateKeyHex": "2d8331c80d7ae396cb60338feced12ce0e74932b16c68c1a91be8ab1dbc2519c",
+    "publicKey": "BOP1gt+CoYqr5jok7MgkOauZwgSpTkR8Ovnv3COa0MOKvPmEMS6F5LxxwDO04wlYFPkXGCIRdpyrSqvy1UtLGj8="
+  },
+  "clientEph": {
+    "privateKeyHex": "6a6c67464f22af2521c1972d636ffa526831bb1bd6f431ce6aaeb9788deac462",
+    "publicKey": "BIGgVoeNJwgPzsGyf3XUd5Wi3xHNUaF4/PIthJJW5R1yA4Vfh8ATBLyylG0kaJvC7cHRO2G4ps1ndige9sVHz4w="
+  },
+  "hostText": "nekko-host-v1\na1b2c3d4e5f60718\nBRAbJjE8R1JdaHN+iZSfqrXA\nBOP1gt+CoYqr5jok7MgkOauZwgSpTkR8Ovnv3COa0MOKvPmEMS6F5LxxwDO04wlYFPkXGCIRdpyrSqvy1UtLGj8=",
+  "sessionInfo": "nekko-session-v1\na1b2c3d4e5f60718\nBRAbJjE8R1JdaHN+iZSfqrXA\nBOP1gt+CoYqr5jok7MgkOauZwgSpTkR8Ovnv3COa0MOKvPmEMS6F5LxxwDO04wlYFPkXGCIRdpyrSqvy1UtLGj8=\nBIGgVoeNJwgPzsGyf3XUd5Wi3xHNUaF4/PIthJJW5R1yA4Vfh8ATBLyylG0kaJvC7cHRO2G4ps1ndige9sVHz4w=",
+  "sessionKey": "c72f8af136b604dc7520e6405a0b8bff20cf56120e0583b91c7444b018c9e58d",
+  "helloFrame": {
+    "eph": "BIGgVoeNJwgPzsGyf3XUd5Wi3xHNUaF4/PIthJJW5R1yA4Vfh8ATBLyylG0kaJvC7cHRO2G4ps1ndige9sVHz4w=",
+    "enc": "BwcHBwcHBwcHBwcHZZ1dOS3raTsL8x80lYmSjZiKQV9rR5t2+yDrXRtShIU3cJtQsKQ3q80sc9pThURB5NWTJ3XSI6F1ezwU9ZRJp2dbt0hhpKVY+OQLSZ5k9UtTCCiZuA+Se0nnem+QTIaX54BPsaYtzq1/p6rDxTSnH458iJUk4qhOvU45qgTj2tt6jBMBFQPngqYuv6Fi9tipf8uFNOwVFH3sK05SAl31JJS0gRJPxhBBOu5+j35T0vtugqiz/0Z8L2kj6gnWcSAsTnb2BrSySi4ldvAiBgGiQKxfh3ZcjIATu80m/RJ8T7+WY3dI8JXcVbCE0Ek7EvfT11lT9j9pKvDuJDF4/izZj60GYLm1+NrRnZe+i/OowSdhJSLD6BGtBSypPJZTV1eCaa0ylExCvxsv6GMHyCoNC5uen8kERLcoD2UU7CvNJ9+/257Sdnc9bhUb6wieu8aNZbq5TdINZFwPO9+oWuKA1fWjmaSmDS5PVbB1h+U/wpr31PvtnUQ="
   }
 }

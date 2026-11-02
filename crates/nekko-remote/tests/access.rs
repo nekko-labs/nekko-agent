@@ -16,7 +16,14 @@ struct NoLink;
 struct NoHandle;
 
 impl Link for NoLink {
-    fn connect(&self, _: &str, _: &str, _: &str, _: Verifier) -> Arc<dyn LinkHandle> {
+    fn connect(
+        &self,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: nekko_remote::client::SigningKey,
+        _: Verifier,
+    ) -> Arc<dyn LinkHandle> {
         Arc::new(NoHandle)
     }
 }
@@ -54,9 +61,9 @@ fn registry() -> (tempfile::TempDir, Arc<RemoteService>) {
 fn hello(id: &str, extra: Value) -> Value {
     let k = SigningKey::from_slice(&[id.len() as u8 + 40; 32]).unwrap();
     let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
-    let sig: Signature = k.sign(nekko_remote::hello::hello_text(id, "r", "c").as_bytes());
+    let sig: Signature = k.sign(nekko_remote::hello::hello_text(id, "r", "c", "h", "d").as_bytes());
     let mut h = json!({
-        "type": "hello", "deviceId": id, "protocol": 5, "challenge": "c",
+        "type": "hello", "deviceId": id, "protocol": 6, "challenge": "c", "hostEph": "h", "clientEph": "d",
         "helloKey": b64(k.verifying_key().to_encoded_point(false).as_bytes()), "sig": b64(&sig.to_bytes()),
     });
     for (k, v) in extra.as_object().unwrap() {
@@ -227,7 +234,14 @@ struct Recorder {
 }
 
 impl Link for Recorder {
-    fn connect(&self, _: &str, _: &str, _: &str, _: Verifier) -> Arc<dyn LinkHandle> {
+    fn connect(
+        &self,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: nekko_remote::client::SigningKey,
+        _: Verifier,
+    ) -> Arc<dyn LinkHandle> {
         self.said.lock().unwrap().push("connect".into());
         Arc::new(Recorder { said: self.said.clone() })
     }
@@ -297,7 +311,8 @@ fn a_pairing_from_before_derived_relay_credentials_is_replaced_at_start() {
     let cfg = saved(&dir);
     assert_ne!(cfg["secret"], json!("s"), "a fresh secret");
     assert_ne!(cfg["room"], json!("r"), "a fresh room");
-    assert_eq!(cfg["pairing"], json!(2));
+    assert_eq!(cfg["pairing"], json!(3));
+    assert!(cfg["hostKey"].is_string(), "a host key for phones to pin");
     assert_eq!(cfg["devices"][0]["id"], "phone-1", "paired devices are kept");
     assert_eq!(*said.lock().unwrap(), ["connect"]);
     // Once current, a restart keeps it.

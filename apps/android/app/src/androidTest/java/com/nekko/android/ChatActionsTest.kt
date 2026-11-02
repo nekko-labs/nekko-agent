@@ -23,7 +23,6 @@ import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.ChatsScreen
 import com.nekko.android.ui.theme.NekkoTheme
 import com.nekko.protocol.Channels
-import com.nekko.protocol.PairingLink
 import com.nekko.protocol.RelayConfig
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RelayStatus
@@ -124,7 +123,7 @@ class ChatActionsTest {
             deriveKey = { _, _ -> ByteArray(32) },
         )
         runBlocking {
-            val id = repo.pair(PairingLink("wss://relay.example.dev", "a1b2c3d4e5f60718", "00112233445566778899aabbccddeeff"))
+            val id = repo.pair(testPairing())
             repo.rename(id, "Studio Mac")
             // The list draws once the repository has read its computers.
             repo.load()

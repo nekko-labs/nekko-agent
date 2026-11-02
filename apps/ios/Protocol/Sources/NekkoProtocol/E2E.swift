@@ -15,6 +15,11 @@ import CommonCrypto
 /// PBKDF2-HMAC-SHA256, 100 000 iterations, salt `nekko-relay:<room>`, derives a
 /// 256-bit AES-GCM key. A sealed frame is base64(iv[12] ‖ ciphertext ‖ tag[16]),
 /// which is exactly CryptoKit's `AES.GCM.SealedBox.combined` with a 12-byte nonce.
+///
+/// Every paired device ever held that secret, so the room key carries nothing
+/// worth having (decision 0041): only the computer's signed challenge goes
+/// under it. Everything else is sealed under a key only that connection's two
+/// ends can derive (`Ephemeral`).
 public enum E2E {
     /// PROTOCOL CONSTANTS: changing any of these breaks every existing pairing.
     public static let saltPrefix = "nekko-relay:"
@@ -25,8 +30,9 @@ public enum E2E {
 
     /// PROTOCOL CONSTANT: the label of the room credential the relay checks (decision 0036).
     public static let relayAuthLabel = "nekko-relay-auth:"
-    /// How a stored pairing reaches the relay: 2 is `relayAuth`. Older stored pairings must pair again.
-    public static let pairingVersion = 2
+    /// What a stored pairing holds: 2 reaches the relay with `relayAuth`, 3 pins
+    /// the computer's host key. Older stored pairings must pair again.
+    public static let pairingVersion = 3
 
     /// The `key=` presented to the relay: hex of HMAC-SHA256 keyed with the
     /// pairing secret over `"nekko-relay-auth:" + room`. One-way, so the relay
@@ -140,5 +146,24 @@ public enum E2E {
         }
         return out.prefix(length)
         #endif
+    }
+}
+
+/// One side of a connection's key exchange: a P-256 key used once (decision 0041).
+struct Ephemeral {
+    let key: P256.KeyAgreement.PrivateKey
+
+    init(key: P256.KeyAgreement.PrivateKey = .init()) { self.key = key }
+
+    /// The public half as frames carry it: X9.63 uncompressed, base64.
+    var publicKey: String { key.publicKey.x963Representation.base64EncodedString() }
+
+    /// `HKDF-SHA256(ECDH(ours, theirs), zero salt, info)`, or nil when `theirs` is not a point on the curve.
+    func sessionKey(theirs: String, info: String) -> Data? {
+        guard let bytes = Data(base64Encoded: theirs), bytes.count == 65,
+              let peer = try? P256.KeyAgreement.PublicKey(x963Representation: bytes),
+              let shared = try? key.sharedSecretFromKeyAgreement(with: peer) else { return nil }
+        let derived = shared.hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data(), sharedInfo: Data(info.utf8), outputByteCount: E2E.keyBytes)
+        return derived.withUnsafeBytes { Data($0) }
     }
 }

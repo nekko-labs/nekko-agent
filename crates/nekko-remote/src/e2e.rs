@@ -3,6 +3,11 @@
 //! `iv || ciphertext || tag`. The relay only ever sees these blobs, and a
 //! room credential derived from the secret under its own label
 //! ([`relay_auth`], decision 0036), never the secret itself.
+//!
+//! Every paired device ever held that secret, so the room key carries nothing
+//! worth having (decision 0041): one signed challenge per connection, and the
+//! refusal an older app gets. Everything else is sealed under [`session_key`],
+//! which only that connection's two ends can derive.
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -53,6 +58,47 @@ pub fn derive_key(secret: &str, room: &str) -> Key {
     let salt = format!("{SALT_PREFIX}{room}");
     let raw = pbkdf2::pbkdf2_hmac_array::<sha2::Sha256, 32>(secret.as_bytes(), salt.as_bytes(), ITERATIONS);
     Key(Aes256Gcm::new_from_slice(&raw).expect("a 32-byte key"), raw)
+}
+
+/// One side of a connection's key exchange: a P-256 key used once.
+pub struct Ephemeral {
+    secret: p256::SecretKey,
+    /// The public half as frames carry it: X9.63 uncompressed, base64.
+    pub public: String,
+}
+
+impl std::fmt::Debug for Ephemeral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Ephemeral(..)")
+    }
+}
+
+impl Ephemeral {
+    pub fn new(random: &crate::hello::Random) -> Self {
+        let secret = loop {
+            let mut bytes = [0u8; 32];
+            random(&mut bytes);
+            // Zero or past the curve's order: about one draw in 2^32.
+            if let Ok(secret) = p256::SecretKey::from_slice(&bytes) {
+                break secret;
+            }
+        };
+        let public = STANDARD.encode(
+            p256::elliptic_curve::sec1::ToEncodedPoint::to_encoded_point(&secret.public_key(), false).as_bytes(),
+        );
+        Self { secret, public }
+    }
+
+    /// `HKDF-SHA256(ECDH(ours, theirs), zero salt, info)`, or `None` when
+    /// `theirs` is not a point on the curve.
+    pub fn session_key(&self, theirs: &str, info: &str) -> Option<Key> {
+        let bytes = STANDARD.decode(theirs).ok().filter(|b| b.len() == 65)?;
+        let peer = p256::PublicKey::from_sec1_bytes(&bytes).ok()?;
+        let shared = p256::ecdh::diffie_hellman(self.secret.to_nonzero_scalar(), peer.as_affine());
+        let mut raw = [0u8; 32];
+        shared.extract::<sha2::Sha256>(None).expand(info.as_bytes(), &mut raw).ok()?;
+        Some(Key(Aes256Gcm::new_from_slice(&raw).expect("a 32-byte key"), raw))
+    }
 }
 
 /// A fresh random IV. A repeated GCM nonce leaks plaintext, so without the OS
@@ -120,5 +166,17 @@ mod tests {
         assert_eq!(open(&key, &STANDARD.encode(bytes)), None);
         assert_eq!(open(&key, "AAAA"), None);
         assert_eq!(open(&key, "not base64!"), None);
+    }
+
+    #[test]
+    fn both_ends_of_an_exchange_derive_one_key_and_nobody_else_does() {
+        let random = crate::hello::os_random();
+        let (a, b, c) = (Ephemeral::new(&random), Ephemeral::new(&random), Ephemeral::new(&random));
+        let (ab, ba) = (a.session_key(&b.public, "x").unwrap(), b.session_key(&a.public, "x").unwrap());
+        assert_eq!(ab.raw(), ba.raw());
+        assert_ne!(ab.raw(), a.session_key(&c.public, "x").unwrap().raw());
+        assert_ne!(ab.raw(), a.session_key(&b.public, "y").unwrap().raw(), "bound to the transcript");
+        assert!(a.session_key("not a point", "x").is_none());
+        assert!(a.session_key(&STANDARD.encode([4u8; 65]), "x").is_none());
     }
 }

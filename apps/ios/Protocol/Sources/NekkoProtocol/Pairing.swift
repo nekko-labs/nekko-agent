@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pairing links. Settings → Remote access on the computer shows a QR carrying
-/// `nekko-agent-pair:?relay=&room=&key=&pair=` (or, from the Local Web UI,
+/// `nekko-agent-pair:?relay=&room=&key=&host=&pair=` (or, from the Local Web UI,
 /// `https://host/?relay=…`), plus one `alt=` per extra route to the same relay
 /// (the relay on the computer's LAN addresses, TASKS.md IO-20). Either form, or
 /// a bare query string, parses to the same credentials. Mirrors
@@ -12,21 +12,34 @@ public struct PairingLink: Equatable, Sendable, CustomStringConvertible {
     public let room: String
     /// Pairing secret. Never logged.
     public let key: String
+    /// The computer's public key (X9.63 P-256, base64), which this phone pins and
+    /// every challenge must verify against (decision 0041). Absent from a link
+    /// made by a computer too old to prove itself: such a link can't pair.
+    public let hostKey: String?
     /// One-time enrollment code; absent when re-using an existing pairing.
     public let pair: String?
     /// Other addresses of the same relay, in the link's order.
     public let alts: [String]
 
-    public init(relayUrl: String, room: String, key: String, pair: String? = nil, alts: [String] = []) {
+    public init(relayUrl: String, room: String, key: String, hostKey: String? = nil, pair: String? = nil, alts: [String] = []) {
         self.relayUrl = relayUrl
         self.room = room
         self.key = key
+        self.hostKey = hostKey
         self.pair = pair
         self.alts = alts
     }
 
     /// Never print the secret.
     public var description: String { "PairingLink(relay=\(relayUrl), room=\(room), pair=\(pair != nil), alts=\(alts.count))" }
+}
+
+/// Why a well-formed link can't pair.
+public enum PairingRefusal: Error, Equatable, LocalizedError {
+    /// The link has no `host`: never trust a first-seen key (decision 0041).
+    case noHostKey
+
+    public var errorDescription: String? { "Update Nekko Agent on your computer, then make a new pairing code." }
 }
 
 public enum Pairing {
@@ -50,8 +63,10 @@ public enum Pairing {
         guard isHex(room, 8...128), isHex(key, 16...256) else { return nil }
         var pair = first("pair")?.trimmingCharacters(in: .whitespaces).uppercased()
         if pair?.isEmpty == true { pair = nil }
+        let host = first("host")?.trimmingCharacters(in: .whitespaces)
+        let hostKey = host.flatMap { $0.wholeMatch(of: #/[A-Za-z0-9+\/]{87}=/#) == nil ? nil : $0 }
         let url = trimSlashes(relay)
-        return PairingLink(relayUrl: url, room: room, key: key, pair: pair,
+        return PairingLink(relayUrl: url, room: room, key: key, hostKey: hostKey, pair: pair,
                            alts: alts(pairs.filter { $0.0 == "alt" }.map(\.1), relayUrl: url))
     }
 

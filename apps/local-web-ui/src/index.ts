@@ -74,6 +74,7 @@ async function main() {
       here: __dirname,
       // A Nekko Cloud machine: its pairing code was minted by Nekko Cloud, and its scope says what it may see.
       pairCode: env('PAIR_CODE') || undefined,
+      hostKey: env('HOST_KEY') || undefined,
       scope: parseCloudScope(env('CLOUD_SCOPE')),
     });
     return;

@@ -112,6 +112,26 @@
   }
  },
  {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&host=BGsX0fLhLEJH%2BLzm5WOkQPJ3A32BLeszoPShOUXYmMKWT%2BNC4v4af5uO5%2BtKfA%2BeFivOM1drMV7Oy7ZAaDe%2FUfU%3D&pair=XY",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "hostKey": "BGsX0fLhLEJH+Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT+NC4v4af5uO5+tKfA+eFivOM1drMV7Oy7ZAaDe/UfU=",
+   "pair": "XY",
+   "alts": []
+  }
+ },
+ {
+  "input": "nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&host=not-a-key",
+  "link": {
+   "relayUrl": "ws://studio.tail1234.ts.net:4400",
+   "room": "0123456789abcdef",
+   "key": "00112233445566778899aabbccddeeff",
+   "alts": []
+  }
+ },
+ {
   "input": "nekko-agent-pair:?relay=http%3A%2F%2Fx&room=0123456789abcdef&key=00112233445566778899aabbccddeeff&alt=ws://10.0.0.5:4400",
   "link": null
  },

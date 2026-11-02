@@ -45,9 +45,14 @@ data class ComputerSecret(
     val keyHex: String,
     /** Present until the computer welcomes us once. */
     val pair: String? = null,
-    /** [com.nekko.protocol.E2E.PAIRING_VERSION] when saved; older pairings must pair again (decision 0036). */
+    /** The computer's public key, pinned from the pairing link; older pairings have none (decision 0041). */
+    val hostKey: String? = null,
+    /** [com.nekko.protocol.E2E.PAIRING_VERSION] when saved; older pairings must pair again (decisions 0036, 0041). */
     val version: Int = com.nekko.protocol.E2E.PAIRING_VERSION,
 ) {
+    /** The key to dial with; null when this pairing must be made again, since a first-seen key is never trusted. */
+    val pin: String? get() = hostKey.takeIf { version >= com.nekko.protocol.E2E.PAIRING_VERSION }
+
     /** Never print the secret. */
     override fun toString(): String = "ComputerSecret(room=$room, pair=${pair != null})"
 }
@@ -130,6 +135,7 @@ internal object StoredJson {
         put("key", s.key)
         put("keyHex", s.keyHex)
         s.pair?.let { put("pair", it) }
+        s.hostKey?.let { put("hostKey", it) }
         put("v", s.version)
     }.toString()
 
@@ -140,6 +146,7 @@ internal object StoredJson {
             key = o.str("key") ?: return null,
             keyHex = o.str("keyHex") ?: return null,
             pair = o.str("pair"),
+            hostKey = o.str("hostKey"),
             // Saved before the relay credential was derived: 1.
             version = (o["v"] as? JsonPrimitive)?.intOrNull ?: 1,
         )

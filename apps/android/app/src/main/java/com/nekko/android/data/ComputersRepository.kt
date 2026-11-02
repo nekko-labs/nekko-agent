@@ -16,6 +16,7 @@ import com.nekko.protocol.Channels
 import com.nekko.protocol.E2E
 import com.nekko.protocol.Events
 import com.nekko.protocol.ModelInfo
+import com.nekko.protocol.Pairing
 import com.nekko.protocol.PairingLink
 import com.nekko.protocol.PendingInput
 import com.nekko.protocol.PublicProvider
@@ -203,6 +204,7 @@ class ComputersRepository(
         if (!_checking.compareAndSet(false, true)) return
         try {
             val secret = StoredJson.decodeSecret(store.get(secretKey(computer.id))) ?: return
+            val hostKey = secret.pin ?: return
             val routes = RouteSupervisor.order(listOf(computer.relayUrl) + computer.alts)
             _checks.value = routes.map { RouteReport(it) }
             routes.forEachIndexed { i, url ->
@@ -217,6 +219,7 @@ class ComputersRepository(
                                 room = secret.room,
                                 key = secret.key,
                                 keyBytes = E2E.fromHex(secret.keyHex),
+                                hostKey = hostKey,
                                 deviceId = deviceId(),
                                 deviceName = deviceName(),
                                 pairCode = null,
@@ -371,6 +374,7 @@ class ComputersRepository(
 
     /** Save a scanned/pasted pairing and connect. Returns the computer's id. */
     suspend fun pair(link: PairingLink): String {
+        val hostKey = link.hostKey ?: throw RelayException(Pairing.NEEDS_HOST_KEY)
         val keyHex = E2E.toHex(deriveKey(link.key, link.room))
         // Paired again after signing out: the old sign-out must never reach the new pairing.
         signOuts.cancel(link.relayUrl, link.room)
@@ -381,7 +385,7 @@ class ComputersRepository(
                 c.relayUrl == link.relayUrl && StoredJson.decodeSecret(store.get(secretKey(c.id)))?.room == link.room
             }
             val id = existing?.id ?: newId()
-            store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair)))
+            store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair, hostKey)))
             // The computer's routes may have changed since (another Wi-Fi, LAN addresses on or off).
             val next = if (existing != null) list.map { if (it.id == id) it.copy(alts = link.alts) else it }
             else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now(), alts = link.alts)
@@ -463,9 +467,10 @@ class ComputersRepository(
             )
         }
         liveList = false
-        if (secret.version < E2E.PAIRING_VERSION) {
-            // Paired before the computer replaced its pairing secret (decision 0036): it no longer
-            // answers on this pairing, so say so and ask for a fresh QR instead of dialing.
+        val hostKey = secret.pin
+        if (hostKey == null) {
+            // Paired before the computer replaced its pairing secret (decision 0036) or named its
+            // host key (decision 0041): say so and ask for a fresh QR instead of dialing.
             logStatus(RelayState.DENIED, denied = DenyReason.BAD_KEY)
             _state.update { it.copy(conn = RelayState.DENIED, denied = DenyReason.BAD_KEY) }
             return@withLock
@@ -479,6 +484,7 @@ class ComputersRepository(
             room = secret.room,
             key = secret.key,
             keyBytes = E2E.fromHex(secret.keyHex),
+            hostKey = hostKey,
             deviceId = deviceId(),
             deviceName = deviceName(),
             pairCode = secret.pair,
@@ -617,11 +623,13 @@ class ComputersRepository(
         } catch (_: Exception) {
             false
         }
-        if (!sent && secret != null) {
-            signOuts.add(PendingSignOut(computer.relayUrl, secret.room, secret.key, secret.keyHex, deviceId(), now()))
+        // A pairing with no host key can't be dialed, so there is nothing to queue.
+        val hostKey = secret?.pin?.takeIf { !sent }
+        if (secret != null && hostKey != null) {
+            signOuts.add(PendingSignOut(computer.relayUrl, secret.room, secret.key, secret.keyHex, hostKey, deviceId(), now()))
         }
         forget(id)
-        return if (sent || secret == null) SignOutResult.SENT else SignOutResult.QUEUED
+        return if (hostKey == null) SignOutResult.SENT else SignOutResult.QUEUED
     }
 
     /**
@@ -667,6 +675,7 @@ class ComputersRepository(
                 room = p.room,
                 key = p.key,
                 keyBytes = E2E.fromHex(p.keyHex),
+                hostKey = p.hostKey,
                 deviceId = p.deviceId,
                 deviceName = deviceName(),
                 platform = "android",

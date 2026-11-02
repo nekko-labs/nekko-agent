@@ -16,8 +16,8 @@ public enum RelayState: String, Sendable, Equatable {
 
 public enum DenyReason: String, Sendable, Equatable {
     case unknownDevice = "unknown-device", revoked, badCode = "bad-code", invalid, kicked, badKey = "bad-key"
-    /// The computer's owner turned off phones from before protocol 4 (no
-    /// challenge in the HELLO): this app must be updated.
+    /// What a computer tells an app from before protocol 6, under the room key,
+    /// which this app no longer reads.
     case updateRequired = "update-required"
     public static func parse(_ s: String?) -> DenyReason { s.flatMap(DenyReason.init(rawValue:)) ?? .invalid }
 }
@@ -106,7 +106,10 @@ public struct RelayConfig: Sendable {
     public var room: String
     /// Pairing secret: relay transport auth (the relay hashes it; never decrypts).
     public var key: String
-    /// AES key derived from (key, room) with `E2E.deriveKey`.
+    /// The computer's public key (X9.63 P-256, base64), pinned from the pairing
+    /// link. Every challenge must verify against it (decision 0041).
+    public var hostKey: String
+    /// AES key derived from (key, room) with `E2E.deriveKey`: the room key, for challenges only.
     public var keyBytes: Data
     public var deviceId: String
     public var deviceName: String
@@ -116,9 +119,8 @@ public struct RelayConfig: Sendable {
     /// The iPhone app's bundle id, so a relay serving several apps pushes to the right one.
     public var app: String?
     public var handshakeTimeout: TimeInterval = 15
-    /// How long an open socket waits for the computer's sealed challenge
-    /// before it takes the computer for one from before protocol 4 and sends
-    /// a legacy HELLO (never once this client has seen a challenge).
+    /// How long an open socket waits for a challenge that verifies before it
+    /// counts as a failed route.
     public var challengeWait: TimeInterval = 3
     public var requestTimeout: TimeInterval = 120
     /// Backoff knobs; tests shrink them.
@@ -129,11 +131,12 @@ public struct RelayConfig: Sendable {
     /// HELLO goes unsigned and the computer asks this phone to pair again.
     public var helloSigner: HelloSigner?
 
-    public init(relayUrl: String, room: String, key: String, keyBytes: Data, deviceId: String, deviceName: String,
+    public init(relayUrl: String, room: String, key: String, hostKey: String, keyBytes: Data, deviceId: String, deviceName: String,
                 pairCode: String? = nil, platform: String = "ios") {
         self.relayUrl = relayUrl
         self.room = room
         self.key = key
+        self.hostKey = hostKey
         self.keyBytes = keyBytes
         self.deviceId = deviceId
         self.deviceName = deviceName
@@ -163,15 +166,20 @@ public struct RelayConfig: Sendable {
 
 /// Relay v2 client: the phone side of the computer's relay agent (`crates/nekko-remote/src/agent.rs`).
 ///
-/// Connects as `role=client`, then completes the sealed handshake (phone
-/// protocol 4, replay protection):
+/// Connects as `role=client`, then completes the handshake (phone protocol 6,
+/// decision 0041):
 ///
-/// 1. The computer seals `{type:'challenge', challenge}` (a fresh nonce) to the
-///    connection when the relay announces it, and may send another at any
-///    time on the same socket, which restarts the handshake.
-/// 2. The phone answers each challenge once with the sealed HELLO
-///    `{type:'hello', deviceId, name, platform, protocol: 4, challenge, pair?}`
-///    (the one-time pairing code only while enrolling).
+/// 1. The computer sends `{type:'challenge', challenge, eph, sig}` under the
+///    room key when the relay announces the connection, and may send another
+///    at any time on the same socket, which restarts the handshake. `sig` is
+///    its host key's signature, checked against the key pinned from the
+///    pairing link. Everyone ever paired held the room key, so a challenge
+///    that fails is dropped without a word, never taken for a denial.
+/// 2. The phone makes a P-256 key for this challenge alone, derives the session
+///    key from the exchange (`Ephemeral`) and answers once with the plain JSON
+///    `{eph, enc}`: its public half beside the HELLO `{type:'hello', deviceId,
+///    name, platform, protocol: 6, challenge, helloKey, sig, pair?}` sealed
+///    under the session key (the one-time pairing code only while enrolling).
 /// 3. After the welcome every request is `{type:'req', id, seq, challenge,
 ///    channel, args, proof?, stepUp?}`: `seq` starts at 1 after each welcome and goes up
 ///    by one per request, and `challenge` is the nonce the welcomed HELLO
@@ -179,13 +187,13 @@ public struct RelayConfig: Sendable {
 ///    challenge and challenges the connection again, so a recorded frame
 ///    replayed by the relay is worthless.
 ///
-/// A computer from before protocol 4 never challenges: after `challengeWait`
-/// without one the phone sends a legacy HELLO (`protocol: 3`, no challenge)
-/// and its requests carry `seq` only. Once this client has seen a challenge it
-/// never falls back; a socket that gets none is treated as a failed route.
+/// A socket that gets no challenge that verifies within `challengeWait` is
+/// treated as a failed route, so the pairing code never reaches anything that
+/// can't prove it is the computer.
 ///
-/// Replies come back as `{type:'res'}` and `{type:'event', channel, payload}`,
-/// all E2E-sealed. Reconnects with backoff until closed. A port of Android's
+/// Replies come back as `{type:'res'}` and `{type:'event', channel, payload}`.
+/// Every frame after the HELLO, both ways, is sealed under the session key;
+/// under the room key only a challenge counts. Reconnects with backoff until closed. A port of Android's
 /// `RelayClient.kt` with the same state machine (pair code never resent, kick
 /// 4001 / bad key are terminal, an offline computer is polled at a fixed pace).
 ///
@@ -214,12 +222,12 @@ public final class RelayClient: @unchecked Sendable {
     private var nextId: Int64 = 1
     /// The handshake on the current socket: a HELLO went out (and its welcome may be awaited).
     private var helloSent = false
-    /// The nonce the last HELLO answered; nil for a legacy HELLO. Requests carry it once welcomed.
+    /// The nonce the last HELLO answered. Requests carry it once welcomed.
     private var challenge: String?
+    /// The key only this connection's two ends hold; nil until a challenge is answered.
+    private var session: Data?
     /// The last request's seq since the welcome (the next request carries seq + 1).
     private var seq: Int64 = 0
-    /// This client received a challenge at some point: never fall back to a legacy HELLO again.
-    private var sawChallenge = false
     /// Bumped to cancel a pending wait for the challenge.
     private var challengeGeneration = 0
     private var pending: [Int64: CheckedContinuation<JSONValue, Error>] = [:]
@@ -564,19 +572,24 @@ public final class RelayClient: @unchecked Sendable {
     private func isCurrent(_ c: WsConnection) -> Bool { locked { conn === c } }
 
     private func onSocketClosed(_ c: WsConnection, code: Int, reason: String) {
-        let mine: Bool = locked {
-            guard conn === c else { return false }
+        let wasWelcomed: Bool? = locked {
+            guard conn === c else { return nil }
+            let was = welcomed
             conn = nil
             welcomed = false
-            return true
+            return was
         }
-        guard mine else { return }
+        guard let wasWelcomed else { return }
         failPending("connection lost")
         if locked({ stopped }) || state == .denied { return }
         let r = reason.lowercased()
-        if code == 4001 {
+        // A close isn't sealed: on a plain LAN address, before the computer has
+        // answered, anyone can send one, so it only fails this route.
+        let url = route
+        let believed = wasWelcomed || url.hasPrefix("wss://") || RelayRoute.of(url) != .lan
+        if believed && code == 4001 {
             deny(.kicked)
-        } else if code == 1008 && r.contains("bad pairing key") {
+        } else if believed && code == 1008 && r.contains("bad pairing key") {
             deny(.badKey)
         } else if code == 1008 && r.contains("agent offline") {
             // The relay answered on this route: the computer is away, not the path.
@@ -593,15 +606,14 @@ public final class RelayClient: @unchecked Sendable {
     private func resetHandshakeLocked() {
         helloSent = false
         challenge = nil
+        session = nil
         seq = 0
         challengeGeneration += 1
     }
 
     /// The socket opened, or the computer (re)joined: wait for its challenge.
-    /// None within `challengeWait` means a computer from before protocol 4
-    /// (legacy HELLO), unless this client has seen a challenge before: then
-    /// the socket is dropped and dialed again, so the relay announces a fresh
-    /// connection to the computer.
+    /// None that verifies within `challengeWait`: the socket is dropped and
+    /// dialed again, so the relay announces a fresh connection to the computer.
     private func awaitChallenge(_ c: WsConnection) {
         let gen: Int = locked {
             challengeGeneration += 1
@@ -609,84 +621,64 @@ public final class RelayClient: @unchecked Sendable {
         }
         queue.asyncAfter(deadline: .now() + config.challengeWait) { [weak self] in
             guard let self else { return }
-            let next: (legacy: Bool, drop: Bool) = self.locked {
+            let drop: Bool = self.locked {
                 guard self.challengeGeneration == gen, self.conn === c, !self.stopped, !self.welcomed, !self.helloSent else {
-                    return (false, false)
+                    return false
                 }
-                if self.sawChallenge {
-                    self.conn = nil
-                    self.resetHandshakeLocked()
-                    return (false, true)
-                }
-                self.helloSent = true
-                self.challenge = nil
-                return (true, false)
+                self.conn = nil
+                self.resetHandshakeLocked()
+                return true
             }
-            if next.legacy {
-                self.hello(challenge: nil)
-            } else if next.drop {
-                // conn is already nil, so this socket's late onClosed is ignored.
-                c.close(code: 1000, reason: "no challenge")
-                self.failPending("connection lost")
-                self.routeFailed("\(Pairing.relayHost(self.route)) sent no handshake")
-            }
+            guard drop else { return }
+            // conn is already nil, so this socket's late onClosed is ignored.
+            c.close(code: 1000, reason: "no challenge")
+            self.failPending("connection lost")
+            self.routeFailed("\(Pairing.relayHost(self.route)) sent no handshake")
         }
     }
 
-    /// The computer refused a legacy HELLO this client sent (`update-required`):
-    /// never fall back again, and hand back the socket to drop. Nil when the
-    /// refused HELLO answered a challenge (then the denial stands).
-    private func lockedLegacyDrop() -> WsConnection? {
-        locked {
-            guard helloSent, challenge == nil, let c = conn else { return nil }
-            sawChallenge = true
-            conn = nil
-            welcomed = false
-            resetHandshakeLocked()
-            return c
-        }
-    }
-
-    /// A sealed challenge from the computer: answer it with a HELLO. While
-    /// online it means the computer reset the handshake (it refused a stale
-    /// HELLO or request): not welcomed until it welcomes again, and calls in
-    /// flight stay pending, since their replies may still arrive.
-    private func onChallenge(_ nonce: String) {
+    /// A challenge under the room key, which proves nothing: only the pinned
+    /// key's signature does. Answered with this phone's half of a new exchange.
+    /// While online it means the computer reset the handshake (it refused a
+    /// stale HELLO or request): not welcomed until it welcomes again, and calls
+    /// in flight stay pending, since their replies may still arrive.
+    private func onChallenge(_ frame: JSONValue) {
+        guard let nonce = frame.str("challenge"), !nonce.isEmpty, let hostEph = frame.str("eph"), let sig = frame.str("sig"),
+              HostKey.verifies(config.hostKey, room: config.room, challenge: nonce, eph: hostEph, sig: sig) else { return }
+        let ours = Ephemeral()
+        let clientEph = ours.publicKey
+        let info = HostKey.sessionInfo(room: config.room, challenge: nonce, hostEph: hostEph, clientEph: clientEph)
+        guard let key = ours.sessionKey(theirs: hostEph, info: info) else { return }
         let wasOnline: Bool? = locked {
             if stopped || conn == nil { return nil }
             let was = welcomed
-            sawChallenge = true
             challengeGeneration += 1
             welcomed = false
             seq = 0
             helloSent = true
             challenge = nonce
+            session = key
             return was
         }
         guard let wasOnline else { return }
         if wasOnline { setStatus(RelayStatus(.connecting)) }
-        hello(challenge: nonce)
+        hello(challenge: nonce, hostEph: hostEph, clientEph: clientEph, key: key)
     }
 
-    /// The sealed HELLO: protocol 4 with the challenge it answers, or a legacy
-    /// HELLO (protocol 3, no challenge) for a computer that never challenges.
-    private func hello(challenge nonce: String?) {
+    /// The HELLO, sealed under the session key beside this phone's half of the exchange.
+    private func hello(challenge nonce: String, hostEph: String, clientEph: String, key: Data) {
         var o: [String: JSONValue] = ["type": "hello", "deviceId": .string(config.deviceId), "name": .string(config.deviceName),
-                                      "platform": .string(config.platform)]
-        if let nonce {
-            o["protocol"] = .int(Int64(PhoneProtocol.version))
-            o["challenge"] = .string(nonce)
-            // Signed with the device key, for this room and this challenge only (decision 0036).
-            if let signer = config.helloSigner,
-               let proof = try? HelloKey.proof(signer, deviceId: config.deviceId, room: config.room, challenge: nonce) {
-                o["helloKey"] = .string(proof.key)
-                o["sig"] = .string(proof.sig)
-            }
-        } else {
-            o["protocol"] = .int(Int64(PhoneProtocol.legacyVersion))
+                                      "platform": .string(config.platform), "protocol": .int(Int64(PhoneProtocol.version)),
+                                      "challenge": .string(nonce)]
+        // Signed with the device key, for this room and this exchange only (decision 0036).
+        if let signer = config.helloSigner,
+           let proof = try? HelloKey.proof(signer, deviceId: config.deviceId, room: config.room, challenge: nonce, hostEph: hostEph, clientEph: clientEph) {
+            o["helloKey"] = .string(proof.key)
+            o["sig"] = .string(proof.sig)
         }
         if let code = locked({ pairCode }) { o["pair"] = .string(code) }
-        sendSealed(.object(o))
+        guard let c = locked({ conn }), let sealed = try? E2E.seal(key: key, value: .object(o)) else { return }
+        c.send(JSONValue.object(["eph": .string(clientEph), "enc": .string(sealed)]).serialized())
     }
 
     /// Number a request and send it, under `sendLock` so seqs leave in order.
@@ -694,31 +686,30 @@ public final class RelayClient: @unchecked Sendable {
     private func sendRequest(_ fields: [String: JSONValue]) -> Bool {
         sendLock.lock()
         defer { sendLock.unlock() }
-        let next: (c: WsConnection, seq: Int64, challenge: String?)? = locked {
-            guard let c = conn, welcomed else { return nil }
+        let next: (c: WsConnection, seq: Int64, challenge: String, key: Data)? = locked {
+            guard let c = conn, welcomed, let challenge, let session else { return nil }
             seq += 1
-            return (c, seq, challenge)
+            return (c, seq, challenge, session)
         }
         guard let next else { return false }
         var f = fields
         f["seq"] = .int(next.seq)
-        if let ch = next.challenge { f["challenge"] = .string(ch) }
-        guard let sealed = try? E2E.seal(key: config.keyBytes, value: .object(f)) else { return false }
+        f["challenge"] = .string(next.challenge)
+        guard let sealed = try? E2E.seal(key: next.key, value: .object(f)) else { return false }
         return next.c.send(JSONValue.object(["enc": .string(sealed)]).serialized())
-    }
-
-    @discardableResult
-    private func sendSealed(_ frame: JSONValue) -> Bool {
-        guard let c = locked({ conn }), let sealed = try? E2E.seal(key: config.keyBytes, value: frame) else { return false }
-        return c.send(JSONValue.object(["enc": .string(sealed)]).serialized())
     }
 
     private func onRaw(_ raw: String) {
         guard let env = try? JSONValue.parse(raw), env.object != nil else { return }
         if let enc = env.str("enc") {
-            // Wrong key or tampered: drop silently, like the agent does.
-            guard let frame = try? E2E.open(key: config.keyBytes, blob: enc), frame.object != nil else { return }
-            onFrame(frame)
+            if let key = locked({ session }), let frame = try? E2E.open(key: key, blob: enc), frame.object != nil {
+                onFrame(frame)
+                return
+            }
+            // Under the room key only a challenge counts: anyone ever paired could
+            // have sealed this. Wrong key or tampered: dropped, as the agent does.
+            guard let frame = try? E2E.open(key: config.keyBytes, blob: enc), frame.str("type") == "challenge" else { return }
+            onChallenge(frame)
             return
         }
         switch env.str("type") {
@@ -743,9 +734,6 @@ public final class RelayClient: @unchecked Sendable {
 
     private func onFrame(_ frame: JSONValue) {
         switch frame.str("type") {
-        case "challenge":
-            guard let nonce = frame.str("challenge"), !nonce.isEmpty else { return }
-            onChallenge(nonce)
         case "welcome":
             locked {
                 welcomed = true
@@ -761,17 +749,7 @@ public final class RelayClient: @unchecked Sendable {
                                         protocolVersion: PhoneProtocol.of(welcome: frame))
             emit { $0._onWelcome?(device) }
         case "denied":
-            let reason = DenyReason.parse(frame.str("reason"))
-            if reason == .updateRequired, let c = lockedLegacyDrop() {
-                // Our legacy HELLO raced a challenge that was slow to come:
-                // this computer speaks protocol 4, so wait for its challenge
-                // on a fresh socket instead of giving up.
-                c.close(code: 1000, reason: "legacy refused")
-                failPending("connection lost")
-                routeFailed("waiting for \(Pairing.relayHost(route)) to challenge")
-                return
-            }
-            deny(reason)
+            deny(DenyReason.parse(frame.str("reason")))
         case "res":
             guard let id = frame.long("id"), let p = takePending(id) else { return }
             if let err = frame["error"], !err.isNull {

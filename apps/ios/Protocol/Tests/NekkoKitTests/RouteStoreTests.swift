@@ -56,7 +56,7 @@ final class RouteStoreTests: XCTestCase {
     func testKeepsEveryRouteAndHandsThemToTheClient() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, pair: "AB", alts: [lan]))
+        try await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, hostKey: testHostKey, pair: "AB", alts: [lan]))
         XCTAssertEqual(s.active?.alts, [lan])
         XCTAssertEqual(s.active?.routes, [lan, tailnet], "the LAN first")
         XCTAssertEqual(connections.last?.config.relayUrl, tailnet)
@@ -66,7 +66,7 @@ final class RouteStoreTests: XCTestCase {
         let again = makeStore()
         again.load()
         XCTAssertEqual(again.active?.alts, [lan])
-        await again.pair(PairingLink(relayUrl: tailnet, room: room, key: key, alts: ["ws://10.0.0.5:4400"]))
+        try await again.pair(PairingLink(relayUrl: tailnet, room: room, key: key, hostKey: testHostKey, alts: ["ws://10.0.0.5:4400"]))
         XCTAssertEqual(again.computers.count, 1)
         XCTAssertEqual(again.active?.alts, ["ws://10.0.0.5:4400"])
     }
@@ -82,7 +82,7 @@ final class RouteStoreTests: XCTestCase {
     func testShowsTheRouteInUseAndLogsItWhenThereAreSeveral() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, alts: [lan]))
+        try await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, hostKey: testHostKey, alts: [lan]))
         let c = try XCTUnwrap(connections.last)
         c.status(RelayStatus(.connecting, route: lan))
         c.status(RelayStatus(.connecting, detail: "192.168.1.20:4400 didn’t answer", route: tailnet))
@@ -96,7 +96,7 @@ final class RouteStoreTests: XCTestCase {
     func testForwardsNetworkChangesWithThePath() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, alts: [lan]))
+        try await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, hostKey: testHostKey, alts: [lan]))
         s.networkChanged(.cellular)
         XCTAssertEqual(connections.last?.paths, [.cellular])
         // A new connection learns the path the phone is on.
@@ -107,7 +107,7 @@ final class RouteStoreTests: XCTestCase {
     func testKeepsAHealthySocketThroughTheGraceThenClosesIt() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.online()
         await settle()
@@ -132,7 +132,7 @@ final class RouteStoreTests: XCTestCase {
     func testABriefSwitchKeepsTheSocketAndABrokenOneClosesAtOnce() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.online()
         await settle()
@@ -153,7 +153,7 @@ final class RouteStoreTests: XCTestCase {
         network.open = ["100.101.102.103:4400"]
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, pair: "AB", alts: [lan]))
+        try await s.pair(PairingLink(relayUrl: tailnet, room: room, key: key, hostKey: testHostKey, pair: "AB", alts: [lan]))
         let live = try XCTUnwrap(connections.last)
         answerProbes = true
         await s.runChecks()

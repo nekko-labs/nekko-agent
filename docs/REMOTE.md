@@ -22,8 +22,11 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 
 - Your computer **dials out** to a relay and claims a room. No inbound ports, no port-forwarding.
 - Your phone connects to the same relay with the pairing credentials.
-- Every payload is **end-to-end encrypted** (AES-GCM, key derived from the pairing secret). The
-  relay routes ciphertext; it cannot read prompts, replies, files, or model output.
+- Every payload is **end-to-end encrypted** (AES-GCM) under a key made fresh for that one connection.
+  The relay routes ciphertext; it cannot read prompts, replies, files, or model output.
+- Your computer **proves who it is** on every connection, with a key your phone pins when it pairs.
+  Anything that can't prove it gets no prompt and no pairing code
+  ([decision 0041](decisions/0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md)).
 - The relay never receives the pairing secret. Both ends present a room credential derived from it
   under its own label (HMAC-SHA256 over `nekko-relay-auth:<room>`), which lets the relay match a phone
   to its computer but gives it nothing the encryption key can be derived from
@@ -49,8 +52,10 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 **Updating from a version before November 2026:** the first time your computer starts with the
 update, it replaces its pairing secret (the phones it knew stay listed). Each phone then says the
 pairing key changed: pair it again with a fresh QR from **Pair a device**. Pairing also enrolls the
-phone's own device key, which signs every connection from then on. Phones and the computer
-both need the update; an older app cannot connect to an updated computer.
+phone's own device key, which signs every connection from then on, and gives the phone your
+computer's key, which proves your computer on every connection. Phones and the computer
+both need the update: an older app cannot connect to an updated computer, and an updated app
+cannot connect to an older computer.
 
 ## The phone app
 
@@ -539,11 +544,8 @@ its key too; on Android, forgetting the last paired computer does.
 included, newest first, with why one was refused (Change off, no fresh Face ID or passcode, a changed
 key). Your computer keeps the newest 200 per phone; rotating the secret clears them.
 
-**Older phone apps.** Phone apps from before relay replay protection (below) still connect for one
-release. Your computer writes it to its log, shows *Older app: update it on the phone* next to that
-phone and adds one *Connected with an older app* line to its activity. To refuse them now, set
-`"acceptLegacyPhones": false` in `remote.json` in the data folder; such a phone is then told to
-update its app.
+**Older phone apps.** A phone app too old to check your computer can't connect. It is told to
+update, your computer writes that to its log, and one line goes in that phone's activity.
 
 **Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
 provider keys or other credentials, remote access itself (pairing more devices, revoking,
@@ -560,12 +562,15 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 
 | Threat | Defense |
 |---|---|
-| Relay operator reads your traffic | E2E encryption: the relay sees ciphertext and a room credential derived from the pairing secret, never the secret the key is derived from (decision 0036) |
-| Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, the secret itself to seal a HELLO, then a live pairing code, or the private key of a device that enrolled (every HELLO is signed with it) |
-| Someone copies the pairing secret off a phone | Not enough to connect as that phone: each phone signs every HELLO with its own device key (Secure Enclave on iPhone, Android Keystore), which never leaves it |
+| Relay operator reads your traffic | E2E encryption: every connection has its own key, from a key exchange the relay can't take part in, and it sees only ciphertext and a room credential (decisions 0036, 0041) |
+| Someone records your traffic and steals a key later | Each connection's key is made for that connection and thrown away with it, so a recording stays closed even with every long-term key |
+| Something poses as your computer | Your computer signs every connection with its host key, which your phone pinned from the pairing link. A phone sends nothing, pairing code included, to anything that can't, even if it holds the pairing secret (decision 0041) |
+| Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, then a live pairing code, or the private key of a device that enrolled (every HELLO is signed with it, for that connection alone) |
+| Someone copies the pairing secret off a phone | Not enough to connect as that phone, to pose as your computer, or to read anyone's traffic: each phone signs with its own device key (Secure Enclave on iPhone, Android Keystore), which never leaves it, and the secret opens no connection's frames |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
-| Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
+| Revoked device replays old creds | The agent refuses its handshake and sends it nothing. It can't read other devices' traffic or pose as your computer. It gets back in only with a fresh one-time pairing code from the computer's owner |
+| Revoked device kept the pairing secret | That still gets it onto the relay. There it can knock your computer offline for the few seconds a redial takes, and send content-free notifications or Live Activity text to your phones. It can't read or forge anything sealed. **Sign out all phones** shuts it out of the room for good, and every device pairs again |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
 | Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals outside a chat, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
 | Someone records the relay's traffic and plays it back | Every connection starts with a fresh random challenge from your computer that the phone's sealed hello must answer, once; every request after it carries that challenge and a number that only goes up. A replayed hello or request is dropped and never runs. (Phone apps from before this are accepted for one release, see *Older phone apps*.) |

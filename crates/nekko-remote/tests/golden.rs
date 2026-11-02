@@ -7,13 +7,13 @@
 //! keys, sealed blobs, verdicts, `remote.json` and the relay agent's frames.
 
 use base64::Engine;
-use nekko_remote::agent::AgentCore;
+use nekko_remote::agent::{AgentCore, Host, answer_challenge};
 use nekko_remote::e2e;
 use nekko_remote::hello::{self, Grant, Random};
 use nekko_remote::service::{Link, LinkHandle, RemoteService, Verifier};
 use nekko_remote::{Activity, Devices, Out, PhoneCall, PhoneDevice, RELAYED_EVENTS};
 use serde_json::{Value, json};
-use std::collections::VecDeque;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -129,6 +129,13 @@ fn hello_verdicts_match() {
     }
 }
 
+/// Whether a recorded reply is the old "send hello first".
+fn refused(key: &e2e::Key, frame: &str) -> bool {
+    let f: Value = serde_json::from_str(frame).unwrap();
+    let d: Value = serde_json::from_str(s(&f["data"])).unwrap();
+    e2e::open(key, s(&d["enc"])).is_some_and(|m| m["error"] == "not paired (send hello first)")
+}
+
 #[test]
 fn the_relay_agent_sends_the_same_frames() {
     let g = golden("agent.json");
@@ -140,15 +147,14 @@ fn the_relay_agent_sends_the_same_frames() {
     assert_eq!(relayed, RELAYED_EVENTS);
 
     let key = e2e::derive_key(s(&g["secret"]), s(&g["room"]));
-    // Each sealed frame the TS sent carries its IV in its first 12 bytes: feed
-    // those to the port in order, and its output must match byte for byte.
-    let ivs: Arc<Mutex<VecDeque<[u8; 12]>>> = Arc::default();
-    let feed = ivs.clone();
-    // A challenge (which the TS agent never sent) is sealed with a fresh IV.
+    // The record is of phones on the room key, which now only carries a
+    // challenge. Each recorded phone goes through the handshake here and the
+    // frames are compared opened: what is routed and said hasn't changed.
+    let host = Host { room: s(&g["room"]).into(), key: nekko_remote::proof::new_key(&hello::os_random()) };
+    let mut sessions: HashMap<String, (e2e::Key, String, u64)> = HashMap::new();
+    let mut challenges: HashMap<String, Value> = HashMap::new();
     // The Live Activity card's dates come from a fixed clock (seconds since 2001).
-    let mut core =
-        AgentCore::new(key.clone(), Box::new(move || feed.lock().unwrap().pop_front().unwrap_or_else(e2e::random_iv)))
-            .with_clock(Box::new(|| 800_000_000.0));
+    let mut core = AgentCore::new(key.clone(), host, Box::new(e2e::random_iv)).with_clock(Box::new(|| 800_000_000.0));
     let verify = |hello: &Value| -> Value {
         let id = hello.get("deviceId").and_then(Value::as_str).unwrap_or("");
         if id == "phone-1" || id == "phone-2" {
@@ -164,37 +170,58 @@ fn the_relay_agent_sends_the_same_frames() {
     assert!(steps.len() > 25);
     for (i, step) in steps.iter().enumerate() {
         let want: Vec<&str> = step["sent"].as_array().unwrap().iter().map(s).collect();
-        {
-            let mut q = ivs.lock().unwrap();
-            q.clear();
-            let mut last = None;
-            for w in &want {
-                let f: Value = serde_json::from_str(w).unwrap();
-                if f["type"] == "d" {
-                    let data: Value = serde_json::from_str(s(&f["data"])).unwrap();
-                    let iv = iv_of(s(&data["enc"]));
-                    // One seal per broadcast event: the same blob to every connection.
-                    if last != Some(iv) {
-                        q.push_back(iv);
-                        last = Some(iv);
-                    }
-                }
-            }
-        }
         let input = &step["input"];
         let mut sent = Vec::new();
         if let Some(text) = input.get("relay").and_then(Value::as_str) {
-            let mut outs = core.on_relay(text, &verify);
+            let recorded: Value = serde_json::from_str(text).unwrap_or(Value::Null);
+            let cid = recorded["cid"].as_str().unwrap_or_default().to_string();
+            let said = recorded["data"].as_str().and_then(|d| serde_json::from_str::<Value>(d).ok());
+            let said = said.and_then(|d| e2e::open(&key, d["enc"].as_str()?));
+            let mut text = text.to_string();
+            match said.as_ref().and_then(|f| f["type"].as_str()) {
+                Some("hello") => {
+                    // A second HELLO on a connection answers a fresh challenge.
+                    if !challenges.contains_key(&cid) || sessions.contains_key(&cid) {
+                        let open = json!({ "type": "client-open", "cid": cid }).to_string();
+                        let Some(Out::Send(first)) = core.on_relay(&open, &verify).into_iter().next() else {
+                            panic!("step {i}: no challenge")
+                        };
+                        let f: Value = serde_json::from_str(&first).unwrap();
+                        let d: Value = serde_json::from_str(s(&f["data"])).unwrap();
+                        challenges.insert(cid.clone(), e2e::open(&key, s(&d["enc"])).unwrap());
+                    }
+                    let (data, session) = answer_challenge(s(&g["room"]), &challenges[&cid], said.clone().unwrap());
+                    let nonce = s(&challenges[&cid]["challenge"]).to_string();
+                    sessions.insert(cid.clone(), (session, nonce, 0));
+                    text = json!({ "type": "c", "cid": cid, "data": data }).to_string();
+                }
+                // A connection without a key was answered "not paired"; now nobody can read it.
+                Some("req") if want.first().is_some_and(|w| w.contains(r#""type":"d""#)) && refused(&key, want[0]) => {
+                    let silent = core.on_relay(&text, &verify);
+                    assert!(silent.is_empty(), "step {i}: {silent:?}");
+                    continue;
+                }
+                Some("req") if sessions.contains_key(&cid) => {
+                    let (session, nonce, seq) = sessions.get_mut(&cid).unwrap();
+                    *seq += 1;
+                    let mut f = said.clone().unwrap();
+                    f["seq"] = json!(*seq);
+                    f["challenge"] = json!(*nonce);
+                    let data = json!({ "enc": e2e::seal_with_iv(session, &f, e2e::random_iv()) }).to_string();
+                    text = json!({ "type": "c", "cid": cid, "data": data }).to_string();
+                }
+                _ => {}
+            }
+            let mut outs = core.on_relay(&text, &verify);
             if text.contains(r#""type":"client-open""#) {
-                // Relay replay protection: each connection the relay announces
-                // is sealed a challenge first (the TS agent sent nothing). The
-                // recorded phones are legacy, so nothing else changes.
+                // Each connection the relay announces gets a challenge first.
                 let Some(Out::Send(first)) = (!outs.is_empty()).then(|| outs.remove(0)) else {
                     panic!("step {i}: no challenge")
                 };
                 let f: Value = serde_json::from_str(&first).unwrap();
                 let opened = e2e::open(&key, s(&serde_json::from_str::<Value>(s(&f["data"])).unwrap()["enc"])).unwrap();
                 assert_eq!(opened["type"], "challenge", "step {i}");
+                challenges.insert(cid.clone(), opened);
             }
             for out in outs {
                 match out {
@@ -219,7 +246,7 @@ fn the_relay_agent_sends_the_same_frames() {
                         let gated = nekko_remote::phone::gate(host, Arc::new(AllOn));
                         let result = rt.block_on(gated(PhoneCall { device_id, proof, step_up: None }, channel, args));
                         calls.extend(seen.lock().unwrap().drain(..));
-                        sent.push(core.reply(&cid, id, result));
+                        sent.extend(core.reply(&cid, id, result));
                     }
                 }
             }
@@ -228,10 +255,31 @@ fn the_relay_agent_sends_the_same_frames() {
         } else if let Some(id) = input.get("kick").and_then(Value::as_str) {
             sent.extend(core.kick_device(id));
         }
-        assert_eq!(sent, want, "step {i}: {input}");
+        // A `d` frame by who it's for and what it says; the rest byte for byte.
+        let opened = |frame: &str, key: &e2e::Key| -> String {
+            let f: Value = serde_json::from_str(frame).unwrap();
+            if f["type"] != "d" {
+                return frame.to_string();
+            }
+            let d: Value = serde_json::from_str(s(&f["data"])).unwrap();
+            let mut said = e2e::open(key, s(&d["enc"])).unwrap();
+            if said.get("protocol").is_some() {
+                said["protocol"] = json!(hello::PROTOCOL_VERSION);
+            }
+            format!("{} {said}", f["cid"])
+        };
+        let got: Vec<String> = sent
+            .iter()
+            .map(|f| {
+                let cid: Value = serde_json::from_str(f).unwrap();
+                let session = sessions.get(cid["cid"].as_str().unwrap_or_default());
+                opened(f, session.map_or(&key, |(k, ..)| k))
+            })
+            .collect();
+        let want: Vec<String> = want.iter().map(|f| opened(f, &key)).collect();
+        assert_eq!(got, want, "step {i}: {input}");
         let connected: Vec<&str> = step["connected"].as_array().unwrap().iter().map(s).collect();
         assert_eq!(core.connected_devices(), connected, "step {i} connected");
-        assert!(ivs.lock().unwrap().is_empty(), "step {i} sealed fewer frames than the TS");
     }
     // The host saw the same calls. The TS row holds the arguments the host
     // method took after the dispatcher picked them out; the agent forwards
@@ -255,7 +303,14 @@ struct FakeHandle {
 }
 
 impl Link for FakeLink {
-    fn connect(&self, _url: &str, _room: &str, _key: &str, _verify: Verifier) -> Arc<dyn LinkHandle> {
+    fn connect(
+        &self,
+        _url: &str,
+        _room: &str,
+        _key: &str,
+        _host_key: nekko_remote::client::SigningKey,
+        _verify: Verifier,
+    ) -> Arc<dyn LinkHandle> {
         Arc::new(FakeHandle { kicked: self.kicked.clone() })
     }
 }
@@ -287,18 +342,21 @@ fn device_key_b64(device_id: &str) -> String {
     base64::engine::general_purpose::STANDARD.encode(point.as_bytes())
 }
 
-/// A recorded HELLO as a current phone sends it: protocol 5, answering a
-/// challenge, and signed with the device's key for `room`.
+/// A recorded HELLO as a current phone sends it and the agent hands it on:
+/// protocol 6, answering a challenge, signed with the device's key for `room`
+/// and one key exchange.
 fn as_current(hello: &Value, room: &str) -> Value {
     use p256::ecdsa::signature::Signer;
     let mut h = hello.clone();
     let id = h.get("deviceId").and_then(Value::as_str).unwrap_or_default().to_string();
     if let Some(o) = h.as_object_mut() {
-        o.insert("protocol".into(), json!(5));
+        o.insert("protocol".into(), json!(hello::SESSION_PROTOCOL));
         o.insert("challenge".into(), json!("golden-challenge"));
         o.insert("helloKey".into(), json!(device_key_b64(&id)));
-        let sig: p256::ecdsa::Signature =
-            device_key(&id).sign(hello::hello_text(&id, room, "golden-challenge").as_bytes());
+        o.insert("hostEph".into(), json!("host-half"));
+        o.insert("clientEph".into(), json!("client-half"));
+        let text = hello::hello_text(&id, room, "golden-challenge", "host-half", "client-half");
+        let sig: p256::ecdsa::Signature = device_key(&id).sign(text.as_bytes());
         o.insert("sig".into(), json!(base64::engine::general_purpose::STANDARD.encode(sig.to_bytes())));
     }
     h
@@ -317,7 +375,7 @@ fn a_phone_app_from_before_device_keys_is_told_to_update() {
     let device = json!({ "id": "p1", "name": "Old phone", "platform": "ios", "createdAt": 1, "lastSeenAt": 1 });
     std::fs::write(&file, json!({ "enabled": false, "room": "r", "devices": [device] }).to_string()).unwrap();
     let activity = |svc: &RemoteService| svc.route("remote:activity", &[json!("p1")]).unwrap();
-    for protocol in [json!(null), json!(3), json!(4)] {
+    for protocol in [json!(null), json!(3), json!(4), json!(5)] {
         let reply = svc.verify(&json!({ "type": "hello", "deviceId": "p1", "protocol": protocol, "challenge": "c" }));
         assert_eq!(reply, json!({ "type": "denied", "reason": "update-required" }), "protocol {protocol}");
     }
@@ -351,7 +409,8 @@ fn a_hello_must_be_signed_with_the_key_the_device_enrolled_with() {
         h
     };
     // Enrolling: the code, the key and a signature with it.
-    let unsigned = json!({ "type": "hello", "deviceId": "p1", "protocol": 5, "challenge": "c", "pair": code });
+    let unsigned = json!({ "type": "hello", "deviceId": "p1", "protocol": 6, "challenge": "c", "pair": code,
+        "hostEph": "h", "clientEph": "c" });
     assert_eq!(svc.verify(&unsigned), json!({ "type": "denied", "reason": "invalid" }));
     let welcome = svc.verify(&as_current(&hello(json!({ "pair": code })), &room));
     assert_eq!(welcome["type"], "welcome", "{welcome}");
@@ -365,6 +424,10 @@ fn a_hello_must_be_signed_with_the_key_the_device_enrolled_with() {
     let mut moved = as_current(&hello(json!({})), &room);
     moved["challenge"] = json!("another-challenge");
     assert_eq!(svc.verify(&moved)["reason"], "bad-key");
+    // Nor for another exchange: a signature relayed from elsewhere is good for nothing.
+    let mut relayed = as_current(&hello(json!({})), &room);
+    relayed["clientEph"] = json!("someone-elses-half");
+    assert_eq!(svc.verify(&relayed)["reason"], "bad-key");
     // Another key claiming the same device, without a live code: refused.
     let mut other = as_current(&hello(json!({ "deviceId": "p2" })), &room);
     other["deviceId"] = json!("p1");
@@ -375,8 +438,8 @@ fn a_hello_must_be_signed_with_the_key_the_device_enrolled_with() {
     rekey["deviceId"] = json!("p1");
     // (signed as p2's key over p1's text)
     use p256::ecdsa::signature::Signer;
-    let sig: p256::ecdsa::Signature =
-        device_key("p2").sign(hello::hello_text("p1", &room, "golden-challenge").as_bytes());
+    let sig: p256::ecdsa::Signature = device_key("p2")
+        .sign(hello::hello_text("p1", &room, "golden-challenge", "host-half", "client-half").as_bytes());
     rekey["sig"] = json!(base64::engine::general_purpose::STANDARD.encode(sig.to_bytes()));
     assert_eq!(svc.verify(&rekey)["type"], "welcome");
     let keys: Value =
@@ -490,31 +553,30 @@ fn the_phone_gate_decides_as_the_ts_does() {
 
 #[test]
 fn a_reply_too_large_for_the_relay_becomes_an_error() {
-    // relay.ts does the same: the relay drops frames over its limit without a word.
-    // Nothing here is compared byte for byte, so fresh random IVs as in real use.
+    // relay.ts did the same: the relay drops frames over its limit without a word.
     let key = e2e::derive_key("00112233445566778899aabbccddeeff", "room-1");
-    let mut core = AgentCore::new(key.clone(), Box::new(e2e::random_iv));
-    let hello = json!({ "type": "hello", "deviceId": "p1" });
-    let data = json!({ "enc": e2e::seal_with_iv(&key, &hello, e2e::random_iv()) }).to_string();
+    let host = Host { room: "room-1".into(), key: nekko_remote::proof::new_key(&hello::os_random()) };
+    let mut core = AgentCore::new(key, host, Box::new(e2e::random_iv));
     let verify = |_: &Value| json!({ "type": "welcome", "device": { "id": "p1" } });
-    let relay = json!({ "type": "c", "cid": "c1", "data": data }).to_string();
-    core.on_relay(&relay, &verify);
-    let open_reply = |frame: &str| -> Value {
-        let f: Value = serde_json::from_str(frame).unwrap();
+    let (_, session) = core.say_hello("c1", json!({ "type": "hello", "deviceId": "p1" }), &verify);
+    let open_reply = |frame: Option<String>| -> Value {
+        let f: Value = serde_json::from_str(&frame.unwrap()).unwrap();
         let d: Value = serde_json::from_str(s(&f["data"])).unwrap();
-        e2e::open(&key, s(&d["enc"])).unwrap()
+        e2e::open(&session, s(&d["enc"])).unwrap()
     };
     // Small: the result as is.
-    let small = open_reply(&core.reply("c1", Some(json!(1)), Ok(json!({ "ok": true }))));
+    let small = open_reply(core.reply("c1", Some(json!(1)), Ok(json!({ "ok": true }))));
     assert_eq!(small, json!({ "type": "res", "id": 1, "result": { "ok": true } }));
     // ~9.6 MB of JSON: sealed and base64'd it is over the phone limit.
     let big = Value::Array((0..1200).map(|i| json!({ "id": format!("s{i}"), "title": "x".repeat(8000) })).collect());
-    let reply = open_reply(&core.reply("c1", Some(json!(2)), Ok(big)));
+    let reply = open_reply(core.reply("c1", Some(json!(2)), Ok(big)));
     assert_eq!(reply["id"], json!(2));
     assert!(reply.get("result").is_none());
     let e = s(&reply["error"]);
     assert!(e.starts_with("This reply is too large to send to a phone ("), "{e}");
     assert!(e.ends_with(" MB). Open it on the computer."), "{e}");
+    // A connection that lost its key has no reply to send.
+    assert_eq!(core.reply("nobody", Some(json!(3)), Ok(json!(1))), None);
 }
 
 #[test]
@@ -639,42 +701,116 @@ fn git_from_a_phone_matches_the_ts() {
     }
 }
 
-#[test]
-fn the_relay_handshake_matches_the_phones() {
-    // relay-handshake.json is shared with the iPhone and Android protocol
-    // tests: the same challenge, HELLO and requests on all three sides.
-    let g = golden("relay-handshake.json");
-    let key = e2e::derive_key(s(&g["secret"]), s(&g["room"]));
-    let hex: String = key.raw().iter().map(|b| format!("{b:02x}")).collect();
-    assert_eq!(hex, s(&g["key"]));
-    let nonce: Vec<u8> = (0..s(&g["challenge"]["nonceBytes"]).len() / 2)
-        .map(|i| u8::from_str_radix(&s(&g["challenge"]["nonceBytes"])[i * 2..i * 2 + 2], 16).unwrap())
-        .collect();
-    // The fixture's nonce first, then fresh ones (a re-challenge is never the same).
-    let first = Mutex::new(Some(nonce));
-    let random: Random = Arc::new(move |buf: &mut [u8]| match first.lock().unwrap().take() {
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn unhex(text: &str) -> Vec<u8> {
+    (0..text.len() / 2).map(|i| u8::from_str_radix(&text[i * 2..i * 2 + 2], 16).unwrap()).collect()
+}
+
+/// `first`, then the OS.
+fn scripted(first: Vec<Vec<u8>>) -> Random {
+    let queue = Mutex::new(std::collections::VecDeque::from(first));
+    Arc::new(move |buf: &mut [u8]| match queue.lock().unwrap().pop_front() {
         Some(n) => buf.copy_from_slice(&n),
         None => getrandom_fill(buf),
-    });
+    })
+}
+
+/// Rewrites relay-handshake.json from its inputs (`UPDATE_GOLDEN=1`): the keys
+/// and nonces in it decide everything else, and every client reads the result.
+#[test]
+fn the_handshake_vector_is_derived_from_its_inputs() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/relay-handshake.json");
+    let mut g = golden("relay-handshake.json");
+    let (room, secret) = (s(&g["room"]).to_string(), s(&g["secret"]).to_string());
+    let room_key = e2e::derive_key(&secret, &room);
+    let host_key = p256::ecdsa::SigningKey::from_slice(&unhex(s(&g["hostKey"]["privateKeyHex"]))).unwrap();
+    let nonce = unhex(s(&g["challenge"]["nonceBytes"]));
+    let host_eph = e2e::Ephemeral::new(&scripted(vec![unhex(s(&g["hostEph"]["privateKeyHex"]))]));
+    let client_eph = e2e::Ephemeral::new(&scripted(vec![unhex(s(&g["clientEph"]["privateKeyHex"]))]));
+    let challenge = base64::engine::general_purpose::STANDARD.encode(&nonce);
+    let host_text = hello::host_text(&room, &challenge, &host_eph.public);
+    let info = hello::session_info(&room, &challenge, &host_eph.public, &client_eph.public);
+    let session = host_eph.session_key(&client_eph.public, &info).unwrap();
+    let id = s(&g["device"]["deviceId"]).to_string();
+    let device_key = p256::ecdsa::SigningKey::from_slice(&unhex(s(&g["helloKey"]["privateKeyHex"]))).unwrap();
+    let hello_text = hello::hello_text(&id, &room, &challenge, &host_eph.public, &client_eph.public);
+
+    g["protocol"] = json!(hello::PROTOCOL_VERSION);
+    g["key"] = json!(hex(room_key.raw()));
+    g["hostKey"]["publicKey"] = json!(nekko_remote::proof::public_key(&host_key));
+    g["hostEph"]["publicKey"] = json!(host_eph.public);
+    g["clientEph"]["publicKey"] = json!(client_eph.public);
+    g["hostText"] = json!(host_text);
+    g["sessionInfo"] = json!(info);
+    g["sessionKey"] = json!(hex(session.raw()));
+    let frame = json!({ "type": "challenge", "challenge": challenge, "eph": host_eph.public,
+        "sig": nekko_remote::proof::sign(&host_key, &host_text) });
+    g["challenge"]["frame"] = frame.clone();
+    g["challenge"]["blob"] = json!(e2e::seal_with_iv(&room_key, &frame, iv_of(s(&g["challenge"]["blob"]))));
+    g["helloKey"]["text"] = json!(hello_text);
+    g["helloKey"]["publicKey"] = json!(nekko_remote::proof::public_key(&device_key));
+    g["helloKey"]["sig"] = json!(nekko_remote::proof::sign(&device_key, &hello_text));
+    g["hello"]["protocol"] = g["protocol"].clone();
+    g["hello"]["challenge"] = json!(challenge);
+    g["hello"]["helloKey"] = g["helloKey"]["publicKey"].clone();
+    g["hello"]["sig"] = g["helloKey"]["sig"].clone();
+    let envelope = json!({ "eph": client_eph.public, "enc": e2e::seal_with_iv(&session, &g["hello"], [7u8; 12]) });
+    g["helloFrame"] = envelope;
+    for r in g["requests"].as_array_mut().unwrap() {
+        r["challenge"] = json!(challenge);
+    }
+    let text = serde_json::to_string_pretty(&g).unwrap() + "\n";
+    if std::env::var("UPDATE_GOLDEN").is_ok() {
+        std::fs::write(&path, text).unwrap();
+    } else {
+        assert_eq!(text, std::fs::read_to_string(&path).unwrap(), "UPDATE_GOLDEN=1 rewrites it");
+    }
+}
+
+#[test]
+fn the_relay_handshake_matches_the_phones() {
+    // relay-handshake.json is shared with the iPhone, Android and the browser:
+    // the same challenge, HELLO and requests on every side.
+    let g = golden("relay-handshake.json");
+    let key = e2e::derive_key(s(&g["secret"]), s(&g["room"]));
+    assert_eq!(hex(key.raw()), s(&g["key"]));
+    let random = scripted(vec![unhex(s(&g["challenge"]["nonceBytes"])), unhex(s(&g["hostEph"]["privateKeyHex"]))]);
     let blob = s(&g["challenge"]["blob"]).to_string();
     let iv = iv_of(&blob);
-    let mut core = AgentCore::new(key.clone(), Box::new(move || iv)).with_random(random);
+    let signing = p256::ecdsa::SigningKey::from_slice(&unhex(s(&g["hostKey"]["privateKeyHex"]))).unwrap();
+    let host = Host { room: s(&g["room"]).into(), key: signing };
+    let mut core = AgentCore::new(key.clone(), host, Box::new(move || iv)).with_random(random);
     let device = s(&g["device"]["deviceId"]).to_string();
-    let verify = move |h: &Value| json!({ "type": "welcome", "device": { "id": h["deviceId"] } });
+    let seen: Mutex<Option<Value>> = Mutex::default();
+    let verify = |h: &Value| {
+        *seen.lock().unwrap() = Some(h.clone());
+        json!({ "type": "welcome", "device": { "id": h["deviceId"] } })
+    };
     // The challenge, byte for byte.
     let out = core.on_relay(&json!({ "type": "client-open", "cid": "c1" }).to_string(), &verify);
     let want = json!({ "type": "d", "cid": "c1", "data": json!({ "enc": blob }).to_string() }).to_string();
     assert_eq!(out, vec![Out::Send(want)]);
     same(&e2e::open(&key, &blob).unwrap(), &g["challenge"]["frame"], "challenge frame");
-    let send = |core: &mut AgentCore, v: &Value| {
-        let data = json!({ "enc": e2e::seal_with_iv(&key, v, e2e::random_iv()) }).to_string();
-        core.on_relay(&json!({ "type": "c", "cid": "c1", "data": data }).to_string(), &verify)
-    };
-    // The phone's HELLO is welcomed, then its two requests run in order.
-    assert_eq!(g["hello"]["protocol"], json!(g["protocol"]));
-    let welcome = send(&mut core, &g["hello"]);
+    // The device's answer is welcomed, and the agent passes on the exchange it ran.
+    let relay = |data: String| json!({ "type": "c", "cid": "c1", "data": data }).to_string();
+    let welcome = core.on_relay(&relay(g["helloFrame"].to_string()), &verify);
     assert_eq!(welcome.len(), 1, "{welcome:?}");
     assert_eq!(core.connected_devices(), vec![device.clone()]);
+    let heard = seen.lock().unwrap().clone().unwrap();
+    assert_eq!(heard["hostEph"], g["hostEph"]["publicKey"]);
+    assert_eq!(heard["clientEph"], g["clientEph"]["publicKey"]);
+    // Its two requests run in order, under the connection's key.
+    let info = s(&g["sessionInfo"]);
+    let client_eph = e2e::Ephemeral::new(&scripted(vec![unhex(s(&g["clientEph"]["privateKeyHex"]))]));
+    let session = client_eph.session_key(s(&g["hostEph"]["publicKey"]), info).unwrap();
+    assert_eq!(hex(session.raw()), s(&g["sessionKey"]));
+    let send = |core: &mut AgentCore, v: &Value| {
+        let data = json!({ "enc": e2e::seal_with_iv(&session, v, e2e::random_iv()) }).to_string();
+        core.on_relay(&relay(data), &verify)
+    };
     for r in g["requests"].as_array().unwrap() {
         match send(&mut core, r).as_slice() {
             [Out::Dispatch { channel, args, device_id, .. }] => {
@@ -685,17 +821,13 @@ fn the_relay_handshake_matches_the_phones() {
             other => panic!("{r}: {other:?}"),
         }
     }
-    // Replayed, the second request is dropped and the phone is challenged again.
+    // Replayed, the second request is dropped and the device is challenged again.
     let replay = send(&mut core, &g["requests"][1]);
     assert!(matches!(replay.as_slice(), [Out::Send(_)]), "{replay:?}");
     assert!(core.connected_devices().is_empty());
-    // The same HELLO again (its challenge is spent) is not welcomed either.
-    send(&mut core, &g["hello"]);
+    // The same answer again (its exchange is spent) is not welcomed either.
+    core.on_relay(&relay(g["helloFrame"].to_string()), &verify);
     assert!(core.connected_devices().is_empty());
-    // A phone from before protocol 4 is the verifier's call.
-    assert!(g["legacyHello"].get("challenge").is_none());
-    send(&mut core, &g["legacyHello"]);
-    assert_eq!(core.connected_devices(), vec![device]);
 }
 
 fn getrandom_fill(buf: &mut [u8]) {
@@ -740,15 +872,15 @@ fn the_hello_signature_matches_the_phones() {
     // signature the phones' tests verify too.
     let g = golden("relay-handshake.json");
     let k = &g["helloKey"];
-    let text = hello::hello_text(s(&g["device"]["deviceId"]), s(&g["room"]), s(&g["challenge"]["frame"]["challenge"]));
+    let (host_eph, client_eph) = (s(&g["hostEph"]["publicKey"]), s(&g["clientEph"]["publicKey"]));
+    let nonce = s(&g["challenge"]["frame"]["challenge"]);
+    let text = hello::hello_text(s(&g["device"]["deviceId"]), s(&g["room"]), nonce, host_eph, client_eph);
     assert_eq!(text, s(&k["text"]));
     let key = nekko_remote::proof::parse_key(s(&k["publicKey"])).expect("an X9.63 P-256 key");
     let sig = base64::engine::general_purpose::STANDARD.decode(s(&k["sig"])).unwrap();
     assert!(nekko_remote::proof::verify(&key, &text, &sig));
     assert!(!nekko_remote::proof::verify(&key, &text.replace("a1b2", "ffff"), &sig));
-    let d: Vec<u8> =
-        (0..32).map(|i| u8::from_str_radix(&s(&k["privateKeyHex"])[i * 2..i * 2 + 2], 16).unwrap()).collect();
-    let signing = p256::ecdsa::SigningKey::from_slice(&d).unwrap();
+    let signing = p256::ecdsa::SigningKey::from_slice(&unhex(s(&k["privateKeyHex"]))).unwrap();
     assert_eq!(&key, signing.verifying_key());
     assert_eq!(g["protocol"], json!(hello::PROTOCOL_VERSION));
 }

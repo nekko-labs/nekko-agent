@@ -48,7 +48,7 @@ extension StoreTests {
         let s = makeStore()
         s.chatListCache = cache
         s.load()
-        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         XCTAssertNil(cache.lists[id], "nothing saved before the computer answers")
         connections.last!.online()
         await settle()
@@ -75,7 +75,7 @@ extension StoreTests {
     func testNothingIsKeptUntilTheSettingIsTurnedOn() async throws {
         let s = makeStore()
         s.load()
-        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         connections.last!.online()
         await settle()
         let cache = MemoryChatListCache()
