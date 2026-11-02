@@ -529,6 +529,8 @@
   input.addEventListener('blur', () => { look.removeAttribute('transform'); if (mood === 'watching') setMood('idle'); });
   button.addEventListener('mouseenter', () => { if (mood !== 'confused') setMood('eager'); });
   button.addEventListener('mouseleave', () => { if (mood === 'eager') setMood(document.activeElement === input ? 'watching' : 'idle'); });
+  // The API's machine sleeps when idle; wake it now so Join answers quickly.
+  if (form.dataset.endpoint) fetch(new URL('/healthz', form.dataset.endpoint), { mode: 'no-cors' }).catch(() => {});
   // idle blink every few seconds
   setInterval(() => {
     if (mood !== 'idle') return;
@@ -541,22 +543,49 @@
     if (!input.checkValidity()) { setMood('confused'); input.focus(); return; }
     const endpoint = form.dataset.endpoint;
     if (!endpoint) {
-      // No sign-up service connected yet: say so rather than claim a sign-up that went nowhere.
+      // No sign-up service connected: say so rather than claim a sign-up that went nowhere.
       note.textContent = "Beta sign-ups aren't open yet. Follow along on GitHub to hear about the first builds.";
       setMood('idle'); // sets the idle line, so the bubble's own text goes after it
       bubble.textContent = 'Almost ready! Check back soon.';
       return;
     }
-    {
-      try {
-        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ email: input.value }) });
-        if (!res.ok) throw new Error(String(res.status));
-      } catch (err) {
+    // What the API keeps: the page path (never the full URL) and any utm_* tags.
+    const params = new URLSearchParams(location.search);
+    const utm = {};
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
+      const v = params.get(key);
+      if (v) utm[key] = v;
+    }
+    const body = {
+      email: input.value.trim(),
+      list: 'beta',
+      source: location.pathname,
+      utm,
+      website: form.elements.website?.value || '',
+    };
+    const name = form.elements.name?.value.trim();
+    if (name) body.name = name;
+    button.disabled = true;
+    let res;
+    try {
+      res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body) });
+    } catch (err) {
+      res = null;
+    }
+    button.disabled = false;
+    if (!res || !res.ok) {
+      if (res && res.status === 429) {
+        note.textContent = "That's a lot of sign-ups from here in a short time. Please try again in an hour.";
+        bubble.textContent = 'Whoa, slow down! Try again later.';
+      } else if (res && res.status === 400) {
+        note.textContent = 'Please check your email address and try again.';
+        bubble.textContent = lines.confused;
+      } else {
         note.textContent = "That didn't go through. Please try again in a moment.";
-        setMood('confused');
         bubble.textContent = 'Oops, something went wrong. Try again?';
-        return;
       }
+      peek.dataset.mood = mood = 'confused';
+      return;
     }
     look.removeAttribute('transform');
     setMood('celebrate');

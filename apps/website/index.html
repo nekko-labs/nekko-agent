@@ -357,8 +357,6 @@
             <li>First to test new features as they land</li>
             <li>More beta-only extras to come</li>
           </ul>
-          <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
-               Until then the form only shows its thank-you message and sends nothing. -->
           <div class="beta-stage reveal" data-beta>
             <!-- Nekko hosts the sign-up: she peeks over the card and reacts.
                  States (data-mood): idle, watching, eager, confused, celebrate. -->
@@ -382,9 +380,7 @@
                 <g class="np-sparkles"><path d="M1 2H2V3H1Z M0 3H1V4H0Z M2 3H3V4H2Z M1 4H2V5H1Z M30 9H31V10H30Z M29 10H30V11H29Z M31 10H32V11H31Z M30 11H31V12H30Z M2 12H3V13H2Z" /></g>
               </svg>
             </div>
-            <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
-                 Until then the form says sign-ups are not open yet; it never claims a sign-up it did not send. -->
-            <form class="beta-card" data-beta-form data-endpoint="" novalidate>
+            <form class="beta-card" data-beta-form data-endpoint="https://nekko-agent-api.fly.dev/v1/signups" novalidate>
               <div class="beta-ask">
                 <h3>Join the beta</h3>
                 <label for="beta-email">YOUR EMAIL</label>
@@ -393,6 +389,8 @@
                   <button class="btn btn-primary" type="submit">Count me in</button>
                 </div>
                 <p class="beta-note" id="beta-note">We'll email you when spots open and new builds are ready to try.</p>
+                <!-- Bots fill every field; people never see this one. The API fakes success when it is filled. -->
+                <input class="beta-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
               </div>
               <div class="beta-done" role="status" hidden>
                 <p class="beta-badge">BETA TESTER</p>
@@ -400,6 +398,7 @@
                 <p>You're in. Nekko will be in touch when new builds are ready to try.</p>
               </div>
             </form>
+            <p class="beta-privacy micro">We'll only use your email to send beta invites and Nekko Agent updates. No spam, and we never share it. To be removed, email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>.</p>
           </div>
         </div>
       </section>

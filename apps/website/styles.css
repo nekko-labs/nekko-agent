@@ -899,6 +899,8 @@ h3 { font-size: 21px; }
 .beta-field input:focus-visible { outline: 3px solid #9d8ce6; outline-offset: 2px; }
 .beta-field .btn { flex: 0 0 auto; cursor: pointer; font: inherit; font-weight: 700; font-size: 16px; }
 .beta-note { font-size: 13px; color: #5d5970; }
+.beta-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.beta-privacy { margin-top: 12px; max-width: 46ch; }
 :root[data-theme='colour'] .beta-card { background: #ffffff; }
 @media (max-width: 900px) {
   .beta { grid-template-columns: 1fr; row-gap: 28px; grid-template-areas: 'intro' 'tour' 'perks' 'stage'; }
