@@ -153,6 +153,10 @@ Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
 
+### How the Agents panel groups your agents
+
+By default the panel follows each agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files), **Verifying** (tests, builds and checks) and **Shipping** (commits, pushes and pull requests). An agent can move back: an edit after a failed test puts it in Building again. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. Use the sliders button to group by project, date or computer instead.
+
 ### Delegated agents in the Agents panel
 
 Delegated subagents appear as compact rows beneath their parent. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.

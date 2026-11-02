@@ -12,11 +12,13 @@
 
 pub mod client_ids;
 pub mod meta;
+mod phase;
 mod summary;
 mod write;
 
 pub use meta::Meta;
 
+pub use phase::loop_phase;
 pub use summary::summarize;
 pub use write::{STARTER_MODES, execution_mode};
 

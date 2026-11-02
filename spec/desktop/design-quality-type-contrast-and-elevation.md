@@ -25,6 +25,6 @@ User intent: the app is read for hours a day, so its small print has to be legib
 ## Status
 
 - Implemented: everything above.
-- The Agents panel's group labels (Needs input, Working, ...) keep their accent colour and 14px size, a recorded choice; they lose only the caps and tracking.
+- The Agents panel's group labels (Exploring, Building, ...) keep their accent colour and 14px size, a recorded choice; they lose only the caps and tracking.
 - Implemented on the iPhone too (#1478): the theme presets it draws from `packages/shared/src/themes.ts` carry the same `inkFaint` values as the desktop's `--ink-faint`, and `apps/ios/App/Platform/ThemePresets.swift` is regenerated from them. `themes.test.ts` fails if any preset's `inkFaint` drops below 4.5:1 on its paper, surface or surface-2. The iPhone's and Android's own light and dark palettes already passed (Android does not use the presets).
 - Later passes under the same issue: wall window motion on transforms, and the website.
