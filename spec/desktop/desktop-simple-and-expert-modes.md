@@ -11,7 +11,7 @@ area: desktop
 
 **Reframed 2026-10-28 (#1311):** Philip asked (2026-10-27) for Simple to become the experience for people who are not developers: the same capabilities, with developer controls such as effort, the context gauge and reasoning out of sight, and Settings choosing, per control, what Simple shows. He reviewed the [design](../../docs/decisions/0041-simple-hides-developer-controls-per-device.md) (per device, Simple for new installs, controls not pages), then asked for three states per control (Show, Expert only, Hide), a drawn preview beside each area's switches, and the row under the composer to become an expandable panel of the composer.
 
-**Status `[implemented 2026-10-28 and refreshed 2026-11-03 in apps/desktop on branch simple-expert-modes, not merged; catalogue unit-tested in packages/shared; renderer tests pass; captured in the hidden chat-modes harness (18 assertions: Simple and Expert controls, the shrinking panel, the Settings previews and a choice reaching the chat); not tried in the packaged app or on a real machine]`**
+**Status `[implemented 2026-10-28 and refreshed 2026-11-03 in apps/desktop on branch simple-expert-modes, not merged; catalogue unit-tested in packages/shared; renderer tests pass; captured in the hidden chat-modes harness (40 assertions, a scene per situation: clean Simple, a local model here and on a connected computer, changed files, a PR, background agents, a long chat, a wall window, both menus, Expert, the shrinking panel and the Settings previews); not tried in the packaged app, against a real connected computer or on a real machine]`**
 
 ## Behaviour
 
