@@ -757,6 +757,67 @@ async fn start_failures_stop_retrying_after_three() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_guest_that_stops_before_its_runner_connects_is_a_failed_start() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    h.tick_for(20).await;
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    let audit = h.audit();
+    assert_eq!(audit.len(), 1);
+    assert_eq!((audit[0].result, audit[0].repo.as_deref()), (AuditResult::FailedToStart, None));
+    assert_eq!(h.view().today.jobs, 0);
+    assert_eq!(h.count("remove "), 1);
+    assert!(h.vms().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn guests_that_keep_stopping_early_stop_retrying_after_three() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    for run in 0..3 {
+        h.tick_for(10).await;
+        h.vm.finish(run, Stopped::Guest);
+    }
+    h.tick_for(60).await;
+    assert_eq!(h.view().state, RunnerState::Error);
+    assert_eq!(h.count("clone_bundle"), 3);
+    assert!(h.view().error.unwrap().contains("powered off"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_healthy_vm_clears_the_early_stops_before_it() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    for run in 0..2 {
+        h.tick_for(10).await;
+        h.vm.finish(run, Stopped::Guest);
+    }
+    h.tick_for(10).await;
+    h.status(RunnerStatus::Idle);
+    h.tick_for(20).await;
+    h.vm.finish(2, Stopped::Error("killed".into()));
+    h.status(RunnerStatus::Offline);
+    h.tick_for(10).await;
+    h.vm.finish(3, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_ne!(h.view().state, RunnerState::Error);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_job_no_poll_saw_still_counts() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    h.tick_for(20).await;
+    // GitHub forgets a JIT runner once its job is done.
+    h.status(RunnerStatus::Missing);
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_eq!(h.audit()[0].result, AuditResult::Finished);
+    assert_eq!(h.view().today.jobs, 1);
+}
+
+#[tokio::test(start_paused = true)]
 async fn auth_error_marks_runner_error() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
     h.prov.0.lock().unwrap().mint.push_back(Err(ProviderError::Auth("revoked".into())));

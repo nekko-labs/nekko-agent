@@ -187,6 +187,14 @@ the max job time.
 
 ## Verified on
 
+2026-11-02, the same Mac, a macOS-only build (16 minutes, restore image download included), guest
+macOS 27.2: 20 boots of clones with a `not-a-config` seed, 2 s apart, alternating the boot script.
+The script that waited only for the mount point powered off early in 6 of 10 boots, at 16 to 25 s,
+with `unexpected seed contents`: macOS makes the mount point (empty, mode 0111) seconds before it
+mounts the volume, and a boot from a warm disk cache gets there first. The script that waits for a
+file ran the runner in 10 of 10. An image built before this change keeps the old script until it is
+rebuilt; its early stops now show as failed starts.
+
 2026-11-01, on an M1 Max running macOS 27.0.1, Nekko's own build from the daemon's channels with
 the dev helper, guest macOS 27.2, Xcode 27.2 (an App Store Xcode). The whole build took 26 minutes
 with the restore image already on disk: Install 4 min 28 s, Xcode, simulator and Homebrew 20 min
