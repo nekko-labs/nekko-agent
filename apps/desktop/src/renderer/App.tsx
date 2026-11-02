@@ -123,7 +123,7 @@ export function App() {
   useEffect(() => {
     const { refreshComputers, refreshSessions: refreshChats } = useStore.getState();
     void refreshComputers();
-    return window.nekko.onComputersUpdated(() => {
+    return window.nekko.onComputersUpdated?.(() => {
       void refreshComputers();
       void refreshChats();
     });

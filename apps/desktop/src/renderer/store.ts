@@ -752,7 +752,7 @@ export const useStore = create<UiState>((set, get) => ({
   },
 
   refreshComputers: async () => {
-    const computers = await window.nekko.listComputers();
+    const computers = (await window.nekko.listComputers()) ?? [];
     set({ computers });
     // shortcut: read once per run, so a provider added over there shows after a restart; refresh from Settings if that bites.
     for (const c of computers) {
