@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import android.content.ClipData
 import android.os.Build
 import androidx.compose.foundation.background
@@ -81,7 +83,7 @@ fun FeedbackSheet(onDismiss: () -> Unit) {
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Send feedback", style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.semantics { heading() })
+            Text(stringResource(R.string.settings_send_feedback), style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.semantics { heading() })
             CopyForAgent(info)
             HorizontalDivider(color = p.line, modifier = Modifier.padding(vertical = 6.dp))
             QuickNote(info)
@@ -114,7 +116,7 @@ private fun CopyForAgent(info: Feedback.AppInfo) {
         }
     }
     val shape = RoundedCornerShape(10.dp)
-    Heading("Copy for an agent", "Paste it into Claude Code, Codex or Nekko Agent. It asks you a few questions and files a GitHub issue once you approve it.")
+    Heading(stringResource(R.string.settings_copy_for_agent), stringResource(R.string.settings_copy_for_agent_detail))
     Text(
         prompt,
         style = Nekko.mono.copy(color = p.inkSoft),
@@ -136,7 +138,7 @@ private fun CopyForAgent(info: Feedback.AppInfo) {
     ) {
         Icon(if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.size(8.dp))
-        Text(if (copied) "Copied" else "Copy prompt")
+        Text(if (copied) stringResource(R.string.settings_copied) else stringResource(R.string.settings_copy_prompt))
     }
 }
 
@@ -151,10 +153,10 @@ private fun QuickNote(info: Feedback.AppInfo) {
     var error by remember { mutableStateOf<String?>(null) }
 
     val counter = Feedback.counter(text.length)
-    Heading("Quick note", "Goes straight to Nekko Labs. No account, and nothing about you unless you add app info.")
+    Heading(stringResource(R.string.settings_quick_note), stringResource(R.string.settings_quick_note_detail))
     if (sent) {
-        Text("Thanks, your note reached Nekko Labs.", style = MaterialTheme.typography.bodyMedium, color = p.ink)
-        TextButton(onClick = { sent = false }) { Text("Write another") }
+        Text(stringResource(R.string.settings_note_thanks), style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        TextButton(onClick = { sent = false }) { Text(stringResource(R.string.settings_write_another)) }
         return
     }
     OutlinedTextField(
@@ -163,7 +165,7 @@ private fun QuickNote(info: Feedback.AppInfo) {
             text = it.take(Feedback.MAX_CHARS)
             error = null
         },
-        label = { Text("What happened, or what you'd like") },
+        label = { Text(stringResource(R.string.settings_note_label)) },
         supportingText = counter?.let { c -> @Composable { Text(c) } },
         enabled = !sending,
         minLines = 4,
@@ -181,9 +183,9 @@ private fun QuickNote(info: Feedback.AppInfo) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Include app info", style = MaterialTheme.typography.bodyLarge, color = p.ink)
+            Text(stringResource(R.string.settings_include_info), style = MaterialTheme.typography.bodyLarge, color = p.ink)
             Text(
-                "App, version, OS and version, and CPU type. Nothing that identifies you.",
+                stringResource(R.string.settings_include_info_detail),
                 style = MaterialTheme.typography.bodySmall,
                 color = p.inkFaint,
             )
@@ -214,9 +216,9 @@ private fun QuickNote(info: Feedback.AppInfo) {
         if (sending) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text("Sending…")
+            Text(stringResource(R.string.settings_sending))
         } else {
-            Text("Send")
+            Text(stringResource(R.string.settings_send))
         }
     }
 }
@@ -224,7 +226,7 @@ private fun QuickNote(info: Feedback.AppInfo) {
 @Composable
 private fun GitHubIssues() {
     val uriHandler = LocalUriHandler.current
-    Heading("Open GitHub issues", "See what others have reported, or file an issue in public.")
+    Heading(stringResource(R.string.settings_github_issues), stringResource(R.string.settings_github_issues_detail))
     OutlinedButton(
         // No browser on the phone is the only way this throws; there is nothing better to offer then.
         onClick = { runCatching { uriHandler.openUri(Feedback.NEW_ISSUE_URL) } },
@@ -232,6 +234,6 @@ private fun GitHubIssues() {
     ) {
         Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.size(8.dp))
-        Text("Open GitHub issues")
+        Text(stringResource(R.string.settings_github_issues))
     }
 }

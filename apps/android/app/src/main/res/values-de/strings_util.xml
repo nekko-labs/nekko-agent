@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_util.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="util_ago_now">jetzt</string>
+    <string name="util_ago_min_one">%1$d Min.</string>
+    <string name="util_ago_min_other">%1$d Min.</string>
+    <string name="util_ago_hr_one">%1$d Std.</string>
+    <string name="util_ago_hr_other">%1$d Std.</string>
+    <string name="util_ago_day_one">%1$d Tag</string>
+    <string name="util_ago_day_other">%1$d Tage</string>
+    <string name="util_ago_month_one">%1$d Monat</string>
+    <string name="util_ago_month_other">%1$d Monate</string>
+    <string name="util_ago_yr_one">%1$d J.</string>
+    <string name="util_ago_yr_other">%1$d J.</string>
+</resources>

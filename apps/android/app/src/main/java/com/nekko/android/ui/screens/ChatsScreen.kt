@@ -1,5 +1,9 @@
 package com.nekko.android.ui.screens
 
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
 import com.nekko.protocol.AgentRows
 import com.nekko.android.ui.chat.RowChip
 import androidx.compose.material.icons.filled.Outbox
@@ -106,6 +110,7 @@ import com.nekko.android.ui.panes.PaneSlot
 import com.nekko.android.ui.security.rememberSafetyExits
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.util.ago
+import com.nekko.android.util.localAgo
 import com.nekko.android.util.plainText
 import com.nekko.protocol.Activity
 import com.nekko.protocol.ChatGroup
@@ -142,10 +147,13 @@ fun ChatsScreen(
     val outbox by repo.outbox.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val res = LocalResources.current
+    val newChat = stringResource(R.string.chats_new_chat)
     // The banner's ⋮: sign out this phone, stop remote access, quit (SK-8).
     val exits = rememberSafetyExits(repo)
     var pulling by remember { mutableStateOf(false) }
     val active = s.active
+    val computerName = active?.name ?: stringResource(R.string.chats_your_computer)
     // Long-press on a chat: the computer's own action (Complete or Delete) for it.
     var pressed by remember { mutableStateOf<SessionSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<SessionSummary?>(null) }
@@ -185,7 +193,7 @@ fun ChatsScreen(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                actionError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t restore that chat."
+                actionError = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_restore_failed)
             }
         }
     }
@@ -197,7 +205,7 @@ fun ChatsScreen(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                actionError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t change that chat."
+                actionError = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_change_failed)
             }
         }
     }
@@ -218,10 +226,10 @@ fun ChatsScreen(
     pressed?.let { chat ->
         val delete = s.pcSettings.effectiveAction == PcSettings.ChatAction.DELETE
         ChatActionDialog(
-            title = plainText(chat.title).ifEmpty { "New chat" },
+            title = plainText(chat.title).ifEmpty { newChat },
             delete = delete,
             pinned = chat.pinned,
-            computer = active?.name ?: "your computer",
+            computer = computerName,
             onDismiss = { pressed = null },
             onConfirm = {
                 pressed = null
@@ -229,7 +237,7 @@ fun ChatsScreen(
             },
             onPin = {
                 pressed = null
-                change("Couldn’t change that chat.") { repo.setPinned(chat.id, !chat.pinned) }
+                change(res.getString(R.string.chats_change_failed)) { repo.setPinned(chat.id, !chat.pinned) }
             },
             onRename = { pressed = null; renaming = chat },
         )
@@ -237,24 +245,24 @@ fun ChatsScreen(
     renaming?.let { chat ->
         RenameChatDialog(plainText(chat.title), onDismiss = { renaming = null }) { title ->
             renaming = null
-            change("Couldn’t rename that chat.") { repo.renameChat(chat.id, title) }
+            change(res.getString(R.string.chats_rename_failed)) { repo.renameChat(chat.id, title) }
         }
     }
     pressedDone?.let { chat ->
         AlertDialog(
             onDismissRequest = { pressedDone = null },
-            title = { Text(plainText(chat.title).ifEmpty { "New chat" }, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            text = { Text("Completed on ${active?.name ?: "your computer"}. Restore it to the active chats, or delete it for good.") },
+            title = { Text(plainText(chat.title).ifEmpty { newChat }, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            text = { Text(stringResource(R.string.chats_completed_on, computerName)) },
             confirmButton = {
-                TextButton(onClick = { pressedDone = null; restore(chat) }) { Text("Restore", color = p.accent) }
+                TextButton(onClick = { pressedDone = null; restore(chat) }) { Text(stringResource(R.string.chats_restore), color = p.accent) }
             },
             dismissButton = {
                 Row {
                     TextButton(onClick = {
                         pressedDone = null
                         if (s.pcSettings.confirmDelete) confirmDelete = chat else run(chat, true)
-                    }) { Text("Delete", color = p.danger) }
-                    TextButton(onClick = { pressedDone = null }) { Text("Cancel") }
+                    }) { Text(stringResource(R.string.chats_delete), color = p.danger) }
+                    TextButton(onClick = { pressedDone = null }) { Text(stringResource(R.string.chats_cancel)) }
                 }
             },
         )
@@ -262,18 +270,18 @@ fun ChatsScreen(
     confirmDelete?.let { chat ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text("Delete this chat?") },
-            text = { Text("“${plainText(chat.title).ifEmpty { "New chat" }}” will be deleted from ${active?.name ?: "your computer"} for good. This can’t be undone.") },
+            title = { Text(stringResource(R.string.chats_delete_title)) },
+            text = { Text(stringResource(R.string.chats_delete_body, plainText(chat.title).ifEmpty { newChat }, computerName)) },
             confirmButton = {
-                TextButton(onClick = { confirmDelete = null; run(chat, true) }) { Text("Delete", color = p.danger) }
+                TextButton(onClick = { confirmDelete = null; run(chat, true) }) { Text(stringResource(R.string.chats_delete), color = p.danger) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(stringResource(R.string.chats_cancel)) } },
         )
     }
 
     if (reordering) {
         ReorderGroupsDialog(
-            sections.map { it.key to it.name },
+            sections.map { it.key to groupTitle(it.key, it.name) },
             onDismiss = { reordering = false },
             onDone = { keys -> reordering = false; setGroupOrder(keys) },
         )
@@ -283,15 +291,15 @@ fun ChatsScreen(
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Chats", style = MaterialTheme.typography.headlineMedium) },
+                title = { Text(stringResource(R.string.chats_title), style = MaterialTheme.typography.headlineMedium) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 actions = {
                     if (active != null) ChatListViewMenu(view, setView, onReorder = { reordering = true })
                     IconButton(onClick = onComputers) {
-                        Icon(Icons.Filled.Computer, contentDescription = "Computers", tint = p.inkSoft)
+                        Icon(Icons.Filled.Computer, contentDescription = stringResource(R.string.chats_computers), tint = p.inkSoft)
                     }
                     IconButton(onClick = onSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = p.inkSoft)
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.chats_settings), tint = p.inkSoft)
                     }
                     pane?.actions?.invoke(this)
                 },
@@ -302,7 +310,7 @@ fun ChatsScreen(
                 ExtendedFloatingActionButton(
                     onClick = onNewChat,
                     icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                    text = { Text("New chat") },
+                    text = { Text(newChat) },
                     containerColor = p.accent,
                     contentColor = p.accentInk,
                 )
@@ -332,7 +340,7 @@ fun ChatsScreen(
                         item(key = "outbox-note") {
                             val n = outbox.waiting.size
                             Notice(
-                                "${if (n == 1) "1 prompt waits" else "$n prompts wait"} on this phone. ${if (n == 1) "It goes" else "They go"} when ${active.name} is back.",
+                                if (n == 1) stringResource(R.string.chats_outbox_note_one, active.name) else stringResource(R.string.chats_outbox_note_other, n, active.name),
                                 Tone.FAINT,
                                 Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.outboxNote"),
                             )
@@ -340,7 +348,7 @@ fun ChatsScreen(
                     }
                     val pendingNew = outbox.pendingNewChats.filter { it.id !in outbox.direct }
                     if (pendingNew.isNotEmpty()) {
-                        item(key = "pending-header") { SectionHeader("Waiting to send") }
+                        item(key = "pending-header") { SectionHeader(stringResource(R.string.chats_waiting_to_send)) }
                         items(pendingNew, key = { "pending:${it.chatKey}" }) { item ->
                             PendingNewChatRow(item, sending = item.id == outbox.sendingId, onDelete = { repo.outbox.remove(item.id) })
                         }
@@ -352,24 +360,24 @@ fun ChatsScreen(
                     s.savedListAt?.let { at ->
                         item(key = "saved-list") {
                             Text(
-                                savedListNote(at, active.name),
+                                savedListNote(at, active.name, template = stringResource(R.string.chats_saved_list_note)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = p.inkSoft,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                             )
                         }
                     }
-                    item(key = "header") { SectionHeader("On ${active.name}") }
+                    item(key = "header") { SectionHeader(stringResource(R.string.chats_on_computer, active.name)) }
                     actionError?.let { msg -> item(key = "action-error") { Notice(msg, Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) } }
                     if (s.summaries.isNotEmpty()) {
                         item(key = "search") {
                             OutlinedTextField(
                                 value = query,
                                 onValueChange = { query = it },
-                                placeholder = { Text("Search chats") },
+                                placeholder = { Text(stringResource(R.string.chats_search_placeholder)) },
                                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                                 trailingIcon = {
-                                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") }
+                                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chats_clear_search)) }
                                 },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -380,7 +388,7 @@ fun ChatsScreen(
                     if (query.isNotBlank()) {
                         if (found.isEmpty()) {
                             item(key = "no-match") {
-                                Text("No chats match “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft,
+                                Text(stringResource(R.string.chats_no_match, query.trim()), style = MaterialTheme.typography.bodyMedium, color = p.inkSoft,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                             }
                         }
@@ -391,11 +399,13 @@ fun ChatsScreen(
                     } else if (s.summaries.isEmpty()) {
                         item(key = "empty") {
                             Text(
-                                when {
-                                    s.conn != RelayState.ONLINE -> "Chats appear here once your computer is online."
-                                    s.summariesLoading -> "Loading chats…"
-                                    else -> "No chats yet. Start one with New chat."
-                                },
+                                stringResource(
+                                    when {
+                                        s.conn != RelayState.ONLINE -> R.string.chats_empty_offline
+                                        s.summariesLoading -> R.string.chats_loading
+                                        else -> R.string.chats_empty
+                                    },
+                                ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = p.inkFaint,
                                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -403,7 +413,7 @@ fun ChatsScreen(
                         }
                     }
                     if (query.isBlank() && needsYou.isNotEmpty()) {
-                        item(key = "needs-you") { GroupHeader("Needs you", open = true, count = "${needsYou.size}", onToggle = null) }
+                        item(key = "needs-you") { GroupHeader(stringResource(R.string.chats_needs_you), open = true, count = "${needsYou.size}", onToggle = null) }
                         items(needsYou, key = { "needs:${it.id}" }) { summary ->
                             ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
                                 waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews)
@@ -417,7 +427,7 @@ fun ChatsScreen(
                         val (shown, hidden) = ChatSections.split(g, s.activity, now)
                         item(key = "group:${g.key}") {
                             GroupHeader(
-                                g.name, open, groupCounts(g),
+                                groupTitle(g.key, g.name), open, groupCounts(g),
                                 onReorder = if (view.canReorderGroups && sections.size > 1) ({ reordering = true }) else null,
                             ) { collapsed = if (open) collapsed + g.key else collapsed - g.key }
                         }
@@ -425,7 +435,7 @@ fun ChatsScreen(
                         if (g.chats.isEmpty()) {
                             item(key = "none:${g.key}") {
                                 Text(
-                                    "No active agents",
+                                    stringResource(R.string.chats_no_active_agents),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = p.inkFaint,
                                     modifier = Modifier.padding(start = 40.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
@@ -473,25 +483,25 @@ private fun ChatActionDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    if (delete) "Delete it from $computer. You can change this action in Settings."
-                    else "Move it to Completed on $computer. Nothing is deleted; you can change this action in Settings.",
+                    if (delete) stringResource(R.string.chats_action_delete_body, computer)
+                    else stringResource(R.string.chats_action_complete_body, computer),
                 )
                 TextButton(onClick = onPin, modifier = Modifier.testTag("chats.pin")) {
                     Icon(Icons.Filled.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text(if (pinned) "Unpin" else "Pin", modifier = Modifier.padding(start = 8.dp))
+                    Text(stringResource(if (pinned) R.string.chats_unpin else R.string.chats_pin), modifier = Modifier.padding(start = 8.dp))
                 }
                 TextButton(onClick = onRename, modifier = Modifier.testTag("chats.rename")) {
                     Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text("Rename", modifier = Modifier.padding(start = 8.dp))
+                    Text(stringResource(R.string.chats_rename), modifier = Modifier.padding(start = 8.dp))
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(if (delete) "Delete" else "Complete", color = if (delete) p.danger else p.accent)
+                Text(stringResource(if (delete) R.string.chats_delete else R.string.chats_complete), color = if (delete) p.danger else p.accent)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chats_cancel)) } },
     )
 }
 
@@ -502,7 +512,7 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
     Row(
         Modifier
             .fillMaxWidth()
-            .combinedClickable(role = Role.Button, onLongClickLabel = "Chat actions", onLongClick = onLongClick, onClick = onClick)
+            .combinedClickable(role = Role.Button, onLongClickLabel = stringResource(R.string.chats_chat_actions), onLongClick = onLongClick, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -514,15 +524,15 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    plainText(s.title).ifEmpty { "New chat" },
+                    plainText(s.title).ifEmpty { stringResource(R.string.chats_new_chat) },
                     style = MaterialTheme.typography.titleMedium,
                     color = p.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = p.warning, modifier = Modifier.size(14.dp))
-                Text(ago(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.warning, modifier = Modifier.size(14.dp))
+                Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
             }
             if (showPreview && preview.isNotEmpty()) {
                 Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -530,21 +540,22 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
             if (activity != null || waiting > 0) {
                 Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     when (activity) {
-                        Activity.NEEDS_YOU -> RowChip("Needs you", tone = AgentRows.Tone.WARN)
-                        Activity.RUNNING -> RowChip("Working", accent = true)
+                        Activity.NEEDS_YOU -> RowChip(stringResource(R.string.chats_needs_you), tone = AgentRows.Tone.WARN)
+                        Activity.RUNNING -> RowChip(stringResource(R.string.chats_working), accent = true)
                         null -> Unit
                     }
                     // Prompts written offline for this chat, still in the outbox.
                     if (waiting > 0) {
+                        val waitingDesc = if (waiting == 1) stringResource(R.string.chats_prompts_waiting_one) else stringResource(R.string.chats_prompts_waiting_other, waiting)
                         Row(
                             Modifier.semantics(mergeDescendants = true) {
-                                contentDescription = if (waiting == 1) "1 prompt waiting to send" else "$waiting prompts waiting to send"
+                                contentDescription = waitingDesc
                             },
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Icon(Icons.Filled.Outbox, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(14.dp))
-                            Text("$waiting waiting", style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
+                            Text(stringResource(R.string.chats_n_waiting, waiting), style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
                         }
                     }
                 }
@@ -562,19 +573,20 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
 @Composable
 internal fun ChatStatusIcon(activity: Activity?, waiting: Boolean, activeWatchCount: Long) {
     val p = Nekko.palette
-    val label = when {
-        activity == Activity.RUNNING -> "Working"
-        activity == Activity.NEEDS_YOU -> "Needs you"
-        waiting -> "Waiting to send"
-        activeWatchCount > 0 -> "Idle"
-        else -> "Done"
+    val status = when {
+        activity == Activity.RUNNING -> R.string.chats_working
+        activity == Activity.NEEDS_YOU -> R.string.chats_needs_you
+        waiting -> R.string.chats_waiting_to_send
+        activeWatchCount > 0 -> R.string.chats_idle
+        else -> R.string.chats_status_done
     }
+    val label = stringResource(status)
     val m = Modifier.size(18.dp).semantics { contentDescription = label }
-    when (label) {
-        "Working" -> Icon(Icons.Outlined.RocketLaunch, contentDescription = null, tint = p.success, modifier = m)
-        "Needs you" -> Icon(Icons.Filled.QuestionMark, contentDescription = null, tint = p.warning, modifier = m)
-        "Waiting to send" -> Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = m)
-        "Idle" -> Text("Zz", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = p.inkFaint, modifier = Modifier.semantics { contentDescription = label })
+    when (status) {
+        R.string.chats_working -> Icon(Icons.Outlined.RocketLaunch, contentDescription = null, tint = p.success, modifier = m)
+        R.string.chats_needs_you -> Icon(Icons.Filled.QuestionMark, contentDescription = null, tint = p.warning, modifier = m)
+        R.string.chats_waiting_to_send -> Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = m)
+        R.string.chats_idle -> Text("Zz", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = p.inkFaint, modifier = Modifier.semantics { contentDescription = label })
         else -> Icon(Icons.Filled.Check, contentDescription = null, tint = p.inkFaint, modifier = m)
     }
 }
@@ -599,8 +611,8 @@ private fun MonitorsRow(onClick: () -> Unit) {
             Icon(Icons.Filled.Monitor, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text("Monitors", style = MaterialTheme.typography.titleMedium, color = p.ink)
-            Text("Hardware, running chats, what needs you", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+            Text(stringResource(R.string.chats_monitors), style = MaterialTheme.typography.titleMedium, color = p.ink)
+            Text(stringResource(R.string.chats_monitors_detail), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
     }
@@ -614,6 +626,9 @@ private fun MonitorsRow(onClick: () -> Unit) {
 @Composable
 private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (() -> Unit)? = null, onToggle: (() -> Unit)?) {
     val p = Nekko.palette
+    val toggleLabel = stringResource(if (open) R.string.chats_collapse_group else R.string.chats_expand_group, name)
+    val reorderLabel = if (onReorder != null) stringResource(R.string.chats_reorder_groups) else null
+    val stateLabel = stringResource(if (open) R.string.chats_expanded else R.string.chats_collapsed)
     Row(
         Modifier
             .fillMaxWidth()
@@ -621,11 +636,11 @@ private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (
                 if (onToggle == null) Modifier
                 else Modifier.combinedClickable(
                     role = Role.Button,
-                    onClickLabel = if (open) "Collapse $name" else "Expand $name",
-                    onLongClickLabel = if (onReorder != null) "Reorder groups" else null,
+                    onClickLabel = toggleLabel,
+                    onLongClickLabel = reorderLabel,
                     onLongClick = onReorder,
                     onClick = onToggle,
-                ).semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
+                ).semantics { stateDescription = stateLabel },
             )
             .padding(start = 12.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)
             .testTag("chats.group"),
@@ -653,9 +668,10 @@ private fun GroupHeader(name: String, open: Boolean, count: String, onReorder: (
 }
 
 /** "3 active · 12 done", as the desktop's group headings count. */
+@Composable
 private fun groupCounts(g: ChatSection): String = buildList {
-    if (g.activeCount > 0) add("${g.activeCount} active")
-    if (g.doneCount > 0) add("${g.doneCount} done")
+    if (g.activeCount > 0) add(stringResource(R.string.chats_count_active, g.activeCount))
+    if (g.doneCount > 0) add(stringResource(R.string.chats_count_done, g.doneCount))
 }.joinToString(" · ")
 
 /** "Show N more" / "Show fewer" under a group's recent chats. */
@@ -677,7 +693,7 @@ private fun ShowMoreToggle(open: Boolean, hidden: Int, onToggle: () -> Unit) {
             tint = p.inkSoft,
             modifier = Modifier.size(16.dp),
         )
-        Text(if (open) "Show fewer" else "Show $hidden more", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = p.inkSoft)
+        Text(if (open) stringResource(R.string.chats_show_fewer) else stringResource(R.string.chats_show_more, hidden), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = p.inkSoft)
     }
 }
 
@@ -690,7 +706,7 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
         IconButton(onClick = { open = true }, modifier = Modifier.testTag("chats.view")) {
             Icon(
                 if (view.isStandard) Icons.AutoMirrored.Outlined.Sort else Icons.AutoMirrored.Filled.Sort,
-                contentDescription = "View options",
+                contentDescription = stringResource(R.string.chats_view_options),
                 tint = if (view.isStandard) p.inkSoft else p.accent,
             )
         }
@@ -707,28 +723,28 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
                 onClick = change,
                 modifier = Modifier.semantics { selected = on },
             )
-            heading("Group by")
-            ChatListView.GroupBy.entries.forEach { g -> choice(groupName(g), view.groupBy == g) { onChange(view.copy(groupBy = g)) } }
+            heading(stringResource(R.string.chats_group_by))
+            ChatListView.GroupBy.entries.forEach { g -> choice(stringResource(groupName(g)), view.groupBy == g) { onChange(view.copy(groupBy = g)) } }
             HorizontalDivider()
-            heading("Sort by")
-            ChatListView.SortBy.entries.forEach { o -> choice(sortName(o), view.sortBy == o) { onChange(view.withSort(o)) } }
+            heading(stringResource(R.string.chats_sort_by))
+            ChatListView.SortBy.entries.forEach { o -> choice(stringResource(sortName(o)), view.sortBy == o) { onChange(view.withSort(o)) } }
             // Manual order has no direction: it is whatever was dragged on the computer.
             if (view.sortBy != ChatListView.SortBy.MANUAL) {
                 HorizontalDivider()
-                heading("Order")
+                heading(stringResource(R.string.chats_order))
                 val name = view.sortBy == ChatListView.SortBy.NAME
-                choice(if (name) "A to Z" else "Oldest first", view.ascending) { onChange(view.copy(ascending = true)) }
-                choice(if (name) "Z to A" else "Newest first", !view.ascending) { onChange(view.copy(ascending = false)) }
+                choice(stringResource(if (name) R.string.chats_a_to_z else R.string.chats_oldest_first), view.ascending) { onChange(view.copy(ascending = true)) }
+                choice(stringResource(if (name) R.string.chats_z_to_a else R.string.chats_newest_first), !view.ascending) { onChange(view.copy(ascending = false)) }
             }
             HorizontalDivider()
-            heading("Show")
-            choice("Previews", view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }
-            choice("Completed chats", view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
-            choice("Empty groups", view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
+            heading(stringResource(R.string.chats_show))
+            choice(stringResource(R.string.chats_previews), view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }
+            choice(stringResource(R.string.chats_completed_chats), view.showCompleted) { onChange(view.copy(showCompleted = !view.showCompleted)) }
+            choice(stringResource(R.string.chats_empty_groups), view.showEmptyGroups) { onChange(view.copy(showEmptyGroups = !view.showEmptyGroups)) }
             if (view.canReorderGroups) {
                 HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text("Reorder groups…") },
+                    text = { Text(stringResource(R.string.chats_reorder_groups_menu)) },
                     leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null) },
                     onClick = { open = false; onReorder() },
                     modifier = Modifier.testTag("chats.reorder"),
@@ -736,7 +752,7 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
             }
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Reset to defaults") },
+                text = { Text(stringResource(R.string.chats_reset_defaults)) },
                 enabled = !view.isStandard,
                 onClick = { open = false; onChange(ChatListView.STANDARD) },
             )
@@ -744,17 +760,19 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
     }
 }
 
-private fun groupName(g: ChatListView.GroupBy) = when (g) {
-    ChatListView.GroupBy.PROJECT -> "Project"
-    ChatListView.GroupBy.STATUS -> "Status"
-    ChatListView.GroupBy.DATE -> "Date"
-    ChatListView.GroupBy.NONE -> "None"
+@StringRes
+private fun groupName(g: ChatListView.GroupBy): Int = when (g) {
+    ChatListView.GroupBy.PROJECT -> R.string.chats_group_project
+    ChatListView.GroupBy.STATUS -> R.string.chats_group_status
+    ChatListView.GroupBy.DATE -> R.string.chats_group_date
+    ChatListView.GroupBy.NONE -> R.string.chats_group_none
 }
 
-private fun sortName(s: ChatListView.SortBy) = when (s) {
-    ChatListView.SortBy.MANUAL -> "Manual"
-    ChatListView.SortBy.UPDATED -> "Last updated"
-    ChatListView.SortBy.NAME -> "Name"
+@StringRes
+private fun sortName(s: ChatListView.SortBy): Int = when (s) {
+    ChatListView.SortBy.MANUAL -> R.string.chats_sort_manual
+    ChatListView.SortBy.UPDATED -> R.string.chats_sort_updated
+    ChatListView.SortBy.NAME -> R.string.chats_sort_name
 }
 
 /**
@@ -767,7 +785,7 @@ private fun ReorderGroupsDialog(groups: List<Pair<String, String>>, onDismiss: (
     var order by remember(groups) { mutableStateOf(groups) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Reorder groups") },
+        title = { Text(stringResource(R.string.chats_reorder_groups)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 order.forEachIndexed { i, (key, name) ->
@@ -777,18 +795,18 @@ private fun ReorderGroupsDialog(groups: List<Pair<String, String>>, onDismiss: (
                     ) {
                         Text(name, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         IconButton(enabled = i > 0, onClick = { order = ChatGroupOrder.move(order.map { it.first }, key, order[i - 1].first).map { k -> order.first { it.first == k } } }) {
-                            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move $name up")
+                            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = stringResource(R.string.chats_move_up, name))
                         }
                         IconButton(enabled = i < order.lastIndex, onClick = { order = ChatGroupOrder.move(order.map { it.first }, key, order.getOrNull(i + 2)?.first).map { k -> order.first { it.first == k } } }) {
-                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move $name down")
+                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.chats_move_down, name))
                         }
                     }
                 }
-                Text("The order is kept on this phone.", style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.chats_order_kept), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(top = 8.dp))
             }
         },
-        confirmButton = { TextButton(onClick = { onDone(order.map { it.first }) }, modifier = Modifier.testTag("groups.done")) { Text("Done") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onDone(order.map { it.first }) }, modifier = Modifier.testTag("groups.done")) { Text(stringResource(R.string.chats_done)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chats_cancel)) } },
     )
 }
 
@@ -803,21 +821,21 @@ private fun CompletedRow(s: SessionSummary, onLongClick: () -> Unit, onClick: ()
     Row(
         Modifier
             .fillMaxWidth()
-            .combinedClickable(role = Role.Button, onLongClickLabel = "Restore or delete", onLongClick = onLongClick, onClick = onClick)
+            .combinedClickable(role = Role.Button, onLongClickLabel = stringResource(R.string.chats_restore_or_delete), onLongClick = onLongClick, onClick = onClick)
             .padding(start = 40.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(Icons.Filled.Check, contentDescription = "Completed", tint = p.success, modifier = Modifier.size(14.dp))
+        Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.chats_completed), tint = p.success, modifier = Modifier.size(14.dp))
         Text(
-            plainText(s.title).ifEmpty { "New chat" },
+            plainText(s.title).ifEmpty { stringResource(R.string.chats_new_chat) },
             style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough),
             color = p.inkFaint,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Text(ago(s.archivedAt ?: s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        Text(localAgo(s.archivedAt ?: s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
     }
 }
 
@@ -841,10 +859,10 @@ private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier, onSkipFir
             Icon(Icons.Filled.QrCode2, contentDescription = null, tint = p.accent, modifier = Modifier.size(36.dp))
         }
         Spacer(Modifier.height(16.dp))
-        Text("Your agent, in your pocket", style = MaterialTheme.typography.headlineSmall, color = p.ink, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.chats_intro_title), style = MaterialTheme.typography.headlineSmall, color = p.ink, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Drive Nekko Agent on your computer from here: start chats, follow runs, and approve what it wants to do.",
+            stringResource(R.string.chats_welcome_body),
             style = MaterialTheme.typography.bodyLarge,
             color = p.inkSoft,
             textAlign = TextAlign.Center,
@@ -853,38 +871,51 @@ private fun Welcome(onPair: () -> Unit, modifier: Modifier = Modifier, onSkipFir
         Button(onClick = onPair, modifier = Modifier.fillMaxWidth().height(48.dp)) {
             Icon(Icons.Filled.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text("Pair a computer")
+            Text(stringResource(R.string.chats_pair_title))
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Scan the QR in Settings → Remote access on your computer.",
+            stringResource(R.string.chats_welcome_scan),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
             textAlign = TextAlign.Center,
         )
         if (onSkipFirstRun != null) {
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onSkipFirstRun, modifier = Modifier.testTag("firstRun.skip")) { Text("Skip") }
+            TextButton(onClick = onSkipFirstRun, modifier = Modifier.testTag("firstRun.skip")) { Text(stringResource(R.string.chats_skip)) }
         }
         Spacer(Modifier.height(80.dp))
     }
 }
 
-/** The line above a saved chat list: when it was saved, and that it isn't live. */
-internal fun savedListNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
-    savedNote("Saved list", savedAt, computer, now, zone)
+/**
+ * The line above a saved chat list: when it was saved, and that it isn't live.
+ * [template] is R.string.chats_saved_list_note in the phone's language (%1$s the time, %2$s the computer).
+ */
+internal fun savedListNote(
+    savedAt: Long,
+    computer: String,
+    now: Long = System.currentTimeMillis(),
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    template: String = "Saved list from %1\$s. It updates when %2\$s answers.",
+): String = savedNote(template, savedAt, computer, now, zone)
 
 /** "Saved copy from 10:42. It updates when Mac answers.": a chat read from the phone's copy (OF-5). */
-internal fun savedCopyNote(savedAt: Long, computer: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
-    savedNote("Saved copy", savedAt, computer, now, zone)
+internal fun savedCopyNote(
+    savedAt: Long,
+    computer: String,
+    now: Long = System.currentTimeMillis(),
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    template: String = "Saved copy from %1\$s. It updates when %2\$s answers.",
+): String = savedNote(template, savedAt, computer, now, zone)
 
-private fun savedNote(what: String, savedAt: Long, computer: String, now: Long, zone: java.time.ZoneId): String {
+private fun savedNote(template: String, savedAt: Long, computer: String, now: Long, zone: java.time.ZoneId): String {
     val at = java.time.Instant.ofEpochMilli(savedAt).atZone(zone)
     val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
     val time = at.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
     val whenText = if (at.toLocalDate() == today) time
     else at.toLocalDate().format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)) + ", " + time
-    return "$what from $whenText. It updates when $computer answers."
+    return String.format(template, whenText, computer)
 }
 
 /** A chat started offline (offline mode): its first message, until the computer creates it. */
@@ -901,12 +932,29 @@ private fun PendingNewChatRow(item: OutboxItem, sending: Boolean, onDelete: () -
         }
         Column(Modifier.weight(1f)) {
             Text(item.preview, style = MaterialTheme.typography.titleMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(item.lastError ?: "New chat, starts when your computer is back", style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2)
+            Text(item.lastError ?: stringResource(R.string.chats_pending_new_chat), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2)
         }
         if (sending) {
             CircularProgressIndicator(Modifier.padding(12.dp).size(18.dp), strokeWidth = 2.dp, color = p.accent)
         } else {
-            IconButton(onClick = onDelete) { Icon(Icons.Filled.Close, contentDescription = "Delete waiting chat", tint = p.inkSoft) }
+            IconButton(onClick = onDelete) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chats_delete_waiting_chat), tint = p.inkSoft) }
         }
     }
+}
+
+/** A group's name: a folder's own, or the list's built-in groups in the phone's language. */
+@Composable
+private fun groupTitle(key: String, name: String): String = when (key) {
+    ChatGroup.GENERAL -> stringResource(R.string.chats_group_general)
+    ChatSection.COMPLETED -> stringResource(R.string.chats_group_completed)
+    "all" -> stringResource(R.string.chats_group_all)
+    "status:input" -> stringResource(R.string.chats_group_needs_you)
+    "status:working" -> stringResource(R.string.chats_group_working)
+    "status:idle" -> stringResource(R.string.chats_group_idle)
+    "date:today" -> stringResource(R.string.chats_group_today)
+    "date:yesterday" -> stringResource(R.string.chats_group_yesterday)
+    "date:week" -> stringResource(R.string.chats_group_week)
+    "date:month" -> stringResource(R.string.chats_group_month)
+    "date:older" -> stringResource(R.string.chats_group_older)
+    else -> name
 }

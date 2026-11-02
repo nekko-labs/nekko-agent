@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_appearance.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="appearance_title">外観</string>
+    <string name="appearance_theme">テーマ</string>
+    <string name="appearance_language">言語</string>
+    <string name="appearance_match_computer">コンピュータに合わせる</string>
+    <string name="appearance_match_phone">この端末に合わせる</string>
+    <string name="appearance_match_phone_detail">端末の設定に合わせてライトまたはダーク</string>
+    <string name="appearance_light">ライト</string>
+    <string name="appearance_dark">ダーク</string>
+    <string name="appearance_presets">デスクトップのテーマ</string>
+    <string name="appearance_experimental">実験的</string>
+    <string name="appearance_done">完了</string>
+    <string name="appearance_computer_waiting">%1$s を待っています。それまでは端末の設定を使います</string>
+    <string name="appearance_computer_dark">%1$s はダーク</string>
+    <string name="appearance_computer_light">%1$s はライト</string>
+    <string name="appearance_computer_system">%1$s はシステムに従います。端末は自身の設定を使います</string>
+    <string name="appearance_footer_computer">この端末に保存されます。アプリは %1$s のテーマ、アクセントカラー、配色に従い、そちらで変更するとすぐに反映されます。</string>
+    <string name="appearance_footer">この端末に保存されます。デスクトップのテーマを、この端末のコントラストで表示します。</string>
+</resources>

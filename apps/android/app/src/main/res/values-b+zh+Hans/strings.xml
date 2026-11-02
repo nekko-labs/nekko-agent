@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="widget_description">有多少聊天需要你、有多少正在工作。只显示数量，从不显示内容。</string>
+    <string name="shortcut_new_chat">新聊天</string>
+    <string name="shortcut_new_chat_long">在你的电脑上新建聊天</string>
+</resources>

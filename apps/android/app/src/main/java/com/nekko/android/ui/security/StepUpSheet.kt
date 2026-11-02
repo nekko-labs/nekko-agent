@@ -1,5 +1,7 @@
 package com.nekko.android.ui.security
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,7 +79,7 @@ fun StepUpSheet(repo: ComputersRepository, pending: PendingStepUp, onDone: () ->
     val p = Nekko.palette
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val computer = repo.state.value.active?.name ?: "your computer"
+    val computer = repo.state.value.active?.name ?: stringResource(R.string.your_computer)
     val controller = remember(pending) {
         StepUpController(
             challenge = { repo.stepUpChallenge() },
@@ -107,7 +109,7 @@ fun StepUpSheet(repo: ComputersRepository, pending: PendingStepUp, onDone: () ->
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                if (ui.offersKey) "Confirm with your security key" else "Confirm it’s you",
+                if (ui.offersKey) stringResource(R.string.settings_confirm_with_key) else stringResource(R.string.settings_confirm_its_you),
                 style = MaterialTheme.typography.titleMedium,
                 color = p.ink,
                 modifier = Modifier.semantics { heading() },
@@ -119,13 +121,13 @@ fun StepUpSheet(repo: ComputersRepository, pending: PendingStepUp, onDone: () ->
                     CircularProgressIndicator()
                 }
                 StepUpUi.Phase.NO_METHOD -> Notice(
-                    "$computer asks for a security key or a code, but none it has can answer from a phone. Do this on $computer.",
+                    stringResource(R.string.settings_no_method, computer),
                     Tone.WARNING,
                 )
                 StepUpUi.Phase.READY -> {
                     if (ui.offersKey) {
                         Text(
-                            "Touch your key when it blinks, or hold it to the back of the phone. A passkey on this phone works too.",
+                            stringResource(R.string.settings_touch_key),
                             style = MaterialTheme.typography.bodySmall,
                             color = p.inkFaint,
                         )
@@ -137,11 +139,11 @@ fun StepUpSheet(repo: ComputersRepository, pending: PendingStepUp, onDone: () ->
                         ) {
                             Icon(Icons.Filled.Key, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(8.dp))
-                            Text("Use security key or passkey")
+                            Text(stringResource(R.string.settings_use_key))
                         }
                     } else if (ui.keysUnavailable) {
                         Text(
-                            "Security keys and passkeys for $computer can’t be used from this phone yet.",
+                            stringResource(R.string.settings_keys_unavailable, computer),
                             style = MaterialTheme.typography.bodySmall,
                             color = p.inkFaint,
                         )
@@ -151,7 +153,7 @@ fun StepUpSheet(repo: ComputersRepository, pending: PendingStepUp, onDone: () ->
                         OutlinedTextField(
                             value = code,
                             onValueChange = { v -> code = v.filter { it.isDigit() || it == ' ' }.take(7) },
-                            label = { Text("Code from your authenticator app") },
+                            label = { Text(stringResource(R.string.settings_code_label)) },
                             singleLine = true,
                             enabled = !ui.busy,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
@@ -162,14 +164,14 @@ fun StepUpSheet(repo: ComputersRepository, pending: PendingStepUp, onDone: () ->
                             onClick = submit,
                             enabled = !ui.busy && code.isNotBlank(),
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        ) { Text("Confirm with code") }
+                        ) { Text(stringResource(R.string.settings_confirm_with_code)) }
                     } else if (ui.offersCode) {
-                        TextButton(onClick = { codeOpen = true }, enabled = !ui.busy) { Text("Use a code") }
+                        TextButton(onClick = { codeOpen = true }, enabled = !ui.busy) { Text(stringResource(R.string.settings_use_code)) }
                     }
                     if (ui.busy) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Text("Checking with $computer…", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                            Text(stringResource(R.string.settings_checking_with, computer), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                         }
                     }
                 }
@@ -178,7 +180,7 @@ fun StepUpSheet(repo: ComputersRepository, pending: PendingStepUp, onDone: () ->
                 Notice(it, Tone.DANGER, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
             }
             HardwareKeyNote()
             Spacer(Modifier.size(8.dp))

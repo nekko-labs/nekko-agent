@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
@@ -95,6 +96,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.R
 import com.nekko.android.terminal.TerminalSession
 import com.nekko.android.terminal.TerminalsController
 import com.nekko.android.ui.components.Notice
@@ -166,8 +168,8 @@ private fun Page(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        if (close) Icon(Icons.Filled.Close, contentDescription = "Close")
-                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        if (close) Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_close))
+                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.tools_back))
                     }
                 },
                 actions = { actions() },
@@ -201,32 +203,32 @@ private fun ListPage(terminals: TerminalsController, online: Boolean, computer: 
         }
     }
     Page(
-        "Terminals", onClose, close = true,
-        actions = { IconButton(onClick = { scope.launch { terminals.load() } }) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") } },
+        stringResource(R.string.tools_term_title), onClose, close = true,
+        actions = { IconButton(onClick = { scope.launch { terminals.load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) } },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(Modifier.fillMaxSize().testTag("terminals.list"), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { Label("THIS CHAT") }
+                item { Label(stringResource(R.string.tools_term_this_chat).uppercase()) }
                 s.error?.let { item { Notice(it, Tone.DANGER) } }
-                if (s.loaded && s.error == null && s.terminals.isEmpty()) item { Text("No terminals for this chat yet.", color = p.inkSoft) }
+                if (s.loaded && s.error == null && s.terminals.isEmpty()) item { Text(stringResource(R.string.tools_term_none), color = p.inkSoft) }
                 items(s.terminals, key = { it.id }) { t -> TerminalRow(t) { open(terminals.session(t)) } }
                 item {
-                    Row2(Icons.Filled.Add, "New terminal", enabled = !busy && online, modifier = Modifier.testTag("terminals.new")) {
+                    Row2(Icons.Filled.Add, stringResource(R.string.tools_term_new), enabled = !busy && online, modifier = Modifier.testTag("terminals.new")) {
                         opening { terminals.newTerminal(PHONE_COLS, PHONE_ROWS) }
                     }
-                    Footnote("A new terminal starts in the chat’s folder on $computer. The computer shows that this phone is attached.")
+                    Footnote(stringResource(R.string.tools_term_new_note, computer))
                 }
                 item { Label("SSH") }
                 when {
                     s.hostsError != null -> item { Text(s.hostsError!!, color = p.inkSoft) }
-                    s.loaded && s.hosts.isEmpty() -> item { Text("No hosts in ~/.ssh/config on $computer.", color = p.inkSoft) }
+                    s.loaded && s.hosts.isEmpty() -> item { Text(stringResource(R.string.tools_term_no_hosts, computer), color = p.inkSoft) }
                 }
                 items(s.hosts, key = { "ssh:${it.alias}" }) { h ->
                     Row2(Icons.Filled.Lan, h.alias, detail = h.detail, enabled = !busy && online, modifier = Modifier.testTag("terminals.ssh.${h.alias}")) {
                         opening { terminals.openSsh(h, PHONE_COLS, PHONE_ROWS) }
                     }
                 }
-                item { Footnote("Runs ssh on $computer with its own keys and config; nothing about the keys reaches this phone.") }
+                item { Footnote(stringResource(R.string.tools_term_ssh_note, computer)) }
             }
             if (busy || (s.loading && !s.loaded)) CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
         }
@@ -234,9 +236,9 @@ private fun ListPage(terminals: TerminalsController, online: Boolean, computer: 
     failed?.let { m ->
         AlertDialog(
             onDismissRequest = { failed = null },
-            title = { Text("Couldn’t open it") },
+            title = { Text(stringResource(R.string.tools_cant_open)) },
             text = { Text(m) },
-            confirmButton = { TextButton(onClick = { failed = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { failed = null }) { Text(stringResource(R.string.tools_ok)) } },
         )
     }
 }
@@ -260,7 +262,7 @@ private fun TerminalRow(t: PhoneTerminal, onClick: () -> Unit) {
             Text(t.title.ifEmpty { t.shell }, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(t.detail, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (t.viewers > 0) Icon(Icons.Filled.PhoneAndroid, contentDescription = "A phone is attached", tint = p.inkSoft, modifier = Modifier.size(18.dp))
+        if (t.viewers > 0) Icon(Icons.Filled.PhoneAndroid, contentDescription = stringResource(R.string.tools_term_attached), tint = p.inkSoft, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -321,15 +323,15 @@ private fun TerminalPage(session: TerminalSession, terminals: TerminalsControlle
     }
 
     Page(
-        terminal.title.ifEmpty { "Terminal" }, onBack,
+        terminal.title.ifEmpty { stringResource(R.string.tools_term_terminal) }, onBack,
         actions = {
             Box {
-                IconButton(onClick = { menu = true }, modifier = Modifier.testTag("terminal.more")) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+                IconButton(onClick = { menu = true }, modifier = Modifier.testTag("terminal.more")) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.tools_term_more)) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Read again") }, leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                    DropdownMenuItem(text = { Text(stringResource(R.string.tools_term_read_again)) }, leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
                         onClick = { menu = false; scope.launch { session.refresh() } })
                     if (!terminal.readOnly) {
-                        DropdownMenuItem(text = { Text("Close terminal", color = p.danger) }, leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null, tint = p.danger) },
+                        DropdownMenuItem(text = { Text(stringResource(R.string.tools_term_close), color = p.danger) }, leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null, tint = p.danger) },
                             onClick = { menu = false; confirmClose = true }, modifier = Modifier.testTag("terminal.close"))
                     }
                 }
@@ -340,15 +342,15 @@ private fun TerminalPage(session: TerminalSession, terminals: TerminalsControlle
             when (val st = state) {
                 TerminalSession.State.Opening -> Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(color = p.accent, modifier = Modifier.size(20.dp))
-                    Text("Opening…", color = p.inkSoft)
+                    Text(stringResource(R.string.tools_term_opening), color = p.inkSoft)
                 }
                 is TerminalSession.State.Failed -> Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Notice(st.message, Tone.DANGER)
-                    TextButton(onClick = { scope.launch { session.start() } }) { Text("Try again") }
+                    TextButton(onClick = { scope.launch { session.start() } }) { Text(stringResource(R.string.tools_try_again)) }
                 }
-                is TerminalSession.State.Exited -> Banner(st.code?.let { "The shell exited ($it)." } ?: "The shell exited.")
-                TerminalSession.State.Closed -> Banner("Closed.")
-                TerminalSession.State.ReadOnly -> Banner("The agent’s commands: read only. Use Read again for more.")
+                is TerminalSession.State.Exited -> Banner(st.code?.let { stringResource(R.string.tools_term_exited_code, it) } ?: stringResource(R.string.tools_term_exited))
+                TerminalSession.State.Closed -> Banner(stringResource(R.string.tools_term_closed))
+                TerminalSession.State.ReadOnly -> Banner(stringResource(R.string.tools_term_read_only))
                 TerminalSession.State.Live -> error?.let { Banner(it, danger = true) }
             }
             Output(session, Modifier.weight(1f))
@@ -358,15 +360,15 @@ private fun TerminalPage(session: TerminalSession, terminals: TerminalsControlle
     if (confirmClose) {
         AlertDialog(
             onDismissRequest = { confirmClose = false },
-            title = { Text("Close this terminal on $computer?") },
-            text = { Text("Its shell stops, on the computer too.") },
+            title = { Text(stringResource(R.string.tools_term_close_title, computer)) },
+            text = { Text(stringResource(R.string.tools_term_close_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmClose = false
                     scope.launch { runCatching { session.close() }; terminals.load() }
-                }) { Text("Close terminal", color = p.danger) }
+                }) { Text(stringResource(R.string.tools_term_close), color = p.danger) }
             },
-            dismissButton = { TextButton(onClick = { confirmClose = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmClose = false }) { Text(stringResource(R.string.tools_cancel)) } },
         )
     }
 }
@@ -429,20 +431,20 @@ private fun Controls(session: TerminalSession) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Key("esc") { session.key(TerminalKey.Escape) }
             Key("tab") { session.key(TerminalKey.Tab) }
-            Key("ctrl", on = ctrl, description = "Control") { ctrl = !ctrl }
-            Key("^C", description = "Control C") { session.key(TerminalKey.Ctrl('c')) }
-            Key("↑", description = "Up") { session.key(TerminalKey.Up) }
-            Key("↓", description = "Down") { session.key(TerminalKey.Down) }
-            Key("←", description = "Left") { session.key(TerminalKey.Left) }
-            Key("→", description = "Right") { session.key(TerminalKey.Right) }
-            Key("⌫", description = "Backspace") { session.key(TerminalKey.Backspace) }
-            Key("⏎", description = "Return") { session.key(TerminalKey.Enter) }
+            Key("ctrl", on = ctrl, description = stringResource(R.string.tools_term_key_control)) { ctrl = !ctrl }
+            Key("^C", description = stringResource(R.string.tools_term_key_control_c)) { session.key(TerminalKey.Ctrl('c')) }
+            Key("↑", description = stringResource(R.string.tools_term_key_up)) { session.key(TerminalKey.Up) }
+            Key("↓", description = stringResource(R.string.tools_term_key_down)) { session.key(TerminalKey.Down) }
+            Key("←", description = stringResource(R.string.tools_term_key_left)) { session.key(TerminalKey.Left) }
+            Key("→", description = stringResource(R.string.tools_term_key_right)) { session.key(TerminalKey.Right) }
+            Key("⌫", description = stringResource(R.string.tools_term_key_backspace)) { session.key(TerminalKey.Backspace) }
+            Key("⏎", description = stringResource(R.string.tools_term_key_return)) { session.key(TerminalKey.Enter) }
             IconButton(onClick = {
                 scope.launch {
                     val clip = clipboard.getClipEntry()?.clipData ?: return@launch
                     if (clip.itemCount > 0) clip.getItemAt(0).coerceToText(context)?.toString()?.let(session::paste)
                 }
-            }) { Icon(Icons.Filled.ContentPaste, contentDescription = "Paste") }
+            }) { Icon(Icons.Filled.ContentPaste, contentDescription = stringResource(R.string.tools_term_paste)) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
@@ -457,7 +459,7 @@ private fun Controls(session: TerminalSession) {
                         line = v
                     }
                 },
-                placeholder = { Text(if (ctrl) "Ctrl + a key" else "Type or dictate a command") },
+                placeholder = { Text(stringResource(if (ctrl) R.string.tools_term_ctrl_key else R.string.tools_term_type)) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
@@ -465,7 +467,7 @@ private fun Controls(session: TerminalSession) {
                 modifier = Modifier.weight(1f).testTag("terminal.line"),
             )
             IconButton(onClick = send, modifier = Modifier.testTag("terminal.send")) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = "Send the line")
+                Icon(Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = stringResource(R.string.tools_term_send))
             }
         }
     }

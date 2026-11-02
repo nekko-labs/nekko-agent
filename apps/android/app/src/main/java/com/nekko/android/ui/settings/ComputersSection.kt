@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -18,12 +20,12 @@ import com.nekko.android.ui.components.SectionHeader
 @Composable
 fun ComputersSection(deps: SettingsDeps) {
     val c by deps.repo.state.collectAsStateWithLifecycle()
-    SectionHeader("Computers")
+    SectionHeader(stringResource(R.string.settings_computers))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             SettingsRow(
-                title = "Computers",
-                detail = computersDetail(c),
+                title = stringResource(R.string.settings_computers),
+                detail = computersDetailText(c),
                 icon = Icons.Filled.Computer,
                 onClick = { deps.open(Routes.COMPUTERS) },
             )
@@ -31,6 +33,20 @@ fun ComputersSection(deps: SettingsDeps) {
     }
 }
 
+/** [computersDetail] in the phone's language. */
+@Composable
+private fun computersDetailText(c: ComputersState): String {
+    val n = c.computers.size
+    val active = c.active?.name
+    return when {
+        n == 0 -> stringResource(R.string.settings_computers_none)
+        n == 1 && active != null -> active
+        active != null -> stringResource(R.string.settings_computers_paired_using, n, active)
+        else -> stringResource(R.string.settings_computers_paired, n)
+    }
+}
+
+/** The same in English, as the JVM tests read it. */
 internal fun computersDetail(c: ComputersState): String {
     val n = c.computers.size
     val active = c.active?.name

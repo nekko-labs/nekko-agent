@@ -87,6 +87,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -103,6 +104,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.graphics.createBitmap
 import androidx.core.view.WindowCompat
+import com.nekko.android.R
 import com.nekko.android.previews.LocalChatPreviews
 import com.nekko.android.previews.PreviewLoader
 import com.nekko.android.previews.PreviewSource
@@ -153,6 +155,9 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
     var webLoading by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     val loopback = link.isLoopback
+    val tooLarge = stringResource(R.string.tools_preview_too_large)
+    val badImage = stringResource(R.string.tools_preview_bad_image)
+    val badAddress = stringResource(R.string.tools_preview_bad_address)
 
     LaunchedEffect(attempt) {
         val reload = attempt > 0
@@ -169,11 +174,11 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                     when (link.kind ?: ArtifactKind.ofPath(t.path) ?: ArtifactKind.TEXT) {
                         ArtifactKind.HTML, ArtifactKind.SVG -> {
                             // Half a page would run half a prototype.
-                            if (body.truncated) throw RelayException("Too large to open on a phone.")
+                            if (body.truncated) throw RelayException(tooLarge)
                             Content.Web(PreviewSource(sessionId, loader, PreviewUrls.artifactUrl(t.path), null))
                         }
                         ArtifactKind.IMAGE -> Content.Picture(
-                            withContext(Dispatchers.Default) { decode(body.data, 4096) } ?: throw RelayException("This image can’t be shown on a phone."),
+                            withContext(Dispatchers.Default) { decode(body.data, 4096) } ?: throw RelayException(badImage),
                         )
                         ArtifactKind.MARKDOWN -> Content.Markdown(body.data.toString(Charsets.UTF_8), cut)
                         ArtifactKind.TEXT -> Content.Text(shown(body.data.toString(Charsets.UTF_8)), cut)
@@ -181,8 +186,8 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                     }
                 }
                 is ChatPreviewLink.Target.Loopback -> {
-                    val local = PreviewUrls.previewUrl(t.url) ?: throw RelayException("This address can’t be opened.")
-                    val first = PreviewUrls.upstream(local.substringBefore('#'), t.url) ?: throw RelayException("This address can’t be opened.")
+                    val local = PreviewUrls.previewUrl(t.url) ?: throw RelayException(badAddress)
+                    val first = PreviewUrls.upstream(local.substringBefore('#'), t.url) ?: throw RelayException(badAddress)
                     // Read the page first, so a stopped server says so here rather than as a blank page.
                     loader.fetch(sessionId, first, reload)
                     Content.Web(PreviewSource(sessionId, loader, local, t.url))
@@ -215,7 +220,7 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                     navigationIcon = {
-                        IconButton(onClick = onDismiss, modifier = Modifier.testTag("preview.done")) { Icon(Icons.Filled.Close, contentDescription = "Done") }
+                        IconButton(onClick = onDismiss, modifier = Modifier.testTag("preview.done")) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_preview_done)) }
                     },
                     title = {
                         Column(Modifier.semantics(mergeDescendants = true) { heading() }) {
@@ -224,11 +229,11 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                         }
                     },
                     actions = {
-                        IconButton(onClick = { attempt++ }, modifier = Modifier.testTag("preview.reload")) { Icon(Icons.Filled.Refresh, contentDescription = "Reload") }
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+                        IconButton(onClick = { attempt++ }, modifier = Modifier.testTag("preview.reload")) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_preview_reload)) }
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.tools_preview_more)) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(
-                                text = { Text(if (loopback) "Copy address" else "Copy path") },
+                                text = { Text(stringResource(if (loopback) R.string.tools_preview_copy_address else R.string.tools_preview_copy_path)) },
                                 leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
                                 onClick = {
                                     menu = false
@@ -236,7 +241,7 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Share") },
+                                text = { Text(stringResource(R.string.tools_preview_share)) },
                                 leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
                                 onClick = {
                                     menu = false
@@ -251,14 +256,16 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
                 val c = content
+                val openingDesc = stringResource(R.string.tools_preview_opening_desc)
+                val loadingDesc = stringResource(R.string.tools_preview_loading)
                 when {
                     error != null -> Failure(error!!) { attempt++ }
                     c == null -> Column(
-                        Modifier.fillMaxSize().semantics { contentDescription = "Opening on your computer" },
+                        Modifier.fillMaxSize().semantics { contentDescription = openingDesc },
                         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         CircularProgressIndicator(color = p.accent)
-                        Text("Opening on your computer…", color = p.inkSoft, modifier = Modifier.padding(top = 12.dp))
+                        Text(stringResource(R.string.tools_preview_opening), color = p.inkSoft, modifier = Modifier.padding(top = 12.dp))
                     }
                     else -> Shown(c, link, attempt) { state ->
                         when (state) {
@@ -274,7 +281,7 @@ fun PreviewWindow(link: ChatPreviewLink, sessionId: String, loader: PreviewLoade
                 if (webLoading && error == null) {
                     CircularProgressIndicator(
                         color = p.accent,
-                        modifier = Modifier.padding(top = 12.dp).size(28.dp).semantics { contentDescription = "Loading" },
+                        modifier = Modifier.padding(top = 12.dp).size(28.dp).semantics { contentDescription = loadingDesc },
                     )
                 }
             }
@@ -307,7 +314,7 @@ private fun CutNote(size: Long?) {
     if (size == null) return
     val context = LocalContext.current
     Text(
-        "Only the start is shown: the whole file is ${Formatter.formatShortFileSize(context, size)} on your computer.",
+        stringResource(R.string.tools_preview_cut, Formatter.formatShortFileSize(context, size)),
         style = MaterialTheme.typography.bodySmall, color = Nekko.palette.warning, modifier = Modifier.padding(bottom = 12.dp),
     )
 }
@@ -319,9 +326,9 @@ private fun Failure(message: String, retry: () -> Unit) {
         Modifier.fillMaxSize().padding(24.dp).testTag("preview.error"),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Couldn’t open the preview", style = MaterialTheme.typography.titleMedium, color = p.ink)
+        Text(stringResource(R.string.tools_preview_failed), style = MaterialTheme.typography.titleMedium, color = p.ink)
         Text(message, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, modifier = Modifier.padding(top = 8.dp))
-        TextButton(onClick = retry, modifier = Modifier.padding(top = 8.dp).testTag("preview.retry")) { Text("Try again") }
+        TextButton(onClick = retry, modifier = Modifier.padding(top = 8.dp).testTag("preview.retry")) { Text(stringResource(R.string.tools_try_again)) }
     }
 }
 
@@ -394,13 +401,13 @@ private fun PdfPages(data: ByteArray) {
         }
         val list = pages
         when {
-            failed -> Failure("This PDF can’t be shown on a phone.") {}
+            failed -> Failure(stringResource(R.string.tools_preview_pdf_failed)) {}
             list == null -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
             else -> LazyColumn(Modifier.fillMaxSize().background(p.code), contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(list.size) { i ->
                     val page = list[i]
                     Image(
-                        page, contentDescription = "Page ${i + 1} of ${list.size}", contentScale = ContentScale.FillWidth,
+                        page, contentDescription = stringResource(R.string.tools_preview_page, i + 1, list.size), contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth().aspectRatio(page.width.toFloat() / page.height.coerceAtLeast(1)).background(androidx.compose.ui.graphics.Color.White),
                     )
                 }
@@ -467,11 +474,13 @@ private fun PreviewCard(link: ChatPreviewLink, sessionId: String, loader: Previe
     val p = Nekko.palette
     val shape = RoundedCornerShape(12.dp)
     val thumbnail = link.isWeb || link.kind == ArtifactKind.IMAGE
+    val description = stringResource(R.string.tools_preview_card, link.title, link.detail)
+    val fileChip = stringResource(R.string.tools_preview_file)
     Column(
         Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape)
             .clickable(onClick = open)
             .semantics(mergeDescendants = true) {
-                contentDescription = "${link.title}, ${link.detail}. Opens a preview from your computer"
+                contentDescription = description
                 role = Role.Button
             }
             .testTag("preview.card"),
@@ -487,7 +496,7 @@ private fun PreviewCard(link: ChatPreviewLink, sessionId: String, loader: Previe
         ) {
             if (!thumbnail) {
                 Text(
-                    link.detail.substringAfterLast('.', "file").uppercase(),
+                    link.detail.substringAfterLast('.', fileChip).uppercase(),
                     style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = p.inkSoft,
                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(p.code).padding(horizontal = 6.dp, vertical = 4.dp),
                 )

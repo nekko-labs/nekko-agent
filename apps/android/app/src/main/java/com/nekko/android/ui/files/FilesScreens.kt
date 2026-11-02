@@ -77,6 +77,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -88,6 +89,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.R
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.files.FileEditController
 import com.nekko.android.files.FilesController
@@ -210,8 +212,8 @@ private fun Page(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        if (close) Icon(Icons.Filled.Close, contentDescription = "Close")
-                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        if (close) Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_close))
+                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.tools_back))
                     }
                 },
                 actions = { actions() },
@@ -228,7 +230,7 @@ private fun Page(
 private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (FilesPage) -> Unit) {
     val p = Nekko.palette
     val c by repo.state.collectAsStateWithLifecycle()
-    val computer = c.active?.name ?: "this computer"
+    val computer = c.active?.name ?: stringResource(R.string.tools_files_this_computer)
     val online = c.conn == RelayState.ONLINE
     val scope = rememberCoroutineScope()
     var adding by remember { mutableStateOf(false) }
@@ -251,9 +253,9 @@ private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (F
             }
         }
     }
-    Page("Files", onClose, close = true) { padding ->
+    Page(stringResource(R.string.tools_files_title), onClose, close = true) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("files.folders"), contentPadding = PaddingValues(vertical = 8.dp)) {
-            if (c.workspaces.isEmpty()) item { Note("No saved folders on $computer.", Modifier.padding(16.dp)) }
+            if (c.workspaces.isEmpty()) item { Note(stringResource(R.string.tools_files_no_folders, computer), Modifier.padding(16.dp)) }
             itemsIndexed(c.workspaces, key = { _, w -> w.id }) { _, w ->
                 Box {
                     Row(
@@ -275,7 +277,7 @@ private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (F
                     }
                     DropdownMenu(expanded = menuFor == w.id, onDismissRequest = { menuFor = null }) {
                         DropdownMenuItem(
-                            text = { Text("Remove saved folder", color = p.danger) },
+                            text = { Text(stringResource(R.string.tools_files_remove_saved), color = p.danger) },
                             leadingIcon = { Icon(Icons.Filled.RemoveCircleOutline, contentDescription = null, tint = p.danger) },
                             enabled = online && !busy,
                             onClick = { menuFor = null; removing = w },
@@ -290,12 +292,11 @@ private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (F
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("files.addFolder"),
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text("Add computer folder", modifier = Modifier.padding(start = 8.dp))
+                    Text(stringResource(R.string.tools_files_add_folder), modifier = Modifier.padding(start = 8.dp))
                 }
                 if (busy) CircularProgressIndicator(color = p.accent, modifier = Modifier.padding(horizontal = 16.dp).size(24.dp))
                 Note(
-                    "Use an absolute path on the computer, not on this phone. Removing a saved folder never deletes files on disk." +
-                        if (c.workspaces.isNotEmpty()) " Touch and hold a folder to remove it." else "",
+                    stringResource(if (c.workspaces.isNotEmpty()) R.string.tools_files_path_note_hold else R.string.tools_files_path_note),
                     Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
@@ -304,10 +305,10 @@ private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (F
     if (adding) {
         AlertDialog(
             onDismissRequest = { adding = false },
-            title = { Text("Add computer folder") },
+            title = { Text(stringResource(R.string.tools_files_add_folder)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter the full folder path on $computer.")
+                    Text(stringResource(R.string.tools_files_enter_path, computer))
                     OutlinedTextField(
                         folderPath, { folderPath = it }, singleLine = true, placeholder = { Text("/Users/you/code/app") },
                         textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
@@ -317,27 +318,27 @@ private fun FoldersPage(repo: ComputersRepository, onClose: () -> Unit, open: (F
                 }
             },
             confirmButton = {
-                TextButton(onClick = { adding = false; act { repo.addWorkspace(folderPath) } }, enabled = folderPath.isNotBlank()) { Text("Add") }
+                TextButton(onClick = { adding = false; act { repo.addWorkspace(folderPath) } }, enabled = folderPath.isNotBlank()) { Text(stringResource(R.string.tools_files_add)) }
             },
-            dismissButton = { TextButton(onClick = { adding = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { adding = false }) { Text(stringResource(R.string.tools_cancel)) } },
         )
     }
     removing?.let { w ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text("Remove “${w.name}”?") },
-            text = { Text("Only the saved entry is removed. The folder and its files stay on the computer.") },
+            title = { Text(stringResource(R.string.tools_files_remove_title, w.name)) },
+            text = { Text(stringResource(R.string.tools_files_remove_body)) },
             confirmButton = {
-                TextButton(onClick = { removing = null; act { repo.removeWorkspace(w.id) } }) { Text("Remove saved folder", color = p.danger) }
+                TextButton(onClick = { removing = null; act { repo.removeWorkspace(w.id) } }) { Text(stringResource(R.string.tools_files_remove_saved), color = p.danger) }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.tools_cancel)) } },
         )
     }
     error?.let { e ->
         AlertDialog(
             onDismissRequest = { error = null },
             text = { Text(e) },
-            confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { error = null }) { Text(stringResource(R.string.tools_ok)) } },
         )
     }
 }
@@ -381,11 +382,11 @@ private fun FolderPage(page: FilesPage.Folder, onBack: () -> Unit, close: Boolea
     }
     val title = if (page.path.isEmpty()) page.title else page.path.substringAfterLast('/')
     Page(title, onBack, close, actions = {
-        IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") }
+        IconButton(onClick = { scope.launch { load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) }
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             OutlinedTextField(
-                query, { query = it }, singleLine = true, placeholder = { Text("Find a file by name") },
+                query, { query = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tools_files_find)) },
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("files.search"),
             )
@@ -394,15 +395,15 @@ private fun FolderPage(page: FilesPage.Folder, onBack: () -> Unit, close: Boolea
                 val l = listing
                 when {
                     query.isNotBlank() && h != null -> LazyColumn(Modifier.fillMaxSize().testTag("files.list")) {
-                        if (h.hits.isEmpty() && !searching) item { Note("No file names match.", Modifier.padding(16.dp)) }
+                        if (h.hits.isEmpty() && !searching) item { Note(stringResource(R.string.tools_files_no_match), Modifier.padding(16.dp)) }
                         itemsIndexed(h.hits, key = { _, e -> e.path }) { _, e -> EntryRow(e, showPath = true) { open(FilesPage.File(files, e.path)) } }
-                        if (h.truncated || !h.complete) item { Note("Showing the best matches. Narrow the search to see others.", Modifier.padding(16.dp)) }
+                        if (h.truncated || !h.complete) item { Note(stringResource(R.string.tools_files_best_matches), Modifier.padding(16.dp)) }
                     }
                     query.isNotBlank() -> CircularProgressIndicator(color = Nekko.palette.accent, modifier = Modifier.align(Alignment.Center))
                     error != null && l == null -> Failure(error!!, files.readOff.collectAsStateWithLifecycle().value) { scope.launch { load() } }
                     l == null -> CircularProgressIndicator(color = Nekko.palette.accent, modifier = Modifier.align(Alignment.Center))
                     else -> LazyColumn(Modifier.fillMaxSize().testTag("files.list")) {
-                        if (l.entries.isEmpty()) item { Note("Empty folder.", Modifier.padding(16.dp)) }
+                        if (l.entries.isEmpty()) item { Note(stringResource(R.string.tools_files_empty_folder), Modifier.padding(16.dp)) }
                         itemsIndexed(l.entries, key = { _, e -> e.path }) { _, e ->
                             EntryRow(e) {
                                 open(if (e.dir) FilesPage.Folder(files, e.path, page.title) else FilesPage.File(files, e.path))
@@ -410,10 +411,10 @@ private fun FolderPage(page: FilesPage.Folder, onBack: () -> Unit, close: Boolea
                         }
                         item {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                if (l.truncated) Note("Showing the first ${l.entries.size} of ${l.total}.")
+                                if (l.truncated) Note(stringResource(R.string.tools_files_first_of, l.entries.size, l.total))
                                 if (l.hiddenSecrets > 0) {
-                                    Note(if (l.hiddenSecrets == 1) "1 file that may hold secrets isn’t shown on phones."
-                                    else "${l.hiddenSecrets} files that may hold secrets aren’t shown on phones.")
+                                    Note(if (l.hiddenSecrets == 1) stringResource(R.string.tools_files_secrets_one)
+                                    else stringResource(R.string.tools_files_secrets_other, l.hiddenSecrets))
                                 }
                             }
                         }
@@ -440,7 +441,7 @@ private fun EntryRow(e: FileEntry, showPath: Boolean = false, onClick: () -> Uni
                 isImage(e.name) -> Icons.Filled.Image
                 else -> Icons.AutoMirrored.Filled.InsertDriveFile
             },
-            contentDescription = if (e.dir) "Folder" else null, tint = if (e.dir) p.accent else p.inkSoft, modifier = Modifier.size(22.dp),
+            contentDescription = if (e.dir) stringResource(R.string.tools_files_folder) else null, tint = if (e.dir) p.accent else p.inkSoft, modifier = Modifier.size(22.dp),
         )
         Column(Modifier.weight(1f)) {
             Text(e.name, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -484,11 +485,11 @@ private fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage)
     Page(page.path.substringAfterLast('/'), onBack, actions = {
         if (f?.markdown == true) {
             IconToggleButton(checked = rendered, onCheckedChange = { rendered = it }) {
-                Icon(Icons.Filled.TextFields, contentDescription = "Formatted", tint = if (rendered) p.accent else p.inkSoft)
+                Icon(Icons.Filled.TextFields, contentDescription = stringResource(R.string.tools_files_formatted), tint = if (rendered) p.accent else p.inkSoft)
             }
         }
         if (f != null && f.canEdit && !changeOff) {
-            TextButton(onClick = { open(FilesPage.Edit(FileEditController(page.path, files, f))) }, modifier = Modifier.testTag("file.edit")) { Text("Edit") }
+            TextButton(onClick = { open(FilesPage.Edit(FileEditController(page.path, files, f))) }, modifier = Modifier.testTag("file.edit")) { Text(stringResource(R.string.tools_files_edit)) }
         }
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -505,30 +506,33 @@ private fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage)
                                 .aspectRatio(bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1)),
                         )
                     } else {
-                        Note("Too large to preview on a phone (${Formatter.formatShortFileSize(context, f.size)}).", Modifier.padding(16.dp))
+                        Note(stringResource(R.string.tools_files_image_too_large, Formatter.formatShortFileSize(context, f.size)), Modifier.padding(16.dp))
                     }
                 }
                 f.kind == FileContent.Kind.BINARY ->
-                    Note("Not a text file (${Formatter.formatShortFileSize(context, f.size)}). Open it on the computer.", Modifier.padding(16.dp))
+                    Note(stringResource(R.string.tools_files_binary, Formatter.formatShortFileSize(context, f.size)), Modifier.padding(16.dp))
                 else -> {
                     val lines = remember(f) { f.lines }
                     LazyColumn(Modifier.fillMaxSize().testTag("file.view")) {
                         item {
                             when {
                                 f.truncated -> Text(
-                                    "Only the first ${Formatter.formatShortFileSize(context, f.text.orEmpty().toByteArray().size.toLong())} of " +
-                                        "${Formatter.formatShortFileSize(context, f.size)} is shown. Open it on the computer for the rest.",
+                                    stringResource(
+                                        R.string.tools_files_truncated,
+                                        Formatter.formatShortFileSize(context, f.text.orEmpty().toByteArray().size.toLong()),
+                                        Formatter.formatShortFileSize(context, f.size),
+                                    ),
                                     style = MaterialTheme.typography.bodySmall, color = p.warning, modifier = Modifier.padding(12.dp).testTag("file.truncated"),
                                 )
-                                !f.editable -> Note("Read only on a phone.", Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
-                                changeOff -> Note("Changes from this phone are turned off on the computer.", Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                                !f.editable -> Note(stringResource(R.string.tools_files_read_only), Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                                changeOff -> Note(stringResource(R.string.tools_files_change_off), Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                             }
                         }
                         if (rendered && f.markdown && f.text != null) {
                             item { MarkdownText(f.text!!, p.ink, Modifier.padding(12.dp)) }
                         } else {
                             itemsIndexed(lines.take(MAX_LINES)) { i, line -> CodeLine(i + 1, line) }
-                            if (lines.size > MAX_LINES) item { Note("Showing the first $MAX_LINES lines.", Modifier.padding(16.dp)) }
+                            if (lines.size > MAX_LINES) item { Note(stringResource(R.string.tools_files_first_lines, MAX_LINES), Modifier.padding(16.dp)) }
                         }
                     }
                 }
@@ -566,7 +570,7 @@ private fun EditPage(edit: FileEditController, onBack: () -> Unit) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 title = { Text(edit.path.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
-                navigationIcon = { IconButton(onClick = cancel) { Icon(Icons.Filled.Close, contentDescription = "Cancel") } },
+                navigationIcon = { IconButton(onClick = cancel) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.tools_cancel)) } },
                 actions = {
                     if (s.saving) {
                         CircularProgressIndicator(color = p.accent, modifier = Modifier.padding(horizontal = 16.dp).size(24.dp))
@@ -574,7 +578,7 @@ private fun EditPage(edit: FileEditController, onBack: () -> Unit) {
                         TextButton(
                             onClick = { scope.launch { if (edit.save()) onBack() } },
                             enabled = edit.canSave(s), modifier = Modifier.testTag("file.save"),
-                        ) { Text("Save") }
+                        ) { Text(stringResource(R.string.tools_files_save)) }
                     }
                 },
             )
@@ -591,32 +595,31 @@ private fun EditPage(edit: FileEditController, onBack: () -> Unit) {
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                 modifier = Modifier.weight(1f).fillMaxWidth().background(p.code).padding(12.dp).testTag("file.editor"),
             )
-            Note("Saving asks for your fingerprint, face or screen lock and shows in this phone’s activity on the computer.", Modifier.padding(10.dp))
+            Note(stringResource(R.string.tools_files_save_note), Modifier.padding(10.dp))
         }
     }
     if (confirmDiscard) {
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
-            title = { Text("Discard your changes?") },
-            confirmButton = { TextButton(onClick = { confirmDiscard = false; onBack() }) { Text("Discard changes", color = p.danger) } },
-            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
+            title = { Text(stringResource(R.string.tools_files_discard_title)) },
+            confirmButton = { TextButton(onClick = { confirmDiscard = false; onBack() }) { Text(stringResource(R.string.tools_files_discard), color = p.danger) } },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text(stringResource(R.string.tools_files_keep_editing)) } },
         )
     }
     if (s.conflict) {
         AlertDialog(
             onDismissRequest = edit::dismissConflict,
-            title = { Text("Changed on the computer") },
+            title = { Text(stringResource(R.string.tools_files_changed_title)) },
             text = {
                 Text(
-                    if (s.canOverwrite) "This file was changed on the computer after you opened it. Reload its new version, or save yours over it."
-                    else "This file was removed or moved on the computer after you opened it.",
+                    stringResource(if (s.canOverwrite) R.string.tools_files_changed_body else R.string.tools_files_removed_body),
                 )
             },
             confirmButton = {
                 Column(horizontalAlignment = Alignment.End) {
-                    TextButton(onClick = { scope.launch { edit.reload() } }) { Text("Reload, losing my edits", color = p.danger) }
-                    if (s.canOverwrite) TextButton(onClick = { scope.launch { if (edit.overwrite()) onBack() } }) { Text("Save over it") }
-                    TextButton(onClick = edit::dismissConflict) { Text("Keep editing") }
+                    TextButton(onClick = { scope.launch { edit.reload() } }) { Text(stringResource(R.string.tools_files_reload_losing), color = p.danger) }
+                    if (s.canOverwrite) TextButton(onClick = { scope.launch { if (edit.overwrite()) onBack() } }) { Text(stringResource(R.string.tools_files_save_over)) }
+                    TextButton(onClick = edit::dismissConflict) { Text(stringResource(R.string.tools_files_keep_editing)) }
                 }
             },
         )
@@ -648,15 +651,15 @@ private fun LogsList(logs: LogsController, s: LogsState, onBack: () -> Unit, ope
     val p = Nekko.palette
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    Page("Logs", onBack, actions = {
-        IconButton(onClick = { scope.launch { logs.load() } }) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") }
+    Page(stringResource(R.string.tools_logs_title), onBack, actions = {
+        IconButton(onClick = { scope.launch { logs.load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) }
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
                 !s.loaded -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
                 s.error != null && s.logs.isEmpty() -> Failure(s.error, readOff = false) { scope.launch { logs.load() } }
                 else -> LazyColumn(Modifier.fillMaxSize().testTag("logs.list")) {
-                    if (s.logs.isEmpty()) item { Note("No logs yet.", Modifier.padding(16.dp)) }
+                    if (s.logs.isEmpty()) item { Note(stringResource(R.string.tools_logs_none), Modifier.padding(16.dp)) }
                     itemsIndexed(s.logs, key = { _, l -> l.id }) { _, l ->
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { open(l) }.padding(horizontal = 16.dp, vertical = 8.dp).testTag("logs.row"),
@@ -675,7 +678,7 @@ private fun LogsList(logs: LogsController, s: LogsState, onBack: () -> Unit, ope
                                 Text(l.title, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 val at = l.updatedAt
                                 Text(
-                                    if (at == null) "Empty"
+                                    if (at == null) stringResource(R.string.tools_logs_empty)
                                     else "${Formatter.formatShortFileSize(context, l.size)} · ${DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}",
                                     style = MaterialTheme.typography.bodySmall, color = p.inkSoft,
                                 )
@@ -733,27 +736,28 @@ private fun LogPage(logs: LogsController, log: LogInfo, onBack: () -> Unit) {
     }
     val searching = query.isNotBlank()
     val shown = if (searching) found else tail
+    val shareSubject = stringResource(R.string.tools_logs_share_subject, log.title)
     // Newest at the bottom: open there, and again after Refresh.
     LaunchedEffect(tail) { tail?.let { if (it.lines.isNotEmpty()) list.scrollToItem(it.lines.size) } }
     Page(log.title, onBack, actions = {
         IconButton(onClick = { scope.launch { load() } }, enabled = !loading, modifier = Modifier.testTag("log.refresh")) {
-            Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh))
         }
         if (shown != null) {
             IconButton(
                 onClick = {
                     val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                        .putExtra(Intent.EXTRA_SUBJECT, "Nekko Agent log: ${log.title}")
+                        .putExtra(Intent.EXTRA_SUBJECT, shareSubject)
                         .putExtra(Intent.EXTRA_TEXT, LogShare.text(log.title, shown))
                     context.startActivity(Intent.createChooser(send, null))
                 },
                 modifier = Modifier.testTag("log.share"),
-            ) { Icon(Icons.Filled.Share, contentDescription = "Share, with secrets removed") }
+            ) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.tools_logs_share)) }
         }
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             OutlinedTextField(
-                query, { query = it }, singleLine = true, placeholder = { Text("Find in this log") },
+                query, { query = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tools_logs_find)) },
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("log.search"),
             )
@@ -762,15 +766,15 @@ private fun LogPage(logs: LogsController, log: LogInfo, onBack: () -> Unit) {
                 val f = found
                 when {
                     searching && f != null -> LazyColumn(Modifier.fillMaxSize()) {
-                        if (f.matches.isEmpty() && !loading) item { Note("No lines match.", Modifier.padding(16.dp)) }
+                        if (f.matches.isEmpty() && !loading) item { Note(stringResource(R.string.tools_logs_no_match), Modifier.padding(16.dp)) }
                         itemsIndexed(f.matches, key = { _, m -> m.line }) { _, m -> CodeLine(m.line, m.text) }
-                        if (f.moreMatches) item { Note("More lines match. Narrow the search.", Modifier.padding(16.dp)) }
+                        if (f.moreMatches) item { Note(stringResource(R.string.tools_logs_more_match), Modifier.padding(16.dp)) }
                     }
                     searching && error != null -> Failure(error!!, readOff = false) { query = query.trim() }
                     searching -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
                     t != null -> LazyColumn(Modifier.fillMaxSize().background(p.code).testTag("log.view"), state = list) {
                         item {
-                            if (t.truncated) Note("Older lines are on the computer.", Modifier.padding(12.dp))
+                            if (t.truncated) Note(stringResource(R.string.tools_logs_older), Modifier.padding(12.dp))
                         }
                         itemsIndexed(t.lines) { _, line ->
                             Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = p.ink,
@@ -791,9 +795,9 @@ private fun LogPage(logs: LogsController, log: LogInfo, onBack: () -> Unit) {
 private fun Failure(message: String, readOff: Boolean, retry: () -> Unit) {
     val p = Nekko.palette
     Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(if (readOff) "Reading is turned off" else "Couldn’t open it", style = MaterialTheme.typography.titleMedium, color = p.ink)
+        Text(stringResource(if (readOff) R.string.tools_files_reading_off else R.string.tools_cant_open), style = MaterialTheme.typography.titleMedium, color = p.ink)
         Text(message, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, modifier = Modifier.padding(top = 6.dp))
-        TextButton(onClick = retry, modifier = Modifier.padding(top = 8.dp)) { Text("Try again") }
+        TextButton(onClick = retry, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.tools_try_again)) }
     }
 }
 

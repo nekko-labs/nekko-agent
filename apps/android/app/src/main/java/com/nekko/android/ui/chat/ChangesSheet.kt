@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -49,6 +50,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nekko.android.R
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PhoneChanges
 
@@ -63,38 +65,45 @@ fun ChangesSheet(changes: PhoneChanges?, error: String?, onRefresh: () -> Unit, 
     val p = Nekko.palette
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Changes", style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.weight(1f).semantics { heading() })
-            TextButton(onClick = onRefresh) { Text("Refresh") }
+            Text(stringResource(R.string.chat_changes), style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.weight(1f).semantics { heading() })
+            TextButton(onClick = onRefresh) { Text(stringResource(R.string.chat_refresh)) }
         }
         val c = changes
         when {
-            c == null && error != null -> Notice("Couldn’t load changes", error)
+            c == null && error != null -> Notice(stringResource(R.string.chat_changes_load_failed), error)
             c == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            c.files.isEmpty() -> Notice("No changes", "The agent hasn’t changed any files in this chat.")
-            else -> LazyColumn(
+            c.files.isEmpty() -> Notice(stringResource(R.string.chat_no_changes), stringResource(R.string.chat_no_changes_body))
+            else -> {
+                val summary = summary(c)
+                val more = if (c.omittedFiles == 1) stringResource(R.string.chat_more_files_one) else stringResource(R.string.chat_more_files_other, c.omittedFiles)
+                val readOnly = stringResource(R.string.chat_changes_read_only)
+                LazyColumn(
                 Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item { Text(summary(c), style = MaterialTheme.typography.bodySmall, color = p.inkSoft) }
+                item { Text(summary, style = MaterialTheme.typography.bodySmall, color = p.inkSoft) }
                 items(c.files, key = { it.path }) { FileChange(it, onAsk) }
                 if (c.omittedFiles > 0) {
                     item {
                         Text(
-                            "${c.omittedFiles} more ${if (c.omittedFiles == 1) "file" else "files"} changed. See them on your computer.",
+                            more,
                             style = MaterialTheme.typography.bodySmall, color = p.inkFaint,
                         )
                     }
                 }
-                item { Text("Read only. Accept or revert changes on your computer. Touch and hold a change to ask the agent about it.", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+                item { Text(readOnly, style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+            }
             }
         }
     }
 }
 
+@Composable
 private fun summary(c: PhoneChanges): String {
     val n = c.files.size + c.omittedFiles
-    return "$n ${if (n == 1) "file" else "files"} · +${c.linesAdded} −${c.linesRemoved}"
+    val files = if (n == 1) stringResource(R.string.chat_files_one) else stringResource(R.string.chat_files_other, n)
+    return "$files · +${c.linesAdded} −${c.linesRemoved}"
 }
 
 @Composable
@@ -112,16 +121,28 @@ private fun FileChange(file: PhoneChanges.File, onAsk: (String) -> Unit) {
     val p = Nekko.palette
     var open by rememberSaveable(file.path) { mutableStateOf(true) }
     val shape = RoundedCornerShape(10.dp)
+    val description = if (file.added) {
+        stringResource(R.string.chat_file_change_new_description, file.path, file.linesAdded, file.linesRemoved)
+    } else {
+        stringResource(R.string.chat_file_change_description, file.path, file.linesAdded, file.linesRemoved)
+    }
+    val expanded = stringResource(R.string.chat_expanded)
+    val collapsed = stringResource(R.string.chat_collapsed)
+    val collapse = stringResource(R.string.chat_collapse)
+    val expand = stringResource(R.string.chat_expand)
+    val askFile = stringResource(R.string.chat_ask_about_file)
+    val askChange = stringResource(R.string.chat_ask_about_change)
+    val skipped = stringResource(R.string.chat_unchanged_skipped)
     Column(Modifier.fillMaxWidth().background(p.surface, shape).border(1.dp, p.line, shape)) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .combinedClickable(onClick = { open = !open }, onLongClick = { onAsk(PhoneChanges.quote(file)) })
                 .padding(horizontal = 12.dp)
                 .clearAndSetSemantics {
-                    contentDescription = "${file.path}, ${if (file.added) "new file, " else ""}${file.linesAdded} added, ${file.linesRemoved} removed"
-                    stateDescription = if (open) "Expanded" else "Collapsed"
-                    onClick(label = if (open) "Collapse" else "Expand") { open = !open; true }
-                    onLongClick(label = "Ask about this file") { onAsk(PhoneChanges.quote(file)); true }
+                    contentDescription = description
+                    stateDescription = if (open) expanded else collapsed
+                    onClick(label = if (open) collapse else expand) { open = !open; true }
+                    onLongClick(label = askFile) { onAsk(PhoneChanges.quote(file)); true }
                 },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -132,7 +153,7 @@ private fun FileChange(file: PhoneChanges.File, onAsk: (String) -> Unit) {
                 file.path, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace, color = p.ink,
                 modifier = Modifier.weight(1f).padding(vertical = 8.dp),
             )
-            if (file.added) Text("new", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = p.success)
+            if (file.added) Text(stringResource(R.string.chat_new), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = p.success)
             Text("+${file.linesAdded}", style = MaterialTheme.typography.labelMedium, color = p.success)
             Text("−${file.linesRemoved}", style = MaterialTheme.typography.labelMedium, color = p.danger)
         }
@@ -141,28 +162,28 @@ private fun FileChange(file: PhoneChanges.File, onAsk: (String) -> Unit) {
             when (val s = file.shown) {
                 PhoneChanges.Shown.Diff ->
                     if (file.hunks.isEmpty()) {
-                        Note("Empty file.")
+                        Note(stringResource(R.string.chat_empty_file))
                     } else {
                         Column(Modifier.fillMaxWidth().background(p.code).horizontalScroll(rememberScrollState()).padding(vertical = 6.dp)) {
                             file.hunks.forEachIndexed { i, h ->
                                 if (i > 0) {
                                     Text(
                                         "⋯", fontFamily = FontFamily.Monospace, color = p.inkFaint,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp).semantics { contentDescription = "Unchanged lines skipped" },
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp).semantics { contentDescription = skipped },
                                     )
                                 }
                                 // Touch and hold a change (the hunk, context included, so a target big
                                 // enough to hit) to ask about it; its lines stay plain text.
                                 Column(
                                     Modifier.pointerInput(h) { detectTapGestures(onLongPress = { onAsk(PhoneChanges.quote(file, h)) }) }
-                                        .semantics { onLongClick(label = "Ask about this change") { onAsk(PhoneChanges.quote(file, h)); true } },
+                                        .semantics { onLongClick(label = askChange) { onAsk(PhoneChanges.quote(file, h)); true } },
                                 ) { h.lines.forEach { DiffLine(it) } }
                             }
                         }
                     }
-                PhoneChanges.Shown.Hidden -> Note("May hold secrets, so it isn’t shown on phones.")
-                PhoneChanges.Shown.Binary -> Note("Not a text file.")
-                is PhoneChanges.Shown.TooLarge -> Note("Too big to show here (${s.lines} changed lines). See it on your computer.")
+                PhoneChanges.Shown.Hidden -> Note(stringResource(R.string.chat_may_hold_secrets))
+                PhoneChanges.Shown.Binary -> Note(stringResource(R.string.chat_not_text_file))
+                is PhoneChanges.Shown.TooLarge -> Note(stringResource(R.string.chat_too_big, s.lines))
             }
         }
     }
@@ -182,14 +203,15 @@ internal fun DiffLine(line: PhoneChanges.Line) {
         PhoneChanges.Kind.REMOVED -> "−" to p.dangerSoft
         PhoneChanges.Kind.SAME -> " " to Color.Transparent
     }
-    val kind = when (line.kind) {
-        PhoneChanges.Kind.ADDED -> "Added"
-        PhoneChanges.Kind.REMOVED -> "Removed"
-        PhoneChanges.Kind.SAME -> "Unchanged"
+    val text = line.text.ifEmpty { stringResource(R.string.chat_blank) }
+    val description = when (line.kind) {
+        PhoneChanges.Kind.ADDED -> stringResource(R.string.chat_line_added, line.number, text)
+        PhoneChanges.Kind.REMOVED -> stringResource(R.string.chat_line_removed, line.number, text)
+        PhoneChanges.Kind.SAME -> stringResource(R.string.chat_line_unchanged, line.number, text)
     }
     Row(
         Modifier.background(bg).padding(horizontal = 12.dp, vertical = 1.dp)
-            .clearAndSetSemantics { contentDescription = "$kind line ${line.number}: ${line.text.ifEmpty { "blank" }}" },
+            .clearAndSetSemantics { contentDescription = description },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("${line.number}", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = p.inkSoft, modifier = Modifier.widthIn(min = 28.dp))

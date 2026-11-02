@@ -1,5 +1,8 @@
 package com.nekko.android.ui.screens
 
+import androidx.annotation.StringRes
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -77,9 +80,10 @@ import com.nekko.android.ui.components.Dot
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
-import com.nekko.android.ui.settings.routeName
+import com.nekko.android.ui.settings.routeLabel
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.util.ago
+import com.nekko.android.util.localAgo
 import com.nekko.protocol.AgentRows
 import com.nekko.protocol.MachineSummary
 import com.nekko.protocol.ModelInfo
@@ -125,29 +129,29 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Computer") },
+                title = { Text(stringResource(R.string.settings_fact_computer)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back)) } },
                 actions = {
                     if (c != null) Box {
                         IconButton(onClick = { menu = true }, modifier = Modifier.testTag("computer.edit")) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "Edit ${c.name}")
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.settings_edit_computer, c.name))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             if (!active) DropdownMenuItem(
-                                text = { Text("Connect") },
+                                text = { Text(stringResource(R.string.settings_connect)) },
                                 leadingIcon = { Icon(Icons.Filled.Bolt, contentDescription = null) },
                                 onClick = { menu = false; scope.launch { repo.connect(c.id) } },
                             )
-                            DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }, onClick = { menu = false; renaming = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.settings_rename)) }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }, onClick = { menu = false; renaming = true })
                             DropdownMenuItem(
-                                text = { Text("Refresh") },
+                                text = { Text(stringResource(R.string.settings_refresh)) },
                                 leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
                                 onClick = { menu = false; scope.launch { machine.refresh() } },
                             )
                             HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text("Forget…", color = p.danger) },
+                                text = { Text(stringResource(R.string.settings_forget_ellipsis), color = p.danger) },
                                 leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = p.danger) },
                                 onClick = { menu = false; forgetting = true },
                             )
@@ -159,7 +163,7 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
     ) { padding ->
         if (c == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("This computer was forgotten", style = MaterialTheme.typography.titleMedium, color = p.inkSoft)
+                Text(stringResource(R.string.settings_computer_forgotten), style = MaterialTheme.typography.titleMedium, color = p.inkSoft)
             }
             return@Scaffold
         }
@@ -170,9 +174,9 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
             if (!active) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Button(onClick = { scope.launch { repo.connect(c.id) } }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("computer.connect")) {
-                        Text("Connect to ${c.name}")
+                        Text(stringResource(R.string.settings_connect_to, c.name))
                     }
-                    Text("The phone talks to one computer at a time. Its details show once it is connected.", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+                    Text(stringResource(R.string.settings_one_at_a_time), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                 }
             } else if (m.summaryError != null && m.loadedOnce) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -183,37 +187,37 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
             if (active) {
                 val models = s.providers.filter { it.enabled }.flatMap { s.models[it.id].orEmpty() }
                 if (models.isNotEmpty()) {
-                    SectionHeader("Models")
+                    SectionHeader(stringResource(R.string.settings_models))
                     NCard(Modifier.padding(horizontal = 16.dp)) {
                         models.forEach { info -> ModelRow(info, info.loaded || info.id in m.loadedIds, s.providers.firstOrNull { it.id == info.providerId }?.label, s.defaults.defaultModelId == info.id) }
                     }
                 }
                 if (s.providers.isNotEmpty()) {
-                    SectionHeader("Providers")
+                    SectionHeader(stringResource(R.string.settings_providers))
                     NCard(Modifier.padding(horizontal = 16.dp)) {
                         s.providers.forEach { pr ->
-                            Fact(pr.label, if (pr.enabled) providerKind(pr.kind) else "${providerKind(pr.kind)} · off")
+                            Fact(pr.label, providerKind(pr.kind).let { if (pr.enabled) it else stringResource(R.string.settings_provider_off, it) })
                         }
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onProviders).heightIn(min = 48.dp).testTag("computer.providers"),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text("Add or switch providers", style = MaterialTheme.typography.bodyMedium, color = p.accent, modifier = Modifier.weight(1f))
+                            Text(stringResource(R.string.settings_add_switch_providers), style = MaterialTheme.typography.bodyMedium, color = p.accent, modifier = Modifier.weight(1f))
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = p.inkFaint)
                         }
                     }
                 }
             }
             if (summary != null) {
-                SectionHeader("Hardware")
+                SectionHeader(stringResource(R.string.settings_hardware))
                 NCard(Modifier.padding(horizontal = 16.dp)) { Hardware(summary) }
             }
-            SectionHeader("Connection")
+            SectionHeader(stringResource(R.string.settings_connection))
             NCard(Modifier.padding(horizontal = 16.dp)) {
                 val route = if (active) s.route ?: c.relayUrl else c.relayUrl
-                Fact("Route", "${routeName(RelayRoute.of(route))} · ${Pairing.relayHost(route)}")
-                Fact("Status", if (active) stateName(s.conn) else "Not connected")
-                Fact("Paired", ago(c.pairedAt).let { if (it == "now") "just now" else "$it ago" })
+                Fact(stringResource(R.string.settings_fact_route), "${routeLabel(RelayRoute.of(route))} · ${Pairing.relayHost(route)}")
+                Fact(stringResource(R.string.settings_fact_status), stringResource(if (active) stateName(s.conn) else R.string.settings_state_idle))
+                Fact(stringResource(R.string.settings_paired), ago(c.pairedAt).let { if (it == "now") stringResource(R.string.settings_just_now) else stringResource(R.string.settings_ago, localAgo(c.pairedAt)) })
                 summary?.version?.let { v -> Fact("Nekko Agent", listOfNotNull(v, summary.edition).joinToString(" · ")) }
             }
             Spacer(Modifier.size(32.dp))
@@ -224,23 +228,23 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
         var name by remember(c.id) { mutableStateOf(c.name) }
         AlertDialog(
             onDismissRequest = { renaming = false },
-            title = { Text("Rename computer") },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it.take(40) }, singleLine = true, label = { Text("Name") }) },
+            title = { Text(stringResource(R.string.settings_rename_computer)) },
+            text = { OutlinedTextField(value = name, onValueChange = { name = it.take(40) }, singleLine = true, label = { Text(stringResource(R.string.settings_name)) }) },
             confirmButton = {
-                TextButton(onClick = { scope.launch { repo.rename(c.id, name) }; renaming = false }, enabled = name.isNotBlank()) { Text("Save") }
+                TextButton(onClick = { scope.launch { repo.rename(c.id, name) }; renaming = false }, enabled = name.isNotBlank()) { Text(stringResource(R.string.settings_save)) }
             },
-            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { renaming = false }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
     if (forgetting && c != null) {
         AlertDialog(
             onDismissRequest = { forgetting = false },
-            title = { Text("Forget ${c.name}?") },
-            text = { Text("This phone deletes the pairing key. To be safe, also remove the phone on your computer (Settings → Remote access).") },
+            title = { Text(stringResource(R.string.settings_forget_title, c.name)) },
+            text = { Text(stringResource(R.string.settings_forget_text)) },
             confirmButton = {
-                TextButton(onClick = { forgetting = false; scope.launch { repo.forget(c.id); onBack() } }) { Text("Forget", color = p.danger) }
+                TextButton(onClick = { forgetting = false; scope.launch { repo.forget(c.id); onBack() } }) { Text(stringResource(R.string.settings_forget), color = p.danger) }
             },
-            dismissButton = { TextButton(onClick = { forgetting = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { forgetting = false }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
 }
@@ -248,8 +252,9 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
 @Composable
 private fun Hero(c: Computer, s: MachineSummary?, active: Boolean, conn: RelayState) {
     val p = Nekko.palette
+    val stateText = stringResource(if (active) stateName(conn) else R.string.settings_state_idle)
     val parts = buildList {
-        add(if (active) stateName(conn) else "Not connected")
+        add(stateText)
         osName(s?.platform ?: c.platform)?.let { add(it) }
         s?.version?.let { add("Nekko Agent $it") }
     }
@@ -285,29 +290,29 @@ private fun Tiles(c: Computer, m: MachineController.State, active: Boolean, modi
     val small = MaterialTheme.typography.labelSmall
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Tile("Round trip", Modifier.weight(1f)) {
+            Tile(stringResource(R.string.settings_round_trip), Modifier.weight(1f)) {
                 val rt = m.latest
                 if (rt != null) {
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("${rt.ms}", style = big, color = p.ink)
-                        Text("ms · ${routeName(RelayRoute.of(c.relayUrl))}", style = small, color = p.inkFaint, modifier = Modifier.padding(bottom = 3.dp))
+                        Text("ms · ${routeLabel(RelayRoute.of(c.relayUrl))}", style = small, color = p.inkFaint, modifier = Modifier.padding(bottom = 3.dp))
                     }
                     Sparkline(m.samples.map { it.ms.toFloat() }, Modifier.fillMaxWidth().height(22.dp))
                 } else {
-                    Text(if (active) "Measuring…" else "—", style = big, color = p.inkFaint)
+                    Text(if (active) stringResource(R.string.settings_measuring) else "—", style = big, color = p.inkFaint)
                 }
             }
-            Tile("Model server", Modifier.weight(1f)) {
+            Tile(stringResource(R.string.settings_model_server), Modifier.weight(1f)) {
                 if (s != null) {
                     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(if (s.serverRunning) "${s.resident.size} loaded" else "Off", style = big, color = p.ink)
-                        if (s.loading > 0) Text("· ${s.loading} loading", style = small, color = p.inkFaint, modifier = Modifier.padding(bottom = 3.dp))
+                        Text(if (s.serverRunning) stringResource(R.string.settings_loaded_count, s.resident.size) else stringResource(R.string.settings_off), style = big, color = p.ink)
+                        if (s.loading > 0) Text(stringResource(R.string.settings_loading_count, s.loading), style = small, color = p.inkFaint, modifier = Modifier.padding(bottom = 3.dp))
                     }
                     val used = s.gpuUsedMB
                     val total = s.gpuTotalMB
                     if (used != null && total != null && total > 0) {
                         Bar((used / total).toFloat())
-                        Text("${mb(used)} of ${mb(total)}${if (s.unified) " unified" else ""}", style = small, color = p.inkFaint)
+                        Text(stringResource(if (s.unified) R.string.settings_mem_of_unified else R.string.settings_mem_of, mb(used), mb(total)), style = small, color = p.inkFaint)
                     }
                 } else {
                     Text("—", style = big, color = p.inkFaint)
@@ -315,14 +320,14 @@ private fun Tiles(c: Computer, m: MachineController.State, active: Boolean, modi
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Tile("Up", Modifier.weight(1f)) {
+            Tile(stringResource(R.string.settings_up), Modifier.weight(1f)) {
                 Text(s?.let { AgentRows.span(it.uptimeMs.toDouble()) } ?: "—", style = big, color = if (s == null) p.inkFaint else p.ink)
-                Text("Paired ${ago(c.pairedAt).let { if (it == "now") "just now" else "$it ago" }}", style = small, color = p.inkFaint)
+                Text(ago(c.pairedAt).let { if (it == "now") stringResource(R.string.settings_paired_just_now) else stringResource(R.string.settings_paired_ago, localAgo(c.pairedAt)) }, style = small, color = p.inkFaint)
             }
-            Tile("Today", Modifier.weight(1f)) {
+            Tile(stringResource(R.string.settings_today), Modifier.weight(1f)) {
                 val d = m.today(System.currentTimeMillis())
                 Text(String.format(Locale.US, "$%.2f", d?.cost ?: 0.0), style = big, color = p.ink)
-                Text(if (d == null) "No usage yet" else "${compact(d.tokens)} tokens", style = small, color = p.inkFaint)
+                Text(if (d == null) stringResource(R.string.settings_no_usage) else stringResource(R.string.settings_tokens_count, compact(d.tokens)), style = small, color = p.inkFaint)
             }
         }
     }
@@ -353,7 +358,8 @@ private fun Bar(fraction: Float) {
 @Composable
 private fun Sparkline(values: List<Float>, modifier: Modifier = Modifier) {
     val p = Nekko.palette
-    Canvas(modifier.semantics { contentDescription = "Round trip, last ${values.size} samples" }) {
+    val description = stringResource(R.string.settings_round_trip_samples, values.size)
+    Canvas(modifier.semantics { contentDescription = description }) {
         if (values.isEmpty()) return@Canvas
         val lo = values.min()
         val hi = maxOf(values.max(), lo + 1f)
@@ -387,27 +393,27 @@ private fun ModelRow(info: ModelInfo, loaded: Boolean, provider: String?, defaul
         Icon(if (loaded) Icons.Filled.Circle else Icons.Outlined.Circle, contentDescription = null, tint = if (loaded) p.success else p.inkFaint, modifier = Modifier.size(10.dp))
         Column(Modifier.weight(1f)) {
             Text(info.name, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val sub = listOfNotNull(provider, if (loaded) "loaded" else null).joinToString(" · ")
+            val sub = listOfNotNull(provider, if (loaded) stringResource(R.string.settings_loaded) else null).joinToString(" · ")
             if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
-        if (default) RowChip("Default", tone = AgentRows.Tone.QUIET)
+        if (default) RowChip(stringResource(R.string.settings_default), tone = AgentRows.Tone.QUIET)
     }
 }
 
 @Composable
 private fun Hardware(s: MachineSummary) {
-    s.cpuModel?.let { cpu -> Fact("Chip", s.cpuCores?.let { "$cpu · $it cores" } ?: cpu) }
+    s.cpuModel?.let { cpu -> Fact(stringResource(R.string.settings_chip), s.cpuCores?.let { stringResource(R.string.settings_chip_cores, cpu, it) } ?: cpu) }
     s.ramBytes?.let { ram ->
         val total = s.memTotalMB
         val used = s.memUsedMB
-        Fact("Memory", if (total != null && used != null) "${bytes(ram)}${if (s.unified) " unified" else ""} · ${mb(total - used)} free" else bytes(ram))
+        Fact(stringResource(R.string.settings_memory), if (total != null && used != null) stringResource(if (s.unified) R.string.settings_memory_free_unified else R.string.settings_memory_free, bytes(ram), mb(total - used)) else bytes(ram))
     }
     s.gpus.forEach { g ->
-        Fact("GPU", listOfNotNull(g.name, g.cores?.let { "$it cores" }, s.gpuC?.let { "${Math.round(it)} °C" }).joinToString(" · "))
+        Fact("GPU", listOfNotNull(g.name, g.cores?.let { stringResource(R.string.settings_n_cores, it) }, s.gpuC?.let { "${Math.round(it)} °C" }).joinToString(" · "))
     }
-    s.cpuPct?.let { pct -> Fact("CPU now", "${Math.round(pct)}%" + (s.cpuC?.let { " · ${Math.round(it)} °C" } ?: "")) }
-    if (s.backends.isNotEmpty()) Fact("Backends", s.backends.joinToString(", "))
-    s.diskFreeBytes?.let { Fact("Free for models", bytes(it)) }
+    s.cpuPct?.let { pct -> Fact(stringResource(R.string.settings_cpu_now), "${Math.round(pct)}%" + (s.cpuC?.let { " · ${Math.round(it)} °C" } ?: "")) }
+    if (s.backends.isNotEmpty()) Fact(stringResource(R.string.settings_backends), s.backends.joinToString(", "))
+    s.diskFreeBytes?.let { Fact(stringResource(R.string.settings_free_for_models), bytes(it)) }
 }
 
 @Composable
@@ -423,12 +429,13 @@ private fun Fact(label: String, value: String) {
     }
 }
 
+@StringRes
 private fun stateName(s: RelayState) = when (s) {
-    RelayState.ONLINE -> "Online"
-    RelayState.CONNECTING -> "Connecting…"
-    RelayState.OFFLINE -> "Offline"
-    RelayState.DENIED -> "Not paired"
-    else -> "Not connected"
+    RelayState.ONLINE -> R.string.settings_state_online
+    RelayState.CONNECTING -> R.string.settings_state_connecting_dots
+    RelayState.OFFLINE -> R.string.settings_state_offline_short
+    RelayState.DENIED -> R.string.settings_state_not_paired
+    else -> R.string.settings_state_idle
 }
 
 private fun osName(platform: String?) = when (platform) {
@@ -439,16 +446,17 @@ private fun osName(platform: String?) = when (platform) {
     else -> platform
 }
 
+@Composable
 private fun providerKind(kind: String) = when (kind) {
-    "anthropic" -> "Anthropic · API key"
-    "openai" -> "OpenAI · API key"
-    "openrouter" -> "OpenRouter · API key"
-    "chatgpt" -> "ChatGPT · subscription"
-    "llamacpp" -> "Local Model Server"
-    "ollama" -> "Ollama · local"
-    "lmstudio" -> "LM Studio · local"
-    "vllm" -> "vLLM · local"
-    "openai-compat" -> "OpenAI-compatible"
+    "anthropic" -> stringResource(R.string.settings_kind_api_key, "Anthropic")
+    "openai" -> stringResource(R.string.settings_kind_api_key, "OpenAI")
+    "openrouter" -> stringResource(R.string.settings_kind_api_key, "OpenRouter")
+    "chatgpt" -> stringResource(R.string.settings_kind_subscription, "ChatGPT")
+    "llamacpp" -> stringResource(R.string.settings_kind_model_server)
+    "ollama" -> stringResource(R.string.settings_kind_local, "Ollama")
+    "lmstudio" -> stringResource(R.string.settings_kind_local, "LM Studio")
+    "vllm" -> stringResource(R.string.settings_kind_local, "vLLM")
+    "openai-compat" -> stringResource(R.string.settings_kind_openai_compat)
     "bedrock" -> "Amazon Bedrock"
     "vertex" -> "Google Vertex"
     "foundry" -> "Azure AI Foundry"

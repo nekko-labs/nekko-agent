@@ -1,5 +1,8 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -76,8 +79,8 @@ private fun Page(title: String, onBack: () -> Unit, onRefresh: () -> Unit, conte
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 title = { Text(title, modifier = Modifier.semantics { heading() }) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
-                actions = { IconButton(onClick = onRefresh) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back)) } },
+                actions = { IconButton(onClick = onRefresh) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.settings_refresh)) } },
             )
         },
     ) { padding ->
@@ -103,9 +106,10 @@ private fun Card(content: @Composable () -> Unit) {
     ) { content() }
 }
 
+@Composable
 private fun ago(ms: Long): String {
     val now = System.currentTimeMillis()
-    if (now - ms in 0 until DateUtils.MINUTE_IN_MILLIS) return "just now"
+    if (now - ms in 0 until DateUtils.MINUTE_IN_MILLIS) return stringResource(R.string.settings_just_now)
     return DateUtils.getRelativeTimeSpanString(ms, now, DateUtils.MINUTE_IN_MILLIS).toString()
 }
 
@@ -123,7 +127,12 @@ fun AutomationsScreen(repo: ComputersRepository, onBack: () -> Unit) {
     val s by a.state.collectAsStateWithLifecycle()
     var running by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf<String?>(null) }
-    val computer = c.active?.name ?: "your computer"
+    val computer = c.active?.name ?: stringResource(R.string.your_computer)
+    val res = LocalResources.current
+    val pausedNote = stringResource(R.string.settings_automations_paused_on, computer)
+    val noneYet = stringResource(R.string.settings_no_automations, computer)
+    val tasksLabel = stringResource(R.string.settings_tasks)
+    val workflowsLabel = stringResource(R.string.settings_workflows)
     LaunchedEffect(a) { a.load() }
     fun run(id: String, call: suspend () -> Unit) {
         running = id
@@ -133,21 +142,21 @@ fun AutomationsScreen(repo: ComputersRepository, onBack: () -> Unit) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                failed = e.message ?: "Couldn’t run it."
+                failed = e.message ?: res.getString(R.string.settings_couldnt_run)
             } finally {
                 running = null
             }
         }
     }
-    Page("Automations", onBack, onRefresh = { scope.launch { a.load() } }) { pad ->
+    Page(stringResource(R.string.settings_automations), onBack, onRefresh = { scope.launch { a.load() } }) { pad ->
         LazyColumn(Modifier.fillMaxSize().testTag("automations.list"), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (c.pcSettings.automationsPaused) item { Notice("Automations are paused on $computer. Run now still works.", Tone.WARNING) }
+            if (c.pcSettings.automationsPaused) item { Notice(pausedNote, Tone.WARNING) }
             s.error?.let { item { Notice(it, Tone.DANGER) } }
             if (s.loaded && s.error == null && s.isEmpty) {
-                item { Text("No automations yet. Set them up on $computer, and run them from here.", color = p.inkSoft) }
+                item { Text(noneYet, color = p.inkSoft) }
             }
             if (s.tasks.isNotEmpty()) {
-                item { Label("Tasks") }
+                item { Label(tasksLabel) }
                 items(s.tasks, key = { "t:${it.id}" }) { t ->
                     AutomationRow(
                         t.title, t.cadence { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(it)) },
@@ -156,7 +165,7 @@ fun AutomationsScreen(repo: ComputersRepository, onBack: () -> Unit) {
                 }
             }
             if (s.workflows.isNotEmpty()) {
-                item { Label("Workflows") }
+                item { Label(workflowsLabel) }
                 items(s.workflows, key = { "w:${it.id}" }) { w ->
                     AutomationRow(w.name, w.detail, workflowStatus(w), w.description, w.lastRunAt, started = w.id in s.started, busy = running == w.id) {
                         run(w.id) { a.runWorkflow(w.id) }
@@ -169,9 +178,9 @@ fun AutomationsScreen(repo: ComputersRepository, onBack: () -> Unit) {
     failed?.let { m ->
         AlertDialog(
             onDismissRequest = { failed = null },
-            title = { Text("Couldn’t run it") },
+            title = { Text(stringResource(R.string.settings_couldnt_run_title)) },
             text = { Text(m) },
-            confirmButton = { TextButton(onClick = { failed = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { failed = null }) { Text(stringResource(R.string.settings_ok)) } },
         )
     }
 }
@@ -180,9 +189,9 @@ fun AutomationsScreen(repo: ComputersRepository, onBack: () -> Unit) {
 private fun taskStatus(t: AutomationTask): Pair<String, Color>? {
     val p = Nekko.palette
     return when {
-        t.failed -> "Last run failed" to p.danger
-        t.paused -> "Paused" to p.inkSoft
-        t.status == "done" -> "Done" to p.success
+        t.failed -> stringResource(R.string.settings_last_run_failed) to p.danger
+        t.paused -> stringResource(R.string.settings_paused) to p.inkSoft
+        t.status == "done" -> stringResource(R.string.settings_task_done) to p.success
         else -> null
     }
 }
@@ -191,10 +200,10 @@ private fun taskStatus(t: AutomationTask): Pair<String, Color>? {
 private fun workflowStatus(w: AutomationWorkflow): Pair<String, Color>? {
     val p = Nekko.palette
     return when (w.lastStatus) {
-        "success" -> "Last run passed" to p.success
-        "failure" -> "Last run failed" to p.danger
-        "running", "queued" -> "Running" to p.running
-        "cancelled" -> "Last run cancelled" to p.inkSoft
+        "success" -> stringResource(R.string.settings_last_run_passed) to p.success
+        "failure" -> stringResource(R.string.settings_last_run_failed) to p.danger
+        "running", "queued" -> stringResource(R.string.settings_running) to p.running
+        "cancelled" -> stringResource(R.string.settings_last_run_cancelled) to p.inkSoft
         else -> null
     }
 }
@@ -221,15 +230,16 @@ private fun AutomationRow(
                 if (busy) {
                     CircularProgressIndicator(color = p.accent, modifier = Modifier.size(20.dp))
                 } else {
+                    val description = stringResource(if (started) R.string.settings_started_cd else R.string.settings_run_now_cd, title)
                     TextButton(
                         onClick = onRun,
-                        modifier = Modifier.testTag("automations.run").semantics { contentDescription = if (started) "$title started" else "Run $title now" },
-                    ) { Text(if (started) "Started" else "Run now", color = if (started) p.inkSoft else p.accent, fontWeight = FontWeight.SemiBold) }
+                        modifier = Modifier.testTag("automations.run").semantics { contentDescription = description },
+                    ) { Text(if (started) stringResource(R.string.settings_started) else stringResource(R.string.settings_run_now), color = if (started) p.inkSoft else p.accent, fontWeight = FontWeight.SemiBold) }
                 }
             }
         }
         status?.let { (text, color) -> Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = color) }
-        lastRun?.let { Text("Last run ${ago(it)}", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+        lastRun?.let { Text(stringResource(R.string.settings_last_run, ago(it)), style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
         result?.takeIf { it.isNotEmpty() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 4) }
     }
 }
@@ -244,37 +254,44 @@ fun UsageScreen(repo: ComputersRepository, onBack: () -> Unit) {
     LaunchedEffect(u) { u.load() }
     val money = remember { NumberFormat.getCurrencyInstance(Locale.US).apply { currency = Currency.getInstance("USD") } }
     val compact = { n: Long -> compactNumber(n) }
-    Page("Usage and limits", onBack, onRefresh = { scope.launch { u.load() } }) { pad ->
+    val allTime = stringResource(R.string.settings_all_time)
+    val tokensLabel = stringResource(R.string.settings_tokens)
+    val spendLabel = stringResource(R.string.settings_estimated_spend)
+    val recentDays = stringResource(R.string.settings_recent_days)
+    val byModel = stringResource(R.string.settings_by_model)
+    val noUsage = stringResource(R.string.settings_no_usage_recorded)
+    val res = LocalResources.current
+    Page(stringResource(R.string.settings_usage), onBack, onRefresh = { scope.launch { u.load() } }) { pad ->
         LazyColumn(Modifier.fillMaxSize().testTag("usage.view"), contentPadding = pad, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             s.error?.let { item { Notice(it, Tone.DANGER) } }
             items(s.limited, key = { "l:${it.first.id}" }) { (provider, limits) ->
                 Label(listOfNotNull(provider.label, limits.planType?.replaceFirstChar { it.uppercase() }).joinToString(" · "))
                 Card {
-                    if (limits.windows.isEmpty()) Text("No limits reported.", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+                    if (limits.windows.isEmpty()) Text(stringResource(R.string.settings_no_limits), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                     limits.windows.forEach { LimitBar(it) }
                 }
             }
             val sum = s.summary
             if (sum != null) {
                 item {
-                    Label("All time")
+                    Label(allTime)
                     Card {
-                        Line("Tokens", compact(sum.totalTokens))
-                        Line("Estimated spend", money.format(sum.totalCost))
+                        Line(tokensLabel, compact(sum.totalTokens))
+                        Line(spendLabel, money.format(sum.totalCost))
                     }
                 }
                 if (sum.days.isNotEmpty()) item {
-                    Label("Recent days")
+                    Label(recentDays)
                     Card { sum.days.reversed().forEach { d -> Line(d.date, "${compact(d.tokens)} · ${money.format(d.cost)}") } }
                 }
                 if (sum.models.isNotEmpty()) item {
-                    Label("By model")
+                    Label(byModel)
                     Card {
-                        sum.models.forEach { m -> Line(m.model, if (m.subscription) "${compact(m.tokens)} · plan" else "${compact(m.tokens)} · ${money.format(m.cost)}") }
+                        sum.models.forEach { m -> Line(m.model, if (m.subscription) res.getString(R.string.settings_plan_tokens, compact(m.tokens)) else "${compact(m.tokens)} · ${money.format(m.cost)}") }
                     }
                 }
             } else if (s.loaded && s.error == null) {
-                item { Text("No usage recorded yet.", color = p.inkSoft) }
+                item { Text(noUsage, color = p.inkSoft) }
             }
             if (!s.loaded) item { CircularProgressIndicator(color = p.accent) }
         }
@@ -301,10 +318,10 @@ private fun LimitBar(w: ProviderLimits.Window) {
     Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row {
             Text(w.label, style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
-            Text("${Math.round(w.usedPercent)}% used", style = MaterialTheme.typography.bodyMedium, color = color)
+            Text(stringResource(R.string.settings_used_pct, Math.round(w.usedPercent)), style = MaterialTheme.typography.bodyMedium, color = color)
         }
         LinearProgressIndicator(progress = { (w.usedPercent / 100).toFloat() }, color = color, trackColor = p.line, modifier = Modifier.fillMaxWidth())
-        w.resetAt?.takeIf { it > 0 }?.let { Text("Resets ${ago(it)}", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+        w.resetAt?.takeIf { it > 0 }?.let { Text(stringResource(R.string.settings_resets, ago(it)), style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
     }
 }
 

@@ -1,5 +1,7 @@
 package com.nekko.android.lock
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -112,9 +114,11 @@ private fun LockScreen(epoch: Int, lock: AppLock, authenticator: Authenticator) 
     var prompted by rememberSaveable { mutableStateOf(0) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
+    val title = stringResource(R.string.settings_unlock_title)
+    val subtitle = stringResource(R.string.settings_unlock_subtitle)
     val unlock = {
         error = null
-        authenticator.authenticate(title = "Unlock Nekko Agent", subtitle = "Use your fingerprint, face or screen lock") { r ->
+        authenticator.authenticate(title = title, subtitle = subtitle) { r ->
             when (r) {
                 AuthResult.Success -> lock.unlock()
                 AuthResult.Cancelled -> Unit
@@ -148,10 +152,10 @@ private fun LockScreen(epoch: Int, lock: AppLock, authenticator: Authenticator) 
             Icon(Icons.Filled.Lock, contentDescription = null, tint = p.accent, modifier = Modifier.size(36.dp))
         }
         Spacer(Modifier.height(16.dp))
-        Text("Nekko Agent is locked", style = MaterialTheme.typography.headlineSmall, color = p.ink, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.headlineSmall, color = p.ink, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Unlock with your fingerprint, face or screen lock to see your chats and approve what the agent wants to do.",
+            stringResource(R.string.settings_locked_detail),
             style = MaterialTheme.typography.bodyLarge,
             color = p.inkSoft,
             textAlign = TextAlign.Center,
@@ -164,7 +168,7 @@ private fun LockScreen(epoch: Int, lock: AppLock, authenticator: Authenticator) 
         Button(onClick = unlock, modifier = Modifier.fillMaxWidth().height(48.dp)) {
             Icon(Icons.Filled.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.size(8.dp))
-            Text("Unlock")
+            Text(stringResource(R.string.settings_unlock))
         }
     }
 }

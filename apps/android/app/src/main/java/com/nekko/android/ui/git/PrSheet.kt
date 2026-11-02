@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -58,6 +60,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun PrChip(pr: PullRequest, onClick: () -> Unit) {
     val p = Nekko.palette
+    val description = stringResource(R.string.tools_pr_chip, pr.summary)
     val color = when {
         pr.state == PullRequest.State.MERGED -> p.accent
         pr.state == PullRequest.State.CLOSED -> p.inkSoft
@@ -69,7 +72,7 @@ fun PrChip(pr: PullRequest, onClick: () -> Unit) {
         Modifier.padding(horizontal = 12.dp, vertical = 4.dp).heightIn(min = 32.dp)
             .clip(RoundedCornerShape(999.dp)).background(color.copy(alpha = 0.14f)).clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .semantics(mergeDescendants = true) { contentDescription = "Pull request ${pr.summary}" }
+            .semantics(mergeDescendants = true) { contentDescription = description }
             .testTag("chat.prChip"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -97,37 +100,39 @@ fun PrSheet(
     val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     var failed by remember { mutableStateOf<String?>(null) }
+    val sendFailed = stringResource(R.string.tools_pr_send_failed)
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper) {
         LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
-                Text(if (prs.size == 1) "Pull request" else "Pull requests", style = MaterialTheme.typography.titleMedium, color = p.ink,
+                Text(stringResource(if (prs.size == 1) R.string.tools_pr_one else R.string.tools_pr_other), style = MaterialTheme.typography.titleMedium, color = p.ink,
                     modifier = Modifier.semantics { heading() })
             }
-            if (prs.isEmpty()) item { Text("This chat hasn’t opened a pull request.", color = p.inkSoft) }
+            if (prs.isEmpty()) item { Text(stringResource(R.string.tools_pr_none), color = p.inkSoft) }
             items(prs, key = { it.url }) { pr ->
                 Box {
                     Text(pr.title, style = MaterialTheme.typography.titleSmall, color = p.ink)
                     Text(pr.summary, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
-                    Text("+${pr.additions} −${pr.deletions} in ${if (pr.changedFiles == 1) "1 file" else "${pr.changedFiles} files"}",
+                    Text(if (pr.changedFiles == 1) stringResource(R.string.tools_pr_lines_one, pr.additions, pr.deletions)
+                        else stringResource(R.string.tools_pr_lines_other, pr.additions, pr.deletions, pr.changedFiles),
                         style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                     pr.reviewDecision?.takeIf { it.isNotEmpty() }?.let {
                         Text(it.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                     }
                     HorizontalDivider(color = p.line)
-                    Row2(Icons.AutoMirrored.Filled.OpenInNew, "Open on GitHub") { uri.openUri(pr.url) }
+                    Row2(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.tools_git_open_github)) { uri.openUri(pr.url) }
                     HorizontalDivider(color = p.line)
-                    Row2(Icons.Filled.Checklist, "Checks, files and actions", Modifier.testTag("pr.detail")) { onGit(pr) }
+                    Row2(Icons.Filled.Checklist, stringResource(R.string.tools_pr_detail), Modifier.testTag("pr.detail")) { onGit(pr) }
                 }
             }
             item {
                 Box {
-                    Row2(Icons.Filled.AccountTree, "Git: status, commit, push", Modifier.testTag("pr.git")) { onGit(null) }
+                    Row2(Icons.Filled.AccountTree, stringResource(R.string.tools_pr_git), Modifier.testTag("pr.git")) { onGit(null) }
                 }
-                Text("Done from this phone, with your fingerprint or screen lock.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint,
+                Text(stringResource(R.string.tools_pr_done_here), style = MaterialTheme.typography.bodySmall, color = p.inkFaint,
                     modifier = Modifier.padding(top = 8.dp, start = 4.dp))
             }
             item {
-                Text("ASK THE AGENT", style = MaterialTheme.typography.labelMedium, color = p.inkFaint, fontWeight = FontWeight.SemiBold,
+                Text(stringResource(R.string.tools_pr_ask).uppercase(), style = MaterialTheme.typography.labelMedium, color = p.inkFaint, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 8.dp).semantics { heading() })
             }
             item {
@@ -148,13 +153,13 @@ fun PrSheet(
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {
-                                    failed = e.message ?: "Couldn’t send that."
+                                    failed = e.message ?: sendFailed
                                 }
                             }
                         }
                     }
                 }
-                Text("Sent to this chat as a prompt. The agent does the git work on the computer, and asks you before anything that needs approval.",
+                Text(stringResource(R.string.tools_pr_sent_note),
                     style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
             }
             failed?.let { item { Notice(it, Tone.DANGER) } }

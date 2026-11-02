@@ -1,5 +1,8 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ContentValues
@@ -107,6 +110,7 @@ private sealed interface Phase {
 @Composable
 internal fun MermaidBlock(source: String, closed: Boolean, style: MarkdownStyle) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val dark = Nekko.palette.paper.luminance() < 0.5f
@@ -116,7 +120,7 @@ internal fun MermaidBlock(source: String, closed: Boolean, style: MarkdownStyle)
             CodeBlock("mermaid", source, style)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Schema, contentDescription = null, tint = style.faint, modifier = Modifier.size(14.dp))
-                Text("Drawing when the reply finishes…", style = MaterialTheme.typography.labelSmall, color = style.faint, modifier = Modifier.padding(start = 6.dp))
+                Text(stringResource(R.string.chat_drawing_when_finished), style = MaterialTheme.typography.labelSmall, color = style.faint, modifier = Modifier.padding(start = 6.dp))
             }
         }
         MermaidRules.Decision.TOO_LARGE -> Fallback(MermaidRenderer.Failure.TOO_LARGE.message.orEmpty(), source, style)
@@ -132,29 +136,32 @@ internal fun MermaidBlock(source: String, closed: Boolean, style: MarkdownStyle)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Phase.Failed(e.message ?: "The diagram couldn’t be drawn.")
+                    Phase.Failed(e.message ?: resources.getString(R.string.chat_diagram_failed))
                 }
             }
             when (val ph = phase) {
                 is Phase.Drawn -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box {
                         val kind = MermaidRules.kind(source)
+                        val openLabel = stringResource(R.string.chat_open_full_screen)
+                        val diagramLabel = stringResource(R.string.chat_diagram_kind, kind)
+                        val sourceLabel = if (showSource) stringResource(R.string.chat_hide_source) else stringResource(R.string.chat_show_source)
                         Image(
                             ph.drawing.image.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit,
                             modifier = Modifier.widthIn(max = (ph.drawing.image.width / scale).dp)
-                                .combinedClickable(onClick = { full = true }, onLongClick = { menu = true }, onClickLabel = "Open full screen")
+                                .combinedClickable(onClick = { full = true }, onLongClick = { menu = true }, onClickLabel = openLabel)
                                 .semantics {
-                                    contentDescription = "Diagram, $kind"
-                                    customActions = listOf(CustomAccessibilityAction(if (showSource) "Hide source" else "Show source") { showSource = !showSource; true })
+                                    contentDescription = diagramLabel
+                                    customActions = listOf(CustomAccessibilityAction(sourceLabel) { showSource = !showSource; true })
                                 }
                                 .testTag("mermaid.diagram"),
                         )
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Copy source") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_source)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = {
                                 menu = false
                                 scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Diagram", source))) }
                             })
-                            DropdownMenuItem(text = { Text(if (showSource) "Hide source" else "Show source") }, leadingIcon = { Icon(Icons.Filled.Code, null) }, onClick = {
+                            DropdownMenuItem(text = { Text(sourceLabel) }, leadingIcon = { Icon(Icons.Filled.Code, null) }, onClick = {
                                 menu = false
                                 showSource = !showSource
                             })
@@ -166,7 +173,7 @@ internal fun MermaidBlock(source: String, closed: Boolean, style: MarkdownStyle)
                 is Phase.Failed -> Fallback(ph.message, source, style)
                 Phase.Waiting -> Row(Modifier.heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(strokeWidth = 2.dp, color = style.soft, modifier = Modifier.size(16.dp))
-                    Text("Drawing diagram…", style = MaterialTheme.typography.labelSmall, color = style.faint, modifier = Modifier.padding(start = 8.dp))
+                    Text(stringResource(R.string.chat_drawing_diagram), style = MaterialTheme.typography.labelSmall, color = style.faint, modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }
@@ -194,6 +201,7 @@ private fun Fallback(message: String, source: String, style: MarkdownStyle) {
 private fun MermaidScreen(source: String, drawing: MermaidRenderer.Drawing, dark: Boolean, onDismiss: () -> Unit) {
     val p = Nekko.palette
     val context = LocalContext.current
+    val resources = LocalResources.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
@@ -223,28 +231,28 @@ private fun MermaidScreen(source: String, drawing: MermaidRenderer.Drawing, dark
             topBar = {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                    title = { Text("Diagram") },
-                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("mermaid.done")) { Icon(Icons.Filled.Close, contentDescription = "Done") } },
+                    title = { Text(stringResource(R.string.chat_diagram)) },
+                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("mermaid.done")) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_done)) } },
                     actions = {
                         Box {
-                            IconButton(onClick = { menu = true }, modifier = Modifier.testTag("mermaid.actions")) { Icon(Icons.Filled.MoreVert, contentDescription = "Diagram actions") }
+                            IconButton(onClick = { menu = true }, modifier = Modifier.testTag("mermaid.actions")) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chat_diagram_actions)) }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                DropdownMenuItem(text = { Text("Copy source") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_source)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = {
                                     menu = false
                                     scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Diagram", source))) }
-                                    note = "Copied the source"
+                                    note = resources.getString(R.string.chat_copied_source)
                                 })
-                                DropdownMenuItem(text = { Text("Share image") }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_share_image)) }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = {
                                     menu = false
                                     scope.launch { shareImage(context, drawing.image) }
                                 })
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    DropdownMenuItem(text = { Text("Save to Photos") }, leadingIcon = { Icon(Icons.Filled.Save, null) }, onClick = {
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.chat_save_to_photos)) }, leadingIcon = { Icon(Icons.Filled.Save, null) }, onClick = {
                                         menu = false
-                                        scope.launch { note = if (saveToPhotos(context, drawing.image)) "Saved to Photos" else "Couldn’t save it" }
+                                        scope.launch { note = if (saveToPhotos(context, drawing.image)) resources.getString(R.string.chat_saved_to_photos) else resources.getString(R.string.chat_save_failed) }
                                     })
                                 }
-                                DropdownMenuItem(text = { Text(if (showSource) "Show diagram" else "Show source") }, leadingIcon = { Icon(Icons.Filled.Code, null) }, onClick = {
+                                DropdownMenuItem(text = { Text(if (showSource) stringResource(R.string.chat_show_diagram) else stringResource(R.string.chat_show_source)) }, leadingIcon = { Icon(Icons.Filled.Code, null) }, onClick = {
                                     menu = false
                                     showSource = !showSource
                                 })
@@ -260,7 +268,8 @@ private fun MermaidScreen(source: String, drawing: MermaidRenderer.Drawing, dark
                         Text(source, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = p.ink, modifier = Modifier.padding(16.dp))
                     }
                 } else {
-                    LockedSvg(drawing.svg, dark, Modifier.fillMaxSize().semantics { contentDescription = "Diagram, ${MermaidRules.kind(source)}" })
+                    val diagramLabel = stringResource(R.string.chat_diagram_kind, MermaidRules.kind(source))
+                    LockedSvg(drawing.svg, dark, Modifier.fillMaxSize().semantics { contentDescription = diagramLabel })
                 }
                 note?.let {
                     Text(
