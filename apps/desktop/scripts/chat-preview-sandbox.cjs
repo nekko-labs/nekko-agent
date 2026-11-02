@@ -7,7 +7,8 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:|https:\/\/(css-loaders\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)\/)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
   const bounds = screen.getPrimaryDisplay().bounds;
-  const win = new BrowserWindow({ width: 900, height: 650, show: false, focusable: false, skipTaskbar: true, x: bounds.x - 1500, y: bounds.y - 800, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
+  const narrow = process.env.NEKKO_PREVIEW_NARROW === '1';
+  const win = new BrowserWindow({ width: narrow ? 390 : 900, height: narrow ? 844 : 650, show: false, focusable: false, skipTaskbar: true, x: bounds.x - 1500, y: bounds.y - 1000, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
   const report = { files: [], checks: {}, errors: [] };
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 250)); });
   const run = s => win.webContents.executeJavaScript(s, true);
