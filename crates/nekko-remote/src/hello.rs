@@ -24,6 +24,9 @@ pub fn os_random() -> Random {
 pub struct Grant {
     pub code: String,
     pub expires_at: f64,
+    /// Minted for a computer (`remote:pairComputer`), so the device it enrolls
+    /// gets the computer class. A phone can't use it, nor a computer a phone's.
+    pub computer: bool,
 }
 
 impl Grant {
@@ -65,12 +68,16 @@ fn hex_bytes(random: &Random, n: usize) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// The `platform` a desktop's HELLO names when it pairs with a computer.
+pub const COMPUTER_PLATFORM: &str = "computer";
+
 /// `normalizePlatform`.
 pub fn normalize_platform(p: Option<&str>) -> &'static str {
     match p.unwrap_or("").to_lowercase().as_str() {
         "ios" => "ios",
         "android" => "android",
         "web" => "web",
+        COMPUTER_PLATFORM => COMPUTER_PLATFORM,
         _ => "unknown",
     }
 }
@@ -81,6 +88,7 @@ pub fn default_device_name(p: Option<&str>) -> &'static str {
         "ios" => "iPhone",
         "android" => "Android phone",
         "web" => "Browser",
+        COMPUTER_PLATFORM => "Computer",
         _ => "Device",
     }
 }

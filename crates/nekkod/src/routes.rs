@@ -341,6 +341,17 @@ impl Table {
             handler!(|ctx, channel, args| Ok(merge_pending(json!({}), ctx.turns.pending.snapshot()))),
         );
         t.add(&["chat:running"], handler!(|ctx, channel, args| Ok(json!(running_chats(ctx)))));
+        // A callable form of the replay a window's socket gets when it starts
+        // showing a chat, for a paired computer that has no such socket.
+        t.add(
+            &["agent:replay"],
+            handler!(|ctx, channel, args| {
+                let id: std::sync::Arc<str> = str_arg(&args, 0).unwrap_or_default().into();
+                let frame = ctx.hub.replay(&[id]).into_iter().next();
+                let frame = frame.and_then(|(_, _, text)| serde_json::from_str::<Value>(&text).ok());
+                Ok(frame.map_or(Value::Null, |mut f| f["payload"].take()))
+            }),
+        );
         t.add(
             &["chat:steer"],
             handler!(|ctx, channel, args| {
@@ -1066,6 +1077,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "sessions:historyUsage",
     "sessions:purgeArchived",
     "session:get",
+    "session:page",
     "session:images",
     "session:delete",
     "session:setOptions",
@@ -1164,6 +1176,11 @@ async fn session_op(
             }
             "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
+            "session:page" => Ok(nekko_remote::phone::message_page(
+                &store.get(id).unwrap_or(Value::Null),
+                arg(&args, 1).as_str(),
+                arg(&args, 2).as_f64(),
+            )),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
             "session:delete" => {
                 delete_log(id)?;
