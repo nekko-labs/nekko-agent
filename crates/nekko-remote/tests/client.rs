@@ -100,6 +100,9 @@ async fn host() -> Host {
                             let Ok((code, reason)) = c else { return };
                             let frame = CloseFrame { code: CloseCode::from(code), reason: reason.into() };
                             let _ = sink.send(Message::Close(Some(frame))).await;
+                            // Read to the end, as a real relay does: a socket dropped with
+                            // bytes unread resets, and on Windows that loses the close frame.
+                            while matches!(stream.next().await, Some(Ok(_))) {}
                             return;
                         }
                         e = events.recv() => {
