@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { parsePairingLink, pairingLink, relayRoute, type ComputerState, type ComputerStatus, type NekkoApi } from '@nekko-agent/shared';
-import { ComputerIcon } from '../icons.js';
+import { COMPUTER_ICONS, parsePairingLink, pairingLink, relayRoute, type ComputerState, type ComputerStatus, type NekkoApi } from '@nekko-agent/shared';
+import { COMPUTER_ICON_GLYPHS, ComputerIcon } from '../icons.js';
+import { useStore } from '../store.js';
+import { ComputerGlyph } from './ComputerChip.js';
 import { pairingAlts } from './RemoteAccess.js';
 
 const STATE_LABEL: Record<ComputerState, string> = {
@@ -38,9 +40,35 @@ export async function computerLink(api: Pick<NekkoApi, 'getRemoteStatus' | 'getR
   return { link: pairingLink('nekko-agent-pair:', { ...pairing, pair: grant.code, alts: pairingAlts(pairing.relayUrl, local) }) };
 }
 
+/** Pick a computer's icon. Shows only if one is set: there is no default. */
+function IconPicker({ icon, label, onPick }: { icon?: string; label: string; onPick: (icon: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const pick = (next: string) => { setOpen(false); onPick(next); };
+  return (
+    <span className="relative shrink-0">
+      <button className="btn btn-ghost h-7 w-7 p-0" aria-label={`Icon for ${label}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+        {icon ? <ComputerGlyph icon={icon} className="h-4 w-4" /> : <span className="text-2xs text-ink-faint">Icon</span>}
+      </button>
+      {open && (
+        <div role="menu" className="card absolute left-0 top-8 z-10 w-56 p-2" data-icon-picker>
+          <div className="grid grid-cols-6 gap-1">
+            {COMPUTER_ICONS.map((id) => {
+              const Glyph = COMPUTER_ICON_GLYPHS[id];
+              return <button key={id} role="menuitem" title={id} aria-label={id} className={`btn btn-ghost h-8 w-8 p-0 ${icon === id ? 'ring-1 ring-accent' : ''}`} onClick={() => pick(id)}><Glyph className="h-4 w-4" /></button>;
+            })}
+          </div>
+          <button role="menuitem" className="btn btn-ghost mt-1 w-full py-0.5 text-xs" onClick={() => pick('')}>No icon</button>
+        </div>
+      )}
+    </span>
+  );
+}
+
 /** Settings > Computers: the computers this one reaches, and the link that lets another reach it. */
 export function ComputersSection() {
   const [computers, setComputers] = useState<ComputerStatus[]>([]);
+  const machineIcon = useStore((s) => s.settings?.machineIcon);
+  const refreshSettings = useStore((s) => s.refreshSettings);
   const [adding, setAdding] = useState(false);
   const [paste, setPaste] = useState('');
   const [busy, setBusy] = useState(false);
@@ -77,6 +105,14 @@ export function ComputersSection() {
   const forget = async (c: ComputerStatus) => {
     if (!confirm(`Remove ${c.name}? Its agents leave this computer's list. They keep running there.`)) return;
     setComputers(await window.nekko.forgetComputer(c.id));
+  };
+
+  const setIcon = async (c: ComputerStatus, icon: string) => {
+    try {
+      setComputers(await window.nekko.setComputerIcon(c.id, icon));
+    } catch (e) {
+      useStore.getState().pushToast('error', `${c.name} didn't take that: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const rename = async (id: string) => {
@@ -116,9 +152,15 @@ export function ComputersSection() {
 
       {computers.length > 0 && (
         <ul className="mt-3 divide-y divide-line">
+          <li className="flex items-center gap-3 py-2 text-sm">
+            <span aria-hidden className="h-2 w-2 shrink-0" />
+            <IconPicker icon={machineIcon} label="this computer" onPick={(icon) => void window.nekko.updateSettings({ machineIcon: icon }).then(() => refreshSettings())} />
+            <span className="min-w-0 flex-1 font-medium">This computer</span>
+          </li>
           {computers.map((c) => (
             <li key={c.id} className="flex items-center gap-3 py-2 text-sm">
               <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATE_COLOR[c.state] }} />
+              <IconPicker icon={c.icon} label={c.name} onPick={(icon) => void setIcon(c, icon)} />
               <div className="min-w-0 flex-1">
                 {renaming === c.id ? (
                   <input

@@ -166,6 +166,7 @@ function WorkspaceCardImpl({
   showMetadata = true,
   showProvider = true,
   showComputer = true,
+  showComputerIcons = true,
   zoneTint,
   onOpen,
   onClose,
@@ -188,6 +189,8 @@ function WorkspaceCardImpl({
   showProvider?: boolean;
   /** The computer a remote agent runs on; off, the provider line stands alone. */
   showComputer?: boolean;
+  /** That computer's icon, when it has one. */
+  showComputerIcons?: boolean;
   /** The colour of the zone showing this agent on the board; absent when it is not on the board. */
   zoneTint?: number;
   onOpen: () => void;
@@ -352,7 +355,7 @@ function WorkspaceCardImpl({
 
       {((showProvider && provider) || (showComputer && computer)) && (
         <div className="flex min-w-0 items-center gap-1 truncate pl-3 text-2xs leading-[13px] text-ink-faint">
-          {showComputer && computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} />}
+          {showComputer && computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />}
           {showComputer && computer && showProvider && provider && <span aria-hidden>·</span>}
           {showProvider && provider && <span className="truncate" data-card-provider>{isLocalProvider(provider.kind) ? 'Local' : provider.label}</span>}
         </div>

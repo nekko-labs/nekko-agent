@@ -1,4 +1,5 @@
-import { computerColor, computerIdOf, type ComputerStatus } from '@nekko-agent/shared';
+import { computerColor, computerIdOf, type ComputerIcon, type ComputerStatus } from '@nekko-agent/shared';
+import { COMPUTER_ICON_GLYPHS } from '../icons.js';
 import { useStore } from '../store.js';
 
 /** The computer a chat or folder runs on, or null when it runs here. */
@@ -17,10 +18,17 @@ export function computerBlock(c: ComputerStatus | null): string | null {
   return `${c.name} is offline`;
 }
 
+/** A computer's icon, or nothing: there is no default. */
+export function ComputerGlyph({ icon, className = 'h-3 w-3 shrink-0' }: { icon?: string; className?: string }) {
+  const Glyph = icon ? COMPUTER_ICON_GLYPHS[icon as ComputerIcon] : undefined;
+  return Glyph ? <span aria-hidden data-computer-icon={icon}><Glyph className={className} /></span> : null;
+}
+
 /** Where an agent runs. Local agents have none: with a second computer the absence reads as "here". */
-export function ComputerChip({ computer, dim }: { computer: ComputerStatus; dim?: boolean }) {
+export function ComputerChip({ computer, dim, showIcon = true }: { computer: ComputerStatus; dim?: boolean; showIcon?: boolean }) {
   return (
     <span className="inline-flex min-w-0 items-center gap-1 truncate text-2xs font-medium" data-computer-chip={computer.id} style={{ color: computerColor(computer), opacity: dim ? 0.6 : undefined }}>
+      {showIcon && <ComputerGlyph icon={computer.icon} />}
       {computer.name}
     </span>
   );

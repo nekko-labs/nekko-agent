@@ -386,6 +386,7 @@ export const IpcChannels = {
   computersForget: 'computers:forget',
   computersCall: 'computers:call',
   computersCatalog: 'computers:catalog',
+  computersSetIcon: 'computers:setIcon',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -1176,6 +1177,8 @@ export interface NekkoApi {
   renameComputer(id: string, name: string): Promise<import('./computers.js').ComputerStatus[]>;
   setComputerColor(id: string, color: number): Promise<import('./computers.js').ComputerStatus[]>;
   forgetComputer(id: string): Promise<import('./computers.js').ComputerStatus[]>;
+  /** Set the icon in that machine's own settings; empty removes it. */
+  setComputerIcon(id: string, icon: string): Promise<import('./computers.js').ComputerStatus[]>;
   /** Its providers and folders; null when it has never answered. */
   computerCatalog(id: string): Promise<import('./computers.js').ComputerCatalog | null>;
   onComputersUpdated(cb: () => void): () => void;
