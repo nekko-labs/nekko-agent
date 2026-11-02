@@ -220,6 +220,7 @@ Architecture, speed contract, distribution, builds and startup.
 - [Send feedback from every app (2026-10-24)](platform/send-feedback.md) (5 KB)
 - [Speed & responsiveness (the speed contract)](platform/speed-responsiveness-the-speed-contract.md) (12 KB)
 - [Startup splash and window launch (2026-10-21)](platform/startup-splash-and-window-launch.md) (2 KB)
+- [Third-party licensing and credits (2026-11-03)](platform/third-party-licensing-and-credits.md) (2 KB)
 - [Windows installs without Visual Studio, and a smaller download (2026-10-12)](platform/windows-installs-without-visual-studio-and-a-smaller-download.md) (6 KB)
 
 ### brand

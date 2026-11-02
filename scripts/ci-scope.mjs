@@ -41,6 +41,8 @@ const CODEQL = {
   rust: [/\.rs$/, /(^|\/)Cargo\.(toml|lock)$/],
   swift: [/\.swift$/, /(^|\/)Package\.resolved$/],
 };
+// What the license policy reads (scripts/third-party.mjs).
+const LICENSES = [/(^|\/)package(-lock)?\.json$/, /(^|\/)Cargo\.(toml|lock)$/, /^ASSETS\.md$/, /^scripts\/third-party\.mjs$/, /^scripts\/license-policy\.json$/];
 // Changes here can affect any job.
 const EVERYTHING = [/^\.github\/workflows\/(ci|codeql)\.yml$/, /^scripts\/ci-scope\.mjs$/, /^package(-lock)?\.json$/];
 
@@ -51,7 +53,7 @@ const touches = (files, patterns) => files.some(file => patterns.some(pattern =>
 
 export function ciScope({ event, files = [], labels = [] }) {
   if (FULL.has(event)) {
-    return { build: true, daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true };
+    return { build: true, daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true, licenses: false };
   }
   const queue = event === 'merge_group';
   const all = files.length === 0 || files.length >= FILE_LIST_CAP || touches(files, EVERYTHING);
@@ -67,6 +69,7 @@ export function ciScope({ event, files = [], labels = [] }) {
     capture_os: [...(capture ? ['windows-latest'] : []), ...(capture && macos ? ['macos-latest'] : [])],
     perf,
     itests: queue && build,
+    licenses: all || touches(files, LICENSES),
   };
 }
 
@@ -91,7 +94,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const labels = JSON.parse(process.env.CI_LABELS || '[]') || [];
   const scope = ciScope({ event: process.env.GITHUB_EVENT_NAME, files, labels });
   const codeql = codeqlLanguages({ event: process.env.GITHUB_EVENT_NAME, files, labels });
-  const lines = [`build=${scope.build}`, `daemon_os=${JSON.stringify(scope.daemon_os)}`, `capture_os=${JSON.stringify(scope.capture_os)}`, `perf=${scope.perf}`, `itests=${scope.itests}`, `codeql=${JSON.stringify(codeql)}`];
+  const lines = [`build=${scope.build}`, `daemon_os=${JSON.stringify(scope.daemon_os)}`, `capture_os=${JSON.stringify(scope.capture_os)}`, `perf=${scope.perf}`, `itests=${scope.itests}`, `licenses=${scope.licenses}`, `codeql=${JSON.stringify(codeql)}`];
   console.log(`${process.env.GITHUB_EVENT_NAME}: ${files.length} changed file(s), labels ${JSON.stringify(labels)}\n${lines.join('\n')}`);
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${lines.join('\n')}\n`);
 }
