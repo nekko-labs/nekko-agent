@@ -247,7 +247,8 @@ kept: if you save a value outside its range, the saved value is the nearest allo
   **Let jobs use the internet directly while a VPN is on**. Job traffic never goes through a VPN
   tunnel; with that switch off, the runner waits while a VPN carries all of the Mac's traffic.
 - **Trusted networks**: up to 32, recognised by the router's hardware address and listed as
-  `gw:...` ids. **Trust this network** adds the one this Mac is on, shown with a
+  `gw:...` ids. The address comes from macOS's own network state (`scutil`), then `arp`, which
+  sees nothing without Local Network permission. **Trust this network** adds the one this Mac is on, shown with a
   **This network** badge.
 - **Safety**: **Re-run jobs lost to sleep**.
 - **Max job time**: 30 min, 1 h, 2 h or 6 h (the runner accepts 10 minutes to 24 hours).

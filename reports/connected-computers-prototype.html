@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connected computers prototype</title>
+<!-- Visual design for docs/superpowers/specs/2026-11-02-connected-computers-design.md.
+     Self-contained: no network requests. Tokens copied from apps/desktop/src/renderer/styles.css. -->
+<style>
+:root {
+  --font-sans: 'Inter Tight Variable', 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  --text-2xs: 11px; --text-xs: 12px; --text-sm: 14px; --text-base: 16px;
+}
+[data-theme='dark'] {
+  --page: #050507; --bg: #08080b; --surface: #16161c; --surface-2: #20202a; --ink: #eceaf3; --ink-soft: #a3a1b0; --ink-faint: #898894;
+  --line: #26262f; --accent: #8b7dff; --accent-2: #22d3ee; --success: #4ec98a; --danger: #e0574a; --warning: #e0a44a; --attention: #f58a3a;
+  --menu: #191c23; --gomi: #f08cc0; --studio: #6fa8ff; --edge: #5c5c6b;
+}
+[data-theme='light'] {
+  --page: #e9e9ef; --bg: #f7f7fa; --surface: #ffffff; --surface-2: #f2f2f7; --ink: #17171d; --ink-soft: #52525e; --ink-faint: #6c6c77;
+  --line: #e8e8ef; --accent: #6d5efc; --accent-2: #06b6d4; --success: #3aa870; --danger: #d24738; --warning: #c9871f; --attention: #e8701a;
+  --menu: #ffffff; --gomi: #c9408b; --studio: #2f6fe0; --edge: #b4b4c0;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--ink); font: 400 var(--text-sm)/1.4 var(--font-sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+code, .mono { font-family: var(--font-mono); }
+
+.deck { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 10px 16px; background: var(--page); border-bottom: 1px solid var(--line); }
+.deck b { font-weight: 600; margin-right: 8px; }
+.deck button { height: 30px; padding: 0 12px; border-radius: 8px; color: var(--ink-soft); font-size: var(--text-xs); }
+.deck button.on { background: var(--surface-2); color: var(--ink); }
+.deck .sp { flex: 1; }
+.note { max-width: 1040px; margin: 14px auto 0; padding: 0 16px; color: var(--ink-soft); }
+.note b { color: var(--ink); font-weight: 600; }
+.stage { padding: 14px 16px 32px; overflow: hidden; }
+.scaler { width: 1440px; height: 860px; transform-origin: top left; margin: 0 auto; }
+
+.app { position: relative; width: 1440px; height: 860px; display: grid; grid-template-columns: 62px 248px 1fr 268px; grid-template-rows: 54px 1fr; background: var(--bg); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+.title { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 18px 0 90px; }
+.title h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink-soft); }
+.title .sp { flex: 1; }
+.seg { display: flex; align-items: center; height: 32px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink-faint); font-size: var(--text-xs); }
+.seg span { padding: 4px 10px; border-radius: 7px; }
+.seg .on { background: var(--surface-2); color: var(--ink); }
+.rail { display: flex; flex-direction: column; align-items: center; gap: 18px; padding-top: 150px; color: var(--ink-faint); }
+.rail .r { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; }
+.rail .r.on { background: var(--surface-2); color: var(--ink); }
+
+.panel { display: flex; flex-direction: column; min-height: 0; padding: 0 6px 0 2px; }
+.tools { display: flex; align-items: center; gap: 12px; padding: 8px 10px 10px; color: var(--ink-faint); }
+.tools .sp { flex: 1; }
+.tools button { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; }
+.tools button:hover, .tools button.on { background: var(--surface-2); color: var(--ink); }
+.tools .plus { color: var(--accent); }
+.groups { flex: 1; overflow: auto; padding: 0 6px 12px 0; }
+.grp { margin-bottom: 14px; }
+.ghead { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; color: var(--accent); font-size: var(--text-sm); font-weight: 500; }
+.ghead .chev { width: 10px; height: 10px; flex: none; }
+.ghead .meta { margin-left: auto; color: var(--ink-faint); font-size: var(--text-2xs); font-weight: 400; display: inline-flex; align-items: center; gap: 5px; }
+.ghead .add { width: 20px; height: 20px; display: grid; place-items: center; color: var(--ink-faint); border-radius: 5px; }
+.ghead .add:hover { background: var(--surface-2); color: var(--accent); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex: none; }
+.dot.off { background: none; box-shadow: inset 0 0 0 1.5px var(--ink-faint); }
+.dot.wait { background: var(--warning); }
+.none { padding: 4px 8px 4px 22px; color: var(--ink-faint); font-size: var(--text-xs); }
+.card { display: block; width: 100%; margin-top: 5px; padding: 7px 10px 8px; text-align: left; border-radius: 9px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 50%, transparent); }
+.card:hover { background: var(--surface); }
+.card.sel { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+.card.needs { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.card.dim { opacity: .55; }
+.ctitle { display: flex; align-items: center; gap: 7px; font-size: 15px; color: var(--ink-soft); }
+.card.sel .ctitle, .card.needs .ctitle { color: var(--ink); }
+.ctitle > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ico { flex: none; width: 16px; height: 16px; display: grid; place-items: center; }
+.cmodel { margin: 1px 0 0 23px; font-size: var(--text-xs); color: var(--accent-2); }
+.cprov { margin: 1px 0 0 23px; font-size: var(--text-xs); color: var(--ink-faint); display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; }
+.chip { display: inline-flex; align-items: center; gap: 4px; color: var(--c); font-weight: 500; }
+.chip svg { width: 12px; height: 12px; flex: none; }
+.chip.off { color: var(--ink-faint); }
+.chip.big { height: 22px; padding: 0 7px; border-radius: 6px; font-size: var(--text-xs); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.chip.big.off { background: var(--surface-2); }
+
+.wall { display: grid; gap: 10px; padding: 10px; min-height: 0; background: color-mix(in srgb, var(--surface) 42%, transparent); border-radius: 14px; margin-right: 8px; margin-bottom: 8px; }
+.win { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.win.sel { border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); }
+.strip { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-bottom: 1px solid var(--line); font-weight: 500; }
+.strip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strip .sp { flex: 1; }
+.strip .x { color: var(--ink-faint); }
+.body { flex: 1; min-height: 0; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 88%; padding: 8px 11px; border-radius: 12px; background: var(--surface-2); color: var(--ink); }
+.msg.me { align-self: flex-end; background: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); }
+.tool { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-faint); }
+.approve { border: 1px solid color-mix(in srgb, var(--attention) 45%, var(--line)); border-radius: 10px; padding: 10px 12px; background: color-mix(in srgb, var(--attention) 7%, transparent); }
+.approve p { margin: 0 0 6px; }
+.approve code { display: block; padding: 6px 8px; margin-bottom: 8px; border-radius: 6px; background: var(--surface-2); font-size: var(--text-xs); }
+.row { display: flex; gap: 8px; align-items: center; }
+.btn { height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); font-size: var(--text-xs); white-space: nowrap; flex: none; }
+.btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+.btn:disabled { opacity: .5; cursor: default; }
+.composer { margin: 0 12px 12px; padding: 10px 12px; min-height: 58px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink-faint); display: flex; flex-direction: column; gap: 6px; font-size: var(--text-xs); }
+.composer .foot { display: flex; align-items: center; gap: 10px; }
+.composer .foot .sp { flex: 1; }
+.composer .m { color: var(--accent-2); }
+.banner { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: var(--text-xs); }
+
+.dock { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 4px 12px 8px 4px; overflow: auto; }
+.dhead { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: var(--text-sm); }
+.dhead span { color: var(--ink-faint); font-weight: 400; }
+.tabs { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; }
+.tabs button { flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 7px; font-size: var(--text-xs); color: var(--ink-faint); }
+.tabs button.on { background: var(--surface-2); color: var(--ink); }
+.tabs svg { width: 12px; height: 12px; flex: none; }
+.mon { border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--surface) 55%, transparent); padding: 10px 12px; }
+.mon h3 { margin: 0 0 8px; font-size: var(--text-sm); font-weight: 500; color: var(--ink-soft); }
+.bar { margin-bottom: 8px; font-size: var(--text-xs); color: var(--ink-faint); }
+.bar i { display: block; height: 5px; margin-top: 3px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.bar i b { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.bar div { display: flex; justify-content: space-between; }
+.kv { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: var(--text-xs); color: var(--ink-faint); }
+.kv b { color: var(--ink-soft); font-weight: 500; }
+.unread { font-size: var(--text-xs); color: var(--ink-faint); }
+
+.menu { position: absolute; z-index: 20; width: 228px; padding: 6px; background: var(--menu); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 34px rgba(0,0,0,.35); }
+.menu button { display: flex; align-items: center; justify-content: space-between; width: 100%; height: 32px; padding: 0 10px; border-radius: 7px; }
+.menu button:hover, .menu button.open { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.menu small { color: var(--ink-faint); font-size: var(--text-xs); }
+.menu .ck { color: var(--accent); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.menu .new { font-size: var(--text-2xs); padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); margin-left: 6px; }
+
+.newagent { align-self: center; justify-self: center; width: 640px; max-width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.newagent h2 { margin: 0 0 6px; text-align: center; font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.prompt { padding: 12px 14px; min-height: 84px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.detail { display: grid; grid-template-columns: 70px 1fr; align-items: center; row-gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); position: relative; }
+.detail > span { color: var(--ink-faint); font-size: var(--text-xs); }
+.pick { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; background: var(--surface-2); text-align: left; width: 100%; }
+.pick .sp { flex: 1; }
+.pick small { color: var(--ink-faint); font-size: var(--text-xs); }
+.pop { grid-column: 2; display: flex; flex-direction: column; gap: 2px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--menu); }
+.pop button { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; min-height: 40px; padding: 4px 8px; border-radius: 7px; text-align: left; }
+.pop button:hover, .pop button.on { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.pop button:disabled { opacity: .5; cursor: default; }
+.pop small { display: block; color: var(--ink-faint); font-size: var(--text-xs); }
+.pop svg { width: 16px; height: 16px; }
+
+.settings { grid-column: 2 / -1; display: grid; grid-template-columns: 210px 1fr; min-height: 0; }
+.snav { padding: 8px; display: flex; flex-direction: column; gap: 1px; color: var(--ink-soft); }
+.snav span { padding: 6px 10px; border-radius: 7px; }
+.snav .on { background: var(--surface-2); color: var(--ink); }
+.scontent { padding: 8px 32px 24px 24px; overflow: auto; }
+.scontent h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+.scontent h3 { margin: 24px 0 8px; font-size: var(--text-sm); font-weight: 600; color: var(--ink-soft); }
+.scontent p { margin: 0 0 12px; color: var(--ink-soft); max-width: 640px; }
+.crow { display: grid; grid-template-columns: 34px 1fr 150px 130px 74px 20px; gap: 12px; align-items: center; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-bottom: 8px; }
+.crow .g { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); }
+.crow .g svg { width: 19px; height: 19px; }
+.crow .n { font-weight: 500; }
+.crow small { display: block; color: var(--ink-faint); font-size: var(--text-xs); font-weight: 400; }
+.crow .s { font-size: var(--text-xs); color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
+.modal { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0,0,0,.45); }
+.dialog { width: 480px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.dialog h2 { margin: 0 0 6px; font-size: 18px; font-weight: 600; }
+.dialog p { margin: 0 0 12px; color: var(--ink-soft); }
+.dialog input { width: 100%; height: 36px; padding: 0 10px; margin-bottom: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: var(--text-xs) var(--font-mono); }
+.confirm { padding: 12px; border-radius: 10px; background: var(--surface-2); margin-bottom: 12px; }
+.confirm .kv { padding: 3px 0; }
+.end { justify-content: flex-end; }
+</style>
+</head>
+<body>
+<div class="deck" id="deck"></div>
+<p class="note" id="note"></p>
+<div class="stage" id="stage"><div class="scaler" id="scaler"><div class="app" id="app"></div></div></div>
+
+<script>
+const ICON = {
+  laptop: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="10" height="7.5" rx="1.2"/><path d="M1.5 13h13"/></svg>',
+  tower: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="1.5" width="7" height="13" rx="1.2"/><path d="M7 4.5h2M7 7h2"/><circle cx="8" cy="11.2" r=".7" fill="currentColor"/></svg>',
+  studio: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="12" height="6.5" rx="1.6"/><path d="M4.5 9h2"/><path d="M4 13.5h8"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3.5 5 6.5 8 3.5"/></svg>',
+  plus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 2.5v11M2.5 8h11"/></svg>',
+  sliders: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 2v3M4 9v5M8 2v7M8 13v1M12 2v2M12 8v6"/><circle cx="4" cy="7" r="1.6"/><circle cx="8" cy="11" r="1.6"/><circle cx="12" cy="6" r="1.6"/></svg>',
+  search: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>',
+  side: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg>',
+  q: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--attention)" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3"/><circle cx="8" cy="11.3" r=".5" fill="var(--attention)"/></svg>',
+  run: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--success)" stroke-width="1.4" stroke-linejoin="round"><path d="M8 1.8c2 1.6 3 3.6 3 6l-.2 2.2H5.2L5 7.8c0-2.4 1-4.4 3-6Z"/><path d="M5.2 8.5 3.5 11l1.9-.6M10.8 8.5l1.7 2.5-1.9-.6M7 12.5h2"/></svg>',
+  err: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--danger)" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6.2"/><path d="M6 6l4 4M10 6l-4 4"/></svg>',
+  ok: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--ink-faint)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>',
+  x: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="m2.5 2.5 7 7M9.5 2.5l-7 7"/></svg>',
+  right: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 2 6.5 5 3.5 8"/></svg>',
+  check: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>',
+  cat: '<svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 3c3 2 5 2.6 10 2.6S20 5 23 3c.6 7-1.4 14-10 16C4.400 17 2.400 10 3 3Z"/></svg>',
+  dots: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.500" cy="8" r="1.200"/><circle cx="8" cy="8" r="1.200"/><circle cx="12.500" cy="8" r="1.200"/></svg>',
+};
+
+const COMPUTERS = {
+  local: { name: 'This Mac', short: 'Mac', glyph: 'laptop', color: 'var(--ink-soft)', sub: 'M4 Max, 64 GB', route: 'Here', ms: '', gpu: '64 GB unified', free: '41 GB free', agents: 3, ver: '0.14.2',
+    hw: [['CPU', 18], ['Memory', 44], ['GPU', 12], ['GPU memory', 21]], models: [['Gemma 4 31B', 'Loaded, 18 GB']],
+    plans: [['Claude plan', '28% used, resets 4h'], ['ChatGPT', '12% used']],
+    pick: [['Gemma 4 31B', 'Local'], ['Opus 5.5', 'Claude plan'], ['GPT-5.5', 'ChatGPT (subscription)']], folders: ['~/code/nekko-agent', '~/code/obsurdian'] },
+  gomi: { name: 'gomi', short: 'gomi', glyph: 'tower', color: 'var(--gomi)', sub: 'Windows, RTX 5090', route: 'Tailscale', ms: '14 ms', gpu: 'RTX 5090, 32 GB', free: '9 GB free', agents: 3, ver: '0.14.2',
+    hw: [['CPU', 37], ['Memory', 58], ['GPU', 92], ['GPU memory', 72]], models: [['Qwen 3.6 27B', 'Loaded, 22 GB'], ['Whisper large', 'Idle, 2 GB']],
+    plans: [['Claude plan', '61% used, resets 2h'], ['ChatGPT', '40% used']],
+    pick: [['Qwen 3.6 27B', 'Local, loaded'], ['Nemotron 70B', 'Local, 44 GB, will not fit in GPU memory'], ['Opus 5.5', 'Claude plan'], ['GPT-5.5', 'ChatGPT (subscription)']], folders: ['D:\\code\\nekko-agent', 'D:\\lab\\benchmarks'] },
+  studio: { name: 'Mac Studio', short: 'Studio', glyph: 'studio', color: 'var(--studio)', sub: 'M5 Ultra, 512 GB', route: 'This network', ms: '2 ms', gpu: '512 GB unified', free: '388 GB free', agents: 2, ver: '0.14.1',
+    hw: [['CPU', 24], ['Memory', 31], ['GPU', 66], ['GPU memory', 24]], models: [['Llama 4 Behemoth 180B', 'Loaded, 120 GB']],
+    plans: [['Claude plan', '9% used']],
+    pick: [['Llama 4 Behemoth 180B', 'Local, loaded'], ['Opus 5.5', 'Claude plan']], folders: ['~/code/nekko-agent', '~/models/eval'] },
+};
+
+const AGENTS = [
+  { id: 'a', title: 'Diagnose failed build', on: 'gomi', st: 'needs', model: 'Opus 5.5', prov: 'Claude plan', proj: 'nekko-agent' },
+  { id: 'b', title: 'Fix login bug', on: 'local', st: 'needs', model: 'GPT-5.5', prov: 'ChatGPT (subscription)', proj: 'nekko-agent' },
+  { id: 'c', title: 'Benchmark quantizations', on: 'gomi', st: 'run', model: 'Qwen 3.6 27B', prov: 'Local', proj: 'benchmarks' },
+  { id: 'd', title: 'Audit sandbox policy', on: 'local', st: 'run', model: 'Gemma 4 31B', prov: 'Local', proj: 'nekko-agent' },
+  { id: 'e', title: 'Refactor relay client', on: 'studio', st: 'run', model: 'Llama 4 Behemoth', prov: 'Local', proj: 'nekko-agent' },
+  { id: 'f', title: 'Summarize CI flakes', on: 'studio', st: 'err', model: 'Opus 5.5', prov: 'Claude plan', proj: 'nekko-agent' },
+  { id: 'g', title: 'Persist quota history', on: 'local', st: 'done', model: 'Opus 5.5', prov: 'Claude plan', proj: 'nekko-agent' },
+  { id: 'h', title: 'Rebuild model catalog', on: 'gomi', st: 'done', model: 'GPT-5.5', prov: 'ChatGPT (subscription)', proj: 'nekko-agent' },
+];
+const STATUS = { needs: 'Needs input', run: 'Working', err: 'Error', done: 'Done' };
+const SICON = { needs: ICON.q, run: ICON.run, err: ICON.err, done: ICON.ok };
+
+const SCENES = [
+  ['activity', '1 Agents, by activity', '<b>The default.</b> Everything from every computer, in one list, needs-input first. Remote cards name their computer on the provider line, so cards keep their height. Local cards stay as they are today. Click cards to open them. Try the sliders button.'],
+  ['computer', '2 Group by computer', '<b>Optional grouping,</b> in the existing view menu. One header per computer, with its state and route, and a <b>+</b> to start an agent there. The Group by menu is open: pick another to compare.'],
+  ['new', '3 New agent, run on', '<b>Where it runs is the first choice,</b> as on the iPhone. Pick a computer: the models, subscriptions and folders below change to that computer\'s. GPU memory is live, so you can see what fits.'],
+  ['remote', '4 A remote window', '<b>The computer is named on the window, the approval and the button.</b> The Monitors dock switches computer; Hardware, Local models and Utilization all follow.'],
+  ['offline', '5 Computer offline', '<b>gomi went to sleep.</b> Its cards stay, dimmed, with its last turns readable. The composer says why it is off. It reconnects by itself and catches up on any running turn.'],
+  ['settings', '6 Settings, Computers', '<b>The list of what is connected,</b> how, and how healthy. This Mac stays out of the list; the section below it makes the link for the other direction.'],
+  ['add', '7 Add a computer', '<b>Paste a link from the other computer.</b> Click through it. Phase 5 replaces the paste with a list of what is on your network and a code to compare.'],
+];
+
+const S = { scene: 'activity', groupBy: 'status', showComputer: true, menu: null, sub: null, sel: 'a', dock: 'gomi', offline: false, runOn: 'gomi', picker: true, addStep: 0 };
+const on = (id) => COMPUTERS[id];
+const isOff = (id) => S.offline && id === 'gomi';
+
+function chip(id, big) {
+  const c = on(id), off = isOff(id);
+  return `<span class="chip${big ? ' big' : ''}${off ? ' off' : ''}" style="--c:${c.color}">${ICON[c.glyph]}${c.name}</span>`;
+}
+function card(a) {
+  const remote = a.on !== 'local';
+  const cls = ['card', S.sel === a.id ? 'sel' : '', a.st === 'needs' ? 'needs' : '', isOff(a.on) ? 'dim' : ''].join(' ');
+  const prov = remote && S.showComputer ? `${chip(a.on)}<span>· ${a.prov}</span>` : a.prov;
+  return `<button class="${cls}" data-sel="${a.id}"><div class="ctitle"><span class="ico">${SICON[a.st]}</span><span>${a.title}</span></div><div class="cmodel">${a.model}</div><div class="cprov">${prov}</div></button>`;
+}
+function groups() {
+  const live = AGENTS.filter((a) => a.st !== 'done');
+  const done = AGENTS.filter((a) => a.st === 'done');
+  const section = (title, list, meta = '', add = '') => `<div class="grp"><div class="ghead">${ICON.chev}<span>${title}</span>${meta ? `<span class="meta">${meta}</span>` : ''}${add}</div>${list.length ? list.map(card).join('') : '<div class="none">No active agents</div>'}</div>`;
+  if (S.groupBy === 'status') return ['needs', 'run', 'err', 'done'].map((k) => section(STATUS[k], AGENTS.filter((a) => a.st === k))).join('');
+  if (S.groupBy === 'computer') {
+    const rows = Object.keys(COMPUTERS).map((id) => {
+      const c = on(id), off = isOff(id);
+      const meta = id === 'local' ? '' : off ? `<i class="dot off"></i>offline 12m` : `<i class="dot"></i>${c.route}`;
+      const add = off ? '' : `<button class="add" title="New agent on ${c.name}" data-go="new" data-on="${id}">${ICON.plus}</button>`;
+      return section(c.name, live.filter((a) => a.on === id), meta, add);
+    });
+    return rows.join('') + section('Completed', done);
+  }
+  if (S.groupBy === 'project') {
+    const p = [...new Set(AGENTS.map((a) => `${a.on}/${a.proj}`))];
+    return p.map((k) => { const [id, n] = k.split('/'); return section(n, AGENTS.filter((a) => a.on === id && a.proj === n), id === 'local' ? '' : chip(id)); }).join('');
+  }
+  if (S.groupBy === 'date') return section('Today', live) + section('Yesterday', done);
+  return section('All agents', AGENTS);
+}
+function panel() {
+  return `<div class="panel"><div class="tools"><button title="Collapse">${ICON.side}</button><span class="sp"></span><button class="${S.menu ? 'on' : ''}" data-menu title="View options: group, sort and show">${ICON.sliders}</button><button title="Search">${ICON.search}</button><button class="plus" title="New agent" data-go="new">${ICON.plus}</button></div><div class="groups">${groups()}</div></div>`;
+}
+function viewMenu() {
+  if (!S.menu) return '';
+  const labels = { status: 'Activity', project: 'Project', date: 'Date', computer: 'Computer', none: 'None' };
+  const top = `<div class="menu" style="left:250px;top:92px"><button class="${S.sub === 'group' ? 'open' : ''}" data-sub="group"><span>Group by</span><small>${labels[S.groupBy]} ${ICON.right}</small></button><button><span>Sort by</span><small>Manual ${ICON.right}</small></button><button class="${S.sub === 'show' ? 'open' : ''}" data-sub="show"><span>Show</span><small>${ICON.right}</small></button><hr><button disabled style="color:var(--ink-faint)">Reset to defaults</button></div>`;
+  const opt = (k, l, tag) => `<button data-group="${k}"><span>${l}${tag ? '<span class="new">New</span>' : ''}</span>${S.groupBy === k ? `<span class="ck">${ICON.check}</span>` : ''}</button>`;
+  const sub = S.sub === 'group' ? `<div class="menu" style="left:484px;top:92px">${opt('status', 'Activity')}${opt('project', 'Project')}${opt('computer', 'Computer', true)}${opt('date', 'Date')}${opt('none', 'None')}</div>`
+    : S.sub === 'show' ? `<div class="menu" style="left:484px;top:150px"><button><span>Metadata</span><span class="ck">${ICON.check}</span></button><button><span>Model provider</span><span class="ck">${ICON.check}</span></button><button data-toggle-chip><span>Computer<span class="new">New</span></span>${S.showComputer ? `<span class="ck">${ICON.check}</span>` : ''}</button><hr><button><span>Automations</span><span class="ck">${ICON.check}</span></button><button><span>Empty groups</span><span class="ck">${ICON.check}</span></button></div>` : '';
+  return top + sub;
+}
+function transcript(a) {
+  const c = on(a.on);
+  if (a.id === 'a') return `<div class="msg me">The nightly build is red on main. Find out why.</div><div class="tool">read_file  logs/nightly.txt</div><div class="tool">run  cargo check -p nekko-remote</div><div class="msg">The failure is a stale lockfile after the tungstenite bump. I can confirm it by running the tests for that crate.</div>${isOff(a.on) ? '' : `<div class="approve"><p>${chip(a.on)} <b>wants to run a command</b></p><code>cargo test -p nekko-remote --release</code><div class="row"><button class="btn pri">Allow on ${c.name}</button><button class="btn">Deny</button><span class="unread">Checked against ${c.name}'s guardrails</span></div></div>`}`;
+  if (a.st === 'run') return `<div class="msg me">${a.title}.</div><div class="tool">run  scripts/run-suite.sh</div><div class="msg">Working through the second of four passes.</div>`;
+  if (a.st === 'err') return `<div class="msg me">${a.title}.</div><div class="msg">Stopped: the provider returned an error.</div>`;
+  if (a.st === 'needs') return `<div class="msg me">${a.title}.</div><div class="msg">Should the session token rotate on every refresh, or only at sign-in?</div>`;
+  return `<div class="msg me">${a.title}.</div><div class="msg">Done. Checks pass.</div>`;
+}
+function win(a, selected) {
+  const off = isOff(a.on);
+  const banner = off ? `<div class="banner"><i class="dot off"></i><span><b style="color:var(--ink)">gomi went offline 12 minutes ago.</b> Showing its last turns. Reconnecting by itself.</span></div>` : '';
+  const comp = off ? `<div class="composer"><span>gomi is offline</span><div class="foot"><span class="sp"></span><span class="m">${a.model}</span></div></div>`
+    : `<div class="composer"><span>Message ${a.on === 'local' ? 'the agent' : 'the agent on ' + on(a.on).name}</span><div class="foot"><span>+</span><span class="sp"></span><span class="m">${a.model}</span><span>${a.prov}</span></div></div>`;
+  return `<section class="win ${selected ? 'sel' : ''}"><div class="strip"><span class="ico">${SICON[a.st]}</span><span class="t">${a.title}</span>${a.on === 'local' ? '' : chip(a.on, true)}<span class="sp"></span><span class="x">${ICON.dots}</span><span class="x">${ICON.x}</span></div>${banner}<div class="body">${transcript(a)}</div>${comp}</section>`;
+}
+function wall() {
+  const sel = AGENTS.find((a) => a.id === S.sel) || AGENTS[0];
+  if (S.scene === 'new') return `<main class="wall" style="grid-template-rows:1fr">${newAgent()}</main>`;
+  if (S.scene === 'remote') return `<main class="wall" style="grid-template-rows:1fr">${win(sel, true)}</main>`;
+  const other = AGENTS.find((a) => a.id === (sel.id === 'c' ? 'd' : 'c'));
+  return `<main class="wall" style="grid-template-columns:1fr 1fr">${win(sel, true)}${win(other, false)}</main>`;
+}
+function newAgent() {
+  const c = on(S.runOn);
+  const list = Object.keys(COMPUTERS).map((id) => {
+    const x = on(id), off = isOff(id);
+    return `<button class="${S.runOn === id ? 'on' : ''}" data-run="${id}" ${off ? 'disabled' : ''}><span style="color:${x.color}">${ICON[x.glyph]}</span><span>${x.name}<small>${x.sub}</small></span><small>${off ? 'Offline' : x.free}</small></button>`;
+  }).join('');
+  return `<div class="newagent"><h2>What should the agent do?</h2><div class="prompt"><span style="color:var(--ink-faint)">Describe the task</span></div><div class="detail"><span>Run on</span><button class="pick" data-picker><span style="color:${c.color};display:grid">${ICON[c.glyph].replace('<svg', '<svg width="15" height="15"')}</span><span>${c.name}</span><small>${c.sub}</small><span class="sp"></span><small>${c.free}</small></button>${S.picker ? `<div class="pop">${list}</div>` : ''}<span>Model</span><button class="pick"><span>${c.pick[0][0]}</span><small>${c.pick[0][1]}</small><span class="sp"></span>${ICON.chev.replace('class="chev"', 'width="10" height="10"')}</button><span>Also here</span><div class="unread">${c.pick.slice(1).map((m) => `${m[0]} (${m[1]})`).join(', ')}</div><span>Folder</span><button class="pick"><span class="mono" style="font-size:12px">${c.folders[0]}</span><span class="sp"></span>${ICON.chev.replace('class="chev"', 'width="10" height="10"')}</button></div><div class="row end"><button class="btn pri">Start on ${c.name}</button></div></div>`;
+}
+function dock() {
+  const c = on(S.dock), off = isOff(S.dock);
+  const tabs = Object.keys(COMPUTERS).map((id) => `<button class="${S.dock === id ? 'on' : ''}" data-dock="${id}"><span style="color:${on(id).color};display:grid">${ICON[on(id).glyph]}</span>${on(id).short}</button>`).join('');
+  const body = off ? `<div class="mon"><h3>Hardware</h3><div class="unread">gomi is offline. Last reading 12 minutes ago.</div></div>`
+    : `<div class="mon"><h3>Hardware</h3>${c.hw.map(([k, v]) => `<div class="bar"><div><span>${k}</span><span>${v}%</span></div><i><b style="width:${v}%"></b></i></div>`).join('')}</div>
+       <div class="mon"><h3>Local models</h3>${c.models.map(([k, v]) => `<div class="kv"><b>${k}</b><span>${v}</span></div>`).join('')}</div>
+       <div class="mon"><h3>Utilization</h3>${c.plans.map(([k, v]) => `<div class="kv"><b>${k}</b><span>${v}</span></div>`).join('')}</div>`;
+  return `<aside class="dock"><div class="dhead">Monitors <span>5 of 6</span></div><div class="tabs">${tabs}</div>${body}</aside>`;
+}
+function settings() {
+  const row = (id) => {
+    const c = on(id), off = isOff(id);
+    return `<div class="crow" style="--c:${c.color}"><span class="g">${ICON[c.glyph]}</span><div class="n">${c.name}<small>${c.sub}</small></div><div class="s"><i class="dot ${off ? 'off' : ''}"></i>${off ? 'Offline 12m' : `${c.route}, ${c.ms}`}</div><div class="s">${c.gpu}</div><div class="s">${c.agents} agents</div><button class="x" title="Rename, change color, forget">${ICON.dots}</button></div>`;
+  };
+  const nav = ['General', 'Appearance', 'Phone pairing', 'Computers', 'Agents', 'Security', 'Connections', 'About'];
+  return `<div class="settings"><nav class="snav">${nav.map((n) => `<span class="${n === 'Computers' ? 'on' : ''}">${n}</span>`).join('')}</nav><div class="scontent"><div class="row" style="justify-content:space-between;max-width:900px"><div><h2>Computers</h2></div><button class="btn pri" data-add>Add a computer</button></div><p>Agents on these computers show up here beside your own. They run there, with that computer's models, subscriptions and files. Nothing else about this Mac is shared with them.</p><div style="max-width:900px">${row('gomi')}${row('studio')}</div><h3>Let a computer connect to this one</h3><p>Make a link here, then paste it into Add a computer on the other computer. Pairing works one way: gomi can't reach this Mac unless you pair in that direction too.</p><button class="btn">Make a link</button></div></div>`;
+}
+function addModal() {
+  if (S.scene !== 'add') return '';
+  const steps = [
+    `<h2>Add a computer</h2><p>On the other computer, open Settings, Computers, then Make a link, and copy it. Paste it here. The link works once, for 10 minutes.</p><input aria-label="Pairing link" value="nekko-agent-pair:relay=ws%3A%2F%2Fstudio.tailfd6474.ts.net..."><div class="row end"><button class="btn" data-go="settings">Cancel</button><button class="btn pri" data-step="1">Continue</button></div>`,
+    `<h2>Connect to Mac Studio?</h2><p>This Mac will see every agent on it, and can start and steer them. You can change or remove this on either computer.</p><div class="confirm"><div class="kv"><span>Name</span><b>Mac Studio</b></div><div class="kv"><span>Reached through</span><b>This network, then Tailscale</b></div><div class="kv"><span>Encrypted</span><b>End to end</b></div></div><div class="row end"><button class="btn" data-step="0">Back</button><button class="btn pri" data-step="2">Connect</button></div>`,
+    `<h2>Mac Studio is connected</h2><p>Its 2 agents are in your Agents panel now. It shows up as a paired device on Mac Studio, where you can limit or remove it.</p><div class="confirm"><div class="kv"><span>Reached through</span><b>This network, 2 ms</b></div><div class="kv"><span>Models</span><b>Llama 4 Behemoth 180B, Opus 5.5</b></div></div><div class="row end"><button class="btn pri" data-go="computer">Done</button></div>`,
+  ];
+  return `<div class="modal"><div class="dialog">${steps[S.addStep]}</div></div>`;
+}
+function render() {
+  const isSettings = S.scene === 'settings' || S.scene === 'add';
+  document.getElementById('deck').innerHTML = `<b>Connected computers</b>${SCENES.map(([k, l]) => `<button class="${S.scene === k ? 'on' : ''}" data-go="${k}">${l}</button>`).join('')}<span class="sp"></span><button data-theme-toggle>Light or dark</button>`;
+  document.getElementById('note').innerHTML = SCENES.find(([k]) => k === S.scene)[2];
+  const rail = `<nav class="rail">${['cat', 'side', 'sliders', 'search'].map((k, i) => `<span class="r ${i === 0 && !isSettings ? 'on' : ''}">${ICON[k]}</span>`).join('')}</nav>`;
+  const head = `<header class="title"><span style="color:var(--ink-soft)">${ICON.cat}</span><h1>${isSettings ? 'Settings' : 'Agents'}</h1><span class="sp"></span><span style="color:var(--accent)">${ICON.plus}</span><div class="seg"><span class="on">Focused</span><span>Dynamic</span></div><div class="seg"><span>1/2</span></div></header>`;
+  document.getElementById('app').innerHTML = head + rail + (isSettings ? settings() + addModal() : panel() + wall() + dock() + viewMenu());
+  fit();
+}
+function fit() {
+  const s = Math.min(1, (window.innerWidth - 32) / 1440);
+  const el = document.getElementById('scaler');
+  el.style.transform = `scale(${s})`;
+  document.getElementById('stage').style.height = `${860 * s + 46}px`;
+}
+const SCENE_SETUP = {
+  activity: { groupBy: 'status', menu: null, sub: null, sel: 'a', offline: false, dock: 'gomi' },
+  computer: { groupBy: 'computer', menu: true, sub: 'group', sel: 'a', offline: false, dock: 'gomi' },
+  new: { groupBy: 'status', menu: null, sub: null, runOn: 'gomi', picker: true, offline: false, dock: 'gomi' },
+  remote: { groupBy: 'status', menu: null, sub: null, sel: 'a', offline: false, dock: 'gomi' },
+  offline: { groupBy: 'computer', menu: null, sub: null, sel: 'a', offline: true, dock: 'gomi' },
+  settings: { offline: false, menu: null, sub: null },
+  add: { offline: false, addStep: 0, menu: null, sub: null },
+};
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button');
+  if (!t) { if (S.menu && !e.target.closest('.menu')) { S.menu = null; S.sub = null; render(); } return; }
+  const d = t.dataset;
+  if (d.themeToggle !== undefined) { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; return; }
+  if (d.go) { S.scene = d.go; Object.assign(S, SCENE_SETUP[d.go]); if (d.on) { S.runOn = d.on; S.picker = false; } if (d.go === 'computer' && d.on === undefined && document.querySelector('.modal')) { S.menu = null; S.sub = null; } }
+  else if (d.sel) { S.sel = d.sel; const a = AGENTS.find((x) => x.id === d.sel); S.menu = null; S.sub = null; if (a.on !== 'local') S.dock = a.on; if (S.scene === 'new') S.scene = 'activity'; }
+  else if (d.menu !== undefined) { S.menu = !S.menu; S.sub = null; }
+  else if (d.sub) S.sub = d.sub;
+  else if (d.group) { S.groupBy = d.group; }
+  else if (d.toggleChip !== undefined) S.showComputer = !S.showComputer;
+  else if (d.dock) S.dock = d.dock;
+  else if (d.run) { S.runOn = d.run; }
+  else if (d.picker !== undefined) S.picker = !S.picker;
+  else if (d.add !== undefined) { S.scene = 'add'; S.addStep = 0; }
+  else if (d.step) S.addStep = Number(d.step);
+  else return;
+  render();
+});
+window.addEventListener('resize', fit);
+render();
+</script>
+</body>
+</html>

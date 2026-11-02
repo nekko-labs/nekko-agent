@@ -9,22 +9,10 @@
   z-index: -1;
   contain: paint;
 }
-.pixel-wave-texture {
-  position: absolute;
-  left: calc(50% - 360px);
-  top: calc(50% - 180px);
-  max-width: none;
-  image-rendering: pixelated;
-  animation: empty-agent-wave 22.5s steps(36, end) infinite alternate paused;
-}
-@keyframes empty-agent-wave {
-  from { transform: translateX(-18px); }
-  to { transform: translateX(18px); }
-}
-.pixel-wave-background[data-wave-paused] .pixel-wave-texture { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) {
-  .pixel-wave-texture { animation: none; }
-}
+/* Drawn at device pixels by PixelWaveBackground; its timer, not CSS, moves it. */
+.pixel-wave-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Rail view switch cover (ViewReveal): above the view, never in the way of input. */
+.view-reveal { position: absolute; inset: 0; z-index: 30; width: 100%; height: 100%; pointer-events: none; visibility: hidden; }
 
 /* Context menus remain neutral even when a preset gives the page a vivid tint. */
 .context-menu, .create-menu { background: #ffffff; color: #17191f; }

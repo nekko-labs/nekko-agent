@@ -24,37 +24,37 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture && !!document.querySelector("[data-chat-surface]")'); i++) await sleep(100);
     await sleep(1500);
     await shot('default-empty');
-    await run(`(() => { const f = layoutFixture, s = f.store.getState(); f.store.setState({ settings: {...s.settings, themePreset: 'lilac', theme: 'light', backgroundAnimation: true, mascotEnabled: true} }); })()`);
+    await run(`(() => { const f = layoutFixture, s = f.store.getState(); f.store.setState({ settings: {...s.settings, themePreset: 'lilac', theme: 'light', backgroundAnimation: true, mascotEnabled: true} }); f.store.getState().applyTheme(); })()`);
     if (!await run(`!!document.querySelector('[data-chat-surface]')`)) throw Error('App fixture did not render agent panels');
     await sleep(1000);
     await shot('empty-agent');
     report.checks.initial = await run(`({waves:document.querySelectorAll('.pixel-wave-background').length, panes:[...document.querySelectorAll('[data-chat-surface]')].map(e=>({id:e.dataset.sessionId,surface:e.dataset.chatSurface,empty:e.hasAttribute('data-clean-start')})),hidden:document.hidden,focused:document.hasFocus()})`);
     await measure('unfocused-empty');
-    assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).every(e => getComputedStyle(e).animationPlayState === 'paused')`), 'unfocused-paused');
-    if (expectNew) assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).every(e => !Number(e.getAnimations()[0]?.currentTime))`), 'unfocused-clock-stopped');
+    if (expectNew) assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-canvas')).every(e => e.dataset.step === '0')`), 'unfocused-clock-stopped');
     await run(`Object.defineProperty(document, 'hasFocus', {configurable:true,value:()=>true}); window.dispatchEvent(new Event('focus')); document.documentElement.removeAttribute('data-app-inactive')`); // Synthetic active-state CSS, never focus the real desktop.
     fs.mkdirSync(path.join(out, 'motion'), { recursive: true });
     for (let i = 0; i < 12; i++) { fs.writeFileSync(path.join(out, 'motion', String(i).padStart(3, '0') + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); await sleep(180); }
-    if (expectNew) assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).some(e => Number(e.getAnimations()[0]?.currentTime) > 0)`), 'focused-wave-advances');
-    assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).every(e => e.getBoundingClientRect().width === 720 && e.getBoundingClientRect().height === 360)`), 'bounded-textures');
+    if (expectNew) assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-canvas')).some(e => Number(e.dataset.step) > 0)`), 'focused-wave-advances');
+    assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-canvas')).every(e => { const p = e.parentElement.getBoundingClientRect(), r = e.getBoundingClientRect(); return r.width === p.width && r.height === p.height; })`), 'canvas-fills-pane');
     await measure('synthetic-focused-empty');
     if (expectNew) {
       await run(`Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>false});window.dispatchEvent(new Event('blur'))`);
-      const blurTime = await run(`Number(document.querySelector('.pixel-wave-texture').getAnimations()[0]?.currentTime)`);
+      const blurTime = await run(`Number(document.querySelector('.pixel-wave-canvas')?.dataset.step)`);
       await sleep(900);
-      assert(await run(`Number(document.querySelector('.pixel-wave-texture').getAnimations()[0]?.currentTime) === ${blurTime}`), 'blur-freezes-clock');
+      assert(await run(`Number(document.querySelector('.pixel-wave-canvas')?.dataset.step) === ${blurTime}`), 'blur-freezes-clock');
       await run(`Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>true});window.dispatchEvent(new Event('focus'))`);
       await run(`document.querySelector('.pixel-wave-background').style.transform='translateX(-20000px)'`); await sleep(150);
       assert(await run(`document.querySelector('.pixel-wave-background').hasAttribute('data-wave-paused')`), 'offscreen-panel-paused');
-      const pausedTime = await run(`Number(document.querySelector('.pixel-wave-texture').getAnimations()[0]?.currentTime)`);
+      const pausedTime = await run(`Number(document.querySelector('.pixel-wave-canvas')?.dataset.step)`);
       await sleep(900);
-      assert(await run(`Number(document.querySelector('.pixel-wave-texture').getAnimations()[0]?.currentTime) === ${pausedTime}`), 'offscreen-clock-stopped');
+      assert(await run(`Number(document.querySelector('.pixel-wave-canvas')?.dataset.step) === ${pausedTime}`), 'offscreen-clock-stopped');
       await run(`document.querySelector('.pixel-wave-background').style.transform=''`); await sleep(150);
     }
     assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-background')).every(e => !!e.closest('[data-chat-surface]'))`), 'waves-only-in-agent-panels');
     await win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'reduce'}]});
-    assert(await run(`Array.from(document.querySelectorAll('.pixel-wave-texture')).every(e => getComputedStyle(e).animationName === 'none')`), 'reduced-motion-still');
+    report.checks['reduced-motion-matches'] = await run(`matchMedia('(prefers-reduced-motion: reduce)').matches`);
+    assert(await run(`(async () => { const a = Number(document.querySelector('.pixel-wave-canvas')?.dataset.step); await new Promise(r => setTimeout(r, 900)); return Number(document.querySelector('.pixel-wave-canvas')?.dataset.step) === a; })()`), 'reduced-motion-still');
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', {features:[]});
     await run(`(() => {const f=layoutFixture; f.store.setState({settings:{...f.store.getState().settings,backgroundAnimation:false}})})()`);
     await sleep(150);
