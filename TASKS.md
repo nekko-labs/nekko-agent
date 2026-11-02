@@ -6,6 +6,20 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Connected computers (#1492, added 2026-11-02)
+
+A desktop connects to other computers the way a phone does, and shows every agent they run in one place. Where the agent runs and where the model runs are separate choices. [Design](docs/superpowers/specs/2026-11-02-connected-computers-design.md), [plan](docs/superpowers/plans/2026-11-02-connected-computers.md). Prefix **CC**.
+
+- [ ] **CC0, Messages during a run.** Queued, Next step and Interrupt on all clients; the word steer leaves the app and docs.
+- [ ] **CC1, Link and host class.** Rust relay client, `computers.rs`, the computer access class, Settings > Computers.
+- [ ] **CC2, Federation.** Qualified ids, routing, rewriting, merged summaries, offline cache.
+- [ ] **CC3, See and drive.** Per-computer catalogs, chips, Group by Computer, offline states, icons.
+- [ ] **CC4, Start and monitor.** *Run on*, Monitors switcher, Keep this computer awake.
+- [ ] **CC5, Model sources.** The model tunnel, generated provider rows, two Model Server settings.
+- [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys, the phone sheet.
+- [ ] **CC7, A host with no window.** `nekko computer serve`, `link`, `revoke`.
+- [ ] **CC8, Pair without pasting.** Discovery, relay lobby, comparison code.
+
 ## Model scheduler (#1462, added 2026-11-01)
 
 Fast switching between local models through residency tiers (Hot, Warm in RAM, Staged on a fast SSD, Cold), and preloading from what is coming next (scheduled tasks, workflow steps, active agents). Design and acceptance criteria in [#1462](https://github.com/nekko-labs/nekko-agent/issues/1462); Phase 0 results in [the report](reports/model-switching-phase0-2026-11-01.md). Prefix **MS**.
