@@ -22,7 +22,7 @@ describe('socket proxy checks', () => {
 
   it('knows the daemon socket routes', () => {
     expect(isSocketRoute('/api/events')).toBe(true);
-    expect(isSocketRoute('/api/ws')).toBe(true);
+    expect(isSocketRoute('/api/ws')).toBe(false);
     expect(isSocketRoute('/api/term/term_1')).toBe(true);
     expect(isSocketRoute('/api/term/a/b')).toBe(false);
     expect(isSocketRoute('/api/settings:get')).toBe(false);

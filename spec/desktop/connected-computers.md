@@ -24,9 +24,11 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 
 ## What a computer may do
 
-`COMPUTER_ACCESS` adds to what a phone may do: reading tool output whole, older messages (`session:page`), a running turn so far (`agent:replay`), compacting, truncating, taking back a queued message, and accepting changes. A chat too large for one relay frame has its tool text cut. The host's Read and Change switches, activity list and revocation work as for a phone, and a mode raise still needs a signed proof.
+`COMPUTER_ACCESS` adds to what a phone may do: reading tool output whole, older messages (`session:page`), a running turn so far (`agent:replay`), compacting, truncating, taking back a queued message, and accepting changes. A chat too large for one relay frame has its tool text cut. The host's Read and Change switches, activity list and revocation work as for a phone, and a mode raise still needs a signed proof, plus step-up where it is on.
 
-Refused from a computer, always: provider keys and sign-ins, sync, remote-access settings, wiping data, and reading a path outside a chat's folder.
+Refused from a computer, always: provider keys and sign-ins, sync, remote-access settings, wiping data, terminals, SSH, adding a folder by path, and attaching any file it did not import into that chat.
+
+**Connecting is equivalent to being at the machine.** Those refusals cover what a computer can call directly. It can still run a chat in YOLO mode, and that agent can do anything the logged-in account can. The UI and `docs/REMOTE.md` say so.
 
 ## Status
 

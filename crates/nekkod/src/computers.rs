@@ -143,8 +143,9 @@ fn pair_refusal(state: &State, host: &str) -> String {
 impl Computers {
     pub fn new(dir: PathBuf, hub: Hub) -> Arc<Self> {
         let file = dir.join("computers-secrets.json");
-        // A machine with nobody logged in has no OS key store to open.
-        let vault: Box<dyn Vault> = if std::env::var_os("NEKKO_FILE_VAULT").is_some() {
+        let vault: Box<dyn Vault> = if cfg!(debug_assertions) && std::env::var("NEKKO_FILE_VAULT").as_deref() == Ok("1")
+        {
+            // Tests: a test run writes nothing to the login keychain.
             Box::new(FileVault::new(file))
         } else {
             scoped_vault(&dir, "computers", file)
@@ -248,7 +249,13 @@ impl Computers {
             .filter(|u| nekko_remote::route::relay_url_problem(u).is_none())
             .map(str::to_string)
             .collect();
-        if lock(&self.list).iter().any(|p| p.relay_url == relay_url) {
+        // The room, not the address: several computers can share one relay.
+        let held = lock(&self.list).clone();
+        let same_room = |p: &Paired| {
+            let s = self.vault.get(&p.id).and_then(|t| serde_json::from_str::<Secrets>(&t).ok());
+            s.is_some_and(|s| s.room == room)
+        };
+        if held.iter().any(same_room) {
             return Err("This computer is already connected.".into());
         }
         let host = nekko_remote::route::relay_host(&relay_url);
@@ -283,7 +290,8 @@ impl Computers {
         client.stop();
 
         let id = random_hex(4)?;
-        let name = info.get("hostname").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(&host).to_string();
+        let name = info.get("hostname").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(&host);
+        let name: String = name.chars().take(60).collect();
         let platform = info.get("platform").and_then(Value::as_str).map(str::to_string);
         let at = nekko_remote::system_clock()();
         let secrets = Secrets { room, secret, device_id, device_key: key_text };

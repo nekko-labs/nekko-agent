@@ -60,6 +60,7 @@ pub struct Policy {
     pub views: crate::phone_views::Views,
     pub queue_edit_keys: Vec<String>,
     pub brain_keys: Vec<String>,
+    pub computer_refused: Vec<String>,
     pub computer_read: Vec<String>,
     pub computer_agent: Vec<String>,
     pub computer_send_keys: Vec<String>,
@@ -134,6 +135,7 @@ pub fn policy() -> &'static Policy {
             views: crate::phone_views::Views::from_policy(&v),
             queue_edit_keys: strings(&v["queueEditKeys"]),
             brain_keys: strings(&v["brainKeys"]),
+            computer_refused: strings(&v["computerAccess"]["refused"]),
             computer_read: strings(&v["computerAccess"]["read"]),
             computer_agent: strings(&v["computerAccess"]["agent"]),
             computer_send_keys: strings(&v["computerAccess"]["sendKeys"]),
@@ -887,6 +889,10 @@ pub trait Devices: Send + Sync {
     fn name(&self, _id: &str) -> Option<String> {
         None
     }
+    /// Where `attachment:import` keeps a chat's files; `None` when unknown.
+    fn attachments_of(&self, _chat: &str) -> Option<std::path::PathBuf> {
+        None
+    }
     /// `device:signOut` (SK-3): revoke the device and kick it. A registry
     /// that can't is refused, so nothing claims a sign-out it did not do.
     fn sign_out(&self, _id: &str) -> Result<(), String> {
@@ -1056,6 +1062,9 @@ impl Gate {
         if channel == "device:access" {
             return Some(Ok(json!({ "read": device.access.read, "change": device.access.change })));
         }
+        if has(&p.computer_refused, channel) {
+            return Some(Err(denied("channel-denied", channel).to_string()));
+        }
         if channel == "session:get" {
             if !device.access.read {
                 return Some(Err(denied("read-off", channel).to_string()));
@@ -1079,15 +1088,37 @@ impl Gate {
             self.record(who, channel, Err("change-off".to_string()));
             return Some(Err(denied("change-off", channel).to_string()));
         }
-        if send
-            && let Err(d) = keys_within(args.get(0).unwrap_or(&Value::Null), &p.computer_send_keys, "chat:send options")
-        {
+        let checked = if send {
+            keys_within(args.get(0).unwrap_or(&Value::Null), &p.computer_send_keys, "chat:send options")
+        } else if channel == "session:setAttachments" {
+            self.attachments_inside(args)
+        } else {
+            Ok(())
+        };
+        if let Err(d) = checked {
             self.record(who, channel, Err(d.code.to_string()));
             return Some(Err(d.to_string()));
         }
         let result = (self.run)(channel.to_string(), args.clone()).await;
         self.record(who, channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
         Some(result)
+    }
+
+    /// A turn reads every attached path as given, with no tool call and no
+    /// approval. So a computer may attach only what it imported into this chat
+    /// (`attachment:import`), never a path on this machine.
+    fn attachments_inside(&self, args: &Value) -> Result<(), Denied> {
+        let chat = args.get(0).and_then(Value::as_str).unwrap_or_default();
+        let paths = args.get(1).and_then(Value::as_array).ok_or_else(|| denied("value-invalid", "attachments"))?;
+        let root = self.devices.attachments_of(chat).and_then(|r| std::fs::canonicalize(r).ok());
+        let inside = |path: &Value| {
+            let real = path.as_str().and_then(|p| std::fs::canonicalize(p).ok());
+            matches!((&real, &root), (Some(p), Some(r)) if p.starts_with(r))
+        };
+        match paths.iter().find(|p| !inside(p)) {
+            Some(_) => Err(denied("path-denied", "session:setAttachments")),
+            None => Ok(()),
+        }
     }
 
     /// An agent-class call: a known device with Change on, a call the
@@ -1525,9 +1556,13 @@ mod tests {
         now: Mutex<f64>,
         /// Safety exits taken: `(channel, device)`.
         exits: Mutex<Vec<(String, String)>>,
+        attachments: Mutex<Option<std::path::PathBuf>>,
     }
 
     impl Devices for MemDevices {
+        fn attachments_of(&self, _chat: &str) -> Option<std::path::PathBuf> {
+            self.attachments.lock().unwrap().clone()
+        }
         fn device(&self, id: &str) -> Option<PhoneDevice> {
             self.devices.lock().unwrap().get(id).cloned()
         }
@@ -2058,10 +2093,43 @@ mod tests {
                 "file:read",
                 "file:write",
                 "dir:list",
+                // On a phone these sit behind Face ID; a computer signs with no presence check.
+                "terminal:create",
+                "terminal:open",
+                "ssh:open",
+                "workspace:addByPath",
+                "providers:saveSealed",
+                "providers:setEnabled",
             ] {
                 assert!(ask(&computer, c, json!([])).unwrap_err().contains("channel-denied"), "{c}");
             }
             assert!(calls.lock().unwrap().is_empty());
+        }
+
+        #[test]
+        fn a_computer_attaches_only_what_it_imported_into_the_chat() {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path().join("attachments").join("s1");
+            std::fs::create_dir_all(&root).unwrap();
+            let (inside, outside) = (root.join("notes.txt"), dir.path().join("settings.json"));
+            std::fs::write(&inside, "ok").unwrap();
+            std::fs::write(&outside, "{}").unwrap();
+            let link = root.join("escape");
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&outside, &link).unwrap();
+
+            let (devices, calls, computer) = with_device(COMPUTER);
+            *devices.attachments.lock().unwrap() = Some(root);
+            let set = |p: &std::path::Path| ask(&computer, "session:setAttachments", json!(["s1", [p]]));
+            assert!(set(&inside).is_ok());
+            assert!(set(&outside).unwrap_err().contains("path-denied"));
+            #[cfg(unix)]
+            assert!(set(&link).unwrap_err().contains("path-denied"), "a link out is refused");
+            assert!(set(std::path::Path::new("/etc/hosts")).unwrap_err().contains("path-denied"));
+            assert!(
+                ask(&computer, "session:setAttachments", json!(["s1", "x"])).unwrap_err().contains("value-invalid")
+            );
+            assert_eq!(calls.lock().unwrap().len(), 1);
         }
 
         #[test]

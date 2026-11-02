@@ -169,9 +169,12 @@ impl RemoteService {
         }
         let mut st = lock(&self.state);
         let now = (self.clock)();
-        // A code only pairs what it was minted for, so a link can't change a device's class.
+        // A code only pairs what it was minted for, so a link can't change a
+        // device's class: not a new device's, nor a paired one's, on re-pairing.
         let computer = hello_frame.get("platform").and_then(Value::as_str) == Some(hello::COMPUTER_PLATFORM);
-        let grant = self.live_grant(&st).filter(|g| g.computer == computer);
+        let is_computer = |d: &Value| d.get("kind").and_then(Value::as_str) == Some(hello::COMPUTER_PLATFORM);
+        let same_class = known(&cfg).is_none_or(|d| is_computer(&d) == computer);
+        let grant = self.live_grant(&st).filter(|g| g.computer == computer && same_class);
         let code_ok = grant.as_ref().is_some_and(|g| {
             hello_frame.get("pair").and_then(Value::as_str) == Some(g.code.as_str()) && g.expires_at > now
         });
@@ -585,6 +588,18 @@ impl RemoteService {
 /// Change key from `remote.json`, its activity in `remote-activity.json`
 /// beside it.
 impl crate::phone::Devices for RemoteService {
+    fn attachments_of(&self, chat: &str) -> Option<PathBuf> {
+        // The folder name `attachment:import` writes (`safe_session` in remote_image.rs).
+        let dir: String = chat
+            .chars()
+            .flat_map(|c| {
+                let keep = c.is_ascii_alphanumeric() || c == '_' || c == '-';
+                std::iter::repeat_n(if keep { c } else { '_' }, if keep { 1 } else { c.len_utf16() })
+            })
+            .collect();
+        Some(self.file.parent()?.join("attachments").join(dir))
+    }
+
     fn device(&self, id: &str) -> Option<crate::phone::PhoneDevice> {
         let _io = lock(&self.io);
         let cfg = self.load();

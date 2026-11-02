@@ -144,7 +144,7 @@ export function ComputersSection() {
       <div className="mt-4 border-t border-line pt-3">
         <h3 className="text-sm font-medium">Let a computer connect to this one</h3>
         <p className="mt-1 text-xs text-ink-faint">
-          Connecting works one way. A computer that connects here can run agents here, with no prompt for each change. It can't see your accounts or keys.
+          Connecting works one way. A computer that connects here can run agents here with no prompt for each change, and an agent in YOLO mode can do anything your account can. Only connect a computer you trust like this one.
         </p>
         <button className="btn btn-outline mt-2 py-1 text-xs" onClick={() => void makeLink()}>Make a link</button>
         {linkNote && <p className="mt-2 text-xs text-ink-soft">{linkNote}</p>}

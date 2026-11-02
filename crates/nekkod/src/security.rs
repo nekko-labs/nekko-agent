@@ -1066,9 +1066,15 @@ mod tests {
                 }
             }
         }
-        for c in
-            ["remote:enable", "remote:attach", "remote:pair", "remote:rotate", "remote:setAccess", "providers:save"]
-        {
+        for c in [
+            "remote:enable",
+            "remote:attach",
+            "remote:pair",
+            "remote:pairComputer",
+            "remote:rotate",
+            "remote:setAccess",
+            "providers:save",
+        ] {
             assert!(action_of(c).is_some(), "{c}");
         }
         for c in ["remote:disable", "remote:status", "app:quit", "remote:stop", "device:signOut"] {
