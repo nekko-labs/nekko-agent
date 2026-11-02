@@ -137,6 +137,8 @@ const CTX_REFRESH_MS = 1_500;
  */
 const PLAN_RAIL_WIDTH = 280;
 const PLAN_RAIL_MIN_PANE = PLAN_RAIL_WIDTH * 2;
+/** The widest the transcript column gets (`.chat-column`: 68 characters of 14px reply text, measured), for row-height estimates only. */
+const CHAT_COLUMN_MAX_PX = 600;
 
 /**
  * The composer's height when the user has dragged it, remembered across chats.
@@ -2309,14 +2311,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   /**
    * How wide the conversation and its controls run inside the pane.
    *
-   * The full pane, less the transcript scroller's 30px gutter on each side: a
-   * narrower centred column (first 768px, then 75%) left wide dead margins on
-   * a desktop workbench pane. The transcript already starts below the floating
-   * Agent Monitor toggle, so nothing sits under it.
+   * The full pane, less the transcript scroller's 30px gutter on each side, up
+   * to the prose measure (68 characters of reply text, `.chat-column`),
+   * centred. Replies already stopped their prose at 68ch; with only the prose
+   * capped, a wide pane showed text ending halfway across under tables and
+   * code blocks that ran the full width. The transcript already starts below
+   * the floating Agent Monitor toggle, so nothing sits under it.
    */
   // The floating Agent Monitor toggle only shows while the rail is closed, so
   // the open rail needs no extra inset: the same 30px gutter on both sides.
-  const contentWidth = 'mx-auto w-full';
+  const contentWidth = 'chat-column mx-auto w-full';
 
   // --- The transcript, as windowed rows ---
   const messages = session?.messages;
@@ -2389,7 +2393,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu],
   );
   // Width of the text column, for the height estimates of rows not yet measured.
-  const columnWidth = Math.max(0, (paneWidth || 800) - 60);
+  const columnWidth = Math.min(CHAT_COLUMN_MAX_PX, Math.max(0, (paneWidth || 800) - 60));
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
   const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });

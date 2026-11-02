@@ -16,7 +16,7 @@ User intent: the app is read for hours a day, so its small print has to be legib
 
 ## Reading, buttons and navigation
 
-- **Readable measure.** Chat replies, the user's own turns and documents stop prose at about 68 characters (`max-width: 68ch` on paragraphs, lists, quotes and headings) with a 1.6 line height. Code blocks, tables and diagrams keep the full width.
+- **Readable measure.** Chat replies, the user's own turns and documents stop prose at about 68 characters (`max-width: 68ch` on paragraphs, lists, quotes and headings) with a 1.6 line height. In documents, code blocks, tables and diagrams keep the full width. In chat the whole transcript is a centred column at that same measure, so tables and code blocks end where the prose does and scroll inside their block when wider (see [Chat transcript width](../chat/chat-transcript-width.md)).
 - **Sentence-case labels.** The small uppercase, letter-spaced labels above groups and fields are 12px sentence case at weight 500 in `--ink-soft`. Badges that are a single word (`new`, a file extension) keep their caps.
 - **Flat primary, ink titles.** `.btn-primary` is one flat accent fill with no gradient, resting shadow or hover filter; its hover darkens the fill. View titles and the title bar heading are plain ink. The violet-to-cyan `--brand-grad` token is gone; `--accent-2` remains only as a data colour (charts, the code highlight, a celebration).
 - **Neutral menus and nav.** Context-menu and creation-menu rows, catalog rows and the nav rail use a neutral wash for hover and the active item (no accent fill, no gradient notch). The accent is kept for the primary action, focus rings and data.

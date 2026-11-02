@@ -2303,6 +2303,15 @@
 :is(.msg-ai, .md-doc) :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
   max-width: 68ch;
 }
+/* The chat transcript is one centred column at that same measure, so a reply's
+   tables, code blocks and tool cards end where its prose does. With only the
+   prose capped, a wide window showed text stopping halfway across under a
+   table that ran the full width. Narrower panes are unaffected. The column
+   inherits 16px text while reply prose is text-sm (14px), and `ch` follows the
+   font size, so 68 characters of the prose is 68ch scaled by 14/16 here. */
+.chat-column {
+  max-width: calc(68ch * 14 / 16);
+}
 :is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
 
 /* Find in this chat (ChatSearchBar): a small bar floating at the top right of
