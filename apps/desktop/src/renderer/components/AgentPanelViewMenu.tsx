@@ -1,4 +1,5 @@
 import { useStore } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckIcon, ChevronIcon } from '../icons.js';
@@ -27,7 +28,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
   onChange: (next: AgentPanelView) => void;
   onClose: () => void;
 }) {
-  const hasComputers = useStore((s) => s.computers.length > 0);
+  const hasComputers = useShown('computers', { computers: useStore((s) => s.computers.length > 0) });
   const ref = useRef<HTMLDivElement>(null);
   const subRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Partial<Record<Sub, HTMLButtonElement | null>>>({});

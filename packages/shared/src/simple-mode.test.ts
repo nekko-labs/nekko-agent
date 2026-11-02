@@ -13,8 +13,8 @@ describe('simple mode catalogue', () => {
 
   it('shows every control in Expert except what waits for something', () => {
     const off = SIMPLE_ITEMS.filter((i) => !simpleShown(i.id, true)).map((i) => i.id);
-    expect(off).toEqual(['changes', 'hardware', 'pr-status', 'mon-hw', 'ph-monitors']);
-    const all = { localModel: true, changes: true, pr: true, agents: true };
+    expect(off).toEqual(['changes', 'hardware', 'computers', 'pr-status', 'mon-hw', 'ph-monitors']);
+    const all = { localModel: true, changes: true, pr: true, agents: true, computers: true };
     expect(SIMPLE_ITEMS.every((i) => simpleShown(i.id, true, {}, all))).toBe(true);
   });
 
@@ -61,6 +61,20 @@ describe('simple mode catalogue', () => {
     expect(simpleShown('agent-monitor', true)).toBe(true);
     expect(simpleShown('agent-monitor', false, { 'agent-monitor': 'show' })).toBe(true);
     expect(simpleShown('agent-monitor', true, { 'agent-monitor': 'hide' }, { agents: true })).toBe(false);
+  });
+
+  it('says nothing about computers until one is connected', () => {
+    for (const expert of [false, true]) {
+      expect(simpleShown('computers', expert)).toBe(false);
+      expect(simpleShown('computers', expert, {}, { computers: true })).toBe(true);
+    }
+    expect(simpleShown('computers', true, { computers: 'hide' }, { computers: true })).toBe(false);
+  });
+
+  it('counts a local model on a connected computer', () => {
+    const idle = { running: true, resident: [] };
+    expect(localModelRunning(idle, [idle, null])).toBe(false);
+    expect(localModelRunning(null, [idle, { running: true, resident: [{}] }])).toBe(true);
   });
 
   it('reads a local model only from a running engine that holds one', () => {

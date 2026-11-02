@@ -286,6 +286,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   /** Groups whose completed chats are expanded under their active ones. */
   const completionTipSessionId = useStore((s) => s.completionTipSessionId);
   const computers = useStore((s) => s.computers);
+  const computersShown = useShown('computers', { computers: computers.length > 0 });
   const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
@@ -522,7 +523,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     const done = completedInGroup(sessions, '*', () => '*').filter(shownDone);
     const completed: PanelGroup[] = done.length > 0 ? [{ key: COMPLETED_GROUP, name: 'Completed', items: [], done }] : [];
     if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, done: [], bare: true }, ...completed];
-    if (view.groupBy === 'computer' && computers.length > 0) {
+    if (view.groupBy === 'computer' && computersShown) {
       const here = (e: Entry) => !computerIdOf(e.s?.id);
       return [
         { key: 'computer:here', name: thisComputerName(), items: all.filter(here), done: [] },
@@ -558,7 +559,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   useLayoutEffect(() => {
     if (cardsBefore.current) flyMovedCards(listRef.current, cardsBefore.current);
     cardsBefore.current = null;
-  }, [layoutSig]);
+  }, [layoutSig, computersShown]);
 
   const activeRowRef = useRef<HTMLDivElement>(null);
   const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));

@@ -3,6 +3,7 @@ import type { GpuStats, MonitorKind, SystemStats } from '@nekko-agent/shared';
 import { MONITOR_HINTS, MONITOR_KINDS, MONITOR_LABELS, gpuMemoryLabel, monitorSources, resolveMonitors } from '@nekko-agent/shared';
 import { readBrandKey } from '../brandStorage.js';
 import { useStore } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import { ChevronIcon } from '../icons.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
 
@@ -498,7 +499,7 @@ export function ResourceHud() {
 export function MonitorComputerSwitch() {
   const computers = useStore((s) => s.computers) ?? [];
   const [chosen, setChosen] = useState('');
-  if (computers.length === 0) return null;
+  if (!useShown('computers', { computers: computers.length > 0 })) return null;
   return (
     <select
       className="input w-auto max-w-[110px] py-0.5 text-2xs"

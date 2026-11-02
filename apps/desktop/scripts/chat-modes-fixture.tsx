@@ -19,7 +19,7 @@ const at = Date.now() - 3_600_000;
 
 // One capture's situation, set by the sandbox before it reloads. Nothing set
 // keeps the original evidence: a nearly full chat with two models resident.
-const scene: { local?: boolean; changes?: number; long?: boolean; agents?: number; many?: boolean; pr?: boolean } = (() => {
+const scene: { local?: boolean; changes?: number; long?: boolean; agents?: number; many?: boolean; pr?: boolean; remote?: boolean } = (() => {
   try { return JSON.parse(localStorage.getItem('fixture.scene') ?? '{}'); } catch { return {}; }
 })();
 const prUrl = 'https://github.com/fixture/app/pull/42';
@@ -32,7 +32,10 @@ function makeSession() {
     { id: 't2', role: 'tool', content: '', createdAt: at + 2500, toolResult: { toolCallId: 'c2', output: 'ci.yml:14 cache-key' } },
     { id: 'a0', role: 'assistant', content: 'The cache key includes the lockfile hash **and** the runner image date, so a new image each night misses it. Key it on the lockfile alone and restore with a prefix fallback.', createdAt: at + 5000 },
   ];
-  if (scene.pr) messages.push({ id: 'a1', role: 'assistant', content: `Opened ${prUrl}.`, createdAt: at + 4000 });
+  if (scene.pr) messages.push(
+    { id: 'a1', role: 'assistant', content: 'Opening the pull request.', createdAt: at + 4000, toolCalls: [{ id: 'c3', name: 'bash', input: { command: 'gh pr create --fill' } }] },
+    { id: 't3', role: 'tool', content: '', createdAt: at + 4200, toolResult: { toolCallId: 'c3', output: prUrl } },
+  );
   // A long chat, so a right-aligned prompt can scroll up under the top of the transcript.
   if (scene.many) for (let i = 0; i < 12; i++) messages.push(
     { id: `mu${i}`, role: 'user', content: `Check workflow number ${i + 1} too, and tell me if its cache key has the same problem.`, createdAt: at + 5000 + i * 2000 },
@@ -46,8 +49,9 @@ const bridge: any = {
   getSession: async () => record, listModels: async () => models, listSessionSummaries: async () => [], listTerminals: async () => [],
   getUsageSummary: async () => ({ totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, byProvider: {}, bySession: {}, bySessionCost: {}, daily: [] }),
   pendingInput: async () => ({}), runningSessions: async () => [], listTasks: async () => [], listShells: async () => [], listChanges: async () => Array.from({ length: scene.changes ?? 0 }, (_, i) => ({ path: `src/file-${i}.ts`, original: 'a\nb\n', current: 'a\nc\nd\n' })),
+  computerEngineStatus: async () => ({ running: true, resident: [{ id: 'qwen3-coder-30b' }] }),
   claudeBackgroundTasks: async () => (scene.agents ? { alpha: scene.agents } : {}),
-  listSessionPrs: async () => (scene.pr ? [{ url: prUrl, number: 42, title: 'Key the cache on the lockfile', state: 'open', repo: 'fixture/app' }] : []), listFiles: async () => [],
+  listSessionPrs: async () => (scene.pr ? [{ url: prUrl, owner: 'fixture', repo: 'app', number: 42, title: 'Key the cache on the lockfile', state: 'open', isDraft: false, additions: 12, deletions: 3, changedFiles: 3, checks: 'passing' }] : []), listFiles: async () => [],
   previewContext: async () => ({ contextWindow: 200000, items: [
     { id: 's', source: 'system', label: 'System prompt', tokens: 9200, included: true },
     { id: 'g', source: 'guideline', label: 'AGENTS.md', tokens: 3100, included: true },
@@ -74,7 +78,7 @@ function Fixture() {
     clearLiveRun('alpha');
     record = makeSession();
     // The sandbox picks the mode before a reset; keep it.
-    useStore.setState({ view: 'chat', providers: [provider], models, activeProviderId: 'fixture', sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: 'alpha', activeProjectId: null, settings: { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'dark', effort: 'normal', experimental: {}, agent: {}, ui: {} }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: false, paletteOpen: false } as any);
+    useStore.setState({ computers: scene.remote ? [{ id: 'ab12cd34', name: 'Studio', relayUrl: '', alts: [], pairedAt: 0, color: 0, state: 'online', route: null, read: true, change: true }] : [], view: 'chat', providers: [provider], models, activeProviderId: 'fixture', sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: 'alpha', activeProjectId: null, settings: { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'dark', effort: 'normal', experimental: {}, agent: {}, ui: {} }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: false, paletteOpen: false } as any);
     putCachedSession(record);
     setEpoch(e => e + 1);
   };

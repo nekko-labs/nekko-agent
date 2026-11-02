@@ -1182,6 +1182,8 @@ export interface NekkoApi {
   forgetComputer(id: string): Promise<import('./computers.js').ComputerStatus[]>;
   /** Its live hardware readings, for the Monitors dock. */
   computerStats(id: string): Promise<{ system: import('./monitor.js').SystemStats | null; gpu: import('./models.js').GpuStats | null }>;
+  /** Its Model Server, as the phone view reports it. Null with Read off over there. */
+  computerEngineStatus(id: string): Promise<{ running: boolean; resident: unknown[] } | null>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
   /** Set the icon in that machine's own settings; empty removes it. */

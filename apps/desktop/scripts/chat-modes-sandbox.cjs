@@ -66,6 +66,10 @@ app.whenReady().then(async () => {
     check('Simple with a local model: the hardware strip shows', await has('[data-expert-monitor]'));
     check('Simple with changes: Changes says 3 files changed', /3 files changed/.test(await text('[data-agent-companion="diff"]')));
     await capture('a2-simple-local-3-changes');
+    await scene({ mode: 'simple', local: false, changes: 0, long: false, remote: true });
+    for (let i = 0; i < 30 && !(await has('[data-expert-monitor]')); i++) await sleep(200);
+    check('Simple: a local model on a connected computer brings the strip', await has('[data-expert-monitor]'));
+    await capture('a2b-simple-remote-model');
     await scene({ mode: 'expert', local: false, changes: 0, long: false });
     check('Expert with no local model: no hardware strip, no Changes', !(await has('[data-expert-monitor]')) && !(await has('[data-agent-companion="diff"]')));
     check('Expert: effort, Mode, strip and arrow stay where they were', (await has('[data-effort-index]')) && (await has('[data-chat-mode-button]')) && (await has('.composer-details-toggle')) && /Incognito/.test(await text('.composer')));
@@ -75,6 +79,7 @@ app.whenReady().then(async () => {
     check('Expert with a local model: the hardware strip shows', await has('[data-expert-monitor]'));
     await capture('a4-expert-local');
     await scene({ mode: 'simple', local: false, changes: 0, long: false });
+    await sleep(1600);
     await click('button[aria-label="Add a photo, video, file, folder, or skill"]');
     check('the + menu holds Incognito and Automate', (await has('[data-plus-incognito]')) && (await has('[data-plus-automate]')));
     await capture('a5-simple-plus-menu');
@@ -101,6 +106,7 @@ app.whenReady().then(async () => {
     check('Simple with a pull request: the PR deck shows', await has('.pr-action-deck'));
     await capture('a8-simple-with-pr');
     await scene({ mode: 'simple', local: false, changes: 0, long: false });
+    await sleep(1600);
     await click('[data-composer-details] button[aria-haspopup="listbox"]');
     await sleep(300);
     check('effort is inside the model menu in Simple', await has('[data-effort-in-model-menu] [data-effort]'));

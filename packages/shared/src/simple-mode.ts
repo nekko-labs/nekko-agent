@@ -26,6 +26,8 @@ export interface SimpleContext {
   pr?: boolean;
   /** Agents are at work in the background: see `agentMonitorRelevant`. */
   agents?: boolean;
+  /** This desktop has a connected computer. */
+  computers?: boolean;
 }
 
 export type SimpleCondition = keyof SimpleContext;
@@ -54,6 +56,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'logs', area: 'Chat · header', label: 'Agent logs', hint: 'The raw command log', platforms: D, default: 'expert' },
   { id: 'agent-monitor', area: 'Chat · header', label: 'Agent Monitor', hint: 'Sub-agents, queued work and artifacts. In Simple, only while agents run in the background', platforms: D, default: 'expert', when: 'agents' },
   { id: 'hardware', area: 'Chat · header', label: 'Hardware strip', hint: 'CPU, memory and GPU dials under the title', platforms: DP, default: 'auto', when: 'localModel' },
+  { id: 'computers', area: 'Agents wall', label: 'Connected computers', hint: 'Run on, the computer chip, grouping and icons. Only once a computer is connected', platforms: D, default: 'show', needs: 'computers' },
   { id: 'ph-subtitle', area: 'Chat · header', label: 'Model and computer under the title', hint: 'Like "Opus 5.5 · Studio Mac"', platforms: P, default: 'expert' },
   { id: 'model', area: 'Chat · message box', label: 'Model name and picker', hint: 'Switch between Claude, ChatGPT or a local model', platforms: DP, default: 'show' },
   { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'How hard the model thinks before it answers. Inside the model menu in Simple', platforms: DP, default: 'show' },
@@ -68,6 +71,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'thinking', area: 'Chat · conversation', label: 'Reasoning and tool steps', hint: 'What the model thought, and each step it took', platforms: DP, default: 'expert' },
   { id: 'stats', area: 'Chat · conversation', label: 'Reply stats', hint: 'Tokens, speed and time under each reply', platforms: D, default: 'expert' },
   { id: 'pr-status', area: 'Chat · conversation', label: 'Pull request status', hint: 'The PR dock and PR chips. Only while this chat has a pull request', platforms: DP, default: 'show', needs: 'pr' },
+  { id: 'run-settings', area: 'Chat · message box', label: 'Run settings', hint: 'Offline, incognito, Git branch and tool style, in the model menu', platforms: P, default: 'expert' },
   { id: 'ph-git', area: 'Chat · conversation', label: 'Git', hint: 'The Git screen and commits', platforms: P, default: 'expert' },
   { id: 'terminal', area: 'Agents wall', label: 'Terminal', hint: 'Open a terminal from New or the More menu', platforms: DP, default: 'expert' },
   { id: 'cardmeta', area: 'Agents wall', label: 'Model and tokens on window cards', hint: 'Like "Opus 5.5 · 48k context"', platforms: D, default: 'expert' },
@@ -84,13 +88,15 @@ export type SimpleChoices = Readonly<Record<string, SimpleVisibility>>;
 
 const BY_ID = new Map(SIMPLE_ITEMS.map((i) => [i.id, i]));
 
+/** A Model Server's state, here or as a connected computer reports it. */
+export type SimpleEngine = { running?: boolean; resident?: readonly unknown[] } | null | undefined;
+
 /**
- * Whether a local model is running on this device. The one check everything
- * contextual reads. It answers for this device only; a connected computer
- * running a local model belongs here too once that link exists.
+ * Whether a local model is running on this device or a connected computer. The
+ * one check everything contextual reads.
  */
-export function localModelRunning(engine?: { running?: boolean; resident?: readonly unknown[] } | null): boolean {
-  return !!engine?.running && (engine.resident?.length ?? 0) > 0;
+export function localModelRunning(engine: SimpleEngine, connected: readonly SimpleEngine[] = []): boolean {
+  return [engine, ...connected].some((e) => !!e?.running && (e.resident?.length ?? 0) > 0);
 }
 
 /**

@@ -110,6 +110,7 @@ export function AgentWindowPicker({ onAdd, onClose, terminal = true }: AgentWind
   const [modelListOpen, setModelListOpen] = useState(false);
   const [pickedFolders, setPickedFolders] = useState<string[] | null>(null);
   const computers = useStore((s) => s.computers);
+  const showComputers = computers.length > 0 && shownNow('computers', { computers: true });
   const catalogs = useStore((s) => s.computerCatalogs);
   const [runOn, setRunOn] = useState<string | null>(null);
   // That computer's first model, so starting there is still one click.
@@ -218,7 +219,7 @@ export function AgentWindowPicker({ onAdd, onClose, terminal = true }: AgentWind
       )}
       {category === 'chat' && (
         <div className="agent-window-picker__steps">
-          {computers.length > 0 && (
+          {showComputers && (
             <section className="agent-window-picker__step" aria-labelledby="awp-step-computer">
               <h3 id="awp-step-computer">Run on</h3>
               <div className="agent-window-picker__folders" role="radiogroup" aria-labelledby="awp-step-computer">

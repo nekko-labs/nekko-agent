@@ -31,7 +31,7 @@ import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
 import { StyleSection } from './StyleSection.js';
 import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
-import { useShown } from '../simpleMode.js';
+import { useExpertMode, useShown } from '../simpleMode.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -106,6 +106,10 @@ export function SettingsView() {
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<SettingsGroupId>('general');
+  // Simple says nothing about computers until one is connected; Expert is where the first one is paired.
+  const [expert] = useExpertMode();
+  const hasComputers = useStore((s) => s.computers.length > 0);
+  const computersPage = expert || hasComputers;
   const jumping = useRef(0);
   // Section spy: it measures the page, so at most once a frame, not per scroll event.
   const spyFrame = useRef(0);
@@ -177,7 +181,7 @@ export function SettingsView() {
         </div>
         <div className="flex flex-col gap-6 md:flex-row md:gap-8">
           <nav aria-label="Settings sections" className="settings-nav" data-settings-search>
-            {SETTINGS_GROUPS.map((g) => (
+            {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
               <button
                 key={g.id}
                 type="button"
@@ -314,9 +318,9 @@ export function SettingsView() {
               {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
               <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
             </SettingsGroup>
-            <SettingsGroup id="computers">
+            {computersPage && <SettingsGroup id="computers">
               <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
-            </SettingsGroup>
+            </SettingsGroup>}
             <SettingsGroup id="style">
               <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
