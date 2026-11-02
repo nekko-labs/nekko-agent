@@ -114,6 +114,7 @@ import com.nekko.protocol.Effort
 import com.nekko.protocol.EngineStatus
 import com.nekko.protocol.MonitorFormat
 import com.nekko.protocol.MonitorTone
+import com.nekko.protocol.PcSettings.ChatMode
 import com.nekko.protocol.RunOption
 import kotlin.math.cos
 import kotlin.math.min
@@ -225,6 +226,19 @@ fun effortLabel(e: Effort): String = stringResource(
 // Model, effort and context: the row under the message box
 // ---------------------------------------------------------------------------
 
+/** The tool policy in plain words, as Simple shows it. Same values as the computer's own. */
+fun asksTitleRes(mode: ChatMode) = when (mode) {
+    ChatMode.ASK -> R.string.simple_asks_first
+    ChatMode.GUARDRAILS -> R.string.simple_asks_matters
+    ChatMode.YOLO -> R.string.simple_asks_own
+}
+
+fun asksDetailRes(mode: ChatMode) = when (mode) {
+    ChatMode.ASK -> R.string.simple_asks_detail_first
+    ChatMode.GUARDRAILS -> R.string.simple_asks_detail_matters
+    ChatMode.YOLO -> R.string.simple_asks_detail_own
+}
+
 /** Which halves of the model and effort control show: a chat with no model yet still offers the picker, whatever Simple hides. */
 @Composable
 private fun modelEffortShown(chat: ChatUi): Pair<Boolean, Boolean> {
@@ -274,15 +288,23 @@ private fun RunOptionRow(option: RunOption, value: JsonElement?, onSet: (JsonEle
 
 /** Under the message box: the model and effort control on the left, the context ring on the right, each as Simple allows. */
 @Composable
-fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit, modifier: Modifier = Modifier) {
+fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit, asks: ChatMode?, onOpenAsks: () -> Unit, modifier: Modifier = Modifier) {
     val (model, effort) = modelEffortShown(chat)
-    val context = LocalSimple.current.shown("context")
-    if (!model && !effort && !context) return
+    val simple = LocalSimple.current
+    val context = simple.shown("context")
+    // Simple's view of the tool policy; Expert keeps it in More.
+    val plainAsks = asks?.takeIf { !simple.expert && simple.shown("asks") }
+    if (!model && !effort && !context && plainAsks == null) return
     Row(
         modifier.fillMaxWidth().background(Nekko.palette.paper).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort)
+        if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort && (simple.expert || !model))
+        plainAsks?.let { mode ->
+            TextButton(onClick = onOpenAsks, enabled = enabled, modifier = Modifier.testTag("chat.asksFirst")) {
+                Text(stringResource(asksTitleRes(mode)), style = MaterialTheme.typography.labelMedium, color = Nekko.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
         Spacer(Modifier.weight(1f))
         if (context) ContextRing(chat)
     }
@@ -300,11 +322,11 @@ fun LongChatNudge(tokens: Long, onStartFresh: (() -> Unit)?, onDismiss: () -> Un
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "This chat is getting long. Starting fresh saves about ${MonitorFormat.tokens(tokens)} tokens.",
+            stringResource(R.string.simple_long_note, MonitorFormat.tokens(tokens)),
             style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f).padding(vertical = 6.dp),
         )
-        if (onStartFresh != null) TextButton(onClick = onStartFresh) { Text("Start fresh", color = p.accent) }
-        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Dismiss", tint = p.inkFaint, modifier = Modifier.size(16.dp)) }
+        if (onStartFresh != null) TextButton(onClick = onStartFresh) { Text(stringResource(R.string.simple_start_fresh), color = p.accent) }
+        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.simple_dismiss), tint = p.inkFaint, modifier = Modifier.size(16.dp)) }
     }
 }
 

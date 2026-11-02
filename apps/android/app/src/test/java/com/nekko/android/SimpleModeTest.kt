@@ -1,6 +1,7 @@
 package com.nekko.android
 
 import com.nekko.android.data.PhonePrefs
+import com.nekko.android.data.SimpleContext
 import com.nekko.android.data.SimpleMode
 import com.nekko.android.data.SimpleVisibility
 import org.junit.Assert.assertEquals
@@ -10,10 +11,22 @@ import org.junit.Test
 
 /** Simple and Expert's catalogue and saved choices (the desktop's simple-mode.test.ts). */
 class SimpleModeTest {
-    @Test fun `by default Simple shows only the model, effort and the context`() {
+    @Test fun `Simple shows only the everyday controls when nothing is going on`() {
         val simple = SimpleMode.ITEMS.filter { SimpleMode.shown(it.id, expert = false, choices = emptyMap()) }.map { it.id }
-        assertEquals(listOf("model", "effort", "context"), simple)
-        assertTrue(SimpleMode.ITEMS.all { SimpleMode.shown(it.id, expert = true, choices = emptyMap()) })
+        assertEquals(listOf("model", "effort", "asks", "context"), simple)
+        val off = SimpleMode.ITEMS.filter { !SimpleMode.shown(it.id, expert = true, choices = emptyMap()) }.map { it.id }
+        assertEquals(listOf("changes", "hardware", "pr-status", "ph-monitors"), off)
+        val all = SimpleContext(localModel = true, changes = true, pr = true)
+        assertTrue(SimpleMode.ITEMS.all { SimpleMode.shown(it.id, expert = true, choices = emptyMap(), context = all) })
+    }
+
+    @Test fun `Changes and PR status need something to show`() {
+        assertFalse(SimpleMode.shown("changes", true, emptyMap()))
+        assertTrue(SimpleMode.shown("changes", false, emptyMap(), SimpleContext(changes = true)))
+        assertFalse(SimpleMode.shown("changes", false, mapOf("changes" to SimpleVisibility.EXPERT), SimpleContext(changes = true)))
+        assertFalse(SimpleMode.shown("pr-status", false, emptyMap()))
+        assertTrue(SimpleMode.shown("pr-status", false, emptyMap(), SimpleContext(pr = true)))
+        assertFalse(SimpleMode.shown("ph-git", false, emptyMap(), SimpleContext(pr = true)))
     }
 
     @Test fun `each choice in each mode`() {
@@ -26,17 +39,25 @@ class SimpleModeTest {
         val hide = mapOf("context" to SimpleVisibility.HIDE, "hardware" to SimpleVisibility.HIDE)
         assertFalse(SimpleMode.shown("context", false, hide))
         assertFalse(SimpleMode.shown("context", true, hide))
-        assertFalse(SimpleMode.shown("hardware", true, hide, localModelLoaded = true))
+        assertFalse(SimpleMode.shown("hardware", true, hide, SimpleContext(localModel = true)))
     }
 
-    @Test fun `a loaded local model shows the monitors in Simple, unless hidden`() {
-        assertFalse(SimpleMode.shown("hardware", false, emptyMap()))
-        assertTrue(SimpleMode.shown("hardware", false, emptyMap(), localModelLoaded = true))
-        assertTrue(SimpleMode.shown("ph-monitors", false, emptyMap(), localModelLoaded = true))
+    @Test fun `monitors wait for a local model in both modes, unless pinned or hidden`() {
+        val running = SimpleContext(localModel = true)
+        for (id in listOf("hardware", "ph-monitors")) for (expert in listOf(false, true)) {
+            assertFalse(SimpleMode.shown(id, expert, emptyMap()))
+            assertTrue(SimpleMode.shown(id, expert, emptyMap(), running))
+            assertTrue(SimpleMode.shown(id, expert, mapOf(id to SimpleVisibility.SHOW)))
+            assertFalse(SimpleMode.shown(id, expert, mapOf(id to SimpleVisibility.HIDE), running))
+        }
         // Only the monitors: other Expert-only controls stay out of Simple.
-        assertFalse(SimpleMode.shown("thinking", false, emptyMap(), localModelLoaded = true))
-        assertFalse(SimpleMode.shown("ph-monitors", false, mapOf("ph-monitors" to SimpleVisibility.HIDE), localModelLoaded = true))
-        assertTrue(SimpleMode.shown("ph-monitors", false, mapOf("ph-monitors" to SimpleVisibility.SHOW)))
+        assertFalse(SimpleMode.shown("thinking", false, emptyMap(), running))
+    }
+
+    @Test fun `monitors offer When running in place of Expert only`() {
+        val hardware = SimpleMode.ITEMS.first { it.id == "hardware" }
+        assertEquals(listOf(SimpleVisibility.AUTO, SimpleVisibility.SHOW, SimpleVisibility.HIDE), SimpleMode.options(hardware))
+        assertEquals(emptyMap<String, SimpleVisibility>(), SimpleMode.parse("""{"hardware":"expert","terminal":"auto"}"""))
     }
 
     @Test fun `unknown ids always show`() {
@@ -77,7 +98,7 @@ class SimpleModeTest {
 
     @Test fun `ids match the desktop catalogue's phone items`() {
         assertEquals(
-            listOf("changes", "hardware", "ph-subtitle", "model", "effort", "context", "ph-policy", "thinking", "ph-git", "terminal", "ph-monitors"),
+            listOf("changes", "hardware", "ph-subtitle", "model", "effort", "asks", "context", "run-settings", "thinking", "pr-status", "ph-git", "terminal", "ph-monitors"),
             SimpleMode.ITEMS.map { it.id },
         )
     }

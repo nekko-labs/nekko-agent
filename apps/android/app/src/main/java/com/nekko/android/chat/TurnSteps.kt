@@ -53,11 +53,14 @@ object TurnSteps {
         return out
     }
 
+    /** The label's words: English here, the app's language from the screen. */
+    data class Words(val one: String = "1 step", val other: String = "%1\$d steps", val working: String = "Working · %1\$s so far", val took: String = "Took %1\$s")
+
     /** "Took 4 steps · 12s", or "Working · 2 steps so far" while the turn runs. */
-    fun label(steps: Int, running: Boolean, durationMs: Long?): String {
-        val count = if (steps == 1) "1 step" else "$steps steps"
-        if (running) return "Working · $count so far"
-        return "Took $count" + (durationMs?.let { " · " + duration(it) } ?: "")
+    fun label(steps: Int, running: Boolean, durationMs: Long?, words: Words = Words()): String {
+        val count = if (steps == 1) words.one else words.other.format(steps)
+        if (running) return words.working.format(count)
+        return words.took.format(count) + (durationMs?.let { " · " + duration(it) } ?: "")
     }
 
     /** 12s, 1m 5s, 2m, 1h 3m. */

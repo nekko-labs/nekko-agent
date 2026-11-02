@@ -36,8 +36,6 @@ import com.nekko.android.data.Remote
 import com.nekko.android.data.SecureStore
 import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.chat.ModeTags
-import com.nekko.android.ui.simple.EXPERT_DESCRIPTION
-import com.nekko.android.ui.simple.SIMPLE_DESCRIPTION
 import com.nekko.android.ui.simple.PILL_TAG
 import com.nekko.android.data.PillDock
 import com.nekko.android.data.PillPlace
@@ -82,6 +80,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+
+private const val SIMPLE_DESCRIPTION = "Simple: everyday controls"
+private const val EXPERT_DESCRIPTION = "Expert: every control"
 
 /**
  * Simple and Expert modes in the real chat screen (spec/phone/iphone-simple-and-expert-modes.md):
@@ -372,7 +373,7 @@ class ChatModesTest {
     @Test fun simpleModeSettings() {
         compose.setContent { NekkoTheme(dark = false) { SimpleModeScreen(prefs, onBack = {}) } }
         settle()
-        assertTrue(compose.onAllNodes(hasText("Simple keeps Nekko calm for everyday use. Everything still works; these controls just stay out of sight.")).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodes(hasText("Simple is a cleaner, more focused view, and details show only when they matter. Everything still works.")).fetchSemanticsNodes().isNotEmpty())
         shot("settings-simple-mode")
     }
 

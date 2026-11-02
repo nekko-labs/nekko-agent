@@ -662,7 +662,7 @@ fun LogsScreen(repo: ComputersRepository, onBack: () -> Unit) {
                 open != null -> key(open.id) { LogPage(logs, open) { openId = null } }
                 phoneOpen -> PhoneLogPage(repo) { phoneOpen = false }
                 else -> LogsList(
-                    logs, s, logGroups(c.computers, c.activeId), repo.connectionLog.collectAsStateWithLifecycle().value.size, onBack,
+                    logs, s, logGroups(c.computers, c.activeId, stringResource(R.string.simple_logs_on_phone)), repo.connectionLog.collectAsStateWithLifecycle().value.size, onBack,
                     openPhone = { phoneOpen = true },
                     connect = { id -> scope.launch { repo.connect(id) } },
                 ) { openId = it.id }
@@ -675,8 +675,8 @@ fun LogsScreen(repo: ComputersRepository, onBack: () -> Unit) {
 internal data class LogGroup(val title: String, val computerId: String?, val active: Boolean)
 
 /** This phone first, then the computer it is connected to, then the other paired computers in pairing order. */
-internal fun logGroups(computers: List<Computer>, activeId: String?): List<LogGroup> =
-    listOf(LogGroup("On this phone", null, false)) +
+internal fun logGroups(computers: List<Computer>, activeId: String?, phone: String = "On this phone"): List<LogGroup> =
+    listOf(LogGroup(phone, null, false)) +
         computers.sortedByDescending { it.id == activeId }.map { LogGroup(it.name, it.id, it.id == activeId) }
 
 @Composable
@@ -703,19 +703,23 @@ private fun LogsList(
                 when {
                     id == null -> item(key = "phone") {
                         LogRow(
-                            Icons.Filled.PhoneAndroid, "Connection log",
-                            if (phoneEvents == 0) "Nothing yet" else "$phoneEvents ${if (phoneEvents == 1) "entry" else "entries"} since the app started",
+                            Icons.Filled.PhoneAndroid, stringResource(R.string.simple_logs_connection),
+                            when (phoneEvents) {
+                                0 -> stringResource(R.string.simple_logs_nothing)
+                                1 -> stringResource(R.string.simple_logs_entries_one)
+                                else -> stringResource(R.string.simple_logs_entries_other, phoneEvents)
+                            },
                             "logs.phone", openPhone,
                         )
                     }
-                    !g.active -> item(key = "connect:$id") { LogRow(Icons.Filled.Link, "Connect to read its logs", null, "logs.connect") { connect(id) } }
+                    !g.active -> item(key = "connect:$id") { LogRow(Icons.Filled.Link, stringResource(R.string.simple_logs_connect), null, "logs.connect") { connect(id) } }
                     !s.loaded -> item(key = "loading") {
                         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.accent) }
                     }
                     s.error != null && s.logs.isEmpty() -> item(key = "error") {
                         Column(Modifier.padding(horizontal = 16.dp)) {
                             Note(s.error)
-                            TextButton(onClick = { scope.launch { logs.load() } }) { Text("Try again") }
+                            TextButton(onClick = { scope.launch { logs.load() } }) { Text(stringResource(R.string.tools_try_again)) }
                         }
                     }
                     s.logs.isEmpty() -> item(key = "none") { Note(stringResource(R.string.tools_logs_none), Modifier.padding(16.dp)) }
@@ -766,10 +770,11 @@ private fun PhoneLogPage(repo: ComputersRepository, onBack: () -> Unit) {
     val context = LocalContext.current
     val entries by repo.connectionLog.collectAsStateWithLifecycle()
     val text = remember(entries) { repo.connectionLogText() }
-    Page("Connection log", onBack, actions = {
+    val subject = stringResource(R.string.simple_logs_subject)
+    Page(stringResource(R.string.simple_logs_connection), onBack, actions = {
         IconButton(onClick = {
             val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                .putExtra(Intent.EXTRA_SUBJECT, "Nekko Agent connection log")
+                .putExtra(Intent.EXTRA_SUBJECT, subject)
                 .putExtra(Intent.EXTRA_TEXT, text)
             context.startActivity(Intent.createChooser(send, null))
         }, modifier = Modifier.testTag("log.share")) { Icon(Icons.Filled.Share, contentDescription = "Share") }

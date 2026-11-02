@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.R
 import com.nekko.android.data.PhonePrefs
+import com.nekko.android.data.SimpleContext
 import com.nekko.android.data.SimpleItem
 import com.nekko.android.data.SimpleMode
 import com.nekko.android.data.SimpleVisibility
@@ -73,8 +74,8 @@ fun SimpleModeSection(deps: SettingsDeps) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         NCard {
             SettingsRow(
-                title = "Simple mode",
-                detail = if (changed == 0) "What Simple and Expert show" else "What Simple and Expert show · $changed changed",
+                title = stringResource(R.string.simple_mode_title),
+                detail = if (changed == 0) stringResource(R.string.simple_mode_detail) else stringResource(R.string.simple_mode_detail_changed, changed),
                 icon = Icons.Filled.Tune,
                 onClick = { deps.open(Routes.SIMPLE_MODE) },
             )
@@ -82,11 +83,37 @@ fun SimpleModeSection(deps: SettingsDeps) {
     }
 }
 
+/** What Settings calls each control and says about it. The catalogue itself holds no words. */
+private val ITEM_TEXT: Map<String, Pair<Int, Int>> = mapOf(
+    "changes" to (R.string.simple_item_changes to R.string.simple_hint_changes),
+    "hardware" to (R.string.simple_item_hardware to R.string.simple_hint_hardware),
+    "ph-subtitle" to (R.string.simple_item_subtitle to R.string.simple_hint_subtitle),
+    "model" to (R.string.simple_item_model to R.string.simple_hint_model),
+    "effort" to (R.string.simple_item_effort to R.string.simple_hint_effort),
+    "asks" to (R.string.simple_asks_first to R.string.simple_hint_asks),
+    "context" to (R.string.simple_item_context to R.string.simple_hint_context),
+    "run-settings" to (R.string.simple_item_run to R.string.simple_hint_run),
+    "thinking" to (R.string.simple_item_thinking to R.string.simple_hint_thinking),
+    "pr-status" to (R.string.simple_item_pr to R.string.simple_hint_pr),
+    "ph-git" to (R.string.simple_item_git to R.string.simple_hint_git),
+    "terminal" to (R.string.simple_item_terminal to R.string.simple_hint_terminal),
+    "ph-monitors" to (R.string.simple_item_monitors to R.string.simple_hint_monitors),
+)
+
+private val AREA_TEXT = mapOf(
+    SimpleMode.HEADER to R.string.simple_area_header,
+    SimpleMode.BOX to R.string.simple_area_box,
+    SimpleMode.CONVERSATION to R.string.simple_area_conversation,
+    SimpleMode.WALL to R.string.simple_area_wall,
+    SimpleMode.CHATS to R.string.simple_area_chats,
+)
+
 /**
  * One drawn piece of an area's preview: a catalogue control when [id] is set, else a fixed part
- * of the screen. [gauges] draws the minimal monitor: thin rings with their percentages.
+ * of the screen. [gauges] draws the minimal monitor: thin rings with their percentages. [name] is
+ * for product names, which stay as they are in every language.
  */
-private data class Part(val text: String, val id: String? = null, val gauges: Boolean = false)
+private data class Part(val text: Int = 0, val id: String? = null, val gauges: Boolean = false, val name: String? = null)
 
 /** One line of a preview; [spread] pushes its parts to the edges, [divider] draws the hairline under it. */
 private data class Line(val parts: List<Part>, val spread: Boolean = false, val divider: Boolean = false)
@@ -94,42 +121,44 @@ private data class Line(val parts: List<Part>, val spread: Boolean = false, val 
 private fun line(vararg parts: Part, spread: Boolean = false, divider: Boolean = false) = Line(parts.toList(), spread, divider)
 
 /** The minimal monitor as the slim row draws it. */
-private val MINI_MONITOR = Part("CPU 12%  Memory 41%  GPU 30%  1 model", "hardware", gauges = true)
+private val MINI_MONITOR = Part(R.string.simple_part_gauges, "hardware", gauges = true)
 
 /** A rough drawing of each area, labelled with the real control names. */
 private val PREVIEWS: Map<String, List<Line>> = mapOf(
-    "Chat · header" to listOf(
-        line(Part("Back"), Part("Fix the login bug"), Part("Changes", "changes"), Part("More"), spread = true),
-        line(Part("Opus 5.5 · Studio Mac", "ph-subtitle"), spread = true),
-        line(Part("Mode switch"), MINI_MONITOR, spread = true, divider = true),
+    SimpleMode.HEADER to listOf(
+        line(Part(R.string.simple_part_back), Part(R.string.simple_part_title), Part(R.string.simple_files_changed_one, "changes"), Part(R.string.simple_part_more), spread = true),
+        line(Part(id = "ph-subtitle", name = "Opus 5.5 · Studio Mac"), spread = true),
+        line(Part(R.string.simple_part_mode), MINI_MONITOR, spread = true, divider = true),
     ),
-    "Chat · message box" to listOf(
-        line(Part("Add"), Part("Message your computer"), Part("Send")),
-        line(Part("Effort dial", "effort"), Part("Opus 5.5", "model"), Part("48k / 200k tokens", "context")),
-        line(Part("Chat mode", "ph-policy")),
+    SimpleMode.BOX to listOf(
+        line(Part(R.string.simple_part_add), Part(R.string.simple_part_message), Part(R.string.simple_part_send)),
+        line(Part(R.string.simple_part_dial, "effort"), Part(id = "model", name = "Opus 5.5"), Part(R.string.simple_asks_first, "asks"), Part(R.string.simple_part_tokens, "context")),
+        line(Part(R.string.simple_item_run, "run-settings")),
     ),
-    "Chat · conversation" to listOf(
-        line(Part("Make the tests pass")),
-        line(Part("Show reasoning", "thinking"), Part("Ran npm test", "thinking")),
-        line(Part("All 42 tests pass now.")),
-        line(Part("PR #42 · Open", "ph-git")),
+    SimpleMode.CONVERSATION to listOf(
+        line(Part(R.string.simple_part_goal)),
+        line(Part(R.string.simple_part_reasoning, "thinking"), Part(R.string.simple_part_ran, "thinking")),
+        line(Part(R.string.simple_part_passed)),
+        line(Part(R.string.simple_part_pr, "pr-status"), Part(R.string.simple_item_git, "ph-git")),
     ),
-    "Agents wall" to listOf(
-        line(Part("New agent"), Part("Terminal", "terminal"), Part("Dictate"), Part("Image from files")),
+    SimpleMode.WALL to listOf(
+        line(Part(R.string.simple_part_new), Part(R.string.simple_item_terminal, "terminal"), Part(R.string.simple_part_dictate), Part(R.string.simple_part_image)),
     ),
-    "Phone · chats list" to listOf(
-        line(Part("Chats"), Part("Computers"), Part("Settings"), spread = true),
-        line(Part("Mode switch"), MINI_MONITOR, spread = true, divider = true),
-        line(Part("Fix the login bug")),
-        line(Part("Plan the trip")),
-        line(Part("Monitors · hardware and loaded models", "ph-monitors")),
+    SimpleMode.CHATS to listOf(
+        line(Part(R.string.simple_part_chats), Part(R.string.chats_computers), Part(R.string.simple_part_settings), spread = true),
+        line(Part(R.string.simple_part_mode), MINI_MONITOR, spread = true, divider = true),
+        line(Part(R.string.simple_part_title)),
+        line(Part(R.string.simple_part_trip)),
+        line(Part(R.string.simple_part_monitors, "ph-monitors")),
     ),
 )
 
-private fun label(v: SimpleVisibility) = when (v) {
-    SimpleVisibility.SHOW -> "Show"
-    SimpleVisibility.EXPERT -> "Expert only"
-    SimpleVisibility.HIDE -> "Hide"
+/** What a choice says for this item: Show pins a monitor on, so it reads Always there. */
+private fun choiceRes(item: SimpleItem, v: SimpleVisibility) = when (v) {
+    SimpleVisibility.SHOW -> if (item.default == SimpleVisibility.AUTO) R.string.simple_choice_always else R.string.simple_choice_show
+    SimpleVisibility.EXPERT -> R.string.simple_choice_expert
+    SimpleVisibility.HIDE -> R.string.simple_choice_hide
+    SimpleVisibility.AUTO -> R.string.simple_choice_auto
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -140,6 +169,7 @@ fun SimpleModeScreen(prefs: PhonePrefs, onBack: () -> Unit) {
     val choices = remember(raw) { SimpleMode.parse(raw) }
     val simpleName = stringResource(R.string.mode_simple)
     val expertName = stringResource(R.string.mode_expert)
+    val previewWords = stringResource(R.string.simple_preview_mode)
     var previewExpert by rememberSaveable { mutableStateOf(false) }
     // The control last changed, outlined in its preview for a moment.
     var flash by remember { mutableStateOf<String?>(null) }
@@ -148,28 +178,28 @@ fun SimpleModeScreen(prefs: PhonePrefs, onBack: () -> Unit) {
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Simple mode") },
+                title = { Text(stringResource(R.string.simple_mode_title)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back)) } },
             )
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Simple keeps Nekko calm for everyday use. Everything still works; these controls just stay out of sight.",
+                    stringResource(R.string.simple_intro),
                     style = MaterialTheme.typography.bodyLarge, color = p.inkSoft,
                 )
-                Text("Preview", style = MaterialTheme.typography.labelMedium, color = p.inkFaint)
+                Text(stringResource(R.string.simple_preview), style = MaterialTheme.typography.labelMedium, color = p.inkFaint)
                 TextSegments(
                     listOf(false, true), previewExpert, { previewExpert = it },
                     label = { if (it) expertName else simpleName },
-                    describe = { "Preview ${if (it) expertName else simpleName}" },
+                    describe = { previewWords.format(if (it) expertName else simpleName) },
                     modifier = Modifier.testTag("simple.preview"),
                 )
             }
             SimpleMode.AREAS.forEach { (area, items) ->
-                SectionHeader(area)
+                SectionHeader(AREA_TEXT[area]?.let { stringResource(it) } ?: area)
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     NCard {
                         AreaPreview(PREVIEWS[area].orEmpty(), previewExpert, choices, flash)
@@ -188,7 +218,7 @@ fun SimpleModeScreen(prefs: PhonePrefs, onBack: () -> Unit) {
                 onClick = { prefs.reset(SimpleMode.CHOICES) },
                 enabled = choices.isNotEmpty(),
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-            ) { Text("Reset to defaults") }
+            ) { Text(stringResource(R.string.simple_reset)) }
         }
     }
 }
@@ -196,17 +226,16 @@ fun SimpleModeScreen(prefs: PhonePrefs, onBack: () -> Unit) {
 @Composable
 private fun ChoiceRow(item: SimpleItem, value: SimpleVisibility, onChange: (SimpleVisibility) -> Unit) {
     val p = Nekko.palette
+    val name = ITEM_TEXT[item.id]?.let { stringResource(it.first) } ?: item.id
+    val words = SimpleMode.options(item).associateWith { stringResource(choiceRes(item, it)) }
     Column(Modifier.fillMaxWidth().testTag("simple.row.${item.id}"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Column {
-            Text(item.label, style = MaterialTheme.typography.bodyLarge, color = p.ink)
-            Text(item.hint, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
-            if (item.id in SimpleMode.LOCAL_MODEL_IDS && value == SimpleVisibility.EXPERT) {
-                Text(SimpleMode.LOCAL_MODEL_NOTE + ".", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
-            }
+            Text(name, style = MaterialTheme.typography.bodyLarge, color = p.ink)
+            Text(ITEM_TEXT[item.id]?.let { stringResource(it.second) }.orEmpty(), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
         TextSegments(
-            SimpleVisibility.entries, value, onChange, label = ::label,
-            describe = { "${item.label}: ${label(it)}" },
+            SimpleMode.options(item), value, onChange, label = { words.getValue(it) },
+            describe = { "$name: ${words.getValue(it)}" },
         )
     }
 }
@@ -239,14 +268,16 @@ private fun AreaPreview(lines: List<Line>, expert: Boolean, choices: Map<String,
 @Composable
 private fun PreviewPart(part: Part, expert: Boolean, choices: Map<String, SimpleVisibility>, flash: String?) {
     val p = Nekko.palette
-    // A preview assumes no local model is loaded; the rows say what one changes.
-    val shown = part.id == null || SimpleMode.shown(part.id, expert, choices)
+    // A preview draws a chat with changes and a pull request, and no local model running.
+    val shown = part.id == null || SimpleMode.shown(part.id, expert, choices, SimpleContext(changes = true, pr = true))
+    val text = part.name ?: stringResource(part.text)
+    val spoken = stringResource(if (shown) R.string.simple_part_shown else R.string.simple_part_hidden, text)
     val lit = part.id != null && part.id == flash
     val edge by animateColorAsState(if (lit) p.accent else if (shown) p.line else p.inkFaint, label = "preview-edge")
     val shape = RoundedCornerShape(8.dp)
     Row(
         Modifier
-            .semantics(mergeDescendants = true) { if (part.id != null) contentDescription = "${part.text}, ${if (shown) "shown" else "hidden"}" }
+            .semantics(mergeDescendants = true) { if (part.id != null) contentDescription = spoken }
             .alpha(if (shown) 1f else 0.4f)
             .then(
                 if (shown) Modifier.clip(shape).background(if (part.id == null) p.surface else p.surface2).border(if (lit) 2.dp else 1.dp, edge, shape)
@@ -271,9 +302,9 @@ private fun PreviewPart(part: Part, expert: Boolean, choices: Map<String, Simple
                 }
                 Text(t, style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
             }
-            Text("1 model", style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
+            Text(stringResource(R.string.simple_one_model), style = MaterialTheme.typography.labelSmall, color = p.inkSoft)
         } else {
-            Text(part.text, style = MaterialTheme.typography.labelMedium, color = if (part.id == null) p.inkFaint else p.ink)
+            Text(text, style = MaterialTheme.typography.labelMedium, color = if (part.id == null) p.inkFaint else p.ink)
         }
     }
 }

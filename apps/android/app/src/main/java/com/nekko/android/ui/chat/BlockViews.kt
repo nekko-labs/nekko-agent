@@ -207,8 +207,9 @@ fun StepsLine(steps: Int, running: Boolean, durationMs: Long?, open: Boolean, on
     ) {
         if (running) CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
         else Icon(Icons.Filled.Check, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
-        Text(TurnSteps.label(steps, running, durationMs), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f))
-        TextButton(onClick = onToggle) { Text(if (open) "Hide steps" else "Show steps", style = MaterialTheme.typography.labelLarge, color = p.accent) }
+        val words = TurnSteps.Words(stringResource(R.string.simple_steps_one), stringResource(R.string.simple_steps_other), stringResource(R.string.simple_steps_working), stringResource(R.string.simple_steps_took))
+        Text(TurnSteps.label(steps, running, durationMs, words), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f))
+        TextButton(onClick = onToggle) { Text(stringResource(if (open) R.string.simple_steps_hide else R.string.simple_steps_show), style = MaterialTheme.typography.labelLarge, color = p.accent) }
     }
 }
 

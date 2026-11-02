@@ -181,7 +181,8 @@ fun ChatsScreen(
     val p = Nekko.palette
     // The computer's monitors: a loaded local model brings them into Simple, the mode pill shows them,
     // and the pill opens into the details.
-    val monitor = remember(repo) { HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: "your computer" } }
+    val yourComputer = stringResource(R.string.your_computer)
+    val monitor = remember(repo) { HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: yourComputer } }
     val hardware by monitor.state.collectAsStateWithLifecycle()
     val simple = LocalSimple.current.withLocalModel(hardware.localModelLoaded)
     val showHardware = simple.shown("hardware") && s.active != null
@@ -190,7 +191,7 @@ fun ChatsScreen(
     var barBottom by remember { mutableFloatStateOf(0f) }
     PollHardware(
         monitor, s.conn == RelayState.ONLINE && s.active != null, full = showHardware,
-        light = !simple.expert && (simple.visibility("hardware") == SimpleVisibility.EXPERT || simple.visibility("ph-monitors") == SimpleVisibility.EXPERT),
+        light = simple.visibility("hardware") == SimpleVisibility.AUTO || simple.visibility("ph-monitors") == SimpleVisibility.AUTO,
     )
     // The details name loaded models from the Model Server's own list.
     LaunchedEffect(pill.expanded) { if (pill.expanded) runCatching { repo.loadModels(ENGINE_PROVIDER_ID) } }
@@ -523,25 +524,25 @@ fun ChatsScreen(
         ModePill(
             pill, barBottom, floor = null,
             gauges = if (showHardware) { vertical, open -> MiniMonitor(hardware, onOpen = open, compact = pane != null, vertical = vertical, modelName = modelName) } else null,
-            details = { AgentDetails(hardware, null, active?.name ?: "your computer", modelName, monitor::unload) },
+            details = { AgentDetails(hardware, null, computerName, modelName, monitor::unload) },
             visible = !searching,
         )
     }
 }
 
 /** The pill's second line once more than one computer is paired: "2 paired". The phone holds a live connection to one at a time. */
-internal fun pairedCaption(count: Int): String? = if (count >= 2) "$count paired" else null
+internal fun pairedCaption(count: Int, template: String = "%1\$d paired"): String? = if (count >= 2) template.format(count) else null
 
 /** What the pill's screen-reader label says: the computer, its connection, and how many are paired. */
-internal fun pillDescription(name: String, state: String, count: Int): String =
-    listOfNotNull("Computer menu", name, state, pairedCaption(count)).joinToString(", ")
+internal fun pillDescription(name: String, state: String, count: Int, menu: String = "Computer menu", paired: String = "%1\$d paired"): String =
+    listOfNotNull(menu, name, state, pairedCaption(count, paired)).joinToString(", ")
 
 private fun connName(s: RelayState) = when (s) {
-    RelayState.IDLE -> "Not connected"
-    RelayState.CONNECTING -> "Connecting"
-    RelayState.ONLINE -> "Online"
-    RelayState.OFFLINE -> "Offline"
-    RelayState.DENIED -> "Refused"
+    RelayState.IDLE -> R.string.simple_conn_idle
+    RelayState.CONNECTING -> R.string.simple_conn_connecting
+    RelayState.ONLINE -> R.string.simple_conn_online
+    RelayState.OFFLINE -> R.string.simple_conn_offline
+    RelayState.DENIED -> R.string.simple_conn_denied
 }
 
 /**
@@ -561,10 +562,11 @@ private fun ComputerPill(
 ) {
     val p = Nekko.palette
     // With no computer chosen yet the pill still opens the menu, as on the iPhone.
-    val name = s.active?.name ?: "Computers"
+    val name = s.active?.name ?: stringResource(R.string.chats_computers)
+    val pairedWords = stringResource(R.string.simple_paired)
     var open by remember { mutableStateOf(false) }
     var exitsOpen by remember { mutableStateOf(false) }
-    val caption = pairedCaption(s.computers.size)
+    val caption = pairedCaption(s.computers.size, pairedWords)
     val dot = when (s.conn) {
         RelayState.ONLINE -> p.success
         RelayState.CONNECTING -> p.accent
@@ -572,7 +574,7 @@ private fun ComputerPill(
         RelayState.DENIED -> p.danger
         RelayState.IDLE -> p.inkFaint
     }
-    val description = pillDescription(name, connName(s.conn), s.computers.size)
+    val description = pillDescription(name, stringResource(connName(s.conn)), s.computers.size, stringResource(R.string.simple_computer_menu), pairedWords)
     val close = { open = false; exitsOpen = false }
     Box {
         Box(
@@ -602,8 +604,8 @@ private fun ComputerPill(
         DropdownMenu(expanded = open, onDismissRequest = close) {
             if (exitsOpen) {
                 DropdownMenuItem(
-                    text = { Text("Sign out or disconnect", fontWeight = FontWeight.SemiBold) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to the menu") },
+                    text = { Text(stringResource(R.string.simple_sign_out_or_disconnect), fontWeight = FontWeight.SemiBold) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.simple_back_to_menu)) },
                     onClick = { exitsOpen = false },
                 )
                 HorizontalDivider(color = p.line)
@@ -615,7 +617,7 @@ private fun ComputerPill(
                 DropdownMenuItem(
                     text = { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingIcon = { if (on) Icon(Icons.Filled.Check, contentDescription = null, tint = p.accent) else Spacer(Modifier.size(24.dp)) },
-                    trailingIcon = if (on) null else ({ Text("Connect", style = MaterialTheme.typography.labelMedium, color = p.accent) }),
+                    trailingIcon = if (on) null else ({ Text(stringResource(R.string.simple_connect), style = MaterialTheme.typography.labelMedium, color = p.accent) }),
                     onClick = {
                         close()
                         if (!on) onConnect(c.id)
@@ -625,19 +627,19 @@ private fun ComputerPill(
             }
             HorizontalDivider(color = p.line)
             DropdownMenuItem(
-                text = { Text("Search chats") },
+                text = { Text(stringResource(R.string.simple_search_chats)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 onClick = { close(); onSearch() },
                 modifier = Modifier.testTag("chats.menu.search"),
             )
             DropdownMenuItem(
-                text = { Text("Computers") },
+                text = { Text(stringResource(R.string.chats_computers)) },
                 leadingIcon = { Icon(Icons.Filled.Computer, contentDescription = null) },
                 onClick = { close(); onComputers() },
             )
             if (s.active != null) HorizontalDivider(color = p.line)
             if (s.active != null) DropdownMenuItem(
-                text = { Text("Sign out or disconnect") },
+                text = { Text(stringResource(R.string.simple_sign_out_or_disconnect)) },
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
                 trailingIcon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
                 onClick = { exitsOpen = true },
@@ -664,7 +666,7 @@ private fun SearchRow(query: String, onQuery: (String) -> Unit, onClose: () -> U
                 TextField(
                     value = query,
                     onValueChange = onQuery,
-                    placeholder = { Text("Search chats") },
+                    placeholder = { Text(stringResource(R.string.simple_search_chats)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
@@ -676,7 +678,7 @@ private fun SearchRow(query: String, onQuery: (String) -> Unit, onClose: () -> U
                     ),
                     modifier = Modifier.weight(1f).focusRequester(focus).testTag("chats.search"),
                 )
-                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Cancel search", tint = p.inkSoft) }
+                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.simple_cancel_search), tint = p.inkSoft) }
             }
             SlimDivider()
         }

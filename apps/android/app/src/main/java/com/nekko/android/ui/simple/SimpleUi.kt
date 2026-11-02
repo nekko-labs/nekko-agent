@@ -23,6 +23,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -32,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.PillPlace
+import com.nekko.android.R
+import com.nekko.android.data.SimpleContext
 import com.nekko.android.data.SimpleMode
 import com.nekko.android.data.SimpleVisibility
 import com.nekko.android.monitors.EXPERT_MODE
@@ -65,7 +68,7 @@ import com.nekko.android.ui.theme.Nekko
 
 /**
  * The mode and the person's choices, as the screens read them. [localModelLoaded] is the
- * screen's own last Model Server read: while it holds a model, Simple shows the monitors too.
+ * screen's own last Model Server read: while it holds a model, the monitors show.
  */
 class SimpleView(
     val expert: Boolean,
@@ -76,7 +79,8 @@ class SimpleView(
     val setPill: (PillPlace) -> Unit = {},
     val setExpert: (Boolean) -> Unit,
 ) {
-    fun shown(id: String) = SimpleMode.shown(id, expert, choices, localModelLoaded)
+    fun shown(id: String, changes: Boolean = false, pr: Boolean = false) =
+        SimpleMode.shown(id, expert, choices, SimpleContext(localModelLoaded, changes, pr))
 
     fun visibility(id: String) = SimpleMode.visibility(id, choices)
 
@@ -165,8 +169,6 @@ fun <T> TextSegments(options: List<T>, selected: T, onSelect: (T) -> Unit, label
 }
 
 const val MODE_SWITCH_TAG = "simple.mode"
-const val SIMPLE_DESCRIPTION = "Simple: everyday controls"
-const val EXPERT_DESCRIPTION = "Expert: every control"
 
 /**
  * Simple (a chat bubble) or Expert (angle brackets), in the mode pill. [vertical] stacks the two
@@ -175,6 +177,8 @@ const val EXPERT_DESCRIPTION = "Expert: every control"
 @Composable
 fun ModeSwitch(expert: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, vertical: Boolean = false) {
     val p = Nekko.palette
+    val expertWords = stringResource(R.string.simple_switch_expert)
+    val simpleWords = stringResource(R.string.simple_switch_simple)
     if (vertical) {
         Column(modifier.testTag(MODE_SWITCH_TAG).selectableGroup(), horizontalAlignment = Alignment.CenterHorizontally) {
             listOf(false, true).forEach { o ->
@@ -184,7 +188,7 @@ fun ModeSwitch(expert: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier 
                         .size(48.dp)
                         .drawBehind { if (on) drawCircle(p.accent, 15.dp.toPx()) }
                         .selectable(on, interactionSource = null, indication = null, role = Role.RadioButton) { if (!on) onChange(o) }
-                        .semantics { contentDescription = if (o) EXPERT_DESCRIPTION else SIMPLE_DESCRIPTION },
+                        .semantics { contentDescription = if (o) expertWords else simpleWords },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(if (o) Icons.Filled.Code else Icons.Filled.ChatBubbleOutline, contentDescription = null, tint = if (on) p.accentInk else p.inkSoft, modifier = Modifier.size(16.dp))
@@ -196,7 +200,7 @@ fun ModeSwitch(expert: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier 
     Box(modifier.testTag(MODE_SWITCH_TAG)) {
         Segments(
             options = listOf(false, true), selected = expert, onSelect = onChange, height = 26.dp,
-            describe = { if (it) EXPERT_DESCRIPTION else SIMPLE_DESCRIPTION },
+            describe = { if (it) expertWords else simpleWords },
         ) { o, on ->
             Icon(
                 if (o) Icons.Filled.Code else Icons.Filled.ChatBubbleOutline,

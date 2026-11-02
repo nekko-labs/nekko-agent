@@ -28,6 +28,8 @@ import android.Manifest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
@@ -204,7 +206,6 @@ private fun ChatScreenContent(
     val showSteps = simple.shown("thinking")
     val showGit = simple.shown("ph-git")
     val showTerminal = simple.shown("terminal")
-    val showPolicy = simple.shown("ph-policy")
     val chat by vm.ui.collectAsStateWithLifecycle()
     val watches by vm.watches.collectAsStateWithLifecycle()
     val subagents by vm.subagents.collectAsStateWithLifecycle()
@@ -213,6 +214,10 @@ private fun ChatScreenContent(
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    // Read with the chat and after each turn: Changes shows only with something in it.
+    LaunchedEffect(vm.sessionId, chat.running, changesAllowed) { if (changesAllowed && !chat.running) vm.loadChanges() }
+    val changesLoad by vm.changes.collectAsStateWithLifecycle()
+    val changedFiles = changesLoad.changes?.let { it.files.size + it.omittedFiles } ?: 0
     val hardware by vm.hardware.state.collectAsStateWithLifecycle()
     val computers by vm.computers.collectAsStateWithLifecycle()
     val computerName = computers.active?.name ?: stringResource(R.string.chats_your_computer)
@@ -229,7 +234,7 @@ private fun ChatScreenContent(
     LaunchedEffect(pill.expanded, online) { if (pill.expanded && online) vm.loadModels(ENGINE_PROVIDER_ID) }
     // The minimal monitor re-reads every 3 s while it shows; Simple otherwise asks the Model Server every 10 s
     // whether a local model is loaded (which brings the monitor in).
-    PollHardware(vm.hardware, online, full = showHardware, light = !simple.expert && simple.visibility("hardware") == SimpleVisibility.EXPERT)
+    PollHardware(vm.hardware, online, full = showHardware, light = simple.visibility("hardware") == SimpleVisibility.AUTO)
     // Simple's "chat getting long" line, until dismissed for this chat.
     var longChatDismissed by rememberSaveable(vm.sessionId) { mutableStateOf(false) }
     val savings = chat.context?.let { c -> SimpleMode.freshSavings(chat.contextTokens ?: c.usedTokens, c.contextWindow, c.sources) }
@@ -333,9 +338,8 @@ private fun ChatScreenContent(
     }
 
     if (showChanges && changesAllowed) {
-        val changes by vm.changes.collectAsStateWithLifecycle()
         ChangesSheet(
-            changes.changes, changes.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false },
+            changesLoad.changes, changesLoad.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false },
             onAsk = { quote -> vm.quote(quote); showChanges = false },
         )
     }
@@ -394,7 +398,7 @@ private fun ChatScreenContent(
     files?.let { f -> FilesDialog(f, vm.repo, onDismiss = vm::closeFiles) }
     val git by vm.gitOpen.collectAsStateWithLifecycle()
     git?.let { o -> GitDialog(o.git, onDismiss = { vm.closeGit(); prReads++ }, pr = o.pr) }
-    if (showPrs && showGit) {
+    if (showPrs) {
         PrSheet(
             prs, onDismiss = { showPrs = false; prReads++ },
             onGit = { pr -> showPrs = false; vm.openGit(pr) },
@@ -412,9 +416,12 @@ private fun ChatScreenContent(
                         // A little shorter than the default, so the mode pill sits right under the title.
                         expandedHeight = 56.dp,
                         actions = {
-                            if (changesAllowed && simple.shown("changes")) {
-                                IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
-                                    Icon(Icons.Filled.Difference, contentDescription = stringResource(R.string.chats_changes))
+                            if (changesAllowed && simple.shown("changes", changes = changedFiles > 0)) {
+                                val filesChanged = if (changedFiles == 1) stringResource(R.string.simple_files_changed_one) else stringResource(R.string.simple_files_changed_other, changedFiles)
+                                IconButton(onClick = { vm.loadChanges(); showChanges = true }, modifier = Modifier.testTag("chat.changes")) {
+                                    BadgedBox(badge = { Badge(containerColor = p.accent, contentColor = p.accentInk) { Text("$changedFiles") } }) {
+                                        Icon(Icons.Filled.Difference, contentDescription = filesChanged)
+                                    }
                                 }
                             }
                             Box {
@@ -422,7 +429,7 @@ private fun ChatScreenContent(
                                     Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_more))
                                 }
                                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                                    DropdownMenuItem(
+                                    if (showGit) DropdownMenuItem(
                                         text = { Text("Git") },
                                         leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
                                         onClick = { showMenu = false; vm.openGit() },
@@ -444,7 +451,7 @@ private fun ChatScreenContent(
                                         modifier = Modifier.testTag("chat.terminals"),
                                     )
                                     HorizontalDivider()
-                                    if (showPolicy) DropdownMenuItem(
+                                    if (simple.expert && simple.shown("asks")) DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chats_chat_mode)) },
                                         leadingIcon = { Icon(Icons.Filled.Shield, contentDescription = null) },
                                         onClick = { showMenu = false; showMode = true },
@@ -585,7 +592,7 @@ private fun ChatScreenContent(
             val controls: @Composable () -> Unit = {
                 chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
                 chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
-                if (showGit) prs.firstOrNull()?.let { pr -> PrChip(pr) { showPrs = true } }
+                prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
                 // A completed chat reads like the desktop's: no message box until it is restored.
                 if (completedAt != null && !chat.running) CompletedBar(
                     restoring = restoring,
@@ -658,7 +665,7 @@ private fun ChatScreenContent(
                         onNewAgent = onNewChat,
                         onTerminal = if (showTerminal) vm::openTerminals else null,
                     )
-                    ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
+                    ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }, asks = chat.mode ?: vm.defaultMode, onOpenAsks = { showMode = true })
                 }
             }
             ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
