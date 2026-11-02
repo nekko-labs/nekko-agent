@@ -859,7 +859,8 @@ class RelayClient(
         dial(detail)
     }
 
-    private fun enc(s: String) = URLEncoder.encode(s, Charsets.UTF_8)
+    // By name: the Charset overload only exists from Android 13, and the app runs from Android 9.
+    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 }
 
 /** How long a socket callback waits for [RelayClient] to finish opening that socket. */

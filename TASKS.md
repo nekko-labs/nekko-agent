@@ -28,6 +28,16 @@ Simple becomes the everyday app with developer controls out of sight, chosen per
 - [x] **SEM-9, phone header and monitors.** Title kept top middle, the switch on a slim second row with a hairline, minimal gauges with percentages, a pull-down agent panel from the top replacing the strip and Monitor sheet, and the getting-long note on both phones. iPhone tests and live UI test pass; Android unit tests and builds pass, not run on a device. (2026-10-28)
 - [x] **SEM-7, search and steps (desktop).** The command palette lists out-of-sight controls (*Shown in Expert* / *Hidden in Settings*), the mode switch and the Simple mode settings; Settings search reaches every control through the Simple mode page. Each turn's steps fold to one line with *Show steps* in Simple (`simpleStepsSummary`, unit-tested; 18 harness assertions). (2026-10-28)
 
+## Third-party licensing and credits (added 2026-11-03)
+
+Spec: [third-party licensing and credits](spec/platform/third-party-licensing-and-credits.md). Runbook: [third-party](docs/runbooks/third-party.md).
+
+- [x] **TP-1, License check.** `scripts/third-party.mjs check` against `scripts/license-policy.json`, as a `licenses` CI job that runs only on dependency or `ASSETS.md` changes, with `gate` waiting for it. (2026-11-03)
+- [x] **TP-2, Notices file.** `dist` and `release` generate `THIRD_PARTY_NOTICES.txt` from what the bundler used, production packages and crates. Settings shows it. macOS also gets Chromium's notices. (2026-11-03)
+- [x] **TP-3, Assets list and credits page.** `ASSETS.md` is both, published at /docs/credits. (2026-11-03)
+- [ ] **TP-4, Notices in the npm packages.** `apps/cli` and the `nekkod` packages bundle third-party code and carry no notices file.
+- [ ] **TP-5, Crates in the Docker notices.** The builder stage has no cargo, so the image's file lists npm packages only.
+
 ## Live Activity language and the bottom of a chat (#1487, added 2026-11-02)
 
 Philip's Live Activity read in Japanese on an English-first iPhone, and he asked for a lighter bottom of a chat. Spec: [The bottom of a chat](spec/phone/native-ios-app.md).

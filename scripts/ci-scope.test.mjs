@@ -5,10 +5,10 @@ import { ciScope, codeqlLanguages, FILE_LIST_CAP } from './ci-scope.mjs';
 
 const pr = (files, labels = []) => ciScope({ event: 'pull_request', files, labels });
 const queue = (files) => ciScope({ event: 'merge_group', files });
-const full = { build: true, daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true };
+const full = { build: true, daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true, licenses: false };
 // Every PR result carries itests: false; every queue result, itests: true. Both build, unless a test says not.
-const p = (scope) => ({ build: true, ...scope, itests: false });
-const q = (scope) => ({ build: true, ...scope, itests: true });
+const p = (scope) => ({ build: true, licenses: false, ...scope, itests: false });
+const q = (scope) => ({ build: true, licenses: false, ...scope, itests: true });
 const none = { daemon_os: [], capture_os: [], perf: false };
 
 test('the schedule, main pushes and manual dispatches run every job on every OS', () => {
@@ -64,8 +64,8 @@ test('macOS never runs in the queue: it runs every 6 hours instead', () => {
 test('CI, dependency and unknown file lists fall back to every job of the tier', () => {
   for (const files of [['.github/workflows/ci.yml'], ['package-lock.json'], ['scripts/ci-scope.mjs'], [], Array(FILE_LIST_CAP).fill('docs/x.md')]) {
     const label = JSON.stringify(files.slice(0, 1));
-    assert.deepEqual(pr(files), p({ daemon_os: ['ubuntu-latest'], capture_os: ['windows-latest'], perf: false }), label);
-    assert.deepEqual(queue(files), q({ daemon_os: ['ubuntu-latest', 'windows-latest'], capture_os: ['windows-latest'], perf: true }), label);
+    assert.deepEqual(pr(files), p({ daemon_os: ['ubuntu-latest'], capture_os: ['windows-latest'], perf: false, licenses: true }), label);
+    assert.deepEqual(queue(files), q({ daemon_os: ['ubuntu-latest', 'windows-latest'], capture_os: ['windows-latest'], perf: true, licenses: true }), label);
   }
 });
 
@@ -103,7 +103,7 @@ test('ci:macos adds macOS only to the jobs a change already needs', () => {
 test('a change only to the native phone apps skips build, on the PR and in the queue', () => {
   const native = ['apps/ios/App/AppModel.swift', 'apps/ios/project.yml', 'apps/android/app/src/main/java/Main.kt'];
   assert.deepEqual(pr(native), p({ build: false, daemon_os: [], capture_os: [], perf: false }));
-  assert.deepEqual(queue(native), { build: false, daemon_os: [], capture_os: [], perf: false, itests: false });
+  assert.deepEqual(queue(native), { build: false, daemon_os: [], capture_os: [], perf: false, itests: false, licenses: false });
   // Anything else alongside, even docs, builds; so does an unknown list.
   assert.equal(pr([...native, 'docs/guide.md']).build, true);
   assert.equal(pr([...native, 'packages/shared/src/phone-access.ts']).build, true);
@@ -133,4 +133,14 @@ test('ci.yml skips build from the scope, and the compliance check runs in scope 
   assert.match(job('build'), /^ {4}if: needs\.scope\.outputs\.run == 'true' && needs\.scope\.outputs\.build == 'true'$/m);
   assert.ok(job('scope').includes('node scripts/check-claude-compliance.mjs'));
   assert.ok(!job('scope').includes('sparse-checkout'), 'the compliance check scans the whole tree');
+});
+
+test('the license check runs only when dependencies or the assets list change', () => {
+  for (const files of [['apps/desktop/package.json'], ['crates/nekkod/Cargo.toml'], ['Cargo.lock'], ['ASSETS.md'], ['scripts/license-policy.json']]) {
+    assert.equal(pr(files).licenses, true, JSON.stringify(files));
+    assert.equal(queue(files).licenses, true, JSON.stringify(files));
+  }
+  assert.equal(pr(['README.md']).licenses, false);
+  assert.equal(pr(['apps/desktop/src/renderer/App.tsx']).licenses, false);
+  assert.equal(ciScope({ event: 'schedule' }).licenses, false);
 });

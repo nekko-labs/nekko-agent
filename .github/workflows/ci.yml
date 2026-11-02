@@ -46,6 +46,7 @@ jobs:
       capture_os: ${{ steps.scope.outputs.capture_os }}
       perf: ${{ steps.scope.outputs.perf }}
       itests: ${{ steps.scope.outputs.itests }}
+      licenses: ${{ steps.scope.outputs.licenses }}
       run: ${{ steps.fresh.outputs.run }}
     steps:
       - uses: actions/checkout@v7
@@ -363,8 +364,20 @@ jobs:
   # the label's runs in other workflows, so nothing queues a PR before they are
   # green. In the queue it fails a group holding a draft, a `hold` PR, or a
   # `ci:macos` PR without green runs, which ejects it (#1002).
+  # Only when dependencies or ASSETS.md change: a new package with a license the
+  # policy has not seen stops here, before it ships. docs/runbooks/third-party.md.
+  licenses:
+    needs: scope
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.licenses == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: node scripts/third-party.mjs check
+
   gate:
-    needs: [scope, build, daemon, capture, perf]
+    needs: [scope, build, daemon, capture, perf, licenses]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 190

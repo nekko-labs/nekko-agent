@@ -27,6 +27,7 @@ on:
   pull_request:
     paths:
       - 'docs/**'
+      - 'ASSETS.md'
       - 'CONTRIBUTING.md'
       - 'scripts/build-docs.mjs'
       - 'apps/website/llms.txt'
@@ -36,6 +37,7 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'ASSETS.md'
       - 'CONTRIBUTING.md'
       - 'scripts/build-docs.mjs'
       - 'apps/website/llms.txt'
