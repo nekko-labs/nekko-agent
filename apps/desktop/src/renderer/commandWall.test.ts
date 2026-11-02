@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { PendingInput, SessionSummary, TerminalInfo } from '@nekko-agent/shared';
 import { allPanes, extent, findPane, isSplit, removePane, type WbPane } from './layout.js';
 import {
-  minimizeFinishedReply,
   DEFAULT_AGENT_PANEL,
   readAgentPanel,
   DEFAULT_WALL_STATE,
@@ -502,38 +501,3 @@ describe('agent panel preferences', () => {
 });
 
 
-describe('automatic reply minimization', () => {
-  const done = { type: 'done' as const, sessionId: 'a', messageId: 'reply', stop: 'complete' as const };
-  const state = () => ({ ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_LAYOUT, mode: 'grid' as const }, watermark: 1234, root: tileTree([wallPane('chat', 'a'), wallPane('chat', 'b'), wallPane('terminal', 'a')]) });
-  it.each([false, true])('minimizes only the finished chat (fixed grid: %s)', (fixedGrid) => {
-    const before = { ...state(), layout: { ...DEFAULT_WALL_LAYOUT, mode: 'grid' as const, fixedGrid } };
-    const after = minimizeFinishedReply(before, done, {});
-    // The chat leaves; its zone stays, empty.
-    expect(allPanes(after.root).map(p => [p.kind, p.refId])).toEqual([['zone', ''], ['chat', 'b'], ['terminal', 'a']]);
-    expect(after).toEqual({ ...before, root: after.root });
-    expect(allPanes(before.root).map(p => p.kind)).toEqual(['chat', 'chat', 'terminal']);
-  });
-  it('keeps Focused windows visible', () => {
-    const before = { ...state(), layout: { ...DEFAULT_WALL_LAYOUT, mode: 'focus' as const } };
-    expect(minimizeFinishedReply(before, done, {})).toBe(before);
-  });
-  it('keeps errors, loop and runaway stops visible', () => {
-    const before = state();
-    expect(minimizeFinishedReply(before, { type: 'error', sessionId: 'a', message: 'failed' }, {})).toBe(before);
-    for (const stop of ['loop', 'runaway'] as const) expect(minimizeFinishedReply(before, { ...done, stop }, {})).toBe(before);
-  });
-  it('keeps pending input visible but does not block on another chat', () => {
-    const before = state();
-    const input = {} as PendingInput;
-    expect(minimizeFinishedReply(before, done, { a: input })).toBe(before);
-    expect(minimizeFinishedReply(before, done, { b: input })).not.toBe(before);
-  });
-  it('accepts older successful events without stop metadata', () => {
-    expect(refs(minimizeFinishedReply(state(), { ...done, stop: undefined }, {}).root)).toEqual(['', 'b', 'a']);
-  });
-  it('is a no-op for absent panes and leaves a lone zone in place', () => {
-    const before = state();
-    expect(minimizeFinishedReply(before, { ...done, sessionId: 'missing' }, {})).toBe(before);
-    expect(minimizeFinishedReply({ ...before, root: wallPane('chat', 'a') }, done, {}).root).toMatchObject({ kind: 'zone', refId: '' });
-  });
-});

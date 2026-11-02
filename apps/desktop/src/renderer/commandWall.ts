@@ -1,4 +1,4 @@
-import type { AgentEvent, CommandWallSetting, PendingInput, SessionSummary, TerminalInfo, WallLayout, MonitorsDock, MonitorKey } from '@nekko-agent/shared';
+import type { CommandWallSetting, PendingInput, SessionSummary, TerminalInfo, WallLayout, MonitorsDock, MonitorKey } from '@nekko-agent/shared';
 import { DEFAULT_WALL_LAYOUT, DEFAULT_MONITORS_DOCK, BLOCKED_META, isArchived, sessionLane } from '@nekko-agent/shared';
 import {
   allPanes,
@@ -35,15 +35,6 @@ import {
  * windows is tiled from scratch, and how the saved grid of the previous
  * design is carried over.
  */
-
-/** Successful replies leave Dynamic's stage without changing the chat's lifecycle. */
-export function minimizeFinishedReply(state: CommandWallState, event: AgentEvent, pending: Record<string, PendingInput>): CommandWallState {
-  if (state.layout.mode === 'focus' || event.type !== 'done' || (event.stop && event.stop !== 'complete') || pending[event.sessionId]) return state;
-  const panes = allPanes(state.root).filter((p) => p.kind === 'chat' && p.refId === event.sessionId);
-  if (!panes.length) return state;
-  // The agent leaves; its zone stays, empty.
-  return { ...state, root: panes.reduce((root, pane) => clearZone(root, pane.id), state.root) };
-}
 
 export type WallFilter = 'all' | 'chat' | 'terminal';
 
