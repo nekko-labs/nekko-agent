@@ -5,7 +5,7 @@ import { liveStore } from './tests/liveStore.js';
 import { renderApp } from './tests/renderApp.js';
 
 vi.mock('./store.js', (original) => liveStore(original as never));
-import { RAIL_MIN_LOWER_SWOOP, RAIL_ROW_CLEARANCE, RAIL_TIP, RAIL_TIP_INSET, railGeometry } from './railGeometry.js';
+import { RAIL_MAX_TAPER, RAIL_MIN_LOWER_SWOOP, RAIL_ROW_CLEARANCE, railGeometry } from './railGeometry.js';
 
 const nums = (d: string) => d.match(/-?[\d.]+/g)!.map(Number);
 /** Every x the outline reaches (absolute commands only, x first in each pair). */
@@ -14,29 +14,30 @@ const xs = (d: string) => nums(d).filter((_, i) => i % 2 === 0);
 describe('swoop rail geometry', () => {
   const g = railGeometry({ railHeight: 1200, groupTop: 300, groupHeight: 500 });
 
-  it('starts and ends as a hairline near the rail ends and swells to the rest width beside the rows', () => {
-    expect(g.y0).toBe(RAIL_TIP_INSET);
-    expect(g.y1).toBe(1200 - RAIL_TIP_INSET);
+  it('tapers out of the wall above the rows and swells to the rest width beside them', () => {
     expect(g.swellTop).toBe(300 - RAIL_ROW_CLEARANCE);
     expect(g.swellBottom).toBe(800 + RAIL_ROW_CLEARANCE);
-    expect(g.restPath.startsWith(`M0,${RAIL_TIP_INSET} L0,${RAIL_TIP_INSET} Q${RAIL_TIP},${RAIL_TIP_INSET}`)).toBe(true);
+    expect(g.y0).toBe(g.swellTop - RAIL_MAX_TAPER);
+    expect(g.restPath.startsWith(`M0,${g.y0} C0,`)).toBe(true);
     expect(g.restPath).toContain(`52,${g.swellTop} L52,${g.swellBottom}`);
     expect(Math.max(...xs(g.restPath))).toBe(52);
-    expect(g.restPath).toMatch(new RegExp(`L0,${g.y1} Z$`));
   });
 
-  it('mirrors the upper swoop below the rows, then runs on as a hairline', () => {
-    const upper = g.swellTop - (g.y0 + RAIL_TIP);
-    const tail = g.swellBottom + Math.max(upper, RAIL_MIN_LOWER_SWOOP);
-    expect(g.restPath).toContain(`${RAIL_TIP},${tail} L${RAIL_TIP},${g.y1 - RAIL_TIP}`);
+  it('mirrors the upper taper below the rows and ends at the wall with no tail', () => {
+    expect(g.y1).toBe(g.swellBottom + Math.max(RAIL_MAX_TAPER, RAIL_MIN_LOWER_SWOOP));
+    expect(g.restPath).toMatch(new RegExp(` 0,${g.y1} Z$`));
+    // Only the two tapers and the wall reach x = 0; no hairline runs on.
+    expect(g.restPath.match(/L/g)).toHaveLength(1);
   });
 
-  it('opens to one even column with rounded ends', () => {
-    expect(new Set(xs(g.openPath).filter(x => x > 0 && x < 198 - RAIL_TIP))).toEqual(new Set());
-    expect(g.openPath.startsWith(`M0,${RAIL_TIP_INSET} L${198 - RAIL_TIP},${RAIL_TIP_INSET} Q198,${RAIL_TIP_INSET} 198,${RAIL_TIP_INSET + RAIL_TIP}`)).toBe(true);
+  it('keeps short gaps above the rows as a shorter taper', () => {
+    const short = railGeometry({ railHeight: 900, groupTop: 60, groupHeight: 400 });
+    expect(short.y0).toBe(0);
+    expect(short.y1).toBe(short.swellBottom + RAIL_MIN_LOWER_SWOOP);
   });
 
-  it('keeps every vertical anchor synchronized including the lower tail', () => {
+  it('opens to the full width on the same vertical anchors', () => {
+    expect(Math.max(...xs(g.openPath))).toBe(198);
     expect(nums(g.openPath).filter((_, i) => i % 2 === 1)).toEqual(nums(g.restPath).filter((_, i) => i % 2 === 1));
   });
 
@@ -112,6 +113,11 @@ describe('compact board and navigation spacing', () => {
     expect(nav).toMatch(/class="rail-indicator"[^>]*style="--i:0;/);
     expect(nav).toContain('style="--n:0"');
     expect(nav).toContain('style="--n:1"');
+    // Send feedback sits in the shape under the last destination, set apart by a divider.
+    const afterRows = group.slice(group.lastIndexOf('style="--n:'));
+    expect(afterRows.indexOf('class="rail-divider"')).toBeGreaterThan(0);
+    expect(afterRows.indexOf('data-testid="rail-feedback"')).toBeGreaterThan(afterRows.indexOf('class="rail-divider"'));
+    expect(afterRows.indexOf('data-testid="rail-feedback"')).toBeLessThan(afterRows.indexOf('class="rail-space-after"'));
   });
 
   it('keeps 1px around the board and one wall gap beside the agent list without shrinking grips', () => {

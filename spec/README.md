@@ -97,7 +97,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Stay out of the way of full-screen apps (games)](desktop/stay-out-of-the-way-of-full-screen-apps.md) (3 KB)
 - [Style: universal fonts, text size and your own fonts (desktop)](desktop/style-fonts-and-text-size.md) (3 KB)
 - [Subtle rail and compact board gutters](desktop/subtle-rail-and-compact-board-gutters.md) (3 KB)
-- [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (4 KB)
+- [Swoop navigation rail (2026-10-17)](desktop/swoop-navigation-rail.md) (5 KB)
 - [Wall model controls and drafting layout](desktop/wall-model-controls-and-drafting-layout.md) (3 KB)
 - [Wall new-chat details placement](desktop/wall-new-chat-details-placement.md) (1 KB)
 - [Wall push and navigation shoulders](desktop/wall-push-and-navigation-shoulders.md) (1 KB)

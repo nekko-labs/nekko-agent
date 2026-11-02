@@ -615,7 +615,15 @@
   top: 5%; bottom: 5%;
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
-.rail-feedback { pointer-events: auto; }
+.rail-feedback { pointer-events: auto; flex-shrink: 0; }
+/* Sets Send feedback apart from the destinations above it: more air than the
+   row gap on both sides, and a hairline that widens with the rail. */
+.rail-divider {
+  flex-shrink: 0;
+  height: 1px;
+  margin: 16px 8px 12px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+}
 .rail-space-before { flex: 1 1 0; }
 .rail-space-after { flex: 4 1 0; }
 .rail-group { position: relative; display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
