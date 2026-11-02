@@ -36,6 +36,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod federation;
 mod feedback;
 mod gcp;
 mod harness;

@@ -6,6 +6,7 @@
 //! `computers:*` is answered for the desktop window only (wire.rs): an agent's
 //! tools, the CLI's API and the Local Web UI never reach a paired machine.
 
+use crate::federation;
 use crate::hub::Hub;
 use nekko_cloud::vault::{FileVault, Vault, scoped_vault};
 use nekko_remote::client::{Client, Config, SigningKey, State, Status};
@@ -23,6 +24,7 @@ pub const CHANNELS: &[&str] = &[
     "computers:setColor",
     "computers:forget",
     "computers:call",
+    "computers:catalog",
 ];
 
 /// The event a window refreshes on: a link's state changed, or the list did.
@@ -30,6 +32,11 @@ pub const UPDATED: &str = "computers:updated";
 
 /// How long a pairing may take: a dial, a handshake and an enrollment.
 const PAIR_LIMIT: Duration = Duration::from_secs(30);
+const REFRESH_EVERY: Duration = Duration::from_secs(60);
+const REFRESH_DEBOUNCE: Duration = Duration::from_millis(250);
+const CALL_LIMIT: Duration = Duration::from_secs(120);
+/// `chat:send` answers when the turn is over, which may be hours.
+const TURN_LIMIT: Duration = Duration::from_secs(12 * 60 * 60);
 
 /// One paired computer, as `computers.json` holds it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -56,12 +63,31 @@ struct Secrets {
     device_key: String,
 }
 
+/// What a computer last said, so the panel paints from memory and an offline
+/// computer's agents stay on it.
+#[derive(Default, Serialize, Deserialize)]
+struct Seen {
+    summaries: Vec<Value>,
+    #[serde(skip)]
+    running: Vec<String>,
+    #[serde(skip)]
+    pending: serde_json::Map<String, Value>,
+    /// The switches it set for this one, once read after the welcome.
+    #[serde(skip)]
+    access: Option<Value>,
+    catalog: Option<Value>,
+}
+
 pub struct Computers {
+    dir: PathBuf,
     file: PathBuf,
     vault: Box<dyn Vault>,
     hub: Hub,
     list: Mutex<Vec<Paired>>,
     links: Mutex<HashMap<String, Client>>,
+    seen: Mutex<HashMap<String, Seen>>,
+    /// Refresh this computer's lists soon; several `done`s coalesce.
+    refresh: Mutex<HashMap<String, Arc<tokio::sync::Notify>>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -156,7 +182,25 @@ impl Computers {
     pub fn with_vault(dir: PathBuf, hub: Hub, vault: Box<dyn Vault>) -> Arc<Self> {
         let file = dir.join("computers.json");
         let list = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-        Arc::new(Self { file, vault, hub, list: Mutex::new(list), links: Mutex::default() })
+        let list: Vec<Paired> = list;
+        let seen = list
+            .iter()
+            .map(|p| {
+                let path = dir.join("computers").join(&p.id).join("seen.json");
+                let seen = std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok());
+                (p.id.clone(), seen.unwrap_or_default())
+            })
+            .collect();
+        Arc::new(Self {
+            dir,
+            file,
+            vault,
+            hub,
+            list: Mutex::new(list),
+            links: Mutex::default(),
+            seen: Mutex::new(seen),
+            refresh: Mutex::default(),
+        })
     }
 
     /// A link per paired computer. Does nothing with none.
@@ -198,15 +242,173 @@ impl Computers {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let client = Client::start(cfg, tx);
         lock(&self.links).insert(id.to_string(), client.clone());
-        let (hub, mut changes) = (self.hub.clone(), client.watch());
+        let soon = Arc::new(tokio::sync::Notify::new());
+        lock(&self.refresh).insert(id.to_string(), soon.clone());
+
+        // Each welcome: read its lists, and catch up on turns already running.
+        let (me, computer, mut changes) = (self.clone(), id.to_string(), client.watch());
         tokio::spawn(async move {
             while changes.changed().await.is_ok() {
-                hub.publish(UPDATED, json!({}), false);
+                me.hub.publish(UPDATED, json!({}), false);
+                let online = changes.borrow().state == State::Online;
+                if online && me.refreshed(&computer).await {
+                    me.catch_up(&computer).await;
+                }
             }
         });
-        // Federation reads these; until then they are dropped.
-        tokio::spawn(async move { while rx.recv().await.is_some() {} });
+
+        // A turn's end, a chat changing, and every minute.
+        let (me, computer, wake) = (self.clone(), id.to_string(), soon.clone());
+        tokio::spawn(async move {
+            loop {
+                let _ = tokio::time::timeout(REFRESH_EVERY, wake.notified()).await;
+                tokio::time::sleep(REFRESH_DEBOUNCE).await;
+                if !lock(&me.links).contains_key(&computer) {
+                    return;
+                }
+                me.refreshed(&computer).await;
+            }
+        });
+
+        let (me, computer) = (self.clone(), id.to_string());
+        tokio::spawn(async move {
+            while let Some((channel, mut payload)) = rx.recv().await {
+                if channel != "agent:event" {
+                    continue;
+                }
+                let turn_over =
+                    matches!(payload.get("type").and_then(Value::as_str), Some("done" | "error" | "session_meta"));
+                federation::qualify_ids(&computer, &mut payload);
+                me.hub.publish_remote(payload);
+                if turn_over {
+                    soon.notify_one();
+                }
+            }
+        });
         client
+    }
+
+    /// Whether any computer is paired: with none, no call pays for this.
+    pub fn any(&self) -> bool {
+        !lock(&self.list).is_empty()
+    }
+
+    /// Read a computer's chat list. False when it could not be read.
+    async fn refreshed(&self, id: &str) -> bool {
+        let Ok(client) = self.client(id) else { return false };
+        let Ok(mut summaries) = client.call("sessions:summaries", json!([])).await else { return false };
+        let mut running = client.call("chat:running", json!([])).await.unwrap_or(json!([]));
+        let pending = client.call("chat:pending", json!([])).await.unwrap_or(json!({}));
+        let access = client.call("device:access", json!([])).await.ok();
+        federation::qualify_chats(id, &mut summaries);
+        for chat in running.as_array_mut().into_iter().flatten() {
+            if let Some(raw) = chat.as_str() {
+                *chat = json!(federation::qualify(id, raw));
+            }
+        }
+        let pending: serde_json::Map<String, Value> = pending
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(raw, p)| {
+                let mut p = p.clone();
+                federation::qualify_ids(id, &mut p);
+                (federation::qualify(id, raw), p)
+            })
+            .collect();
+        {
+            let mut seen = lock(&self.seen);
+            let s = seen.entry(id.to_string()).or_default();
+            s.summaries = summaries.as_array().cloned().unwrap_or_default();
+            s.running =
+                running.as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect();
+            s.pending = pending;
+            s.access = access;
+        }
+        self.keep(id);
+        self.hub.publish(UPDATED, json!({}), false);
+        true
+    }
+
+    /// What survives a restart, without the chats a person marked incognito.
+    fn keep(&self, id: &str) {
+        let path = self.dir.join("computers").join(id).join("seen.json");
+        let value = {
+            let seen = lock(&self.seen);
+            let Some(s) = seen.get(id) else { return };
+            let keep: Vec<&Value> =
+                s.summaries.iter().filter(|c| c.get("incognito") != Some(&Value::Bool(true))).collect();
+            json!({ "summaries": keep, "catalog": s.catalog })
+        };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = nekko_remote::service::write_json_atomic(&path, &value);
+    }
+
+    /// The turns running over there, each replayed so far into this computer's
+    /// event stream, so an open chat shows the reply already under way.
+    async fn catch_up(&self, id: &str) {
+        let Ok(client) = self.client(id) else { return };
+        let running = lock(&self.seen).get(id).map(|s| s.running.clone()).unwrap_or_default();
+        for chat in running {
+            let Some((_, raw)) = federation::split(&chat) else { continue };
+            let Ok(replay) = client.call("agent:replay", json!([raw])).await else { continue };
+            for event in replay.get("events").and_then(Value::as_array).into_iter().flatten() {
+                let mut event = event.clone();
+                federation::qualify_ids(id, &mut event);
+                self.hub.publish_remote(event);
+            }
+        }
+    }
+
+    /// A chat's call, on the computer it belongs to.
+    pub async fn forward(&self, id: &str, channel: &str, args: Vec<Value>) -> Result<Value, String> {
+        let client = self.client(id)?;
+        let limit = if federation::LONG.contains(&channel) { TURN_LIMIT } else { CALL_LIMIT };
+        let mut reply = client.call_for(channel, Value::Array(args), limit).await.map_err(|e| e.to_string())?;
+        federation::qualify_chats(id, &mut reply);
+        Ok(reply)
+    }
+
+    /// A list the window reads, with every computer's added to this one's.
+    pub fn merged(&self, channel: &str, local: Value) -> Value {
+        if !matches!(channel, "sessions:summaries" | "chat:running" | "chat:pending") || !self.any() {
+            return local;
+        }
+        let seen = lock(&self.seen);
+        match (channel, local) {
+            ("chat:pending", Value::Object(mut all)) => {
+                all.extend(seen.values().flat_map(|s| s.pending.clone()));
+                Value::Object(all)
+            }
+            ("chat:running", Value::Array(mut all)) => {
+                all.extend(seen.values().flat_map(|s| s.running.iter().map(|id| json!(id))));
+                Value::Array(all)
+            }
+            ("sessions:summaries", Value::Array(mut all)) => {
+                all.extend(seen.values().flat_map(|s| s.summaries.clone()));
+                Value::Array(all)
+            }
+            (_, other) => other,
+        }
+    }
+
+    /// A computer's models, subscriptions and folders, for its pickers. Answers
+    /// from memory while it is away.
+    async fn catalog(&self, id: &str) -> Result<Value, String> {
+        let client = self.client(id).ok().filter(|c| c.status().state == State::Online);
+        if let Some(c) = client {
+            let providers = c.call("providers:list", json!([])).await.map_err(|e| e.to_string())?;
+            let models = c.call("models:list", json!([])).await.map_err(|e| e.to_string())?;
+            let mut workspaces = c.call("workspace:list", json!([])).await.map_err(|e| e.to_string())?;
+            federation::qualify_chats(id, &mut workspaces);
+            let catalog = json!({ "providers": providers, "models": models, "workspaces": workspaces });
+            lock(&self.seen).entry(id.to_string()).or_default().catalog = Some(catalog.clone());
+            self.keep(id);
+            return Ok(catalog);
+        }
+        Ok(lock(&self.seen).get(id).and_then(|s| s.catalog.clone()).unwrap_or(Value::Null))
     }
 
     fn client(&self, id: &str) -> Result<Client, String> {
@@ -216,7 +418,17 @@ impl Computers {
     pub fn list(&self) -> Value {
         let links = lock(&self.links);
         let list = lock(&self.list);
-        Value::Array(list.iter().map(|p| status_value(p, links.get(&p.id).map(Client::status))).collect())
+        let seen = lock(&self.seen);
+        let row = |p: &Paired| {
+            let mut v = status_value(p, links.get(&p.id).map(Client::status));
+            // Newer than the welcome: the switches can change while linked.
+            if let (Some(a), Some(o)) = (seen.get(&p.id).and_then(|s| s.access.as_ref()), v.as_object_mut()) {
+                o.insert("read".into(), a.get("read").cloned().unwrap_or(json!(true)));
+                o.insert("change".into(), a.get("change").cloned().unwrap_or(json!(true)));
+            }
+            v
+        };
+        Value::Array(list.iter().map(row).collect())
     }
 
     fn edit(&self, id: &str, change: impl FnOnce(&mut Paired)) -> Result<Value, String> {
@@ -316,6 +528,9 @@ impl Computers {
         }
         self.vault.delete(id);
         lock(&self.list).retain(|p| p.id != id);
+        lock(&self.seen).remove(id);
+        lock(&self.refresh).remove(id);
+        let _ = std::fs::remove_dir_all(self.dir.join("computers").join(id));
         self.save()?;
         self.hub.publish(UPDATED, json!({}), false);
         Ok(self.list())
@@ -340,6 +555,7 @@ impl Computers {
                 let channel = arg(1).as_str().ok_or("A channel is required.")?;
                 self.client(id)?.call(channel, arg(2).clone()).await.map_err(|e| e.to_string())
             }
+            "computers:catalog" => self.catalog(id).await,
             _ => Err(format!("No handler for {channel}")),
         }
     }
