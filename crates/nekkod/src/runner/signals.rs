@@ -8,7 +8,7 @@
 //! address (`lan.rs`); pending security updates from `softwareupdate` (`updates.rs`).
 
 use super::egress::{Egress, spawn_line_watch};
-use super::lan::{default_gateway, network_id};
+use super::lan::{default_gateway, network_id, scutil_field, service_network_id};
 use super::updates::{UpdateLedger, os_major, security_labels, write_atomic};
 use nekko_machine::Machine;
 use nekko_machine::activity::Power;
@@ -319,8 +319,26 @@ impl Sense for HostSense {
     }
 }
 
-/// The router's hardware address, or `None` when either command fails.
+/// The router's hardware address, or `None` when neither source has it.
 pub(super) async fn read_network_id() -> Option<String> {
+    match service_router().await {
+        Some(id) => Some(id),
+        None => arp_router().await,
+    }
+}
+
+async fn service_router() -> Option<String> {
+    let global = scutil_show("State:/Network/Global/IPv4").await?;
+    let service = scutil_field(&global, "PrimaryService")?;
+    service_network_id(&scutil_show(&format!("State:/Network/Service/{service}/IPv4")).await?)
+}
+
+/// `scutil` takes `show` only on stdin.
+async fn scutil_show(key: &str) -> Option<String> {
+    output("/bin/sh", &["-c", r#"echo "show $1" | /usr/sbin/scutil"#, "sh", key], Duration::from_secs(5)).await
+}
+
+async fn arp_router() -> Option<String> {
     let route = output("/sbin/route", &["-n", "get", "default"], Duration::from_secs(5)).await?;
     let gateway = default_gateway(&route)?;
     let arp = output("/usr/sbin/arp", &["-n", &gateway.to_string()], Duration::from_secs(5)).await?;

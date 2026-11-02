@@ -84,7 +84,7 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 - **Max job time:** 2 h. The VM is destroyed at the limit whatever the provider's timeout.
 - **Only when:** on power, on trusted networks, never on hotspots, and not while a VPN carries all the Mac's traffic (a full-tunnel VPN or a Tailscale exit node). The setting **Let jobs use the internet directly while a VPN is on** (off by default) lifts the VPN pause; job traffic still leaves by the physical interface, never the tunnel. Like the other network gates, a VPN coming on drains a running job with the mode's grace (Runner first lets it finish).
 - **Accepted ranges:** settings outside these are clamped when loaded: macOS slots 0 to 2, Linux slots 0 (none in P1), memory per VM 4 to 64 GB (0 means 8 GB), total runner memory at least 4 GB (below that, the recommendation), vCPUs per VM at least 2, image disk budget 50 to 4000 GB, free disk floor 10 to 1000 GB, max job time 10 to 1440 minutes. A hand-edited record that cannot be read is skipped, and a file that is not JSON is kept as `runners.json.bad`.
-- **Trusted networks:** the networks you approved, recognised by the router's hardware address; connecting adds the current one. At most 32.
+- **Trusted networks:** the networks you approved, recognised by the router's hardware address, which macOS records itself, so no Local Network permission is needed; connecting adds the current one. At most 32.
 - **Unknown Mac state:** no new VM starts while the Mac's state, its egress interface or its addresses are unknown; a running job is not stopped by that alone.
 - **Safety:** fork PRs off, re-run lost jobs on, build cache for trusted runs on.
 
