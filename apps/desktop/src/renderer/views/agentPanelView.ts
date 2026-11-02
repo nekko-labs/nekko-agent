@@ -3,10 +3,12 @@
  * each group is in, and what it shows. A per-window preference, remembered like
  * the panel's width, not a setting.
  *
- * The defaults group the cards by activity (what each agent is doing), in the
+ * The defaults group the cards by activity (where each agent is in its loop), in the
  * order cards were dragged into (newest first for the rest), every detail and
  * every group shown.
  */
+
+import type { SessionSummary } from '@nekko-agent/shared';
 
 export type AgentGroupBy = 'project' | 'status' | 'date' | 'computer' | 'none';
 export type AgentSortBy = 'manual' | 'updated' | 'created' | 'name';
@@ -135,16 +137,26 @@ export function compareCards(view: Pick<AgentPanelView, 'sortBy' | 'direction'>)
   };
 }
 
-/** The activity groups, most urgent first. */
+/** Chats nothing has been sent in yet. This group shows only while it has some. */
+export const DRAFT_GROUP = 'status:draft';
+
+/** The activity groups, in the order the agent loop goes through them. */
 export const STATUS_GROUPS = [
-  { key: 'status:input', name: 'Needs input' },
-  { key: 'status:working', name: 'Working' },
-  { key: 'status:error', name: 'Error' },
-  { key: 'status:done', name: 'Done' },
+  { key: DRAFT_GROUP, name: 'Draft' },
+  { key: 'status:exploring', name: 'Exploring' },
+  { key: 'status:building', name: 'Building' },
+  { key: 'status:verifying', name: 'Verifying' },
+  { key: 'status:shipping', name: 'Shipping' },
 ] as const;
 
-export function statusGroupOf(status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
-  return !status || status === 'idle' ? 'status:done' : `status:${status}`;
+/**
+ * A chat's activity group. `running` covers a first message on its way, which
+ * no summary shows yet. A chat stays in its phase when it stops: the card's own
+ * glyph says whether it is working, waiting on you or stopped on an error.
+ */
+export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase'> | null | undefined, running: boolean): string {
+  if (!running && chat?.exchangeCount === 0) return DRAFT_GROUP;
+  return `status:${chat?.phase ?? 'exploring'}`;
 }
 
 /** The date groups, newest first. */

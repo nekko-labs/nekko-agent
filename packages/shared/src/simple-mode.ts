@@ -70,7 +70,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'suggest', area: 'Chat · message box', label: 'Prompt suggestions', hint: 'Tips to make a request clearer', platforms: D, default: 'show' },
   { id: 'thinking', area: 'Chat · conversation', label: 'Reasoning and tool steps', hint: 'What the model thought, and each step it took', platforms: DP, default: 'expert' },
   { id: 'stats', area: 'Chat · conversation', label: 'Reply stats', hint: 'Tokens, speed and time under each reply', platforms: D, default: 'expert' },
-  { id: 'pr-status', area: 'Chat · conversation', label: 'Pull request status', hint: 'The PR dock and PR chips. Only while this chat has a pull request', platforms: DP, default: 'show', needs: 'pr' },
+  { id: 'pr-status', area: 'Chat · conversation', label: 'Pull request status', hint: 'The live PR card and PR chips. Only while this chat has a pull request', platforms: DP, default: 'show', needs: 'pr' },
   { id: 'run-settings', area: 'Chat · message box', label: 'Run settings', hint: 'Offline, incognito, Git branch and tool style, in the model menu', platforms: P, default: 'expert' },
   { id: 'ph-git', area: 'Chat · conversation', label: 'Git', hint: 'The Git screen and commits', platforms: P, default: 'expert' },
   { id: 'terminal', area: 'Agents wall', label: 'Terminal', hint: 'Open a terminal from New or the More menu', platforms: DP, default: 'expert' },

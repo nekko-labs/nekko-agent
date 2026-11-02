@@ -1,10 +1,19 @@
 ---
 status: active
-last-updated: 2026-10-31
+last-updated: 2026-11-03
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Agents panel by agent loop (#1560, added 2026-11-03)
+
+Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#activity-follows-the-agent-loop-2026-11-03).
+
+- [x] **APL-1, Loop phase on the summary.** `loop_phase` in `crates/nekko-store/src/phase.rs` names a chat's phase from its latest telling tool call and runs the shared tool-purpose fixture; `summarize` adds it as `phase`. (2026-11-03)
+- [x] **APL-2, Every window hears a move.** `forward` in `turns.rs` sends `session_meta` when a checkpoint moves the phase, after the save, because tool calls only reach windows showing the chat. (2026-11-03)
+- [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
+- [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
 
 ## Third-party licensing and credits (added 2026-11-03)
 

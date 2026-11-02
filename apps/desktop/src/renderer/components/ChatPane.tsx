@@ -72,7 +72,6 @@ import { ExpertMonitor, ModeSwitch, useExpertMode, useShown } from './ModeViews.
 import { hasAppChrome } from '../chrome.js';
 import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
-import { sheetPlan } from '../claudeAgentPlan.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
 import { useWallLogs } from '../wallLogs.js';
@@ -84,7 +83,7 @@ import { ChatControls, InternetToggle, McpMenu, MODE_LABEL, ToolsMenu } from './
 import { useElementCompact } from './agent-console/useElementWidth.js';
 import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
-import { PrCard, PrActionDock } from './PrCard.js';
+import { PrCard } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
 import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
@@ -428,7 +427,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
   if (row.kind === 'stats') return <div className="msg-ai"><TurnStatsLine stats={row.stats} /></div>;
   if (row.kind === 'prs') {
     // Historical milestones stay anchored to their original transcript positions.
-    return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} />)}</>;
+    return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} sessionId={sessionId} />)}</>;
   }
   const persisted = !row.displayOnly && row.message.id !== 'tmp' && row.message.id !== 'live';
   const editable = !readOnly && !streaming && row.message.role === 'user' && persisted;
@@ -451,7 +450,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
       </MarkdownSession.Provider>
       {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath).filter(artifact => !artifact.inlineImage)} sessionId={sessionId} />}
       {/* A PR card right after the message that first names it. */}
-      {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" />)}
+      {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" sessionId={sessionId} />)}
     </>
   );
 });
@@ -2350,9 +2349,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Every PR the transcript mentions, scanned once per transcript: the scan is
   // a regular expression over every message, and it used to run on every
   // render of the pane, including each streaming frame.
-  const sessionPrUrls = useMemo(() => (messages ? collectSessionPrUrls(messages) : []), [messages]);
   const prByUrl = useMemo(() => new Map(prs.map((p) => [p.url, p])), [prs]);
-  const showPrStatus = useShown('pr-status', { pr: prs.length > 0 || sessionPrUrls.length > 0 });
   // Handlers handed to rows go through refs, so a row never re-renders because
   // this pane re-rendered.
   const editResendRef = useRef(editResend);
@@ -2768,7 +2765,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
-        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-4 pt-1`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
+        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
           {/* The resize grip rides the composer's top border: a wide invisible
               hit area over a hairline that lights up on hover. */}
           {surface !== 'composer' && !cleanStart && <div
@@ -2784,7 +2781,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
-          <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
+          <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : 'w-[min(90%,calc(100%-8px))]'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
             )}
@@ -3418,8 +3415,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>
         </div>
         )}
-        {/* The PR deck sits under the composer, on the window surface. */}
-        {!cleanStart && showPrStatus && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!sheetPlan(session, providers, streaming)?.length} />}
+        {/* Open PRs show their status and actions on their own PR card in the
+            transcript, and on the plan sheet's PR chip. */}
       </section>
 
       {/* The work rail, in the quarter the transcript gives back. Kept inside

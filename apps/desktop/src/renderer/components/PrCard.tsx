@@ -2,9 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { PrInfo, PrAction, PrDiff, PrChecks } from '@nekko-agent/shared';
 import { getExecutionMode, parsePrUrl } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import { subscribePrPolling } from '../prPolling.js';
 import { PrProgress } from './WorkProgress.js';
 import { BranchIcon, CheckIcon, CloseIcon } from '../icons.js';
+
+/** Live PR polling: when a session has an open PR, keep its status fresh. */
+function usePrPolling(sessionId: string | undefined) {
+  useEffect(() => {
+    if (!sessionId) return;
+    return subscribePrPolling(sessionId, () => useStore.getState().refreshSessionPrs(sessionId));
+  }, [sessionId]);
+}
 
 /** Summarise a chat's PRs for the sidebar/header badges. */
 export function prSummary(prs: PrInfo[]) {
@@ -43,11 +52,26 @@ export const MERGED_CARD_STYLE: React.CSSProperties = {
   background: 'linear-gradient(270deg, var(--merged-wash), var(--merged-wash-soft) 70%, transparent)',
 };
 
-/** A historical milestone, never an action surface or a live status card. */
-export function PrCard({ url, info, event = 'created' }: { url: string; info?: PrInfo; event?: 'created' | 'open' | 'closed' | 'merged' }) {
+/**
+ * One PR as it appears in the transcript. The merged and closed cards stay as
+ * historical milestones (anchored to the message that observed them). When the
+ * PR is live (event is "created" and the poller reports it still open), the
+ * card expands into the live surface the chat offers for working with it: its
+ * Draft/Open state, CI progress and the actions (Approve, Decline, Merge,
+ * Review) that used to sit as a strip below the composer.
+ */
+export function PrCard({ url, info, event = 'created', sessionId }: { url: string; info?: PrInfo; event?: 'created' | 'open' | 'closed' | 'merged'; sessionId?: string }) {
+  const spooky = useStore((s) => s.settings?.themePreset === 'autumn');
+  // Hidden in Settings > Simple mode, an open PR stays a plain milestone in the chat.
+  const showStatus = useShown('pr-status', { pr: true });
   const parsed = parsePrUrl(url);
   const label = info ? info.owner + '/' + info.repo + '#' + info.number : parsed ? parsed.owner + '/' + parsed.repo + '#' + parsed.number : url;
-  const spooky = useStore((s) => s.settings?.themePreset === 'autumn');
+  // The created card goes live only when the poller still reports it open:
+  // merged/closed events keep their own historical rows a few lines down, so
+  // "created" must stay as a static milestone once resolved.
+  if (showStatus && (event === 'created' || event === 'open') && info?.state === 'open' && sessionId) {
+    return <OpenPrCard url={url} info={info} sessionId={sessionId} label={label} />;
+  }
   const merged = event === 'merged';
   return (
     <div className="relative my-2 overflow-hidden rounded-xl border px-4 py-3" data-pr-event={event}
@@ -59,6 +83,67 @@ export function PrCard({ url, info, event = 'created' }: { url: string; info?: P
         <span className="ml-auto text-xs font-semibold" style={{ color: merged ? 'var(--merged-ink)' : event === 'closed' ? 'var(--danger)' : 'var(--success)' }}>
           {merged ? 'PR merged' : event === 'closed' ? 'PR closed' : 'PR created'}
         </span>
+      </div>
+    </div>
+  );
+}
+
+/** The live card for an open PR: status, progress and the actions chats used to carry below the composer. */
+function OpenPrCard({ url, info, sessionId, label }: { url: string; info: PrInfo; sessionId: string; label: string }) {
+  usePrPolling(sessionId);
+  const openPrPane = useStore((s) => s.openPrPane);
+  const session = useStore((s) => s.sessions.find((item) => item.id === sessionId));
+  const parent = session?.gitStackParent;
+  const canStack = !!session && !session.offline && !session.incognito && !session.archivedAt && getExecutionMode(session) !== 'sandbox' && session.chatType !== 'image';
+  const linkable = canStack && !!parent && parent.url !== url && !info?.stack;
+  const [busy, setBusy] = useState<PrAction | 'continue' | 'stack' | null>(null);
+  const [confirm, setConfirm] = useState<PrAction | null>(null);
+  const act = async (action: PrAction) => {
+    if (action === 'merge' && info?.stack) { openExternally(url); return; }
+    if (confirm !== action) { setConfirm(action); return; }
+    setConfirm(null);
+    setBusy(action);
+    try { await runPrAction(sessionId, url, action); } finally { setBusy(null); }
+  };
+  const stackAction = async (action: 'continue' | 'stack') => {
+    setBusy(action); setConfirm(null);
+    try {
+      if (action === 'continue') await useStore.getState().continuePrStack(sessionId, url);
+      else {
+        const result = await window.nekko.linkPrStack(sessionId, url);
+        useStore.getState().pushToast(result.ok ? 'success' : 'error', result.message);
+        await useStore.getState().refreshSessionPrs(sessionId, result.ok);
+      }
+    } catch (error) { useStore.getState().pushToast('error', (error as Error).message); }
+    finally { setBusy(null); }
+  };
+  const check = CHECK_META[info.checks];
+  const actionClass = 'rounded-md px-2 py-0.5 text-2xs font-medium hover:bg-surface-2 disabled:opacity-50';
+  return (
+    <div className="relative my-2 rounded-xl border border-line px-3 py-2" data-pr-event="open" data-pr-actions={url} style={{ background: 'var(--surface)' }}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <a href={url} className="min-w-0 truncate font-mono text-xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
+        {info.title && <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{info.title}</span>}
+        <span className="ml-auto text-2xs font-semibold" style={{ color: info.isDraft ? 'var(--ink-faint)' : 'var(--accent)' }}>
+          {info.isDraft ? 'Draft' : 'Open'}
+        </span>
+        {!info.checkProgress && check.dot && <span className="text-2xs" style={{ color: check.color }}>{check.dot} {check.label}</span>}
+      </div>
+      <PrProgress url={url} info={info} checks />
+      {info.stack && <p className="mt-1 text-2xs text-ink-soft">GitHub stack · {info.stack.size} PRs</p>}
+      {parent && <a className="mt-1 block truncate text-2xs text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}
+      <div className="mt-1.5 flex flex-wrap items-center justify-end gap-0" data-pr-action-controls>
+        {(['approve', 'close', 'merge'] as const).map((action) => (
+          <button key={action} className={actionClass} disabled={!!busy} onClick={() => void act(action)}
+            title={action === 'close' ? 'Close this PR without merging' : action === 'approve' ? 'Approve this PR' : info.stack ? 'Review all included layers and merge on GitHub' : 'Merge this PR'}>
+            {busy === action ? 'Working…' : confirm === action ? 'Confirm?' : action === 'approve' ? 'Approve' : action === 'close' ? 'Decline' : info.stack ? 'Merge on GitHub' : 'Merge'}
+          </button>
+        ))}
+        <button className={actionClass} onClick={() => openPrPane(url)}>Review</button>
+        {canStack && <button className={actionClass} disabled={!!busy} onClick={() => void stackAction('continue')} title="Start a separate chat worktree from this PR's committed code">{busy === 'continue' ? 'Preparing…' : 'Continue as stacked PR'}</button>}
+        {linkable && <button className={actionClass} disabled={!!busy} onClick={() => void stackAction('stack')} title="Link this dependent PR to its parent on GitHub">{busy === 'stack' ? 'Linking…' : 'Link stack'}</button>}
+        <button className={actionClass} onClick={() => openExternally(url)} aria-label="Open on GitHub">↗</button>
+        {confirm && <button className={actionClass} onClick={() => setConfirm(null)}>Cancel</button>}
       </div>
     </div>
   );
@@ -76,138 +161,6 @@ export async function runPrAction(sessionId: string, url: string, action: PrActi
   } catch (e) {
     useStore.getState().pushToast('error', (e as Error).message);
   }
-}
-
-/** Live actions stay above the composer and disappear when the PR is resolved. */
-export function PrActionCard({ url, info, sessionId, onDismiss, checksInPlan = false }: { url: string; info?: PrInfo; sessionId: string; onDismiss: () => void; checksInPlan?: boolean }) {
-  const parsed = parsePrUrl(url);
-  const openPrPane = useStore((s) => s.openPrPane);
-  const [busy, setBusy] = useState<PrAction | 'continue' | 'stack' | null>(null);
-  const session = useStore((s) => s.sessions.find((item) => item.id === sessionId));
-  const parent = session?.gitStackParent;
-  const canStack = !!session && !session.offline && !session.incognito && !session.archivedAt && getExecutionMode(session) !== 'sandbox' && session.chatType !== 'image';
-  const linkable = canStack && !!parent && parent.url !== url && !info?.stack;
-  const [confirm, setConfirm] = useState<PrAction | null>(null);
-  const label = parsed ? parsed.owner + '/' + parsed.repo + '#' + parsed.number : url;
-  const act = async (action: PrAction) => {
-    if (action === 'merge' && info?.stack) { openExternally(url); return; }
-    if (confirm !== action) { setConfirm(action); return; }
-    setConfirm(null);
-    setBusy(action);
-    try { await runPrAction(sessionId, url, action); } finally { setBusy(null); }
-  };
-  const check = info ? CHECK_META[info.checks] : CHECK_META.none;
-  const stackAction = async (action: 'continue' | 'stack') => {
-    setBusy(action); setConfirm(null);
-    try {
-      if (action === 'continue') await useStore.getState().continuePrStack(sessionId, url);
-      else {
-        const result = await window.nekko.linkPrStack(sessionId, url);
-        useStore.getState().pushToast(result.ok ? 'success' : 'error', result.message);
-        await useStore.getState().refreshSessionPrs(sessionId, result.ok);
-      }
-    } catch (error) { useStore.getState().pushToast('error', (error as Error).message); }
-    finally { setBusy(null); }
-  };
-  const actionClass = 'rounded-md px-2 py-0.5 text-2xs font-medium hover:bg-surface-2 disabled:opacity-50';
-  return (
-    <div className="pr-deck-card rounded-lg border border-line px-3 py-1" data-pr-actions={url}>
-      <div className="pr-action-layout">
-      <div className="pr-action-content min-w-0 flex-1">
-        <div className="pr-action-heading flex flex-wrap items-center gap-x-2 gap-y-1">
-          <a href={url} className="truncate font-mono text-2xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
-          <span className="text-2xs text-ink-faint">{info ? info.isDraft ? 'Draft' : 'Open' : 'Status unavailable'}</span>
-          {!info?.checkProgress && check.dot && <span className="text-2xs" style={{ color: check.color }}>{check.dot} {check.label}</span>}
-        </div>
-        {info?.title && <p className="truncate text-xs">{info.title}</p>}
-        <PrProgress url={url} info={info} checks={!checksInPlan} />
-        {info?.stack && <span className="text-2xs text-ink-soft">GitHub stack · {info.stack.size} PRs</span>}
-        {parent && <a className="block truncate text-2xs text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}
-      </div>
-      <div className="flex max-w-[55%] shrink-0 flex-wrap items-center justify-end gap-0" data-pr-action-controls>
-        {(['approve', 'close', 'merge'] as const).map((action) => (
-          <button key={action} className={actionClass} disabled={!!busy || !info} onClick={() => void act(action)}
-            title={action === 'close' ? 'Close this PR without merging' : action === 'approve' ? 'Approve this PR' : info?.stack ? 'Review all included layers and merge on GitHub' : 'Merge this PR'}>
-            {busy === action ? 'Working…' : confirm === action ? 'Confirm?' : action === 'approve' ? 'Approve' : action === 'close' ? 'Decline' : info?.stack ? 'Merge on GitHub' : 'Merge'}
-          </button>
-        ))}
-        <button className={actionClass} onClick={() => openPrPane(url)}>Review</button>
-        {canStack && info?.state === 'open' && <button className={actionClass} disabled={!!busy} onClick={() => void stackAction('continue')} title="Start a separate chat worktree from this PR's committed code">{busy === 'continue' ? 'Preparing…' : 'Continue as stacked PR'}</button>}
-        {linkable && info?.state === 'open' && <button className={actionClass} disabled={!!busy} onClick={() => void stackAction('stack')} title="Link this dependent PR to its parent on GitHub">{busy === 'stack' ? 'Linking…' : 'Link stack'}</button>}
-        <button className={actionClass} onClick={() => openExternally(url)} aria-label="Open on GitHub">↗</button>
-        {confirm && <button className={actionClass} onClick={() => setConfirm(null)}>Cancel</button>}
-      </div>
-      <button className="pr-action-dismiss grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink"
-        onClick={onDismiss} aria-label={'Hide PR ' + label} title="Hide this PR panel (does not close the PR)"><CloseIcon className="h-3.5 w-3.5" /></button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Opens upward from the chat's footer divider: the toggle sits on the divider
- * and the cards stack above it. `floating` closes it into a standalone card
- * where there is no divider below (the wall composer).
- */
-/** checksInPlan: the plan card above shows this PR's CI, so the card leaves it out. */
-export function PrActionDock({ sessionId, prs, urls, floating = false, checksInPlan = false }: { sessionId: string; prs: PrInfo[]; urls: string[]; floating?: boolean; checksInPlan?: boolean }) {
-  const storageKey = 'nekko.pr-dismissed.' + sessionId;
-  const load = () => {
-    try { const value = JSON.parse(localStorage.getItem(storageKey) ?? '[]'); return new Set<string>(Array.isArray(value) ? value.filter((x) => typeof x === 'string') : []); }
-    catch { return new Set<string>(); }
-  };
-  const [dismissed, setDismissed] = useState(load);
-  const byUrl = new Map(prs.map((p) => [p.url, p]));
-  const tracked = [...new Set(urls)].filter((url) => !dismissed.has(url));
-  const active = tracked.filter((url) => !byUrl.has(url) || byUrl.get(url)?.state === 'open');
-  const statusKey = tracked.map((url) => url + ':' + (byUrl.get(url)?.state ?? 'unknown')).sort().join('|');
-  const [expansion, setExpansion] = useState<{ key: string; value: boolean } | null>(null);
-  // The plan card already shows these PRs and their CI, so the actions start tucked away.
-  const expanded = expansion?.key === statusKey ? expansion.value : active.length > 0 && !checksInPlan;
-  const [closing, setClosing] = useState<Set<string>>(() => new Set());
-  useEffect(() => { setDismissed(load()); }, [storageKey]);
-  useEffect(() => subscribePrPolling(sessionId, () => useStore.getState().refreshSessionPrs(sessionId)), [sessionId]);
-  // Fallback for disabled animations, background tabs, or interrupted CSS motion.
-  useEffect(() => {
-    if (!closing.size) return;
-    const timer = setTimeout(() => {
-      setDismissed((previous) => {
-        const next = new Set([...previous, ...closing]);
-        try { localStorage.setItem(storageKey, JSON.stringify([...next])); } catch { /* memory-only dismissal */ }
-        return next;
-      });
-      setClosing(new Set());
-    }, 260);
-    return () => clearTimeout(timer);
-  }, [closing, storageKey]);
-  if (!tracked.length) return null;
-  const dismiss = (url: string) => {
-    setClosing((previous) => new Set(previous).add(url));
-  };
-  const finishDismiss = (url: string) => {
-    if (!closing.has(url)) return;
-    setDismissed((previous) => {
-      const next = new Set(previous).add(url);
-      try { localStorage.setItem(storageKey, JSON.stringify([...next])); } catch { /* memory-only dismissal */ }
-      return next;
-    });
-    setClosing((previous) => { const next = new Set(previous); next.delete(url); return next; });
-  };
-  return <section aria-label="Pending pull requests" className="pr-action-deck" data-expanded={expanded} data-floating={floating}>
-    <div className="pr-deck-reveal" id={'pr-deck-' + sessionId} inert={!expanded}>
-      <div className="pr-deck-clip"><div className="pr-deck-list">
-        {active.map((url) => <div key={url} className="pr-deck-slot" data-closing={closing.has(url)} onTransitionEnd={(event) => { if (event.target === event.currentTarget && event.propertyName === 'opacity') finishDismiss(url); }}>
-          <PrActionCard url={url} info={byUrl.get(url)} sessionId={sessionId} onDismiss={() => dismiss(url)} checksInPlan={checksInPlan} />
-        </div>)}
-      </div></div>
-    </div>
-    <button className="pr-deck-toggle" aria-expanded={expanded} aria-controls={'pr-deck-' + sessionId} onClick={() => setExpansion({ key: statusKey, value: !expanded })}>
-      <BranchIcon className="h-3.5 w-3.5 shrink-0" />
-      <span>{tracked.length} pull request{tracked.length === 1 ? '' : 's'}</span>
-      <span className="ml-auto text-ink-faint">{active.length ? expanded ? 'Tuck away' : 'Show actions' : tracked.every((url) => byUrl.get(url)?.state === 'merged') ? 'Merged' : 'Resolved'}</span>
-      <span aria-hidden className="pr-deck-chevron">⌃</span>
-    </button>
-  </section>;
 }
 
 /** One line of a unified-diff hunk. */

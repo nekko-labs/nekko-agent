@@ -261,6 +261,9 @@ pub fn summarize(session: &Value) -> Option<Value> {
         .map(|m| m.get("images").and_then(Value::as_array).map_or(0, Vec::len))
         .sum();
     out.insert("imageCount".into(), json!(images));
+    if let Some(phase) = crate::phase::loop_phase(messages) {
+        out.insert("phase".into(), json!(phase));
+    }
     Some(Value::Object(out))
 }
 
