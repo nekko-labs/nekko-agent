@@ -378,6 +378,10 @@ async function measureLatency({ appUrl, mock, api, bigChat }) {
   log(`browser ${app.browser.version || app.browser.bin}`);
 
   log('opening workspaces');
+  // A chat off the board takes the active zone's place. Start in the last zone,
+  // so chats 6 and up replace that one and chats 0 and 1 stay on the board,
+  // parked: a warm switch flips between them instead of remounting a chat.
+  await app.openChat(CFG.memory.working - 1);
   for (let i = CFG.chats.length - 1; i >= 0; i--) await app.openChat(i);
   await sleep(1000);
   // How long a frame asked for right after an empty one takes to start: a few
