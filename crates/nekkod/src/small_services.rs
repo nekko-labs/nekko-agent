@@ -64,6 +64,8 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "data:wipe" => wipe(ctx).await,
         "app:info" => {
             let mut info = app_info(&ctx.app.facts);
+            let settings = crate::settings::current(ctx).await;
+            info["machineIcon"] = settings.get("machineIcon").cloned().unwrap_or(Value::Null);
             let on = crate::settings::current(ctx).await.get("quitFromPhone") == Some(&Value::Bool(true));
             info["quitFromPhone"] = json!(on);
             Ok(info)

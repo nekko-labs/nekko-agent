@@ -311,6 +311,8 @@ export interface AppSettings {
    * Settings → Remote access; never settable from a phone.
    */
   quitFromPhone?: boolean;
+  /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
+  machineIcon?: string;
   phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';

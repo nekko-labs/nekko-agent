@@ -64,6 +64,7 @@ pub struct Policy {
     pub computer_read: Vec<String>,
     pub computer_agent: Vec<String>,
     pub computer_send_keys: Vec<String>,
+    pub computer_icons: Vec<String>,
     /// `PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS` (IO-33).
     pub read_channels: Vec<String>,
     pub change_channels: Vec<String>,
@@ -139,6 +140,7 @@ pub fn policy() -> &'static Policy {
             computer_read: strings(&v["computerAccess"]["read"]),
             computer_agent: strings(&v["computerAccess"]["agent"]),
             computer_send_keys: strings(&v["computerAccess"]["sendKeys"]),
+            computer_icons: strings(&v["computerAccess"]["icons"]),
             read_channels: strings(&v["readChannels"]),
             change_channels: strings(&v["changeChannels"]),
             agent_channels: strings(&v["agentChannels"]),
@@ -212,6 +214,7 @@ fn language_ok(s: &str) -> bool {
 fn setting_value(path: &str, value: &Value) -> Result<(), Denied> {
     let ok = match path {
         "defaultChatMode" => return chat_mode(value, path),
+        "machineIcon" => value.as_str().is_some_and(|i| i.is_empty() || has(&policy().computer_icons, i)),
         "chatPaneAction" => matches!(value.as_str(), Some("complete" | "delete")),
         "skipDeleteConfirmation" | "voice.enabled" => value.is_boolean(),
         "voice.language" => value.as_str().is_some_and(language_ok),

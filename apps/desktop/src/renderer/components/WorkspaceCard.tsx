@@ -1,3 +1,4 @@
+import { ComputerChip, useComputerOf } from './ComputerChip.js';
 import React, { memo } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
@@ -164,6 +165,8 @@ function WorkspaceCardImpl({
   subAgentCount = 0,
   showMetadata = true,
   showProvider = true,
+  showComputer = true,
+  showComputerIcons = true,
   zoneTint,
   onOpen,
   onClose,
@@ -184,6 +187,10 @@ function WorkspaceCardImpl({
   showMetadata?: boolean;
   /** The provider subtext under the model; off, the model line stands alone. */
   showProvider?: boolean;
+  /** The computer a remote agent runs on; off, the provider line stands alone. */
+  showComputer?: boolean;
+  /** That computer's icon, when it has one. */
+  showComputerIcons?: boolean;
   /** The colour of the zone showing this agent on the board; absent when it is not on the board. */
   zoneTint?: number;
   onOpen: () => void;
@@ -194,7 +201,9 @@ function WorkspaceCardImpl({
   const mentionedPrs = useStore((s) => (session ? s.prsBySession[session.id] : undefined));
   const liveCtxEstimate = useStore((s) => (session ? s.sessionCtxEstimate[session.id] : undefined));
   const compacting = useCompactionStore((s) => (session ? s.bySession[session.id]?.state === 'running' : false));
-  const provider = providers.find((p) => p.id === session?.providerId);
+  const computer = useComputerOf(session?.id);
+  const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
+  const provider = (remoteProviders ?? providers).find((p) => p.id === session?.providerId);
 
   const folders = (session ? getSessionWorkspaceIds(session) : terminal?.workspaceId ? [terminal.workspaceId] : [])
     .map((id) => projects.find((w) => w.id === id))
@@ -344,9 +353,11 @@ function WorkspaceCardImpl({
         )}
       </div>
 
-      {showProvider && provider && (
-        <div className="truncate pl-3 text-2xs leading-[13px] text-ink-faint" data-card-provider>
-          {isLocalProvider(provider.kind) ? 'Local' : provider.label}
+      {((showProvider && provider) || (showComputer && computer)) && (
+        <div className="flex min-w-0 items-center gap-1 truncate pl-3 text-2xs leading-[13px] text-ink-faint">
+          {showComputer && computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />}
+          {showComputer && computer && showProvider && provider && <span aria-hidden>·</span>}
+          {showProvider && provider && <span className="truncate" data-card-provider>{isLocalProvider(provider.kind) ? 'Local' : provider.label}</span>}
         </div>
       )}
 

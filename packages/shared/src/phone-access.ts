@@ -13,6 +13,7 @@
  */
 
 import { clientMessageIdOf } from './chat.js';
+import { COMPUTER_ICONS } from './computers.js';
 import { skillTurnText } from './skills.js';
 import { stepUpPolicy, STEP_UP_CHALLENGE } from './step-up.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
@@ -330,6 +331,7 @@ export const PHONE_ALWAYS_DENIED = {
  * administration stay refused: these lists are all a computer gains.
  */
 export const COMPUTER_ACCESS = {
+  icons: COMPUTER_ICONS,
   /**
    * Phone channels a computer does not get. A phone's change proof means Face
    * ID; a computer signs with no presence check, so what a phone reaches behind
@@ -561,6 +563,7 @@ export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): vo
 export const PHONE_SETTINGS_KEYS = [
   'chatPaneAction',
   'defaultChatMode',
+  'machineIcon',
   'skipDeleteConfirmation',
   'voice.enabled',
   'voice.language',
@@ -581,6 +584,7 @@ export const PHONE_SETTINGS_VIEW = [
   'defaultChatMode',
   'defaultModelId',
   'defaultProviderId',
+  'machineIcon',
   'favoriteModels',
   // Read-only: show the computer's effort before the phone has a saved choice.
   'effort',
@@ -818,6 +822,9 @@ function chatMode(value: unknown, what: string): void {
 /** One phone-settable setting's value, or why not. */
 function settingValue(path: string, value: unknown): void {
   switch (path) {
+    case 'machineIcon':
+      if (value === '' || (COMPUTER_ICONS as readonly unknown[]).includes(value)) return;
+      break;
     case 'defaultChatMode':
       return chatMode(value, path);
     case 'chatPaneAction':

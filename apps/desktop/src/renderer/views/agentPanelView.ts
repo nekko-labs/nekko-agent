@@ -8,7 +8,7 @@
  * every group shown.
  */
 
-export type AgentGroupBy = 'project' | 'status' | 'date' | 'none';
+export type AgentGroupBy = 'project' | 'status' | 'date' | 'computer' | 'none';
 export type AgentSortBy = 'manual' | 'updated' | 'created' | 'name';
 export type SortDirection = 'desc' | 'asc';
 
@@ -24,6 +24,10 @@ export type AgentPanelView = {
   showAutomations: boolean;
   /** Groups with nothing in them, shown with their "No active agents" line. */
   showEmptyGroups: boolean;
+  /** Which computer a card's agent runs on, for a card on another computer. */
+  showComputer: boolean;
+  /** A computer's icon on its card and group heading, when it has one. */
+  showComputerIcons: boolean;
 };
 
 export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
@@ -34,12 +38,15 @@ export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
   showProvider: true,
   showAutomations: true,
   showEmptyGroups: true,
+  showComputer: true,
+  showComputerIcons: true,
 };
 
 export const GROUP_BY_LABELS: Record<AgentGroupBy, string> = {
   project: 'Project',
   status: 'Activity',
   date: 'Date',
+  computer: 'Computer',
   none: 'None',
 };
 
@@ -52,7 +59,7 @@ export const SORT_BY_LABELS: Record<AgentSortBy, string> = {
 
 export const AGENT_PANEL_VIEW_KEY = 'nekko.agentPanelView';
 
-const GROUPS: AgentGroupBy[] = ['project', 'status', 'date', 'none'];
+const GROUPS: AgentGroupBy[] = ['project', 'status', 'date', 'computer', 'none'];
 const SORTS: AgentSortBy[] = ['manual', 'updated', 'created', 'name'];
 
 /** Read a saved view, keeping only fields that are still valid. */
@@ -71,6 +78,8 @@ export function parseAgentPanelView(raw: string | null): AgentPanelView {
     showProvider: bool(saved.showProvider, d.showProvider),
     showAutomations: bool(saved.showAutomations, d.showAutomations),
     showEmptyGroups: bool(saved.showEmptyGroups, d.showEmptyGroups),
+    showComputer: bool(saved.showComputer, d.showComputer),
+    showComputerIcons: bool(saved.showComputerIcons, d.showComputerIcons),
   };
 }
 

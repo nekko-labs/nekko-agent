@@ -279,6 +279,7 @@
  "settingsKeys": [
   "chatPaneAction",
   "defaultChatMode",
+  "machineIcon",
   "skipDeleteConfirmation",
   "voice.enabled",
   "voice.language"
@@ -291,6 +292,7 @@
   "defaultChatMode",
   "defaultModelId",
   "defaultProviderId",
+  "machineIcon",
   "favoriteModels",
   "effort",
   "phoneChanges",
@@ -514,6 +516,32 @@
   "providerId"
  ],
  "computerAccess": {
+  "icons": [
+   "laptop",
+   "desktop",
+   "tower",
+   "mini",
+   "server",
+   "rack",
+   "cloud",
+   "gpu",
+   "chip",
+   "home",
+   "office",
+   "lab",
+   "bolt",
+   "moon",
+   "sun",
+   "star",
+   "flame",
+   "leaf",
+   "globe",
+   "cube",
+   "rocket",
+   "shield",
+   "terminal",
+   "cat"
+  ],
   "refused": [
    "providers:saveSealed",
    "providers:setEnabled",

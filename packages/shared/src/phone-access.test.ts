@@ -37,7 +37,7 @@ const SETTINGS = {
   themePreset: 'nebula',
   defaultProviderId: 'p1',
   defaultModelId: 'm1',
-  favoriteModels: ['p1::m1'],
+  favoriteModels: ['p1::m1'], machineIcon: 'tower',
   defaultChatMode: 'ask',
   effort: 'high',
   chatPaneAction: 'complete',
