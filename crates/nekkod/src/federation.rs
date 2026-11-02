@@ -118,7 +118,8 @@ pub fn qualify_ids(computer: &str, v: &mut Value) {
         Value::Object(o) => {
             for (key, value) in o.iter_mut() {
                 match value {
-                    Value::String(s) if ID_KEYS.contains(&key.as_str()) && split(s).is_none() => {
+                    // Always: a host's ids are raw, and one that came with `@` must not pass as another computer's.
+                    Value::String(s) if ID_KEYS.contains(&key.as_str()) => {
                         *s = qualify(computer, s);
                     }
                     Value::Array(list) if key == "supportingWorkspaceIds" => {
@@ -152,9 +153,7 @@ pub fn qualify_chats(computer: &str, v: &mut Value) {
             }
         }
         Value::Object(o) => {
-            if let Some(Value::String(id)) = o.get_mut("id")
-                && split(id).is_none()
-            {
+            if let Some(Value::String(id)) = o.get_mut("id") {
                 *id = qualify(computer, id);
             }
             qualify_ids(computer, v);
@@ -221,11 +220,10 @@ mod tests {
     }
 
     #[test]
-    fn qualifying_twice_changes_nothing() {
-        let mut chat = json!({ "id": "s1", "workspaceId": "w1" });
+    fn a_computer_cannot_pass_its_chat_off_as_another_computers() {
+        let mut chat = json!({ "id": "@studio99:s1", "workspaceId": "@studio99:w1" });
         qualify_chats("gomi1234", &mut chat);
-        let once = chat.clone();
-        qualify_chats("gomi1234", &mut chat);
-        assert_eq!(chat, once);
+        assert_eq!(split(chat["id"].as_str().unwrap()).unwrap().0, "gomi1234");
+        assert_eq!(split(chat["workspaceId"].as_str().unwrap()).unwrap().0, "gomi1234");
     }
 }

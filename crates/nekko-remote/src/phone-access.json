@@ -542,6 +542,16 @@
    "terminal",
    "cat"
   ],
+  "refused": [
+   "providers:saveSealed",
+   "providers:setEnabled",
+   "ssh:open",
+   "terminal:close",
+   "terminal:create",
+   "terminal:open",
+   "terminal:signal",
+   "workspace:addByPath"
+  ],
   "read": [
    "agent:replay",
    "chat:running",
@@ -892,6 +902,7 @@
    ],
    "pairing": [
     "remote:pair",
+    "remote:pairComputer",
     "remote:rotate"
    ],
    "phoneAccess": [
