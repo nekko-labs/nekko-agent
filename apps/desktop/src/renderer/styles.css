@@ -2297,10 +2297,12 @@
   color: var(--ink);
   line-height: 1.6;
 }
-/* A readable measure: prose stops at about 68 characters however wide the
-   window gets, and documents read the same way. Code blocks, tables and
-   diagrams keep the full width; they scroll on their own. */
-:is(.msg-ai, .md-doc) :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+/* A readable measure for documents: prose stops at about 68 characters however
+   wide the window gets. Code blocks, tables and diagrams keep the full width;
+   they scroll on their own. Chat replies (.msg-ai) are not capped: with only
+   their prose stopped at 68ch, a wide pane showed text ending halfway across
+   under a table or code block that ran the whole width. */
+.md-doc :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
   max-width: 68ch;
 }
 :is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
