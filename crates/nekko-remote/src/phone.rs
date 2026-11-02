@@ -2115,6 +2115,7 @@ mod tests {
             let (inside, outside) = (root.join("notes.txt"), dir.path().join("settings.json"));
             std::fs::write(&inside, "ok").unwrap();
             std::fs::write(&outside, "{}").unwrap();
+            #[cfg(unix)]
             let link = root.join("escape");
             #[cfg(unix)]
             std::os::unix::fs::symlink(&outside, &link).unwrap();
