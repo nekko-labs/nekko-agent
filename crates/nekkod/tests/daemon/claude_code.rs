@@ -134,6 +134,28 @@ pub fn fake_claude() {
             let reply = format!("woke: {}", decision["behavior"].as_str().unwrap_or("?"));
             out(assistant("m_w2", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "plan" {
+            // Claude Code's own plan: two tasks, the first started.
+            let tool = |id: &str, name: &str, input: Value, output: &str| {
+                out(assistant(
+                    &format!("m_{id}"),
+                    json!([{ "type": "tool_use", "id": id, "name": name, "input": input }]),
+                ));
+                out(json!({ "type": "user", "message": { "role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": id, "content": output,
+                }] }, "parent_tool_use_id": null }));
+            };
+            let created = |n: u8, subject: &str| format!("Task #{n} created successfully: {subject}");
+            tool(
+                "toolu_t1",
+                "TaskCreate",
+                json!({ "subject": "Read the code", "description": "Find the parser" }),
+                &created(1, "Read the code"),
+            );
+            tool("toolu_t2", "TaskCreate", json!({ "subject": "Fix it", "description": "" }), &created(2, "Fix it"));
+            tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
+            out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
+            out(result("planned", "completed"));
         } else if text == "background later" {
             // A background task that finishes only once the test says so (a
             // `wake-now` file in the workspace), so the chat can change first.
@@ -148,6 +170,13 @@ pub fn fake_claude() {
             out(init());
             out(assistant("m_bl2", json!([{ "type": "text", "text": "woke later" }])));
             out(result("woke later", "completed"));
+        } else if text == "usage" {
+            // Plan usage Claude Code reports on its own while it works.
+            out(json!({ "type": "rate_limit_event", "rate_limit_info": {
+                "status": "allowed_warning", "resetsAt": 1_761_231_600, "utilization": 0.62,
+            } }));
+            out(assistant("m_u", json!([{ "type": "text", "text": "used" }])));
+            out(result("used", "completed"));
         } else if text == "run rm" {
             // A prompt only a person may answer in guardrails mode, through the bridge.
             out(assistant(
@@ -526,38 +555,33 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     assert!(replies.last().unwrap().ends_with(": again"), "{replies:?}");
 }
 
-/// The chat's mode changed while Claude Code ran in the background (#1408):
-/// the wake-up still reads the child that woke, launched with the old flags,
-/// instead of returning at once and waking again in a tight loop.
+/// A chat whose mode changed after its turn still shows the wake-up: the
+/// child that woke is read as it is, not dropped as out of date over and
+/// over while its work goes unseen (#1408).
 #[tokio::test(flavor = "multi_thread")]
-async fn a_wake_up_reads_the_child_after_the_chat_changed_mode() {
-    let rig = rig("wakemode", "guardrails", true);
-    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccM", "background later")]), Some(TOKEN)).await;
+async fn a_wake_up_after_a_mode_change_still_reaches_the_chat() {
+    let rig = rig("wake-mode", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccM", "background-slow")]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     turn_record(&rig, "ccM", "s_cc").await;
-    let (status, body) = post(rig.d.port, "session:setOptions", json!(["s_cc", { "mode": "yolo" }]), Some(TOKEN)).await;
+    let (status, body) = post(rig.d.port, "session:setOptions", json!(["s_cc", { "mode": "plan" }]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
-    assert_eq!(saved(&rig)["mode"], "yolo");
-    // After the turn's Done the chat can tell Claude Code still works.
-    let (_, tasks) = post(rig.d.port, "claude:backgroundTasks", json!([]), Some(TOKEN)).await;
-    assert_eq!(tasks, json!({ "s_cc": 1 }));
-    std::fs::write(rig.workspace.join("wake-now"), "").unwrap();
-    until("the wake-up turn to land", Duration::from_secs(30), || async {
+    assert_eq!(saved(&rig)["mode"], "plan");
+
+    let approval = wait_pending(rig.d.port, "s_cc", "approval", "toolu_wake").await;
+    assert_eq!(approval["call"]["executedBy"], "claude-code");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cc", "toolu_wake", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    until("the wake-up to reach the chat", Duration::from_secs(30), || async {
         let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
-        let s = saved(&rig);
-        let last = assistant_texts(&s).last().cloned();
-        (running == json!([]) && last.as_deref() == Some("woke later")).then_some(())
+        let last = assistant_texts(&saved(&rig)).last().cloned();
+        (running == json!([]) && last.as_deref() == Some("woke: allow")).then_some(())
     })
     .await;
-    // One turn for the message and one for the wake-up, not a stream of empty ones.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // One wake-up, not a turn started again and again.
     let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
-    assert_eq!(kinds(&events).iter().filter(|k| *k == "done").count(), 2, "{:?}", kinds(&events));
-    let counts: Vec<&Value> =
-        events.iter().filter(|e| e["type"] == "claude_code_background").map(|e| &e["tasks"]).collect();
-    assert_eq!(counts, [&json!(1), &json!(0)]);
-    let (_, tasks) = post(rig.d.port, "claude:backgroundTasks", json!([]), Some(TOKEN)).await;
-    assert_eq!(tasks, json!({}));
+    let metas = kinds(&events).iter().filter(|k| *k == "session_meta").count();
+    assert!(metas < 10, "{metas} session_meta events: {:?}", kinds(&events));
 }
 
 /// A Claude Agent on a second Claude Code account runs with that account's
@@ -604,4 +628,38 @@ async fn a_second_account_runs_in_its_own_folder_and_a_switch_starts_afresh() {
     assert!(log.lines().all(|l| l.starts_with("new ")), "{log}");
     drop(rig);
     let _ = std::fs::remove_dir_all(&home);
+}
+
+/// After a turn's Done the chat can tell Claude Code still runs background
+/// tasks: the count is published as it changes and kept for
+/// `claude:backgroundTasks`, also when the chat's mode changed meanwhile.
+#[tokio::test(flavor = "multi_thread")]
+async fn background_tasks_are_counted_after_done() {
+    let rig = rig("wakemode", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccM", "background later")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccM", "s_cc").await;
+    let (status, body) = post(rig.d.port, "session:setOptions", json!(["s_cc", { "mode": "yolo" }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(saved(&rig)["mode"], "yolo");
+    // After the turn's Done the chat can tell Claude Code still works.
+    let (_, tasks) = post(rig.d.port, "claude:backgroundTasks", json!([]), Some(TOKEN)).await;
+    assert_eq!(tasks, json!({ "s_cc": 1 }));
+    std::fs::write(rig.workspace.join("wake-now"), "").unwrap();
+    until("the wake-up turn to land", Duration::from_secs(30), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        let s = saved(&rig);
+        let last = assistant_texts(&s).last().cloned();
+        (running == json!([]) && last.as_deref() == Some("woke later")).then_some(())
+    })
+    .await;
+    // One turn for the message and one for the wake-up, not a stream of empty ones.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
+    assert_eq!(kinds(&events).iter().filter(|k| *k == "done").count(), 2, "{:?}", kinds(&events));
+    let counts: Vec<&Value> =
+        events.iter().filter(|e| e["type"] == "claude_code_background").map(|e| &e["tasks"]).collect();
+    assert_eq!(counts, [&json!(1), &json!(0)]);
+    let (_, tasks) = post(rig.d.port, "claude:backgroundTasks", json!([]), Some(TOKEN)).await;
+    assert_eq!(tasks, json!({}));
 }
