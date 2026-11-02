@@ -15,9 +15,9 @@ A desktop connects to other computers the way a phone does, and shows every agen
 - [x] **CC2, Federation (2026-11-02).** Qualified ids, routing, rewriting, merged summaries, offline cache.
 - [x] **CC3, See and drive (2026-11-02).** Per-computer catalogs, chips, Group by Computer, offline states, icons. Notifications still name the chat only.
 - [ ] **CC4, Start and monitor.** *Run on* and the Hardware monitor's switch done 2026-11-02. Left: Local models and Utilization following the switch, Keep this computer awake.
-- [ ] **CC5, Model sources.** The model tunnel, generated provider rows, two Model Server settings.
-- [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys, the phone sheet.
-- [ ] **CC7, A host with no window.** `nekko computer serve`, `link`, `revoke`.
+- [x] **CC5, Model sources (2026-11-02).** The model tunnel, generated provider rows, two Model Server settings.
+- [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys and the phone section done 2026-11-02. Left: controls for model loading on any client, and for disabled tools, memory and privacy on phones.
+- [x] **CC7, A host with no window (2026-11-02).** `nekko-agent computer serve`, `link`, `list`, `revoke`.
 - [ ] **CC8, Pair without pasting.** Discovery, relay lobby, comparison code.
 
 ## Model scheduler (#1462, added 2026-11-01)
