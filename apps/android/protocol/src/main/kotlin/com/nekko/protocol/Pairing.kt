@@ -85,8 +85,9 @@ object Pairing {
         val out = ArrayList<Pair<String, String>>()
         for (part in q.split('&')) {
             if (part.isEmpty()) continue
-            val k = URLDecoder.decode(part.substringBefore('='), Charsets.UTF_8)
-            val v = if ('=' in part) URLDecoder.decode(part.substringAfter('='), Charsets.UTF_8) else ""
+            // By name: the Charset overload only exists from Android 13, and the app runs from Android 9.
+            val k = URLDecoder.decode(part.substringBefore('='), "UTF-8")
+            val v = if ('=' in part) URLDecoder.decode(part.substringAfter('='), "UTF-8") else ""
             out += k to v
         }
         out
