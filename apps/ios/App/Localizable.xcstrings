@@ -11132,42 +11132,42 @@
         }
       }
     },
-    "Interrupt": {
+    "Interrupt and send now": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unterbrechen"
+            "value": "Unterbrechen und jetzt senden"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Interrumpir"
+            "value": "Interrumpir y enviar ahora"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Interrompre"
+            "value": "Interrompre et envoyer maintenant"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "中断"
+            "value": "中断して今すぐ送信"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Interromper"
+            "value": "Interromper e enviar agora"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "中断"
+            "value": "中断并立即发送"
           }
         }
       }
@@ -13968,46 +13968,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "最新的在前"
-          }
-        }
-      }
-    },
-    "Next step": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nächster Schritt"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Siguiente paso"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Étape suivante"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "次のステップ"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Próxima etapa"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下一步"
           }
         }
       }
@@ -23666,46 +23626,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "开启同步时你保存的 55 位字符密钥，或恢复套件中的 QR 码。"
-          }
-        }
-      }
-    },
-    "The agent reads this at its next step and keeps going": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Agent liest dies beim nächsten Schritt und macht weiter"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El agente lo lee en su siguiente paso y continúa"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’agent le lit à sa prochaine étape et continue"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "エージェントは次のステップでこれを読み、作業を続けます"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O agente lê isto na próxima etapa e continua"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "智能体会在下一步读取此内容并继续工作"
           }
         }
       }

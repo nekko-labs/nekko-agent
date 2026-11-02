@@ -16,7 +16,7 @@ Philip's Live Activity read in Japanese on an English-first iPhone, and he asked
 
 A desktop connects to other computers the way a phone does, and shows every agent they run in one place. Where the agent runs and where the model runs are separate choices. [Design](docs/superpowers/specs/2026-11-02-connected-computers-design.md), [plan](docs/superpowers/plans/2026-11-02-connected-computers.md). Prefix **CC**.
 
-- [ ] **CC0, Messages during a run.** Queued, Next step and Interrupt on all clients; the word steer leaves the app and docs.
+- [ ] **CC0, Messages during a run.** Queued messages reach the agent at its next step on their own, and **Interrupt and send now** is the one action on all clients; the word steer leaves the app and docs.
 - [x] **CC1, Link and host class (2026-11-02).** Rust relay client, `computers.rs`, the computer access class, Settings > Computers. Decision [0040](docs/decisions/0040-a-desktop-is-a-paired-device-with-its-own-class.md), [spec](spec/desktop/connected-computers.md).
 - [x] **CC2, Federation (2026-11-02).** Qualified ids, routing, rewriting, merged summaries, offline cache.
 - [x] **CC3, See and drive (2026-11-02).** Per-computer catalogs, chips, Group by Computer, offline states, icons. Notifications still name the chat only.
