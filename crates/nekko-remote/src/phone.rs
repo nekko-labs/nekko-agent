@@ -1004,10 +1004,11 @@ impl Gate {
         if channel == policy().key_channel {
             return self.register_key(&who, &channel, &args);
         }
-        if let Some(out) = self.terminal_call(&who, &channel, &args).await {
+        // First: a computer's refusals cover the terminal channels answered next.
+        if let Some(out) = self.computer_call(&who, &channel, &args).await {
             return out;
         }
-        if let Some(out) = self.computer_call(&who, &channel, &args).await {
+        if let Some(out) = self.terminal_call(&who, &channel, &args).await {
             return out;
         }
         // Fail closed: a channel in no class never reaches the computer.
