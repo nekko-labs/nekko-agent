@@ -11,6 +11,7 @@ owner:
 Philip's Live Activity read in Japanese on an English-first iPhone, and he asked for a lighter bottom of a chat. Spec: [The bottom of a chat](spec/phone/native-ios-app.md).
 
 - [x] **T228, Live Activity language and the bottom of a chat (2026-11-02).** The widget extension declares the app's languages and development region; the string catalog gives English no `.lproj`, so without them English was not a language there (`WidgetLanguageTests`). The bar's background is gone and the transcript is clipped at its top edge, keeping `safeAreaInset`: moving the bar into the `VStack` froze the app when a plan sheet folded and squeezed fields above the keyboard. Message box and cards 12 pt, controls inside 8 pt; the question card takes the message box's surface and the answer field the app's style.
+
 ## Connected computers (#1492, added 2026-11-02)
 
 A desktop connects to other computers the way a phone does, and shows every agent they run in one place. Where the agent runs and where the model runs are separate choices. [Design](docs/superpowers/specs/2026-11-02-connected-computers-design.md), [plan](docs/superpowers/plans/2026-11-02-connected-computers.md). Prefix **CC**.

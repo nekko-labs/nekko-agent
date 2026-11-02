@@ -654,7 +654,7 @@ struct QuestionCard: View {
                         TextField("Your answer", text: Binding(get: { notes[q.id] ?? "" }, set: { notes[q.id] = $0 }),
                                   prompt: Text("Your answer").foregroundStyle(palette.inkFaint), axis: .vertical)
                             .font(.subheadline).foregroundStyle(palette.ink)
-                            .padding(.horizontal, 12).padding(.vertical, 12)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
@@ -663,11 +663,11 @@ struct QuestionCard: View {
                 Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
             }
             Button(action: send) {
-                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer").font(.body.weight(.semibold)) } }
+                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer").font(.footnote.weight(.semibold)) } }
                     .foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
-                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .frame(maxWidth: .infinity, minHeight: 36)
                     .background(ready ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
-                    .contentShape(RoundedRectangle(cornerRadius: 8))
+                    .frame(minHeight: 44).contentShape(Rectangle())
             }
                 .buttonStyle(.plain)
                 .disabled(!ready || busy)
@@ -700,7 +700,7 @@ struct FlowOptions: View {
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack { chips }
-            VStack(alignment: .leading) { chips }
+            VStack(alignment: .leading, spacing: 0) { chips }
         }
     }
 
@@ -708,15 +708,15 @@ struct FlowOptions: View {
         ForEach(options, id: \.self) { o in
             let on = selected.contains(o)
             Button { tap(o) } label: {
-                // A checkmark as well as the colour, and a 44 pt target.
+                // A checkmark as well as the colour, and a 44 pt target around the slim chip.
                 HStack(spacing: 5) {
                     if on { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
                     Text(o)
                 }
-                .font(.footnote).padding(.horizontal, 14).frame(minHeight: 44)
+                .font(.footnote).padding(.horizontal, 12).frame(minHeight: 36)
                 .background(on ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                 .foregroundStyle(on ? palette.onAccent : palette.ink)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(on ? .isSelected : [])
