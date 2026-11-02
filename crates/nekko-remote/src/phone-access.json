@@ -555,6 +555,8 @@
   "read": [
    "agent:replay",
    "chat:running",
+   "model:cancel",
+   "model:next",
    "session:images",
    "session:page"
   ],
@@ -565,6 +567,7 @@
    "chat:cancelCompaction",
    "chat:compact",
    "chat:dequeue",
+   "model:open",
    "session:setAttachments",
    "session:truncate"
   ],

@@ -338,8 +338,9 @@ export const COMPUTER_ACCESS = {
    * that prompt, a shell above all, is not the computer's by inheritance.
    */
   refused: ['providers:saveSealed', 'providers:setEnabled', 'ssh:open', 'terminal:close', 'terminal:create', 'terminal:open', 'terminal:signal', 'workspace:addByPath'],
-  read: ['agent:replay', 'chat:running', 'session:images', 'session:page'],
-  agent: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'chat:cancelCompaction', 'chat:compact', 'chat:dequeue', 'session:setAttachments', 'session:truncate'],
+  // `model:next` and `model:cancel` carry a reply `model:open` already started: not logged per piece.
+  read: ['agent:replay', 'chat:running', 'model:cancel', 'model:next', 'session:images', 'session:page'],
+  agent: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'chat:cancelCompaction', 'chat:compact', 'chat:dequeue', 'model:open', 'session:setAttachments', 'session:truncate'],
   sendKeys: ['clientMessageId', 'images', 'modelId', 'providerId', 'regenerate', 'resume', 'sessionId', 'skill', 'text', 'videos'],
 } as const;
 

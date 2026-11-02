@@ -68,7 +68,7 @@ struct Secrets {
 
 /// What a computer last said, so the panel paints from memory and an offline
 /// computer's agents stay on it.
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Seen {
     summaries: Vec<Value>,
     #[serde(skip)]
@@ -81,6 +81,27 @@ struct Seen {
     catalog: Option<Value>,
     /// Its `machineIcon`.
     icon: Option<String>,
+    /// *Let connected computers use these models*, as of the last read.
+    #[serde(default = "shared_by_default")]
+    models_shared: bool,
+}
+
+fn shared_by_default() -> bool {
+    true
+}
+
+impl Default for Seen {
+    fn default() -> Self {
+        Self {
+            summaries: Vec::new(),
+            running: Vec::new(),
+            pending: serde_json::Map::new(),
+            access: None,
+            catalog: None,
+            icon: None,
+            models_shared: true,
+        }
+    }
 }
 
 pub struct Computers {
@@ -93,6 +114,10 @@ pub struct Computers {
     seen: Mutex<HashMap<String, Seen>>,
     /// Refresh this computer's lists soon; several `done`s coalesce.
     refresh: Mutex<HashMap<String, Arc<tokio::sync::Notify>>>,
+    /// The daemon, for the generated Model Server providers.
+    ctx: std::sync::OnceLock<crate::routes::Ctx>,
+    /// Where those providers point: this run's listener and its token.
+    tunnel: std::sync::OnceLock<(u16, Arc<str>)>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -205,16 +230,78 @@ impl Computers {
             links: Mutex::default(),
             seen: Mutex::new(seen),
             refresh: Mutex::default(),
+            ctx: std::sync::OnceLock::new(),
+            tunnel: std::sync::OnceLock::new(),
         })
     }
 
     /// A link per paired computer. Does nothing with none.
-    pub fn start(self: &Arc<Self>) {
+    pub fn start(self: &Arc<Self>, ctx: crate::routes::Ctx) {
+        let _ = self.ctx.set(ctx);
         for p in lock(&self.list).clone() {
             if let Some(cfg) = self.config(&p) {
                 self.open(&p.id, cfg);
             }
         }
+        if self.any() {
+            let me = self.clone();
+            tokio::spawn(async move { me.sync_providers().await });
+        }
+    }
+
+    /// A provider for each connected computer's Model Server, in settings like
+    /// any other, so a chat here, or a phone connected here, can pick one.
+    async fn sync_providers(self: &Arc<Self>) {
+        const PREFIX: &str = "computer:";
+        let Some(ctx) = self.ctx.get() else { return };
+        let paired = lock(&self.list).clone();
+        let settings = crate::settings::current(ctx).await;
+        let held = settings.get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
+        let ours = |p: &Value| p.get("id").and_then(Value::as_str).is_some_and(|id| id.starts_with(PREFIX));
+        if paired.is_empty() && !held.iter().any(ours) {
+            return;
+        }
+        if !paired.is_empty() && self.tunnel.get().is_none() {
+            let Ok(token) = random_hex(24) else { return };
+            let token: Arc<str> = token.into();
+            let app = crate::model_tunnel::Listener { computers: self.clone(), token: token.clone() };
+            match crate::model_tunnel::listen(app).await {
+                Ok(port) => {
+                    let _ = self.tunnel.set((port, token));
+                }
+                Err(e) => eprintln!("nekkod: no listener for connected Model Servers: {e}"),
+            }
+        }
+        let Some((port, token)) = self.tunnel.get().cloned() else { return };
+        let shared: Vec<&Paired> = {
+            let seen = lock(&self.seen);
+            paired.iter().filter(|p| seen.get(&p.id).is_none_or(|s| s.models_shared)).collect()
+        };
+        let rows = shared.iter().map(|p| {
+            json!({
+                "id": format!("{PREFIX}{}", p.id),
+                "kind": "openai-compat",
+                "label": format!("{} Model Server", p.name),
+                "baseUrl": format!("http://127.0.0.1:{port}/{}/v1", p.id),
+                "apiKey": &*token,
+                "enabled": true,
+            })
+        });
+        let next: Vec<Value> = held.iter().filter(|p| !ours(p)).cloned().chain(rows).collect();
+        if next != held {
+            let _ = crate::settings::update(ctx, json!({ "providers": next })).await;
+        }
+    }
+
+    /// The computer a tunneled model request goes to.
+    pub fn client_for_models(&self, id: &str) -> Result<(String, Client), String> {
+        let name = lock(&self.list).iter().find(|p| p.id == id).map(|p| p.name.clone());
+        let name = name.ok_or("That computer isn't connected.")?;
+        let client = self.client(id).map_err(|_| format!("{name} isn't connected."))?;
+        if client.status().state != State::Online {
+            return Err(format!("{name} is offline."));
+        }
+        Ok((name, client))
     }
 
     pub fn stop(&self) {
@@ -299,7 +386,7 @@ impl Computers {
     }
 
     /// Read a computer's chat list. False when it could not be read.
-    async fn refreshed(&self, id: &str) -> bool {
+    async fn refreshed(self: &Arc<Self>, id: &str) -> bool {
         let Ok(client) = self.client(id) else { return false };
         let Ok(mut summaries) = client.call("sessions:summaries", json!([])).await else { return false };
         let mut running = client.call("chat:running", json!([])).await.unwrap_or(json!([]));
@@ -307,6 +394,7 @@ impl Computers {
         let access = client.call("device:access", json!([])).await.ok();
         let info = client.call("app:info", json!([])).await.unwrap_or(Value::Null);
         let icon = info.get("machineIcon").and_then(Value::as_str).filter(|i| !i.is_empty()).map(str::to_string);
+        let shared = info.get("sharesModels") != Some(&Value::Bool(false));
         federation::qualify_chats(id, &mut summaries);
         for chat in running.as_array_mut().into_iter().flatten() {
             if let Some(raw) = chat.as_str() {
@@ -323,6 +411,7 @@ impl Computers {
                 (federation::qualify(id, raw), p)
             })
             .collect();
+        let changed;
         {
             let mut seen = lock(&self.seen);
             let s = seen.entry(id.to_string()).or_default();
@@ -332,6 +421,11 @@ impl Computers {
             s.pending = pending;
             s.access = access;
             s.icon = icon;
+            changed = s.models_shared != shared;
+            s.models_shared = shared;
+        }
+        if changed {
+            self.sync_providers().await;
         }
         self.keep(id);
         self.hub.publish(UPDATED, json!({}), false);
@@ -346,7 +440,7 @@ impl Computers {
             let Some(s) = seen.get(id) else { return };
             let keep: Vec<&Value> =
                 s.summaries.iter().filter(|c| c.get("incognito") != Some(&Value::Bool(true))).collect();
-            json!({ "summaries": keep, "catalog": s.catalog, "icon": s.icon })
+            json!({ "summaries": keep, "catalog": s.catalog, "icon": s.icon, "models_shared": s.models_shared })
         };
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
@@ -524,12 +618,13 @@ impl Computers {
         lock(&self.list).push(paired.clone());
         self.save()?;
         self.open(&id, Config { pair_code: None, ..cfg });
+        self.sync_providers().await;
         self.hub.publish(UPDATED, json!({}), false);
         Ok(status_value(&paired, None))
     }
 
     /// Stop using a computer, and sign out of it while it can still hear.
-    async fn forget(&self, id: &str) -> Result<Value, String> {
+    async fn forget(self: &Arc<Self>, id: &str) -> Result<Value, String> {
         let link = lock(&self.links).remove(id);
         if let Some(c) = link {
             if c.status().state == State::Online {
@@ -542,6 +637,7 @@ impl Computers {
         lock(&self.seen).remove(id);
         lock(&self.refresh).remove(id);
         let _ = std::fs::remove_dir_all(self.dir.join("computers").join(id));
+        self.sync_providers().await;
         self.save()?;
         self.hub.publish(UPDATED, json!({}), false);
         Ok(self.list())
