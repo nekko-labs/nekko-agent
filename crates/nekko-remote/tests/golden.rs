@@ -30,7 +30,7 @@ struct AllOn;
 
 impl Devices for AllOn {
     fn device(&self, _id: &str) -> Option<PhoneDevice> {
-        Some(PhoneDevice { access: nekko_remote::DeviceAccess::default(), key: None })
+        Some(PhoneDevice { access: nekko_remote::DeviceAccess::default(), key: None, computer: false })
     }
     fn register_key(&self, id: &str, _key: &str) -> Result<bool, &'static str> {
         panic!("register_key({id})")
@@ -117,6 +117,7 @@ fn hello_verdicts_match() {
         let pairing = c["pairing"].as_object().map(|p| Grant {
             code: p["code"].as_str().unwrap().to_string(),
             expires_at: p["expiresAt"].as_f64().unwrap(),
+            computer: false,
         });
         let got = hello::verify_hello(&devices, &c["hello"], pairing.as_ref(), c["now"].as_f64().unwrap());
         same(&got.value(), &c["verdict"], &format!("hello {} with {}", c["hello"], c["pairing"]));

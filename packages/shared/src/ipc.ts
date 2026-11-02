@@ -378,6 +378,7 @@ export const IpcChannels = {
   messagingStatus: 'messaging:status',
   remotePairing: 'remote:pairing',
   remotePair: 'remote:pair',
+  remotePairComputer: 'remote:pairComputer',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',

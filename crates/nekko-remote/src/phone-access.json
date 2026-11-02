@@ -513,6 +513,36 @@
   "modelId",
   "providerId"
  ],
+ "computerAccess": {
+  "read": [
+   "agent:replay",
+   "chat:running",
+   "session:images",
+   "session:page"
+  ],
+  "agent": [
+   "attachment:import",
+   "changes:accept",
+   "changes:acceptAll",
+   "chat:cancelCompaction",
+   "chat:compact",
+   "chat:dequeue",
+   "session:setAttachments",
+   "session:truncate"
+  ],
+  "sendKeys": [
+   "clientMessageId",
+   "images",
+   "modelId",
+   "providerId",
+   "regenerate",
+   "resume",
+   "sessionId",
+   "skill",
+   "text",
+   "videos"
+  ]
+ },
  "expertMonitor": {
   "systemView": [
    "cpuCores",
