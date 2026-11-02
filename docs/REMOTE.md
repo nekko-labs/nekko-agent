@@ -4,6 +4,12 @@ Drive the Nekko Agent running on your computer from your phone: start and manage
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
 
+## From another computer
+
+A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
+
+**Its safety is weaker than a phone's.** A phone asks for Face ID or the passcode before a change. A computer does not ask per change: the check is that computer's own screen lock. Raising a chat to a more permissive mode asks for a click. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. It still can't touch provider keys, sign-ins or remote-access settings.
+
 ## How it works
 
 ```
