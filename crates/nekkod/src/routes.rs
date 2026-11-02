@@ -183,6 +183,7 @@ impl Table {
             &["claude:planUsage"],
             handler!(|ctx, channel, args| crate::claude_policy::plan_usage_route(ctx, &args).await),
         );
+        t.add(&["claude:backgroundTasks"], handler!(|ctx, channel, args| Ok(ctx.turns.harness.background_tasks())));
         t.add(
             &["claude:codeStatus"],
             handler!(|ctx, channel, args| crate::claude_policy::code_status_route(ctx, &args).await),
