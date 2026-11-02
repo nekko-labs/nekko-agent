@@ -705,6 +705,7 @@ function makeWebClient(): NekkoApi {
     setComputerColor: async () => [],
     forgetComputer: async () => [],
     setComputerIcon: async () => [],
+    computerStats: async () => ({ system: null, gpu: null }),
     createSessionOn: () => Promise.reject(new Error('Connected computers are in the desktop app.')),
     computerCatalog: async () => null,
     onComputersUpdated: () => () => {},

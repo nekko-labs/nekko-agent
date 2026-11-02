@@ -388,6 +388,7 @@ export const IpcChannels = {
   computersCatalog: 'computers:catalog',
   computersSetIcon: 'computers:setIcon',
   computersCreateSession: 'computers:createSession',
+  computersStats: 'computers:stats',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -1178,6 +1179,8 @@ export interface NekkoApi {
   renameComputer(id: string, name: string): Promise<import('./computers.js').ComputerStatus[]>;
   setComputerColor(id: string, color: number): Promise<import('./computers.js').ComputerStatus[]>;
   forgetComputer(id: string): Promise<import('./computers.js').ComputerStatus[]>;
+  /** Its live hardware readings, for the Monitors dock. */
+  computerStats(id: string): Promise<{ system: import('./monitor.js').SystemStats | null; gpu: import('./models.js').GpuStats | null }>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
   /** Set the icon in that machine's own settings; empty removes it. */
