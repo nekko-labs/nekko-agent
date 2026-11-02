@@ -1,11 +1,11 @@
-import React, { memo } from 'react';
+import React, { memo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  BranchIcon, CheckIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  BranchIcon, CheckIcon, CloseIcon, CompactIcon, PencilIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
 import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
@@ -165,8 +165,11 @@ function WorkspaceCardImpl({
   showMetadata = true,
   showProvider = true,
   zoneTint,
+  renaming = false,
   onOpen,
   onClose,
+  onRenameStart,
+  onRename,
 }: {
   /** The open workspace, or null for an active chat with no window open. */
   workspace: Workspace | null;
@@ -186,8 +189,14 @@ function WorkspaceCardImpl({
   showProvider?: boolean;
   /** The colour of the zone showing this agent on the board; absent when it is not on the board. */
   zoneTint?: number;
+  /** The chat's title is a text field, being renamed. */
+  renaming?: boolean;
   onOpen: () => void;
   onClose: () => void | Promise<void>;
+  /** Turn the title into a text field (the pencil); absent, the card has no pencil. */
+  onRenameStart?: () => void;
+  /** The typed title, or null when the rename was cancelled. */
+  onRename?: (title: string | null) => void;
 }) {
   const providers = useStore((s) => s.providers);
   const knownModels = useStore((s) => s.models);
@@ -279,13 +288,25 @@ function WorkspaceCardImpl({
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
       <div className="flex items-center gap-2">
         <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
-        <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
-          {title}
-        </span>
+        {renaming && onRename
+          ? <RenameField title={title} onDone={onRename} />
+          : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
+            {title}
+          </span>}
         {lastReply && (!status || status === 'done' || status === 'idle') && (
           <time className="shrink-0 text-2xs tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
+        )}
+        {isChat && onRenameStart && !renaming && (
+          <button
+            className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
+            title="Rename this chat"
+            aria-label={`Rename ${title}`}
+            onClick={(e) => { e.stopPropagation(); onRenameStart(); }}
+          >
+            <PencilIcon className="h-3 w-3" />
+          </button>
         )}
         {/* A chat card archives rather than closes: closing used to look like
             deleting and then the chat was nowhere to be found. Archived chats
@@ -410,6 +431,48 @@ function WorkspaceCardImpl({
   );
 }
 
+/**
+ * The title a rename saves, or null when there is nothing to save: Escape, an
+ * empty field and the same title all keep the chat as it was.
+ */
+export function chatRenameTitle(typed: string | null, current: string | undefined): string | null {
+  const title = typed?.trim();
+  return title && title !== current ? title : null;
+}
+
+/**
+ * The title as a text field: Enter or clicking away keeps what was typed,
+ * Escape gives it up. Keys and clicks stay in the field, so they never open
+ * the card.
+ */
+function RenameField({ title, onDone }: { title: string; onDone: (title: string | null) => void }) {
+  const [value, setValue] = useState(title);
+  const done = useRef(false);
+  const finish = (next: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(next);
+  };
+  return (
+    <input
+      className="min-w-0 flex-1 rounded-sm border border-accent bg-surface px-1 text-sm text-ink outline-none"
+      aria-label="Chat title"
+      value={value}
+      autoFocus
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setValue(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); finish(value); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(null); }
+      }}
+      onBlur={() => finish(value)}
+    />
+  );
+}
+
 type CardProps = React.ComponentProps<typeof WorkspaceCardImpl>;
 
 /**
@@ -420,7 +483,7 @@ type CardProps = React.ComponentProps<typeof WorkspaceCardImpl>;
  */
 export const WorkspaceCard = memo(WorkspaceCardImpl, (a: CardProps, b: CardProps) => {
   for (const key of Object.keys(b) as Array<keyof CardProps>) {
-    if (key === 'onOpen' || key === 'onClose') continue;
+    if (key === 'onOpen' || key === 'onClose' || key === 'onRenameStart' || key === 'onRename') continue;
     if (a[key] !== b[key]) return false;
   }
   return Object.keys(a).length === Object.keys(b).length;
