@@ -34,6 +34,8 @@ export interface ProviderConfig {
   baseUrl: string;
   /** API key (cloud) or token (some local servers). Stored locally. */
   apiKey?: string;
+  /** A connected computer's Model Server: its address is loopback, its requests leave this machine. */
+  computerId?: string;
   /** Auth mode: 'apikey' is the default, 'subscription' pulls a fresh OAuth token. */
   auth?: 'apikey' | 'subscription';
   /** Vendor account id (decoded from ChatGPT id_token, or a stable account handle). */
@@ -135,7 +137,9 @@ export function providerEndpoint(provider: Pick<ProviderConfig, 'kind' | 'baseUr
  * (or openai-compat, a dual-use kind allowed by name) on a loopback address.
  * Offline chats and local-only workflows run only on these.
  */
-export function offlineProviderAllowed(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): boolean {
+export function offlineProviderAllowed(provider: Pick<ProviderConfig, 'kind' | 'baseUrl' | 'computerId'>): boolean {
+  // Loopback here, but the requests go to another machine.
+  if (provider.computerId) return false;
   const url = providerEndpoint(provider);
   return !!url && (isLocalProvider(provider.kind) || provider.kind === 'openai-compat') && (
     url.hostname === 'localhost' || url.hostname === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(url.hostname)

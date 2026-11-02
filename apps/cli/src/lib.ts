@@ -131,6 +131,11 @@ export interface Client {
   listTools(): Promise<Array<{ name: string; description: string }>>;
   usageSummary(): Promise<UsageSummary>;
   remoteStatus(): Promise<RemoteStatus>;
+  enableRemote(relayUrl: string): Promise<RemoteStatus>;
+  remotePairing(): Promise<import('@nekko-agent/shared').RemotePairing | null>;
+  computerCode(): Promise<import('@nekko-agent/shared').PairingGrant>;
+  remoteDevices(): Promise<import('@nekko-agent/shared').RemoteDevice[]>;
+  revokeDevice(id: string): Promise<import('@nekko-agent/shared').RemoteDevice[]>;
   sendChat(opts: SendOptions): Promise<void>;
   abortChat(sessionId: string): Promise<void>;
   approveTool(sessionId: string, callId: string, approved: boolean): Promise<void>;
@@ -298,6 +303,11 @@ function httpClient(url: string, token?: string): Client {
     listTools: () => call('tools:list'),
     usageSummary: () => call('usage:summary'),
     remoteStatus: () => call('remote:status'),
+    enableRemote: (relayUrl) => call('remote:enable', relayUrl),
+    remotePairing: () => call('remote:pairing'),
+    computerCode: () => call('remote:pairComputer'),
+    remoteDevices: () => call('remote:devices'),
+    revokeDevice: (id) => call('remote:revoke', id),
     sendChat: (o) => call('chat:send', o),
     abortChat: (id) => call('chat:abort', id),
     approveTool: (s, c, a) => call('tool:approve', s, c, a),

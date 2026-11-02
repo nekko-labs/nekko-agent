@@ -36,6 +36,10 @@
   "logs:list",
   "logs:read",
   "machine:summary",
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load",
   "model:unload",
   "models:list",
   "monitor:summary",
@@ -218,6 +222,10 @@
   "chat:queue",
   "chat:send",
   "chat:steer",
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load",
   "model:unload",
   "session:create",
   "session:delete",
@@ -376,25 +384,134 @@
  ],
  "sessionOptionKeys": [
   "archivedAt",
+  "autoModel",
+  "autoProviderSwitch",
+  "autoQuality",
+  "chatType",
+  "cloudOnly",
+  "disabledConnectors",
+  "disabledMcpServers",
+  "disabledTools",
   "effort",
+  "executionMode",
+  "gitIsolation",
+  "guidance",
+  "imageParams",
+  "incognito",
+  "memory",
   "mode",
   "modelId",
+  "offline",
+  "order",
   "pinned",
+  "privacy",
   "providerId",
   "tags",
   "thinking",
-  "title"
+  "title",
+  "toolApproach",
+  "workMode"
+ ],
+ "guardedOptionKeys": [
+  "cloudOnly",
+  "disabledConnectors",
+  "disabledMcpServers",
+  "disabledTools",
+  "executionMode",
+  "gitIsolation",
+  "guidance",
+  "incognito",
+  "memory",
+  "offline",
+  "privacy"
+ ],
+ "optionValues": {
+  "autoQuality": [
+   "cheap",
+   "normal",
+   "quality"
+  ],
+  "chatType": [
+   "image",
+   "multimodal"
+  ],
+  "executionMode": [
+   "sandbox",
+   "unified",
+   "worktree"
+  ],
+  "guidance": [
+   "off",
+   "root",
+   "rules"
+  ],
+  "memory": [
+   "all",
+   "off",
+   "project"
+  ],
+  "toolApproach": [
+   "code",
+   "list"
+  ],
+  "workMode": [
+   "best-output",
+   "better-review",
+   "default",
+   "design"
+  ]
+ },
+ "optionSwitches": [
+  "autoModel",
+  "autoProviderSwitch",
+  "cloudOnly",
+  "gitIsolation",
+  "incognito",
+  "offline"
+ ],
+ "engineKeys": [
+  "autoStart",
+  "autoload",
+  "idleTtlSeconds",
+  "jitLoad",
+  "maxLoaded"
+ ],
+ "modelServerView": [
+  "autoStart",
+  "autoload",
+  "idleTtlSeconds",
+  "jitLoad",
+  "maxLoaded",
+  "clientModelSettings",
+  "shareWithComputers"
+ ],
+ "modelSettingChannels": [
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load"
+ ],
+ "presetPathKeys": [
+  "clip_g",
+  "clip_l",
+  "llm",
+  "t5xxl",
+  "taesd",
+  "vae"
  ],
  "chatSendKeys": [
   "clientMessageId",
   "images",
+  "maxHistoryTurns",
   "modelId",
+  "noTools",
   "providerId",
   "regenerate",
   "resume",
   "sessionId",
   "skill",
-  "text"
+  "text",
+  "videos"
  ],
  "chatModes": [
   "ask",
@@ -555,6 +672,8 @@
   "read": [
    "agent:replay",
    "chat:running",
+   "model:cancel",
+   "model:next",
    "session:images",
    "session:page"
   ],
@@ -565,13 +684,16 @@
    "chat:cancelCompaction",
    "chat:compact",
    "chat:dequeue",
+   "model:open",
    "session:setAttachments",
    "session:truncate"
   ],
   "sendKeys": [
    "clientMessageId",
    "images",
+   "maxHistoryTurns",
    "modelId",
+   "noTools",
    "providerId",
    "regenerate",
    "resume",

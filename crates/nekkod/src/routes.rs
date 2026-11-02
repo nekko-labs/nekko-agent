@@ -48,6 +48,8 @@ pub struct Ctx {
     pub automation: Arc<crate::automation::Automation>,
     /// Phone remote access (`remote:*`) and the relay agent.
     pub remote: Arc<crate::remote::Remote>,
+    /// This computer's Model Server, for connected computers (`model:*`).
+    pub tunnel: Arc<crate::model_tunnel::Tunnel>,
     /// Links to other computers (`computers:*`), answered in wire.rs for the window only.
     pub computers: Arc<crate::computers::Computers>,
     /// Settings → Security and the step-up check on the desktop's and the
@@ -343,6 +345,10 @@ impl Table {
             handler!(|ctx, channel, args| Ok(merge_pending(json!({}), ctx.turns.pending.snapshot()))),
         );
         t.add(&["chat:running"], handler!(|ctx, channel, args| Ok(json!(running_chats(ctx)))));
+        t.add(
+            crate::model_tunnel::CHANNELS,
+            handler!(|ctx, channel, args| ctx.tunnel.clone().route(ctx, channel, &args).await),
+        );
         // A callable form of the replay a window's socket gets when it starts
         // showing a chat, for a paired computer that has no such socket.
         t.add(

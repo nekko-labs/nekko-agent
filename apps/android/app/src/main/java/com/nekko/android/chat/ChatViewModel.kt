@@ -280,6 +280,11 @@ class ChatViewModel(
     suspend fun complete() = repo.completeChat(sessionId)
 
     /** Raising the mode is signed; a step-up refusal is thrown for the sheet, which passes its [stepUp]. */
+    suspend fun setRunOption(key: String, value: kotlinx.serialization.json.JsonElement) {
+        repo.setRunOption(sessionId, key, value)
+        controller.reload()
+    }
+
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         repo.setChatMode(sessionId, mode, stepUp)
         controller.reload()

@@ -33,11 +33,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -81,11 +83,16 @@ import com.nekko.protocol.Effort
 import com.nekko.protocol.EngineStatus
 import com.nekko.protocol.MonitorFormat
 import com.nekko.protocol.MonitorTone
+import com.nekko.protocol.RunOption
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 
 /** Test tags the instrumented tests find the controls by. */
 object ModeTags {
@@ -232,6 +239,46 @@ fun effortLabel(e: Effort): String = stringResource(
 // ---------------------------------------------------------------------------
 
 /** Under the message box in both modes: the model and effort control on the left, the context ring on the right. */
+private val RUN_OPTION_TITLES = mapOf(
+    "autoModel" to "Choose the model automatically",
+    "offline" to "Offline",
+    "cloudOnly" to "Cloud only",
+    "incognito" to "Incognito",
+    "gitIsolation" to "Separate Git branch",
+    "workMode" to "Work mode",
+    "toolApproach" to "Tool style",
+)
+
+private val RUN_VALUE_LABELS = mapOf(
+    "default" to "Default",
+    "better-review" to "Better review",
+    "design" to "Design",
+    "best-output" to "Best output",
+    "list" to "List",
+    "code" to "Code",
+)
+
+/** One run setting: a switch, or a choice of its values. */
+@Composable
+private fun RunOptionRow(option: RunOption, value: JsonElement?, onSet: (JsonElement) -> Unit) {
+    val p = Nekko.palette
+    val title = RUN_OPTION_TITLES[option.key] ?: option.key
+    if (option.values.isEmpty()) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("run.${option.key}"), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+            Switch(checked = (value as? JsonPrimitive)?.booleanOrNull == true, onCheckedChange = { onSet(JsonPrimitive(it)) })
+        }
+    } else {
+        val current = (value as? JsonPrimitive)?.contentOrNull ?: option.values.first()
+        Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        Row(Modifier.fillMaxWidth().testTag("run.${option.key}"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            option.values.forEach { v ->
+                FilterChip(selected = v == current, onClick = { onSet(JsonPrimitive(v)) }, label = { Text(RUN_VALUE_LABELS[v] ?: v) })
+            }
+        }
+    }
+}
+
 @Composable
 fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit, modifier: Modifier = Modifier) {
     Row(
@@ -280,6 +327,7 @@ fun ModelEffortSheet(
     computers: ComputersState,
     onSet: suspend (providerId: String?, modelId: String?, effort: Effort?) -> Unit,
     onLoadModels: suspend () -> Unit,
+    onRunOption: suspend (key: String, value: JsonElement) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val p = Nekko.palette
@@ -363,6 +411,21 @@ fun ModelEffortSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = p.inkSoft,
             )
+            Text("Run settings", style = MaterialTheme.typography.titleSmall, color = p.ink)
+            RunOption.all.forEach { option ->
+                RunOptionRow(option, chat.runOptions[option.key]) { value ->
+                    error = null
+                    scope.launch {
+                        try {
+                            onRunOption(option.key, value)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            error = e.message ?: "Couldn’t change it."
+                        }
+                    }
+                }
+            }
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         }
     }

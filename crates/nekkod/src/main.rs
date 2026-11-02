@@ -52,6 +52,7 @@ mod mcp;
 mod mdns;
 mod messaging;
 mod model_server;
+mod model_tunnel;
 mod native;
 mod oauth;
 mod pr_checkouts;
@@ -351,6 +352,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         workspace: Arc::new(workspace::Workspace::new(data_dir.clone(), cfg.github_api_url.as_deref())),
         automation: automation.clone(),
         remote: remote.clone(),
+        tunnel: Arc::default(),
         computers: computers.clone(),
         security: Arc::new(security::Security::new(Some(remote.security_store()), nekko_remote::system_clock())),
         sandboxes,
@@ -437,7 +439,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     remote.start();
-    computers.start();
+    computers.start(ctx.clone());
     {
         // A chat's turn, approvals and answers go through the router, as the UI's do.
         let ctx = ctx.clone();

@@ -60,6 +60,13 @@ pub struct Policy {
     pub views: crate::phone_views::Views,
     pub queue_edit_keys: Vec<String>,
     pub brain_keys: Vec<String>,
+    pub guarded_option_keys: Vec<String>,
+    pub option_values: Vec<(String, Vec<String>)>,
+    pub option_switches: Vec<String>,
+    pub engine_keys: Vec<String>,
+    pub model_server_view: Vec<String>,
+    pub model_setting_channels: Vec<String>,
+    pub preset_path_keys: Vec<String>,
     pub computer_refused: Vec<String>,
     pub computer_read: Vec<String>,
     pub computer_agent: Vec<String>,
@@ -136,6 +143,18 @@ pub fn policy() -> &'static Policy {
             views: crate::phone_views::Views::from_policy(&v),
             queue_edit_keys: strings(&v["queueEditKeys"]),
             brain_keys: strings(&v["brainKeys"]),
+            guarded_option_keys: strings(&v["guardedOptionKeys"]),
+            option_values: v["optionValues"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(k, list)| (k.clone(), strings(list)))
+                .collect(),
+            option_switches: strings(&v["optionSwitches"]),
+            engine_keys: strings(&v["engineKeys"]),
+            model_server_view: strings(&v["modelServerView"]),
+            model_setting_channels: strings(&v["modelSettingChannels"]),
+            preset_path_keys: strings(&v["presetPathKeys"]),
             computer_refused: strings(&v["computerAccess"]["refused"]),
             computer_read: strings(&v["computerAccess"]["read"]),
             computer_agent: strings(&v["computerAccess"]["agent"]),
@@ -397,9 +416,13 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         "workflow:run" => id(0, "workflow id")?,
         "limits:get" => id(0, "provider id")?,
         "context:preview" => id(0, "chat id")?,
-        "model:unload" => {
+        "model:load" | "model:unload" => {
             id(0, "provider id")?;
             id(1, "model id")?;
+            // Passed to a runtime's own CLI on the computer: a leading dash would read as a flag.
+            if arg(1).as_str().is_some_and(|m| m.starts_with('-')) {
+                return Err(denied("value-invalid", "model id"));
+            }
         }
         "settings:update" => out.settings = Some(check_settings_patch(arg(0))?),
         "session:setOptions" => {
@@ -411,6 +434,28 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 && !effort.as_str().is_some_and(|e| has(&policy().effort_levels, e))
             {
                 return Err(denied("value-invalid", "effort"));
+            }
+            for (key, allowed) in &policy().option_values {
+                if arg(1).get(key).is_some_and(|v| !v.as_str().is_some_and(|s| has(allowed, s))) {
+                    return Err(denied("value-invalid", key.clone()));
+                }
+            }
+            for key in &policy().option_switches {
+                if arg(1).get(key).is_some_and(|v| !v.is_boolean()) {
+                    return Err(denied("value-invalid", key.clone()));
+                }
+            }
+        }
+        "engine:settings" => keys_within(arg(0), &policy().engine_keys, "model server settings")?,
+        "engine:saveModelPreset" => {
+            id(0, "model id")?;
+            if !arg(1).is_object() {
+                return Err(denied("value-invalid", "preset"));
+            }
+            for key in &policy().preset_path_keys {
+                if arg(1).get("diffusion").is_some_and(|d| d.get(key).is_some()) {
+                    return Err(denied("option-denied", key.clone()));
+                }
             }
         }
         "chat:send" => {
@@ -571,6 +616,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "gpu:stats" => crate::phone_views::gpu(&result, &policy().views),
         "engine:status" => crate::phone_views::engine(&result, &policy().views),
         "context:preview" => crate::phone_views::context(&result, &policy().views),
+        "engine:settings" => pick(&result, &policy().model_server_view),
         "model:unload" => {
             if result.is_object() {
                 pick(&result, &["message".into(), "ok".into()])
@@ -1134,6 +1180,14 @@ impl Gate {
         }
         let list = args.as_array().cloned().unwrap_or_default();
         screen(channel, &list)?;
+        if has(&policy().model_setting_channels, channel) {
+            let settings = (self.run)("settings:get".to_string(), json!([]))
+                .await
+                .map_err(|_| denied("server-locked", channel))?;
+            if settings.pointer("/engine/clientModelSettings") == Some(&Value::Bool(false)) {
+                return Err(denied("server-locked", channel));
+            }
+        }
         if self.mode_raise(channel, &list).await {
             // Said first, so a phone without a registered key learns it must sign.
             if who.proof.is_none() {
@@ -1241,6 +1295,10 @@ impl Gate {
             return false;
         }
         let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
+        // These change what an agent may touch: a proof either way, as a raise needs.
+        if channel == "session:setOptions" && policy().guarded_option_keys.iter().any(|k| arg(1).get(k).is_some()) {
+            return true;
+        }
         let next = match channel {
             "session:setOptions" => arg(1).get("mode"),
             "settings:update" => arg(0).get("defaultChatMode"),
@@ -2061,6 +2119,66 @@ mod tests {
         const PHONE: PhoneDevice = PhoneDevice { access: ON, key: None, computer: false };
 
         #[test]
+        fn every_run_setting_is_checked_and_loosening_one_needs_a_proof() {
+            let (_, calls, phone) = with_device(PHONE);
+            let set = |o: Value| ask(&phone, "session:setOptions", json!(["s1", o]));
+            assert!(set(json!({ "workMode": "design", "autoModel": true, "toolApproach": "code" })).is_ok());
+            assert!(set(json!({ "workMode": "nope" })).unwrap_err().contains("value-invalid"));
+            assert!(set(json!({ "autoModel": "yes" })).unwrap_err().contains("value-invalid"));
+            assert!(set(json!({ "unattended": true })).unwrap_err().contains("option-denied"));
+            for guarded in [
+                json!({ "executionMode": "worktree" }),
+                json!({ "gitIsolation": false }),
+                json!({ "disabledTools": [] }),
+                json!({ "disabledMcpServers": [] }),
+                json!({ "disabledConnectors": [] }),
+                json!({ "offline": false }),
+                json!({ "cloudOnly": false }),
+                json!({ "privacy": {} }),
+                json!({ "incognito": true }),
+                json!({ "memory": "all" }),
+                json!({ "guidance": "off" }),
+            ] {
+                assert!(set(guarded.clone()).unwrap_err().contains("proof-required"), "{guarded}");
+            }
+            assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 1);
+        }
+
+        #[test]
+        fn model_settings_follow_the_servers_switch_and_network_keys_never_move() {
+            let (_, _, phone) = with_device(PHONE);
+            let save = |o: Value| ask(&phone, "engine:settings", json!([o]));
+            assert!(save(json!({ "maxLoaded": 3, "idleTtlSeconds": 60 })).is_ok());
+            let preset = |p: Value| ask(&phone, "engine:saveModelPreset", json!(["m1", p]));
+            assert!(preset(json!({ "contextTokens": 8192 })).is_ok());
+            assert!(
+                preset(json!({ "diffusion": { "vae": "/Users/x/.ssh/id_rsa" } }))
+                    .unwrap_err()
+                    .contains("option-denied")
+            );
+            assert!(ask(&phone, "model:load", json!(["lms", "--help"])).unwrap_err().contains("value-invalid"));
+            for key in [
+                "port",
+                "bind",
+                "apiKey",
+                "corsOrigins",
+                "modelsDir",
+                "modelFolders",
+                "shareWithComputers",
+                "clientModelSettings",
+            ] {
+                let mut o = json!({});
+                o[key] = json!("x");
+                assert!(save(o).unwrap_err().contains("option-denied"), "{key}");
+            }
+            let view = redact(
+                "engine:settings",
+                json!({ "maxLoaded": 2, "apiKey": "secret", "bind": "lan", "clientModelSettings": true }),
+            );
+            assert_eq!(view, json!({ "maxLoaded": 2, "clientModelSettings": true }));
+        }
+
+        #[test]
         fn a_computer_gets_its_class_and_a_phone_does_not() {
             let (_, calls, computer) = with_device(COMPUTER);
             let (_, _, phone) = with_device(PHONE);
@@ -2158,7 +2276,7 @@ mod tests {
             let (_, _, computer) = with_device(COMPUTER);
             let send = |o: Value| ask(&computer, "chat:send", json!([o]));
             assert!(send(json!({ "sessionId": "s1", "text": "hi", "videos": ["data:video/mp4;base64,AA"] })).is_ok());
-            for bad in ["unattended", "attachedPaths", "noTools", "maxHistoryTurns"] {
+            for bad in ["unattended", "attachedPaths"] {
                 let mut o = json!({ "sessionId": "s1", "text": "hi" });
                 o[bad] = json!(true);
                 assert!(send(o).unwrap_err().contains("option-denied"), "{bad}");
@@ -2823,7 +2941,7 @@ mod tests {
                 assert!(has(&policy().read_channels, c), "{c}");
             }
             assert!(has(&policy().agent_channels, "model:unload"));
-            for c in ["engine:settings", "engine:install", "engine:deleteModel"] {
+            for c in ["engine:install", "engine:deleteModel"] {
                 assert_eq!(screen(c, &[]).err(), Some(denied("channel-denied", c)));
             }
         }
