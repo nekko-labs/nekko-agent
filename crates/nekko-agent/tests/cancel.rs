@@ -177,9 +177,10 @@ fn chatgpt(transport: Arc<dyn Transport>) -> AnyProvider {
     create_provider_with(config, Io { transport, clock: nekko_agent::stream::system_clock() })
 }
 
-/// The ChatGPT catalog is held to the same five seconds.
+/// The ChatGPT catalog is held to the same five seconds, then reports the
+/// failure rather than guessing models.
 #[tokio::test(start_paused = true)]
-async fn a_stalled_chatgpt_catalog_falls_back_after_five_seconds() {
+async fn a_stalled_chatgpt_catalog_reports_an_error_after_five_seconds() {
     let headers_never_come = chatgpt(Arc::new(NeverAnswers));
     let body_never_ends = chatgpt(Arc::new(Stalling {
         first: "{\"models\":[",
@@ -189,8 +190,8 @@ async fn a_stalled_chatgpt_catalog_falls_back_after_five_seconds() {
 
     for p in [headers_never_come, body_never_ends] {
         let started = tokio::time::Instant::now();
-        let models = p.list_models().await.unwrap();
+        let error = p.list_models().await.unwrap_err();
         assert_eq!(started.elapsed(), Duration::from_secs(5));
-        assert!(models.iter().all(|m| m.fallback) && models.iter().any(|m| m.id == "gpt-6.1-sol"));
+        assert!(error.to_string().contains("model catalog is unavailable"));
     }
 }

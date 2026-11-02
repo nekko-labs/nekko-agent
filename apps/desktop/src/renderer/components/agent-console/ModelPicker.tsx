@@ -270,6 +270,11 @@ export function ModelPicker({
     // is split into a short name and its folder.
     const label = modelRowLabel(m, isLocalProvider(p.kind));
     const sub = label.sub;
+    const claudeVersion = p.kind === 'claude-code' && selected && resolvedModelId
+      ? shortModelName(resolvedModelId) : null;
+    const hint = blocked ? why : sub ?? (p.kind === 'claude-code'
+      ? claudeVersion ? `Currently ${claudeVersion} · Claude Code chooses the version` : 'Claude Code chooses the version when the chat starts'
+      : m.availability?.detail ?? price);
     return (
       <div
         key={key}
@@ -283,7 +288,7 @@ export function ModelPicker({
           disabled={blocked}
           className={`flex min-w-0 flex-1 flex-col px-3 py-1 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
           onClick={() => pick(p.id, m.id)}
-          title={blocked ? `${label.name} · ${why}` : sub ? `${label.name} · ${sub}` : m.id === label.name ? label.name : `${label.name} · ${m.id}`}
+          title={`${label.name} · ${hint}`}
         >
           <div className="flex w-full items-center gap-2">
             {key === defaultKey && <span className="text-2xs text-accent">Default</span>}
@@ -294,7 +299,7 @@ export function ModelPicker({
                 title="Loaded in memory"
               />
             )}
-            <span className={`min-w-0 truncate text-xs font-medium leading-tight ${blocked ? 'text-ink-faint' : ''}`} data-model-name>{label.name}</span>
+            <span className={`min-w-0 truncate text-xs font-medium leading-tight ${blocked ? 'text-ink-faint' : ''}`} data-model-name>{claudeVersion ? `${label.name} (${claudeVersion})` : label.name}</span>
             {blocked && (
               <span
                 className="shrink-0 rounded-sm px-1 py-0.5 text-2xs font-semibold leading-none"
@@ -310,9 +315,9 @@ export function ModelPicker({
           </div>
           <span
             className={`truncate text-2xs text-ink-faint ${sub ? 'font-mono' : ''}`}
-            title={blocked ? why : sub ?? 'Estimated list price per 1M tokens'}
+            title={hint}
           >
-            {blocked ? why : sub ?? price}
+            {hint}
           </span>
         </button>
         {!readOnly && <button
