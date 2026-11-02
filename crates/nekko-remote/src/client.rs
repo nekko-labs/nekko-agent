@@ -11,7 +11,7 @@ use crate::hello;
 use crate::phone::policy;
 use crate::socket::encode_uri_component;
 use futures_util::{SinkExt, StreamExt};
-use p256::ecdsa::SigningKey;
+pub use p256::ecdsa::SigningKey;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
