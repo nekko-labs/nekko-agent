@@ -433,6 +433,11 @@ async fn until_stopped(stopped: &mut watch::Receiver<bool>) {
 
 /// One socket, from dial to close.
 async fn session(shared: &Arc<Shared>, route: &str, more: bool, mut stopped: watch::Receiver<bool>) -> End {
+    const ID: &str = "connected-computers";
+    let host = crate::route::relay_host(route);
+    if !nekko_net::allowed_to(ID, Some(&host)) {
+        return End::Offline;
+    }
     let url = client_url(route, &shared.cfg.room, &shared.cfg.secret);
     let open = if more && crate::route::relay_route(route) != crate::route::Route::Internet { OPEN_TIMEOUT } else { HANDSHAKE };
     let dial = tokio::time::timeout(open, tokio_tungstenite::connect_async(url.as_str()));
@@ -441,6 +446,7 @@ async fn session(shared: &Arc<Shared>, route: &str, more: bool, mut stopped: wat
         _ = until_stopped(&mut stopped) => return End::Stopped,
     };
     let Ok(Ok((ws, _))) = ws else { return End::Failed };
+    nekko_net::record(ID, nekko_net::Event::new("connect").host(&host));
     let (mut sink, mut stream) = ws.split();
     let (out, mut outgoing) = mpsc::unbounded_channel();
     lock(&shared.conn).out = Some(out);
@@ -461,6 +467,10 @@ async fn session(shared: &Arc<Shared>, route: &str, more: bool, mut stopped: wat
             }
             _ = &mut handshake, if !welcomed && !away => return End::Failed,
             _ = ping.tick() => {
+                if !nekko_net::allowed_to(ID, Some(&host)) {
+                    let _ = sink.send(Message::Close(None)).await;
+                    return End::Offline;
+                }
                 if seen.elapsed() > PING * 2 + PING / 2 {
                     return if welcomed { End::Lost } else { End::Failed };
                 }
