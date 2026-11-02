@@ -701,11 +701,9 @@
     last = now;
     draw();
   };
-  // The wave moves only while the hero is on screen (and the tab is visible):
-  // past it, the dots hold their last frame instead of redrawing behind the
-  // content at 20 fps.
-  let heroVisible = true;
-  const start = () => { if (!raf && !reduced && heroVisible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(loop); } };
+  // The wave keeps moving down the whole page; the panels over it are solid,
+  // so redrawing behind them stays cheap. Only a hidden tab stops it.
+  const start = () => { if (!raf && !reduced && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(loop); } };
   const stop = () => { cancelAnimationFrame(raf); raf = 0; };
   size(); draw();
   // A phone's URL bar showing or hiding fires resize with only the height
@@ -719,10 +717,6 @@
     }, 150);
   });
   document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
-  const hero = document.querySelector('.hero-band, .hero');
-  if (hero && 'IntersectionObserver' in window) {
-    new IntersectionObserver(([e]) => { heroVisible = e.isIntersecting; if (heroVisible) start(); else stop(); }).observe(hero);
-  }
   new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   start();
 })();
