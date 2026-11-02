@@ -1,5 +1,7 @@
+import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { defineConfig } from 'electron-vite';
+import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // Our own workspace packages must be bundled into the main and preload output,
@@ -11,8 +13,29 @@ import react from '@vitejs/plugin-react';
 // true, which electron-vite 2 did not do), so each one has to be excluded here.
 const workspacePackages = ['@nekko-agent/profile', '@nekko-agent/shared'];
 
+// Writes which npm packages each bundle pulled in, for the notices file
+// (scripts/third-party.mjs). The lockfile cannot say: Vite bundles this app's
+// devDependencies too, React among them.
+function recordBundledPackages(section: string): Plugin {
+  const repo = resolve(__dirname, '../..').replace(/\\/g, '/');
+  return {
+    name: 'record-bundled-packages',
+    apply: 'build',
+    generateBundle() {
+      const dirs = new Set<string>();
+      for (const id of this.getModuleIds()) {
+        const dir = /^.*node_modules\/(?:@[^/]+\/)?[^/?]+/.exec(id.replace(/\\/g, '/'))?.[0];
+        if (dir?.startsWith(`${repo}/`)) dirs.add(dir.slice(repo.length + 1));
+      }
+      mkdirSync(resolve(__dirname, 'out'), { recursive: true });
+      writeFileSync(resolve(__dirname, `out/bundled-packages-${section}.json`), JSON.stringify([...dirs].sort()));
+    },
+  };
+}
+
 export default defineConfig({
   main: {
+    plugins: [recordBundledPackages('main')],
     build: {
       // Keep ws bundled as before; native optional helpers remain external below.
       externalizeDeps: { exclude: [...workspacePackages, 'ws'] },
@@ -33,6 +56,7 @@ export default defineConfig({
     },
   },
   preload: {
+    plugins: [recordBundledPackages('preload')],
     build: {
       externalizeDeps: { exclude: workspacePackages },
       rollupOptions: {
@@ -54,7 +78,7 @@ export default defineConfig({
         input: { index: resolve(__dirname, 'src/renderer/index.html') },
       },
     },
-    plugins: [react(), {
+    plugins: [react(), recordBundledPackages('renderer'), {
       name: 'preserve-elk-bundle',
       apply: 'build',
       enforce: 'post',
