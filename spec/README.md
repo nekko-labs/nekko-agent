@@ -79,6 +79,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Dynamic view: zones](desktop/dynamic-zones.md) (7 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (13 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (8 KB)
+- [Full-pane dot wave and pixel view reveal](desktop/full-pane-dot-wave-and-pixel-view-reveal.md) (3 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (6 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (2 KB)
