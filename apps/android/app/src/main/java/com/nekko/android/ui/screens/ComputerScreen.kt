@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,7 +29,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
@@ -64,9 +65,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,8 +80,11 @@ import com.nekko.android.computer.MachineController
 import com.nekko.android.data.Computer
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.ui.chat.RowChip
+import com.nekko.android.ui.components.ComputerIcon
+import com.nekko.android.ui.components.ComputerTileIcon
 import com.nekko.android.ui.components.Dot
 import com.nekko.android.ui.components.NCard
+import com.nekko.android.ui.components.computerIconLabel
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.settings.routeLabel
@@ -85,11 +92,13 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.android.util.ago
 import com.nekko.android.util.localAgo
 import com.nekko.protocol.AgentRows
+import com.nekko.protocol.COMPUTER_ICONS
 import com.nekko.protocol.MachineSummary
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.Pairing
 import com.nekko.protocol.RelayRoute
 import com.nekko.protocol.RelayState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -123,6 +132,8 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var forgetting by remember { mutableStateOf(false) }
+    var pickingIcon by remember { mutableStateOf(false) }
+    var iconError by remember { mutableStateOf<String?>(null) }
     val active = s.activeId == computerId
 
     Scaffold(
@@ -185,6 +196,20 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
                 }
             }
             if (active) {
+                SectionHeader("Icon")
+                NCard(Modifier.padding(horizontal = 16.dp)) {
+                    val online = s.conn == RelayState.ONLINE
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(enabled = online, role = Role.Button, onClickLabel = "Change the icon") { pickingIcon = true }.heightIn(min = 48.dp)
+                            .semantics(mergeDescendants = true) { stateDescription = c.icon?.let(::computerIconLabel) ?: "None" }.testTag("computer.icon"),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Shown on every device", style = MaterialTheme.typography.bodyMedium, color = if (online) p.ink else p.inkFaint, modifier = Modifier.weight(1f))
+                        if (c.icon == null) Text("None", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft) else ComputerIcon(c.icon, size = 20.dp, tint = p.ink)
+                    }
+                    if (!online) Text("Connect to change this.", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+                    iconError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
+                }
                 val models = s.providers.filter { it.enabled }.flatMap { s.models[it.id].orEmpty() }
                 if (models.isNotEmpty()) {
                     SectionHeader(stringResource(R.string.settings_models))
@@ -224,6 +249,21 @@ fun ComputerScreen(repo: ComputersRepository, computerId: String, onBack: () -> 
         }
     }
 
+    if (pickingIcon && c != null) {
+        IconDialog(c.icon, onDismiss = { pickingIcon = false }) { name ->
+            pickingIcon = false
+            iconError = null
+            scope.launch {
+                try {
+                    repo.setMachineIcon(name)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    iconError = e.message?.takeIf { it.isNotBlank() } ?: "${c.name} didn’t save that."
+                }
+            }
+        }
+    }
     if (renaming && c != null) {
         var name by remember(c.id) { mutableStateOf(c.name) }
         AlertDialog(
@@ -264,7 +304,7 @@ private fun Hero(c: Computer, s: MachineSummary?, active: Boolean, conn: RelaySt
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(p.accentSoft), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Computer, contentDescription = null, tint = p.accent, modifier = Modifier.size(24.dp))
+            ComputerTileIcon(c.icon, 24.dp, p.accent)
         }
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(c.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -279,6 +319,38 @@ private fun Hero(c: Computer, s: MachineSummary?, active: Boolean, conn: RelaySt
             }
         }
     }
+}
+
+/** None and the 24 icons. Picking closes it; the computer saves the choice. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun IconDialog(current: String?, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val p = Nekko.palette
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Icon") },
+        text = {
+            FlowRow(Modifier.verticalScroll(rememberScrollState()).testTag("computer.iconPicker"), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                (listOf("") + COMPUTER_ICONS).forEach { name ->
+                    val on = name == current.orEmpty()
+                    Box(
+                        Modifier.size(48.dp).clip(RoundedCornerShape(10.dp))
+                            .background(if (on) p.accentSoft else p.surface2)
+                            .clickable(role = Role.Button) { onPick(name) }
+                            .semantics {
+                                contentDescription = if (name.isEmpty()) "None" else computerIconLabel(name)
+                                selected = on
+                            }
+                            .testTag("computer.icon.${name.ifEmpty { "none" }}"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (name.isEmpty()) Text("None", style = MaterialTheme.typography.labelSmall, color = p.ink) else ComputerIcon(name, size = 24.dp, tint = p.ink)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /** Four stat tiles: the round trip with its last samples, the Model Server, uptime, and today's usage. */

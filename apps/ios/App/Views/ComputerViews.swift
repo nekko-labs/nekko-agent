@@ -19,6 +19,8 @@ struct ComputerDetailView: View {
     @State private var addingProvider = false
     @State private var setup: ProviderSetupModel?
     @State private var switching: Set<String> = []
+    @State private var pickingIcon = false
+    @State private var iconError: String?
 
     var body: some View {
         Group {
@@ -47,6 +49,15 @@ struct ComputerDetailView: View {
         .alert("Couldn’t change that", isPresented: Binding(get: { setup?.failed != nil }, set: { if !$0 { setup = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(setup?.failed ?? "") }
+        .alert("Couldn’t change that", isPresented: Binding(get: { iconError != nil }, set: { if !$0 { iconError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(iconError ?? "") }
+        .sheet(isPresented: $pickingIcon) {
+            ComputerIconPicker(current: store.computers.first { $0.id == computerId }?.icon) { name in
+                pickingIcon = false
+                Task { do { try await store.setMachineIcon(name) } catch { iconError = error.localizedDescription } }
+            }
+        }
     }
 
     @ViewBuilder private func content(_ c: Computer, _ m: MachineModel) -> some View {
@@ -68,6 +79,22 @@ struct ComputerDetailView: View {
                 }
             } else if let why = m.summaryError, m.loadedOnce {
                 Section { Label(why, systemImage: "info.circle").font(.footnote).foregroundStyle(palette.inkSoft) }
+            }
+            if m.isActive {
+                Section {
+                    Button { pickingIcon = true } label: {
+                        LabeledContent("Icon") {
+                            if c.icon == nil { Text("None") } else { ComputerGlyph(icon: c.icon, size: 20).foregroundStyle(palette.ink) }
+                        }
+                    }
+                    .foregroundStyle(palette.ink)
+                    .disabled(store.conn != .online)
+                    .accessibilityValue(c.icon.map(computerIconName) ?? String(localized: "None"))
+                    .accessibilityIdentifier("computer.icon")
+                } footer: {
+                    Text(store.conn == .online ? "Saved on the computer; the desktop shows the same." : "Connect to change these.")
+                        .foregroundStyle(palette.inkSoft)
+                }
             }
             if !m.models.isEmpty || !m.providers.isEmpty {
                 Section {
@@ -143,7 +170,13 @@ struct ComputerDetailView: View {
 
     private func hero(_ c: Computer, _ s: MachineSummary?) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: c.platform == "darwin" ? "laptopcomputer" : "desktopcomputer").font(.title2)
+            Group {
+                if c.icon == nil {
+                    Image(systemName: c.platform == "darwin" ? "laptopcomputer" : "desktopcomputer").font(.title2)
+                } else {
+                    ComputerGlyph(icon: c.icon, size: 26)
+                }
+            }
                 .foregroundStyle(palette.accent).frame(width: 48, height: 48)
                 .background(palette.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
                 .accessibilityHidden(true)
@@ -288,6 +321,104 @@ struct ComputerDetailView: View {
 
     private func bytes(_ b: Double) -> String { ByteCountFormatter.string(fromByteCount: Int64(b), countStyle: .memory) }
     private func mb(_ v: Double) -> String { bytes(v * 1_048_576) }
+}
+
+/// A computer's icon beside its name, or nothing at all when it has none. Decorative: the name says which.
+struct ComputerGlyph: View {
+    let icon: String?
+    var size: CGFloat = 16
+    @ScaledMetric private var scale: CGFloat = 1
+
+    var body: some View {
+        if let icon {
+            Image("computer-\(icon)").resizable().scaledToFit().frame(width: size * scale, height: size * scale)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// A computer in a menu or a picker, which keep only a title and an image.
+struct ComputerLabel: View {
+    let c: Computer
+
+    var body: some View {
+        if let icon = c.icon {
+            Label(c.name, image: "computer-\(icon)")
+        } else {
+            Text(c.name)
+        }
+    }
+}
+
+/// The name a picker's button reads out for an icon.
+func computerIconName(_ icon: String) -> String {
+    switch icon {
+    case "laptop": return String(localized: "Laptop")
+    case "desktop": return String(localized: "Desktop")
+    case "tower": return String(localized: "Tower")
+    case "mini": return String(localized: "Mini")
+    case "server": return String(localized: "Server")
+    case "rack": return String(localized: "Rack")
+    case "cloud": return String(localized: "Cloud")
+    case "gpu": return String(localized: "GPU")
+    case "chip": return String(localized: "Chip")
+    case "home": return String(localized: "Home")
+    case "office": return String(localized: "Office")
+    case "lab": return String(localized: "Lab")
+    case "bolt": return String(localized: "Bolt")
+    case "moon": return String(localized: "Moon")
+    case "sun": return String(localized: "Sun")
+    case "star": return String(localized: "Star")
+    case "flame": return String(localized: "Flame")
+    case "leaf": return String(localized: "Leaf")
+    case "globe": return String(localized: "Globe")
+    case "cube": return String(localized: "Cube")
+    case "rocket": return String(localized: "Rocket")
+    case "shield": return String(localized: "Shield")
+    case "terminal": return String(localized: "Terminal")
+    case "cat": return String(localized: "Cat")
+    default: return icon
+    }
+}
+
+/// None and the 24 icons. Picking closes it; the computer saves the choice.
+private struct ComputerIconPicker: View {
+    let current: String?
+    let onPick: (String) -> Void
+    @Environment(\.palette) private var palette
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 8)], spacing: 8) {
+                    cell(icon: "", label: String(localized: "None")) { Text("None").font(.footnote).lineLimit(1).minimumScaleFactor(0.7) }
+                    ForEach(computerIcons, id: \.self) { icon in
+                        cell(icon: icon, label: computerIconName(icon)) { ComputerGlyph(icon: icon, size: 24) }
+                    }
+                }
+                .padding(16)
+            }
+            .appBackground()
+            .navigationTitle("Icon")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func cell(icon: String, label: String, @ViewBuilder content: () -> some View) -> some View {
+        let selected = icon == (current ?? "")
+        return Button { onPick(icon) } label: {
+            content().foregroundStyle(palette.ink).frame(maxWidth: .infinity, minHeight: 52)
+                .background(selected ? palette.accent.opacity(0.12) : palette.surface, in: RoundedRectangle(cornerRadius: 12))
+                .overlay { if selected { RoundedRectangle(cornerRadius: 12).stroke(palette.accent) } }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("computer.icon.\(icon.isEmpty ? "none" : icon)")
+    }
 }
 
 /// A stat tile: a small uppercase title, then whatever the stat needs.

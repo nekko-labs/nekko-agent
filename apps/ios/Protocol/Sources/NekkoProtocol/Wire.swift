@@ -567,11 +567,12 @@ public struct PcSettings: Equatable, Sendable {
     }
 
     /// The `settings:update` patch for one change: never more than the phone-settable keys.
-    public static func patch(mode: ChatMode? = nil, action: ChatAction? = nil, skipConfirm: Bool? = nil) -> JSONValue {
+    public static func patch(mode: ChatMode? = nil, action: ChatAction? = nil, skipConfirm: Bool? = nil, icon: String? = nil) -> JSONValue {
         var o: [String: JSONValue] = [:]
         if let mode { o["defaultChatMode"] = .string(mode.rawValue) }
         if let action { o["chatPaneAction"] = .string(action.rawValue) }
         if let skipConfirm { o["skipDeleteConfirmation"] = .bool(skipConfirm) }
+        if let icon { o["machineIcon"] = .string(icon) }
         return .object(o)
     }
 }
@@ -729,11 +730,22 @@ public struct AppInfo: Equatable, Sendable {
     public let platform: String?
     /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
     public var quitFromPhone = false
+    /// The computer's icon, one of `computerIcons`; nil when it has none, or one this app doesn't draw.
+    public var machineIcon: String?
 
     public static func from(_ v: JSONValue?) -> AppInfo {
-        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false)
+        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false,
+                machineIcon: v?.str("machineIcon").flatMap { computerIcons.contains($0) ? $0 : nil })
     }
 }
+
+/// The icons a computer can have, as `COMPUTER_ICONS` in packages/shared/src/computers.ts.
+/// `scripts/computer-icons.test.mjs` fails when this or the app's assets drift from it.
+public let computerIcons = [
+    "laptop", "desktop", "tower", "mini", "server", "rack", "cloud", "gpu",
+    "chip", "home", "office", "lab", "bolt", "moon", "sun", "star",
+    "flame", "leaf", "globe", "cube", "rocket", "shield", "terminal", "cat",
+]
 
 public struct VoiceInstall: Equatable, Sendable {
     public let installed: Bool

@@ -168,6 +168,10 @@ both need the update; an older app cannot connect to an updated computer.
 > free disk) and the connection. The computer sends this as one read, `machine:summary`, built
 > without paths or addresses; an older computer says it cannot.
 >
+> A computer that has an icon shows it beside its name wherever the phone lists or switches
+> computers. Set it from the computer's page, while connected: **Icon** offers None and the same 24
+> icons as the desktop. It is saved on the computer, so every device shows the same one.
+>
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version, the phone protocol on each side and the open-source licenses of the app and the

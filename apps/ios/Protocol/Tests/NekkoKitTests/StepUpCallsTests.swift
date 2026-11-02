@@ -400,4 +400,49 @@ final class SafetyExitTests: XCTestCase {
         XCTAssertTrue(AppInfo.from(["quitFromPhone": true]).quitFromPhone)
         XCTAssertFalse(AppInfo.from(["version": "0.9"]).quitFromPhone, "older computers never offer it")
     }
+
+    func testAComputerIconComesFromAppInfoAndTheRecordKeepsIt() async throws {
+        XCTAssertEqual(AppInfo.from(["machineIcon": "tower"]).machineIcon, "tower")
+        XCTAssertNil(AppInfo.from(["machineIcon": ""]).machineIcon)
+        XCTAssertNil(AppInfo.from(["machineIcon": "spaceship"]).machineIcon, "one this app doesn't draw")
+        XCTAssertNil(AppInfo.from(["machineIcon": .null]).machineIcon)
+        XCTAssertNil(AppInfo.from(["version": "0.9"]).machineIcon, "older computers send none")
+
+        replies[Channels.appInfo] = { _ in ["version": "1.0", "platform": "darwin", "machineIcon": "tower"] }
+        let s = makeStore()
+        _ = await online(s)
+        XCTAssertEqual(s.active?.icon, "tower")
+        let saved = try JSONDecoder().decode(Computer.self, from: JSONEncoder().encode(XCTUnwrap(s.active)))
+        XCTAssertEqual(saved.icon, "tower")
+
+        // A read that fails keeps what was learned; an answer without one clears it.
+        replies[Channels.appInfo] = { _ in throw RelayError("gone", fromComputer: true) }
+        connections[0].replies = replies
+        await s.refresh()
+        XCTAssertEqual(s.active?.icon, "tower")
+        replies[Channels.appInfo] = { _ in ["version": "1.0", "platform": "darwin", "machineIcon": .null] }
+        connections[0].replies = replies
+        await s.refresh()
+        XCTAssertNil(s.active?.icon)
+    }
+
+    func testThePickerSendsOnlyTheIconAndShowsWhatIsSaved() async throws {
+        var sent: [JSONValue] = []
+        replies[Channels.settingsUpdate] = { args in sent.append(args[0]); return ["machineIcon": args[0]["machineIcon"] ?? .null] }
+        let s = makeStore()
+        _ = await online(s)
+        try await s.setMachineIcon("cat")
+        XCTAssertEqual(s.active?.icon, "cat")
+        try await s.setMachineIcon("")
+        XCTAssertNil(s.active?.icon)
+        XCTAssertEqual(sent, [["machineIcon": "cat"], ["machineIcon": ""]])
+
+        replies[Channels.settingsUpdate] = { _ in throw RelayError("Not allowed from a paired phone (change-off): settings:update", fromComputer: true) }
+        connections[0].replies = replies
+        do {
+            try await s.setMachineIcon("sun")
+            XCTFail("refused")
+        } catch {}
+        XCTAssertNil(s.active?.icon, "a refused change shows nothing new")
+    }
 }

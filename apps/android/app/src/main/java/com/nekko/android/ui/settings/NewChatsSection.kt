@@ -46,6 +46,7 @@ import com.nekko.android.data.ModelChoice
 import com.nekko.android.data.ModelPick
 import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.data.modelGroups
+import com.nekko.android.ui.components.ComputerIcon
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.theme.Nekko
@@ -131,7 +132,7 @@ private fun ComputerDialog(c: ComputersState, pref: String?, onPick: (String?) -
         text = {
             Column(Modifier.selectableGroup()) {
                 Choice(stringResource(R.string.settings_used_last), stringResource(R.string.settings_used_last_detail), pref == null) { onPick(null) }
-                c.computers.forEach { pc -> Choice(pc.name, null, pc.id == pref) { onPick(pc.id) } }
+                c.computers.forEach { pc -> Choice(pc.name, null, pc.id == pref, pc.icon) { onPick(pc.id) } }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_close)) } },
@@ -199,7 +200,7 @@ private fun ModelDialog(deps: SettingsDeps, c: ComputersState, current: ModelPic
 }
 
 @Composable
-private fun Choice(title: String, detail: String?, selected: Boolean, onClick: () -> Unit) {
+private fun Choice(title: String, detail: String?, selected: Boolean, icon: String? = null, onClick: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
@@ -212,6 +213,7 @@ private fun Choice(title: String, detail: String?, selected: Boolean, onClick: (
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        ComputerIcon(icon, tint = p.inkSoft)
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
