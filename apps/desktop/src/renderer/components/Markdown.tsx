@@ -482,9 +482,9 @@ function inline(s: string, ctx: Ctx): React.ReactNode {
         </code>,
       );
     } else if (linkText !== undefined) {
-      nodes.push(<Ref key={key++} href={linkHref} basePath={ctx.basePath}>{linkText}</Ref>);
+      nodes.push(<Ref key={key++} href={linkHref} basePath={ctx.basePath} doc={ctx.doc}>{linkText}</Ref>);
     } else if (bareUrl !== undefined) {
-      nodes.push(<Link key={key++} href={bareUrl}>{bareUrl}</Link>);
+      nodes.push(<Link key={key++} href={bareUrl} doc={ctx.doc}>{bareUrl}</Link>);
     }
     last = m.index + m[0].length;
   }
@@ -512,13 +512,13 @@ function resolveRef(basePath: string, target: string): string {
  * `#section`) only becomes clickable when we know the document's folder,
  * otherwise it reads as plain emphasis instead of a dead link.
  */
-function Ref({ href: raw, basePath, children }: { href: string; basePath?: string; children: React.ReactNode }) {
+function Ref({ href: raw, basePath, doc, children }: { href: string; basePath?: string; doc?: boolean; children: React.ReactNode }) {
   const sessionId = React.useContext(MarkdownSession);
   // A `file://` URL names a local file like an absolute path does.
   const href = fileUrlPath(raw) ?? raw;
   const sandbox = React.useContext(MarkdownSandbox);
   if (sandbox && !/^https?:\/\//i.test(href)) return <span title="Host file previews are unavailable in Sandbox">{children} (preview unavailable)</span>;
-  if (/^https?:\/\//i.test(href)) return <Link href={href}>{children}</Link>;
+  if (/^https?:\/\//i.test(href)) return <Link href={href} doc={doc}>{children}</Link>;
   if (/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^[a-z]:[\\/]/i.test(href)) return <span>{children}</span>;
   if (href.startsWith('//') || href.startsWith('\\\\')) return <span>{children}</span>;
   if (href.startsWith('#') || (!basePath && !/^(?:[A-Za-z]:[\\/]|\/)/.test(href))) return <span className="text-ink-soft">{children}</span>;
@@ -596,10 +596,12 @@ export function linkContextActions(href: string): Array<{ label: string; run: ()
   return actions;
 }
 
-function Link({ href, children }: { href: string; children: React.ReactNode }) {
+function Link({ href, doc, children }: { href: string; doc?: boolean; children: React.ReactNode }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [preview, setPreview] = useState(false);
   const safe = safeHref(href);
   if (!safe) return <span className="wrap-break-word text-ink-soft" title={href}>{children}</span>;
+  const web = /^https?:\/\//i.test(safe);
   return (
     <>
       <a href={safe} target="_blank" rel="noreferrer" className="wrap-break-word underline" style={{ color: 'var(--accent)' }} onContextMenu={(e) => {
@@ -609,6 +611,15 @@ function Link({ href, children }: { href: string; children: React.ReactNode }) {
       }}>
         {children}
       </a>
+      {web && !doc && <button type="button" className="ml-1 rounded border border-line px-1.5 py-0.5 text-2xs text-ink-soft hover:text-ink focus-visible:outline focus-visible:outline-accent" aria-expanded={preview} onClick={() => setPreview(!preview)}>{preview ? 'Close preview' : 'Preview'}</button>}
+      {web && !doc && preview && <span className="my-2 block overflow-hidden rounded-lg border border-line" style={{ background: 'var(--surface-2)' }}>
+        <span className="flex items-center justify-between gap-2 border-b border-line px-2 py-1 text-xs text-ink-soft">
+          <span className="min-w-0 truncate">Live site · {new URL(safe).host}</span>
+          <button type="button" className="shrink-0 underline hover:text-ink" onClick={() => useStore.getState().openBrowserPane(safe)}>Open in browser pane</button>
+        </span>
+        <iframe src={safe} title={`Preview of ${safe}`} className="block h-64 w-full bg-white" sandbox="allow-scripts allow-forms" referrerPolicy="no-referrer" />
+        <span className="block px-2 py-1 text-2xs text-ink-faint">Some sites block embedded previews. Open in browser pane if this stays blank.</span>
+      </span>}
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
         {linkContextActions(safe).map((action) => <ContextAction key={action.label} onClick={() => { setMenu(null); action.run(); }}>{action.label}</ContextAction>)}
       </ContextMenu>}
