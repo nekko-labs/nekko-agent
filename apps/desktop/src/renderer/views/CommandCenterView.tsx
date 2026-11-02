@@ -12,7 +12,8 @@ import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
+import { BoltIcon, MagnetIcon } from '../icons.js';
+import { FocusIcon } from '../gentleface-icons.js';
 import { HoverTip } from '../components/HoverTip.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -614,7 +615,7 @@ function LayoutSegments({ mode, onPick }: { mode: 'focus' | 'grid'; onPick: (mod
       {pill && <span className="wall-layout-pill" aria-hidden="true" style={{ width: pill.width, transform: `translateX(${pill.x}px)` }} />}
       {(['focus', 'grid'] as const).map((m) => (
         <button key={m} ref={(el) => { buttons.current[m] = el; }} type="button" title={`${LAYOUT_LABEL[m]} (${layoutShortcutLabel(m)})`} aria-pressed={mode === m} data-lit={lit === m ? '' : undefined}
-          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
+          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
       ))}
     </div>
   );
