@@ -24,7 +24,7 @@ async function main() {
   const env = { ...process.env, NEKKO_INTEGRATION_OUT: out }; delete env.ELECTRON_RUN_AS_NODE;
   // NEKKO_LAYOUT_SANDBOX picks another capture script for the same fixture.
   const sandbox = path.join(__dirname, path.basename(process.env.NEKKO_LAYOUT_SANDBOX || 'layout-evidence-sandbox.cjs'));
-  const r = cp.spawnSync(require(path.join(modules, 'electron')), [sandbox], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
+  const r = cp.spawnSync(require(path.join(modules, 'electron')), [sandbox], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: Number(process.env.NEKKO_TEST_TIMEOUT) || 120000 });
   if (r.error) throw r.error;
   process.exitCode = r.status || 0;
 }
