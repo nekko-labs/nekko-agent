@@ -225,6 +225,8 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     const title = chatTitle(i);
     // Setup selects the exact grouped card on Agents; Chat no longer owns this list.
     await waitFor("!!document.querySelector('button[data-sidebar-group]')", 'the Agents sidebar');
+    // The groups draw before the session list reaches them, and a click on no card does nothing.
+    await waitFor(`[...document.querySelectorAll('div[role="button"]')].some((card) => card.getAttribute('title')?.includes(${JSON.stringify(title)}))`, `the card for ${title}`);
     // Cards only select a window in Dynamic/Grid; measure the full-size chat in Focus.
     await cdp.evaluate(`(() => { const b = [...document.querySelectorAll('.wall-layout-segments button')].find(b => b.textContent.trim() === 'Focused'); if (b && b.getAttribute('aria-pressed') !== 'true') b.click(); return true; })()`);
     await showAllCards();
