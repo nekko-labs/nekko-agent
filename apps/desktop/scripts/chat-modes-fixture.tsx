@@ -19,7 +19,7 @@ const at = Date.now() - 3_600_000;
 
 // One capture's situation, set by the sandbox before it reloads. Nothing set
 // keeps the original evidence: a nearly full chat with two models resident.
-const scene: { local?: boolean; changes?: number; long?: boolean; agents?: number; many?: boolean; pr?: boolean; remote?: boolean } = (() => {
+const scene: { local?: boolean; changes?: number; long?: boolean; agents?: number; many?: boolean; pr?: boolean; remote?: boolean; wall?: boolean } = (() => {
   try { return JSON.parse(localStorage.getItem('fixture.scene') ?? '{}'); } catch { return {}; }
 })();
 const prUrl = 'https://github.com/fixture/app/pull/42';
@@ -89,7 +89,7 @@ function Fixture() {
     <div className="titlebar"><h1 className="titlebar-heading text-gradient">Agents</h1><ModeSwitch /></div>
     {location.hash === '#settings'
       ? <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 24px 24px' }}><SimpleModeSettings /></main>
-      : <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" /></main>}
+      : <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" commandCenter={!!scene.wall} /></main>}
   </div>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

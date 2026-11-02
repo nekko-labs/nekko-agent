@@ -2700,6 +2700,8 @@
 .composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock { width: auto; margin-left: max(8%, 92px); margin-right: 8%; }
 /* The note sits right above the box, where the cat peeks: it starts clear of him. */
 .composer-column:has(> .composer > .chat-mascot) .chat-long-note { margin-left: 92px; }
+/* The transcript's last row stops above his ears. */
+[data-session-id]:has(.composer > .chat-mascot) [data-transcript-scroll] { padding-bottom: 68px; }
 .plan-sheet-dock::before, .plan-sheet-dock::after { content: ''; position: absolute; bottom: 10px; width: 12px; height: 12px; pointer-events: none; }
 .plan-sheet-dock::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
 .plan-sheet-dock::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }

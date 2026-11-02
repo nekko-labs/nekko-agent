@@ -102,6 +102,10 @@ app.whenReady().then(async () => {
     report.agentMonitorOverPrompt = await overlap('[data-plan-toggle]', '.msg-user');
     check('the Agent Monitor button covers no message', !report.agentMonitorOverPrompt);
     await capture('a7-agent-monitor-scrolled');
+    await run(`(()=>{const s=document.querySelector('[data-transcript-scroll]');s.scrollTop=s.scrollHeight})()`);
+    await sleep(400);
+    check('the cat leaves the last transcript row clear', !(await overlap('[data-chat-mascot]', '[data-claude-background]')));
+    await capture('a7b-transcript-end-clear-of-cat');
     await scene({ mode: 'simple', local: false, changes: 0, long: false, pr: true });
     check('Simple with a pull request: the PR deck shows', await has('.pr-action-deck'));
     await capture('a8-simple-with-pr');
@@ -118,6 +122,13 @@ app.whenReady().then(async () => {
     await run(`[...document.querySelectorAll('[data-asks-menu] button')].at(-1).click()`);
     await sleep(300);
     check('choosing Works on its own sets the existing tool policy', (await run(`document.querySelector('[data-asks-first]').dataset.asksFirst`)) === 'yolo');
+    await scene({ mode: 'simple', local: false, changes: 0, long: false, wall: true });
+    await sleep(1600);
+    check('a wall window in Simple has no details row, and Automate left its foot', !(await has('[data-composer-details]')) && !(await has('[data-composer-automate]')));
+    await click('[data-composer-foot] button[aria-haspopup="listbox"]');
+    await sleep(300);
+    check('a wall window in Simple offers effort in the model menu', await has('[data-effort-in-model-menu] [data-effort]'));
+    await capture('a11-simple-wall-window-model-menu');
     // Back to the original evidence: a nearly full chat with models resident.
     await run(`localStorage.removeItem('fixture.scene'); localStorage.setItem('nekko.chatMode','simple'); localStorage.removeItem('nekko.planRail'); location.reload()`).catch(() => {});
     await sleep(300);
