@@ -18,7 +18,7 @@ enum class RelayRoute {
     companion object {
         fun of(relayUrl: String): RelayRoute {
             val h = host(relayUrl)
-            if (h == "localhost" || h == "::1" || h.startsWith("127.")) return LOOPBACK
+            if (h == "localhost" || h == "::1" || isLoopbackIPv4(h)) return LOOPBACK
             if (h == "ts.net" || h.endsWith(".ts.net") || RelayHint.isTailscaleIp(h) || h.startsWith("fd7a:115c:a1e0:")) return TAILSCALE
             if (h.endsWith(".local") || isPrivateIPv4(h)) return LAN
             if (':' in h && (h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:"))) return LAN
@@ -45,6 +45,11 @@ enum class RelayRoute {
                 return if (end < 0) "" else s.substring(1, end).lowercase()
             }
             return (Regex("^[^/:?#]*").find(s)?.value.orEmpty()).lowercase()
+        }
+
+        private fun isLoopbackIPv4(h: String): Boolean {
+            val parts = h.split('.')
+            return parts.size == 4 && parts.all { Regex("^\\d{1,3}$").matches(it) && it.toInt() <= 255 } && parts[0] == "127"
         }
 
         private fun isPrivateIPv4(h: String): Boolean {
