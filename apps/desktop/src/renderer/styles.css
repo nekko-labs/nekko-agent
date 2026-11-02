@@ -2297,20 +2297,13 @@
   color: var(--ink);
   line-height: 1.6;
 }
-/* A readable measure: prose stops at about 68 characters however wide the
-   window gets, and documents read the same way. Code blocks, tables and
-   diagrams keep the full width; they scroll on their own. */
-:is(.msg-ai, .md-doc) :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+/* A readable measure for documents: prose stops at about 68 characters however
+   wide the window gets. Code blocks, tables and diagrams keep the full width;
+   they scroll on their own. Chat replies (.msg-ai) are not capped: with only
+   their prose stopped at 68ch, a wide pane showed text ending halfway across
+   under a table or code block that ran the whole width. */
+.md-doc :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
   max-width: 68ch;
-}
-/* The chat transcript is one centred column at that same measure, so a reply's
-   tables, code blocks and tool cards end where its prose does. With only the
-   prose capped, a wide window showed text stopping halfway across under a
-   table that ran the full width. Narrower panes are unaffected. The column
-   inherits 16px text while reply prose is text-sm (14px), and `ch` follows the
-   font size, so 68 characters of the prose is 68ch scaled by 14/16 here. */
-.chat-column {
-  max-width: calc(68ch * 14 / 16);
 }
 :is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
 
