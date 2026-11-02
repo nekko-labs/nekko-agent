@@ -787,7 +787,8 @@ fn the_handshake_vector_is_derived_from_its_inputs() {
     if std::env::var("UPDATE_GOLDEN").is_ok() {
         std::fs::write(&path, text).unwrap();
     } else {
-        assert_eq!(text, std::fs::read_to_string(&path).unwrap(), "UPDATE_GOLDEN=1 rewrites it");
+        let want = std::fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
+        assert_eq!(text, want, "UPDATE_GOLDEN=1 rewrites it");
     }
 }
 
