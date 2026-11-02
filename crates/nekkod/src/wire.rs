@@ -199,6 +199,18 @@ async fn route_from(
         }
         return ctx.computers.route(channel, &args).await;
     }
+    let desktop = matches!(surface, crate::security::Surface::Desktop);
+    let args = if desktop && ctx.computers.any() {
+        match crate::federation::route(channel, &args) {
+            crate::federation::Route::Local => args,
+            crate::federation::Route::Remote(computer, args) => {
+                return ctx.computers.forward(&computer, channel, args).await;
+            }
+            crate::federation::Route::Refused(why) => return Err(why),
+        }
+    } else {
+        args
+    };
     if crate::security::CHANNELS.contains(&channel) {
         let (security, ch) = (ctx.security.clone(), channel.to_string());
         // security.json is a file: off the async workers.
@@ -213,7 +225,8 @@ async fn route_from(
         let (security, ch) = (ctx.security.clone(), channel.to_string());
         tokio::task::spawn_blocking(move || security.guard(surface, &ch)).await.map_err(|e| e.to_string())??;
     }
-    route(ctx, channel, args).await
+    let out = route(ctx, channel, args).await?;
+    Ok(if desktop { ctx.computers.merged(channel, out) } else { out })
 }
 
 async fn events(
@@ -397,10 +410,22 @@ enum Out {
     Subscribe(Value, Vec<Arc<str>>, bool),
 }
 
+/// This computer's next event, or another computer's.
+async fn next_event(
+    local: &mut tokio::sync::broadcast::Receiver<crate::hub::Event>,
+    remote: &mut tokio::sync::broadcast::Receiver<crate::hub::Event>,
+) -> Result<crate::hub::Event, RecvError> {
+    tokio::select! {
+        ev = local.recv() => ev,
+        ev = remote.recv() => ev,
+    }
+}
+
 async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subscription) {
     let (mut sink, mut stream) = socket.split();
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Out>();
     let mut events = app.ctx.hub.subscribe();
+    let mut remote = app.ctx.hub.subscribe_remote();
     let hub = app.ctx.hub.clone();
     let writer = tokio::spawn(async move {
         if !send_opening(&mut sink, &mut subs, &hub).await {
@@ -429,7 +454,7 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
                     }
                     None => break,
                 },
-                ev = events.recv() => match ev {
+                ev = next_event(&mut events, &mut remote) => match ev {
                     Ok(ev) => {
                         if ev.term_data && !term_data { continue }
                         if !subs.wants(&ev) { continue }
