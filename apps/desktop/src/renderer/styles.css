@@ -3667,7 +3667,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .mode-row-btn.is-open { background: var(--accent-soft); }
 .mode-row-btn.is-open .mode-ic, .mode-row-btn.is-open .mode-chev { color: var(--accent); }
 .mode-ic { width: 16px; height: 18px; flex: none; display: grid; place-items: center; color: var(--ink-soft); }
-.mode-t { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--text-sm); font-weight: 500; color: var(--ink); }
+.mode-t { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 500; color: var(--ink); }
 .mode-s { display: block; margin-top: 1px; font-size: var(--text-xs); line-height: 1.4; color: var(--ink-faint); }
 .mode-s a { color: var(--accent); text-decoration: none; }
 @media (hover: hover) {
@@ -3675,6 +3675,18 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 }
 .mode-under { padding: 0 12px 4px 36px; margin-top: -2px; }
 .mode-meta { max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+/* Info-icon trigger beside a setting title: carries the explanation copy as a HoverTip. */
+.mode-info { display: inline-grid; place-items: center; width: 14px; height: 14px; padding: 0; border-radius: 4px; color: var(--ink-faint); background: transparent; cursor: help; transition: color .12s; }
+.mode-info:hover, .mode-info:focus-visible { color: var(--accent); }
+.mode-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mode-info svg { width: 12px !important; height: 12px !important; }
+.mode-info-link { display: inline-grid; place-items: center; width: 14px; height: 14px; color: var(--ink-faint); }
+.mode-info-link:hover { color: var(--accent); }
+/* Nested rows sit under a section sub-header (Nekko router -> Models run), with a slim rail that groups them visually. */
+.mode-sec.is-sub { display: flex; align-items: center; gap: 6px; }
+.mode-sec.is-sub .mode-info { color: var(--ink-faint); }
+.mode-row.is-nested { position: relative; margin-left: 10px; padding-left: 14px; }
+.mode-row.is-nested::before { content: ""; position: absolute; left: 6px; top: 12px; bottom: 12px; width: 2px; border-radius: 1px; background: var(--line); }
 .mode-chev { width: 14px !important; height: 14px !important; color: var(--ink-faint); transition: transform .15s; }
 .mode-link { margin: 0 12px 4px 36px; font-size: var(--text-xs); color: var(--accent); }
 .mode-link.is-inline { margin: 0; font-size: inherit; }

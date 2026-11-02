@@ -136,6 +136,7 @@ export const RocketIcon = (p: P) => (
 );
 /** A question mark in a ring: something is waiting on you. */
 export const QuestionIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.8M12 17h.01" /></S>);
+export const InfoIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="M12 8.5h.01M11 12h1v4.5h1" /></S>);
 /** "Zz": idle, asleep until you wake it. */
 export const SleepIcon = (p: P) => (<S {...p}><path d="M4 9h6l-6 8h6M14 5h5l-5 6h5" /></S>);
 /** Two arrows squeezing inward onto a line: a transcript being compacted. */
