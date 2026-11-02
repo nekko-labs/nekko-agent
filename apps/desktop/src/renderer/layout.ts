@@ -48,6 +48,8 @@ export interface WbPane {
    * agent in it; an empty one is kind `zone` with no refId.
    */
   zone?: string;
+  /** Agent board only: the zone's colour, an index into the zone tints. */
+  tint?: number;
 }
 
 /**

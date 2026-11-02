@@ -593,17 +593,13 @@ impl Logs {
 }
 
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
-    let Some(dir) = ctx.workspace.data_dir().map(Path::to_path_buf) else {
-        return Err(format!("{channel} needs the data directory"));
-    };
-    let logs = Logs::new(&dir);
+    let logs = Logs::new(ctx.workspace.data_dir());
     match channel {
         "logs:list" => {
             let store = ctx.sessions.clone();
             tokio::task::spawn_blocking(move || {
                 let titles: std::collections::HashMap<String, String> = store
-                    .map(|s| s.summaries())
-                    .unwrap_or_default()
+                    .summaries()
                     .into_iter()
                     .filter_map(|s| {
                         Some((s.get("id")?.as_str()?.to_string(), s.get("title")?.as_str().unwrap_or("").to_string()))

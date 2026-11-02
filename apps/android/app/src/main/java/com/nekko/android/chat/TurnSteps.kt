@@ -1,5 +1,6 @@
 package com.nekko.android.chat
 
+import com.nekko.protocol.AgentRows
 import com.nekko.protocol.Block
 
 /**
@@ -15,10 +16,13 @@ object TurnSteps {
         data class Summary<T>(val turn: String, val steps: Int, val running: Boolean, val durationMs: Long?, val open: Boolean) : Row<T>
     }
 
-    private fun isStep(b: Block) = b is Block.Tool || (b is Block.Assistant && !b.reasoning.isNullOrEmpty())
+    /** A watch's wake-up arrives as a user block, but it is a step of the run, not a new prompt. */
+    private fun isWake(b: Block) = b is Block.User && b.thumbs.isEmpty() && AgentRows.parseWake(b.text) != null
+
+    private fun isStep(b: Block) = b is Block.Tool || isWake(b) || (b is Block.Assistant && !b.reasoning.isNullOrEmpty())
 
     /** A thought with no reply text: nothing left to show once its reasoning is folded. */
-    private fun onlyStep(b: Block) = b is Block.Tool || (b is Block.Assistant && b.text.isBlank() && !b.streaming && !b.interrupted)
+    private fun onlyStep(b: Block) = b is Block.Tool || isWake(b) || (b is Block.Assistant && b.text.isBlank() && !b.streaming && !b.interrupted)
 
     /**
      * [items] in order, each turn's steps folded into a [Row.Summary] unless its key is in [open].
@@ -27,7 +31,7 @@ object TurnSteps {
     fun <T> fold(items: List<T>, block: (T) -> Block, key: (T) -> String, running: Boolean, open: Set<String>): List<Row<T>> {
         // Turns start at each prompt; whatever comes before the first prompt is a turn too.
         val turns = mutableListOf<MutableList<T>>()
-        items.forEach { if (block(it) is Block.User || turns.isEmpty()) turns += mutableListOf(it) else turns.last() += it }
+        items.forEach { if ((block(it) is Block.User && !isWake(block(it))) || turns.isEmpty()) turns += mutableListOf(it) else turns.last() += it }
         val out = mutableListOf<Row<T>>()
         turns.forEachIndexed { i, turn ->
             val steps = turn.filter { isStep(block(it)) }

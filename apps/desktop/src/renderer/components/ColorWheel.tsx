@@ -96,7 +96,7 @@ export function ColorWheel({
           setDragging(true);
           pick(e.clientX, e.clientY);
         }}
-        className="relative cursor-crosshair rounded-full border border-line shadow-sm outline-none focus-visible:ring-2"
+        className="relative cursor-crosshair rounded-full border border-line outline-none focus-visible:ring-2"
         style={{
           width: size,
           height: size,
@@ -113,7 +113,7 @@ export function ColorWheel({
       >
         <span
           aria-hidden
-          className="pointer-events-none absolute h-4 w-4 rounded-full border-2 border-white shadow-md"
+          className="pointer-events-none absolute h-4 w-4 rounded-full border-2 border-white shadow-(--shadow-md)"
           style={{
             left: knobX,
             top: knobY,

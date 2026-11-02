@@ -41,13 +41,17 @@ describe('agent status glyphs', () => {
     expect(idle).not.toContain('rounded-full');
   });
 
-  it('uses the glyphs in wall window strips, before the numbered agent icon', async () => {
+  it('puts the window number, then Nekko with its status badge, as the agent icon in wall window strips', async () => {
     const wall = (await loadWall()).render(
       { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid', cols: 2, rows: 1 } },
       { sessions: [summary('a'), summary('b')], running: ['a'] },
     );
-    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon="true"><span data-agent-status="true"><span class="status-rocket[^]*?<\/span><\/span><span class="numbered-agent-icon"/);
-    expect(windowBody(wall, 'b')).toMatch(/data-agent-status="true"><span[^>]*aria-label="Done"/);
+    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon="true"><span class="wall-number" title="Agent window 1: Ctrl\+1 selects it" aria-label="Window 1">1<\/span><span data-agent-status="true"><span class="wall-mascot" role="img" aria-label="Working"/);
+    // Nekko is the agent's icon now: no robot head.
+    expect(windowBody(wall, 'a')).not.toContain('numbered-agent-icon');
+    expect(windowBody(wall, 'a')).toContain('pixel-nekko');
+    expect(windowBody(wall, 'a')).toContain('style="background:#4dc28a"');
+    expect(windowBody(wall, 'b')).toMatch(/data-agent-status="true"><span class="wall-mascot pixel-happy"[^>]*aria-label="Done"/);
     // The window passes the status to the chat as a value, and the chat draws no footer copy of it.
     expect(windowBody(wall, 'a')).toContain('data-status="working"');
     expect(windowBody(wall, 'b')).toContain('data-status="done"');
@@ -60,8 +64,8 @@ describe('agent status glyphs', () => {
       { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid', cols: 2, rows: 1 } },
       { sessions: [summary('a', { activeWatchCount: 1 }), summary('b', { activeWatchCount: 0 })] },
     );
-    expect(windowBody(wall, 'a')).toContain('aria-label="Idle, watching"');
-    expect(windowBody(wall, 'b')).toContain('aria-label="Done"');
+    expect(windowBody(wall, 'a')).toMatch(/class="wall-mascot pixel-sleeping"[^>]*aria-label="Watching"/);
+    expect(windowBody(wall, 'b')).toMatch(/class="wall-mascot pixel-happy"[^>]*aria-label="Done"/);
   });
 
   it('uses the glyph in the wall composer, not a pulsing dot', () => {

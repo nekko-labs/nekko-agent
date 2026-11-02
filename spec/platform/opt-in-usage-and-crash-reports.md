@@ -12,7 +12,7 @@ area: platform
 ## How people choose
 
 - **Onboarding:** a skippable **Help improve Nekko Agent?** step, just before the last one. The switch starts off, and skipping leaves it off. People who finished onboarding before this step existed are not asked again: the choice is in Settings.
-- **Settings > System > Help improve Nekko Agent:** the same switch, with the same promises.
+- **Settings > General > Help improve Nekko Agent:** the same switch, with the same promises. It is the first card in General (moved from System on 2026-10-28 so it is easy to find).
 - **Settings > Connections > Usage and crash reports:** every send appears in its log, and All connections off stops it.
 
 ## The promises (shown wherever the choice is offered)

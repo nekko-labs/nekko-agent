@@ -16,6 +16,7 @@
 //! | `system/permission_denied` | the call's `tool_result` marked `denied` |
 //! | `assistant` with `is_api_error_message` | `error` |
 //! | `command_lifecycle` (a message Nekko wrote, queued / started / completed), its `isReplay` echo | [`Mapped::Command`] |
+//! | a main-thread `TodoWrite` / `TaskCreate` / `TaskUpdate` that succeeded | [`Mapped::Plan`], after its `tool_result` (crate::plan) |
 //! | `result` | [`Mapped::End`]; then [`Mapper::finish`] gives `usage` + `done`, or `error` |
 //! | main-thread `assistant` `message.usage`, `result.modelUsage[model].contextWindow` | [`TurnEnd::context`] (what the context gauge shows) |
 //! | `result` `terminal_reason: aborted_*` | an interrupted turn, not a failure |
@@ -25,10 +26,10 @@
 //! sent again; one that never streamed (an older CLI, a resumed turn) is sent
 //! whole.
 
+use crate::plan::{PLAN_TOOLS, PlanCall, plan_call};
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The message a user's Stop ends the turn with, as Nekko's own loop does.
 pub const USER_STOPPED: &str = "Stopped";
@@ -37,10 +38,6 @@ pub const USER_STOPPED: &str = "Stopped";
 const SIGNED_OUT: &str = "Claude Code is not signed in. Open a terminal, run `claude` and sign in with /login, then send your message again.";
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
-}
 
 fn base36(mut n: u64) -> String {
     const D: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
@@ -59,7 +56,7 @@ fn base36(mut n: u64) -> String {
 /// `msg_<time base36>_<counter>`, the shape Nekko's loop gives its messages.
 fn new_id() -> String {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
-    format!("msg_{}_h{n}", base36(now_ms()))
+    format!("msg_{}_h{n}", base36(nekko_js::now_ms()))
 }
 
 fn str_at<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
@@ -90,6 +87,8 @@ pub enum Mapped {
     /// assistant message carrying `/usage`'s `usage_report`. The raw event,
     /// for `nekko_usage::parse_claude_code_usage`.
     PlanUsage(Value),
+    /// Claude Code changed its own plan: the change, for the chat's `agentPlan`.
+    Plan(PlanCall),
     /// A stdout line that was not JSON (kept for an exit's diagnostics).
     Unparsed(String),
 }
@@ -199,6 +198,8 @@ pub struct Mapper {
     /// The latest reported context, kept across the Claude Code turns a
     /// steered Nekko turn spans.
     context: ReportedContext,
+    /// Main-thread plan calls waiting for their result: id to (name, input).
+    planning: HashMap<String, (String, Value)>,
 }
 
 /// A user message's content for stream-json: its text, and its images as
@@ -270,6 +271,7 @@ impl Mapper {
             stopping: None,
             model: None,
             context: ReportedContext::default(),
+            planning: HashMap::new(),
         }
     }
 
@@ -451,7 +453,7 @@ impl Mapper {
         self.draft.get_or_insert_with(|| Draft {
             claude_id: claude_id.to_string(),
             id: new_id(),
-            created_at: now_ms(),
+            created_at: nekko_js::now_ms(),
             ..Default::default()
         })
     }
@@ -508,6 +510,13 @@ impl Mapper {
                 }
                 Some("tool_use") => {
                     let call = tool_call(b);
+                    let name = str_at(&call, "name").unwrap_or_default();
+                    if PLAN_TOOLS.contains(&name) {
+                        self.planning.insert(
+                            str_at(&call, "id").unwrap_or_default().into(),
+                            (name.into(), call["input"].clone()),
+                        );
+                    }
                     self.draft_for(&claude_id, out).calls.push(call.clone());
                     out.push(self.event("tool_call", json!({ "call": call })));
                 }
@@ -540,9 +549,16 @@ impl Mapper {
                 "role": "tool",
                 "content": "",
                 "toolResult": result,
-                "createdAt": now_ms(),
+                "createdAt": nekko_js::now_ms(),
             })));
             out.push(self.event("tool_result", json!({ "result": result })));
+            if let Some((name, input)) = self.planning.remove(&id)
+                && result.get("isError").is_none()
+                && result.get("denied").is_none()
+                && let Some(call) = plan_call(&name, &input, str_at(&result, "output").unwrap_or_default())
+            {
+                out.push(Mapped::Plan(call));
+            }
         }
     }
 
@@ -721,6 +737,35 @@ mod tests {
             "a\nb"
         );
         assert_eq!(result_text(None), "");
+    }
+
+    #[test]
+    fn a_plan_call_that_succeeded_follows_its_result() {
+        let mut m = Mapper::new("s");
+        let todos = json!({ "todos": [{ "content": "Fix it", "status": "in_progress", "activeForm": "Fixing" }] });
+        let call = |id: &str| {
+            json!({ "type": "assistant", "message": { "id": format!("m_{id}"), "content": [
+                { "type": "tool_use", "id": id, "name": "TodoWrite", "input": todos } ] } })
+        };
+        let result = |id: &str, error: bool| {
+            json!({ "type": "user", "message": { "content": [
+                { "type": "tool_result", "tool_use_id": id, "content": "ok", "is_error": error } ] } })
+        };
+        m.map(&call("t1"));
+        let out = m.map(&result("t1", false));
+        assert!(matches!(out.last(), Some(Mapped::Plan(PlanCall::Replace(steps))) if steps.len() == 1));
+        m.map(&call("t2"));
+        assert!(
+            !m.map(&result("t2", true)).iter().any(|o| matches!(o, Mapped::Plan(_))),
+            "a failed call changes nothing"
+        );
+        // A sub-agent's plan is its own, not the chat's.
+        let mut sub = call("t3");
+        sub["parent_tool_use_id"] = json!("agent_1");
+        m.map(&sub);
+        let mut sub_result = result("t3", false);
+        sub_result["parent_tool_use_id"] = json!("agent_1");
+        assert!(!m.map(&sub_result).iter().any(|o| matches!(o, Mapped::Plan(_))));
     }
 
     #[test]

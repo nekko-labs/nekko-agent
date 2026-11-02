@@ -10,14 +10,23 @@ import type { FitPlan, FitReason, ResidentModel } from '@nekko-agent/shared';
  */
 
 export function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '0 GB';
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
   const gb = n / 1024 ** 3;
   // Keep the decimal below 100 GB. On a 16 GB card the gap between "14 GB" and
   // "14.2 GB" is the gap between fitting and not, so rounding it away costs the
   // reader the one digit they need.
   if (gb >= 100) return `${Math.round(gb)} GB`;
   if (gb >= 1) return `${gb.toFixed(1)} GB`;
-  return `${Math.round(n / 1024 ** 2)} MB`;
+  // Below a megabyte (a tokenizer, a small adapter) the MB figure rounded to 0.
+  if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${Math.round(n)} B`;
+}
+
+/** A count for a badge: 999,600 reads "1M", not "1000k"; locale-aware. */
+export function formatCount(n: number): string {
+  if (!Number.isFinite(n)) return '0';
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 export function formatTokens(n: number): string {

@@ -44,6 +44,12 @@ class PhotoTray<T> {
         }
     }
 
+    /** Photos from a saved draft, back in the tray as they were. */
+    fun seed(saved: List<Pair<String, T>>) {
+        if (saved.isEmpty()) return
+        _state.update { s -> s.copy(photos = (s.photos + saved.map { (url, preview) -> Photo(nextId++, url, preview) }).take(MAX_PHOTOS)) }
+    }
+
     fun failed(message: String) {
         _state.update { it.copy(adding = (it.adding - 1).coerceAtLeast(0), error = message) }
     }

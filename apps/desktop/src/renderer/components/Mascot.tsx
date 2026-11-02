@@ -3,11 +3,15 @@ import React, { useEffect, useState } from 'react';
 export type MascotMood = 'idle' | 'waving' | 'thinking';
 
 /** The app icon's wide cat head, drawn on a 32px grid. No shared SVG IDs. */
-function PixelHead({ eyes = true }: { eyes?: boolean }) {
+function PixelHead({ eyes = true, pupilOffset }: { eyes?: boolean; pupilOffset?: { x: number; y: number } }) {
+  // The eye group gets a per-render translate so the pupils can watch something
+  // outside the SVG (e.g. the chat composer's caret); the opacity keyframes on
+  // the child <path>s continue to blink and smile over it.
+  const eyeTransform = pupilOffset ? `translate(${pupilOffset.x} ${pupilOffset.y})` : undefined;
   return (
     <g data-part="pixel-head" strokeLinejoin="miter">
       <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#101714" stroke="#f2f1e9" strokeWidth="2" />
-      {eyes && <g data-part="pixel-eyes" fill="#f2f1e9">
+      {eyes && <g data-part="pixel-eyes" fill="#f2f1e9" transform={eyeTransform}>
         <path className="pixel-eyes-open" d="M11 15H13V18H11Z M20 15H22V18H20Z" />
         <path className="pixel-eyes-happy" d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" />
         <path className="pixel-eyes-closed" d="M10 17H14V18H10Z M19 17H23V18H19Z" />
@@ -36,13 +40,16 @@ function usePageHidden() {
  */
 const WIZARD_HAT_TRANSFORM = 'translate(16.5 9) scale(0.8) translate(-16.5 -12)';
 
-export function NekkoAvatar({ size = 28, title, wizardHat = false, stationary = false, quiet = false, eyes = true }: { size?: number; title?: string; wizardHat?: boolean; stationary?: boolean; quiet?: boolean; eyes?: boolean }) {
+export const NekkoAvatar = React.forwardRef<SVGSVGElement, { size?: number; title?: string; wizardHat?: boolean; stationary?: boolean; quiet?: boolean; eyes?: boolean; pupilOffset?: { x: number; y: number } }>(function NekkoAvatar(
+  { size = 28, title, wizardHat = false, stationary = false, quiet = false, eyes = true, pupilOffset },
+  ref,
+) {
   const hidden = usePageHidden();
   return (
-    <svg className={`pixel-nekko${stationary ? ' pixel-stationary' : ''}${quiet ? ' pixel-quiet' : ''}${hidden ? ' pixel-paused' : ''}`} viewBox="0 0 32 32" width={size} height={size}
+    <svg ref={ref} className={`pixel-nekko${stationary ? ' pixel-stationary' : ''}${quiet ? ' pixel-quiet' : ''}${hidden ? ' pixel-paused' : ''}`} viewBox="0 0 32 32" width={size} height={size}
       shapeRendering="crispEdges" role={title ? 'img' : 'presentation'} aria-label={title}
       aria-hidden={title ? undefined : true} focusable="false">
-      <PixelHead eyes={eyes} />
+      <PixelHead eyes={eyes} pupilOffset={pupilOffset} />
       {wizardHat && <g data-part="orange-wizard-hat" strokeLinejoin="miter" transform={WIZARD_HAT_TRANSFORM}>
         <polygon points="9,10 16,0 19,2 23,10" fill="#fb923c" stroke="#9a3412" strokeWidth="1" />
         <rect x="8" y="9" width="17" height="3" fill="#ea580c" stroke="#9a3412" strokeWidth="1" />
@@ -50,7 +57,7 @@ export function NekkoAvatar({ size = 28, title, wizardHat = false, stationary = 
       </g>}
     </svg>
   );
-}
+});
 
 export function MiniNekko({ size = 18 }: { size?: number }) {
   return <span className="pixel-working inline-block shrink-0 align-middle" style={{ lineHeight: 0 }}><NekkoAvatar size={size} /></span>;

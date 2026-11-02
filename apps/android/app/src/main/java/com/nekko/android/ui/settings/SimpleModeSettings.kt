@@ -83,12 +83,6 @@ fun SimpleModeSection(deps: SettingsDeps) {
 }
 
 /**
- * Controls the catalogue lists that this app does not have yet: a choice for them would do
- * nothing here, so the screen leaves them out (they stay in the catalogue to keep the ids in step).
- */
-private val NOT_ON_ANDROID = setOf("ph-policy")
-
-/**
  * One drawn piece of an area's preview: a catalogue control when [id] is set, else a fixed part
  * of the screen. [gauges] draws the minimal monitor: thin rings with their percentages.
  */
@@ -112,6 +106,7 @@ private val PREVIEWS: Map<String, List<Line>> = mapOf(
     "Chat · message box" to listOf(
         line(Part("Add"), Part("Message your computer"), Part("Send")),
         line(Part("Effort dial", "effort"), Part("Opus 5.5", "model"), Part("48k / 200k tokens", "context")),
+        line(Part("Chat mode", "ph-policy")),
     ),
     "Chat · conversation" to listOf(
         line(Part("Make the tests pass")),
@@ -173,9 +168,7 @@ fun SimpleModeScreen(prefs: PhonePrefs, onBack: () -> Unit) {
                     modifier = Modifier.testTag("simple.preview"),
                 )
             }
-            SimpleMode.AREAS.forEach { (area, all) ->
-                val items = all.filter { it.id !in NOT_ON_ANDROID }
-                if (items.isEmpty()) return@forEach
+            SimpleMode.AREAS.forEach { (area, items) ->
                 SectionHeader(area)
                 Column(Modifier.padding(horizontal = 16.dp)) {
                     NCard {

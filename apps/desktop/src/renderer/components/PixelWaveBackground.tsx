@@ -19,29 +19,40 @@ export function pixelWaveFor(presetId: string | undefined): PixelWave | null {
     : preset.wave;
 }
 
-/** One small, shared texture, independent of panel and monitor resolution. */
-export const WAVE_TEXTURE = { width: 720, height: 360, pitch: 9 } as const;
-const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+/**
+ * One seamless tile, in dots: the wave repeats every `cols` columns and `rows`
+ * rows, so copies of it cover a pane of any size with no edge or band.
+ */
+export const WAVE_TILE = { cols: 80, rows: 40, pitch: 9 } as const;
 
-/** Rasterized by Chromium once; motion only translates this image, never its dots. */
-export function waveTexture({ from, to, peak }: PixelWave): string {
-  const a = rgb(from), b = rgb(to);
-  const dots: string[] = [];
-  for (let x = 0; x < WAVE_TEXTURE.width; x += WAVE_TEXTURE.pitch) {
-    const k = x / WAVE_TEXTURE.width;
-    const color = `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(',')})`;
-    for (let y = 0; y < WAVE_TEXTURE.height; y += WAVE_TEXTURE.pitch) {
-      const w = Math.sin(x / 110 + Math.sin(y / 150) * 1.6);
-      // Bake a soft edge into the texture instead of adding a composited mask.
-      const fade = Math.min(1, x / 54, (WAVE_TEXTURE.width - x) / 54)
-        * Math.min(1, y / 54, (WAVE_TEXTURE.height - y) / 54);
-      const opacity = Math.max(0, w) ** 3 * peak * fade;
-      if (opacity < 0.02) continue;
-      const size = opacity > peak * 0.55 ? 3 : 2;
-      dots.push(`<rect x="${x + 3}" y="${y + 3}" width="${size}" height="${size}" fill="${color}" opacity="${opacity.toFixed(3)}"/>`);
+/** Opacity of the dot at a tile column and row; periodic in both. */
+export function waveDot(col: number, row: number, peak: number): number {
+  const w = Math.sin((2 * Math.PI * col) / WAVE_TILE.cols + Math.sin((2 * Math.PI * row) / WAVE_TILE.rows) * 1.6);
+  const opacity = Math.max(0, w) ** 3 * peak;
+  return opacity < 0.02 ? 0 : opacity;
+}
+
+/**
+ * Rasterize the tile once, in white at whole device pixels so every dot is
+ * crisp at any display scale; the pane's colour gradient is applied per paint.
+ */
+function waveTile(peak: number, scale: number): HTMLCanvasElement {
+  const pitch = Math.max(1, Math.round(WAVE_TILE.pitch * scale));
+  const tile = document.createElement('canvas');
+  tile.width = WAVE_TILE.cols * pitch;
+  tile.height = WAVE_TILE.rows * pitch;
+  const ctx = tile.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  for (let col = 0; col < WAVE_TILE.cols; col++) {
+    for (let row = 0; row < WAVE_TILE.rows; row++) {
+      const opacity = waveDot(col, row, peak);
+      if (!opacity) continue;
+      const size = Math.max(1, Math.round((opacity > peak * 0.55 ? 3 : 2) * scale));
+      ctx.globalAlpha = opacity;
+      ctx.fillRect(col * pitch + Math.round(3 * scale), row * pitch + Math.round(3 * scale), size, size);
     }
   }
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360">${dots.join('')}</svg>`)}`;
+  return tile;
 }
 
 /** Eligibility is deliberately independent of a welcome screen's model/setup UI. */
@@ -49,33 +60,68 @@ export function showEmptyAgentWave({ loaded, messages, running, composer, enable
   return loaded && messages === 0 && !running && !composer && enabled && !readOnly;
 }
 
-/** Empty-agent decoration only. Pane visibility and app activity pause CSS motion. */
+/** Milliseconds between one-column steps: about 48 CSS px a second at the default speed. */
+export const waveStepMs = (speed = 0.8) => Math.round((WAVE_TILE.pitch / (60 * speed)) * 1000);
+
+/**
+ * Empty-agent decoration only. The pattern advances one dot column per step,
+ * like a dot-matrix sign: dots never leave the grid, and each step only copies
+ * the pre-rendered tile. Pane visibility, app focus and reduced motion hold it.
+ */
 export function PixelWaveBackground({ wave, visible = true }: { wave: PixelWave; visible?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [intersecting, setIntersecting] = React.useState(false);
-  const texture = React.useMemo(() => waveTexture(wave), [wave.from, wave.to, wave.peak]);
+  const step = useRef(0);
+  const paint = useRef<() => void>(() => {});
   useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
+    const element = ref.current, canvas = canvasRef.current;
+    if (!element || !canvas) return;
+    let tile: HTMLCanvasElement | null = null, tileScale = 0;
+    paint.current = () => {
+      const scale = window.devicePixelRatio || 1;
+      const width = Math.round(element.clientWidth * scale), height = Math.round(element.clientHeight * scale);
+      if (!width || !height) return;
+      if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+      if (!tile || tileScale !== scale) { tile = waveTile(wave.peak, scale); tileScale = scale; }
+      const ctx = canvas.getContext('2d')!;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, width, height);
+      const pitch = tile.width / WAVE_TILE.cols;
+      const shift = (step.current % WAVE_TILE.cols) * pitch;
+      for (let y = 0; y < height; y += tile.height) {
+        for (let x = -shift; x < width; x += tile.width) ctx.drawImage(tile, x, y);
+      }
+      // Tint the white dots: the gradient stays put while the wave moves through it.
+      const gradient = ctx.createLinearGradient(0, 0, width, 0);
+      gradient.addColorStop(0, wave.from);
+      gradient.addColorStop(1, wave.to);
+      ctx.globalCompositeOperation = 'source-in';
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      canvas.dataset.step = String(step.current);
+    };
+    paint.current();
+    const resize = new ResizeObserver(() => paint.current());
+    resize.observe(element);
     const observer = new IntersectionObserver(([entry]) => setIntersecting(entry.isIntersecting));
     observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
+    return () => { resize.disconnect(); observer.disconnect(); };
+  }, [wave.from, wave.to, wave.peak]);
   useEffect(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     let timer = 0;
-    // A stepped CSS animation can still tick Chromium every vsync. Hold it and
-    // advance the transform only when the next precomputed step changes.
+    const still = () => !visible || !intersecting || document.hidden || !document.hasFocus() || reduced.matches;
     const schedule = () => {
       window.clearInterval(timer);
       timer = 0;
-      if (!visible || !intersecting || document.hidden || !document.hasFocus() || reduced.matches) return;
-      const animation = ref.current?.querySelector('img')?.getAnimations()[0];
-      if (!animation) return;
-      const stepMs = 18_000 / (wave.speed ?? 0.8) / 36;
+      if (still()) return;
+      // Re-checked per step too: a media query's change event can arrive late.
       timer = window.setInterval(() => {
-        animation.currentTime = Number(animation.currentTime ?? 0) + stepMs;
-      }, stepMs);
+        if (still()) return schedule();
+        step.current += 1;
+        paint.current();
+      }, waveStepMs(wave.speed));
     };
     schedule();
     window.addEventListener('focus', schedule);
@@ -91,7 +137,6 @@ export function PixelWaveBackground({ wave, visible = true }: { wave: PixelWave;
     };
   }, [visible, intersecting, wave.speed]);
   return <div ref={ref} className="pixel-wave-background" data-wave-paused={!visible || !intersecting || undefined} aria-hidden="true">
-    <img className="pixel-wave-texture" src={texture} width={720} height={360} alt="" draggable={false}
-      style={{ animationDuration: `${18 / (wave.speed ?? 0.8)}s` }} />
+    <canvas ref={canvasRef} className="pixel-wave-canvas" />
   </div>;
 }

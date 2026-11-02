@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class ComputersTests: XCTestCase {
     /// A paired computer can be renamed and forgotten from its page (a tap on
     /// its row in Computers opens it, Edit holds both), and forgotten from the

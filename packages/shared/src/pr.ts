@@ -139,6 +139,18 @@ export function parsePrUrl(url: string): { owner: string; repo: string; number: 
   return { owner: m[1], repo: m[2], number: Number(m[3]) };
 }
 
+/**
+ * A heredoc's opening marker through its closing delimiter line, and the line
+ * break before a `)` that closes the `$(cat <<EOF ...)` it sits in.
+ */
+const HEREDOC_BODY_RE = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1\r?\n[\s\S]*?\r?\n[ \t]*\2[ \t]*(?:\r?\n[ \t]*(?=\))|(?=\r?\n|$))/g;
+
+/** One leading `cd <dir> && ` (a plain or quoted path, nothing else). */
+const LEADING_CD_RE = /^cd\s+(?:"[^"`$]*"|'[^']*'|[^\s;&|`$"']+)\s*&&\s*/;
+
+/** A trailing `2>&1`, `| tail -N` or `| head -N`, or both, that only trims the output. */
+const TRAILING_TRIM_RE = /(?:\s+2>&1)?(?:\s*\|\s*(?:tail|head)\s+(?:-n\s*)?-?\d+)?\s*$/;
+
 /** Only successful PR-creation tool results attach PRs to this chat. */
 export function collectSessionPrUrls(messages: Array<{
   role?: string; content?: string;
@@ -150,8 +162,14 @@ export function collectSessionPrUrls(messages: Array<{
   for (const m of messages) {
     const result = m.toolResult;
     const call = result?.toolCallId ? calls.get(result.toolCallId) : undefined;
-    if (!call || result?.isError || call.name !== 'bash') continue;
-    const command = String(call.input?.command ?? '').trim();
+    // Nekko's `bash`, or Claude Code's own `Bash` in a Claude Agent chat.
+    if (!call || result?.isError || (call.name !== 'bash' && call.name !== 'Bash')) continue;
+    // A heredoc body (how Claude Code passes `--body`) is the command's text,
+    // not more commands: it is set aside before the checks below. So is one
+    // leading `cd <dir> &&`, how Claude Code runs a command in a worktree.
+    // A trailing `2>&1 | tail -5` only trims what it printed.
+    const command = String(call.input?.command ?? '').replace(HEREDOC_BODY_RE, '<<HEREDOC').trim()
+      .replace(LEADING_CD_RE, '').replace(TRAILING_TRIM_RE, '');
     // Do not classify strings embedded in scripts, quoted fixtures, or shell
     // batches as creation. Fail closed when output provenance is ambiguous.
     if (!command.startsWith('gh ') || /[\r\n;&|`]/.test(command)) continue;
@@ -159,7 +177,9 @@ export function collectSessionPrUrls(messages: Array<{
     const api = /^gh\s+api\s+(?:repos\/)?[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pulls(?:\s|$)/.test(command)
       && /(?:-X|--method)\s+POST\b/.test(command);
     if (!create && !api) continue;
-    const value = (result?.output ?? '').trim();
+    // `gh pr create` prints the PR's URL last, after any warnings (with `2>&1`).
+    const output = (result?.output ?? '').trim();
+    const value = create ? output.split(/\r?\n/).pop()!.trim() : output;
     if (/^https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+$/.test(value)) urls.add(value);
   }
   return [...urls];

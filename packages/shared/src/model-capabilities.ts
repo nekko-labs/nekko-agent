@@ -43,6 +43,23 @@ export function parseClaudeModel(modelId: string | undefined): ClaudeId | null {
   return { family: m[1] as ClaudeId['family'], major: Number(m[2]), minor: Number(m[3] ?? 0) };
 }
 
+/**
+ * How a model id reads as a short card line. For a Claude id the family is
+ * capitalised and the version is dotted ("Opus 5.5", "Opus 4.7"); other ids
+ * come back unchanged. When the picker already carries a vendor label (the
+ * ProviderConfig line reads "Claude" on its own), the shared "Claude " prefix
+ * is dropped so the two don't repeat each other.
+ */
+export function shortModelName(id: string, known?: string): string {
+  if (known) return known.replace(/^Claude\s+/i, '');
+  const c = parseClaudeModel(id);
+  if (c) {
+    const family = c.family[0].toUpperCase() + c.family.slice(1);
+    return `${family} ${c.major}${c.minor ? `.${c.minor}` : ''}`;
+  }
+  return id;
+}
+
 /** True from the 4.6 generation onwards, where the 1M window became standard. */
 function atLeast(c: ClaudeId, major: number, minor: number): boolean {
   return c.major > major || (c.major === major && c.minor >= minor);
@@ -147,26 +164,4 @@ export function guessContextWindow(modelId: string | undefined): number {
   if (id.includes('gpt-4.1')) return 1_047_576;
   if (/(?:^|\/)o[34](?:$|[-/])/.test(id)) return 200_000;
   return 128_000;
-}
-
-/**
- * The most output tokens one reply from a Claude model may hold, by family and
- * generation. Anthropic's endpoint requires `max_tokens` on every request, so a
- * cloud chat that has no cap of its own is sent the model's own ceiling and
- * runs to it rather than to the local-model safeguard. Anything that is not a
- * recognisable Claude id (a gateway's own naming) gets a generous middle value;
- * a model that turns out to hold less says so in a 400 and the provider learns
- * the real figure from it.
- */
-export function claudeMaxOutputTokens(modelId: string | undefined): number {
-  const c = parseClaudeModel(modelId);
-  if (!c) return 32_000;
-  if (c.family === 'fable' || c.family === 'mythos') return 64_000;
-  if (c.family === 'haiku' && c.major >= 5) return 128_000;
-  if (c.major >= 5) return 64_000;
-  if (c.family === 'haiku') return c.major >= 4 ? 64_000 : c.minor >= 5 ? 8_192 : 4_096;
-  if (c.family === 'sonnet') return c.major >= 4 || atLeast(c, 3, 7) ? 64_000 : 8_192;
-  // Opus: 3 held 4k, 4 and 4.1 hold 32k, 4.5 onwards 64k.
-  if (c.major < 4) return 4_096;
-  return atLeast(c, 4, 5) ? 64_000 : 32_000;
 }

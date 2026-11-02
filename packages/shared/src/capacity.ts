@@ -15,19 +15,6 @@
 /** KV-cache element type. Halving the element halves the cache. */
 export type KvCacheDtype = 'f16' | 'q8_0' | 'q4_0' | 'fp8';
 
-export function kvBytesPerElement(dtype: KvCacheDtype): number {
-  switch (dtype) {
-    case 'f16':
-      return 2;
-    case 'q8_0':
-      return 1;
-    case 'fp8':
-      return 1;
-    case 'q4_0':
-      return 0.5;
-  }
-}
-
 /** What we know about a model, normalized across runtimes. */
 export interface ModelFacts {
   id: string;
@@ -52,13 +39,6 @@ export interface ModelFacts {
   vramBytes?: number;
   /** Context it was actually loaded with. */
   loadedContext?: number;
-}
-
-/** One memory pool the planner can place a model in. */
-export interface CapacityDevice {
-  name: string;
-  totalBytes: number;
-  freeBytes: number;
 }
 
 /**
@@ -137,16 +117,6 @@ export interface Recommendation {
   why: Array<{ field: string; value: string; sentence: string }>;
 }
 
-export interface HardwareFacts {
-  devices: CapacityDevice[];
-  /**
-   * GPU and CPU share one pool (Apple Silicon). Never add system RAM on top of a
-   * unified device: doing so makes a 36 GB Mac look like it has 72 GB.
-   */
-  unified: boolean;
-  systemRamTotalBytes: number;
-  systemRamFreeBytes: number;
-}
 
 export interface FitRequest {
   contextTokens: number;
@@ -237,14 +207,4 @@ export interface AutoFitSummary {
   tradeoff: string;
   /** Why not something larger, when something had to be given up. */
   compromises: string[];
-}
-
-/** Measured residency after a load, kept beside the projection that predicted it. */
-export interface FitMeasurement {
-  at: number;
-  modelId: string;
-  totalBytes: number;
-  vramBytes: number;
-  /** Measured minus projected. Positive means we under-estimated. */
-  deltaBytes: number;
 }

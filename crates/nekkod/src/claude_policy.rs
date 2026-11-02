@@ -16,7 +16,15 @@
 //! serial than the one applied before (no rollback to an older document), and
 //! is kept in the data directory so it survives restarts. This is how a row
 //! turns on after Anthropic approves it without a release, and how one turns
-//! off within hours if they ask. There is no end-user switch anywhere.
+//! off within hours if they ask.
+//!
+//! **The user's own approval.** Settings > Agents has one switch,
+//! [`USER_APPROVAL_SETTING`], for a user who has Anthropic's permission
+//! themselves (an agreement of their own with Anthropic). On, it turns every
+//! `awaiting_approval` row for `subscription` on for that user. It never
+//! touches an `unsupported` row and never the `unknown` rows (an unread
+//! sign-in still fails closed), and it is off unless the setting is exactly
+//! `true`. The responsibility is the user's, and Settings says so.
 //!
 //! **Preview.** `NEKKO_CLAUDE_POLICY_PREVIEW=subscription` renders the plan's
 //! approval-gated rows as enabled, for recording what we would turn on. It
@@ -30,19 +38,20 @@ use nekko_agent::claude_policy::{self as policy, Capability, ClaudeAuth, Engine,
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 /// The release's file name beside its update feed, and the cached copy in the data directory.
 pub const FEED_FILE: &str = "claude-policy.json";
 
-/// The Ed25519 public key `claudePolicy` documents are signed with.
-///
-/// TODO(Philip): replace with the release signing key's public half before
-/// any signed policy ships. Nekko has no release signing key yet (the update
-/// feed is checked by SHA-512 and, on Windows, Authenticode only). While this
-/// is all zeros, every signed override is refused, so the shipped table is the
-/// whole policy.
-pub const RELEASE_POLICY_KEY: [u8; 32] = [0; 32];
+/// The Ed25519 public key `claudePolicy` documents are signed with: the one
+/// release signing key, shared with the update feed
+/// (`nekko_native::release_key`). While it is the all-zero placeholder, every
+/// signed override is refused, so the shipped table is the whole policy.
+pub use nekko_native::release_key::RELEASE_SIGNING_KEY as RELEASE_POLICY_KEY;
+
+/// The setting a user turns on when Anthropic has approved their use of the
+/// plan's approval-gated features (`AppSettings.claudePlanFeaturesApproved`).
+pub const USER_APPROVAL_SETTING: &str = "claudePlanFeaturesApproved";
 
 const DOC_TYPE: &str = "nekko.claudePolicy";
 const DOC_VERSION: u64 = 1;
@@ -88,6 +97,9 @@ pub struct ClaudePolicyStore {
     cache: Option<PathBuf>,
     preview: Option<ClaudeAuth>,
     state: RwLock<State>,
+    /// The daemon's settings, for [`USER_APPROVAL_SETTING`]; read on every
+    /// gate (the store keeps them in memory) so a change applies at once.
+    settings: Option<Arc<nekko_settings::SettingsStore>>,
     /// Each Claude Code harness provider's last `claude auth status --json`, by provider id.
     auth_status: Mutex<HashMap<String, Value>>,
 }
@@ -95,8 +107,18 @@ pub struct ClaudePolicyStore {
 impl ClaudePolicyStore {
     /// The daemon's store: the release key, the cached override in `data_dir`,
     /// and the preview when this build and launch allow it.
-    pub fn new(data_dir: Option<PathBuf>, is_packaged: bool) -> Self {
+    pub fn new(
+        data_dir: Option<PathBuf>,
+        is_packaged: bool,
+        settings: Option<Arc<nekko_settings::SettingsStore>>,
+    ) -> Self {
         Self::with_key(RELEASE_POLICY_KEY, data_dir.map(|d| d.join(FEED_FILE)), preview_from_env(is_packaged))
+            .with_settings(settings)
+    }
+
+    pub fn with_settings(mut self, settings: Option<Arc<nekko_settings::SettingsStore>>) -> Self {
+        self.settings = settings;
+        self
     }
 
     pub fn with_key(key: [u8; 32], cache: Option<PathBuf>, preview: Option<ClaudeAuth>) -> Self {
@@ -104,6 +126,7 @@ impl ClaudePolicyStore {
             key,
             cache,
             preview,
+            settings: None,
             state: RwLock::new(State { effective: Policy::shipped(), applied: None }),
             auth_status: Mutex::new(HashMap::new()),
         };
@@ -135,7 +158,7 @@ impl ClaudePolicyStore {
 
     /// Check a signed document: key, signature, type, version and rows.
     fn verify(&self, doc: &Value) -> Result<Applied, String> {
-        if self.key == [0; 32] {
+        if nekko_native::release_key::is_placeholder(&self.key) {
             return Err("no Claude policy signing key is configured".into());
         }
         let b64 = base64::engine::general_purpose::STANDARD;
@@ -184,19 +207,26 @@ impl ClaudePolicyStore {
         Ok(())
     }
 
-    /// The effective table.
+    /// Whether the user turned on [`USER_APPROVAL_SETTING`].
+    pub fn user_approved(&self) -> bool {
+        self.settings.as_ref().is_some_and(|s| s.shared().get(USER_APPROVAL_SETTING) == Some(&Value::Bool(true)))
+    }
+
+    /// The effective table, with the user's own approval applied.
     pub fn policy(&self) -> Policy {
-        self.state.read().unwrap_or_else(|e| e.into_inner()).effective.clone()
+        let effective = self.state.read().unwrap_or_else(|e| e.into_inner()).effective.clone();
+        if self.user_approved() { policy::preview(&effective, ClaudeAuth::Subscription) } else { effective }
     }
 
     /// `claude:policy`: the effective table, where it came from, and every
     /// reason's copy, so the renderer shows exactly what is enforced.
     pub fn status(&self) -> Value {
-        let st = self.state.read().unwrap_or_else(|e| e.into_inner());
+        let applied = self.state.read().unwrap_or_else(|e| e.into_inner()).applied.clone();
         json!({
-            "policy": st.effective,
-            "override": st.applied.as_ref().map(|a| json!({ "serial": a.serial, "issuedAt": a.issued_at })),
+            "policy": self.policy(),
+            "override": applied.map(|a| json!({ "serial": a.serial, "issuedAt": a.issued_at })),
             "preview": self.preview.map(ClaudeAuth::as_str),
+            "userApproved": self.user_approved(),
         })
     }
 
@@ -368,6 +398,26 @@ pub async fn plan_usage_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Resul
     })
 }
 
+/// The Claude Agent provider a limits read names (`claude-code:<id>`, see
+/// `limitsKeyFor`), for `limits:get` and `limits:poll` only.
+pub fn limits_key_provider<'a>(channel: &str, args: &'a [Value]) -> Option<&'a str> {
+    if !matches!(channel, "limits:get" | "limits:poll") {
+        return None;
+    }
+    args.first()?.as_str()?.strip_prefix("claude-code:")
+}
+
+/// `limits:get` for a Claude Agent: the plan usage its own Claude Code
+/// printed, where `usage_limits` allows it; `null` otherwise (nothing yet,
+/// an unread sign-in, or the dev preview, whose example the UI renders itself).
+pub async fn plan_usage_limits(ctx: &crate::routes::Ctx, id: &str) -> Result<Value, String> {
+    let Ok(provider) = provider(ctx, id).await else { return Ok(Value::Null) };
+    Ok(match ctx.claude_policy.plan_usage(&provider, ctx.turns.harness.plan_usage(id)) {
+        PlanUsage::Observed(limits) => limits,
+        PlanUsage::Unavailable(_) | PlanUsage::Example => Value::Null,
+    })
+}
+
 /// Whether a `chat:send` was started by automation rather than a person.
 pub fn is_unattended(opts: &Value) -> bool {
     opts.get("unattended").and_then(Value::as_bool) == Some(true)
@@ -448,7 +498,7 @@ mod tests {
     fn every_gate_is_off_for_a_plan_and_on_for_an_api_key() {
         let s = store(None);
         let plan = on_plan(&s);
-        for cap in ALL_GATED {
+        for cap in ALL_GATED.into_iter().filter(|c| *c != Capability::UsageLimits) {
             let refusal = s.gate(&plan, cap).unwrap_err();
             assert_eq!(refusal.message, cap.awaiting_reason().reason().text);
             assert!(s.gate(&harness(Some("nekko-anthropic-key")), cap).is_ok());
@@ -456,17 +506,54 @@ mod tests {
         }
         assert!(s.gate(&plan, Capability::NekkoTools).is_err());
         assert!(s.gate(&plan, Capability::ContextNote).is_err());
-        assert_eq!(s.plan_usage(&plan, None), PlanUsage::Unavailable("Check your plan's usage in Claude Code."));
-        // What Claude Code printed stays hidden while the row awaits approval.
+        // Plan usage is on for a plan: what its own Claude Code printed, once it has.
+        assert_eq!(s.plan_usage(&plan, None), PlanUsage::Unavailable(NOT_REPORTED_YET));
         let seen = json!({ "windows": [] });
+        assert_eq!(s.plan_usage(&plan, Some(seen.clone())), PlanUsage::Observed(seen.clone()));
+        // An unread sign-in fails closed.
+        let unread = json!({ "id": "unread", "kind": "claude-code" });
         assert_eq!(
-            s.plan_usage(&plan, Some(seen.clone())),
+            s.plan_usage(&unread, Some(seen.clone())),
             PlanUsage::Unavailable("Check your plan's usage in Claude Code.")
         );
         assert_eq!(s.plan_usage(&harness(Some("vertex")), Some(seen.clone())), PlanUsage::Observed(seen));
         // Interactive chat and the phone stay on.
         assert!(s.gate(&plan, Capability::InteractiveChat).is_ok());
         assert!(s.gate(&plan, Capability::PhoneRemote).is_ok());
+    }
+
+    #[test]
+    fn the_users_own_approval_turns_the_plan_rows_on_and_nothing_else() {
+        let dir = std::env::temp_dir().join(format!("nekkod-claude-approval-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let settings = Arc::new(nekko_settings::SettingsStore::new(&dir));
+        let s = store(None).with_settings(Some(settings.clone()));
+        let plan = on_plan(&s);
+        // Off by default, and anything but `true` stays off.
+        settings.update(&json!({ USER_APPROVAL_SETTING: "true" })).unwrap();
+        assert!(!s.user_approved());
+        assert!(s.gate_turn(&plan, &json!({ "unattended": true })).is_err());
+
+        settings.update(&json!({ USER_APPROVAL_SETTING: true })).unwrap();
+        assert!(s.user_approved());
+        assert_eq!(s.status()["userApproved"], true);
+        for cap in ALL_GATED {
+            assert!(s.gate(&plan, cap).is_ok(), "{cap:?}");
+        }
+        assert!(s.gate_turn(&plan, &json!({ "unattended": true })).is_ok());
+        // Real usage, never the dev preview's example.
+        let seen = json!({ "windows": [] });
+        assert_eq!(s.plan_usage(&plan, Some(seen.clone())), PlanUsage::Observed(seen));
+        // Unsupported rows and an unread sign-in stay off.
+        assert!(s.gate(&plan, Capability::CostEstimate).is_err());
+        assert!(s.gate(&plan, Capability::ModelRouting).is_err());
+        let unread = json!({ "id": "other", "kind": "claude-code" });
+        assert!(s.gate(&unread, Capability::UnattendedRuns).is_err());
+
+        settings.update(&json!({ USER_APPROVAL_SETTING: false })).unwrap();
+        assert!(s.gate_turn(&plan, &json!({ "unattended": true })).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

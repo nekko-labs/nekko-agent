@@ -24,9 +24,11 @@ describe('agent question in the window', () => {
     const html = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} tone="attention" />);
     expect(html).toContain('data-question-tone="attention"');
     expect(html).toContain('var(--warning) 70%');
-    expect(html).toContain('text-[14px] font-semibold');
+    expect(html).toContain('text-sm font-semibold');
     const plain = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} />);
-    expect(plain).toContain('data-question-tone="accent"');
+    expect(plain).toContain('data-question-tone="attention"');
+    const accent = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} tone="accent" />);
+    expect(accent).toContain('data-question-tone="accent"');
   });
   // Source pin, pending the wall e2e journey: the question reaches the pane
   // from the host (a promise or an agent event), which a server render never

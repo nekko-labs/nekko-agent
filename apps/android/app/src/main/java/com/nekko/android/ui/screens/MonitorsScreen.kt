@@ -1,5 +1,8 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -94,7 +97,7 @@ fun MonitorsScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val computers by repo.state.collectAsStateWithLifecycle()
-    val computer = computers.active?.name ?: "your computer"
+    val computer = computers.active?.name ?: stringResource(R.string.your_computer)
     val p = Nekko.palette
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     // Polls only while visible: STARTED and on screen; stops in the background.
@@ -112,26 +115,35 @@ fun MonitorsScreen(
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Monitors", style = MaterialTheme.typography.titleMedium) },
+                title = { Text(stringResource(R.string.settings_monitors), style = MaterialTheme.typography.titleMedium) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
                     if (onBack != null) {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back)) }
                     }
                 },
                 actions = { pane?.actions?.invoke(this) },
             )
         },
     ) { padding ->
+        val notice = when {
+            state.readOff -> stringResource(R.string.settings_read_off, computer)
+            computers.conn != RelayState.ONLINE -> stringResource(
+                if (computers.conn == RelayState.OFFLINE) R.string.settings_monitor_offline else R.string.settings_monitor_reconnecting,
+                computer,
+            )
+            else -> state.error
+        }
+        val hardwareTitle = stringResource(R.string.settings_hardware_on, computer)
+        val runningTitle = stringResource(R.string.settings_running)
+        val needsTitle = stringResource(R.string.settings_needs_you)
+        val automationsTitle = stringResource(R.string.settings_automations)
+        val noScheduled = stringResource(R.string.settings_no_scheduled)
+        val automationName = stringResource(R.string.settings_automation)
         LazyColumn(
             Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).navigationBarsPadding(),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            val notice = when {
-                state.readOff -> "Read is off for this phone. Turn it on on $computer in Remote access → What phones can do."
-                computers.conn != RelayState.ONLINE -> "$computer is ${if (computers.conn == RelayState.OFFLINE) "offline" else "reconnecting"}. Monitors update once it answers."
-                else -> state.error
-            }
             notice?.let { msg ->
                 item(key = "notice") {
                     Notice(msg, if (state.readOff) Tone.WARNING else Tone.DANGER, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -151,12 +163,12 @@ fun MonitorsScreen(
 
             val needs = state.needsYou
             val sections = monitorSections(summary.running.size, needs.size)
-            item(key = "hardware") { SectionHeader("Hardware · $computer", accent = true) }
+            item(key = "hardware") { SectionHeader(hardwareTitle, accent = true) }
             item(key = "hw-rows") { HardwareRows(summary.hardware) }
 
             // Running and Needs you show only while they hold something.
             if (MonitorSection.RUNNING in sections) {
-                item(key = "running") { SectionHeader("Running", accent = true) }
+                item(key = "running") { SectionHeader(runningTitle, accent = true) }
                 itemsIndexed(summary.running, key = { _, r -> "run:${r.id}" }) { i, r ->
                     if (i > 0) RowDivider(40.dp)
                     val elapsed = r.elapsedMs?.let { it + (now - (state.readAt ?: now)).coerceAtLeast(0) }
@@ -164,7 +176,7 @@ fun MonitorsScreen(
                 }
             }
 
-            if (MonitorSection.NEEDS_YOU in sections) item(key = "needs") { SectionHeader("Needs you", accent = true) }
+            if (MonitorSection.NEEDS_YOU in sections) item(key = "needs") { SectionHeader(needsTitle, accent = true) }
             itemsIndexed(needs, key = { _, n -> "need:${n.key}" }) { i, row ->
                 if (i > 0) RowDivider()
                 NeedsYouRow(
@@ -176,8 +188,8 @@ fun MonitorsScreen(
                 )
             }
 
-            item(key = "automations") { SectionHeader("Automations", accent = true) }
-            if (summary.automations.isEmpty()) item(key = "auto-none") { Empty("No scheduled runs.") }
+            item(key = "automations") { SectionHeader(automationsTitle, accent = true) }
+            if (summary.automations.isEmpty()) item(key = "auto-none") { Empty(noScheduled) }
             itemsIndexed(summary.automations, key = { _, a -> "auto:${a.kind}:${a.id}" }) { i, a ->
                 if (i > 0) RowDivider(40.dp)
                 Row(
@@ -186,7 +198,7 @@ fun MonitorsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
-                    Text(plainText(a.name).ifEmpty { "Automation" }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(plainText(a.name).ifEmpty { automationName }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(MonitorSummary.nextRun(a.nextRunAt, now), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                 }
             }
@@ -214,12 +226,13 @@ private fun Empty(text: String) {
 @Composable
 private fun HardwareRows(hw: MonitorSummary.Hardware) {
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        LoadBar("CPU", hw.cpu.loadPct, hw.cpu.tempC, if (hw.cpu.cores > 0) "${hw.cpu.cores} cores" else null)
+        LoadBar("CPU", hw.cpu.loadPct, hw.cpu.tempC, if (hw.cpu.cores > 0) stringResource(R.string.settings_n_cores, hw.cpu.cores) else null)
+        val shared = stringResource(R.string.settings_shared_memory)
         hw.gpu?.let { g ->
             val mem = if (!g.unified && g.memoryTotalMB != null && g.memoryTotalMB!! > 0) gb(g.memoryUsedMB ?: 0.0, g.memoryTotalMB!!) else null
-            LoadBar("GPU", g.loadPct, g.tempC, mem ?: if (g.unified) "shared memory" else null)
+            LoadBar("GPU", g.loadPct, g.tempC, mem ?: if (g.unified) shared else null)
         }
-        LoadBar("Memory", hw.memory.usedPct, hw.memory.tempC, if (hw.memory.totalMB > 0) gb(hw.memory.usedMB, hw.memory.totalMB) else null)
+        LoadBar(stringResource(R.string.settings_memory), hw.memory.usedPct, hw.memory.tempC, if (hw.memory.totalMB > 0) gb(hw.memory.usedMB, hw.memory.totalMB) else null)
     }
 }
 
@@ -258,14 +271,14 @@ private fun LoadBar(label: String, pct: Double?, tempC: Double?, detail: String?
 private fun RunningRow(r: MonitorSummary.Running, elapsedMs: Long?, onOpen: () -> Unit) {
     val p = Nekko.palette
     val (step, tone) = when (r.step) {
-        MonitorSummary.Step.APPROVAL -> "needs your approval" to Tone.WARNING
-        MonitorSummary.Step.QUESTION -> "has a question" to Tone.WARNING
-        MonitorSummary.Step.WORKING -> "working" to Tone.ACCENT
+        MonitorSummary.Step.APPROVAL -> stringResource(R.string.settings_step_approval) to Tone.WARNING
+        MonitorSummary.Step.QUESTION -> stringResource(R.string.settings_step_question) to Tone.WARNING
+        MonitorSummary.Step.WORKING -> stringResource(R.string.settings_step_working) to Tone.ACCENT
     }
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClickLabel = "Open chat", onClick = onOpen)
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.settings_open_chat), onClick = onOpen)
             .heightIn(min = 48.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -273,7 +286,7 @@ private fun RunningRow(r: MonitorSummary.Running, elapsedMs: Long?, onOpen: () -
     ) {
         Icon(if (tone == Tone.WARNING) Icons.Filled.Warning else Icons.Filled.Bolt, contentDescription = null, tint = toneColor(tone), modifier = Modifier.size(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(plainText(r.title).ifEmpty { "Chat" }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(plainText(r.title).ifEmpty { stringResource(R.string.settings_chat) }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(step, style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
         }
         elapsedMs?.let { Text(MonitorSummary.elapsed(it), style = MaterialTheme.typography.bodySmall, color = p.inkFaint) }
@@ -306,6 +319,7 @@ private fun NeedsYouRow(
         Severity.LOW -> Tone.ACCENT
         null -> Tone.WARNING
     }
+    val res = LocalResources.current
     fun run(block: suspend () -> Unit) {
         error = null
         scope.launch {
@@ -314,7 +328,7 @@ private fun NeedsYouRow(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Couldn’t reach your computer."
+                error = e.message ?: res.getString(R.string.settings_couldnt_reach)
             } finally {
                 busy = null
                 loading = false
@@ -326,22 +340,31 @@ private fun NeedsYouRow(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
-            Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Open chat", onClick = onOpen).heightIn(min = 40.dp),
+            Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = stringResource(R.string.settings_open_chat), onClick = onOpen).heightIn(min = 40.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Column(Modifier.weight(1f)) {
-                Text(plainText(row.title).ifEmpty { "Chat" }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val more = if (!approval && row.count > 1) " (and ${row.count - 1} more)" else ""
+                Text(plainText(row.title).ifEmpty { stringResource(R.string.settings_chat) }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val line = if (approval) stringResource(R.string.settings_wants_to_run, row.label) else row.label
                 Text(
-                    (if (approval) "Wants to run ${row.label}" else row.label) + more,
+                    if (!approval && row.count > 1) stringResource(R.string.settings_and_more, line, row.count - 1) else line,
                     style = MaterialTheme.typography.bodySmall,
                     color = p.inkSoft,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (approval) Pill("${row.risk?.name?.lowercase() ?: "medium"} risk", tone)
+            if (approval) Pill(
+                stringResource(
+                    when (row.risk) {
+                        Severity.HIGH -> R.string.settings_risk_high
+                        Severity.LOW -> R.string.settings_risk_low
+                        else -> R.string.settings_risk_medium
+                    },
+                ),
+                tone,
+            )
         }
         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         val q = question
@@ -351,13 +374,13 @@ private fun NeedsYouRow(
                     onClick = { busy = false; run { decide(false) } },
                     enabled = busy == null,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                ) { Text(if (busy == false) "Denying…" else "Deny") }
+                ) { Text(if (busy == false) stringResource(R.string.settings_denying) else stringResource(R.string.settings_deny)) }
                 Button(
                     onClick = { busy = true; run { decide(true) } },
                     enabled = busy == null,
                     colors = ButtonDefaults.buttonColors(containerColor = toneColor(tone), contentColor = p.accentInk),
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                ) { Text(if (busy == true) "Allowing…" else "Allow") }
+                ) { Text(if (busy == true) stringResource(R.string.settings_allowing) else stringResource(R.string.settings_allow)) }
             }
             q != null -> QuestionCard(q, onAnswer = answer)
             else -> OutlinedButton(
@@ -365,12 +388,12 @@ private fun NeedsYouRow(
                     loading = true
                     run {
                         val found = loadQuestion()
-                        if (found == null) error = "Already answered." else question = found
+                        if (found == null) error = res.getString(R.string.settings_already_answered) else question = found
                     }
                 },
                 enabled = !loading,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text(if (loading) "Opening…" else "Answer") }
+            ) { Text(if (loading) stringResource(R.string.settings_opening) else stringResource(R.string.settings_answer)) }
         }
     }
 }

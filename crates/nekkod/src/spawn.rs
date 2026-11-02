@@ -69,7 +69,7 @@ async fn prepare_sub_agent(
     model_id: &Value,
     input: &Value,
 ) -> Result<Child, String> {
-    let store = ctx.sessions.clone().ok_or("Sub-agents need the data directory.")?;
+    let store = ctx.sessions.clone();
     let parent_id = s(parent, "id").unwrap_or_default().to_string();
     let settings = crate::settings::current(ctx).await;
     let orchestration = settings.get("orchestration").filter(|o| !o.is_null());
@@ -214,7 +214,7 @@ pub async fn prepare(ctx: &Ctx, req: &Value) -> Value {
             }
         }
         Some(child_id) => {
-            let saved = ctx.sessions.as_ref().and_then(|st| st.get(child_id));
+            let saved = ctx.sessions.get(child_id);
             let Some(saved) = saved.filter(|c| s(c, "parentSessionId").is_some_and(|p| Some(p) == s(&parent, "id")))
             else {
                 return json!({ "error": "Unknown child session." });

@@ -1,18 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MONITORS_DOCK, DEFAULT_WALL_LAYOUT, sanitizeMonthlyBudgetUsd, type AppSettings, type CommandWallSetting } from './settings.js';
-
-describe('monthlyBudgetUsd', () => {
-  it('preserves finite non-negative USD amounts, including zero', () => {
-    for (const value of [0, 0.01, 100, 1234.56]) expect(sanitizeMonthlyBudgetUsd(value)).toBe(value);
-    const setting: Pick<AppSettings, 'monthlyBudgetUsd'> = { monthlyBudgetUsd: 25 };
-    expect(sanitizeMonthlyBudgetUsd(setting.monthlyBudgetUsd)).toBe(25);
-  });
-  it('treats invalid, negative and unset amounts as no budget', () => {
-    for (const value of [undefined, null, -1, NaN, Infinity, -Infinity, '100', true, {}, []]) {
-      expect(sanitizeMonthlyBudgetUsd(value)).toBeUndefined();
-    }
-  });
-});
+import { DEFAULT_MONITORS_DOCK, DEFAULT_WALL_LAYOUT, type CommandWallSetting } from './settings.js';
 
 describe('command wall settings schema', () => {
   it('allows legacy settings without the new optional fields', () => {

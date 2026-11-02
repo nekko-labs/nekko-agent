@@ -2,6 +2,9 @@ import { createPgDb } from "./db.js";
 import { expireDonations } from "./donations.js";
 import { migrate } from "./migrate.js";
 import { FlyDriver } from "./fly.js";
+import { sweepMachineHours } from "./machines.js";
+import { resendMailer } from "./confirmations.js";
+import { purgeSignups } from "./retention.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
 import { supabaseVerifier } from "./supabase.js";
 
@@ -18,6 +21,15 @@ if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
 await expireDonations(db);
 setInterval(() => expireDonations(db).catch((e) => console.error("expiring donations failed", e)), 24 * 60 * 60 * 1000).unref();
 
+// Signup retention (privacy policy): unconfirmed after 30 days and
+// unsubscribed rows are deleted. A failed run deletes nothing (one
+// transaction) and is retried on the next tick.
+const purge = () => purgeSignups(db)
+  .then((n) => { if (n.unconfirmed || n.unsubscribed) console.log(`signups purged: ${n.unconfirmed} unconfirmed, ${n.unsubscribed} unsubscribed`); })
+  .catch((e) => console.error("purging signups failed", e));
+await purge();
+setInterval(purge, 6 * 60 * 60 * 1000).unref();
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
   : DEFAULT_ORIGINS;
@@ -26,7 +38,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const signIn = supabaseUrl && supabaseAnonKey
-  ? { supabaseUrl, supabaseAnonKey, verify: supabaseVerifier({ url: supabaseUrl, jwtSecret: process.env.SUPABASE_JWT_SECRET || undefined }) }
+  ? { supabaseUrl, supabaseAnonKey, verify: supabaseVerifier({ url: supabaseUrl, anonKey: supabaseAnonKey, jwtSecret: process.env.SUPABASE_JWT_SECRET || undefined }) }
   : undefined;
 if (!signIn) console.warn("SUPABASE_URL / SUPABASE_ANON_KEY not set: sign-in is off (the /v1/auth routes answer 503).");
 // Nekko Cloud machines run on Fly Machines when the app and token are set.
@@ -39,8 +51,14 @@ const machines = flyToken && flyApp
       image: process.env.NEKKO_MACHINE_IMAGE ?? "ghcr.io/nekko-labs/nekko-agent:latest",
     }
   : undefined;
+// Machine hours are counted on every state change; this also counts long-running machines and stops the ones past their plan hours.
+if (machines) setInterval(() => sweepMachineHours(db, machines.driver).catch((e) => console.error("machine hours sweep failed", e)), 10 * 60 * 1000).unref();
 if (!machines) console.warn("FLY_API_TOKEN / FLY_MACHINES_APP not set: Nekko Cloud machines are off (the /v1/machines routes are absent).");
-const app = buildServer({ db, allowedOrigins, logger: true, signIn, machines });
+// Beta signup confirmation emails go through Resend.
+const resendKey = process.env.RESEND_API_KEY;
+if (!resendKey) console.warn("RESEND_API_KEY not set: signups save but no confirmation emails are sent.");
+const mailer = resendKey ? resendMailer(resendKey) : undefined;
+const app = buildServer({ db, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

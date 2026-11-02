@@ -4,6 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { AgentPage as Page } from './agentPage.js';
 import { validateBrowserInput } from '@nekko-agent/shared';
 import { captureWindow } from './windowCapture.js';
+import { quietLoadFailures } from './quietLoadFailures.js';
 import { nativeDriver } from './agentNativeDriver.js';
 import { isAllowedNavigation } from './agentCdpTransport.js';
 import { describeLogs, runPageAction, watchPage, type PageLogEntry } from './agentBrowserActions.js';
@@ -136,9 +137,9 @@ export async function startAgentBrowser(options: {
       webPreferences: { partition: partitionFor(sessionId), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, disableDialogs: true },
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    // The agent already gets a failed navigation back from Playwright. Without
-    // a listener Electron also warns about it on the app's console.
-    win.webContents.on('did-fail-load', () => {});
+    // The agent already gets a failed navigation back; keep Electron's
+    // duplicate warning off the app's console.
+    quietLoadFailures(win.webContents);
     win.webContents.on('will-navigate', (event, target) => { if (!/^https?:\/\//i.test(target)) event.preventDefault(); });
     win.webContents.on('will-redirect', (event, target) => { if (!/^https?:\/\//i.test(target)) event.preventDefault(); });
     win.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));

@@ -172,26 +172,26 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
           data-finder-index={i}
           data-finder-row={s.id}
           data-finder-kind={hit.kind}
-          className={`chat-finder-row flex w-full items-center gap-3 rounded-lg ${compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} text-left ${i === cursor ? 'is-cursor' : ''}`}
+          className={`chat-finder-row flex w-full items-center gap-3 rounded-lg ${compact ? 'px-2 py-1' : 'px-3 py-1'} text-left ${i === cursor ? 'is-cursor' : ''}`}
           onMouseMove={() => { if (i !== cursor) setCursor(i); }}
           onClick={() => open(s.id, hit.findText)}
           title={hit.findText ? `Open and find “${hit.findText}”` : 'Open chat'}
         >
           <span className="min-w-0 flex-1">
-            <span className={`block truncate ${compact ? 'text-[12.5px]' : 'text-[13px]'} text-ink`}>{s.title || 'Untitled chat'}</span>
-            {hit.snippet && <span className="block truncate text-[11px] text-ink-faint">{hit.snippet}</span>}
+            <span className={`block truncate ${compact ? 'text-xs' : 'text-sm'} text-ink`} title={s.title || undefined} dir="auto">{s.title || 'Untitled chat'}</span>
+            {hit.snippet && <span className="block truncate text-2xs text-ink-faint">{hit.snippet}</span>}
           </span>
           {label && <span className="chat-finder-badge shrink-0" data-finder-badge>{label}</span>}
-          {s.archivedAt ? <span className="shrink-0 text-[10px] text-ink-faint">Completed</span> : null}
-          <span className="shrink-0 text-[11px] tabular-nums text-ink-faint" data-finder-age>{finderAge(s.updatedAt, now)}</span>
+          {s.archivedAt ? <span className="shrink-0 text-2xs text-ink-faint">Completed</span> : null}
+          <span className="shrink-0 text-2xs tabular-nums text-ink-faint" data-finder-age>{finderAge(s.updatedAt, now)}</span>
         </button>
       </div>
     );
   };
 
-  const empty = (text: string) => <p className="px-2.5 py-3 text-center text-[12px] text-ink-faint" role="presentation">{text}</p>;
+  const empty = (text: string) => <p className="px-3 py-3 text-center text-xs text-ink-faint" role="presentation">{text}</p>;
   const sectionHead = (text: string, count?: number) => (
-    <p className="flex items-center gap-1.5 px-2.5 pb-1 pt-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-ink-faint" role="presentation">
+    <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-xs font-medium text-ink-soft" role="presentation">
       {text}{count !== undefined && <span className="tabular-nums font-normal normal-case tracking-normal">{count}</span>}
     </p>
   );
@@ -210,8 +210,8 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
             const shown = all ? f.sessions : f.sessions.slice(0, FACET_PREVIEW);
             return (
               <section key={f.key} className="chat-finder-facet mb-1 rounded-lg" data-finder-facet={f.key} aria-label={f.name}>
-                <h3 className="flex items-center gap-2 px-2.5 pb-0.5 pt-1.5 text-[12px] font-semibold text-ink">
-                  <span className="min-w-0 truncate">{f.name}</span>
+                <h3 className="flex items-center gap-2 px-3 pb-0.5 pt-1 text-xs font-semibold text-ink">
+                  <span className="min-w-0 truncate" title={f.name} dir="auto">{f.name}</span>
                   <span className="chat-finder-badge tabular-nums">{f.sessions.length}</span>
                 </h3>
                 {shown.map((s) => {
@@ -221,7 +221,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
                 {f.sessions.length > FACET_PREVIEW && (
                   <button
                     type="button"
-                    className="ml-2 px-1.5 pb-1 text-[11px] text-accent hover:underline"
+                    className="ml-2 px-2 pb-1 text-2xs text-accent hover:underline"
                     data-finder-facet-more={f.key}
                     onClick={() => setExpanded((cur) => { const n = new Set(cur); if (n.has(f.key)) n.delete(f.key); else n.add(f.key); return n; })}
                   >
@@ -265,23 +265,23 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
                   data-finder-index={i}
                   data-finder-artifact={a.path}
                   data-finder-row={a.sessionId}
-                  className={`chat-finder-row flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 pr-9 text-left ${i === cursor ? 'is-cursor' : ''}`}
+                  className={`chat-finder-row flex w-full items-center gap-3 rounded-lg px-3 py-1 pr-9 text-left ${i === cursor ? 'is-cursor' : ''}`}
                   onMouseMove={() => { if (i !== cursor) setCursor(i); }}
                   onClick={() => open(a.sessionId)}
                   title={`Open “${chat?.title || a.sessionTitle}”\n${a.path}`}
                 >
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2 text-[9px] font-semibold uppercase text-ink-faint" aria-hidden>
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2 text-2xs font-semibold uppercase text-ink-faint" aria-hidden>
                     {a.filename.split('.').pop()?.slice(0, 4)}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] text-ink">{a.title}</span>
-                    <span className="block truncate text-[11px] text-ink-faint">{chat?.title || a.sessionTitle} · {a.filename}</span>
+                    <span className="block truncate text-sm text-ink" title={a.title} dir="auto">{a.title}</span>
+                    <span className="block truncate text-2xs text-ink-faint">{chat?.title || a.sessionTitle} · {a.filename}</span>
                   </span>
-                  <span className="shrink-0 text-[11px] tabular-nums text-ink-faint">{finderAge(a.at, now)}</span>
+                  <span className="shrink-0 text-2xs tabular-nums text-ink-faint">{finderAge(a.at, now)}</span>
                 </button>
                 <button
                   type="button"
-                  className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-ink-faint opacity-0 hover:bg-surface-2 hover:text-ink focus:opacity-100 group-hover:opacity-100"
+                  className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-ink-faint opacity-0 hover:bg-surface-2 hover:text-ink focus:opacity-100 group-hover:opacity-100 touch:opacity-100"
                   title="Open the file with the system's default app"
                   aria-label={`Open file ${a.filename}`}
                   onClick={() => void window.nekko.openPath(a.path)}
@@ -304,15 +304,15 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
       data-chat-finder
       role="dialog"
       aria-label="Search chats"
-      className="chat-finder card fixed z-[1000] flex flex-col p-1.5 shadow-lg"
-      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: `calc(100vh - ${pos.top + 12}px)` }}
+      className="chat-finder card fixed z-[1000] flex flex-col p-2 shadow-(--shadow-float)"
+      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: `calc(100dvh - ${pos.top + 12}px)` }}
       onKeyDown={onKeyDown}
     >
-      <div className="flex items-center gap-1 px-1 pb-1.5">
+      <div className="flex items-center gap-1 px-1 pb-1">
         <kbd className="kbd shrink-0">{SHORTCUTS.searchChats.label}</kbd>
         <input
           ref={inputRef}
-          className="chat-finder-input min-w-0 flex-1 bg-transparent px-1.5 py-1.5 text-[13px] outline-none"
+          className="chat-finder-input min-w-0 flex-1 bg-transparent px-2 py-1 text-sm outline-none"
           placeholder={SCOPE_PLACEHOLDER[scope]}
           aria-label="Search chats"
           value={draft}
@@ -332,7 +332,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
         </button>
         <button
           type="button"
-          className="send-avatar grid h-8 w-8 shrink-0 place-items-center rounded-xl transition-all duration-150"
+          className="send-avatar grid h-8 w-8 shrink-0 place-items-center rounded-xl transition-[background-color,border-color,color,opacity,transform] duration-150"
           title="Search now (Enter)"
           aria-label="Search now"
           data-finder-search
@@ -353,7 +353,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
       </div>
       {/* Keyed on the text so every keystroke restarts the fill. */}
       <div key={draft} className="chat-finder-progress" data-active={pending || undefined} aria-hidden />
-      <div className="chat-finder-tabs flex gap-1 overflow-x-auto px-1 pb-1 pt-1.5" role="tablist" aria-label="What to search">
+      <div className="chat-finder-tabs flex gap-1 overflow-x-auto px-1 pb-1 pt-1" role="tablist" aria-label="What to search">
         {FINDER_SCOPES.map((s) => (
           <button
             key={s.id}
@@ -369,7 +369,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
         ))}
       </div>
       {range && !calendarOpen && (
-        <div className="flex items-center gap-1.5 px-2 pb-1 text-[11px] text-ink-faint">
+        <div className="flex items-center gap-2 px-2 pb-1 text-2xs text-ink-faint">
           <CalendarIcon className="h-3 w-3" />
           <button type="button" className="text-ink hover:underline" data-finder-range-label onClick={() => setCalendarOpen(true)}>{rangeLabel(range)}</button>
           <button type="button" className="grid h-4 w-4 place-items-center rounded hover:bg-surface-2 hover:text-ink" aria-label="Clear date range" data-finder-range-x onClick={() => setRange(null)}>
@@ -383,7 +383,7 @@ export function ChatFinder({ anchorRef, onOpen, onClose }: {
         </div>
       )}
       {progress && (
-        <p className="flex items-center gap-1.5 px-2.5 pb-1 text-[11px] text-ink-faint" data-finder-indexing aria-live="polite">
+        <p className="flex items-center gap-2 px-3 pb-1 text-2xs text-ink-faint" data-finder-indexing aria-live="polite">
           <span className="chat-finder-spinner" aria-hidden />
           Reading chats {progress.done} of {progress.total}; results so far
         </p>

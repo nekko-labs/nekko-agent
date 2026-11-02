@@ -6,6 +6,8 @@ import { Modal } from './primitives/index.js';
 import { openFeedback } from './FeedbackSheet.js';
 import { SIMPLE_ITEMS, simpleShown, simpleVisibility } from '@nekko-agent/shared';
 import { useExpertMode, useLocalModelLoaded, useSimpleChoices } from '../simpleMode.js';
+import { Toggle } from './primitives/Toggle.js';
+import { matchSettings, matchSettingsPages, openSettingsGroup, saveSettings, SETTINGS_PAGES, type SettingEntry } from '../settingsIndex.js';
 
 interface Command {
   id: string;
@@ -14,13 +16,13 @@ interface Command {
   run: () => void;
 }
 
-/** Settings, scrolled to the Simple mode group. */
-function openSimpleSettings() {
-  useStore.getState().setView('settings');
-  requestAnimationFrame(() => document.getElementById('settings-simple')?.scrollIntoView({ block: 'start' }));
-}
+type Item = { id: string; command: Command } | { id: string; setting: SettingEntry };
 
-/** Ctrl/Cmd+K command palette for fast navigation and actions. */
+/**
+ * Ctrl/Cmd+K command palette for fast navigation and actions. Typing also
+ * lists matching settings: each shows its switch or choice to change right
+ * here (Enter flips or steps it), and matching Settings groups to jump to.
+ */
 export function CommandPalette() {
   const { paletteOpen, setPaletteOpen, setView, newChat, newTerminal, toggleContextPanel, settings } = useStore(
     useShallow((s) => ({
@@ -59,12 +61,12 @@ export function CommandPalette() {
       { id: 'toggle-context', label: 'Toggle context panel', run: () => toggleContextPanel() },
       { id: 'feedback', label: 'Send feedback', hint: 'Help', run: openFeedback },
       { id: 'mode', label: expert ? 'Switch to Simple' : 'Switch to Expert', hint: expert ? 'Everyday controls' : 'Every control', run: () => setExpert(!expert) },
-      { id: 'simple-settings', label: 'Choose what Simple shows', hint: 'Settings', run: openSimpleSettings },
+      { id: 'simple-settings', label: 'Choose what Simple shows', hint: 'Settings', run: () => openSettingsGroup('simple') },
       // Controls out of sight in this mode stay findable: Expert-only ones
       // switch to Expert, hidden ones open the setting that hides them.
       ...SIMPLE_ITEMS.filter((i) => i.platforms.includes('desktop') && !simpleShown(i.id, expert, choices, localLoaded)).map((i): Command => (
         simpleVisibility(i.id, choices) === 'hide'
-          ? { id: `simple-${i.id}`, label: i.label, hint: 'Hidden in Settings', run: openSimpleSettings }
+          ? { id: `simple-${i.id}`, label: i.label, hint: 'Hidden in Settings', run: () => openSettingsGroup('simple') }
           : { id: `simple-${i.id}`, label: i.label, hint: 'Shown in Expert', run: () => setExpert(true) })),
       // Only when there is a daemon to reach: an entry that can only fail is
       // worse than no entry. Connected, it is the way back to the tab.
@@ -83,7 +85,13 @@ export function CommandPalette() {
     ];
   }, [setView, newChat, newTerminal, toggleContextPanel, hypergate, hypergateConnected, settings, expert, choices, localLoaded]);
 
-  const filtered = commands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase()));
+  const q = query.toLowerCase();
+  const pages = matchSettingsPages(query).map((p): Command => ({ id: `settings-${p.group}`, label: `Settings: ${p.label}`, hint: 'Settings', run: () => openSettingsGroup(p.group) }));
+  const filtered: Item[] = [
+    ...commands.filter((c) => c.label.toLowerCase().includes(q)).map((command) => ({ id: command.id, command })),
+    ...pages.map((command) => ({ id: command.id, command })),
+    ...(settings ? matchSettings(query) : []).map((setting) => ({ id: `setting-${setting.id}`, setting })),
+  ];
 
   useEffect(() => {
     if (paletteOpen) {
@@ -94,30 +102,40 @@ export function CommandPalette() {
 
   if (!paletteOpen) return null;
 
-  const choose = (c?: Command) => {
-    if (!c) return;
-    c.run();
-    setPaletteOpen(false);
+  /** Commands run and close; a setting changes in place and the palette stays. */
+  const choose = (item?: Item, back = false) => {
+    if (!item) return;
+    if ('command' in item) {
+      item.command.run();
+      setPaletteOpen(false);
+      return;
+    }
+    const { control } = item.setting;
+    if (!settings) return;
+    if (control.kind === 'toggle') { void saveSettings(control.set(!control.get(settings), settings)); return; }
+    const at = control.options.findIndex((o) => o.value === control.get(settings));
+    const next = control.options[(at + (back ? -1 : 1) + control.options.length) % control.options.length];
+    void saveSettings(control.set(next.value, settings));
   };
 
   return (
     <Modal
       title="Command palette"
-      description="Search commands, then press Enter to run the highlighted one."
+      description="Search commands and settings. Enter runs the highlighted command, or flips or steps the highlighted setting."
       onClose={() => setPaletteOpen(false)}
       align="top"
       initialFocus={inputRef}
-      className="card fade-in w-[520px] overflow-hidden p-0 shadow-2xl"
+      className="card w-[520px] max-w-[calc(100vw-16px)] overflow-hidden p-0 shadow-(--shadow-float)"
     >
       <input
         ref={inputRef}
-        className="w-full border-b border-line bg-transparent px-4 py-3 text-[14px] outline-hidden"
-        placeholder="Type a command…"
+        className="w-full border-b border-line bg-transparent px-4 py-3 text-sm outline-hidden"
+        placeholder="Type a command or setting…"
         role="combobox"
         aria-expanded
         aria-controls={listId}
         aria-activedescendant={filtered[active] ? `${listId}-${filtered[active].id}` : undefined}
-        aria-label="Type a command"
+        aria-label="Type a command or setting"
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -126,25 +144,37 @@ export function CommandPalette() {
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') setActive((a) => Math.min(a + 1, filtered.length - 1));
           else if (e.key === 'ArrowUp') setActive((a) => Math.max(a - 1, 0));
-          else if (e.key === 'Enter') choose(filtered[active]);
+          else if (e.key === 'Enter') { e.preventDefault(); choose(filtered[active], e.shiftKey); }
         }}
       />
       <div id={listId} role="listbox" aria-label="Commands" className="max-h-80 overflow-y-auto py-1">
-        {filtered.length === 0 && <div className="px-4 py-3 text-[13px] text-ink-faint">No matching commands.</div>}
-        {filtered.map((c, i) => (
-          <button
-            key={c.id}
-            id={`${listId}-${c.id}`}
-            role="option"
-            aria-selected={i === active}
-            className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-[13px] ${i === active ? 'bg-surface-2' : ''}`}
-            onMouseEnter={() => setActive(i)}
-            onClick={() => choose(c)}
-          >
-            <span>{c.label}</span>
-            {c.hint && <span className="text-[11px] text-ink-faint">{c.hint}</span>}
-          </button>
-        ))}
+        {filtered.length === 0 && <div className="px-4 py-3 text-sm text-ink-faint">No matching commands or settings.</div>}
+        {filtered.map((item, i) => {
+          const row = `flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm ${i === active ? 'bg-surface-2' : ''}`;
+          if ('command' in item) {
+            const c = item.command;
+            return (
+              <button key={item.id} id={`${listId}-${item.id}`} role="option" aria-selected={i === active} className={row} onMouseEnter={() => setActive(i)} onClick={() => choose(item)}>
+                <span>{c.label}</span>
+                {c.hint && <span className="text-2xs text-ink-faint">{c.hint}</span>}
+              </button>
+            );
+          }
+          const e = item.setting;
+          const control = e.control;
+          const where = SETTINGS_PAGES.find((p) => p.group === e.group)?.label;
+          return (
+            <div key={item.id} id={`${listId}-${item.id}`} role="option" aria-selected={i === active} className={`${row} py-2`} onMouseEnter={() => setActive(i)} data-palette-setting={e.id}>
+              <span className="min-w-0 truncate">{e.label}<span className="ml-2 text-2xs text-ink-faint">Settings: {where}</span></span>
+              {settings && (control.kind === 'toggle'
+                ? <Toggle label={e.label} value={control.get(settings)} onChange={(v) => void saveSettings(control.set(v, settings))} />
+                : <select className="input max-w-[180px] shrink-0 py-1 text-xs" aria-label={e.label} value={control.get(settings)}
+                    onChange={(ev) => void saveSettings(control.set(ev.target.value, settings))}>
+                    {control.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>)}
+            </div>
+          );
+        })}
       </div>
     </Modal>
   );

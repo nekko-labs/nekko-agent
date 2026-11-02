@@ -61,6 +61,8 @@ fn record(id: &str, priority: Priority, slots: u8) -> RunnerRecord {
             group_id: None,
             repos: vec![],
             allow_public: false,
+            slug: None,
+            fork_approval_open: false,
         }),
         image: None,
     }
@@ -755,6 +757,67 @@ async fn start_failures_stop_retrying_after_three() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_guest_that_stops_before_its_runner_connects_is_a_failed_start() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    h.tick_for(20).await;
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    let audit = h.audit();
+    assert_eq!(audit.len(), 1);
+    assert_eq!((audit[0].result, audit[0].repo.as_deref()), (AuditResult::FailedToStart, None));
+    assert_eq!(h.view().today.jobs, 0);
+    assert_eq!(h.count("remove "), 1);
+    assert!(h.vms().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn guests_that_keep_stopping_early_stop_retrying_after_three() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    for run in 0..3 {
+        h.tick_for(10).await;
+        h.vm.finish(run, Stopped::Guest);
+    }
+    h.tick_for(60).await;
+    assert_eq!(h.view().state, RunnerState::Error);
+    assert_eq!(h.count("clone_bundle"), 3);
+    assert!(h.view().error.unwrap().contains("powered off"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_healthy_vm_clears_the_early_stops_before_it() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    for run in 0..2 {
+        h.tick_for(10).await;
+        h.vm.finish(run, Stopped::Guest);
+    }
+    h.tick_for(10).await;
+    h.status(RunnerStatus::Idle);
+    h.tick_for(20).await;
+    h.vm.finish(2, Stopped::Error("killed".into()));
+    h.status(RunnerStatus::Offline);
+    h.tick_for(10).await;
+    h.vm.finish(3, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_ne!(h.view().state, RunnerState::Error);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_job_no_poll_saw_still_counts() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    h.tick_for(20).await;
+    // GitHub forgets a JIT runner once its job is done.
+    h.status(RunnerStatus::Missing);
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_eq!(h.audit()[0].result, AuditResult::Finished);
+    assert_eq!(h.view().today.jobs, 1);
+}
+
+#[tokio::test(start_paused = true)]
 async fn auth_error_marks_runner_error() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
     h.prov.0.lock().unwrap().mint.push_back(Err(ProviderError::Auth("revoked".into())));
@@ -822,6 +885,16 @@ async fn views_serialize_camel_case() {
     assert_eq!(v[0]["slots"][0]["state"], "starting");
     assert!(v[0]["slots"][0].get("drainEndsAt").is_some());
     assert_eq!(v[0]["today"], json!({"jobs": 0, "seconds": 0}));
+}
+
+#[tokio::test(start_paused = true)]
+async fn views_carry_the_repos_an_org_runner_serves() {
+    let mut r = record("r1", Priority::Balanced, 1);
+    let Link::Github(g) = &mut r.link else { panic!("a GitHub record") };
+    g.repos = vec!["nekko-labs/app".into(), "nekko-labs/site".into()];
+    let h = harness(vec![r]);
+    let v = serde_json::to_value(h.sup.views()).unwrap();
+    assert_eq!(v[0]["repos"], json!(["nekko-labs/app", "nekko-labs/site"]));
 }
 
 #[tokio::test(start_paused = true)]
@@ -1058,6 +1131,45 @@ fn runners_rig(h: H) -> Rig {
     Rig { runners, dir, vm, log, vault }
 }
 
+#[tokio::test(start_paused = true)]
+async fn an_image_build_holds_the_mac_awake_with_no_runner() {
+    let mut h = harness(vec![]);
+    let building = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    h.sup.set_building(building.clone());
+    h.tick_for(5).await;
+    assert_eq!(h.awake.lock().unwrap().last(), Some(&true));
+    building.store(false, std::sync::atomic::Ordering::SeqCst);
+    h.tick_for(5).await;
+    assert_eq!(h.awake.lock().unwrap().last(), Some(&false));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_finished_build_turns_its_runner_on_in_the_chosen_mode() {
+    let Rig { runners, dir, .. } = runners_rig(harness(vec![]));
+    runners.route("runner:setEnabled", &[json!("r1"), json!(false)]).await.unwrap();
+    runners.enable_after_build("r1", Priority::Balanced).await.unwrap();
+    let saved = crate::runner::store::Store::new(dir.path()).load();
+    assert!(saved[0].config.settings.enabled);
+    assert_eq!(saved[0].config.settings.priority, Priority::Balanced);
+    // Removed during the build: nothing to turn on, and no error.
+    runners.enable_after_build("gone", Priority::Balanced).await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_finished_build_leaves_a_public_runner_off_until_fork_approval_is_settled() {
+    let Rig { runners, dir, .. } = runners_rig(harness(vec![]));
+    runners.route("runner:setEnabled", &[json!("r1"), json!(false)]).await.unwrap();
+    let store = crate::runner::store::Store::new(dir.path());
+    let mut records = store.load();
+    let Link::Github(g) = &mut records[0].link else { panic!("a GitHub record") };
+    g.fork_approval_open = true;
+    store.save(&records).unwrap();
+    runners.enable_after_build("r1", Priority::Balanced).await.unwrap();
+    let saved = store.load();
+    assert!(!saved[0].config.settings.enabled);
+    assert_eq!(saved[0].config.settings.priority, Priority::Balanced);
+}
+
 /// Lets paused time run, a second at a time, until `f` holds.
 async fn wait_for(what: &str, f: impl Fn() -> bool) {
     for _ in 0..600 {
@@ -1136,6 +1248,51 @@ async fn reconnecting_a_scope_to_another_app_forgets_the_old_key() {
     let saved = crate::runner::store::Store::new(dir.path()).load();
     assert_eq!(saved[0].github().unwrap().app_id, 2);
     assert_eq!(vault.get("github-app-1"), None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn reconnecting_turns_a_runner_off_only_for_an_open_fork_approval() {
+    let Rig { runners, dir, .. } = runners_rig(harness(vec![]));
+    let mut again = record("new-id", Priority::RunnerFirst, 1);
+    again.config.scope = Scope::Org { org: "ACME".into() };
+    // Confirm connects off so that setup can turn a new runner on. A running one must not stop for it.
+    again.config.settings.enabled = false;
+    runners.save_connected(again.clone(), None).await.unwrap();
+    assert!(crate::runner::store::Store::new(dir.path()).load()[0].config.settings.enabled);
+    again.link = Link::Github(GithubLink { fork_approval_open: true, ..again.github().unwrap().clone() });
+    runners.save_connected(again.clone(), None).await.unwrap();
+    assert!(!crate::runner::store::Store::new(dir.path()).load()[0].config.settings.enabled);
+    // Held off stays off: a connect never turns a runner on by itself.
+    again.config.settings.enabled = true;
+    runners.save_connected(again, None).await.unwrap();
+    assert!(!crate::runner::store::Store::new(dir.path()).load()[0].config.settings.enabled);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_open_fork_approval_holds_the_runner_off_until_it_is_settled() {
+    let Rig { runners, .. } = runners_rig(harness(vec![]));
+    let mut held = record("r2", Priority::RunnerFirst, 1);
+    held.config.scope = Scope::Repo { owner: "o".into(), repo: "public".into() };
+    held.config.settings.enabled = false;
+    held.link = Link::Github(GithubLink { fork_approval_open: true, ..held.github().unwrap().clone() });
+    let view = runners.save_connected(held, None).await.unwrap();
+    assert_eq!(view["forkApprovalOpen"], true);
+
+    let id = serde_json::json!("r2");
+    let on = serde_json::json!(true);
+    let err = runners.route("runner:setEnabled", &[id.clone(), on.clone()]).await.unwrap_err();
+    assert!(err.contains("Connect GitHub"), "{err}");
+    let patch = serde_json::json!({ "enabled": true });
+    assert!(runners.route("runner:update", &[id.clone(), patch]).await.is_err());
+    // Anything else about the runner can still change.
+    let tweak = serde_json::json!({ "maxJobMinutes": 60 });
+    assert!(runners.route("runner:update", &[id.clone(), tweak]).await.is_ok());
+
+    let said = serde_json::json!({ "runnerId": "r2", "confirmed": true });
+    runners.route("runner:setForkApproval", &[said]).await.unwrap();
+    let view = runners.route("runner:setEnabled", &[id, on]).await.unwrap();
+    assert_eq!(view["config"]["settings"]["enabled"], true);
+    assert_eq!(view["forkApprovalOpen"], false);
 }
 
 /// A 16 GB Mac: room for exactly one 8 GB VM, and the VM's own memory shows as used.

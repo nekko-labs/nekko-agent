@@ -1,6 +1,7 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { homedir, hostname, userInfo } from 'node:os';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
 if (process.isMainFrame) contextBridge.exposeInMainWorld('nekkoPreview', { open: (source: string) => ipcRenderer.invoke(PREVIEW_CHANNEL, source) });
 import type {
@@ -355,11 +356,21 @@ const api: NekkoApi = {
   listWorkflowRuns: (workflowId) => inv(IpcChannels.workflowRuns, workflowId),
   listWorkflowSkillDefs: () => inv(IpcChannels.workflowSkillDefs),
   dispatchWorkflowEvent: (event) => inv(IpcChannels.workflowEvent, event),
+  imageStatus: () => inv(IpcChannels.runnerImageStatus),
+  imagePlan: () => inv(IpcChannels.runnerImagePlan),
+  buildImage: (req) => inv(IpcChannels.runnerImageBuild, req),
+  resumeImage: () => inv(IpcChannels.runnerImageResume),
+  cancelImage: () => inv(IpcChannels.runnerImageCancel),
   listRunners: () => inv(IpcChannels.runnerList),
   connectRunner: (req) => inv(IpcChannels.runnerConnect, req),
   updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
   removeRunner: (id) => inv(IpcChannels.runnerRemove, id),
   setRunnerEnabled: (id, enabled) => inv(IpcChannels.runnerSetEnabled, id, enabled),
+  githubAccounts: () => inv(IpcChannels.runnerGithubAccounts),
+  githubStart: (req) => inv(IpcChannels.runnerGithubStart, req),
+  githubStatus: () => inv(IpcChannels.runnerGithubStatus),
+  githubCancel: () => inv(IpcChannels.runnerGithubCancel),
+  setForkApproval: (req) => inv(IpcChannels.runnerSetForkApproval, req),
 
   listConnectors: () => inv(IpcChannels.connectorsList),
   connectConnector: (kind: ConnectorKind, token, settings) => inv(IpcChannels.connectorConnect, kind, token, settings),
@@ -428,6 +439,7 @@ const api: NekkoApi = {
   getClaudePolicy: () => inv(IpcChannels.claudePolicy),
   getClaudeCapability: (providerId, capability) => inv(IpcChannels.claudeCapability, providerId, capability),
   getClaudePlanUsage: (providerId) => inv(IpcChannels.claudePlanUsage, providerId),
+  claudeBackgroundTasks: () => inv(IpcChannels.claudeBackgroundTasks),
   getClaudeCodeStatus: (providerId, account) => inv(IpcChannels.claudeCodeStatus, providerId, account),
   getMcpStatus: () => inv(IpcChannels.mcpStatus),
   detectHypergate: (port?: number) => inv(IpcChannels.mcpHypergate, port),
@@ -504,10 +516,20 @@ const api: NekkoApi = {
     bus.on(IpcEvents.workflowsUpdated, listener);
     return () => bus.removeListener(IpcEvents.workflowsUpdated, listener);
   },
+  onImageChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').ImageView) => cb(view);
+    bus.on(IpcEvents.runnerImageChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerImageChanged, listener);
+  },
   onRunnersChanged: (cb) => {
     const listener = (_: unknown, views: import('@nekko-agent/shared').RunnerView[]) => cb(views);
     bus.on(IpcEvents.runnerChanged, listener);
     return () => bus.removeListener(IpcEvents.runnerChanged, listener);
+  },
+  onGithubSetupChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').GithubSetupView) => cb(view);
+    bus.on(IpcEvents.runnerGithubChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerGithubChanged, listener);
   },
   onDownloadsUpdated: (cb) => {
     const listener = (_: unknown, jobs: import('@nekko-agent/shared').DownloadJob[]) => cb(jobs);
@@ -543,6 +565,12 @@ const api: NekkoApi = {
 };
 
 contextBridge.exposeInMainWorld('nekko', api);
+
+// Presenter mode (NEKKO_PRESENTER=1): the renderer masks these names, emails
+// and key-shaped text outside Settings, for screen recordings.
+if (process.env.NEKKO_PRESENTER === '1') {
+  contextBridge.exposeInMainWorld('nekkoPresenter', { user: userInfo().username, home: homedir(), host: hostname() });
+}
 
 /**
  * The window-chrome bridge, separate from the app API on purpose: `NekkoApi`

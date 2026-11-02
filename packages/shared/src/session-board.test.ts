@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage, PendingInput } from './chat.js';
-import { isStalled, recentTurns, sessionLane, waitingSince } from './session-board.js';
+import { isStalled, recentTurns, sessionLane } from './session-board.js';
 
 const msg = (role: ChatMessage['role'], content: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({
   id: `m_${role}_${content.slice(0, 4)}`,
@@ -81,15 +81,6 @@ describe('sessionLane', () => {
     ];
     expect(isStalled(recovered)).toBe(false);
     expect(sessionLane({ running: false, messages: recovered })).toEqual({ lane: 'idle' });
-  });
-});
-
-describe('waitingSince', () => {
-  it('reports when the wait started, so the longest wait sorts first', () => {
-    expect(waitingSince(question)).toBe(1_000);
-    expect(waitingSince(approval)).toBe(2_000);
-    expect(waitingSince(undefined)).toBe(0);
-    expect(waitingSince({ sessionId: 's' })).toBe(0);
   });
 });
 

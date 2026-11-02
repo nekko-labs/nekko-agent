@@ -7,7 +7,7 @@ async fn generates_a_design_on_the_default_provider() {
     let data = std::env::temp_dir().join(format!("nekkod-design-{}", std::process::id()));
     std::fs::create_dir_all(&data).unwrap();
     let model = scripted_model(vec![say_text("```html\n<!DOCTYPE html><p>Pricing</p>\n```")]).await;
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     // No default provider yet: the refusal names what is missing.
     let (status, refused) =
         post(d.port, "design:generate", json!(["w1", { "prompt": "A pricing page" }]), Some(TOKEN)).await;
@@ -80,7 +80,7 @@ async fn suggests_replies_and_fills_prompt_parts_on_the_chats_model() {
         }
         std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec_pretty(&s).unwrap()).unwrap();
     }
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let (status, suggested) = post(d.port, "chat:suggest", json!(["s_side"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{suggested}");
@@ -146,7 +146,7 @@ async fn builds_a_linked_spec_on_the_chats_provider() {
     // Written before launch: a `settings:update` racing the launch's own
     // provider write (the engine entry) can lose `p1`.
     std::fs::write(data.join("settings.json"), folder.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (status, built) = post(d.port, "spec:build", json!(["s_spec"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{built}");
     assert_eq!(built["ok"], json!(true), "{built}");

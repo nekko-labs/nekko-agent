@@ -52,8 +52,8 @@ impl SessionStart {
     }
 }
 
-/// Everything a launch needs. Nothing here touches the environment: the
-/// child gets the user's as it is.
+/// Everything a launch needs. The child gets the user's environment with
+/// only the changes in `env`.
 #[derive(Debug, Clone)]
 pub struct LaunchSpec {
     pub bin: ClaudeBin,
@@ -72,6 +72,8 @@ pub struct LaunchSpec {
     /// `CLAUDE_CONFIG_DIR` for a second Claude Code account; `None` runs on
     /// the user's default login.
     pub config_dir: Option<PathBuf>,
+    /// Environment changes for the child: set a variable, or remove it (`None`).
+    pub env: Vec<(String, Option<String>)>,
 }
 
 /// The command line, without the binary. Always stream-json both ways with
@@ -148,6 +150,8 @@ pub struct Session {
     peeked: Option<String>,
     /// Background tasks Claude Code says are running (`background_tasks_changed`).
     background: usize,
+    /// Told the new count whenever it changes ([`Session::on_background_change`]).
+    on_background: Option<Box<dyn Fn(usize) + Send + Sync>>,
     /// Whether this child has reported a `command_lifecycle` for a message.
     reports_commands: bool,
     stderr: Arc<Mutex<VecDeque<String>>>,
@@ -169,6 +173,12 @@ impl Session {
             .kill_on_drop(true);
         if let Some(dir) = &spec.config_dir {
             cmd.env("CLAUDE_CONFIG_DIR", dir);
+        }
+        for (name, value) in &spec.env {
+            match value {
+                Some(v) => cmd.env(name, v),
+                None => cmd.env_remove(name),
+            };
         }
         let mut child = cmd.spawn()?;
         let pid = child.id();
@@ -206,6 +216,7 @@ impl Session {
             lines,
             peeked: None,
             background: 0,
+            on_background: None,
             reports_commands: false,
             stderr,
             claude_session_id,
@@ -245,6 +256,12 @@ impl Session {
         self.background > 0
     }
 
+    /// Hear the number of background tasks each time it changes, and 0 when
+    /// the child ends with some still counted (they end with it).
+    pub fn on_background_change(&mut self, f: impl Fn(usize) + Send + Sync + 'static) {
+        self.on_background = Some(Box::new(f));
+    }
+
     fn note(&mut self, line: &str) {
         if !line.contains("background_tasks_changed") {
             return;
@@ -252,7 +269,16 @@ impl Session {
         if let Ok(v) = serde_json::from_str::<Value>(line)
             && v.get("subtype").and_then(Value::as_str) == Some("background_tasks_changed")
         {
-            self.background = v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len);
+            self.set_background(v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len));
+        }
+    }
+
+    fn set_background(&mut self, n: usize) {
+        if n != self.background {
+            self.background = n;
+            if let Some(f) = &self.on_background {
+                f(n);
+            }
         }
     }
 
@@ -275,6 +301,7 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.kill_tree();
+        self.set_background(0);
     }
 }
 
@@ -379,6 +406,7 @@ mod tests {
             permission_prompt_tool: Some("mcp__nekko_bridge__approve".into()),
             add_dirs: vec!["D:/other".into()],
             config_dir: None,
+            env: Vec::new(),
         }
     }
 

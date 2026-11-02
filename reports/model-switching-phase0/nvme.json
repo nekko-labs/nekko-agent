@@ -1,0 +1,368 @@
+{
+  "machine": "RTX 5090 32 GB (PCIe 5 x16), 47 GB RAM, Windows 11, llama.cpp b11149 CUDA",
+  "server": "~/.nekko-agent/engine/win-x64-cuda/llama-server.exe",
+  "args": [
+    "--n-gpu-layers",
+    "999",
+    "--ctx-size",
+    "4096"
+  ],
+  "repeats": 3,
+  "models": [
+    {
+      "name": "Qwen3 8B Q4_K_M",
+      "sizeBytes": 5027784512,
+      "volumes": [
+        {
+          "volume": "NVMe (Samsung 9100 PRO, PCIe 5)",
+          "rawReadMbps": [
+            10322.902105936135,
+            10315.082653381283,
+            10509.611892615663
+          ],
+          "cachedReadMbps": [
+            8583.359744058782,
+            7186.675481251307,
+            7745.266122451621
+          ],
+          "cold": [
+            {
+              "readyMs": 3429.1391999999996,
+              "startupMs": 139.512,
+              "weightsMs": 3268.917,
+              "serveMs": 20.71019999999953,
+              "firstTokenMs": 74.02069999999999,
+              "hotTokenMs": 57.043499999999995
+            },
+            {
+              "readyMs": 2980.9373,
+              "startupMs": 122.402,
+              "weightsMs": 2840.946,
+              "serveMs": 17.589300000000094,
+              "firstTokenMs": 165.05939999999998,
+              "hotTokenMs": 111.50540000000001
+            },
+            {
+              "readyMs": 3417.6647,
+              "startupMs": 112.633,
+              "weightsMs": 3281.0800000000004,
+              "serveMs": 23.95169999999962,
+              "firstTokenMs": 107.49409999999999,
+              "hotTokenMs": 93.1959
+            }
+          ],
+          "warm": [
+            {
+              "readyMs": 2288.3016000000002,
+              "startupMs": 104.099,
+              "weightsMs": 2167.932,
+              "serveMs": 16.270600000000286,
+              "firstTokenMs": 62.0246,
+              "hotTokenMs": 37.0449
+            },
+            {
+              "readyMs": 2500.1908,
+              "startupMs": 132.506,
+              "weightsMs": 2333.603,
+              "serveMs": 34.08179999999993,
+              "firstTokenMs": 47.190999999999995,
+              "hotTokenMs": 32.2183
+            },
+            {
+              "readyMs": 2843.4987,
+              "startupMs": 135.225,
+              "weightsMs": 2692.64,
+              "serveMs": 15.633700000000317,
+              "firstTokenMs": 151.07909999999998,
+              "hotTokenMs": 142.4293
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gemma 4 E4B Q4_K_M",
+      "sizeBytes": 5335289664,
+      "volumes": [
+        {
+          "volume": "NVMe (Samsung 9100 PRO, PCIe 5)",
+          "rawReadMbps": [
+            10467.865470209374,
+            10291.266125302809,
+            10841.961857208129
+          ],
+          "cachedReadMbps": [
+            9304.530901834769,
+            8637.95179458884,
+            7945.393558579092
+          ],
+          "cold": [
+            {
+              "readyMs": 4017.6786,
+              "startupMs": 129.638,
+              "weightsMs": 3868.8940000000002,
+              "serveMs": 19.146600000000035,
+              "firstTokenMs": 320.3279,
+              "hotTokenMs": 178.8399
+            },
+            {
+              "readyMs": 4117.5864,
+              "startupMs": 139.762,
+              "weightsMs": 3956.9819999999995,
+              "serveMs": 20.842400000000453,
+              "firstTokenMs": 323.3485,
+              "hotTokenMs": 224.5326
+            },
+            {
+              "readyMs": 4014.9675,
+              "startupMs": 122.974,
+              "weightsMs": 3875.247,
+              "serveMs": 16.746500000000196,
+              "firstTokenMs": 321.1516,
+              "hotTokenMs": 252.71349999999998
+            }
+          ],
+          "warm": [
+            {
+              "readyMs": 3479.3018,
+              "startupMs": 130.566,
+              "weightsMs": 3306.052,
+              "serveMs": 42.68380000000025,
+              "firstTokenMs": 285.80129999999997,
+              "hotTokenMs": 249.3322
+            },
+            {
+              "readyMs": 3462.7032999999997,
+              "startupMs": 142.344,
+              "weightsMs": 3276.654,
+              "serveMs": 43.705299999999625,
+              "firstTokenMs": 294.6122,
+              "hotTokenMs": 194.4717
+            },
+            {
+              "readyMs": 3501.3504,
+              "startupMs": 131.867,
+              "weightsMs": 3351.6099999999997,
+              "serveMs": 17.873399999999947,
+              "firstTokenMs": 290.3862,
+              "hotTokenMs": 222.2294
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gemma 4 12B Q4_K_M",
+      "sizeBytes": 7381384864,
+      "volumes": [
+        {
+          "volume": "NVMe (Samsung 9100 PRO, PCIe 5)",
+          "rawReadMbps": [
+            10395.343857357853,
+            9902.115393837448,
+            10520.269360137403
+          ],
+          "cachedReadMbps": [
+            7570.144913386304,
+            7541.033058467594,
+            7920.787311605403
+          ],
+          "cold": [
+            {
+              "readyMs": 6202.2873,
+              "startupMs": 137.321,
+              "weightsMs": 6023.42,
+              "serveMs": 41.546299999999974,
+              "firstTokenMs": 466.1988,
+              "hotTokenMs": 374.2793
+            },
+            {
+              "readyMs": 6132.1239,
+              "startupMs": 148.383,
+              "weightsMs": 5934.571,
+              "serveMs": 49.16989999999987,
+              "firstTokenMs": 492.79699999999997,
+              "hotTokenMs": 390.6382
+            },
+            {
+              "readyMs": 5846.0866,
+              "startupMs": 135.783,
+              "weightsMs": 5676.6759999999995,
+              "serveMs": 33.6275999999998,
+              "firstTokenMs": 463.2239,
+              "hotTokenMs": 406.248
+            }
+          ],
+          "warm": [
+            {
+              "readyMs": 5296.0061,
+              "startupMs": 143.509,
+              "weightsMs": 5116.606,
+              "serveMs": 35.891099999999824,
+              "firstTokenMs": 442.9749,
+              "hotTokenMs": 375.31530000000004
+            },
+            {
+              "readyMs": 5579.0321,
+              "startupMs": 165.89,
+              "weightsMs": 5351.717,
+              "serveMs": 61.425100000000384,
+              "firstTokenMs": 433.3869,
+              "hotTokenMs": 400.7118
+            },
+            {
+              "readyMs": 5543.5996000000005,
+              "startupMs": 138.602,
+              "weightsMs": 5358.478,
+              "serveMs": 46.51960000000054,
+              "firstTokenMs": 434.9464,
+              "hotTokenMs": 394.1138
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Qwen3 8B Q4_K_M, --load-mode none",
+      "sizeBytes": 5027784512,
+      "volumes": [
+        {
+          "volume": "NVMe (Samsung 9100 PRO, PCIe 5)",
+          "rawReadMbps": [
+            10594.869567405343,
+            10498.929800125254,
+            10927.646713997263
+          ],
+          "cachedReadMbps": [
+            7361.992614263667,
+            12036.200429041428,
+            11443.816061679077
+          ],
+          "cold": [
+            {
+              "readyMs": 2476.0141999999996,
+              "startupMs": 125.553,
+              "weightsMs": 2299.422,
+              "serveMs": 51.03919999999971,
+              "firstTokenMs": 160.722,
+              "hotTokenMs": 122.09219999999999
+            },
+            {
+              "readyMs": 2130.5254,
+              "startupMs": 150.085,
+              "weightsMs": 1953.862,
+              "serveMs": 26.578399999999874,
+              "firstTokenMs": 46.282700000000006,
+              "hotTokenMs": 34.202799999999996
+            },
+            {
+              "readyMs": 2071.7445,
+              "startupMs": 113.931,
+              "weightsMs": 1926.12,
+              "serveMs": 31.693499999999858,
+              "firstTokenMs": 155.5021,
+              "hotTokenMs": 128.76090000000002
+            }
+          ],
+          "warm": [
+            {
+              "readyMs": 1987.5619,
+              "startupMs": 130.139,
+              "weightsMs": 1814.7220000000002,
+              "serveMs": 42.70089999999982,
+              "firstTokenMs": 171.5663,
+              "hotTokenMs": 116.0618
+            },
+            {
+              "readyMs": 1413.6945999999998,
+              "startupMs": 117.682,
+              "weightsMs": 1282.757,
+              "serveMs": 13.255599999999731,
+              "firstTokenMs": 152.734,
+              "hotTokenMs": 140.5502
+            },
+            {
+              "readyMs": 1410.8248999999998,
+              "startupMs": 119.392,
+              "weightsMs": 1258.08,
+              "serveMs": 33.35289999999986,
+              "firstTokenMs": 73.8089,
+              "hotTokenMs": 57.5796
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Qwen3 8B Q4_K_M, --load-mode dio",
+      "sizeBytes": 5027784512,
+      "volumes": [
+        {
+          "volume": "NVMe (Samsung 9100 PRO, PCIe 5)",
+          "rawReadMbps": [
+            10778.532953952852,
+            10344.891670456209,
+            10956.879048910145
+          ],
+          "cachedReadMbps": [
+            10032.89067791165,
+            9839.283854174311,
+            11932.744926645362
+          ],
+          "cold": [
+            {
+              "readyMs": 1821.793,
+              "startupMs": 107.656,
+              "weightsMs": 1686.482,
+              "serveMs": 27.654999999999973,
+              "firstTokenMs": 47.023500000000006,
+              "hotTokenMs": 34.1469
+            },
+            {
+              "readyMs": 2374.4898000000003,
+              "startupMs": 144.268,
+              "weightsMs": 2203.159,
+              "serveMs": 27.062800000000152,
+              "firstTokenMs": 162.0114,
+              "hotTokenMs": 138.41899999999998
+            },
+            {
+              "readyMs": 1749.4266,
+              "startupMs": 100.649,
+              "weightsMs": 1634.8200000000002,
+              "serveMs": 13.957599999999957,
+              "firstTokenMs": 44.7646,
+              "hotTokenMs": 34.9233
+            }
+          ],
+          "warm": [
+            {
+              "readyMs": 1501.9499,
+              "startupMs": 116.758,
+              "weightsMs": 1356.725,
+              "serveMs": 28.466900000000123,
+              "firstTokenMs": 47.927200000000006,
+              "hotTokenMs": 38.917699999999996
+            },
+            {
+              "readyMs": 1237.8134,
+              "startupMs": 114.738,
+              "weightsMs": 1097.831,
+              "serveMs": 25.24440000000004,
+              "firstTokenMs": 47.1837,
+              "hotTokenMs": 35.1999
+            },
+            {
+              "readyMs": 1223.8709000000001,
+              "startupMs": 129.255,
+              "weightsMs": 1050.5839999999998,
+              "serveMs": 44.03190000000018,
+              "firstTokenMs": 44.9562,
+              "hotTokenMs": 31.5852
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

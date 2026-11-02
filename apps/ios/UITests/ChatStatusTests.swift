@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class ChatStatusTests: XCTestCase {
     func testStatusShapesAndMascotGreeting() {
         let app = XCUIApplication()

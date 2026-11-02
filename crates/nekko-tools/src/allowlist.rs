@@ -56,6 +56,9 @@ fn unreadable(label: &'static str, evidence: impl Into<String>) -> Unreadable {
 pub(crate) struct Segment {
     pub words: Vec<String>,
     pub sep: &'static str,
+    /// Where each word ends in the command, in chars (just past its last
+    /// char or closing quote), so a word can be followed by an insertion.
+    pub ends: Vec<usize>,
 }
 
 impl Segment {
@@ -87,6 +90,7 @@ struct Lexer {
     d: Dialect,
     segments: Vec<Segment>,
     words: Vec<String>,
+    ends: Vec<usize>,
     word: String,
     /// The current word exists (a quoted empty string is still a word).
     in_word: bool,
@@ -102,6 +106,7 @@ impl Lexer {
     fn end_word(&mut self) {
         if self.in_word {
             self.words.push(std::mem::take(&mut self.word));
+            self.ends.push(self.i);
         }
         self.in_word = false;
         self.quoted = false;
@@ -110,7 +115,8 @@ impl Lexer {
     fn end_segment(&mut self, sep: &'static str) {
         self.end_word();
         if !self.words.is_empty() {
-            self.segments.push(Segment { words: std::mem::take(&mut self.words), sep });
+            let ends = std::mem::take(&mut self.ends);
+            self.segments.push(Segment { words: std::mem::take(&mut self.words), sep, ends });
         } else if let Some(last) = self.segments.last_mut() {
             // `a ;; b`, `a |\n b`: keep the first operator.
             if last.sep.is_empty() {
@@ -337,6 +343,7 @@ pub(crate) fn split(command: &str, d: Dialect) -> Result<Vec<Segment>, Unreadabl
         d,
         segments: Vec::new(),
         words: Vec::new(),
+        ends: Vec::new(),
         word: String::new(),
         in_word: false,
         quoted: false,
@@ -358,22 +365,31 @@ fn has_long(args: &[String], full: &str, min: usize) -> bool {
     })
 }
 
-/// `git` with a read-only subcommand and no option that writes or runs anything.
-fn git_read_only(args: &[String]) -> bool {
+/// The index in `args` (the words after `git`) of the subcommand, when only
+/// the global options a read-only command may carry come before it. `-c`,
+/// `--exec-path`, `--git-dir` and the rest can point git at commands or
+/// configuration of the caller's choosing.
+fn git_subcommand(args: &[String]) -> Option<usize> {
     let mut i = 0;
-    // Global options: only these. `-c`, `--exec-path`, `--git-dir` and the
-    // rest can point git at commands or configuration of the caller's choosing.
     while let Some(a) = args.get(i).filter(|a| a.starts_with('-')) {
         match a.as_str() {
             "--no-pager" | "-P" => i += 1,
             "-C" if args.get(i + 1).is_some() => i += 2,
-            _ => return false,
+            _ => return None,
         }
     }
-    let Some(sub) = args.get(i) else { return false };
+    args.get(i).map(|_| i)
+}
+
+/// `git` with a read-only subcommand and no option that writes or runs anything.
+fn git_read_only(args: &[String]) -> bool {
+    let Some(i) = git_subcommand(args) else { return false };
+    let sub = &args[i];
     let rest = &args[i + 1..];
-    // `--output` writes the patch to a file; `--ext-diff` runs a configured program.
-    let writes = has_long(rest, "--output", 5) || has_long(rest, "--ext-diff", 5);
+    // `--output` writes the patch to a file; `--ext-diff` and `--textconv`
+    // run configured programs (an auto-run diff gets `--no-ext-diff
+    // --no-textconv`, and a later `--textconv` would win over it).
+    let writes = has_long(rest, "--output", 5) || has_long(rest, "--ext-diff", 5) || has_long(rest, "--textconv", 7);
     match sub.as_str() {
         "status" | "diff" | "log" | "show" | "rev-parse" | "ls-files" | "blame" | "describe" => !writes,
         "branch" => {
@@ -440,6 +456,45 @@ pub(crate) fn read_only(words: &[String], d: Dialect) -> bool {
         }
         _ => false,
     }
+}
+
+/// The options that keep a git subcommand from running diff or textconv
+/// drivers named in configuration, for the subcommands that would.
+fn git_driver_off(sub: &str) -> Option<&'static str> {
+    match sub {
+        "diff" | "log" | "show" => Some(" --no-ext-diff --no-textconv"),
+        "blame" => Some(" --no-textconv"),
+        _ => None,
+    }
+}
+
+/// The command with `--no-ext-diff` and `--no-textconv` added right after
+/// each `git diff`, `log` and `show` in it (`--no-textconv` after `blame`),
+/// so an auto-run read-only git never runs an external diff or textconv
+/// program named in repository configuration. A command the lexer cannot
+/// read is returned unchanged (it is never auto-run).
+pub(crate) fn harden_git_command(command: &str, d: Dialect) -> String {
+    let Ok(segments) = split(command, d) else { return command.to_string() };
+    let mut inserts: Vec<(usize, &'static str)> = Vec::new();
+    for s in &segments {
+        let Some((name, args)) = s.words.split_first() else { continue };
+        if !name.eq_ignore_ascii_case("git") {
+            continue;
+        }
+        let Some(i) = git_subcommand(args) else { continue };
+        if let Some(flags) = git_driver_off(&args[i]) {
+            inserts.push((s.ends[i + 1], flags));
+        }
+    }
+    if inserts.is_empty() {
+        return command.to_string();
+    }
+    let mut chars: Vec<char> = command.chars().collect();
+    inserts.sort_by_key(|i| std::cmp::Reverse(i.0));
+    for (at, flags) in inserts {
+        chars.splice(at..at, flags.chars());
+    }
+    chars.into_iter().collect()
 }
 
 /// The command runs git in one of its simple commands (an unreadable command

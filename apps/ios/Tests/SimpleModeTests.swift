@@ -78,6 +78,18 @@ final class SimpleModeTests: XCTestCase {
         if case .summary(_, _, _, let running) = live[1] { XCTAssertTrue(running) } else { XCTFail() }
     }
 
+    func testAWakeUpIsAStepOfItsTurn() {
+        let rows: [TranscriptRow] = [
+            .block(.user(id: "u1", text: "Watch CI", at: nil, images: 0)),
+            .block(.tool(id: "t1", name: "read", label: "Read", status: .ok, output: nil, input: [:])),
+            .block(.user(id: "w1", text: "[Agent watch t-9]\nWatch deadline reached at 10:00", at: nil, images: 0)),
+            .block(.assistant(id: "a1", text: "CI is green.", reasoning: nil, streaming: false, interrupted: false)),
+        ]
+        let folded = TranscriptRow.folded(rows, open: [])
+        XCTAssertEqual(folded.map(\.id), ["u1", "steps-u1", "a1"])
+        if case .summary(_, let steps, _, _) = folded[1] { XCTAssertEqual(steps, 2) } else { XCTFail() }
+    }
+
     func testUnknownIdsAlwaysShow() {
         XCTAssertTrue(SimpleMode.shown("not-a-control", expert: false, ["not-a-control": .hide]))
         XCTAssertEqual(SimpleMode.visibility("not-a-control", [:]), .show)

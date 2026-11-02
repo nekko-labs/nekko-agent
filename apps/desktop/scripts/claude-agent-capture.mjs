@@ -40,10 +40,20 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto('file://' + path.join(out, `index-${theme}.html`).replaceAll('\\', '/'));
-    for (const scene of ['choices', 'checking', 'missing', 'signedOut', 'plan', 'apiKey', 'api', 'connected', 'another', 'confirm', 'blocked', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect']) {
+    for (const scene of ['choices', 'checking', 'missing', 'signedOut', 'plan', 'apiKey', 'api', 'connected', 'another', 'confirm', 'blocked', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect', 'planOff', 'planOn']) {
       await page.evaluate((s) => window.integration.show(s), scene);
       await page.waitForTimeout(250);
       if (scene === 'missing') await page.getByRole('button', { name: 'Install Claude Code' }).click();
+      if (scene === 'signedOut') {
+        await page.getByRole('button', { name: 'Connect: sign in to Claude Code' }).click();
+        await page.waitForTimeout(200);
+        const ran = await page.evaluate(() => window.integration.calls.at(-1)?.command);
+        if (ran !== 'claude auth login --claudeai') throw new Error(`sign-in ran ${ran}`);
+        // Claude Code's auto-update can hide the binary for a check or two: the panel must hold.
+        await page.evaluate(() => window.integration.setCodeStatus('missing'));
+        await page.waitForTimeout(3300);
+        if (await page.getByRole('button', { name: 'Install Claude Code' }).count()) throw new Error('one missed check flipped the panel to Install');
+      }
       if (scene === 'api') {
         await page.getByRole('radio', { name: 'API' }).click();
         await page.getByRole('button', { name: 'Connect: add a key or cloud account' }).click();

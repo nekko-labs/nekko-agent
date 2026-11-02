@@ -1,5 +1,7 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import com.nekko.android.voice.DictationController
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -14,6 +16,7 @@ import java.io.File
 import com.nekko.android.ui.chat.MicUi
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,6 +73,10 @@ import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
 import com.nekko.android.ui.chat.PurposeGroupCard
+import com.nekko.android.ui.chat.AgentContext
+import com.nekko.android.ui.chat.LocalAgentContext
+import com.nekko.android.ui.chat.SubagentGroup
+import com.nekko.android.ui.chat.allSubagents
 import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
@@ -138,6 +145,19 @@ import com.nekko.android.data.SimpleVisibility
 import androidx.compose.material3.CenterAlignedTopAppBar
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.ENGINE_PROVIDER_ID
+import com.nekko.protocol.RelayException
+import com.nekko.android.ui.chat.ChatModeDialog
+import com.nekko.android.ui.chat.WaitingList
+import com.nekko.android.ui.chat.RefusalNote
+import com.nekko.android.ui.chat.RenameChatDialog
+import com.nekko.android.ui.security.PendingStepUp
+import com.nekko.android.ui.security.StepUpSheet
+import com.nekko.android.ui.settings.modeTitleRes
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Shield
 
 @Composable
 fun ChatScreen(
@@ -184,14 +204,18 @@ private fun ChatScreenContent(
     val showSteps = simple.shown("thinking")
     val showGit = simple.shown("ph-git")
     val showTerminal = simple.shown("terminal")
+    val showPolicy = simple.shown("ph-policy")
     val chat by vm.ui.collectAsStateWithLifecycle()
+    val watches by vm.watches.collectAsStateWithLifecycle()
+    val subagents by vm.subagents.collectAsStateWithLifecycle()
+    val agentContext = AgentContext(watches, subagents.children, subagents.activity, chat.running, chat.modelId)
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
     val hardware by vm.hardware.state.collectAsStateWithLifecycle()
     val computers by vm.computers.collectAsStateWithLifecycle()
-    val computerName = computers.active?.name ?: "your computer"
+    val computerName = computers.active?.name ?: stringResource(R.string.chats_your_computer)
     var showModelEffort by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
     val pill = rememberModePill { !list.canScrollBackward }
@@ -210,6 +234,11 @@ private fun ChatScreenContent(
     var longChatDismissed by rememberSaveable(vm.sessionId) { mutableStateOf(false) }
     val savings = chat.context?.let { c -> SimpleMode.freshSavings(chat.contextTokens ?: c.usedTokens, c.contextWindow, c.sources) }
     var showMenu by remember { mutableStateOf(false) }
+    val pinned by vm.pinned.collectAsStateWithLifecycle()
+    var showRename by remember { mutableStateOf(false) }
+    var showMode by remember { mutableStateOf(false) }
+    // A mode raise the computer wants a second factor for (SK-7): the sheet asks, then sends it again.
+    var modeStepUp by remember { mutableStateOf<PendingStepUp?>(null) }
     var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
     var showPrs by remember { mutableStateOf(false) }
     // The chat's pull request chip: read when the chat opens, after each turn, and when Git or the
@@ -226,11 +255,14 @@ private fun ChatScreenContent(
     val attach = rememberAttach(vm)
     val prompts by vm.prompts.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val res = LocalResources.current
+    val editInNewChat = stringResource(R.string.chats_edit_in_new_chat)
+    val forkFromHere = stringResource(R.string.chats_fork_from_here)
     // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
     // everything up to the next prompt. Streaming blocks aren't saved yet, so they offer Copy only.
     val forkAction: (Block) -> ForkAction? = { block ->
         if ((block is Block.User || (block is Block.Assistant && !block.streaming)) && vm.canFork(block)) {
-            ForkAction(if (block is Block.User) "Edit in a new chat" else "Fork from here") {
+            ForkAction(if (block is Block.User) editInNewChat else forkFromHere) {
                 scope.launch {
                     try {
                         val (id, draft) = vm.fork(block)
@@ -238,7 +270,7 @@ private fun ChatScreenContent(
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        android.widget.Toast.makeText(context, e.message ?: "Couldn’t fork the chat.", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(context, e.message ?: res.getString(R.string.chats_fork_failed), android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -308,6 +340,46 @@ private fun ChatScreenContent(
         )
     }
 
+    // ⋮ → Rename, Pin, Complete, Chat mode: changes on the computer; a refusal is said in a toast.
+    val chatAction: (String, suspend () -> Unit) -> Unit = { failed, action ->
+        scope.launch {
+            try {
+                action()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, e.message?.takeIf { it.isNotBlank() } ?: failed, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    if (showRename) {
+        RenameChatDialog(chat.title, onDismiss = { showRename = false }) { title ->
+            showRename = false
+            chatAction(res.getString(R.string.chats_rename_this_failed)) { vm.rename(title) }
+        }
+    }
+    if (showMode) {
+        ChatModeDialog(chat.mode, vm.defaultMode, computerName, onDismiss = { showMode = false }) { mode ->
+            showMode = false
+            scope.launch {
+                try {
+                    vm.setMode(mode)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if ((e as? RelayException)?.refusal?.asksForStepUp == true) {
+                        modeStepUp = PendingStepUp(res.getString(R.string.chats_mode_step_up, computerName, res.getString(modeTitleRes(mode)))) { proof -> vm.setMode(mode, proof) }
+                    } else {
+                        android.widget.Toast.makeText(context, e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_mode_failed), android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+    modeStepUp?.let { pending ->
+        StepUpSheet(vm.repo, pending, onDone = { modeStepUp = null }, onDismiss = { modeStepUp = null })
+    }
+
     if (showModelEffort) {
         ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onDismiss = { showModelEffort = false })
     }
@@ -342,39 +414,73 @@ private fun ChatScreenContent(
                         actions = {
                             if (changesAllowed && simple.shown("changes")) {
                                 IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
-                                    Icon(Icons.Filled.Difference, contentDescription = "Changes")
+                                    Icon(Icons.Filled.Difference, contentDescription = stringResource(R.string.chats_changes))
                                 }
                             }
                             Box {
                                 IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
-                                    Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_more))
                                 }
                                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                                     DropdownMenuItem(
                                         text = { Text("Git") },
                                         leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
                                         onClick = { showMenu = false; vm.openGit() },
+                                        enabled = chat.savedAt == null,
                                         modifier = Modifier.testTag("chat.git"),
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Files") },
+                                        text = { Text(stringResource(R.string.chats_files)) },
                                         leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
                                         onClick = { showMenu = false; vm.openFiles() },
+                                        enabled = chat.savedAt == null,
                                         modifier = Modifier.testTag("chat.files"),
                                     )
                                     if (showTerminal) DropdownMenuItem(
-                                        text = { Text("Terminals") },
+                                        text = { Text(stringResource(R.string.chats_terminals)) },
                                         leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
                                         onClick = { showMenu = false; vm.openTerminals() },
+                                        enabled = chat.savedAt == null,
                                         modifier = Modifier.testTag("chat.terminals"),
                                     )
+                                    HorizontalDivider()
+                                    if (showPolicy) DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chats_chat_mode)) },
+                                        leadingIcon = { Icon(Icons.Filled.Shield, contentDescription = null) },
+                                        onClick = { showMenu = false; showMode = true },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.toolMode"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chats_rename)) },
+                                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                        onClick = { showMenu = false; showRename = true },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.rename"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(if (pinned) R.string.chats_unpin else R.string.chats_pin)) },
+                                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+                                        onClick = { showMenu = false; chatAction(res.getString(R.string.chats_change_this_failed)) { vm.setPinned(!pinned) } },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.pin"),
+                                    )
+                                    if (completedAt == null) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.chats_complete)) },
+                                            leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
+                                            onClick = { showMenu = false; chatAction(res.getString(R.string.chats_complete_this_failed)) { vm.complete() } },
+                                            enabled = online,
+                                            modifier = Modifier.testTag("chat.complete"),
+                                        )
+                                    }
                                 }
                             }
                             pane?.actions?.invoke(this)
                         },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back))
                             }
                         },
                         title = {
@@ -407,7 +513,7 @@ private fun ChatScreenContent(
                     when {
                         !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
                         keyed.isEmpty() && chat.error == null -> Text(
-                            "Ask your computer to do something. It can use its folders, tools and models.",
+                            stringResource(R.string.chats_chat_empty),
                             style = MaterialTheme.typography.bodyLarge,
                             color = p.inkSoft,
                             textAlign = TextAlign.Center,
@@ -422,8 +528,8 @@ private fun ChatScreenContent(
                             if (chat.omittedMessages > 0) {
                                 item(key = "omitted") {
                                     Text(
-                                        if (chat.omittedMessages == 1) "1 earlier message is on the computer."
-                                        else "${chat.omittedMessages} earlier messages are on the computer.",
+                                        if (chat.omittedMessages == 1) stringResource(R.string.chats_omitted_one)
+                                        else stringResource(R.string.chats_omitted_other, chat.omittedMessages),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = p.inkFaint,
                                         textAlign = TextAlign.Center,
@@ -433,22 +539,30 @@ private fun ChatScreenContent(
                             }
                             itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
                                 val run = (row as? TranscriptRow.Run)?.run
-                                when {
-                                    row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
-                                        openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
-                                    }
-                                    run is PurposeRun.Single -> {
-                                        val block = run.item.second
-                                        // Long press: Copy, and fork the chat from a saved message.
-                                        val fork = forkAction(block)
-                                        // In a pane a message can be dragged into the other pane's message box.
-                                        // A reply's links to files and loopback pages open previews from the computer (AN-35).
-                                        CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
-                                            val reasoning = (row as TranscriptRow.Run).stepsOpen
-                                            if (pane == null) BlockView(block, fork, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, reasoning) }
+                                // Watch chips and subagent rows read the chat's watches and child chats.
+                                CompositionLocalProvider(LocalAgentContext provides agentContext) {
+                                    when {
+                                        row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
+                                            openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
+                                        }
+                                        run is PurposeRun.Single -> {
+                                            val block = run.item.second
+                                            // Long press: Copy, and fork the chat from a saved message.
+                                            val fork = forkAction(block)
+                                            // In a pane a message can be dragged into the other pane's message box.
+                                            // A reply's links to files and loopback pages open previews from the computer (AN-35).
+                                            CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
+                                                val reasoning = (row as TranscriptRow.Run).stepsOpen
+                                                if (pane == null) BlockView(block, fork, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, reasoning) }
+                                            }
+                                        }
+                                        run is PurposeRun.Group -> {
+                                            val blocks = run.items.map { it.second }
+                                            // Consecutive delegations read as one group, as on the desktop.
+                                            if (allSubagents(blocks)) SubagentGroup(blocks.filterIsInstance<Block.Tool>(), agentContext)
+                                            else PurposeGroupCard(run.purpose, blocks, run.calls)
                                         }
                                     }
-                                    run is PurposeRun.Group -> PurposeGroupCard(run.purpose, run.items.map { it.second }, run.calls)
                                 }
                             }
                             item(key = "footer") {
@@ -457,7 +571,7 @@ private fun ChatScreenContent(
                                     val rate = chat.rate
                                     if (!chat.running && rate != null) {
                                         Text(
-                                            String.format(Locale.US, "%.1f tokens/s", rate),
+                                            stringResource(R.string.chats_tokens_per_second, String.format(Locale.US, "%.1f", rate)),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = p.inkFaint,
                                         )
@@ -485,7 +599,7 @@ private fun ChatScreenContent(
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                restoreError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t restore this chat."
+                                restoreError = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_restore_this_failed)
                             } finally {
                                 restoring = false
                             }
@@ -500,8 +614,31 @@ private fun ChatScreenContent(
                             onDismiss = { longChatDismissed = true },
                         )
                     }
+                    val waiting by vm.waiting.collectAsStateWithLifecycle()
+                    val sendingId by vm.sendingId.collectAsStateWithLifecycle()
+                    val refusal by vm.refusal.collectAsStateWithLifecycle()
+                    val restore by vm.restore.collectAsStateWithLifecycle()
+                    Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // The phone's saved copy (OF-5): read-only until the computer answers.
+                        chat.savedAt?.let { at ->
+                            Text(
+                                savedCopyNote(at, computerName, template = stringResource(R.string.chats_saved_copy_note)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = p.inkSoft,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp).testTag("chat.savedCopy"),
+                            )
+                        }
+                        WaitingList(waiting, sendingId, online, onEdit = vm::editWaiting, onDelete = vm::deleteWaiting, onSendNow = vm::sendWaitingNow)
+                        refusal?.let { RefusalNote(it, onDismiss = vm::dismissRefusal) }
+                    }
                     Composer(
-                        initialText = initialDraft,
+                        restore = restore,
+                        onRestored = vm::restored,
+                        sendsLater = chat.sendsLater,
+                        // A fork's prompt, else what was typed here last time (the saved draft).
+                        initialText = initialDraft ?: vm.savedDraft.text.ifEmpty { null },
+                        initialSkillName = vm.savedDraft.skill?.name.takeIf { initialDraft == null },
+                        onDraftChange = vm::draftChanged,
                         running = chat.running,
                         blocked = chat.blocked,
                         queued = chat.queued,
@@ -517,6 +654,8 @@ private fun ChatScreenContent(
                         prompts = prompts,
                         queuedPrompts = chat.queuedPrompts,
                         onEditQueued = vm::editQueued,
+                        onNextStep = vm::sendQueuedAtNextStep,
+                        onInterrupt = vm::interruptQueued,
                         onNewAgent = onNewChat,
                         onTerminal = if (showTerminal) vm::openTerminals else null,
                     )
@@ -603,12 +742,12 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = p.success, modifier = Modifier.size(16.dp))
             Text(
-                "This chat is completed. Restore it to keep going.",
+                stringResource(R.string.chats_completed_bar),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.inkSoft,
                 modifier = Modifier.weight(1f),
             )
-            Button(onClick = onRestore, enabled = !restoring) { Text(if (restoring) "Restoring…" else "Restore") }
+            Button(onClick = onRestore, enabled = !restoring) { Text(stringResource(if (restoring) R.string.chats_restoring else R.string.chats_restore)) }
         }
     }
 }
@@ -651,6 +790,7 @@ private fun rememberMic(d: DictationController?): MicUi? {
 @Composable
 private fun rememberAttach(vm: ChatViewModel): AttachUi {
     val context = LocalContext.current
+    val res = LocalResources.current
     val lock = LocalAppLock.current
     val state by vm.photos.state.collectAsStateWithLifecycle()
     // Where the camera app was asked to write; survives the activity being recreated meanwhile.
@@ -690,7 +830,7 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
                     lock?.returned()
                     shot = null
                     vm.photos.begin(1)
-                    vm.photos.failed("No camera app on this phone.")
+                    vm.photos.failed(res.getString(R.string.chats_no_camera))
                 }
             }
         },

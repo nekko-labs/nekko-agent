@@ -59,6 +59,7 @@ pub struct Policy {
     /// `PHONE_VIEWS` and the views beyond the chat (phone_views.rs).
     pub views: crate::phone_views::Views,
     pub queue_edit_keys: Vec<String>,
+    pub brain_keys: Vec<String>,
     /// `PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS` (IO-33).
     pub read_channels: Vec<String>,
     pub change_channels: Vec<String>,
@@ -129,6 +130,7 @@ pub fn policy() -> &'static Policy {
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
             views: crate::phone_views::Views::from_policy(&v),
             queue_edit_keys: strings(&v["queueEditKeys"]),
+            brain_keys: strings(&v["brainKeys"]),
             read_channels: strings(&v["readChannels"]),
             change_channels: strings(&v["changeChannels"]),
             agent_channels: strings(&v["agentChannels"]),
@@ -361,6 +363,25 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 return Err(denied("value-invalid", "queued prompt edit"));
             }
         }
+        "chat:steer" => {
+            id(0, "chat id")?;
+            if arg(1).as_str().is_none_or(|t| nekko_js::trim(t).is_empty()) {
+                return Err(denied("value-invalid", "message"));
+            }
+        }
+        "chat:interruptQueued" => {
+            id(0, "chat id")?;
+            let index_ok = arg(1).as_f64().is_some_and(|i| i.fract() == 0.0 && i >= 0.0);
+            if !index_ok {
+                return Err(denied("value-invalid", "queue index"));
+            }
+            if !arg(2).is_null() {
+                if !arg(2).is_object() {
+                    return Err(denied("value-invalid", "model"));
+                }
+                keys_within(arg(2), &policy().brain_keys, "model")?;
+            }
+        }
         "task:runNow" => id(0, "task id")?,
         "workflow:run" => id(0, "workflow id")?,
         "limits:get" => id(0, "provider id")?,
@@ -500,7 +521,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
             Value::Array(list) => Value::Array(list.iter().map(|s| pick(s, &policy().skill_view)).collect()),
             _ => json!([]),
         },
-        "session:get" => session_view(result),
+        "session:get" | "chat:steer" => session_view(result),
         "changes:list" => crate::phone_changes::view(&result, &policy().changes_view),
         "chat:editQueued" => match &result {
             Value::Object(o) => json!({
@@ -565,21 +586,16 @@ fn cut_text(s: &str, n: usize) -> String {
     crate::hello::cut16(s, n).to_string()
 }
 
-/// Length in UTF-16 units, as JavaScript's `s.length`.
-fn len16(s: &str) -> usize {
-    s.encode_utf16().count()
-}
-
 /// `cutInput`: a tool call's input with long string values cut.
 fn cut_input(input: &Value, n: usize) -> (Value, bool) {
     match input {
-        Value::String(s) if len16(s) > n => (json!(cut_text(s, n)), true),
+        Value::String(s) if nekko_js::len16(s) > n => (json!(cut_text(s, n)), true),
         Value::Object(m) => {
             let mut cut = false;
             let mut out = Map::new();
             for (k, v) in m {
                 match v {
-                    Value::String(s) if len16(s) > n => {
+                    Value::String(s) if nekko_js::len16(s) > n => {
                         out.insert(k.clone(), json!(cut_text(s, n)));
                         cut = true;
                     }
@@ -608,9 +624,9 @@ fn phone_message(m: &Value, n: usize) -> Value {
             }
         }
         if let Some(Value::String(o)) = r.get("output")
-            && len16(o) > n
+            && nekko_js::len16(o) > n
         {
-            let full = len16(o);
+            let full = nekko_js::len16(o);
             let cut = cut_text(o, n);
             r.insert("outputChars".into(), json!(full));
             r.insert("output".into(), json!(cut));
@@ -655,7 +671,8 @@ pub fn session_view(session: Value) -> Value {
         let Some(Value::Array(imgs)) = m.get("images") else { continue };
         let mut imgs: Vec<Value> = imgs.iter().map(|v| json!(v.as_str().unwrap_or(""))).collect();
         for v in imgs.iter_mut().rev() {
-            let fits = matches!(v.as_str(), Some(t) if !t.is_empty() && len16(t) <= policy().thumb_chars) && room > 0;
+            let fits = matches!(v.as_str(), Some(t) if !t.is_empty() && nekko_js::len16(t) <= policy().thumb_chars)
+                && room > 0;
             if fits {
                 room -= 1;
             } else {
@@ -1865,12 +1882,39 @@ mod tests {
             for c in &p.channels {
                 assert!(classes.of(c).is_some() || has(&p.terminal.token_channels, c), "{c} is in no class");
             }
-            for c in ["chat:send", "chat:queue", "tool:approve", "chat:answer", "task:runNow", "workflow:run"] {
+            for c in [
+                "chat:send",
+                "chat:queue",
+                "chat:steer",
+                "chat:interruptQueued",
+                "tool:approve",
+                "chat:answer",
+                "task:runNow",
+                "workflow:run",
+            ] {
                 assert_eq!(classes.of(c), Some(Class::Agent), "{c}");
             }
             for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
                 assert_eq!(classes.of(c), Some(Class::Read), "{c}");
             }
+        }
+
+        #[test]
+        fn next_step_and_interrupt_check_their_arguments() {
+            let code = |c: &str, a: Value| {
+                let args = a.as_array().cloned().unwrap_or_default();
+                screen(c, &args).err().map(|d| d.code)
+            };
+            assert_eq!(code("chat:steer", json!(["s", "read the tests first"])), None);
+            assert_eq!(code("chat:steer", json!(["", "hi"])), Some("value-invalid"));
+            assert_eq!(code("chat:steer", json!(["s", "   "])), Some("value-invalid"));
+            assert_eq!(code("chat:steer", json!(["s", 5])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0])), None);
+            assert_eq!(code("chat:interruptQueued", json!(["s", 1, { "providerId": "p", "modelId": "m" }])), None);
+            assert_eq!(code("chat:interruptQueued", json!(["s", -1])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 1.5])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0, "p"])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0, { "yolo": true }])), Some("option-denied"));
         }
 
         #[test]

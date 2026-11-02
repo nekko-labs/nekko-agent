@@ -1608,7 +1608,7 @@ fn put_opt(m: &mut Map<String, Value>, k: &str, v: Option<Value>) {
 }
 
 /// Equal-length strings compared without an early exit (`timingSafeEqual`).
-fn constant_time_eq(a: &str, b: &str) -> bool {
+pub fn constant_time_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }

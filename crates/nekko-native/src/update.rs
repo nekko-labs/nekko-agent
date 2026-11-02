@@ -8,6 +8,9 @@
 //!   (`/releases/latest`, then `/releases/download/<tag>/<file>`), or from a
 //!   generic base URL; `files` (else the legacy `path` and `sha512`), each
 //!   needing a checksum; spaces in names turned into dashes for GitHub.
+//!   Beyond electron-updater: once a real release key is built in
+//!   (`release_key.rs`), the feed is refused unless `<feed>.sig` verifies
+//!   over its exact bytes (`verify_feed`).
 //! - The file: the installer `.exe` (Windows), the `.zip` (macOS, arm64 files
 //!   first on an arm64 Mac), the `.AppImage` (or the `.deb` when the app was
 //!   installed from one), preferring the one naming this machine's arch.
@@ -320,6 +323,35 @@ pub fn pick_download(
     picked.ok_or_else(|| "No files provided".to_string())
 }
 
+// ---- The feed's signature ----
+
+/// Where a feed file's signature is published: beside it, `<file>.sig` (the
+/// base64 Ed25519 signature over the feed's exact bytes, written by
+/// `scripts/sign-update-feed.mjs` in the release workflow).
+pub fn signature_url(feed_url: &url::Url) -> url::Url {
+    let mut u = feed_url.clone();
+    u.set_path(&format!("{}.sig", feed_url.path()));
+    u
+}
+
+/// Check the feed's bytes against its signature before anything in it is
+/// trusted. `signature` is `None` when the release has no `.sig` for it (or
+/// it could not be fetched). With the placeholder key (no release key yet)
+/// nothing is checked, as before signing existed.
+pub fn verify_feed(key: &[u8; 32], channel_file: &str, feed: &[u8], signature: Option<&[u8]>) -> Result<(), String> {
+    if crate::release_key::is_placeholder(key) {
+        return Ok(());
+    }
+    let Some(signature) = signature else {
+        return Err(format!(
+            "The update feed {channel_file} is not signed ({channel_file}.sig is missing from the release), so the update was refused."
+        ));
+    };
+    crate::release_key::verify_detached(key, feed, signature).map_err(|e| {
+        format!("The update feed {channel_file} did not pass its signature check ({e}), so the update was refused.")
+    })
+}
+
 // ---- Checksums ----
 
 /// electron-builder's checksum: base64 of the SHA-512 digest.
@@ -561,6 +593,21 @@ fn wait_for_pid(pid: Option<u32>) -> String {
     }
 }
 
+/// macOS: before the swap, when the running app is signed by a Developer ID
+/// team, the new bundle must pass a strict `codesign` check against a
+/// requirement anchored to Apple naming that same team. Otherwise the staged
+/// copy is removed, the running app is reopened unchanged, and the script
+/// fails. A running app with no team (a local or ad-hoc build) skips the check.
+fn mac_verify_snippet(bundle: &str, staging: &str) -> String {
+    format!(
+        "team=$(/usr/bin/codesign -dv {bundle} 2>&1 | sed -n 's/^TeamIdentifier=//p')\n\
+         if [ -n \"$team\" ] && [ \"$team\" != \"not set\" ]; then\n\
+         \x20 if ! /usr/bin/codesign --verify --deep --strict \
+         -R=\"anchor apple generic and certificate leaf[subject.OU] = \\\"$team\\\"\" \"$new_app\"; then\n\
+         \x20   rm -rf {staging}\n\x20   /usr/bin/open -n {bundle}\n\x20   exit 1\n\x20 fi\nfi\n"
+    )
+}
+
 /// How to install `downloaded` over the running app.
 pub fn install_plan(
     platform: Platform,
@@ -597,10 +644,11 @@ pub fn install_plan(
             let script = format!(
                 "set -e\n{wait}rm -rf {s}\nmkdir -p {s}\n/usr/bin/ditto -x -k {z} {s}\n\
                  new_app=$(find {s} -mindepth 1 -maxdepth 1 -type d -name '*.app' | head -n 1)\n\
-                 test -n \"$new_app\"\nrm -rf {old}\nmv {b} {old}\n\
+                 test -n \"$new_app\"\n{verify}rm -rf {old}\nmv {b} {old}\n\
                  if mv \"$new_app\" {b}; then rm -rf {old}; else mv {old} {b}; exit 1; fi\n\
                  rm -rf {s}\n/usr/bin/open -n {b}\n",
                 wait = wait_for_pid(installed.app_pid),
+                verify = mac_verify_snippet(&b, &s),
             );
             Ok(InstallPlan::Script { script })
         }
@@ -653,6 +701,48 @@ pub fn verify_publisher(file: &Path, publishers: &[String]) -> Result<(), String
     if publishers.is_empty() || !cfg!(windows) {
         return Ok(());
     }
+    let data = authenticode(file)?;
+    if data.get("Status").and_then(Value::as_i64) == Some(0) {
+        let subject = data.pointer("/SignerCertificate/Subject").and_then(Value::as_str).unwrap_or("");
+        if publishers.iter().any(|p| dn_matches(p, subject)) {
+            return Ok(());
+        }
+    }
+    Err(format!("New version is not signed by the application owner: publisherNames: {}", publishers.join(" | ")))
+}
+
+/// Windows: when the running app is itself validly Authenticode-signed, the
+/// installer must be validly signed with the same certificate subject. This
+/// holds whether or not `app-update.yml` names publishers; an unsigned
+/// running app (a local build) skips it.
+pub fn verify_same_signer(file: &Path, running_exe: &Path) -> Result<(), String> {
+    if !cfg!(windows) {
+        return Ok(());
+    }
+    // Nothing to compare against when the running executable is not a file
+    // whose signature can be read (a development run).
+    if !running_exe.is_file() {
+        return Ok(());
+    }
+    let Ok(running) = authenticode(running_exe) else { return Ok(()) };
+    if running.get("Status").and_then(Value::as_i64) != Some(0) {
+        return Ok(());
+    }
+    same_signer(&running, &authenticode(file)?)
+}
+
+/// The installer's signature is valid and its signer subject is the running app's.
+pub fn same_signer(running: &Value, installer: &Value) -> Result<(), String> {
+    let subject = |v: &Value| v.pointer("/SignerCertificate/Subject").and_then(Value::as_str).map(str::to_string);
+    let valid = installer.get("Status").and_then(Value::as_i64) == Some(0);
+    match (subject(running), subject(installer)) {
+        (Some(a), Some(b)) if valid && !a.is_empty() && a == b => Ok(()),
+        _ => Err("New version is not signed by the same publisher as the installed app".into()),
+    }
+}
+
+/// `Get-AuthenticodeSignature` for one file, as JSON.
+fn authenticode(file: &Path) -> Result<Value, String> {
     let literal = file.to_string_lossy().replace('\'', "''");
     let mut cmd = std::process::Command::new("powershell.exe");
     cmd.args([
@@ -670,15 +760,7 @@ pub fn verify_publisher(file: &Path, publishers: &[String]) -> Result<(), String
         cmd.creation_flags(0x0800_0000);
     }
     let out = cmd.output().map_err(|e| format!("Cannot verify the installer's signature: {e}"))?;
-    let data: Value =
-        serde_json::from_slice(&out.stdout).map_err(|e| format!("Cannot verify the installer's signature: {e}"))?;
-    if data.get("Status").and_then(Value::as_i64) == Some(0) {
-        let subject = data.pointer("/SignerCertificate/Subject").and_then(Value::as_str).unwrap_or("");
-        if publishers.iter().any(|p| dn_matches(p, subject)) {
-            return Ok(());
-        }
-    }
-    Err(format!("New version is not signed by the application owner: publisherNames: {}", publishers.join(" | ")))
+    serde_json::from_slice(&out.stdout).map_err(|e| format!("Cannot verify the installer's signature: {e}"))
 }
 
 /// `parseDn` comparison: every key of a full DN must match; a bare name is the CN.
@@ -800,6 +882,23 @@ mod tests {
         assert!(script.contains("find '/c/p/update.staging' -mindepth 1 -maxdepth 1 -type d -name '*.app'"));
         assert!(script.contains("if mv \"$new_app\" '/Applications/NekkoAgent.app'; then"));
         assert!(script.ends_with("/usr/bin/open -n '/Applications/NekkoAgent.app'\n"));
+        // The new bundle is checked against the running app's team before the swap.
+        let check = script.find("/usr/bin/codesign --verify --deep --strict").unwrap();
+        assert!(script.contains("/usr/bin/codesign -dv '/Applications/NekkoAgent.app'"));
+        assert!(script.contains("anchor apple generic and certificate leaf[subject.OU]"));
+        assert!(check < script.find("mv '/Applications/NekkoAgent.app'").unwrap());
+    }
+
+    #[test]
+    fn an_installer_must_share_the_running_app_signer() {
+        let signed =
+            |subject: &str, status: i64| json!({ "Status": status, "SignerCertificate": { "Subject": subject } });
+        let ours = signed("CN=Nekko Labs, O=Nekko Labs, C=JP", 0);
+        assert!(same_signer(&ours, &signed("CN=Nekko Labs, O=Nekko Labs, C=JP", 0)).is_ok());
+        assert!(same_signer(&ours, &signed("CN=Someone Else", 0)).is_err());
+        assert!(same_signer(&ours, &signed("CN=Nekko Labs, O=Nekko Labs, C=JP", 1)).is_err());
+        assert!(same_signer(&ours, &json!({ "Status": 2, "SignerCertificate": null })).is_err());
+        assert!(same_signer(&json!({ "Status": 0, "SignerCertificate": { "Subject": "" } }), &signed("", 0)).is_err());
     }
 
     #[cfg(target_os = "macos")]
@@ -837,6 +936,83 @@ mod tests {
         assert!(!apps.join("NekkoAgent.app/old").exists());
         assert!(!apps.join("NekkoAgent.app.old").exists());
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    mod feed_signature {
+        use super::*;
+        use ed25519_dalek::{Signer, SigningKey};
+
+        const FEED: &[u8] = b"version: 9.9.9\nfiles:\n  - url: NekkoAgent-9.9.9-x64.exe\n    sha512: abc=\n";
+
+        fn pair() -> (SigningKey, [u8; 32]) {
+            let sk = SigningKey::from_bytes(&[11; 32]);
+            let pk = sk.verifying_key().to_bytes();
+            (sk, pk)
+        }
+
+        fn sig(sk: &SigningKey, bytes: &[u8]) -> Vec<u8> {
+            format!("{}\n", base64::engine::general_purpose::STANDARD.encode(sk.sign(bytes).to_bytes())).into_bytes()
+        }
+
+        #[test]
+        fn a_good_signature_passes() {
+            let (sk, pk) = pair();
+            assert_eq!(verify_feed(&pk, "latest.yml", FEED, Some(&sig(&sk, FEED))), Ok(()));
+        }
+
+        #[test]
+        fn a_bad_signature_is_refused() {
+            let (sk, pk) = pair();
+            // Signed by another key.
+            let other = SigningKey::from_bytes(&[12; 32]);
+            let err = verify_feed(&pk, "latest.yml", FEED, Some(&sig(&other, FEED))).unwrap_err();
+            assert!(err.contains("did not pass its signature check"), "{err}");
+            // A feed changed after signing (a swapped checksum).
+            let mut tampered = FEED.to_vec();
+            let at = tampered.len() - 3;
+            tampered[at] = b'X';
+            assert!(verify_feed(&pk, "latest.yml", &tampered, Some(&sig(&sk, FEED))).is_err());
+            // Not a signature at all.
+            assert!(verify_feed(&pk, "latest.yml", FEED, Some(b"<html>Not Found</html>")).is_err());
+        }
+
+        #[test]
+        fn a_missing_signature_is_refused() {
+            let (_, pk) = pair();
+            let err = verify_feed(&pk, "latest-mac.yml", FEED, None).unwrap_err();
+            assert!(err.contains("latest-mac.yml.sig is missing"), "{err}");
+        }
+
+        #[test]
+        fn the_placeholder_key_checks_nothing() {
+            assert_eq!(verify_feed(&[0; 32], "latest.yml", FEED, None), Ok(()));
+            assert_eq!(verify_feed(&[0; 32], "latest.yml", FEED, Some(b"garbage")), Ok(()));
+        }
+
+        #[test]
+        fn a_feed_signed_by_the_release_script_verifies() {
+            // scripts/sign-update-feed.mjs made this signature (a test key).
+            let v: Value = serde_json::from_str(include_str!("../tests/golden/feed-signature.json")).unwrap();
+            let b64 = base64::engine::general_purpose::STANDARD;
+            let pk: [u8; 32] = b64.decode(v["publicKey"].as_str().unwrap()).unwrap().try_into().unwrap();
+            let seed: [u8; 32] = b64.decode(v["seed"].as_str().unwrap()).unwrap().try_into().unwrap();
+            assert_eq!(SigningKey::from_bytes(&seed).verifying_key().to_bytes(), pk);
+            let feed = v["feed"].as_str().unwrap().as_bytes();
+            let sig = v["signature"].as_str().unwrap().as_bytes();
+            assert_eq!(verify_feed(&pk, "latest.yml", feed, Some(sig)), Ok(()));
+            assert_eq!(parse_update_info(v["feed"].as_str().unwrap(), "latest.yml").unwrap().version, "1.2.3");
+        }
+
+        #[test]
+        fn the_signature_sits_beside_the_feed() {
+            let u = url::Url::parse("https://github.com/o/r/releases/download/v1.2.3/latest-linux.yml").unwrap();
+            assert_eq!(
+                signature_url(&u).as_str(),
+                "https://github.com/o/r/releases/download/v1.2.3/latest-linux.yml.sig"
+            );
+            let q = url::Url::parse("https://cdn.example/feed/latest.yml?token=1").unwrap();
+            assert_eq!(signature_url(&q).as_str(), "https://cdn.example/feed/latest.yml.sig?token=1");
+        }
     }
 
     #[test]

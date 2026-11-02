@@ -12,12 +12,18 @@ const KEY_STEP = 0.02;
  * same way wherever two windows meet.
  */
 export function Divider({
-  splitId, index, dir, onResize, snapped,
+  splitId, index, dir, onResize, onPreview, snapped,
 }: {
   splitId: string; index: number; dir: 'row' | 'col';
   /** Snap to grid is on and this divider sits on its even-spacing snap point. */
   snapped?: boolean;
   onResize: (splitId: string, index: number, fraction: number) => void;
+  /**
+   * Draw a drag's result straight onto the page, at most once a frame,
+   * without a React render; onResize then commits it once, on release.
+   * Returns false when it cannot (the caller falls back to onResize per move).
+   */
+  onPreview?: (splitId: string, index: number, fraction: number, handle: HTMLElement) => boolean;
 }) {
   const row = dir === 'row';
   const start = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -26,16 +32,30 @@ export function Divider({
     const area = handle.parentElement;
     if (!area) return;
     handle.setPointerCapture(e.pointerId);
+    // The split's box does not move during the drag: measure it once.
+    const rect = area.getBoundingClientRect();
+    const span = row ? rect.width : rect.height;
+    let pending: number | null = null;
+    let frame = 0;
+    let previewed = false;
+    const flush = () => {
+      frame = 0;
+      if (pending == null) return;
+      if (onPreview?.(splitId, index, pending, handle)) previewed = true;
+      else onResize(splitId, index, pending);
+    };
     const onMove = (ev: PointerEvent) => {
-      const rect = area.getBoundingClientRect();
-      const span = row ? rect.width : rect.height;
       if (span <= 0) return;
-      onResize(splitId, index, row ? (ev.clientX - rect.left) / span : (ev.clientY - rect.top) / span);
+      pending = row ? (ev.clientX - rect.left) / span : (ev.clientY - rect.top) / span;
+      if (!frame) frame = requestAnimationFrame(flush);
     };
     const onUp = () => {
       handle.releasePointerCapture(e.pointerId);
       handle.removeEventListener('pointermove', onMove);
       handle.removeEventListener('pointerup', onUp);
+      if (frame) { cancelAnimationFrame(frame); flush(); }
+      // One commit for the whole drag.
+      if (previewed && pending != null) onResize(splitId, index, pending);
     };
     handle.addEventListener('pointermove', onMove);
     handle.addEventListener('pointerup', onUp);

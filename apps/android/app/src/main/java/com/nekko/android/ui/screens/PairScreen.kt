@@ -1,5 +1,7 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -64,8 +67,6 @@ import com.nekko.protocol.PairingLink
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-private const val NOT_A_LINK = "That isn’t a pairing link. On your computer: Settings → Remote access → Pair a device."
-
 /**
  * Pair with a computer: scan the QR from Settings → Remote access, or paste the
  * link. A `nekko-agent-pair:` link opened from outside the app lands here
@@ -81,9 +82,11 @@ fun PairScreen(
 ) {
     val p = Nekko.palette
     val context = LocalContext.current
+    val res = LocalResources.current
     val appLock = LocalAppLock.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
+    val notALink = stringResource(R.string.chats_pair_not_a_link)
     var text by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf<PairingLink?>(null) }
@@ -95,7 +98,7 @@ fun PairScreen(
         // An unreadable link from outside: show it so the user can see what came in.
         if (initialLink != null && Pairing.parse(initialLink) == null) {
             text = initialLink
-            error = NOT_A_LINK
+            error = notALink
         }
     }
 
@@ -103,7 +106,7 @@ fun PairScreen(
         if (busy != null) return@commit
         val link = Pairing.parse(raw)
         if (link == null) {
-            error = NOT_A_LINK
+            error = notALink
             return@commit
         }
         error = null
@@ -117,7 +120,7 @@ fun PairScreen(
                 throw e
             } catch (e: Exception) {
                 busy = null
-                error = e.message?.takeIf { it.isNotBlank() } ?: "Pairing failed. Try a fresh QR."
+                error = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_pair_failed)
             }
         }
     }
@@ -139,9 +142,9 @@ fun PairScreen(
             }
             .addOnFailureListener { e ->
                 error = if (e is MlKitException && e.errorCode == MlKitException.UNAVAILABLE) {
-                    "The QR scanner isn’t ready yet: Google Play services is still downloading it. Try again in a minute, or paste the link below."
+                    res.getString(R.string.chats_pair_scanner_downloading)
                 } else {
-                    "Couldn’t open the QR scanner. Paste the link below instead."
+                    res.getString(R.string.chats_pair_scanner_failed)
                 }
             }
         Unit
@@ -151,10 +154,10 @@ fun PairScreen(
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Pair a computer") },
+                title = { Text(stringResource(R.string.chats_pair_title)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back)) }
                 },
             )
         },
@@ -178,9 +181,9 @@ fun PairScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(Icons.Filled.Lock, contentDescription = null, tint = p.accent, modifier = Modifier.size(28.dp))
-                        Text("Pairing securely…", style = MaterialTheme.typography.titleMedium, color = p.ink)
+                        Text(stringResource(R.string.chats_pairing_securely), style = MaterialTheme.typography.titleMedium, color = p.ink)
                         Text(
-                            "Deriving the encryption key and saying hello to your computer through ${Pairing.relayHost(pending.relayUrl)}.",
+                            stringResource(R.string.chats_pairing_deriving, Pairing.relayHost(pending.relayUrl)),
                             style = MaterialTheme.typography.bodyMedium,
                             color = p.inkSoft,
                             textAlign = TextAlign.Center,
@@ -189,16 +192,17 @@ fun PairScreen(
                     }
                 }
                 offer != null -> NCard {
-                    Text("Pair with this computer?", style = MaterialTheme.typography.titleMedium, color = p.ink)
+                    Text(stringResource(R.string.chats_pair_confirm_title), style = MaterialTheme.typography.titleMedium, color = p.ink)
                     Text(
-                        "A pairing link was opened. This phone will connect to your computer through ${Pairing.relayHost(offer.relayUrl)}, end-to-end encrypted. Only continue if you just chose “Pair a device” on your own computer.",
+                        stringResource(R.string.chats_pair_confirm_body, Pairing.relayHost(offer.relayUrl)),
                         style = MaterialTheme.typography.bodyMedium,
                         color = p.inkSoft,
                     )
                     // Say now if this relay can't work from a phone, rather than spinning after pairing.
+                    val yourComputer = stringResource(R.string.chats_your_computer)
                     RelayHint.problem(offer.relayUrl, BuildConfig.DEBUG)?.let { problem ->
-                        Notice(RelayHint.message(problem, "your computer"), Tone.DANGER)
-                    } ?: Tailnet.hint(offer.relayUrl, TailnetStatus.phoneOnTailnet(), "your computer")?.let { line ->
+                        Notice(RelayHint.message(problem, yourComputer), Tone.DANGER)
+                    } ?: Tailnet.hint(offer.relayUrl, TailnetStatus.phoneOnTailnet(), yourComputer)?.let { line ->
                         // Tailscale first: pairing over the tailnet needs it on here too.
                         Notice(line, Tone.WARNING)
                     }
@@ -206,21 +210,21 @@ fun PairScreen(
                         OutlinedButton(
                             onClick = { proposed = null },
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        ) { Text("Cancel") }
+                        ) { Text(stringResource(R.string.chats_cancel)) }
                         Button(
                             onClick = { commit(initialLink.orEmpty()) },
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        ) { Text("Pair") }
+                        ) { Text(stringResource(R.string.chats_pair)) }
                     }
                 }
                 else -> {
                     Button(onClick = scan, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                         Icon(Icons.Filled.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.size(8.dp))
-                        Text("Scan QR code")
+                        Text(stringResource(R.string.chats_scan_qr))
                     }
                     Text(
-                        "On your computer: Nekko Agent → Settings → Remote access → Pair a device. Or copy the link and paste it here:",
+                        stringResource(R.string.chats_pair_instructions),
                         style = MaterialTheme.typography.bodyMedium,
                         color = p.inkSoft,
                     )
@@ -230,7 +234,7 @@ fun PairScreen(
                             text = it
                             error = null
                         },
-                        label = { Text("Pairing link") },
+                        label = { Text(stringResource(R.string.chats_pairing_link)) },
                         placeholder = { Text("nekko-agent-pair:?relay=…") },
                         textStyle = Nekko.mono.copy(color = p.ink),
                         isError = error != null,
@@ -253,13 +257,13 @@ fun PairScreen(
                         ) {
                             Icon(Icons.Filled.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(8.dp))
-                            Text("Paste")
+                            Text(stringResource(R.string.chats_paste))
                         }
                         Button(
                             onClick = { commit(text) },
                             enabled = text.isNotBlank(),
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                        ) { Text("Pair") }
+                        ) { Text(stringResource(R.string.chats_pair)) }
                     }
                     NearbyCard()
                 }
@@ -267,7 +271,7 @@ fun PairScreen(
             error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = p.danger) }
             if (busy == null) {
                 Text(
-                    "The link holds a one-time code (valid 10 minutes) and the key that encrypts everything between this phone and your computer. Treat it like a password.",
+                    stringResource(R.string.chats_pair_link_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = p.inkFaint,
                 )

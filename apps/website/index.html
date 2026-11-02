@@ -36,7 +36,7 @@
       content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
-    <link rel="stylesheet" href="styles.css?v=8" />
+    <link rel="stylesheet" href="styles.css?v=9" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Non-blocking webfont load: the system stack renders immediately; Inter
@@ -206,23 +206,24 @@
 
       <!-- ===== app window mock rises out of the hero band ===== -->
       <section class="showcase reveal" aria-label="Illustration of the workspace, not a live session">
-                <button class="media media-hero" type="button" aria-label="Product screenshot coming soon. Opens larger.">
-          <span>Product screenshot</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span>
+                <button class="media media-hero" type="button" aria-label="Nekko Agent workspace screenshot. Opens larger.">
+          <img class="hero-shot hero-shot-dark" src="media/hero-dark-1920.webp" srcset="media/hero-dark-1920.webp 1920w, media/hero-dark.webp 2560w" sizes="(max-width: 960px) 100vw, 960px" width="2560" height="1392" alt="Nekko Agent with three agents working side by side: Claude Opus adding a dark mode toggle, ChatGPT tidying a README, and a local Qwen model turning meeting notes into an action table" fetchpriority="high" decoding="async">
+          <img class="hero-shot hero-shot-light" src="media/hero-colour-1920.webp" srcset="media/hero-colour-1920.webp 1920w, media/hero-colour.webp 2560w" sizes="(max-width: 960px) 100vw, 960px" width="2560" height="1392" alt="Nekko Agent with three agents working side by side: Claude Opus adding a dark mode toggle, ChatGPT tidying a README, and a local Qwen model turning meeting notes into an action table" loading="lazy" decoding="async">
         </button>
       </section>
 
       <!-- ===== why Nekko: five promises, one demo panel each. Travis is
-           producing the videos; drop each one into its slot as
-           <video src="…" autoplay muted loop playsinline></video> and the
-           placeholder label hides itself. ===== -->
+           producing the videos; drop each one into its slot like the control
+           panel's (<video class="panel-video" … data-autoplay> with a poster):
+           site.js plays it only while it is on screen, and the placeholder
+           label hides itself. ===== -->
       <section id="why-nekko" class="chapter panels">
-        <p class="eyebrow reveal">WHY NEKKO · FIVE PROMISES</p>
         <h2 class="reveal">An agent you can trust with your own data</h2>
         <p class="chapter-lede reveal">Cloud agents are good. They are also someone else's computer. Nekko gives you the same quality of experience on your own machine, with your data where you can see it.</p>
 
         <article class="panel glass reveal" id="control">
           <div class="panel-copy">
-            <span class="mf-num">01 · IN CONTROL</span>
+            <span class="mf-num">IN CONTROL</span>
             <h3>Your models. Your data. Nothing hidden.</h3>
             <p>Pick the model for every chat: one running on your own computer, or ChatGPT, Claude and Gemini when you want them. The Context Inspector shows every file, note and instruction about to go with your request, so you can leave out what is not needed. Every command the agent wants to run and every line it changes waits for your say.</p>
             <ul class="panel-points">
@@ -232,12 +233,16 @@
             </ul>
             <a class="card-link" href="#features">How the controls work <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video coming soon: choosing a model and inspecting context. Opens larger."><span>Demo · In control</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
+          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video: switching a chat from a local model to Claude Opus, checking its context, and approving each file edit. Opens larger.">
+            <video class="panel-video" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-control-poster.webp" data-autoplay>
+              <source src="media/demo-control.mp4" type="video/mp4">
+            </video>
+          </button>
         </article>
 
         <article class="panel glass reveal" id="experience">
           <div class="panel-copy">
-            <span class="mf-num">02 · NO COMPROMISE</span>
+            <span class="mf-num">NO COMPROMISE</span>
             <h3>The power of a terminal. The polish of a great app.</h3>
             <p>Tired of the gap between the cloud experience and the local one? We were too. Nekko is a premium app for local AI: the agent, the model server, the diff review, the terminal and your connected tools, together in one window that feels finished. Prefer the shell? The same engine is there as a CLI and an MCP server.</p>
             <ul class="panel-points">
@@ -252,7 +257,7 @@
 
         <article class="panel glass reveal panel-fast" id="fast">
           <div class="panel-copy">
-            <span class="mf-num">03 · FAST</span>
+            <span class="mf-num">FAST</span>
             <h3>Fast. Really fast. Maybe the fastest.</h3>
             <p>Nekko runs models with llama.cpp under a Rust core tuned for the way agents actually work: repeated edits, many chats open, long contexts. Same model file, same machine, measured the same way as Ollama and LM Studio.</p>
             <a class="card-link" href="/docs/benchmarks">Every number, wins and losses <span aria-hidden="true">→</span></a>
@@ -292,7 +297,7 @@
 
         <article class="panel glass reveal" id="secure">
           <div class="panel-copy">
-            <span class="mf-num">04 · SECURE</span>
+            <span class="mf-num">SECURE</span>
             <h3>A safe space. Even we can't see in.</h3>
             <p>People need a place where their information stays theirs. We took Apple's idea of a service that cannot see your data even if it wanted to, and built Nekko around it. Local chats never leave your computer. Your phone talks to it through end-to-end encryption, so the relay in between carries only ciphertext. And when you do choose a cloud model, Privacy Shield swaps your emails, keys, card numbers and private names for placeholders before anything is sent, then puts the real values back on the way home.</p>
             <ul class="panel-points">
@@ -307,7 +312,7 @@
 
         <article class="panel glass reveal" id="convenient">
           <div class="panel-copy">
-            <span class="mf-num">05 · CONVENIENT <span class="chip">Beta</span></span>
+            <span class="mf-num">CONVENIENT <span class="chip">Beta</span></span>
             <h3>Bring local with you.</h3>
             <p>An easy phone app for iPhone and Android. Start a chat, approve a risky command, check on a long run, or dictate a message, all from your pocket while the work runs on your computer at home. No computer nearby? Download a small model and chat on the phone itself, with nothing sent anywhere.</p>
             <ul class="panel-points">
@@ -326,18 +331,32 @@
       <!-- ===== beta sign-up: after the "what it does" tour, before the technical detail ===== -->
       <section id="beta" class="chapter band band-lavender" aria-labelledby="beta-title">
         <div class="beta">
-          <div class="reveal">
-            <p class="eyebrow">NEKKO BETA · FREE TO JOIN</p>
-            <h2 id="beta-title">Help shape what Nekko becomes</h2>
-            <p class="chapter-lede">Join the beta list and get a front-row seat as Nekko grows. You try new things first, and your feedback decides what we build next.</p>
-            <ul class="beta-perks">
-              <li>A chance to try the iOS and Android apps before anyone else</li>
-              <li>First to test new features as they land</li>
-              <li>More beta-only extras to come</li>
-            </ul>
+          <div class="beta-intro reveal">
+            <p class="eyebrow">MEET NEKKO · FREE BETA</p>
+            <h2 id="beta-title">See it in a minute. Try it first.</h2>
+            <p class="chapter-lede">Nekko the cat walks you through the ideas behind the app in about a minute. Like what you see? Join the beta and try new things before anyone else.</p>
           </div>
-          <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
-               Until then the form only shows its thank-you message and sends nothing. -->
+          <!-- The tour: one video, its file picked by look (dark files for Dark,
+               light for White and Colourful). Nothing loads until it is near the screen. -->
+          <figure class="tour reveal" data-tour>
+            <div class="tour-frame">
+              <video class="tour-video" muted playsinline preload="none" controls width="1080" height="1080"
+                     aria-label="Illustrated tour of Nekko, about a minute, no sound"
+                     data-src-dark="media/nekko-tour-dark.mp4" data-poster-dark="media/nekko-tour-dark-poster.webp"
+                     data-src-light="media/nekko-tour-light.mp4" data-poster-light="media/nekko-tour-light-poster.webp"></video>
+              <div class="tour-end" data-tour-end hidden>
+                <p>Want to try it first?</p>
+                <button class="btn btn-primary" type="button" data-tour-join>Join the beta</button>
+                <button class="tour-again" type="button" data-tour-again>Watch again</button>
+              </div>
+            </div>
+            <figcaption class="micro">Illustrated tour. The screenshots elsewhere on this page show the real app.</figcaption>
+          </figure>
+          <ul class="beta-perks reveal">
+            <li>A chance to try the iOS and Android apps before anyone else</li>
+            <li>First to test new features as they land</li>
+            <li>More beta-only extras to come</li>
+          </ul>
           <div class="beta-stage reveal" data-beta>
             <!-- Nekko hosts the sign-up: she peeks over the card and reacts.
                  States (data-mood): idle, watching, eager, confused, celebrate. -->
@@ -361,9 +380,7 @@
                 <g class="np-sparkles"><path d="M1 2H2V3H1Z M0 3H1V4H0Z M2 3H3V4H2Z M1 4H2V5H1Z M30 9H31V10H30Z M29 10H30V11H29Z M31 10H32V11H31Z M30 11H31V12H30Z M2 12H3V13H2Z" /></g>
               </svg>
             </div>
-            <!-- TODO before launch: point data-endpoint at the sign-up service (Formspree, Loops, Buttondown or similar).
-                 Until then the form says sign-ups are not open yet; it never claims a sign-up it did not send. -->
-            <form class="beta-card" data-beta-form data-endpoint="" novalidate>
+            <form class="beta-card" data-beta-form data-endpoint="https://nekko-agent-api.fly.dev/v1/signups" novalidate>
               <div class="beta-ask">
                 <h3>Join the beta</h3>
                 <label for="beta-email">YOUR EMAIL</label>
@@ -372,6 +389,8 @@
                   <button class="btn btn-primary" type="submit">Count me in</button>
                 </div>
                 <p class="beta-note" id="beta-note">We'll email you when spots open and new builds are ready to try.</p>
+                <!-- Bots fill every field; people never see this one. The API fakes success when it is filled. -->
+                <input class="beta-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
               </div>
               <div class="beta-done" role="status" hidden>
                 <p class="beta-badge">BETA TESTER</p>
@@ -379,12 +398,12 @@
                 <p>You're in. Nekko will be in touch when new builds are ready to try.</p>
               </div>
             </form>
+            <p class="beta-privacy micro">We'll only use your email to send beta invites and Nekko Agent updates. No spam, and we never share it. To be removed, email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>.</p>
           </div>
         </div>
       </section>
 
       <section id="local" class="chapter band band-aqua">
-        <p class="eyebrow reveal">AI ON YOUR COMPUTER</p>
         <h2 class="reveal">Your own model server, built in</h2>
         <p class="chapter-lede reveal">Nekko comes with its own engine, so running AI on your computer takes a few clicks rather than a weekend of setup. Find a model, see whether it fits your machine, and start using it.</p>
         <div class="split reveal">
@@ -407,7 +426,6 @@
 
       <!-- ===== the harness: a spec-sheet manifest, deliberately not cards ===== -->
       <section id="features" class="chapter">
-        <p class="eyebrow reveal">PRIVACY AND CONTROL</p>
         <h2 class="reveal">Share only what you choose</h2>
         <p class="chapter-lede reveal">
           Letting an AI read a prompt is one thing. Handing it your files, your terminal,
@@ -418,7 +436,6 @@
         <div class="manifest reveal">
           <section class="mf-group">
             <div class="mf-head">
-              <span class="mf-num">01</span>
               <h3>Choose the information it uses</h3>
               <p>Context means the information sent with your request. Check what is included and leave out what is not needed.</p>
             </div>
@@ -448,7 +465,6 @@
 
           <section class="mf-group">
             <div class="mf-head">
-              <span class="mf-num">02</span>
               <h3>Give it useful tools</h3>
               <p>Connect the tools and repeatable steps your work needs, rather than copying everything into a chat.</p>
             </div>
@@ -478,7 +494,6 @@
 
           <section class="mf-group">
             <div class="mf-head">
-              <span class="mf-num">03</span>
               <h3>Review and correct changes</h3>
               <p>AI can make mistakes. Approval settings, file limits, and change review help you stay involved.</p>
             </div>
@@ -509,7 +524,6 @@
       </section>
 
       <section id="why" class="chapter">
-        <p class="eyebrow reveal">YOUR FILES AND CONNECTIONS</p>
         <h2 class="reveal">Choose what stays on your computer</h2>
         <div class="grid two reveal">
           <div class="card glass">
@@ -526,20 +540,18 @@
       </section>
 
       <section id="editions" class="chapter band band-blend">
-        <p class="eyebrow reveal">GETTING STARTED</p>
         <h2 class="reveal">Choose how to use Nekko</h2>
         <p class="chapter-lede reveal">Download the desktop app to get started. If you prefer a technical setup, run Nekko in your browser, in Docker, or from a terminal.</p>
         <div class="grid four reveal">
-          <div class="card glass"><span class="mf-num">01</span><h3>Desktop app</h3><p>Download for macOS, Windows, or Linux.</p><a class="card-link" href="#download">Get the app</a></div>
-          <div class="card glass"><span class="mf-num">02</span><h3>In your browser</h3><p>Run it yourself from a source checkout: <code>npm install</code>, then <code>npm run web</code>. Tasks using AI on your computer can work offline after setup.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent#readme">Setup guide</a></div>
-          <div class="card glass"><span class="mf-num">03</span><h3>In Docker</h3><p>For container-based setups, run <code>docker compose up</code> from a source checkout and connect your project folders and model servers.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/docker-compose.yml">Compose setup</a></div>
-          <div class="card glass"><span class="mf-num">04</span><h3>From other tools</h3><p>The CLI is Nekko's command-line interface. Run <code>nekko-agent</code>, or <code>nekko-agent mcp</code> to connect tools that support the MCP standard.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/apps/cli/README.md">Client setup</a></div>
+          <div class="card glass"><h3>Desktop app</h3><p>Download for macOS, Windows, or Linux.</p><a class="card-link" href="#download">Get the app</a></div>
+          <div class="card glass"><h3>In your browser</h3><p>Run it yourself from a source checkout: <code>npm install</code>, then <code>npm run web</code>. Tasks using AI on your computer can work offline after setup.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent#readme">Setup guide</a></div>
+          <div class="card glass"><h3>In Docker</h3><p>For container-based setups, run <code>docker compose up</code> from a source checkout and connect your project folders and model servers.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/docker-compose.yml">Compose setup</a></div>
+          <div class="card glass"><h3>From other tools</h3><p>The CLI is Nekko's command-line interface. Run <code>nekko-agent</code>, or <code>nekko-agent mcp</code> to connect tools that support the MCP standard.</p><a class="card-link" href="https://github.com/nekko-labs/nekko-agent/blob/main/apps/cli/README.md">Client setup</a></div>
         </div>
         <p class="micro center reveal">The npm package is <code>nekko-agent</code>, publishing with the next release; until then run the CLI from a source checkout (<code>npm run dev</code> or <code>apps/cli</code>). It provides the <code>nekko-agent</code> command.</p>
       </section>
 
       <section id="roadmap" class="chapter roadmap">
-        <p class="eyebrow reveal">COMING SOON</p>
         <h2 class="reveal">What we are building next</h2>
         <p class="chapter-lede reveal">Here is what is on the bench right now. Join the beta to try each one first.</p>
         <div class="grid two reveal">
@@ -551,7 +563,6 @@
       </section>
 
       <section id="download" class="chapter download band band-lavender">
-        <p class="eyebrow reveal">READY WHEN YOU ARE</p>
         <h2 class="reveal">Download Nekko Agent</h2>
         <p class="chapter-lede reveal">Free, open-source software. Pick the build for your machine. Model providers and hardware may have their own costs.</p>
 
@@ -613,7 +624,7 @@
       <button class="lightbox-close btn btn-ghost btn-sm" type="button" aria-label="Close">Close ✕</button>
       <div class="lightbox-stage"></div>
     </div>
-    <script src="site.js?v=10"></script>
+    <script src="site.js?v=12"></script>
     <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

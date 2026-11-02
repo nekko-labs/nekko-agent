@@ -1,5 +1,6 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -300,6 +301,7 @@ fun ModelEffortSheet(
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var picking by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf<Effort?>(null) }
@@ -318,7 +320,7 @@ fun ModelEffortSheet(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Couldn’t change it."
+                error = e.message ?: resources.getString(R.string.chat_change_failed)
             } finally {
                 busy = null
             }
@@ -764,6 +766,7 @@ fun AgentDetails(
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var notice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     Column(Modifier.testTag(ModeTags.MONITOR_SHEET), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle(stringResource(R.string.monitor_hardware))
@@ -787,7 +790,7 @@ fun AgentDetails(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    (e.message ?: "Couldn’t unload it.") to false
+                    (e.message ?: resources.getString(R.string.chat_unload_failed)) to false
                 }
             }
         }

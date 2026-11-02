@@ -8,7 +8,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
-chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+chrono.workspace = true
 getrandom.workspace = true
 nekko-js = { path = "../nekko-js" }
 nekko-settings = { path = "../nekko-settings" }

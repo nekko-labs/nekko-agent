@@ -79,6 +79,8 @@ public final class CloudSync {
     public private(set) var joinCode: String?
     /// The device the current token is bound to, per the server.
     private var boundDevice: String?
+    /// The (token, key epoch) Nekko Cloud last accepted this iPhone's epoch proof for.
+    private var proven: (token: String, keyId: UInt32)?
 
     public static let oauthProviders = ["apple", "github", "google"]
     /// Where the browser comes back to (Info.plist `nekko-agent` scheme; allowed in Supabase's redirect list).
@@ -287,10 +289,14 @@ public final class CloudSync {
         }
         let wrap = try SyncCrypto.wrapKeyring(keyring, account: accountId, keyId: current, recipientId: deviceId,
                                               recipientPublic: device.publicKeyX963, senderId: deviceId, sender: device)
+        let proof = SyncCrypto.base64url(SyncCrypto.epochProof(keyring: keyring, keyId: current))
         do {
-            _ = try await request("PUT", path("/v1/sync/keyrings/\(current)/wraps/\(deviceId)"), json: .object(["wrap": .string(wrap)]), token: t)
+            _ = try await request("PUT", path("/v1/sync/keyrings/\(current)/wraps/\(deviceId)"),
+                                  json: .object(["wrap": .string(wrap), "proof": .string(proof)]), token: t)
+            proven = (token: t, keyId: current)
         } catch let e as CloudError where e.code == "wrap-exists" {}
         holdEpoch(current, keyring, record: record, oid: oid, revision: rev)
+        try await prove(token: t, keyId: current)
         state.waiting = false
         waitingForApproval = false
         save()
@@ -323,6 +329,7 @@ public final class CloudSync {
         let joining = TrustedDevice(id: deviceId, publicKey: SyncCrypto.base64url(pk), label: d.str("label") ?? "")
         try await updateAccount(token: t) { $0.add(joining) }
         let wrap = try SyncCrypto.wrapForJoin(kr, account: accountId, keyId: current, recipientId: deviceId, recipientPublic: pk, code: code)
+        try await prove(token: t, keyId: current)
         _ = try await request("PUT", path("/v1/sync/keyrings/\(current)/wraps/\(deviceId)"), json: .object(["wrap": .string(wrap)]), token: t)
         try await refresh()
     }
@@ -592,6 +599,7 @@ public final class CloudSync {
                                                  revision: UInt64(revision), plaintext: Data(body.utf8))
             let obj: JSONValue = .object(["collection": .string("account"), "objectId": .string(oid), "revision": .int(revision),
                                           "keyId": .int(Int64(k)), "blob": .string(blob)])
+            try await prove(token: t, keyId: k)
             let res = try await request("POST", path("/v1/sync/push"), json: .object(["objects": .array([obj])]), token: t)
             let r = res["results"]?.array?.first
             switch r?.str("status") {
@@ -674,7 +682,18 @@ public final class CloudSync {
         secrets.set("cloud.keyring.\(id)", SyncCrypto.base64url(k.bytes))
     }
 
+    /// Show Nekko Cloud this sign-in holds the epoch's keyring, once per (token, epoch).
+    /// Changing keys, devices or data needs it.
+    private func prove(token t: String, keyId: UInt32) async throws {
+        if let p = proven, p.token == t, p.keyId == keyId { return }
+        guard let kr = keyring(keyId) else { throw CloudError(message: "This iPhone has no sync keys.") }
+        let proof = SyncCrypto.base64url(SyncCrypto.epochProof(keyring: kr, keyId: keyId))
+        _ = try await request("POST", path("/v1/sync/keyrings/\(keyId)/proof"), json: .object(["proof": .string(proof)]), token: t)
+        proven = (token: t, keyId: keyId)
+    }
+
     private func forgetKeys() {
+        proven = nil
         for k in 1...max(1, state.keyId ?? 1) { secrets.set("cloud.keyring.\(k)", nil) }
         secrets.set("cloud.joinCode", nil)
         joinCode = nil

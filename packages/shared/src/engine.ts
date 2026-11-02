@@ -259,24 +259,6 @@ export function downloadFitVerdict(
   return 'wont-load';
 }
 
-/**
- * The simple surface's only control: how much of this machine the model may use.
- *
- * It is a fraction rather than three named presets because it feeds the planner
- * as a number, and because the honest answer to "will 70% work" depends on the
- * machine, not on a label.
- */
-export interface MachineBudget {
-  /** 0..1 of free memory the model may occupy. */
-  fraction: number;
-}
-
-export const BUDGET_PRESETS: Array<{ id: string; label: string; fraction: number; hint: string }> = [
-  { id: 'gentle', label: 'Leave my machine usable', fraction: 0.5, hint: 'Other apps stay responsive.' },
-  { id: 'balanced', label: 'Balanced', fraction: 0.75, hint: 'Most of the memory, some left over.' },
-  { id: 'full', label: 'Everything it has', fraction: 0.92, hint: 'Fastest, expect stutter elsewhere.' },
-];
-
 /* ------------------------------------------------------------------ catalog */
 
 /** One quantization of one model: the thing actually downloaded. */
@@ -686,23 +668,4 @@ export interface ModelFolderReport {
   folders: ModelFolderStatus[];
   /** Known layouts present on disk that nobody has added yet. */
   suggestions: ModelFolderSuggestion[];
-}
-
-/**
- * The context a model gets when nothing asked for a size: its trained maximum,
- * capped at 64k tokens.
- *
- * Left to itself llama.cpp takes the trained context for every parallel slot
- * (4 by default), so a 262k-token model asked for a million-token KV cache and
- * `--fit` filled the GPU to within 1 GiB of full. The first flash-attention
- * kernel then sometimes could not be loaded ("CUDA error: shared object
- * initialization failed") and the model server died on its first request; the
- * oversized cache also made loads take 10 to 25 s. 64k is more than an agent
- * turn needs, and the drawer can always ask for more.
- */
-export const ENGINE_DEFAULT_CONTEXT = 65_536;
-
-export function defaultContextTokens(model: Pick<LocalModel, 'maxContext'>): number {
-  const trained = model.maxContext && model.maxContext > 0 ? model.maxContext : ENGINE_DEFAULT_CONTEXT;
-  return Math.min(trained, ENGINE_DEFAULT_CONTEXT);
 }

@@ -188,7 +188,7 @@ pub fn start(ctx: Ctx) {
         previous(info);
     }));
     tokio::spawn(async move {
-        let Some(settings) = ctx.settings.clone() else { return };
+        let settings = ctx.settings.clone();
         let mut changes = settings.store.subscribe();
         configure(&changes.borrow_and_update());
         capture("app_started", &Value::Null);

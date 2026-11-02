@@ -3,11 +3,11 @@ import Foundation
 // The one Live Activity card for all of the computer's chats. Pure state and
 // rules; the views and ActivityKit lifecycle live in the app.
 
-public enum LiveLevel: String, Codable, CaseIterable {
+public enum LiveLevel: String, Codable, CaseIterable, Sendable {
     case none, minimal, standard, detailed
 }
 
-public enum LiveChatState: String, Codable {
+public enum LiveChatState: String, Codable, Sendable {
     case needsYou, working, watching, done, failed
 
     /// A state from a newer computer reads as working, rather than failing the whole card.
@@ -27,7 +27,7 @@ public enum LiveChatState: String, Codable {
     }
 }
 
-public struct LiveChat: Codable, Hashable {
+public struct LiveChat: Codable, Hashable, Sendable {
     public var id: String
     /// About 8 characters, for the chip (see `shortTitle`).
     public var short: String
@@ -76,7 +76,7 @@ public struct LiveChat: Codable, Hashable {
 }
 
 /// The ActivityKit `ContentState` of the card.
-public struct LiveCardState: Codable, Hashable {
+public struct LiveCardState: Codable, Hashable, Sendable {
     public var chats: [LiveChat]
     public var focusId: String?
     /// Chats past the eight the state carries.

@@ -828,7 +828,7 @@ struct AgentPanel: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .containerRelativeFrame(.vertical) { h, _ in h * 0.62 }
-            .refreshable { await monitor.refresh() }
+            .pawRefreshable { await monitor.refresh() }
             if let notice {
                 Label(notice.text, systemImage: notice.ok ? "checkmark.circle" : "exclamationmark.triangle")
                     .font(.footnote).foregroundStyle(notice.ok ? palette.ink : palette.danger)

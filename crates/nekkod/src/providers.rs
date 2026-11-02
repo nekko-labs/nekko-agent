@@ -7,8 +7,7 @@
 //! lms.ts). The provider list is a setting, so writes go through
 //! `crate::settings::update` and the host hears of them. A provider signed in
 //! through OAuth gets a fresh token from `crate::oauth` ([`resolve`]); other
-//! daemon modules use [`resolve_provider`] and [`list_models`]. Owned while
-//! the daemon knows the data directory (it then owns settings and tokens).
+//! daemon modules use [`resolve_provider`] and [`list_models`].
 
 use crate::routes::Ctx;
 use nekko_remote::phone_providers;
@@ -209,7 +208,7 @@ pub async fn resolve(ctx: &Ctx, config: &Value) -> Result<Value, String> {
             "Provider is configured for subscription sign-in but has no token key. Sign in again in Settings.".into()
         );
     };
-    let oauth = ctx.oauth.as_ref().ok_or("Sign-in is not available here.")?;
+    let oauth = &ctx.oauth;
     let access = oauth.ensure_fresh(&key, false).await?;
     let account = match config.get("accountId") {
         Some(v) if !v.is_null() => Some(v.clone()),
@@ -509,7 +508,7 @@ pub fn is_localhost_url(base_url: &str) -> bool {
 /// `lmsBin()`: LM Studio's own install of the CLI, else whatever is on PATH.
 fn lms_bin() -> PathBuf {
     let name = if cfg!(windows) { "lms.exe" } else { "lms" };
-    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+    let home = nekko_js::home_dir();
     match home.map(|h| h.join(".lmstudio").join("bin").join(name)) {
         Some(p) if p.exists() => p,
         _ => PathBuf::from("lms"),
@@ -548,6 +547,19 @@ async fn lms_installed() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn api_catalog_cache_is_scoped_to_credentials_and_does_not_keep_empty_results() {
+        let cache = CatalogCache::default();
+        let a = catalog_key(&json!({"kind": "chatgpt", "accountId": "a", "apiKey": "first"}));
+        let b = catalog_key(&json!({"kind": "chatgpt", "accountId": "b", "apiKey": "second"}));
+        let models = vec![nekko_agent::ModelInfo { id: "api-model".into(), ..Default::default() }];
+        cache.put("provider", a, &models);
+        assert_eq!(cache.get("provider", a).unwrap()[0].id, "api-model");
+        assert!(cache.get("provider", b).is_none());
+        cache.put("provider", a, &[]);
+        assert!(cache.get("provider", a).is_none());
+    }
 
     #[test]
     fn localhost_urls_are_recognised_as_lms_js_did() {

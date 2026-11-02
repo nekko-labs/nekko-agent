@@ -20,6 +20,11 @@ import {
   clearZone,
   fillZone,
   nextZoneName,
+  nextZoneTint,
+  agentZoneTints,
+  setZoneTint,
+  zoneTints,
+  openWallPane,
   startZones,
   targetZone,
   autoShape,
@@ -248,7 +253,7 @@ describe('zones', () => {
     const root = two();
     const [za, zb] = allPanes(root);
     const cleared = clearZone(root, za.id);
-    expect(findPane(cleared, za.id)).toEqual({ id: za.id, kind: 'zone', refId: '', zone: 'Zone 1' });
+    expect(findPane(cleared, za.id)).toEqual({ id: za.id, kind: 'zone', refId: '', zone: 'Zone 1', tint: 0 });
     const filled = fillZone(cleared, za.id, 'chat', 'b');
     expect(allPanes(filled).map((p) => `${p.zone}:${p.kind}:${p.refId}`)).toEqual(['Zone 1:chat:b', 'Zone 2:zone:']);
     expect(fillZone(root, zb.id, 'chat', 'b')).toBe(root);
@@ -260,6 +265,33 @@ describe('zones', () => {
     expect(targetZone({ root, activeZone: z2.id })).toBe(z2.id);
     expect(targetZone({ root, activeZone: 'gone' })).toBe(z1.id);
     expect(targetZone({ root: null, activeZone: null })).toBeNull();
+  });
+  it('shows an agent already on the board in its own zone instead of moving it', () => {
+    const root = two();
+    const [z1, z2] = allPanes(root);
+    const state = { ...DEFAULT_WALL_STATE, root, zones: true, activeZone: z1.id, hero: 'a', layout: { ...DEFAULT_WALL_STATE.layout, mode: 'grid' as const } };
+    const shown = openWallPane(state, 'chat', 'b');
+    expect(shown.root).toBe(root);
+    expect(shown.activeZone).toBe(z2.id);
+    // One not on the board still goes into the active zone.
+    const opened = openWallPane(state, 'chat', 'c');
+    expect(allPanes(opened.root).map((p) => p.refId)).toEqual(['c', 'b']);
+  });
+  it('colours each zone, keeps the colour through a swap, and fills in walls saved before colours', () => {
+    const root = two();
+    const [z1, z2] = allPanes(root);
+    expect([...zoneTints(root).values()]).toEqual([0, 1]);
+    expect(nextZoneTint(root)).toBe(2);
+    expect(addZone(root, { edge: 'right' }).root && allPanes(addZone(root, { edge: 'right' }).root).map((p) => p.tint)).toEqual([0, 1, 2]);
+    // The colour belongs to the zone, not the agent in it.
+    const swapped = fillZone(root, z1.id, 'chat', 'b');
+    expect(agentZoneTints(swapped)).toEqual(new Map([['b', 0], ['a', 1]]));
+    const recoloured = setZoneTint(root, z2.id, 4);
+    expect(agentZoneTints(recoloured).get('b')).toBe(4);
+    expect(nextZoneTint(recoloured)).toBe(1);
+    // A wall from before colours: tints are dealt out in reading order, the same every time.
+    const legacy = { ...root, children: allPanes(root).map(({ tint: _, ...p }) => p) };
+    expect([...zoneTints(legacy).values()]).toEqual([0, 1]);
   });
 });
 

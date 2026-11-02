@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { estimateTranscriptTokens, estimateTokens } from './context.js';
 import {
   claudeContextWindow,
-  claudeMaxOutputTokens,
   effectiveEffort,
   guessContextWindow,
   modelDefaultEffort,
@@ -93,23 +92,5 @@ describe('effort capability', () => {
     expect(effectiveEffort('medium', 'gpt-5')).toBe('medium');
     expect(effectiveEffort('medium', 'llama3')).toBe('normal');
     expect(effectiveEffort('xhigh', 'claude-opus-5')).toBe('xhigh');
-  });
-});
-
-describe('claudeMaxOutputTokens', () => {
-  it('reads the output ceiling off the family and generation', () => {
-    expect(claudeMaxOutputTokens('claude-opus-5-5')).toBe(64_000);
-    expect(claudeMaxOutputTokens('anthropic/claude-opus-4-1')).toBe(32_000);
-    expect(claudeMaxOutputTokens('claude-opus-4-5')).toBe(64_000);
-    expect(claudeMaxOutputTokens('claude-sonnet-4-6')).toBe(64_000);
-    expect(claudeMaxOutputTokens('claude-3-5-sonnet')).toBe(32_000); // not the family-first id shape: unknown
-    expect(claudeMaxOutputTokens('claude-sonnet-3-5')).toBe(8_192);
-    expect(claudeMaxOutputTokens('claude-haiku-4-5-20251001')).toBe(64_000);
-    expect(claudeMaxOutputTokens('claude-haiku-5-5')).toBe(128_000);
-    expect(claudeMaxOutputTokens('claude-fable-5-1')).toBe(64_000);
-  });
-  it('gives an unrecognised id a generous middle value', () => {
-    expect(claudeMaxOutputTokens('my-proxy-model')).toBe(32_000);
-    expect(claudeMaxOutputTokens(undefined)).toBe(32_000);
   });
 });

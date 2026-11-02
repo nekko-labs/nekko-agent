@@ -11,7 +11,7 @@ import kotlinx.serialization.json.put
  * The phone's own copy of one computer's chat list, kept while *Keep the chat
  * list when offline* is on (the default since OF-9). The same shape
  * as the iPhone app's `SavedChatList`: each visible chat's id, title, times,
- * folder and manual order, plus the folder names. Never replies, first
+ * folder, manual order and pin, plus the folder names. Never replies, first
  * messages, models or anything a chat contains.
  */
 data class SavedChatList(val savedAt: Long, val summaries: List<SessionSummary>, val folders: List<WorkspaceFolder>) {
@@ -26,6 +26,7 @@ data class SavedChatList(val savedAt: Long, val summaries: List<SessionSummary>,
                 s.workspaceId?.let { put("workspaceId", it) }
                 s.archivedAt?.let { put("archivedAt", it) }
                 s.order?.let { put("order", JsonPrimitive(it)) }
+                if (s.pinned) put("pinned", true)
             }
         }))
         put("folders", buildJsonArray {

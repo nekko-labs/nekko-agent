@@ -22,23 +22,17 @@ pub const INTERRUPTED_NOTE: &str =
 const SWEEP_FIRST: Duration = Duration::from_secs(60);
 const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
-}
-
 /// `auto_start_engine` off (a one-shot CLI command): the model server is left as it is.
 pub fn start(ctx: &Ctx, auto_start_engine: bool) {
-    if let Some(store) = ctx.sessions.clone() {
-        let marked = reconcile_interrupted(&store);
-        if marked > 0 {
-            eprintln!("nekkod: {marked} chat(s) were mid-reply when the app last closed");
-        }
+    let marked = reconcile_interrupted(&ctx.sessions);
+    if marked > 0 {
+        eprintln!("nekkod: {marked} chat(s) were mid-reply when the app last closed");
     }
-    if ctx.server.is_some() && ctx.settings.is_some() {
+    {
         let ctx = ctx.clone();
         tokio::spawn(async move { start_engine(&ctx, auto_start_engine).await });
     }
-    if ctx.sessions.is_some() && ctx.settings.is_some() {
+    {
         crate::auto_continue::start(ctx);
         let ctx = ctx.clone();
         tokio::spawn(async move {
@@ -92,11 +86,14 @@ fn interrupted_reply() -> Value {
     let _ = getrandom::fill(&mut rand);
     let r = crate::turns::base36(u32::from_le_bytes(rand) as u64);
     let mut m = Map::new();
-    m.insert("id".into(), json!(format!("msg_{}_{}", crate::turns::base36(now_ms()), &format!("{r:0>6}")[..6])));
+    m.insert(
+        "id".into(),
+        json!(format!("msg_{}_{}", crate::turns::base36(nekko_js::now_ms()), &format!("{r:0>6}")[..6])),
+    );
     m.insert("role".into(), json!("assistant"));
     m.insert("content".into(), json!(format!("_The app closed while this reply was running._\n\n{INTERRUPTED_NOTE}")));
     m.insert("interrupted".into(), json!(true));
-    m.insert("createdAt".into(), json!(now_ms()));
+    m.insert("createdAt".into(), json!(nekko_js::now_ms()));
     Value::Object(m)
 }
 
@@ -105,9 +102,7 @@ async fn start_engine(ctx: &Ctx, auto_start: bool) {
     let settings = crate::settings::current(ctx).await;
     let engine = crate::library::engine_settings(&settings);
     let base_url = format!("http://127.0.0.1:{}/v1", nekko_js::display(engine.get("port").unwrap_or(&json!(11500))));
-    if let Some(s) = &ctx.settings {
-        crate::model_server::ensure_engine_provider(s, &base_url).await;
-    }
+    crate::model_server::ensure_engine_provider(&ctx.settings, &base_url).await;
     // Opt-in only, and never fatal: a port taken by something else leaves a
     // line in the engine's log for the Models tab, not a failed launch.
     if auto_start && nekko_js::truthy(engine.get("autoStart")) {

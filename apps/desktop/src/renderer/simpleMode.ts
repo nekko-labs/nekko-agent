@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { parseSimpleChoices, simpleShown, type SimpleChoices, type SimpleVisibility } from '@nekko-agent/shared';
 
 /*
- * Simple and Expert (decision 0030, spec desktop/desktop-simple-and-expert-modes). Simple is
+ * Simple and Expert (decision 0040, spec desktop/desktop-simple-and-expert-modes). Simple is
  * the everyday app: developer controls stay out of sight. Expert shows every
  * control. Settings > Simple mode chooses, per control, whether it shows in
  * both modes, in Expert only, or nowhere. Both are kept on this computer and

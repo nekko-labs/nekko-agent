@@ -5,7 +5,7 @@ Nekko Agent can send anonymous reports of which features get used and what goes 
 ## Turning it on or off
 
 - During setup, the **Help improve Nekko Agent?** step asks once. Skipping it leaves reports off.
-- Any time: **Settings > System > Help improve Nekko Agent**.
+- Any time: **Settings > General > Help improve Nekko Agent** (the first card).
 
 Each time you turn it on, Nekko Agent makes a new random id, so reports from before and after are not linked.
 

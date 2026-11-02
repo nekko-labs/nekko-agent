@@ -63,7 +63,7 @@ describe('local models and provider headings', () => {
     expect(out).toContain('data-model-name="true">Muse-Glimmer-30B<');
     expect(out).toContain('>lmstudio/lmstudio-community</span>');
     expect(out).not.toContain('data-model-name="true">lmstudio/');
-    expect(out).toMatch(/text-\[12px\] font-semibold text-ink" data-provider-heading="true">Nekko Agent engine/);
+    expect(out).toMatch(/text-xs font-semibold text-ink" data-provider-heading="true">Nekko Agent engine/);
   });
   it('keeps a cloud id with a slash as its name and price line', () => {
     const providers = [{ id: 'or', kind: 'openrouter' as const, label: 'OpenRouter', enabled: true, baseUrl: 'https://openrouter.ai/api/v1' }];
@@ -82,6 +82,15 @@ describe('account emails in the picker', () => {
       const chip = renderToStaticMarkup(<ModelPicker open={false} providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
       expect(chip).toContain('Model: Claude Opus · Claude API · Davide@Example.com');
     } finally { emails.byToken = {}; }
+  });
+});
+
+describe('subscription model version labels', () => {
+  it('names the resolved Claude version in the selected alias row without renaming other aliases', () => {
+    const out = renderToStaticMarkup(<ModelPicker expanded open providers={[{ id: 'cc', kind: 'claude-code', label: 'Claude Agent', baseUrl: '', enabled: true }]} providerId="cc" modelId="opus" resolvedModelId="claude-opus-5-5" models={[{ id: 'opus', providerId: 'cc', name: 'Claude Opus' }, { id: 'sonnet', providerId: 'cc', name: 'Claude Sonnet' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    expect(out).toContain('Claude Opus (Opus 5.5)');
+    expect(out).toContain('Currently Opus 5.5');
+    expect(out).toContain('Claude Code chooses the version when the chat starts');
   });
 });
 

@@ -9,7 +9,7 @@ import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { StatusIcon, WorkspaceCard, agentStatusOfLane, type AgentStatus } from '../components/WorkspaceCard.js';
+import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
@@ -22,6 +22,7 @@ import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
+import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
@@ -138,10 +139,12 @@ type SidebarActions = {
   onOrientation?: (orientation: AgentPanelOrientation) => void;
   /** Hide the panel; the Agents toolbar offers it back. */
   onClosePanel?: () => void;
+  /** The colour of the zone showing each agent on the board, by chat or terminal id. */
+  zoneTints?: Map<string, number>;
 };
 
 /** The Agent board's list of agents: one card per active agent, grouped, beside or above the wall. */
-export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, orientation = 'vertical', onOrientation, onClosePanel }: SidebarActions) {
+export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate, orientation = 'vertical', onOrientation, onClosePanel, zoneTints }: SidebarActions) {
   const horizontal = orientation === 'horizontal';
   const {
     sessions, terminals, workspaces, settings,
@@ -204,6 +207,20 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
   const [doneMenu, setDoneMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  // The chat whose card title is a text field, from the pencil or the menu's Rename.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const renameChat = async (id: string, typed: string | null) => {
+    setRenamingId(null);
+    const title = chatRenameTitle(typed, sessions.find((s) => s.id === id)?.title);
+    if (!title) return;
+    try {
+      const saved = await window.nekko.setSessionOptions(id, { title });
+      if (!saved) throw new Error('Chat no longer exists');
+      // An open pane's header shows its own copy of the chat.
+      window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id, session: saved } }));
+      await refreshSessions();
+    } catch (e) { useStore.getState().pushToast('error', `Could not rename the chat: ${e instanceof Error ? e.message : String(e)}`); }
+  };
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
@@ -259,6 +276,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const completionTipSessionId = useStore((s) => s.completionTipSessionId);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
+  /** Completed rows rendered per group past the first page ("Show more"). */
+  const [completedShown, setCompletedShown] = useState<Record<string, number>>({});
   const [sidebarW, setSidebarW] = useState(readSidebarWidth);
   const saveSidebarW = (px: number) => {
     const w = clampSidebarWidth(px);
@@ -600,7 +619,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
       data-agent-panel
       data-orientation={orientation}
     >
-      <div className={horizontal ? 'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-line px-1.5 py-2' : 'flex items-center justify-between px-3 py-2.5'} data-agent-panel-header>
+      <div className={horizontal ? 'flex shrink-0 flex-col items-center justify-center gap-1 border-r border-line px-2 py-2' : 'flex items-center justify-between px-3 py-2'} data-agent-panel-header>
         {/* A column panel keeps show/hide and orientation at its left and the
             + at its right; a row panel stacks all three in its left strip. */}
         {!horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
@@ -608,7 +627,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           {horizontal && <AgentPanelControls show orientation={orientation} onToggle={() => onClosePanel?.()} onOrientation={(next) => onOrientation?.(next)} />}
           <button
             ref={viewButtonRef}
-            className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${viewMenu ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
+            className={`agent-panel-view btn btn-ghost px-2 py-1 ${viewMenu ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
             title="View options: group, sort and show"
             aria-label="Agent panel view options"
             aria-haspopup="menu"
@@ -621,7 +640,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           </button>
           <HoverTip label={`Search chats (${SHORTCUTS.searchChats.label})`}><span className="inline-flex"><button
             ref={finderButtonRef}
-            className={`agent-panel-view btn btn-ghost px-1.5 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
+            className={`agent-panel-view btn btn-ghost px-2 py-1 ${finderOpen ? 'is-open text-ink' : 'text-ink-faint hover:text-ink'}`}
             aria-label="Search chats"
             aria-haspopup="dialog"
             aria-expanded={finderOpen}
@@ -639,7 +658,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           )}
           <button
             ref={newMenuButtonRef}
-            className={`agent-panel-plus btn btn-ghost px-1.5 py-1 ${newMenuOpen ? 'is-open' : ''}`}
+            className={`agent-panel-plus btn btn-ghost px-2 py-1 ${newMenuOpen ? 'is-open' : ''}`}
             title="New agent"
             aria-label="New agent"
             aria-haspopup="menu"
@@ -655,7 +674,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
             <div
               ref={newMenuPopRef}
               data-new-agent-menu
-              className="create-menu card fixed z-[1000] w-max min-w-48 p-1 shadow-lg"
+              className="create-menu card fixed z-[1000] w-max min-w-48 p-1 shadow-(--shadow-float)"
               style={{ top: newMenuPos.top, left: newMenuPos.left }}
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
@@ -670,7 +689,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           )}
         </div>
       </div>
-      <div ref={listRef} className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1.5' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
+      <div ref={listRef} className={horizontal ? 'agent-panel-row flex min-w-0 flex-1 items-start gap-3 overflow-x-auto overflow-y-hidden px-2 py-1' : 'agent-panel-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 pb-3'} data-agent-panel-list onWheel={horizontal ? scrollRowWithWheel : undefined}>
         {groups.map((b) => {
           const { items, done } = b;
           const byProject = view.groupBy === 'project' && !utilityGroups.includes(b);
@@ -679,6 +698,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
           const completedOpen = completedGroup || showCompleted.has(b.key);
           const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
+          // A page of completed rows at a time; the selected or just-completed
+          // chat is always in it.
+          const completedCount = pagedCount(done.length, completedShown[b.key] ?? LIST_PAGE, Math.max(done.findIndex((s) => s.id === selectedId), done.findIndex((s) => s.id === completionTipSessionId)));
           const bucketActive = dropTarget === 'bucket:' + b.key;
           const groupGap = bucketActive && drag?.kind === 'project' && drag.id !== b.key;
           return (
@@ -692,7 +714,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               onDrop={byProject ? (e) => { e.preventDefault(); e.stopPropagation(); dropOnBucket(b); } : undefined}
             >
               {!b.bare && <div
-                className="agent-panel-group-heading group flex items-center gap-1 rounded-lg px-1.5 py-1 hover:bg-surface-2"
+                className="agent-panel-group-heading group flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-surface-2"
                 draggable={byProject && !!b.ws}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setViewMenu({ x: e.clientX, y: e.clientY }); }}
                 onDragStart={byProject && b.ws ? (e) => {
@@ -718,9 +740,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     className={`h-3 w-3 shrink-0 text-accent transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
-                  <span className="agent-panel-group-label truncate font-semibold uppercase tracking-wider">{b.name}</span>
+                  <span className="agent-panel-group-label truncate font-medium" title={b.name} dir="auto">{b.name}</span>
                   {isCollapsed && (items.length > 0 || completedGroup) && (
-                    <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-1.5 text-[10px] tabular-nums text-ink-faint">
+                    <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
                     </span>
                   )}
@@ -728,7 +750,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                 {/* Not part of the row's project drag: a press that wanders a few
                     pixels would otherwise start dragging the project, and the
                     click on + never lands. */}
-                {byProject && <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100" data-group-actions
+                {byProject && <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100" data-group-actions
                   onPointerDown={() => { pressingGroupAction.current = true; }}>
                   <button className="rounded-md p-1 text-ink-faint hover:bg-paper hover:text-ink" title="New agent in this project"
                     disabled={pendingProjects.includes(b.key)} aria-label={`New agent in ${b.name}`}
@@ -743,7 +765,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
-                    <p className="px-3.5 py-1 text-[11px] text-ink-faint">No active agents</p>
+                    <p className="px-4 py-1 text-2xs text-ink-faint">No active agents</p>
                   )}
                   {items.map((entry) => {
                     const { w, s } = entry;
@@ -756,7 +778,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
-                        draggable={reorderable || !!s || !!entry.t}
+                        draggable={(reorderable || !!s || !!entry.t) && !(s && s.id === renamingId)}
                         {...{ [CARD_ATTR]: entry.key }}
                         onDragStart={(e) => {
                           if (reorderable) startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id });
@@ -784,12 +806,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
                           showProvider={view.showProvider}
+                          zoneTint={zoneTints?.get(s?.id ?? entry.t?.id ?? '')}
                           onOpen={() => {
                             if (s) onOpenChat(s.id);
                             else if (entry.t) onOpenTerminal(entry.t.id);
                             setMobileNav(false);
                           }}
                           onClose={() => (w ? archiveWorkspace(w.id) : s ? archiveChat(s.id) : undefined)}
+                          renaming={!!s && s.id === renamingId}
+                          onRenameStart={s ? () => setRenamingId(s.id) : undefined}
+                          onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
                         {kids.map((kid) => (
@@ -808,7 +834,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   {done.length > 0 && (
                     <div className={completedGroup ? '' : 'pt-1'}>
                       {!completedGroup && <button
-                        className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-[11px] text-ink-faint hover:bg-surface-2 hover:text-ink"
+                        className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-2xs text-ink-faint hover:bg-surface-2 hover:text-ink"
                         style={showTips && done.some((s) => s.id === completionTipSessionId) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
                         aria-expanded={completedOpen}
                         ref={showTips && done.some((s) => s.id === completionTipSessionId) ? completionDestinationRef : undefined}
@@ -821,11 +847,11 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         ><path d="M9 6l6 6-6 6" /></svg>
                         {completedOpen ? 'Hide completed' : `Show completed (${done.length})`}
                       </button>}
-                      {tipHere && <div role="status" className="mt-1 rounded-md border border-line p-2 text-[11px] text-ink-soft">
+                      {tipHere && <div role="status" className="mt-1 rounded-md border border-line p-2 text-2xs text-ink-soft">
                         {completedGroup ? 'Your completed chat is here. Open Completed to find or restore it.' : 'Your completed chat is here. Open Show completed to find or restore it.'}
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
                       </div>}
-                      {completedOpen && done.map((s) => (
+                      {completedOpen && done.slice(0, completedCount).map((s) => (
                         <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><CompletedRow
                           session={s}
                           now={now}
@@ -834,6 +860,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
                         /></div>
                       ))}
+                      {completedOpen && done.length > completedCount && (
+                        <button
+                          type="button"
+                          data-completed-more
+                          className="w-full rounded-md px-2 py-1 text-left text-2xs text-ink-faint hover:bg-surface-2 hover:text-ink"
+                          onClick={() => setCompletedShown((m) => ({ ...m, [b.key]: completedCount + LIST_PAGE }))}
+                        >
+                          {showMoreLabel(done.length - completedCount)}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -860,9 +896,10 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     >
       {viewMenu && <AgentPanelViewMenu x={viewMenu.x} y={viewMenu.y} view={view} onChange={setView} onClose={closeViewMenu} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-        <div className="select-text break-all px-2.5 py-2 font-mono text-[10px] text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
+        <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
+          <ContextAction disabled={menu.ids.length !== 1} onClick={() => { setRenamingId(menu.ids[0]); setMenu(null); }}>Rename</ContextAction>
           <ContextAction onClick={() => void runAction('complete',menu.ids)}>Mark as completed</ContextAction>
           <ContextAction onClick={() => setMenu({...menu, model:true})}>Change model</ContextAction>
           <ContextAction disabled={!menu.ids.some(id => statuses.has(id))} onClick={() => void runAction('stop',menu.ids)}>Stop{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
@@ -887,7 +924,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         <button className="btn btn-ghost" aria-label="Open agent list" aria-expanded={mobileNav}
           style={!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) ? { outline: '2px solid var(--accent)', background: 'var(--surface-2)' } : undefined}
           onClick={() => setMobileNav(true)}>Agents</button>
-        {!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) && <div role="status" className="mt-1 max-w-40 rounded-md border border-line p-2 text-[11px] text-ink-soft">
+        {!mobileNav && showTips && sessions.some((s) => s.id === completionTipSessionId && s.archivedAt) && <div role="status" className="mt-1 max-w-40 rounded-md border border-line p-2 text-2xs text-ink-soft">
           Your completed chat is in the agent list. Open Agents, then Show completed to find or restore it.
           <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
         </div>}
@@ -962,15 +999,15 @@ function CompletedRow({
       onClick={onOpen}
       onContextMenu={onContextMenu}
       data-completed-row={s.id}
-      className={`flex w-full items-center gap-1.5 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
+      className={`flex w-full items-center gap-2 rounded-lg py-1 pl-2 pr-2 text-left transition-colors duration-150 ${isActive ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
       title={`${s.title}\nCompleted ${new Date(at).toLocaleString()}\nKept until you delete it`}
     >
       <span className="inline-grid shrink-0 place-items-center" style={{ color: 'var(--success)' }} aria-label="Completed" role="img">
         <CheckIcon className="h-3 w-3" />
       </span>
-      <span className={`min-w-0 flex-1 truncate text-[12px] line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`}>{s.title}</span>
+      <span className={`min-w-0 flex-1 truncate text-xs line-through ${isActive ? 'text-ink-soft' : 'text-ink-faint'}`} dir="auto">{s.title || 'Untitled chat'}</span>
       <time
-        className="shrink-0 text-[10px] tabular-nums"
+        className="shrink-0 text-2xs tabular-nums"
         style={{ color: 'var(--ink-faint)' }}
         dateTime={new Date(at).toISOString()}
       >
@@ -989,7 +1026,7 @@ function SubAgentRow({
   return (
     <button
       onClick={onOpen}
-      className={`flex w-full items-center gap-2 rounded-lg py-1 pl-6 pr-2 text-left text-[12px] transition-colors duration-150 ${
+      className={`flex w-full items-center gap-2 rounded-lg py-1 pl-6 pr-2 text-left text-xs transition-colors duration-150 ${
         isActive ? 'bg-accent-soft text-ink' : 'text-ink-soft hover:bg-surface-2'
       }`}
     >
@@ -997,7 +1034,7 @@ function SubAgentRow({
         aria-hidden
         className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
       />
-      <span className="min-w-0 flex-1 truncate">{session.title}</span>
+      <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
       <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, session.activeWatchCount)} />
     </button>
   );

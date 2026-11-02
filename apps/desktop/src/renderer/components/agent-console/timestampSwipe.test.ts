@@ -6,6 +6,7 @@ function fixture() {
   const target = new EventTarget();
   const properties = new Map<string, string>();
   const classes = new Set<string>();
+  const list = { style: { transform: '' } };
   const el = Object.assign(target, {
     style: { setProperty: (k: string, v: string) => properties.set(k, v) },
     classList: {
@@ -13,6 +14,7 @@ function fixture() {
       toggle: (k: string, on: boolean) => (on ? classes.add(k) : classes.delete(k), on),
     },
     closest: () => null,
+    querySelector: () => list,
     setPointerCapture: vi.fn(), hasPointerCapture: () => true, releasePointerCapture: vi.fn(),
   });
   vi.stubGlobal('window', Object.assign(new EventTarget(), { getSelection: () => null }));
@@ -20,9 +22,9 @@ function fixture() {
   const send = (type: string, props = {}) => target.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), {
     pointerId: 1, isPrimary: true, button: 0, clientX: 200, clientY: 100, ...props,
   }));
-  // The row offset lives in --vt-reveal, applied only while .vt-revealing is set.
-  const shift = () => (classes.has('vt-revealing') ? properties.get('--vt-reveal') : '');
-  return { send, properties, shift, cleanup, el };
+  // The row offset is the list's own transform, set only while .vt-revealing is.
+  const shift = () => (classes.has('vt-revealing') ? list.style.transform.replace(/^translateX\(-?(.*)\)$/, '$1') : '');
+  return { send, properties, classes, shift, cleanup, el };
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe('timestamp swipe', () => {
@@ -52,6 +54,7 @@ describe('timestamp swipe', () => {
   it('cleans pending timers and styles on unmount', () => {
     const f = fixture(); f.send('wheel', { deltaX: 112, deltaY: 0 }); f.cleanup();
     vi.advanceTimersByTime(2000); expect(f.shift()).toBe('');
-    expect(f.properties.get('--vt-reveal-o')).toBe('0');
+    expect(f.classes.has('vt-stamps-on')).toBe(false);
+    expect(f.properties.size).toBe(0);
   });
 });

@@ -41,7 +41,7 @@ export function PrProgress({ url, info, checks: showChecks = true }: { url: stri
   const checks = info?.checkProgress;
   const threads = info?.reviewThreads;
   const canonical = canonicalPrUrl(url);
-  return <div className="mt-1 space-y-1 break-words text-[10px] text-ink-soft" data-pr-progress>
+  return <div className="mt-1 space-y-1 break-words text-2xs text-ink-soft" data-pr-progress>
     {showChecks && <><p><ProgressLink url={canonical && canonical + '/checks'}>CI checks</ProgressLink>: {checks ? checks.total ? `${checks.completed + checks.failing} of ${checks.total} finished · ${checks.completed} passed/neutral/skipped · ${checks.pending} pending · ${checks.failing} failing${checks.unknown ? ` · ${checks.unknown} unknown` : ''}` : 'None reported' : 'Unknown: checks unavailable'}</p>
     {!!checks?.items.length && <details><summary className="cursor-pointer">Check details</summary><ul className="mt-1 max-h-28 space-y-0.5 overflow-y-auto">{checks.items.map((check, index) => <li key={index}><ProgressLink url={check.link}>{check.name}</ProgressLink> · {check.state}</li>)}</ul></details>}</>}
     <p><ProgressLink url={canonical && canonical + '/files'}>Review threads</ProgressLink>: {threads ? `${threads.resolved} resolved · ${threads.unresolved} unresolved` : 'Unknown: resolution counts unavailable'}</p>

@@ -24,6 +24,8 @@ struct ChatView: View {
     @State private var viewing: PhotoSet?
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
+    /// The transcript's rows between renders (a streamed token patches only the last one).
+    @State private var rowCache = TranscriptRowCache()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(Prefs.self) private var prefs
     /// Expert mode's hardware and loaded models, read while the chat is on screen.
@@ -97,9 +99,8 @@ struct ChatView: View {
                             .font(.footnote).foregroundStyle(palette.inkFaint).frame(maxWidth: .infinity)
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
-                    // Simple mode keeps reasoning and tool steps out of sight unless chosen in Settings.
                     // Simple folds each turn's reasoning and tool steps to one line, unless chosen in Settings.
-                    let rows = TranscriptRow.of(chat.blocks)
+                    let rows = rowCache.rows(chat)
                     let items = prefs.shows("thinking") ? rows.map { FoldItem.row($0, reasoning: true) }
                         : TranscriptRow.folded(rows, open: openSteps, running: chat.turn.running)
                     ForEach(items) { item in
@@ -174,23 +175,31 @@ struct ChatView: View {
             .contentMargins(.top, pillRoom, for: .scrollContent)
             .hidesPillOnScroll($pillHidden)
           }
+            // The bar has no background to hide what scrolls behind it: stop the transcript at the
+            // bar's top edge, and leave the top open so it still runs under the navigation glass.
+            .clipShape(Rectangle().scale(x: 1, y: 2, anchor: .bottom))
             // Follow streamed output only while the reader is at the end, and
             // without animating every token (overlapping animations shudder).
-            .onChange(of: chat.blocks.last) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
+            .onChange(of: chat.blocksRevision) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
             // An approval or question card grows the bottom bar: keep the latest step above it.
             // After the card has been laid out: scrolling in the same update used the old inset.
             .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
             .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
             .overlay(alignment: .bottomTrailing) {
-                if !atBottom && chat.running {
-                    Button { scrollToEnd(proxy) } label: {
-                        Label("Jump to latest", systemImage: "arrow.down").labelStyle(.iconOnly)
-                            .font(.body.weight(.semibold)).frame(width: 44, height: 44)
-                            .background(.regularMaterial, in: Circle())
+                // Fades in and out (a fade, so also with Reduce Motion) rather than popping:
+                // `atBottom` changes outside any animation, as the end scrolls in or out of view.
+                ZStack {
+                    if !atBottom && chat.running {
+                        Button { scrollToEnd(proxy) } label: {
+                            Label("Jump to latest", systemImage: "arrow.down").labelStyle(.iconOnly)
+                                .font(.body.weight(.semibold)).frame(width: 44, height: 44)
+                                .background(.regularMaterial, in: Circle())
+                        }
+                        .padding(16)
+                        .transition(.opacity)
                     }
-                    .padding(16)
-                    .transition(.opacity)
                 }
+                .animation(.smooth(duration: 0.2), value: !atBottom && chat.running)
             }
             // Simple or Expert, and the minimal monitor while the hardware shows, floating
             // over the transcript; tapped, it opens into the agent's details.
@@ -205,7 +214,6 @@ struct ChatView: View {
               Color.clear.frame(height: CGFloat(flex.gap)).accessibilityHidden(true)
               ScrollView { bottomBar(chat) }
                   .scrollBounceBehavior(.basedOnSize)
-                  .background(.bar)
                   .accessibilityIdentifier("chat.flexLower")
           }
          }
@@ -323,7 +331,6 @@ struct ChatView: View {
             Composer(chat: chat, openTerminals: { showTerminals = true })
         }
         .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
-        .background(.bar)
     }
 
     /// Tabletop: where the hinge cuts this chat, when the pane host passes one and it falls inside.
@@ -470,7 +477,7 @@ enum TranscriptRow: Identifiable {
         var turnOf: [Int] = []
         var turnIds: [String] = ["start"]
         for row in rows {
-            if case .block(let b) = row, b.isPrompt { turnIds.append(b.id) }
+            if case .block(let b) = row, b.isPrompt, !row.isWake { turnIds.append(b.id) }
             turnOf.append(turnIds.count - 1)
         }
         var steps = Array(repeating: 0, count: turnIds.count)
@@ -503,7 +510,7 @@ enum TranscriptRow: Identifiable {
     var stepCount: Int {
         switch self {
         case .block(.tool): return 1
-        case .block: return 0
+        case .block: return isWake ? 1 : 0
         case .agents(let blocks), .purpose(_, let blocks, _): return blocks.count
         }
     }
@@ -512,9 +519,15 @@ enum TranscriptRow: Identifiable {
     var isStep: Bool {
         switch self {
         case .block(.tool): return true
-        case .block: return false
+        case .block: return isWake
         case .agents, .purpose: return true
         }
+    }
+
+    /// A watch's wake-up arrives as a user block, but it is a step of the run, not a new prompt.
+    var isWake: Bool {
+        if case .block(.user(_, let text, _, 0)) = self { return AgentRows.parseWake(text) != nil }
+        return false
     }
 
     static func of(_ blocks: [Block]) -> [TranscriptRow] {
@@ -530,6 +543,37 @@ enum TranscriptRow: Identifiable {
                 return purpose == .delegate && subagents ? .agents(items) : .purpose(purpose, items, calls)
             }
         }
+    }
+}
+
+/// `TranscriptRow.of`, kept between renders. While a reply streams, each token
+/// changes only the chat's last block (`ChatModel.blocksLayout` stays put), so
+/// only the last row is replaced instead of grouping the whole transcript again.
+/// A plain class in `@State`: reading it in `body` is memoization, not state.
+@MainActor
+final class TranscriptRowCache {
+    private var chat: ObjectIdentifier?
+    private var layout = -1
+    private var rows: [TranscriptRow] = []
+
+    func rows(_ chat: ChatModel) -> [TranscriptRow] {
+        let blocks = chat.blocks
+        if ObjectIdentifier(chat) == self.chat, chat.blocksLayout == layout, let last = blocks.last,
+           case .block(let shown)? = rows.last, shown.id == last.id, Self.breaker(shown), Self.breaker(last) {
+            rows[rows.count - 1] = .block(last)
+            return rows
+        }
+        self.chat = ObjectIdentifier(chat)
+        layout = chat.blocksLayout
+        rows = TranscriptRow.of(blocks)
+        return rows
+    }
+
+    /// A reply with text ends any purpose group (`Purpose.role`): its own row
+    /// whatever the text grows to. A reply still blank (reasoning only) may not be.
+    private static func breaker(_ b: Block) -> Bool {
+        if case .assistant(_, let text, _, _, _) = b { return text.contains { !$0.isWhitespace } }
+        return false
     }
 }
 
@@ -629,14 +673,14 @@ struct ApprovalCard: View {
             }
             HStack {
                 Button(role: .destructive) { decide(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
-                    .buttonStyle(.bordered).tint(palette.inkSoft)
+                    .buttonStyle(.bordered).tint(palette.inkSoft).buttonBorderShape(.roundedRectangle(radius: 8))
                 // Drawn rather than .borderedProminent, which the audit reports as clipping its label.
                 Button { decide(true) } label: {
                     Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Allow").font(.body.weight(.semibold)) } }
                         .foregroundStyle(palette.onAccent)
                         .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 12))
-                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
             }
@@ -645,7 +689,7 @@ struct ApprovalCard: View {
         }
         .padding(14)
         // A card, because it needs you; tinted by its risk rather than outlined.
-        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.09))) }
+        .background { RoundedRectangle(cornerRadius: 12).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.09))) }
         // The haptic comes from AppModel, per the user's vibration setting; VoiceOver gets told here.
         .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
     }
@@ -698,8 +742,11 @@ struct QuestionCard: View {
                         picked[q.id] = s
                     }
                     if picked[q.id]?.contains(askOtherLabel) == true {
-                        TextField("Your answer", text: Binding(get: { notes[q.id] ?? "" }, set: { notes[q.id] = $0 }), axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
+                        TextField("Your answer", text: Binding(get: { notes[q.id] ?? "" }, set: { notes[q.id] = $0 }),
+                                  prompt: Text("Your answer").foregroundStyle(palette.inkFaint), axis: .vertical)
+                            .font(.subheadline).foregroundStyle(palette.ink)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }
@@ -707,15 +754,19 @@ struct QuestionCard: View {
                 Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
             }
             Button(action: send) {
-                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer") } }
-                    .frame(maxWidth: .infinity).foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
+                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer").font(.footnote.weight(.semibold)) } }
+                    .foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(ready ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
+                    .frame(minHeight: 44).contentShape(Rectangle())
             }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.plain)
                 .disabled(!ready || busy)
         }
         .padding(14)
-        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(palette.accent.opacity(0.07))) }
+        // The message box's own surface and edge, so the two read as one panel.
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
     }
 
     private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
@@ -740,7 +791,7 @@ struct FlowOptions: View {
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack { chips }
-            VStack(alignment: .leading) { chips }
+            VStack(alignment: .leading, spacing: 0) { chips }
         }
     }
 
@@ -748,15 +799,15 @@ struct FlowOptions: View {
         ForEach(options, id: \.self) { o in
             let on = selected.contains(o)
             Button { tap(o) } label: {
-                // A checkmark as well as the colour, and a 44 pt target.
+                // A checkmark as well as the colour, and a 44 pt target around the slim chip.
                 HStack(spacing: 5) {
                     if on { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
                     Text(o)
                 }
-                .font(.footnote).padding(.horizontal, 14).frame(minHeight: 44)
-                .background(on ? palette.accent : palette.surface2, in: Capsule())
+                .font(.footnote).padding(.horizontal, 12).frame(minHeight: 36)
+                .background(on ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                 .foregroundStyle(on ? palette.onAccent : palette.ink)
-                .contentShape(Capsule())
+                .frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(on ? .isSelected : [])
@@ -784,7 +835,8 @@ struct HoldToTalkButton: View {
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
             .scaleEffect(down ? 1.15 : 1)
-            .animation(.easeOut(duration: 0.12), value: down)
+            // A critically damped spring: a fast press and release reverses from where it is.
+            .animation(.spring(response: 0.25, dampingFraction: 1), value: down)
             .gesture(DragGesture(minimumDistance: 0).updating($down) { _, pressed, _ in pressed = true })
             // Down, and up whether released or cancelled.
             .onChange(of: down) { _, pressed in
@@ -923,6 +975,10 @@ struct Composer: View {
                let saving = SimpleMode.longChatSaving(longChatContext, used: chat.contextTokens) {
                 LongChatNote(tokens: saving, startFresh: startFresh, dismiss: { prefs.dismissLongChat(chat.sessionId) })
             }
+            // The agent's plan, tucked behind the box's top edge (drawn first, so the box covers its foot).
+            if !PlanSheet.plan(chat, store).isEmpty {
+                PlanSheet(chat: chat).padding(.bottom, -(PlanSheet.tuck + 6))
+            }
             // One box the width of the screen: the message on top, + and Send inside it below.
             VStack(alignment: .leading, spacing: 0) {
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
@@ -1001,7 +1057,7 @@ struct Composer: View {
                         Button { send() } label: {
                             Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
                                 .padding(.horizontal, 12).frame(minHeight: 36)
-                                .background(canSend ? palette.accent : palette.surface2, in: Capsule())
+                                .background(canSend ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                                 .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
                                 .frame(minHeight: 44).contentShape(Rectangle())
                         }
@@ -1022,8 +1078,8 @@ struct Composer: View {
                 .padding(.horizontal, 4).padding(.bottom, 2)
             }
             .frame(maxWidth: .infinity)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
             // The chat's model and effort, and its context window, as Settings > Simple mode says.
             let parts = ModelEffortButton.parts(prefs, chat)
             if parts.model || parts.effort || prefs.shows("context") {

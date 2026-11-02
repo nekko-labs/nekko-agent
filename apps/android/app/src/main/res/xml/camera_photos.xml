@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The only folder the photo FileProvider shares: one camera shot at a time, deleted once read. -->
+<!-- The folders the app's FileProvider shares: one camera shot at a time, deleted once read,
+     and a diagram's picture while its share sheet is open (MM-4), replaced by the next one. -->
 <paths>
     <cache-path name="camera" path="camera/" />
+    <cache-path name="diagrams" path="diagram-share/" />
 </paths>

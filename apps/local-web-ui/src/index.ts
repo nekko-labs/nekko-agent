@@ -9,7 +9,7 @@ import { brandEnv, unsupportedPlatformReason } from '@nekko-agent/shared';
 import { parseCloudScope, runRelayAgent } from './relay-agent.js';
 import { runCli } from 'nekko-agent/run';
 import { isLoopbackHost, tokenMatches, validateBindSecurity } from './security.js';
-import { createApiSecurityHook, type RequestSecurityOptions } from './request-security.js';
+import { createApiSecurityHook, isOriginForm, type RequestSecurityOptions } from './request-security.js';
 import { registerWebhookRoutes, type WebhookTarget } from './webhooks.js';
 import { githubReviewConfig, registerGitHubReviewRoutes, ReviewReplayLedger, type RepositoryReviewInput, type RepositoryReviewVerdict } from './github-review.js';
 import { startNekkod } from 'nekko-agent/engine';
@@ -161,6 +161,7 @@ async function main() {
     }
   });
   app.server.on('upgrade', (req, socket, head: Buffer) => {
+    if (!isOriginForm(req.url)) return refuse(socket, 400, 'Bad Request');
     let url: URL;
     try {
       url = new URL(req.url ?? '/', 'http://127.0.0.1');

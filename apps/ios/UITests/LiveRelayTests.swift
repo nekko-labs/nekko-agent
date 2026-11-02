@@ -6,6 +6,7 @@ import XCTest
 /// it. Each step is a screenshot attachment (the PR's visual evidence).
 ///
 /// Opt-in: the CI passes `TEST_RUNNER_NEKKO_ITEST_LINK`; without it this skips.
+@MainActor
 final class LiveRelayTests: XCTestCase {
     /// How long a step the computer drives may take to reach the phone: a
     /// reply from the fake model, an approval or question card, a tool step,
@@ -613,6 +614,61 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(waitGone(panel, 10), "Simple mode hides the monitor")
     }
 
+    /// The plan sheet (#1474): the agent's `update_plan` shows behind the
+    /// composer folded to the step being worked, and opens to the whole plan.
+    func testPlanSheetBehindTheComposer() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-uiTestReset", "YES"]
+        app.launch()
+        allowSystemAlerts()
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        // The fake model answers "make a plan" with update_plan; the task link lands on the first step.
+        prompt.typeText("Make a plan for https://linear.app/nekko/issue/NEK-412")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait), "the reply after the plan streamed in")
+
+        let folded = app.buttons["chat.planFolded"]
+        XCTAssertTrue(folded.waitForExistence(timeout: busyWait), "the plan shows behind the composer")
+        XCTAssertTrue(app.staticTexts["Draw the plan sheet"].exists, "folded, it shows the step being worked")
+        XCTAssertTrue(app.staticTexts["2 of 4"].exists, "and where it is in the plan")
+        XCTAssertTrue(app.staticTexts["NEK-412"].exists, "the chat's task link, from the first step, says what the work is for")
+        settle()
+        attach(app, "plan-1-folded")
+
+        folded.tap()
+        XCTAssertTrue(app.buttons["chat.planOpen"].waitForExistence(timeout: 10), "tapping it opens the whole plan")
+        XCTAssertTrue(app.staticTexts["Open a pull request"].exists, "every step shows")
+        XCTAssertTrue(app.staticTexts["Tucked behind the composer"].exists, "the step being worked shows its note")
+        // The finished first step is squeezed to its title; a tap opens its note and task link.
+        XCTAssertFalse(app.staticTexts["Found the message box"].exists, "a finished step is squeezed")
+        app.descendants(matching: .any)["chat.planStep.step_1"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Found the message box"].waitForExistence(timeout: 5), "tapping a finished step opens it")
+        XCTAssertTrue(app.staticTexts["NEK-412"].exists, "the task link sits on the first step")
+        settle()
+        attach(app, "plan-2-open")
+        auditAccessibility(app, "plan-open")
+
+        app.buttons["chat.planOpen"].tap()
+        XCTAssertTrue(folded.waitForExistence(timeout: 10), "the header folds it again")
+    }
+
     func testPairFromADeepLink() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
@@ -696,7 +752,8 @@ final class LiveRelayTests: XCTestCase {
     /// `GET <NEKKO_ITEST_RELAY_CTL>/stop` or `/start` (apps/ios/scripts/relay-ctl.mjs): kill or restart the relay.
     private func relay(_ ctl: String, _ action: String) {
         let done = expectation(description: "relay \(action)")
-        var status = 0
+        // Written once by the callback, read after the wait below has seen it fulfilled.
+        nonisolated(unsafe) var status = 0
         URLSession.shared.dataTask(with: URL(string: "\(ctl)/\(action)")!) { _, response, _ in
             status = (response as? HTTPURLResponse)?.statusCode ?? 0
             done.fulfill()

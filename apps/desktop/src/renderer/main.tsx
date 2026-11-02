@@ -12,6 +12,11 @@ import './styles.css';
 import { useStore } from './store.js';
 import { playSplash } from './splash.js';
 import { isScreenWindow } from './displays.js';
+import { presenterRequest, startPresenterMode } from './presenter.js';
+
+// Presenter mode masks personal details outside Settings for recordings.
+const presenter = presenterRequest();
+if (presenter) startPresenterMode(presenter);
 
 // Resolve the system preference before mounting even the loading or login UI.
 useStore.getState().applyTheme();

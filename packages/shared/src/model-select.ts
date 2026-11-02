@@ -141,20 +141,6 @@ function autoReason(quality: AutoQuality, complex: boolean, count: number): stri
 }
 
 /**
- * Pick a concrete model id for a prompt from the available list. Thin wrapper
- * over `pickAutoModel` for callers that only want the id. Returns null only
- * when there are no models.
- */
-export function recommendModel(
-  models: ModelInfo[],
-  prompt: string,
-  preferred: Set<string> = new Set(),
-  quality: AutoQuality = 'normal',
-): string | null {
-  return pickAutoModel(models, prompt, { quality, preferred })?.modelId ?? null;
-}
-
-/**
  * A usage window is "spent" for switching purposes once it is rate-limited or
  * within the last sliver of its allowance: at 95% a turn queued behind it would
  * still land, but the turn after that very likely would not, so the honest

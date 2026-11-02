@@ -41,7 +41,7 @@ struct CloudView: View {
                         Text("Signing out keeps the synced chats on this iPhone until you forget everything in Settings.").foregroundStyle(palette.inkSoft)
                     }
                 }
-                .refreshable { await run { try await cloud.sync() } }
+                .pawRefreshable { await run { try await cloud.sync() } }
             }
         }
         .appBackground()
@@ -205,7 +205,7 @@ struct CloudSignInView: View {
                 if sent {
                     TextField("123456", text: $code)
                         .textContentType(.oneTimeCode).keyboardType(.numberPad)
-                        .font(.system(size: 30, weight: .semibold, design: .monospaced)).tracking(10)
+                        .font(.system(.title, design: .monospaced).weight(.semibold)).tracking(10)
                         .multilineTextAlignment(.center).padding(.vertical, 12)
                         .background(palette.surface, in: RoundedRectangle(cornerRadius: 14))
                         .overlay(RoundedRectangle(cornerRadius: 14).stroke(codeFocused ? palette.accent : palette.line))

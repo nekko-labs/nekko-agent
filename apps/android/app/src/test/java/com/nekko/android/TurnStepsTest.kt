@@ -57,6 +57,13 @@ class TurnStepsTest {
         assertEquals(false, (rows.last() as Row.Item).stepsOpen)
     }
 
+    @Test fun `a watch's wake-up is a step of its turn, not a new prompt`() {
+        val wake = Block.User("w1", "[Agent watch t-9]\nWatch deadline reached at 10:00")
+        val rows = fold(listOf(turn[0], turn[2], wake, turn[3], turn[4]))
+        assertEquals(listOf("u1", "steps:t1", "a2"), rows.map { if (it is Row.Summary) "steps:${it.turn}" else ((it as Row.Item).item.id) })
+        assertEquals(3, (rows[1] as Row.Summary).steps)
+    }
+
     @Test fun `a running turn counts its steps so far and has no duration`() {
         val live = listOf(Block.User("u1", "Go", at = 1_000), Block.Tool("t1", "bash", "Ran ls", ToolStatus.RUNNING))
         val s = fold(live, running = true).filterIsInstance<Row.Summary<Block>>().single()

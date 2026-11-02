@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, type Plan, SYNC_PLANS } from "./auth.js";
 import type { Db } from "./db.js";
@@ -21,6 +22,8 @@ const WRAP_BYTES = 1 + 65 + 64 + 16;
 const RECOVERY_BYTES = WRAP_BYTES;
 // version, salt, the smallest padded frame (256), tag.
 const MIN_OBJECT_BYTES = 1 + 32 + 256 + 16;
+// The epoch proof: HKDF-SHA256 of the keyring (crates/nekko-sync epoch_proof).
+const PROOF_BYTES = 32;
 
 const B64URL = /^[A-Za-z0-9_-]*$/;
 const COLLECTION = /^[a-z][a-z0-9-]{0,31}$/;
@@ -60,19 +63,44 @@ const wire = (r: ObjectRow) => ({
 const FRESH_SIGN_IN_MS = 10 * 60 * 1000;
 
 /**
- * Is the caller a device that holds this epoch's keys (it has a wrap)? The
- * routes that change keys, devices or everything at once need one. This stops
- * someone who can only sign in to the account; the clients' own checks are
- * what stop a malicious server.
+ * Is the caller a device that holds this epoch's keys? It needs a wrap for the
+ * epoch on its live device, and the token must have shown the epoch proof (a
+ * value only the keyring yields; the server keeps its hash). The routes that
+ * change keys, devices or everything at once need one. This stops someone who
+ * can only sign in to the account; the clients' own checks are what stop a
+ * malicious server.
  */
 async function keyed(db: Db, caller: Caller, keyId: number): Promise<boolean> {
   if (!caller.deviceId) return false;
   const { rows } = await db.query(
-    `select 1 from sync_key_wraps w join sync_devices d on d.id = w.device_id
-      where w.user_id = $1 and w.key_id = $2 and w.device_id = $3 and d.revoked_at is null`,
-    [caller.userId, keyId, caller.deviceId],
+    `select 1 from sync_key_wraps w
+       join sync_devices d on d.id = w.device_id
+       join sync_keyrings k on k.user_id = w.user_id and k.key_id = w.key_id
+       join api_tokens t on t.id = $4 and t.user_id = w.user_id
+      where w.user_id = $1 and w.key_id = $2 and w.device_id = $3 and d.revoked_at is null
+        and k.proof_hash is not null and t.sync_proven_key_id = w.key_id`,
+    [caller.userId, keyId, caller.deviceId, caller.tokenId],
   );
   return rows.length === 1;
+}
+
+const proofHash = (proof: Buffer) => createHash("sha256").update(proof).digest();
+
+/** Does the proof match the epoch's stored hash? A keyring without one matches nothing. */
+async function proofMatches(db: Db, userId: string, keyId: number, proof: Buffer): Promise<boolean> {
+  const { rows } = await db.query<{ proof_hash: Buffer | null }>(
+    "select proof_hash from sync_keyrings where user_id = $1 and key_id = $2",
+    [userId, keyId],
+  );
+  const stored = rows[0]?.proof_hash;
+  if (!stored) return false;
+  const want = Buffer.from(stored);
+  const got = proofHash(proof);
+  return want.length === got.length && timingSafeEqual(want, got);
+}
+
+async function markProven(db: Db, caller: Caller, keyId: number): Promise<void> {
+  await db.query("update api_tokens set sync_proven_key_id = $1 where id = $2", [keyId, caller.tokenId]);
 }
 
 async function currentKeyId(db: Db, userId: string): Promise<number | null> {
@@ -165,8 +193,13 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     const { id } = req.params as { id: string };
     if (!UUID.test(id)) return reply.code(404).send({ error: "not-found" });
     const current = await currentKeyId(db, caller.userId);
-    if (id !== caller.deviceId && current !== null && !(await keyed(db, caller, current))) {
-      return reply.code(403).send({ error: "needs-synced-device" });
+    // A device still waiting to join (no wrap for the current epoch) may remove
+    // itself; removing any other device, or one that holds the keys, needs a
+    // token that proved it holds them.
+    if (current !== null && !(await keyed(db, caller, current))) {
+      const pending = id === caller.deviceId
+        && !(await db.query("select 1 from sync_key_wraps where user_id = $1 and key_id = $2 and device_id = $3", [caller.userId, current, id])).rows.length;
+      if (!pending) return reply.code(403).send({ error: "needs-synced-device" });
     }
     return db.transaction(async (tx) => {
       const { rows } = await tx.query<{ id: string }>(
@@ -187,9 +220,10 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     const keyId = Number((req.params as { keyId: string }).keyId);
     const body = (req.body ?? {}) as Record<string, unknown>;
     const recovery = bytes(body.recoveryWrap, RECOVERY_BYTES);
+    const proof = bytes(body.proof, PROOF_BYTES);
     const wraps = Array.isArray(body.wraps) ? body.wraps : null;
-    if (!isPositiveInt(keyId, 1_000_000) || !recovery || !wraps || wraps.length > 100) {
-      return reply.code(400).send({ error: "expected recoveryWrap and wraps for a positive keyId" });
+    if (!isPositiveInt(keyId, 1_000_000) || !recovery || !proof || !wraps || wraps.length > 100) {
+      return reply.code(400).send({ error: "expected recoveryWrap, proof and wraps for a positive keyId" });
     }
     const parsed: { deviceId: string; wrap: Buffer }[] = [];
     for (const w of wraps as Record<string, unknown>[]) {
@@ -207,7 +241,14 @@ export function registerSync(app: FastifyInstance, db: Db): void {
         ? !!caller.deviceId && parsed.some((w) => w.deviceId === caller.deviceId)
         : await keyed(tx, caller, current);
       if (!allowed) return reply.code(403).send({ error: "needs-synced-device" });
-      await tx.query("insert into sync_keyrings (user_id, key_id, recovery_wrap) values ($1, $2, $3)", [caller.userId, keyId, recovery]);
+      await tx.query("insert into sync_keyrings (user_id, key_id, recovery_wrap, proof_hash) values ($1, $2, $3, $4)", [
+        caller.userId,
+        keyId,
+        recovery,
+        proofHash(proof),
+      ]);
+      // The device that made the epoch holds it.
+      await markProven(tx, caller, keyId);
       for (const w of parsed) {
         const ok = (await insertWrap(tx, caller.userId, keyId, w.deviceId, w.wrap)) === "ok";
         if (!ok) throw Object.assign(new Error("unknown device"), { statusCode: 400 });
@@ -221,23 +262,49 @@ export function registerSync(app: FastifyInstance, db: Db): void {
 
   // A device that holds the current epoch adds a wrap for one it approved,
   // or a device that restored with the recovery key wraps the epoch to
-  // itself. Only to the current epoch, and never over an existing wrap.
+  // itself (with the epoch proof, which marks its token proven). Only to the
+  // current epoch, and never over an existing wrap.
   app.put("/v1/sync/keyrings/:keyId/wraps/:deviceId", async (req, reply) => {
     const caller = await guard(req, reply, true);
     if (!caller) return;
     const { keyId: rawKey, deviceId } = req.params as { keyId: string; deviceId: string };
     const keyId = Number(rawKey);
-    const wrap = bytes((req.body as Record<string, unknown> | undefined)?.wrap, WRAP_BYTES);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const wrap = bytes(body.wrap, WRAP_BYTES);
+    // Only a wrap to the caller's own device can bring its proof along.
+    const proof = deviceId === caller.deviceId && body.proof !== undefined ? bytes(body.proof, PROOF_BYTES) : null;
     if (!isPositiveInt(keyId, 1_000_000) || !UUID.test(deviceId) || !wrap) return reply.code(400).send({ error: "bad wrap" });
+    if (deviceId === caller.deviceId && body.proof !== undefined && !proof) return reply.code(400).send({ error: "expected a 32-byte proof" });
     return db.transaction(async (tx) => {
       await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
       const current = await currentKeyId(tx, caller.userId);
       if (current === null || keyId > current) return reply.code(404).send({ error: "not-found" });
       if (keyId !== current) return reply.code(409).send({ error: "key-epoch", currentKeyId: current });
-      if (deviceId !== caller.deviceId && !(await keyed(tx, caller, keyId))) return reply.code(403).send({ error: "needs-synced-device" });
+      const proven = !!proof && (await proofMatches(tx, caller.userId, keyId, proof));
+      if (!proven && !(await keyed(tx, caller, keyId))) return reply.code(403).send({ error: "needs-synced-device" });
       const result = await insertWrap(tx, caller.userId, keyId, deviceId, wrap);
       if (result === "unknown-device") return reply.code(400).send({ error: "unknown-device" });
       if (result === "exists") return reply.code(409).send({ error: "wrap-exists" });
+      if (proven) await markProven(tx, caller, keyId);
+      return reply.code(204).send();
+    });
+  });
+
+  // A token shows it holds the current epoch's keyring (after joining,
+  // adopting a new epoch or signing in again). Idempotent.
+  app.post("/v1/sync/keyrings/:keyId/proof", async (req, reply) => {
+    const caller = await guard(req, reply, false);
+    if (!caller) return;
+    const keyId = Number((req.params as { keyId: string }).keyId);
+    const proof = bytes((req.body as Record<string, unknown> | undefined)?.proof, PROOF_BYTES);
+    if (!isPositiveInt(keyId, 1_000_000) || !proof) return reply.code(400).send({ error: "expected a 32-byte proof for a positive keyId" });
+    return db.transaction(async (tx) => {
+      await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`sync:${caller.userId}`]);
+      const current = await currentKeyId(tx, caller.userId);
+      if (current === null || keyId > current) return reply.code(404).send({ error: "not-found" });
+      if (keyId !== current) return reply.code(409).send({ error: "key-epoch", currentKeyId: current });
+      if (!(await proofMatches(tx, caller.userId, keyId, proof))) return reply.code(403).send({ error: "bad-proof" });
+      await markProven(tx, caller, keyId);
       return reply.code(204).send();
     });
   });
@@ -381,7 +448,7 @@ export function registerSync(app: FastifyInstance, db: Db): void {
     await db.transaction(async (tx) => {
       await tx.query("delete from sync_objects where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_keyrings where user_id = $1", [caller.userId]);
-      await tx.query("update api_tokens set device_id = null where user_id = $1", [caller.userId]);
+      await tx.query("update api_tokens set device_id = null, sync_proven_key_id = null where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_devices where user_id = $1", [caller.userId]);
       await tx.query("delete from sync_usage where user_id = $1", [caller.userId]);
     });

@@ -240,10 +240,3 @@ export const PROVIDER_DEFAULTS: Record<ProviderKind, { baseUrl: string; needsKey
   foundry: { baseUrl: 'https://YOUR_RESOURCE.services.ai.azure.com/anthropic', needsKey: true, label: 'Claude in Microsoft Foundry' },
   'claude-code': { baseUrl: '', needsKey: false, label: 'Claude subscription' },
 };
-
-/** Ports we probe when auto-discovering local servers. */
-export const DISCOVERY_TARGETS: Array<{ kind: ProviderKind; baseUrl: string; probe: string }> = [
-  { kind: 'ollama', baseUrl: 'http://localhost:11434', probe: '/api/tags' },
-  { kind: 'lmstudio', baseUrl: 'http://localhost:1234/v1', probe: '/models' },
-  { kind: 'vllm', baseUrl: 'http://localhost:8000/v1', probe: '/models' },
-];

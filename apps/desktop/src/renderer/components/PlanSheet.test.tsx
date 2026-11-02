@@ -7,7 +7,7 @@ import { PlanSheet } from './PlanSheet.js';
 
 const now = 1_800_000_000_000;
 const step = (id: string, status: string, extra = {}) => ({ id, title: id, status: 'done', updatedAt: now, createdAt: now, verification: { status, ...extra } }) as PlanStep;
-const render = (agentPlan: PlanStep[], prs: PrInfo[] = []) => renderToStaticMarkup(<PlanSheet sessionId="s" session={{ agentPlan, messages: [] } as unknown as Session} streaming prs={prs} />);
+const render = (agentPlan: PlanStep[], prs: PrInfo[] = []) => renderToStaticMarkup(<PlanSheet sessionId="s" session={{ agentPlan, messages: [] } as unknown as Session} streaming prs={prs} initiallyOpen />);
 const chips = (html: string, kind: string) => html.match(new RegExp(`data-plan-chip="${kind}"`, 'g'))?.length ?? 0;
 afterEach(() => vi.restoreAllMocks());
 

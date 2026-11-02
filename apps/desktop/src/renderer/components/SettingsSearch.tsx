@@ -172,7 +172,7 @@ export function SettingsSearch({ root }: { root: React.RefObject<HTMLElement | n
             onKeyDown={onKey}
           />
           {query.trim() && (
-            <span className="shrink-0 text-[11px] tabular-nums text-ink-faint" aria-live="polite">
+            <span className="shrink-0 text-2xs tabular-nums text-ink-faint" aria-live="polite">
               {pending ? '…' : total ? `${shown} of ${total}` : 'No results'}
             </span>
           )}

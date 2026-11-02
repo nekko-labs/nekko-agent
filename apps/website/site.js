@@ -69,7 +69,18 @@
     );
     reveals.forEach((el) => io.observe(el));
   }
-  window.addEventListener('scroll', showInView, { passive: true });
+  // The viewport check reads layout, so once a frame at most, and not at all
+  // once everything has been revealed.
+  let pending = 0;
+  const onScroll = () => {
+    if (pending) return;
+    pending = requestAnimationFrame(() => {
+      pending = 0;
+      showInView();
+      if (reveals.every((el) => el.classList.contains('in'))) window.removeEventListener('scroll', onScroll);
+    });
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
   showInView();
   window.addEventListener('load', showInView);
 
@@ -385,6 +396,22 @@
   }
 })();
 
+// ---- panel videos: loop only while on screen, so five looping demos cost
+//      nothing until scrolled to. preload="none" keeps the page load light;
+//      with reduced motion they stay on their poster (the lightbox still plays). ----
+(() => {
+  const videos = document.querySelectorAll('video[data-autoplay]');
+  if (!videos.length || !('IntersectionObserver' in window)) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(({ target, isIntersecting }) => {
+      if (isIntersecting) target.play().catch(() => { /* autoplay blocked: the poster stays */ });
+      else target.pause();
+    });
+  }, { threshold: 0.4 });
+  videos.forEach((v) => io.observe(v));
+})();
+
 // ---- media slots: click a feature GIF or product image to see it large ----
 (() => {
   const box = document.getElementById('lightbox');
@@ -399,10 +426,12 @@
   document.querySelectorAll('.media').forEach((el) => {
     el.addEventListener('click', () => {
       opener = el;
-      const src = el.querySelector('img, video');
+      // the visible one: the hero holds a dark and a light shot, one hidden per look
+      const src = [...el.querySelectorAll('img, video')].find((m) => m.getClientRects().length);
       let big;
       if (src) {
         big = src.cloneNode(true);
+        if (big.tagName === 'IMG' && big.srcset) big.sizes = '100vw';
         if (big.tagName === 'VIDEO') { big.controls = true; big.autoplay = true; big.muted = true; big.loop = true; }
       } else {
         big = document.createElement('div');
@@ -500,6 +529,8 @@
   input.addEventListener('blur', () => { look.removeAttribute('transform'); if (mood === 'watching') setMood('idle'); });
   button.addEventListener('mouseenter', () => { if (mood !== 'confused') setMood('eager'); });
   button.addEventListener('mouseleave', () => { if (mood === 'eager') setMood(document.activeElement === input ? 'watching' : 'idle'); });
+  // The API's machine sleeps when idle; wake it now so Join answers quickly.
+  if (form.dataset.endpoint) fetch(new URL('/healthz', form.dataset.endpoint), { mode: 'no-cors' }).catch(() => {});
   // idle blink every few seconds
   setInterval(() => {
     if (mood !== 'idle') return;
@@ -512,27 +543,111 @@
     if (!input.checkValidity()) { setMood('confused'); input.focus(); return; }
     const endpoint = form.dataset.endpoint;
     if (!endpoint) {
-      // No sign-up service connected yet: say so rather than claim a sign-up that went nowhere.
+      // No sign-up service connected: say so rather than claim a sign-up that went nowhere.
       note.textContent = "Beta sign-ups aren't open yet. Follow along on GitHub to hear about the first builds.";
       setMood('idle'); // sets the idle line, so the bubble's own text goes after it
       bubble.textContent = 'Almost ready! Check back soon.';
       return;
     }
-    {
-      try {
-        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ email: input.value }) });
-        if (!res.ok) throw new Error(String(res.status));
-      } catch (err) {
+    // What the API keeps: the page path (never the full URL) and any utm_* tags.
+    const params = new URLSearchParams(location.search);
+    const utm = {};
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
+      const v = params.get(key);
+      if (v) utm[key] = v;
+    }
+    const body = {
+      email: input.value.trim(),
+      list: 'beta',
+      source: location.pathname,
+      utm,
+      website: form.elements.website?.value || '',
+    };
+    const name = form.elements.name?.value.trim();
+    if (name) body.name = name;
+    button.disabled = true;
+    let res;
+    try {
+      res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body) });
+    } catch (err) {
+      res = null;
+    }
+    button.disabled = false;
+    if (!res || !res.ok) {
+      if (res && res.status === 429) {
+        note.textContent = "That's a lot of sign-ups from here in a short time. Please try again in an hour.";
+        bubble.textContent = 'Whoa, slow down! Try again later.';
+      } else if (res && res.status === 400) {
+        note.textContent = 'Please check your email address and try again.';
+        bubble.textContent = lines.confused;
+      } else {
         note.textContent = "That didn't go through. Please try again in a moment.";
-        setMood('confused');
         bubble.textContent = 'Oops, something went wrong. Try again?';
-        return;
       }
+      peek.dataset.mood = mood = 'confused';
+      return;
     }
     look.removeAttribute('transform');
     setMood('celebrate');
     form.querySelector('.beta-ask').hidden = true;
     form.querySelector('.beta-done').hidden = false;
+  });
+
+  // ---- the tour video beside the form. Its file follows the look (dark files
+  //      for Dark, light for White and Colourful) and nothing, poster included,
+  //      loads until the section nears the screen. It plays while at least half
+  //      of it is in view, never on its own with reduced motion, and when it
+  //      ends it hands over to the form. ----
+  const tour = document.querySelector('[data-tour]');
+  if (!tour) return;
+  const video = tour.querySelector('video');
+  const end = tour.querySelector('[data-tour-end]');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tone = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+  let loaded = null; // the tone whose file is in the player
+  let inView = false;
+  const load = () => {
+    const t = tone();
+    if (t === loaded) return;
+    const at = video.currentTime;
+    const wasPlaying = !video.paused;
+    const key = t === 'dark' ? 'Dark' : 'Light';
+    video.poster = video.dataset[`poster${key}`];
+    video.src = video.dataset[`src${key}`];
+    loaded = t;
+    if (at > 0) {
+      video.addEventListener('loadedmetadata', () => {
+        video.currentTime = at;
+        if (wasPlaying) video.play().catch(() => {});
+      }, { once: true });
+      video.load();
+    }
+  };
+  new MutationObserver(() => { if (loaded !== null) load(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  new IntersectionObserver(([e], io) => {
+    if (e.isIntersecting) { load(); io.disconnect(); }
+  }, { rootMargin: '200px 0px' }).observe(tour);
+  if (!reduced) {
+    new IntersectionObserver(([e]) => {
+      inView = e.intersectionRatio >= 0.5;
+      if (inView && end.hidden) { load(); video.play().catch(() => {}); } else if (!inView) video.pause();
+    }, { threshold: [0, 0.5] }).observe(video);
+  }
+  video.addEventListener('ended', () => {
+    end.hidden = false;
+    setMood('eager');
+    if (mood === 'eager') bubble.textContent = 'Liked the tour? Pop your email in!';
+  });
+  video.addEventListener('play', () => { end.hidden = true; });
+  tour.querySelector('[data-tour-join]').addEventListener('click', () => {
+    stage.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
+    input.focus({ preventScroll: true });
+  });
+  tour.querySelector('[data-tour-again]').addEventListener('click', () => {
+    end.hidden = true;
+    video.currentTime = 0;
+    video.play().catch(() => {});
   });
 })();
 
@@ -586,10 +701,21 @@
     last = now;
     draw();
   };
-  const start = () => { if (!raf && !reduced) { last = performance.now(); raf = requestAnimationFrame(loop); } };
+  // The wave keeps moving down the whole page; the panels over it are solid,
+  // so redrawing behind them stays cheap. Only a hidden tab stops it.
+  const start = () => { if (!raf && !reduced && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(loop); } };
   const stop = () => { cancelAnimationFrame(raf); raf = 0; };
   size(); draw();
-  window.addEventListener('resize', () => { size(); draw(); });
+  // A phone's URL bar showing or hiding fires resize with only the height
+  // changed a little: keep the canvas rather than reallocating it.
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (window.innerWidth === W && Math.abs(window.innerHeight - H) < 120) return;
+      size(); draw();
+    }, 150);
+  });
   document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
   new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   start();

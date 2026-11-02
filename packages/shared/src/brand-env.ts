@@ -5,9 +5,6 @@
  */
 export const ENV_PREFIXES = ['NEKKO_'] as const;
 
-/** The canonical prefix, for building the names shown in help text and errors. */
-export const ENV_PREFIX = ENV_PREFIXES[0];
-
 /**
  * The value of `NEKKO_<name>`. An empty string counts as set (it is how a
  * caller turns a default off), so this checks presence rather than truthiness.

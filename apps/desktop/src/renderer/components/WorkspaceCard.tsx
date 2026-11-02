@@ -1,11 +1,11 @@
-import React, { memo } from 'react';
+import React, { memo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext } from '@nekko-agent/shared';
+import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  BranchIcon, CheckIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  BranchIcon, CheckIcon, CloseIcon, CompactIcon, PencilIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
 import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
@@ -131,20 +131,6 @@ function compactTokens(n: number): string {
   return String(n);
 }
 
-/**
- * A model id as a card can say it. The provider already names the vendor on
- * the same line, so "claude-opus-5-5" reads as "Opus 5.5" beside "Claude".
- */
-function shortModelName(id: string, known?: string): string {
-  if (known) return known.replace(/^Claude\s+/i, '');
-  const claude = /^(?:.*\/)?claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/i.exec(id);
-  if (claude) {
-    const family = claude[1][0].toUpperCase() + claude[1].slice(1).toLowerCase();
-    return `${family} ${claude[2]}${claude[3] ? `.${claude[3]}` : ''}`;
-  }
-  return id;
-}
-
 /** PRs by URL, the branch's own first, so one PR is never counted twice. */
 function mergePrs(branchPr: PrInfo | undefined, mentioned: PrInfo[] | undefined): PrInfo[] {
   const out = new Map<string, PrInfo>();
@@ -178,8 +164,12 @@ function WorkspaceCardImpl({
   subAgentCount = 0,
   showMetadata = true,
   showProvider = true,
+  zoneTint,
+  renaming = false,
   onOpen,
   onClose,
+  onRenameStart,
+  onRename,
 }: {
   /** The open workspace, or null for an active chat with no window open. */
   workspace: Workspace | null;
@@ -197,8 +187,16 @@ function WorkspaceCardImpl({
   showMetadata?: boolean;
   /** The provider subtext under the model; off, the model line stands alone. */
   showProvider?: boolean;
+  /** The colour of the zone showing this agent on the board; absent when it is not on the board. */
+  zoneTint?: number;
+  /** The chat's title is a text field, being renamed. */
+  renaming?: boolean;
   onOpen: () => void;
   onClose: () => void | Promise<void>;
+  /** Turn the title into a text field (the pencil); absent, the card has no pencil. */
+  onRenameStart?: () => void;
+  /** The typed title, or null when the rename was cancelled. */
+  onRename?: (title: string | null) => void;
 }) {
   const providers = useStore((s) => s.providers);
   const knownModels = useStore((s) => s.models);
@@ -235,14 +233,23 @@ function WorkspaceCardImpl({
   const lastReply = session?.lastReplyAt;
   const title = session?.title ?? terminal?.title ?? 'Agent';
   const isChat = !!session;
+  // Claude Code picks the version from the plan: when its `system/init` reports
+  // a specific id for the alias we sent ("claude-opus-4-7" against our "opus"),
+  // the card says that so a plan chat reads "Opus 4.7" rather than generic "opus".
+  const resolvedClaudeCodeModel = session?.claudeCodeContext?.model
+    && session.claudeCodeContext.modelId === session.modelId
+    ? session.claudeCodeContext.model
+    : undefined;
   const model = session
     ? session.chatType === 'image'
       ? `🎨 ${session.imageParams?.modelId ? (session.imageParams.modelId.split('/').pop() as string) : 'No image model yet'}`
       : session.autoModel
       ? 'Auto'
-      : session.modelId
-        ? shortModelName(session.modelId, modelInfo?.name)
-        : 'No model yet'
+      : resolvedClaudeCodeModel
+        ? shortModelName(resolvedClaudeCodeModel)
+        : session.modelId
+          ? shortModelName(session.modelId, modelInfo?.name)
+          : 'No model yet'
     : terminal
       ? terminal.shell.split(/[\\/]/).pop() || terminal.shell
       : 'Shell';
@@ -264,7 +271,7 @@ function WorkspaceCardImpl({
          findable without reading a word; a terminal's stays neutral. */
       /* A card waiting on you (a question, or stopped on an error) takes the
          active card's highlight too, so it is findable at a glance. */
-      className={`agent-chip group w-full cursor-pointer rounded-xl border px-2.5 py-1.5 text-left shadow-xs transition-colors duration-150 ${
+      className={`agent-chip group relative w-full cursor-pointer rounded-xl border px-3 py-1 text-left transition-colors duration-150 ${
         isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'bg-surface hover:bg-surface-2'
       }`}
       style={{
@@ -276,22 +283,36 @@ function WorkspaceCardImpl({
       }}
       data-agent-active={isActive || undefined}
       title={title}
+      data-zone-tint={zoneTint}
     >
-      <div className="flex items-center gap-1.5">
+      {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
+      <div className="flex items-center gap-2">
         <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
-        <span className={`min-w-0 flex-1 truncate text-[13px] ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
-          {title}
-        </span>
+        {renaming && onRename
+          ? <RenameField title={title} onDone={onRename} />
+          : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
+            {title}
+          </span>}
         {lastReply && (!status || status === 'done' || status === 'idle') && (
-          <time className="shrink-0 text-[10px] tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
+          <time className="shrink-0 text-2xs tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
+        )}
+        {isChat && onRenameStart && !renaming && (
+          <button
+            className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
+            title="Rename this chat"
+            aria-label={`Rename ${title}`}
+            onClick={(e) => { e.stopPropagation(); onRenameStart(); }}
+          >
+            <PencilIcon className="h-3 w-3" />
+          </button>
         )}
         {/* A chat card archives rather than closes: closing used to look like
             deleting and then the chat was nowhere to be found. Archived chats
             stay readable until explicitly deleted. A shell has nothing to keep, so it closes. */}
         <button
-          className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+          className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
           title={isChat ? 'Complete this chat (kept until you delete it)' : 'Close this agent'}
           aria-label={isChat ? `Complete ${title}` : `Close ${title}`}
           onClick={async (e) => {
@@ -311,7 +332,7 @@ function WorkspaceCardImpl({
       {/* Line 2: what is running it: the model, then how full the context
           window is. Where the model comes from is subtext on the next line. */}
       {showMetadata && <>
-      <div className="mt-0.5 flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
+      <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
         <Fact
           grow
           tone={isChat ? 'var(--accent-2)' : 'var(--success)'}
@@ -345,7 +366,7 @@ function WorkspaceCardImpl({
       </div>
 
       {showProvider && provider && (
-        <div className="truncate pl-3 text-[10px] leading-[13px] text-ink-faint" data-card-provider>
+        <div className="truncate pl-3 text-2xs leading-[13px] text-ink-faint" data-card-provider>
           {isLocalProvider(provider.kind) ? 'Local' : provider.label}
         </div>
       )}
@@ -353,7 +374,7 @@ function WorkspaceCardImpl({
       {/* Line 3: its git position, then the PRs it made. The project is the
           group heading the card sits under, so the card does not repeat it. */}
       {(git || prs.length > 0) && (
-        <div className="flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
+        <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
           {git ? (
             <Fact
               shrink
@@ -392,7 +413,7 @@ function WorkspaceCardImpl({
       {/* Line 4: what it has spun up. Only when there is something to say: a
           card for a plain one-window chat should not carry an empty row. */}
       {(subAgentCount > 0 || windows > 1) && (
-        <div className="flex items-center gap-1 pl-3 text-[10px] leading-[15px] text-ink-faint">
+        <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
           {subAgentCount > 0 && (
             <Fact
               tone="var(--accent-2)"
@@ -410,6 +431,48 @@ function WorkspaceCardImpl({
   );
 }
 
+/**
+ * The title a rename saves, or null when there is nothing to save: Escape, an
+ * empty field and the same title all keep the chat as it was.
+ */
+export function chatRenameTitle(typed: string | null, current: string | undefined): string | null {
+  const title = typed?.trim();
+  return title && title !== current ? title : null;
+}
+
+/**
+ * The title as a text field: Enter or clicking away keeps what was typed,
+ * Escape gives it up. Keys and clicks stay in the field, so they never open
+ * the card.
+ */
+function RenameField({ title, onDone }: { title: string; onDone: (title: string | null) => void }) {
+  const [value, setValue] = useState(title);
+  const done = useRef(false);
+  const finish = (next: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(next);
+  };
+  return (
+    <input
+      className="min-w-0 flex-1 rounded-sm border border-accent bg-surface px-1 text-sm text-ink outline-none"
+      aria-label="Chat title"
+      value={value}
+      autoFocus
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setValue(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); finish(value); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(null); }
+      }}
+      onBlur={() => finish(value)}
+    />
+  );
+}
+
 type CardProps = React.ComponentProps<typeof WorkspaceCardImpl>;
 
 /**
@@ -420,7 +483,7 @@ type CardProps = React.ComponentProps<typeof WorkspaceCardImpl>;
  */
 export const WorkspaceCard = memo(WorkspaceCardImpl, (a: CardProps, b: CardProps) => {
   for (const key of Object.keys(b) as Array<keyof CardProps>) {
-    if (key === 'onOpen' || key === 'onClose') continue;
+    if (key === 'onOpen' || key === 'onClose' || key === 'onRenameStart' || key === 'onRename') continue;
     if (a[key] !== b[key]) return false;
   }
   return Object.keys(a).length === Object.keys(b).length;

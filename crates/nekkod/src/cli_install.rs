@@ -314,13 +314,8 @@ pub fn install_status(app: &AppPaths) -> Value {
 pub fn cli_link_dir() -> PathBuf {
     match std::env::var_os("NEKKO_DATA_DIR").filter(|d| !d.is_empty()) {
         Some(d) => PathBuf::from(d),
-        None => home().join(".nekko-agent"),
+        None => nekko_js::home_dir().unwrap_or_default().join(".nekko-agent"),
     }
-}
-
-fn home() -> PathBuf {
-    let var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-    std::env::var_os(var).map(PathBuf::from).unwrap_or_default()
 }
 
 /// Write (or clear) the address and token the CLI should use by default, `0600`:

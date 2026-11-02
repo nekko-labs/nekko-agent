@@ -8,13 +8,14 @@ import { existsSync, readFileSync } from 'fs';
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
-import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
+import { fixedWindowBounds, initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { EngineProcess } from './engine-process.js';
 import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
 import { createTrayCompanion } from './trayCompanion.js';
+import { createMemoryWatch } from './memoryWatch.js';
 import { createForegroundGuard, holdNotices, type ForegroundGuard } from './foregroundGuard.js';
 import { startAgentBrowser } from './agentBrowser.js';
 import { guardSession } from './connectionsGuard.js';
@@ -37,29 +38,21 @@ let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let quitting = false;
 let mainWindow: BrowserWindow | null = null;
 let trayCompanion: ReturnType<typeof createTrayCompanion> | undefined;
+let memoryWatch: ReturnType<typeof createMemoryWatch> | undefined;
 let stopNotifications: (() => void) | undefined;
 let nativeNotifications: ReturnType<typeof createNativeNotificationPoster> | undefined;
 const notificationSessions = new Map<number, string | null>();
 /** Each window's view on screen, so a workflow run notice stays quiet on the Workflows view. */
 const notificationViews = new Map<number, string | null>();
 
-/** Holds windows and notices while a full-screen app (a game) is in front (foregroundGuard.ts). */
+/** Holds native notices while an exclusive-fullscreen game is in front (foregroundGuard.ts). */
 let foreground: ForegroundGuard | undefined;
 
-/** Run `fn`, which brings a window forward, once no full-screen app is in front. */
-function whenFree(fn: () => void): void {
-  if (foreground) void foreground.whenFree(fn);
-  else fn();
-}
-
-/** Restore, show and focus `win`, unless it has gone in the meantime. */
+/** Restore, show and focus `win`. */
 function raise(win: BrowserWindow): void {
-  whenFree(() => {
-    if (win.isDestroyed()) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-  });
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
 }
 
 function showWindow(): void {
@@ -99,6 +92,14 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 
 app.setName('Nekko Agent');
 registerDevLaunch(app);
+// Scripted demos (scripts/demo): the runner finds elements over this local
+// debugging port and moves the real cursor to them. Dev builds only, and only
+// when asked for: an installed app never opens it.
+const demoPort = process.env.NEKKO_DEMO_DEBUG_PORT;
+if (!app.isPackaged && demoPort && /^\d+$/.test(demoPort)) {
+  app.commandLine.appendSwitch('remote-debugging-port', demoPort);
+  app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+}
 const previousProfile = app.getPath('userData');
 preservePackagedProfile(app);
 
@@ -147,8 +148,8 @@ function deliverLink(url: string): void {
     if (!win) createWindow();
     return;
   }
-  win.webContents.send(IpcEvents.deepLink, url);
   raise(win);
+  win.webContents.send(IpcEvents.deepLink, url);
 }
 
 /**
@@ -322,19 +323,19 @@ function createWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
   // A first launch is sized to the screen before the window exists, so it
   // appears at that size rather than visibly growing into it.
-  const { maximized, ...bounds } = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
+  const area = screen.getPrimaryDisplay().workArea;
+  const { maximized, ...bounds } = fixedWindowBounds(process.env.NEKKO_WINDOW_SIZE, area) ?? loadWindowBounds() ?? initialWindowBounds(area);
   const win = newAppWindow(bounds);
 
   mainWindow = win;
   win.once('closed', () => { if (mainWindow === win) mainWindow = null; });
-  win.on('ready-to-show', () => whenFree(() => {
-    if (win.isDestroyed()) return;
+  win.on('ready-to-show', () => {
     if (maximized) win.maximize();
     win.show();
     // Without focus, Windows may leave a window opened from a terminal behind
     // others, flashing in the taskbar instead of coming to the front.
     win.focus();
-  }));
+  });
   const closeIntent = createCloseIntent();
   if (process.platform === 'win32') {
     win.hookWindowMessage(WM_SYSCOMMAND, (wParam) => closeIntent.sysCommand(readWParam(wParam)));
@@ -693,6 +694,7 @@ app.whenReady().then(async () => {
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),
     });
+    memoryWatch = createMemoryWatch({ tray: desktopTray.tray, engine: service, quiet: async () => (await foreground?.quiet()) === true, onError: message => dialog.showErrorBox('Nekko Agent', message) });
   }
 
   // Under `npm run dev`, hand the launcher what it needs for its banner.
@@ -719,6 +721,7 @@ app.on('before-quit', (event) => {
   quitting = true;
   displayWindows?.dispose();
   trayCompanion?.dispose();
+  memoryWatch?.dispose();
   stopNotifications?.();
   stopNotifications = undefined;
   foreground?.dispose();
@@ -729,6 +732,11 @@ app.on('before-quit', (event) => {
   engine = null;
   void stopping.stop().finally(() => {
     engineStopped = true;
-    app.quit();
+    // Not from inside this handler: with no daemon running, stop() is already
+    // settled and this runs as a microtask of the same emit. Electron then sets
+    // its quitting flag from the nested quit and clears it again when the outer
+    // one sees this preventDefault, so the windows close but the app never
+    // quits (macOS keeps it running with no window).
+    setImmediate(() => app.quit());
   });
 });

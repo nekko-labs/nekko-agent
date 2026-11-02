@@ -36,7 +36,7 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Typing in a new agent window
 
-A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel.
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
@@ -129,7 +129,7 @@ Closing the desktop window hides it to the tray; the engine and running work rem
 
 **Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
 
-**Games and other full-screen apps (Windows).** While a full-screen app is in front (a game, a presentation, a video), Nekko Agent waits: notices are held and shown together when you leave it, one per chat and kind, and a window that would open or come forward (at launch, from a link, from a second launch) does so when you leave instead. Nekko never takes the foreground from a game, so the game keeps exclusive fullscreen and its frame rate.
+**Full-screen games (Windows).** While a game runs in exclusive fullscreen, Nekko Agent holds its notices and shows them together when you leave the game, one per chat and kind. Windows you open yourself (launching the app, a link, the tray) still open at once.
 
 The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet landed. Image inspection and native toast delivery/click/permission testing remain pending. Known issue under review: the native listener currently also posts for a focused visible chat.
 
@@ -141,9 +141,9 @@ Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Vi
 
 ### Approvals and delegated work
 
-When a tool needs permission, its approval card appears in the chat window, not the separate wall composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
+When a tool needs permission, its approval card appears in that agent's own window, above its composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
 
-For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the Agent Monitor subagent list instead; the row does not guess which chat to open.
+For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent chips on the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
 
 ### Quickly filter the model picker
 
@@ -192,11 +192,13 @@ In Dynamic View the board is laid out in zones: places that each hold one agent.
 It starts with two side by side. New agents wait in the Agents list instead of
 opening on the board. Click a zone to make it the active one (it gets a heavier
 outline), then click an agent in the Agents list to show it there, or drag the
-agent from the list straight into a zone. The thin plus buttons along the
+agent from the list straight into a zone. Clicking an agent that is already on
+the board just switches to its zone. Each zone has a colour, shown as a small
+square before its name and as a thin bar on the cards of the agents it holds. The thin plus buttons along the
 board's right and bottom edges add a zone that fits that row or column; the
 plus at the end of an edge, or Shift-click, spans the full height or width.
 Drag a zone by its name bar to move it (hold Shift at a board edge to span the
-whole side) and right-click the name bar to close it. Minimizing or completing
+whole side) and right-click the name bar to change its colour or close it. Minimizing or completing
 an agent leaves its zone in place, dotted, until you fill it.
 In Dynamic View (including Fixed grid), a window also minimizes automatically
 when its agent finishes a successful reply. Errors and requests for input stay

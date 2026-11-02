@@ -1,5 +1,9 @@
 package com.nekko.android.ui.security
 
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PowerSettingsNew
@@ -33,7 +37,7 @@ import kotlinx.coroutines.launch
  * (behind a confirm, and only when the computer allows it). None asks for a
  * proof or a step-up: a safety exit must never be harder than the attack.
  */
-class SafetyExits internal constructor(private val repo: ComputersRepository, private val scope: CoroutineScope) {
+class SafetyExits internal constructor(private val repo: ComputersRepository, private val scope: CoroutineScope, private val res: Resources) {
     /** The last outcome, in plain words, for the screen to show. */
     var outcome by mutableStateOf<Pair<String, Tone>?>(null)
         private set
@@ -45,14 +49,14 @@ class SafetyExits internal constructor(private val repo: ComputersRepository, pr
 
     fun signOut() = launchExit { name ->
         when (repo.signOutThisPhone()) {
-            SignOutResult.SENT -> "Signed out of $name. To use it from this phone again, pair with a new code from $name."
-            SignOutResult.QUEUED -> "Signed out of $name on this phone. $name will hear it the next time this phone reaches it."
+            SignOutResult.SENT -> res.getString(R.string.settings_signed_out_sent, name)
+            SignOutResult.QUEUED -> res.getString(R.string.settings_signed_out_queued, name)
         }
     }
 
     fun stopRemoteAccess() = launchExit { name ->
         repo.stopRemoteAccess()
-        "Remote access is off on $name and every phone was disconnected. Only $name can turn it on again (Settings → Remote access)."
+        res.getString(R.string.settings_remote_off, name)
     }
 
     fun askQuit() {
@@ -67,7 +71,7 @@ class SafetyExits internal constructor(private val repo: ComputersRepository, pr
         confirmingQuit = false
         launchExit { name ->
             repo.quitComputer()
-            "Nekko Agent is quitting on $name. Start it again there when you need it."
+            res.getString(R.string.settings_quitting, name)
         }
     }
 
@@ -80,7 +84,7 @@ class SafetyExits internal constructor(private val repo: ComputersRepository, pr
 
     private fun launchExit(block: suspend (name: String) -> String) {
         if (busy) return
-        val name = repo.state.value.active?.name ?: "your computer"
+        val name = repo.state.value.active?.name ?: res.getString(R.string.your_computer)
         busy = true
         outcome = null
         scope.launch {
@@ -89,7 +93,7 @@ class SafetyExits internal constructor(private val repo: ComputersRepository, pr
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                (e.message?.takeIf { it.isNotBlank() } ?: "$name didn’t answer. Try again.") to Tone.DANGER
+                (e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.settings_didnt_answer, name)) to Tone.DANGER
             } finally {
                 busy = false
             }
@@ -100,7 +104,8 @@ class SafetyExits internal constructor(private val repo: ComputersRepository, pr
 @Composable
 fun rememberSafetyExits(repo: ComputersRepository): SafetyExits {
     val scope = rememberCoroutineScope()
-    return remember(repo, scope) { SafetyExits(repo, scope) }
+    val res = LocalResources.current
+    return remember(repo, scope, res) { SafetyExits(repo, scope, res) }
 }
 
 /** One exit as a menu entry or a settings row: what it says, and whether it can run now. */
@@ -111,14 +116,14 @@ data class SafetyExit(val title: String, val detail: String, val icon: ImageVect
  * computer is told later); stopping and quitting need the computer online;
  * quitting appears only when `app:info` says `quitFromPhone`.
  */
-fun safetyExits(s: ComputersState, exits: SafetyExits): List<SafetyExit> {
+fun safetyExits(s: ComputersState, exits: SafetyExits, res: Resources): List<SafetyExit> {
     val name = s.active?.name ?: return emptyList()
     val online = s.conn == RelayState.ONLINE
     return buildList {
         add(
             SafetyExit(
-                "Sign out this phone",
-                "Forget $name here; $name removes this phone",
+                res.getString(R.string.settings_exit_sign_out),
+                res.getString(R.string.settings_exit_sign_out_detail, name),
                 Icons.AutoMirrored.Filled.Logout,
                 danger = true,
                 enabled = !exits.busy,
@@ -127,8 +132,8 @@ fun safetyExits(s: ComputersState, exits: SafetyExits): List<SafetyExit> {
         )
         add(
             SafetyExit(
-                "Stop remote access on $name",
-                if (online) "Disconnects every phone; only $name can turn it back on" else "$name must be online",
+                res.getString(R.string.settings_exit_stop, name),
+                res.getString(if (online) R.string.settings_exit_stop_detail else R.string.settings_exit_must_be_online, name),
                 Icons.Filled.WifiOff,
                 danger = true,
                 enabled = online && !exits.busy,
@@ -138,8 +143,8 @@ fun safetyExits(s: ComputersState, exits: SafetyExits): List<SafetyExit> {
         if (s.quitFromPhone) {
             add(
                 SafetyExit(
-                    "Quit Nekko Agent on $name",
-                    if (online) "Running chats stop; start it again at $name" else "$name must be online",
+                    res.getString(R.string.settings_exit_quit, name),
+                    res.getString(if (online) R.string.settings_exit_quit_detail else R.string.settings_exit_must_be_online, name),
                     Icons.Filled.PowerSettingsNew,
                     danger = true,
                     enabled = online && !exits.busy,
@@ -154,7 +159,7 @@ fun safetyExits(s: ComputersState, exits: SafetyExits): List<SafetyExit> {
 @Composable
 fun SafetyExitMenuItems(s: ComputersState, exits: SafetyExits, onPicked: () -> Unit) {
     val p = Nekko.palette
-    safetyExits(s, exits).forEach { e ->
+    safetyExits(s, exits, LocalResources.current).forEach { e ->
         DropdownMenuItem(
             text = { Text(e.title, color = if (e.danger) p.danger else p.ink) },
             leadingIcon = { Icon(e.icon, contentDescription = null, tint = if (e.danger) p.danger else p.inkSoft) },
@@ -174,11 +179,11 @@ fun SafetyExitDialogs(exits: SafetyExits, computer: String) {
     if (!exits.confirmingQuit) return
     AlertDialog(
         onDismissRequest = exits::cancelQuit,
-        title = { Text("Quit Nekko Agent on $computer?") },
+        title = { Text(stringResource(R.string.settings_quit_title, computer)) },
         text = {
-            Text("Nekko Agent and its background service stop on $computer, and any running chats are interrupted. A phone can’t start it again: someone at $computer has to.")
+            Text(stringResource(R.string.settings_quit_text, computer))
         },
-        confirmButton = { TextButton(onClick = exits::quit) { Text("Quit", color = p.danger) } },
-        dismissButton = { TextButton(onClick = exits::cancelQuit) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = exits::quit) { Text(stringResource(R.string.settings_quit), color = p.danger) } },
+        dismissButton = { TextButton(onClick = exits::cancelQuit) { Text(stringResource(R.string.settings_cancel)) } },
     )
 }

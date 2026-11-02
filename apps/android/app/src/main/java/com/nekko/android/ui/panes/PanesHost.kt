@@ -1,5 +1,7 @@
 package com.nekko.android.ui.panes
 
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -320,6 +322,7 @@ private fun Divider(split: PaneSplit, vertical: Boolean, total: Float, fraction:
     }
     val base by rememberUpdatedState(fraction)
     var f by remember { mutableFloatStateOf(fraction) }
+    val resizeLabel = stringResource(R.string.chats_resize_panes)
     val state = rememberDraggableState { deltaPx ->
         val usable = total - PaneSplit.DIVIDER_DP
         if (usable > 0f) {
@@ -337,7 +340,7 @@ private fun Divider(split: PaneSplit, vertical: Boolean, total: Float, fraction:
                 onDragStarted = { f = base },
                 onDragStopped = { onDragStopped() },
             )
-            .semantics { contentDescription = "Resize panes" },
+            .semantics { contentDescription = resizeLabel },
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.then(if (vertical) Modifier.width(1.dp).fillMaxHeight() else Modifier.height(1.dp).fillMaxWidth()).background(p.line))
@@ -361,7 +364,7 @@ private fun EdgeTab(title: String, waiting: Boolean, onClick: () -> Unit, modifi
             .widthIn(max = 160.dp)
             .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
             .background(p.surface2)
-            .clickable(role = Role.Button, onClickLabel = "Show $title", onClick = onClick)
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.chats_show_pane, title), onClick = onClick)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -380,8 +383,8 @@ private fun TabletopShelf(other: String, onShowOther: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Lay the phone flat to see both panes.", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
-        TextButton(onClick = onShowOther) { Text("Show $other") }
+        Text(stringResource(R.string.chats_tabletop_hint), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        TextButton(onClick = onShowOther) { Text(stringResource(R.string.chats_show_pane, other)) }
     }
 }
 
@@ -394,16 +397,16 @@ private fun TipRow(keep: String, onTake: () -> Unit, onDismiss: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "“$keep” is still running. Watch both side by side?",
+            stringResource(R.string.chats_tip, keep),
             style = MaterialTheme.typography.bodySmall,
             color = p.ink,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onTake) { Text("Chat + Chat") }
+        TextButton(onClick = onTake) { Text(stringResource(R.string.chats_chat_plus_chat)) }
         IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Outlined.Close, contentDescription = "Dismiss tip", tint = p.inkFaint, modifier = Modifier.size(16.dp))
+            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.chats_dismiss_tip), tint = p.inkFaint, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -428,34 +431,34 @@ private fun RowScope.PaneActions(
     if (mode != PaneMode.TABLETOP) {
         if (!zoomed) {
             IconButton(onClick = { onChange { it.swap() } }) {
-                Icon(if (mode == PaneMode.STACKED) Icons.Filled.SwapVert else Icons.Filled.SwapHoriz, contentDescription = "Swap panes", tint = p.inkSoft)
+                Icon(if (mode == PaneMode.STACKED) Icons.Filled.SwapVert else Icons.Filled.SwapHoriz, contentDescription = stringResource(R.string.chats_swap_panes), tint = p.inkSoft)
             }
         }
         IconButton(onClick = { onChange { it.zoom(if (zoomed) null else side) } }) {
             Icon(
                 if (zoomed) Icons.Filled.CloseFullscreen else Icons.Filled.OpenInFull,
-                contentDescription = if (zoomed) "Show both panes" else "Focus this pane",
+                contentDescription = stringResource(if (zoomed) R.string.chats_show_both_panes else R.string.chats_focus_pane),
                 tint = p.inkSoft,
             )
         }
     }
     Box {
         IconButton(onClick = { menu = true }) {
-            Icon(Icons.Filled.Dashboard, contentDescription = "Replace with…", tint = p.inkSoft)
+            Icon(Icons.Filled.Dashboard, contentDescription = stringResource(R.string.chats_replace_with), tint = p.inkSoft)
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.widthIn(max = 320.dp)) {
             Text(
-                "Replace with…",
+                stringResource(R.string.chats_replace_with),
                 style = MaterialTheme.typography.labelMedium,
                 color = p.inkFaint,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
             )
             val here = layout[side]
             if (here != PaneContent.Monitors) {
-                DropdownMenuItem(text = { Text("Monitors") }, onClick = { menu = false; onChange { it.replace(side, PaneContent.Monitors) } })
+                DropdownMenuItem(text = { Text(stringResource(R.string.chats_monitors)) }, onClick = { menu = false; onChange { it.replace(side, PaneContent.Monitors) } })
             }
             if (here != PaneContent.Chats) {
-                DropdownMenuItem(text = { Text("Chats") }, onClick = { menu = false; onChange { it.replace(side, PaneContent.Chats) } })
+                DropdownMenuItem(text = { Text(stringResource(R.string.chats_title)) }, onClick = { menu = false; onChange { it.replace(side, PaneContent.Chats) } })
             }
             val onScreen = layout.chatIds.toSet()
             chats.filter { it.id !in onScreen }.take(MENU_CHATS).forEach { c ->
@@ -467,7 +470,7 @@ private fun RowScope.PaneActions(
             // The other pane's chat, here instead (Replace with… never shows one chat twice).
             (layout[side.other] as? PaneContent.Chat)?.id?.let { id ->
                 DropdownMenuItem(
-                    text = { Text("${labels.title(PaneContent.Chat(id))} (from the other pane)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    text = { Text(stringResource(R.string.chats_from_other_pane, labels.title(PaneContent.Chat(id))), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     onClick = { menu = false; onChange { it.replace(side, PaneContent.Chat(id)) } },
                 )
             }

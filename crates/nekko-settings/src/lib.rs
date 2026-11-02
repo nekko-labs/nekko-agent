@@ -320,64 +320,11 @@ fn ensure_private(path: &Path) {
 #[cfg(not(unix))]
 fn ensure_private(_path: &Path) {}
 
-fn uuid() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
-}
-
 /// `writeJsonAtomic`: `JSON.stringify(value, null, 2)` to a private temp file
 /// beside the target, flushed to disk, then renamed over it.
 pub fn write_json_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
-    use std::io::Write;
-    let dir = path.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(dir)?;
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("settings.json");
-    let temp = dir.join(format!(".{name}.{}.tmp", uuid()));
     let text = nekko_js::stringify_pretty(value, "  ");
-    let written = (|| {
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
-        }
-        let mut f = opts.open(&temp)?;
-        f.write_all(text.as_bytes())?;
-        f.sync_all()?;
-        drop(f);
-        rename_retrying(&temp, path)
-    })();
-    if let Err(e) = written {
-        let _ = std::fs::remove_file(&temp);
-        return Err(e);
-    }
-    #[cfg(unix)]
-    if let Ok(d) = std::fs::File::open(dir) {
-        let _ = d.sync_all();
-    }
-    ensure_private(path);
-    Ok(())
-}
-
-fn rename_retrying(from: &Path, to: &Path) -> std::io::Result<()> {
-    let mut attempt = 0;
-    loop {
-        match std::fs::rename(from, to) {
-            Ok(()) => return Ok(()),
-            // Windows refuses a rename over a file another process holds open
-            // without delete sharing; that clears in moments.
-            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && attempt < 20 => {
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(5 * attempt));
-            }
-            Err(e) => return Err(e),
-        }
-    }
+    nekko_js::fs::atomic_write(path, text.as_bytes(), nekko_js::fs::AtomicWrite::PRIVATE)
 }
 
 #[cfg(test)]
@@ -400,7 +347,7 @@ mod tests {
 
     #[test]
     fn a_store_round_trips_through_its_file() {
-        let dir = std::env::temp_dir().join(format!("nekko-settings-{}", uuid()));
+        let dir = std::env::temp_dir().join(format!("nekko-settings-{}", nekko_js::uuid()));
         let store = SettingsStore::new(&dir);
         let rx = store.subscribe();
         assert_eq!(store.get()["theme"], "system");

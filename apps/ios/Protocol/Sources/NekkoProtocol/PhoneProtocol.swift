@@ -4,9 +4,10 @@ import Foundation
 /// computer's in its welcome (`REMOTE_PROTOCOL_VERSION` in
 /// packages/shared/src/remote.ts, `PROTOCOL_VERSION` in nekko-remote). A
 /// computer from before the field counts as 1. Version 4 adds the relay
-/// challenge (replay protection, see `RelayClient`).
+/// challenge (replay protection, see `RelayClient`); 5 signs the HELLO with the
+/// phone's device key (`HelloSigner`, decision 0036).
 public enum PhoneProtocol {
-    public static let version = 4
+    public static let version = 5
     /// What a HELLO says to a computer that never challenged this phone (from before version 4).
     public static let legacyVersion = 3
 

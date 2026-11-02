@@ -63,6 +63,21 @@ impl Keyring {
     }
 }
 
+/// The info string of [`epoch_proof`]: `nekko-sync-epoch-proof/v1 \n keyId`.
+pub const EPOCH_PROOF_LABEL: &str = "nekko-sync-epoch-proof/v1";
+
+/// Proof that a device holds an epoch's keyring, shown to Nekko Cloud before
+/// it lets a sign-in change keys, devices or data: `HKDF-SHA256(ikm = the
+/// 64-byte keyring, salt = empty, info = "nekko-sync-epoch-proof/v1\n" ‖
+/// keyId)`, 32 bytes. The server keeps only its SHA-256. It is one-way, so
+/// knowing it opens nothing.
+pub fn epoch_proof(keyring: &Keyring, key_id: u32) -> [u8; 32] {
+    let mut ikm = keyring.to_bytes();
+    let out = hkdf::derive32(&ikm, format!("{EPOCH_PROOF_LABEL}\n{key_id}").as_bytes());
+    ikm.zeroize();
+    out
+}
+
 /// Collections are short lowercase names (`chat`, `chat-part`, `prompt`).
 pub(crate) fn valid_collection(c: &str) -> bool {
     let b = c.as_bytes();

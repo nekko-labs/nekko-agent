@@ -62,6 +62,17 @@ describe('tinted dark presets', () => {
   });
 });
 
+describe('faint ink', () => {
+  // --ink-faint carries timestamps, hints, counts and labels on every screen,
+  // much of it at 11 to 12px, so it is held to the same AA bar as body text.
+  it.each(Object.entries(THEMES))('%s: --ink-faint is readable on paper and every surface', (name, vars) => {
+    for (const bg of ['--paper', '--win', '--surface', '--surface-2']) {
+      const ratio = contrastRatio(parseColor(vars['--ink-faint']), parseColor(vars[bg]));
+      expect(ratio, `${name}: ink-faint on ${bg} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+    }
+  });
+});
+
 describe('contrast helper', () => {
   it('matches the WCAG reference points', () => {
     expect(contrastRatio(parseColor('#000'), parseColor('#fff'))).toBeCloseTo(21, 5);

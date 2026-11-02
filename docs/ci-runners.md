@@ -22,24 +22,108 @@ You find it in **Workflows**, under the **Workflows | CI runners** switch at the
 checked on a real macOS 15 guest, but one real GitHub job has not yet run end to end, and the
 rule that keeps job traffic off a VPN has not yet been checked against a real tunnel. Both are
 part of the pilot (T214). The [image guide](ci-runners-image.md) and the job picker are in place;
-the image itself has not yet been booted in a VM.
+the image itself has not yet been booted in a VM. Connecting GitHub with clicks has been tested
+against a stand-in for GitHub, not GitHub itself, so if GitHub refuses the app, use
+[an app you already have](#use-an-app-you-already-have).
 
 ## Before you start
 
 - **An Apple silicon Mac.** Windows and Linux show "CI runners aren't available here", and a Mac
   that cannot run VMs shows "VM support unavailable" on the runner card.
-- **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. There is no
-  download in this version: you build the image yourself with the
-  [image guide](ci-runners-image.md). Until an image exists, the runner card shows `No VM image yet.`
+- **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. On macOS 27
+  Nekko [builds it](#set-up-this-mac) from Apple's restore image; on macOS 26 you
+  [bring your own](ci-runners-image.md). Until an image exists, the runner card offers **Set up this Mac**.
 - **A build with VM support.** The `nekko-vm` helper needs Apple's virtualization entitlement.
   Development builds sign it themselves, and packaged builds sign it with its own entitlement
-  (see [signing](signing.md#the-vm-helpers-entitlement)). A Developer ID signed release with it
-  has not shipped yet.
+  (see [signing](signing.md#the-vm-helpers-entitlement)).
 
-## Create the GitHub App
+## Connect GitHub
 
-The runner talks to GitHub as a GitHub App you create and own, so its access is limited to what
-you grant and you can revoke it at any time.
+The runner talks to GitHub as a GitHub App you own, so its access is limited to what you grant and
+you can revoke it at any time. Nekko creates the app for you with two clicks on GitHub. Nothing is
+copied or pasted.
+
+In **Workflows > CI runners**, choose **Connect GitHub**:
+
+1. **Where do your repos live?** Pick your account or an org. The list comes from `gh` when it is
+   signed in; without it, type the name and say whether it is an org.
+2. **Create.** Your browser opens GitHub with everything filled in. Click **Create**. If GitHub
+   asks you to sign in first, it may then show an empty form: close it and choose
+   **Open GitHub again**.
+3. **Install.** Pick the repos the runner may use and click **Install**. Nekko notices by itself,
+   even if you close the tab.
+4. **Confirm.** Choose the repos this Mac serves: up to 20 for an org, one for a personal account,
+   because GitHub has no account-wide runners. If you add repos on GitHub, choose **Check again**.
+   If an install returns more than 5 repos, none start ticked. **Advanced: runner label** changes
+   the label, which defaults to `nekko-cloud-mac`. **Continue to Mac setup** saves the connection
+   and goes on to the next step, [Set up this Mac](#set-up-this-mac).
+
+Leaving is safe. The app and its key are kept from the moment GitHub creates it, so if you close
+the sheet, cancel or quit Nekko, **Connect GitHub** picks up at Install with the same app. It does
+not make a second one. To remove an app you no longer want, delete it on GitHub: under **Settings >
+Developer settings > GitHub Apps**, choose the app, then **Advanced**. GitHub has no way for Nekko to
+do that for you.
+
+The app gets **Actions: Read and write** and **Metadata: Read**. An org's app also gets
+**Self-hosted runners: Read and write**, and a personal account's gets repository
+**Administration: Read and write**. Why those: see [below](#create-the-github-app). Its key is saved
+in this Mac's keychain and never shown.
+
+**A public repo.** The sheet warns you and won't continue until you choose **Require approval for
+outside contributors**. The runner stays off until GitHub holds outside contributors' jobs for your
+approval. Nekko sets that for you before Mac setup: a repo's app can, and for an org it uses `gh`
+when that is signed in with enough access. Otherwise the sheet links to the setting: choose **It is
+on, continue to Mac setup** once it is. If you choose **Leave it off**, the sheet closes and the
+runner stays off, even after the image is built. Turning it on from the runner card is refused until
+you have set it: choose **Connect GitHub** again to finish. See [Use it in a workflow](#use-it-in-a-workflow) for what else a public
+repo needs.
+
+**A Free org.** An org on GitHub's Free plan cannot limit a runner with runner groups, so Nekko
+offers one repo instead, and that app gets repository Administration. Without `gh`, Nekko can't see
+the plan, so choose **On the Free plan? Connect one repo instead** on the first screen. If you don't,
+Confirm stops with the reason and a link to delete the app. Delete it, connect again and choose that
+link.
+
+## Set up this Mac
+
+Jobs need a VM image. The second step builds one here, with no terminal and nothing to paste. It
+needs macOS 27 and 110 GB free. The sheet shows what it will download, what it copies from this
+Mac and how much space it needs. Pick a [mode](#how-this-mac-helps) and choose
+**Download and set up**. If this Mac already has an image, only the mode is asked.
+
+The build takes about 30 minutes plus the download, and runs by itself:
+
+1. **Check this Mac.** If it cannot go on, it says why before anything is downloaded, for example
+   "Update this Mac to macOS 27 to set it up here."
+2. **Download macOS** from Apple.
+3. **Install macOS** into a new VM.
+4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator and Homebrew are added.
+   With no Xcode on this Mac the sheet offers **macOS only**; install Xcode for iOS jobs.
+5. **Lock the VM down.**
+6. **Test a boot.** Then the image goes in and the runner turns on in the mode you chose.
+
+You can close the sheet: the runner card shows the same stage and bar, and **Details** opens the
+sheet again. Quitting Nekko pauses the build, and **Resume setup** picks up where it left off. The
+build holds the Mac awake while it works, and pauses with its reason on screen when there is no free
+VM slot, memory is critical, the Mac is hot, the disk is too full, or, from the install on, the Mac
+is on battery. If a stage fails, **Setup stopped** gives the reason, **Show log** the detail, and
+**Try again** restarts that stage, except that a failed lockdown goes back to before Xcode, because
+it runs once per image. **Cancel setup** deletes the build and leaves an image already in use alone.
+
+When it finishes, **This Mac is ready** offers **Connect to a workflow now**, or see
+[Use it in a workflow](#use-it-in-a-workflow). If the runner is off, the sheet says so instead. A
+runner you connected while the build was running gets its mode then.
+
+**Rebuild image** in the runner's settings runs the same build, which is how macOS, Xcode and runner
+updates arrive. The runner keeps working on the old image until the new one passes its test boot,
+and keeps its mode and its on or off state.
+
+## Use an app you already have
+
+To make the app yourself, or if you already have one, choose **Use an app I already have** on the
+first screen.
+
+### Create the GitHub App
 
 1. On GitHub, open **Settings > Developer settings > GitHub Apps > New GitHub App** for your
    account, or the same page under your org's settings for an org runner. Give it any name and
@@ -62,9 +146,10 @@ list workflow runs and re-run a job. See GitHub's
 (the "Self-hosted runners", "Administration" and "Actions" sections) and the
 [self-hosted runners REST API](https://docs.github.com/en/rest/actions/self-hosted-runners).
 
-## Connect this Mac
+### Connect this Mac
 
-In **Workflows > CI runners**, choose **Connect GitHub**. The sheet has three steps:
+In **Workflows > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
+sheet has three steps:
 
 1. **Install app.** Paste the App ID, the installation ID and the whole private key file. The key
    is saved in this Mac's keychain, and only after GitHub accepts it. It is never shown again,
@@ -82,7 +167,13 @@ In **Workflows > CI runners**, choose **Connect GitHub**. The sheet has three st
 
 ## Use it in a workflow
 
-Point a job at the runner with all four labels:
+**Connect to a workflow** on the ready screen or the runner card opens a new chat with the message
+already in the composer: your runner's label and repos, and what to do. Read it and press **Send**.
+The agent reads your workflows, asks which ones should run on this Mac, and opens a pull request
+for the ones you pick. Nothing changes until you pick, and the result is a pull request to review.
+With no model set up, set one up first; the button stays on the runner card.
+
+To do it by hand, point a job at the runner with all four labels:
 
 ```yaml
 jobs:
@@ -114,8 +205,8 @@ your Mac. The VM is the second layer: a job that gets in still only reaches the 
 
 ## How this Mac helps
 
-The mode decides when the runner may take a job. You choose it when you connect and can change
-it any time in the runner's settings.
+The mode decides when the runner may take a job. You choose it when you
+[set up this Mac](#set-up-this-mac) and can change it any time in the runner's settings.
 
 - **Do not disturb: Only run when I'm idle** (default). Only when you're away and plugged in.
   Steps aside the moment you need the Mac.
@@ -156,7 +247,8 @@ kept: if you save a value outside its range, the saved value is the nearest allo
   **Let jobs use the internet directly while a VPN is on**. Job traffic never goes through a VPN
   tunnel; with that switch off, the runner waits while a VPN carries all of the Mac's traffic.
 - **Trusted networks**: up to 32, recognised by the router's hardware address and listed as
-  `gw:...` ids. **Trust this network** adds the one this Mac is on, shown with a
+  `gw:...` ids. The address comes from macOS's own network state (`scutil`), then `arp`, which
+  sees nothing without Local Network permission. **Trust this network** adds the one this Mac is on, shown with a
   **This network** badge.
 - **Safety**: **Re-run jobs lost to sleep**.
 - **Max job time**: 30 min, 1 h, 2 h or 6 h (the runner accepts 10 minutes to 24 hours).

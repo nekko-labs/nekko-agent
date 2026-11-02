@@ -736,7 +736,7 @@ async fn silent_guest_connection_is_reset_and_frees_the_slot() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn spike_forward_reaches_the_guest_port() {
+async fn build_forward_reaches_the_guest_port() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     let cfg = NetConfig { forward: Some((listener, 22)), ..NetConfig::default() };

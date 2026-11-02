@@ -35,14 +35,19 @@ public struct ChangeRefused: Error, Equatable, LocalizedError, Sendable {
 /// (`ChangeProof`), and the phone's key is registered with the computer on
 /// the first one (trust on first use). Feature screens call
 /// `ComputersStore.call(change:_:)`, which uses this.
-public final class ChangeCalls: @unchecked Sendable {
+///
+/// An actor: its state (registered, the last timestamp, the registration in
+/// flight) changes only in its synchronous parts, and concurrent calls share
+/// one key registration instead of each sending their own.
+public actor ChangeCalls {
     private let caller: ProofCaller
     private let signer: ChangeSigner
     private let deviceId: String
     private let computerName: String
     private let now: @Sendable () -> Int64
-    private let lock = NSLock()
     private var registered = false
+    /// The key registration in flight: every call that needs it awaits this one.
+    private var registering: Task<Void, Error>?
     private var lastTs: Int64 = 0
 
     public init(caller: ProofCaller, signer: ChangeSigner, deviceId: String, computerName: String,
@@ -67,7 +72,7 @@ public final class ChangeCalls: @unchecked Sendable {
             guard let refusal = PhoneRefusal(e.message) else { throw e }
             if refusal.code == "key-missing" {
                 // The computer lost the key (paired again on its side): register and try once more.
-                setRegistered(false)
+                registered = false
                 do {
                     try await registerIfNeeded()
                     return try await signed(channel, args, stepUp: stepUp, timeout: timeout)
@@ -86,24 +91,28 @@ public final class ChangeCalls: @unchecked Sendable {
         return ChangeRefused(code: r?.code, message: r?.message(computer: computerName) ?? message)
     }
 
-    private func setRegistered(_ v: Bool) {
-        lock.withLock { registered = v }
-    }
-
+    /// Registers this phone's key unless it is. Concurrent callers (stage and
+    /// commit tapped quickly, or a key-missing retry beside another call) all
+    /// await the one registration in flight; a failed one is tried again by the
+    /// next call.
     private func registerIfNeeded() async throws {
-        if lock.withLock({ registered }) { return }
-        let key: JSONValue = .string(try signer.publicKey().base64EncodedString())
-        _ = try await signed(ChangeProof.keyChannel, [key], stepUp: nil, timeout: nil)
-        setRegistered(true)
+        if registered { return }
+        if let registering { return try await registering.value }
+        let task = Task {
+            let key: JSONValue = .string(try signer.publicKey().base64EncodedString())
+            _ = try await signed(ChangeProof.keyChannel, [key], stepUp: nil, timeout: nil)
+        }
+        registering = task
+        defer { registering = nil }
+        try await task.value
+        registered = true
     }
 
     /// Never the same timestamp twice: the computer refuses a proof it has
     /// seen, and the same call signed twice in one millisecond would be one.
     private func nextTs() -> Int64 {
-        lock.withLock {
-            lastTs = max(now(), lastTs + 1)
-            return lastTs
-        }
+        lastTs = max(now(), lastTs + 1)
+        return lastTs
     }
 
     private func signed(_ channel: String, _ args: [JSONValue], stepUp: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue {

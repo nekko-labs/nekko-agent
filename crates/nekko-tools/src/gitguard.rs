@@ -4,10 +4,14 @@
 //! commands, so a chat that could rewrite git's configuration without asking
 //! could turn the next `git status` into any program (decision 0010).
 //!
-//! Two defences: writing anywhere git reads configuration from asks
-//! ([`touches_git_config`]), and an auto-run command that runs git gets an
-//! environment that overrides the settings that execute ([`hardened_git_env`]).
+//! Three defences: writing anywhere git reads configuration from asks
+//! ([`touches_git_config`]), an auto-run command that runs git gets an
+//! environment that overrides the settings that execute and only uses a bare
+//! repository it is pointed at ([`hardened_git_env`]), and an auto-run diff,
+//! log, show or blame is told not to run diff or textconv drivers
+//! ([`harden_git_command`]).
 
+use crate::allowlist::Dialect;
 use crate::sandbox::real_location;
 use std::path::{Component, Path, PathBuf};
 
@@ -74,28 +78,61 @@ fn null_device() -> &'static str {
     if cfg!(windows) { "NUL" } else { "/dev/null" }
 }
 
-/// The environment for an auto-run command that runs git: configuration
-/// that would run a program is overridden with `GIT_CONFIG_COUNT` entries,
-/// which take precedence over every config file, numbered after any the
-/// daemon already has. `GIT_EXTERNAL_DIFF` is removed.
-///
-/// `diff.external` has no value that turns it off (an empty one makes
-/// `git diff` fail with "cannot run", `true` prints an empty diff), and git
-/// has no global switch for textconv or filter drivers, so those rely on
-/// [`touches_git_config`]: the configuration that defines them cannot be
-/// written without asking.
-pub fn hardened_git_env() -> Vec<EnvChange> {
+/// `GIT_CONFIG_COUNT` entries for `overrides`, numbered after any the daemon
+/// already has. They are command-line scope: they take precedence over every
+/// config file, and git honors protected settings such as
+/// `safe.bareRepository` from them.
+fn config_overrides(overrides: &[(&str, &str)]) -> Vec<EnvChange> {
     let base: usize = std::env::var("GIT_CONFIG_COUNT").ok().and_then(|n| n.trim().parse().ok()).unwrap_or(0);
-    let overrides = [("core.fsmonitor", "false"), ("core.hooksPath", null_device()), ("core.pager", "cat")];
     let mut env = Vec::new();
     for (i, (key, value)) in overrides.iter().enumerate() {
         env.push((format!("GIT_CONFIG_KEY_{}", base + i), Some((*key).to_string())));
         env.push((format!("GIT_CONFIG_VALUE_{}", base + i), Some((*value).to_string())));
     }
     env.push(("GIT_CONFIG_COUNT".into(), Some((base + overrides.len()).to_string())));
+    env
+}
+
+/// The environment for an auto-run command that runs git: configuration
+/// that would run a program is overridden, git only uses a bare repository
+/// it is explicitly pointed at (`safe.bareRepository=explicit`, so a bare
+/// repository's configuration in the workspace is never picked up by
+/// discovery), and `GIT_EXTERNAL_DIFF` is removed.
+///
+/// `diff.external` has no value that turns it off (an empty one makes
+/// `git diff` fail with "cannot run", `true` prints an empty diff), and git
+/// has no global switch for textconv drivers, so the auto-run command itself
+/// carries `--no-ext-diff --no-textconv` ([`harden_git_command`]), and
+/// writing the configuration that defines them asks ([`touches_git_config`]).
+pub fn hardened_git_env() -> Vec<EnvChange> {
+    let mut env = config_overrides(&[
+        ("core.fsmonitor", "false"),
+        ("core.hooksPath", null_device()),
+        ("core.pager", "cat"),
+        ("safe.bareRepository", "explicit"),
+    ]);
     env.push(("GIT_PAGER".into(), Some("cat".into())));
     env.push(("GIT_EXTERNAL_DIFF".into(), None));
     env
+}
+
+/// The environment for an agent process that runs git commands itself, some
+/// of them without asking (a Claude Code chat): the settings a read-only
+/// command would run are overridden, and bare repositories are only used when
+/// named. Hooks are left alone, since they only run on commands that change
+/// the repository, which ask, and the user's hooks should run on those.
+pub fn agent_git_env() -> Vec<EnvChange> {
+    let mut env = config_overrides(&[("core.fsmonitor", "false"), ("safe.bareRepository", "explicit")]);
+    env.push(("GIT_EXTERNAL_DIFF".into(), None));
+    env
+}
+
+/// The command with `--no-ext-diff --no-textconv` added after each `git
+/// diff`, `log` and `show` (`--no-textconv` after `blame`), for running it
+/// without asking. Read in `dialect`; a command the reader cannot split comes
+/// back unchanged.
+pub fn harden_git_command(command: &str, dialect: Dialect) -> String {
+    crate::allowlist::harden_git_command(command, dialect)
 }
 
 #[cfg(test)]
@@ -154,8 +191,8 @@ mod tests {
         let env = hardened_git_env();
         let get = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
         let base: usize = std::env::var("GIT_CONFIG_COUNT").ok().and_then(|n| n.parse().ok()).unwrap_or(0);
-        assert_eq!(get("GIT_CONFIG_COUNT"), Some(Some((base + 3).to_string())));
-        let pairs: Vec<(String, String)> = (base..base + 3)
+        assert_eq!(get("GIT_CONFIG_COUNT"), Some(Some((base + 4).to_string())));
+        let pairs: Vec<(String, String)> = (base..base + 4)
             .map(|i| {
                 (
                     get(&format!("GIT_CONFIG_KEY_{i}")).flatten().unwrap(),
@@ -166,6 +203,44 @@ mod tests {
         assert!(pairs.contains(&("core.fsmonitor".into(), "false".into())));
         assert!(pairs.contains(&("core.hooksPath".into(), null_device().into())));
         assert!(pairs.contains(&("core.pager".into(), "cat".into())));
+        assert!(pairs.contains(&("safe.bareRepository".into(), "explicit".into())));
         assert_eq!(get("GIT_EXTERNAL_DIFF"), Some(None));
+    }
+
+    #[test]
+    fn the_agent_env_keeps_hooks_and_limits_discovery() {
+        let env = agent_git_env();
+        let values: Vec<_> = env.iter().filter_map(|(_, v)| v.clone()).collect();
+        assert!(values.contains(&"safe.bareRepository".to_string()));
+        assert!(values.contains(&"explicit".to_string()));
+        assert!(values.contains(&"core.fsmonitor".to_string()));
+        assert!(!values.contains(&"core.hooksPath".to_string()));
+        assert!(env.iter().any(|(n, v)| n == "GIT_EXTERNAL_DIFF" && v.is_none()));
+    }
+
+    #[test]
+    fn auto_run_diffs_turn_off_drivers() {
+        let p = |c: &str| harden_git_command(c, Dialect::Posix);
+        assert_eq!(p("git diff"), "git diff --no-ext-diff --no-textconv");
+        assert_eq!(p("git -C sub diff --no-index a b"), "git -C sub diff --no-ext-diff --no-textconv --no-index a b");
+        assert_eq!(
+            p("git --no-pager log -p | head && git status"),
+            "git --no-pager log --no-ext-diff --no-textconv -p | head && git status"
+        );
+        assert_eq!(
+            p("git show HEAD; git blame f"),
+            "git show --no-ext-diff --no-textconv HEAD; git blame --no-textconv f"
+        );
+        assert_eq!(p("git \"diff\" x"), "git \"diff\" --no-ext-diff --no-textconv x");
+        assert_eq!(p("ls -la && git status"), "ls -la && git status");
+        assert_eq!(p("echo diff"), "echo diff");
+        // Unreadable commands are never auto-run, and come back unchanged.
+        assert_eq!(p("git diff $(x)"), "git diff $(x)");
+        let cmd = |c: &str| harden_git_command(c, Dialect::Cmd);
+        assert_eq!(cmd("GIT diff 2>nul & dir"), "GIT diff --no-ext-diff --no-textconv 2>nul & dir");
+        assert_eq!(
+            cmd("git log\ngit diff é"),
+            "git log --no-ext-diff --no-textconv\ngit diff --no-ext-diff --no-textconv é"
+        );
     }
 }

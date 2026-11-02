@@ -91,14 +91,14 @@ export function SimpleModeSettings() {
       <div className="flex flex-wrap items-start gap-4">
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold">What Simple shows</h3>
-          <p className="mt-1 max-w-prose text-[12.5px] text-ink-soft">
+          <p className="mt-1 max-w-prose text-xs text-ink-soft">
             Simple keeps Nekko calm for everyday use. Everything still works; these controls just stay out of sight.
             Choose <b>Show</b> to see a control in both modes, <b>Expert only</b> to keep it for Expert, or <b>Hide</b> to put it away in both.
           </p>
-          <p className="mt-1 text-[12px] text-ink-faint">{hiddenInSimple} of {desktop.length} controls are out of sight in Simple. Kept on this computer.</p>
+          <p className="mt-1 text-xs text-ink-faint">{hiddenInSimple} of {desktop.length} controls are out of sight in Simple. Kept on this computer.</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="text-[11.5px] text-ink-faint">Preview</span>
+          <span className="text-2xs text-ink-faint">Preview</span>
           <div className="mode-seg" role="radiogroup" aria-label="Preview mode">
             {([false, true] as const).map((on) => (
               <button key={String(on)} type="button" role="radio" aria-checked={previewExpert === on} className={previewExpert === on ? 'on' : ''} onClick={() => setPreviewExpert(on)} aria-label={on ? 'Preview Expert' : 'Preview Simple'} title={on ? 'Preview Expert' : 'Preview Simple'}>
@@ -106,7 +106,7 @@ export function SimpleModeSettings() {
               </button>
             ))}
           </div>
-          <button type="button" className="btn btn-ghost px-2 py-1 text-[12px]" disabled={!changed} onClick={() => { for (const id of Object.keys(choices)) setChoice(id, null); }}>Reset to defaults</button>
+          <button type="button" className="btn btn-ghost px-2 py-1 text-xs" disabled={!changed} onClick={() => { for (const id of Object.keys(choices)) setChoice(id, null); }}>Reset to defaults</button>
         </div>
       </div>
       <PreviewCtx.Provider value={{ expert: previewExpert, choices, hot }}>
@@ -117,7 +117,7 @@ export function SimpleModeSettings() {
               <div className="min-w-0">
                 <h4 className="sm-area-title">{area}</h4>
                 {Preview && <Preview />}
-                <p className="mt-1.5 text-[11px] text-ink-faint">{previewExpert ? 'In Expert.' : 'In Simple.'} Dashed controls are out of sight.</p>
+                <p className="mt-1.5 text-2xs text-ink-faint">{previewExpert ? 'In Expert.' : 'In Simple.'} Dashed controls are out of sight.</p>
               </div>
               <ul className="min-w-0" onMouseLeave={() => setHot(null)}>
                 {items.map((item) => {
@@ -125,8 +125,8 @@ export function SimpleModeSettings() {
                   return (
                     <li key={item.id} className="sm-item" onMouseEnter={() => setHot(item.id)} onFocus={() => setHot(item.id)} data-simple-item={item.id}>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[12.5px] font-medium">{item.label}{item.default === v ? '' : <span className="ml-1.5 text-[11px] font-normal text-accent">changed</span>}</div>
-                        <div className="text-[11.5px] text-ink-faint">{item.hint}</div>
+                        <div className="text-xs font-medium">{item.label}{item.default === v ? '' : <span className="ml-1.5 text-2xs font-normal text-accent">changed</span>}</div>
+                        <div className="text-2xs text-ink-faint">{item.hint}</div>
                       </div>
                       <div className="sm-choice" role="radiogroup" aria-label={item.label}>
                         {CHOICES.map((c) => (

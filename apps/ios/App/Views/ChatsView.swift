@@ -35,6 +35,8 @@ struct ChatsView: View {
     /// The pill scrolled away.
     @State private var pillHidden = false
     @Environment(Prefs.self) private var prefs
+    /// Pull to refresh, played by the toolbar mascot.
+    @State private var pull = PawPull()
 
     var body: some View {
         Group {
@@ -52,10 +54,10 @@ struct ChatsView: View {
         // Room for the floating pill under the large title, while it sits there.
         .contentMargins(.top, prefs.pillPlacement.isStandard && !searching ? AgentPillLayer.topMargin : 0, for: .scrollContent)
         .hidesPillOnScroll($pillHidden)
-        .refreshable { await store.refresh() }
+        .pawRefreshable(pull) { await store.refresh() }
         .navigationTitle("Chats")
         .toolbar {
-            RootMascot(working: store.activity.values.contains(.running))
+            RootMascot(working: store.activity.values.contains(.running), pull: pull)
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback, search: { searching = true }) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {

@@ -35,6 +35,10 @@ import com.nekko.protocol.PullRequest
 import com.nekko.protocol.PhoneChanges
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SkillSummary
+import com.nekko.protocol.Draft
+import com.nekko.android.data.OutboxItem
+import com.nekko.protocol.PcSettings
+import com.nekko.protocol.StepUpProof
 import android.content.ContentResolver
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -49,6 +53,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import com.nekko.protocol.Activity
+import com.nekko.protocol.SessionSummary
+import com.nekko.protocol.AgentWatch
+import com.nekko.protocol.AgentRows
 import kotlinx.serialization.json.JsonPrimitive
 
 /** Android wrapper around [ChatController]: wires it to the repository's state and events. */
@@ -59,7 +68,7 @@ class ChatViewModel(
     mic: MicHardware? = null,
     private val phonePrefs: PhonePrefs? = null,
 ) : ViewModel() {
-    private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) })
+    private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox, saved = repo.transcripts)
 
     /** Dictation into this chat's message box (Settings → Dictation). */
     val dictation: DictationController? = if (mic == null || phonePrefs == null) null else DictationController(
@@ -122,6 +131,8 @@ class ChatViewModel(
 
     /** Change or remove a queued prompt before it runs (AN-29); the computer checks it still reads [expect]. */
     suspend fun editQueued(index: Int, expect: String, text: String?) = controller.editQueued(index, expect, text)
+    suspend fun sendQueuedAtNextStep(index: Int, expect: String) = controller.sendQueuedAtNextStep(index, expect)
+    suspend fun interruptQueued(index: Int) = controller.interruptQueued(index)
 
     /** Whether [block] is saved, so the chat can be forked from it. */
     fun canFork(block: Block): Boolean = controller.isSaved(block)
@@ -195,12 +206,62 @@ class ChatViewModel(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatController.project(controller.state.value, env(repo.state.value)))
 
     init {
+        // Instant paint (OF-6): the saved copy at once, replaced in place when the computer answers.
+        controller.showSavedCopy()
         // Load when the computer is reachable, and again after every reconnect.
         viewModelScope.launch {
             repo.state.map { it.conn }.distinctUntilChanged().collect { if (it == RelayState.ONLINE) controller.reload() }
         }
         viewModelScope.launch {
             repo.events.collect { e -> if (controller.onEvent(e)) launch { controller.reload() } }
+        }
+    }
+
+    private val _watches = MutableStateFlow<List<AgentWatch>>(emptyList())
+    /** The chat's durable watches (`session:watches`), for the watch rows' live chips. */
+    val watches: StateFlow<List<AgentWatch>> = _watches.asStateFlow()
+
+    /** This chat's subagent chats (the list hides them) and their live activity, for the delegation rows. */
+    data class Subagents(val children: List<SessionSummary> = emptyList(), val activity: Map<String, Activity> = emptyMap())
+
+    // The list the phone holds leaves subagent chats out (SessionSummary.visible), so they are read here.
+    private val children = MutableStateFlow<List<SessionSummary>>(emptyList())
+
+    val subagents: StateFlow<Subagents> = combine(children, repo.state.map { it.activity }.distinctUntilChanged()) { kids, activity ->
+        Subagents(kids, activity.filterKeys { id -> kids.any { it.id == id } })
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, Subagents())
+
+    private fun calls(tool: String) = ui.value.blocks.any { it is Block.Tool && it.name == tool }
+
+    /**
+     * Re-read what the agent-work rows show beyond the transcript: the watches,
+     * and the child chats when the transcript delegates. Failures keep the last state.
+     */
+    suspend fun refreshAgentState() {
+        if (calls(AgentRows.WATCH_TOOL)) {
+            runCatching { AgentWatch.list(repo.caller.call(Channels.SESSION_WATCHES, JsonPrimitive(sessionId))) }
+                .onSuccess { _watches.value = it }
+        }
+        if (calls(AgentRows.SUBAGENT_TOOL)) {
+            runCatching { SessionSummary.children(repo.caller.call(Channels.SESSIONS_SUMMARIES), sessionId) }
+                .onSuccess { children.value = it }
+        }
+    }
+
+    init {
+        // Re-read when the transcript first holds a watch or a delegation, and after each turn.
+        viewModelScope.launch {
+            ui.map { u -> Triple(u.blocks.any { it is Block.Tool && it.name == AgentRows.WATCH_TOOL },
+                u.blocks.any { it is Block.Tool && it.name == AgentRows.SUBAGENT_TOOL }, u.running) }
+                .distinctUntilChanged()
+                .collect { (watch, agent, _) -> if (watch || agent) refreshAgentState() }
+        }
+        // While a watch is armed, its chip is re-read every 15 s (the desktop's cadence).
+        viewModelScope.launch {
+            while (true) {
+                delay(15_000)
+                if (_watches.value.any { it.status == AgentWatch.Status.ACTIVE }) refreshAgentState()
+            }
         }
     }
 
@@ -211,6 +272,30 @@ class ChatViewModel(
 
     /** Bring this completed chat back to the active list. */
     suspend fun restore() = repo.restoreChat(sessionId)
+
+    /** Whether this chat is pinned on the computer. */
+    val pinned: StateFlow<Boolean> = repo.state.map { s -> s.summaries.firstOrNull { it.id == sessionId }?.pinned == true }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.state.value.summaries.firstOrNull { it.id == sessionId }?.pinned == true)
+
+    /** The chat's ⋮ → Rename, Pin, Complete and Chat mode: each changes the chat on the computer, then re-reads it. */
+    suspend fun rename(title: String) {
+        repo.renameChat(sessionId, title)
+        controller.reload()
+    }
+
+    suspend fun setPinned(pinned: Boolean) = repo.setPinned(sessionId, pinned)
+
+    suspend fun complete() = repo.completeChat(sessionId)
+
+    /** Raising the mode is signed; a step-up refusal is thrown for the sheet, which passes its [stepUp]. */
+    suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
+        repo.setChatMode(sessionId, mode, stepUp)
+        controller.reload()
+    }
+
+    /** What the chat runs with when it has no mode of its own: the computer's default. */
+    val defaultMode: PcSettings.ChatMode get() = repo.state.value.pcSettings.effectiveMode
 
     /** Whether the computer lets phones see a chat's changes (`phoneChanges`, set on the computer). */
     val changesAllowed: StateFlow<Boolean> = repo.state.map { it.pcSettings.phoneChanges }.distinctUntilChanged()
@@ -247,6 +332,91 @@ class ChatViewModel(
     /** Photos waiting in the message box; kept here so a rotation doesn't drop them. */
     val photos = PhotoTray<ImageBitmap>()
 
+    // ---- the draft (offline mode): what the message box holds survives leaving the chat and the app ending ----
+
+    /** The draft as the chat opened: the message box starts from it. */
+    val savedDraft: Draft = repo.drafts.draft(sessionId)
+    private var draftText = savedDraft.text
+    private var draftSkill = savedDraft.skill
+
+    init {
+        photos.seed(savedDraft.images.mapNotNull { url -> ImageAttachments.preview(url)?.let { url to it } })
+        // A photo added or removed is saved like a typed word.
+        viewModelScope.launch {
+            photos.state.map { s -> s.photos.map { it.dataUrl } }.distinctUntilChanged().collect { saveDraft() }
+        }
+    }
+
+    /** This chat's prompts waiting in the outbox, oldest first, shown as *Waiting to send*. */
+    val waiting: StateFlow<List<OutboxItem>> = repo.outbox.state.map { it.waitingFor(sessionId) }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.outbox.state.value.waitingFor(sessionId))
+
+    /** The prompt being delivered now (its Edit and Delete wait). */
+    val sendingId: StateFlow<String?> = repo.outbox.state.map { it.sendingId }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val _restore = MutableStateFlow<Draft?>(null)
+    /**
+     * A prompt back from the outbox (Edit, or refused by the computer), merged in
+     * front of what was typed: the message box takes it once ([restored]).
+     */
+    val restore: StateFlow<Draft?> = _restore.asStateFlow()
+
+    /** Why the computer turned the last prompt down; shown above the box until the next send. */
+    val refusal: StateFlow<String?> = repo.drafts.drafts.map { it[sessionId]?.refusal }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, savedDraft.refusal)
+
+    init {
+        // The outbox put a prompt back in this chat's draft: show it in the box.
+        viewModelScope.launch {
+            repo.drafts.drafts.map { it[sessionId] }.distinctUntilChanged().collect { d ->
+                if (d != null && (d.text != draftText || d.skill?.name != draftSkill?.name || d.images != photos.state.value.photos.map { it.dataUrl })) {
+                    draftText = d.text
+                    draftSkill = d.skill
+                    val have = photos.state.value.photos.map { it.dataUrl }.toSet()
+                    photos.seed(d.images.filter { it !in have }.mapNotNull { url -> ImageAttachments.preview(url)?.let { url to it } })
+                    _restore.value = d
+                }
+            }
+        }
+    }
+
+    fun restored() { _restore.value = null }
+
+    /** *Waiting to send* → Edit: back into the box. */
+    fun editWaiting(id: String) { repo.outbox.takeBack(id) }
+
+    /** *Waiting to send* → Delete. */
+    fun deleteWaiting(id: String) { repo.outbox.remove(id) }
+
+    /** *Waiting to send* → Send now: try again at once. */
+    fun sendWaitingNow() = repo.outbox.flushSoon()
+
+    /** The refusal note was read: drop it from the draft. */
+    fun dismissRefusal() {
+        val d = repo.drafts.draft(sessionId)
+        if (d.refusal != null) repo.drafts.set(sessionId, d.copy(refusal = null))
+    }
+
+    /** The message box changed: its text and armed skill (by name, resolved against the computer's skills). */
+    fun draftChanged(text: String, skillName: String?) {
+        draftText = text
+        draftSkill = when {
+            skillName == null -> null
+            draftSkill?.name == skillName -> draftSkill
+            else -> ui.value.skills.firstOrNull { it.name == skillName } ?: SkillSummary(skillName, "", "", "")
+        }
+        saveDraft()
+    }
+
+    private fun saveDraft() {
+        val photosNow = photos.state.value.photos.map { it.dataUrl }
+        val d = repo.drafts.draft(sessionId)
+        // Emptied by a send: the refusal note has been answered too.
+        val refusal = d.refusal.takeUnless { draftText.isBlank() && draftSkill == null && photosNow.isEmpty() }
+        repo.drafts.set(sessionId, d.copy(text = draftText, skill = draftSkill, images = photosNow, refusal = refusal))
+    }
+
     /** Picked files or a camera shot → the tray, scaled and encoded off the main thread. */
     fun addPhotos(resolver: ContentResolver, uris: List<Uri>, afterEach: (Uri) -> Unit = {}) {
         if (uris.isEmpty()) return
@@ -277,5 +447,6 @@ class ChatViewModel(
         defaults = s.defaults,
         computerName = s.active?.name ?: "your computer",
         models = s.models,
+        canQueue = true,
     )
 }

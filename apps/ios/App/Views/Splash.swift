@@ -12,11 +12,12 @@ import SwiftUI
 struct SplashView: View {
     enum Kind { case launch, resume }
     var kind: Kind = .launch
-    /// `.resume` waits for this: the app active and not behind the lock.
+    /// Both kinds wait for this: the app active and not behind the lock. Until then
+    /// the launch holds its first frame, the plain lavender of the launch screen.
     var ready = true
     var onDone: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var start = Date()
+    @State private var start: Date?
     @State private var faded = false
 
     static let ground = Color(red: 0x9d / 255, green: 0x8c / 255, blue: 0xe6 / 255)
@@ -38,18 +39,28 @@ struct SplashView: View {
                 resume
             } else if reduceMotion {
                 Self.ground.opacity(faded ? 0 : 1)
-                    .task {
-                        try? await Task.sleep(for: .milliseconds(300))
-                        withAnimation(.easeOut(duration: 0.25)) { faded = true }
+                    .task(id: ready) {
+                        guard ready else { return }
+                        if !faded {
+                            try? await Task.sleep(for: .milliseconds(300))
+                            guard !Task.isCancelled else { return }
+                            withAnimation(.easeOut(duration: 0.25)) { faded = true }
+                        }
                         try? await Task.sleep(for: .milliseconds(260))
+                        guard !Task.isCancelled else { return }
                         onDone()
                     }
             } else {
                 TimelineView(.animation) { tl in
-                    Canvas { ctx, size in draw(&ctx, size, tl.date.timeIntervalSince(start)) }
+                    Canvas { ctx, size in draw(&ctx, size, start.map { tl.date.timeIntervalSince($0) } ?? 0) }
                 }
-                .task {
-                    try? await Task.sleep(for: .seconds(Self.zoomAt + Self.zoomFor + 0.05))
+                .task(id: ready) {
+                    guard ready else { return }
+                    // Started once; a brief trip to inactive (a Face ID sheet) doesn't restart it.
+                    let begun = start ?? Date()
+                    start = begun
+                    try? await Task.sleep(for: .seconds(Self.zoomAt + Self.zoomFor + 0.05 - Date().timeIntervalSince(begun)))
+                    guard !Task.isCancelled else { return }
                     onDone()
                 }
             }
@@ -79,11 +90,15 @@ struct SplashView: View {
             }
         }
         .task(id: ready) {
-            guard ready, !faded else { return }
-            try? await Task.sleep(for: .milliseconds(60))
-            guard !Task.isCancelled else { return }
-            faded = true
+            guard ready else { return }
+            if !faded {
+                try? await Task.sleep(for: .milliseconds(60))
+                guard !Task.isCancelled else { return }
+                faded = true
+            }
             try? await Task.sleep(for: .milliseconds(450))
+            // Torn down mid-dissolve (the lock cover put back up): not done.
+            guard !Task.isCancelled else { return }
             onDone()
         }
     }
