@@ -13,11 +13,13 @@ struct LiveCardView: View {
 
     /// The card is always dark, whatever the phone's appearance.
     static let background = Color(red: 28/255, green: 28/255, blue: 30/255)
-    fileprivate static let surface = Color(white: 0.17)
-    fileprivate static let raised = Color(white: 0.28)
-    fileprivate static let grey = Color(white: 0.68)
-    fileprivate static let orange = Color(red: 1, green: 0.62, blue: 0.04)
-    fileprivate static let greenInk = Color(red: 0.02, green: 0.13, blue: 0.05)
+    // The default dark palette (Theme.swift): the extension runs apart from the app and can't see its theme.
+    fileprivate static let accent = Color(red: 0x8B/255, green: 0x7D/255, blue: 0xFF/255)
+    fileprivate static let onAccent = Color(red: 0x0C/255, green: 0x0C/255, blue: 0x11/255)
+    fileprivate static let danger = Color(red: 0xEF/255, green: 0x6A/255, blue: 0x5B/255)
+    fileprivate static let grey = Color(red: 0xA3/255, green: 0xA1/255, blue: 0xB0/255)
+    fileprivate static let surface = grey.opacity(0.14)
+    fileprivate static let raised = grey.opacity(0.24)
     /// Where "+N" goes when every chat on the card is already a chip: the app.
     static let chatsURL = URL(string: "nekko-agent://chats")!
     /// The Detailed mic, on the card and in the Settings preview.
@@ -106,7 +108,7 @@ struct LiveCardView: View {
     }
 
     private var mic: some View {
-        MicGlyph().stroke(Self.orange, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+        MicGlyph().stroke(Self.accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
             .frame(width: 16, height: 16)
             .frame(width: 30, height: 30)
             .background(Self.surface, in: Circle())
@@ -182,7 +184,7 @@ struct LiveCardView: View {
                 if let focus {
                     let to = showsText ? focus.short : ""
                     button(TalkToChatIntent(sessionId: focus.id)) {
-                        pill(to.isEmpty ? Text("Send") : Text("Send to \(to)"), fill: Color(red: 0.04, green: 0.52, blue: 1))
+                        pill(to.isEmpty ? Text("Send") : Text("Send to \(to)"), fill: Self.accent, ink: Self.onAccent)
                             .privacySensitive(!to.isEmpty)
                     }
                 }
@@ -212,11 +214,11 @@ struct LiveCardView: View {
             if let callId = chat.callId {
                 HStack(spacing: 8) {
                     button(AnswerApprovalIntent(sessionId: chat.id, callId: callId, allow: false)) {
-                        pill(Text("Deny"), fill: Self.raised, ink: LiveChatState.failed.tint)
+                        pill(Text("Deny"), fill: Self.raised, ink: Self.danger)
                     }
                     if showsText {
                         button(AllowToolIntent(sessionId: chat.id, callId: callId)) {
-                            pill(Text("Allow"), fill: LiveChatState.done.tint, ink: Self.greenInk)
+                            pill(Text("Allow"), fill: Self.accent, ink: Self.onAccent)
                         }
                     }
                 }
@@ -241,7 +243,7 @@ struct LiveCardView: View {
     private func close(_ chat: LiveChat) -> some View {
         let failed = chat.state == .failed
         let word = chat.closeWord.isEmpty ? closeWord(for: chat.id, failed: failed) : chat.closeWord
-        let ink = failed ? Color.white : Self.greenInk
+        let ink = failed ? Color.white : Self.onAccent
         return button(DismissChatIntent(sessionId: chat.id)) {
             HStack(spacing: 6) {
                 CheckGlyph().stroke(ink, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)).frame(width: 12, height: 12)
@@ -252,7 +254,7 @@ struct LiveCardView: View {
             .foregroundStyle(ink)
             .frame(maxWidth: .infinity)
             .frame(height: 28)
-            .background(failed ? Self.raised : LiveChatState.done.tint, in: RoundedRectangle(cornerRadius: 10))
+            .background(failed ? Self.raised : Self.accent, in: RoundedRectangle(cornerRadius: 10))
         }
         .accessibilityHint(Text("Removes this chat from the card"))
     }
@@ -317,7 +319,7 @@ private struct LevelBars: View {
     var body: some View {
         HStack(spacing: 3) {
             ForEach(Array([6, 12, 16, 9, 14, 7, 11, 15, 8, 5].enumerated()), id: \.offset) { _, h in
-                Capsule().fill(LiveCardView.orange).frame(width: 3, height: CGFloat(h))
+                Capsule().fill(LiveCardView.accent).frame(width: 3, height: CGFloat(h))
             }
         }
         .frame(height: 18)
