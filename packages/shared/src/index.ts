@@ -11,6 +11,7 @@ export * from './feedback.js';
 export * from './nekko-package.js';
 export * from './nekko-package-signature.js';
 export * from './ui-layout.js';
+export * from './computers.js';
 export * from './connections.js';
 export * from './telemetry.js';
 export * from './models.js';
