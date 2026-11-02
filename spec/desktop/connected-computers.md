@@ -41,6 +41,32 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 - **Run on.** New chat gets a *Run on* row once a computer is connected, as on the iPhone. Choosing one swaps the model list to that computer's models and subscriptions, and the folder list to its folders, and picks its first model so starting there is still one click. A computer that is offline, or that allows watching only, can't be chosen. A chat started there has one working folder; supporting folders stay a local feature for now.
 - **Monitors.** A switch in the dock points the Hardware monitor at a connected computer. Local models and Utilization still read this one.
 
+## Where the model runs
+
+`[implemented 2026-11-02; two real daemons and a scripted model, not yet on real machines]`
+
+Where the agent runs and where the model runs are separate choices. Whichever computer runs the agent can use its own models and subscriptions, a connected computer's Model Server, or a cloud provider. A rented box with a plain model server is an OpenAI-compatible provider, as it always was.
+
+- **A connected Model Server is a provider here.** Each connected computer adds *gomi Model Server* to this computer's providers, so a chat's model picker lists it, and a phone connected here can pick it too. It reaches that computer over the same sealed link, on LAN, tailnet or relay, with no change to the Model Server's `bind` or key.
+- **Only the engine crosses.** Three paths: chat completions, embeddings and the model list. It never reaches a local runtime, a provider or Claude Code, so a subscription stays on the computer it signed in on.
+- **Model Server settings.** *Let connected computers use these models* removes that provider elsewhere when off. *Connected devices choose model settings*, off, means the server's saved settings decide: a request's temperature, seed and token limits are dropped, and devices can't change how models load. Both are on by default, and neither can be changed from another device.
+- A chat using a model on another computer stops if that computer goes away, with *gomi went offline during this reply*. Its transcript is kept here.
+
+## Every run setting, from any client
+
+`[gate implemented 2026-11-02 for phones and computers; the phone section built on iOS and Android; model-loading controls not built on any client]`
+
+- A phone or a desktop can set everything `setSessionOptions` takes on the computer running a chat. The phone's model sheet has *Run settings*: choosing the model automatically, offline, cloud only, incognito, a separate Git branch, work mode and tool style.
+- **Options that change what an agent may touch need the same proof as raising a mode, in either direction:** execution mode, Git isolation, disabled tools, MCP servers and connectors, privacy, offline and cloud only.
+- `chat:send` also takes videos, a history limit and no-tools. Attaching a path on the host stays refused.
+- How a Model Server loads and keeps models is open to devices while it allows it (`maxLoaded`, `idleTtlSeconds`, `jitLoad`, `autoload`, `autoStart`, presets, loading a model). `port`, `bind`, `apiKey`, `corsOrigins`, the model folders and the two settings above stay on the machine, because they open it to its network or decide this rule.
+
+## A host with no window
+
+`[implemented 2026-11-02; CLI logic tested, not yet run on rented compute]`
+
+`nekko-agent computer serve --relay <wss://…>` keeps a computer reachable with no desktop app, and prints the link for Settings > Computers. `computer link`, `computer list` and `computer revoke <device>` do the rest. A rented box, or a Mac Studio with nobody logged in, is then a computer like any other.
+
 ## What a computer may do
 
 `COMPUTER_ACCESS` adds to what a phone may do: reading tool output whole, older messages (`session:page`), a running turn so far (`agent:replay`), compacting, truncating, taking back a queued message, and accepting changes. A chat too large for one relay frame has its tool text cut. The host's Read and Change switches, activity list and revocation work as for a phone, and a mode raise still needs a signed proof, plus step-up where it is on.

@@ -35,6 +35,25 @@ nekko-agent --url http://127.0.0.1:1440 --token "$NEKKO_TOKEN" status --json
 `--url` can also be supplied as `NEKKO_URL`; `--token` can be supplied as
 `NEKKO_TOKEN`.
 
+
+## A computer with no window
+
+Rented compute, or a Mac Studio nobody is logged in to, has no desktop app. Run this on it:
+
+```bash
+nekko-agent computer serve --relay wss://relay.example
+```
+
+It stays reachable until you stop it, and prints a one-time link. On the desktop that will drive it, open Settings, Computers, Add a computer, and paste that link. The relay is only needed the first time.
+
+```bash
+nekko-agent computer link              # a new one-time link
+nekko-agent computer list              # what is paired here
+nekko-agent computer revoke <device>   # remove one
+```
+
+Connecting a computer is equivalent to being at this machine: see [REMOTE.md](REMOTE.md#from-another-computer).
+
 ## Safety and approval
 
 Chat defaults to `--approve guardrails` (or `NEKKO_APPROVE=guardrails`).
