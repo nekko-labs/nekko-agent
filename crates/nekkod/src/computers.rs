@@ -7,9 +7,8 @@
 //! tools, the CLI's API and the Local Web UI never reach a paired machine.
 
 use crate::hub::Hub;
-use nekko_cloud::vault::{Vault, scoped_vault};
-use nekko_remote::client::{Client, Config, State, Status};
-use p256::ecdsa::SigningKey;
+use nekko_cloud::vault::{FileVault, Vault, scoped_vault};
+use nekko_remote::client::{Client, Config, SigningKey, State, Status};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -143,7 +142,14 @@ fn pair_refusal(state: &State, host: &str) -> String {
 
 impl Computers {
     pub fn new(dir: PathBuf, hub: Hub) -> Arc<Self> {
-        Self::with_vault(dir.clone(), hub, scoped_vault(&dir, "computers", dir.join("computers-secrets.json")))
+        let file = dir.join("computers-secrets.json");
+        // A machine with nobody logged in has no OS key store to open.
+        let vault: Box<dyn Vault> = if std::env::var_os("NEKKO_FILE_VAULT").is_some() {
+            Box::new(FileVault::new(file))
+        } else {
+            scoped_vault(&dir, "computers", file)
+        };
+        Self::with_vault(dir, hub, vault)
     }
 
     pub fn with_vault(dir: PathBuf, hub: Hub, vault: Box<dyn Vault>) -> Arc<Self> {
@@ -339,7 +345,6 @@ fn this_name() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nekko_cloud::vault::FileVault;
 
     fn computers(dir: &std::path::Path) -> Arc<Computers> {
         let vault = Box::new(FileVault::new(dir.join("secrets.json")));
