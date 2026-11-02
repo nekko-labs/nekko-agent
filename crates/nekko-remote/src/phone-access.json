@@ -279,6 +279,7 @@
  "settingsKeys": [
   "chatPaneAction",
   "defaultChatMode",
+  "machineIcon",
   "skipDeleteConfirmation",
   "voice.enabled",
   "voice.language"
@@ -291,6 +292,7 @@
   "defaultChatMode",
   "defaultModelId",
   "defaultProviderId",
+  "machineIcon",
   "favoriteModels",
   "effort",
   "phoneChanges",
@@ -514,15 +516,31 @@
   "providerId"
  ],
  "computerAccess": {
-  "refused": [
-   "providers:saveSealed",
-   "providers:setEnabled",
-   "ssh:open",
-   "terminal:close",
-   "terminal:create",
-   "terminal:open",
-   "terminal:signal",
-   "workspace:addByPath"
+  "icons": [
+   "laptop",
+   "desktop",
+   "tower",
+   "mini",
+   "server",
+   "rack",
+   "cloud",
+   "gpu",
+   "chip",
+   "home",
+   "office",
+   "lab",
+   "bolt",
+   "moon",
+   "sun",
+   "star",
+   "flame",
+   "leaf",
+   "globe",
+   "cube",
+   "rocket",
+   "shield",
+   "terminal",
+   "cat"
   ],
   "read": [
    "agent:replay",
@@ -874,7 +892,6 @@
    ],
    "pairing": [
     "remote:pair",
-    "remote:pairComputer",
     "remote:rotate"
    ],
    "phoneAccess": [

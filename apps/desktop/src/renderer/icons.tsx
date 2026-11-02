@@ -1,4 +1,5 @@
 import React from 'react';
+import type { ComputerIcon as ComputerIconName } from '@nekko-agent/shared';
 
 type P = { className?: string };
 /** Standard window-minimize minus, consistent with the app's line icons. */
@@ -185,3 +186,31 @@ export const EffortBarsIcon = ({ level, className }: P & { level: number }) => (
     {[0, 1, 2, 3].map((i) => <rect key={i} x={3.5 + i * 4.6} y={16 - i * 3.6} width={3} height={4.5 + i * 3.6} rx={0.8} fill={i < level ? 'currentColor' : 'none'} />)}
   </svg>
 );
+
+/** The icons a computer can have (`COMPUTER_ICONS`). */
+export const COMPUTER_ICON_GLYPHS: Record<ComputerIconName, (p: P) => React.ReactElement> = {
+  laptop: (p) => <S {...p}><rect x="5" y="5" width="14" height="10" rx="1.5" /><path d="M3 19h18" /></S>,
+  desktop: ComputerIcon,
+  tower: (p) => <S {...p}><rect x="7" y="3" width="10" height="18" rx="1.5" /><path d="M10 7h4M10 10h4" /><circle cx="12" cy="16" r="1" /></S>,
+  mini: (p) => <S {...p}><rect x="4" y="8" width="16" height="8" rx="2.5" /><path d="M8 12h.01" /></S>,
+  server: (p) => <S {...p}><rect x="4" y="4" width="16" height="7" rx="1.5" /><rect x="4" y="13" width="16" height="7" rx="1.5" /><path d="M8 7.5h.01M8 16.5h.01" /></S>,
+  rack: (p) => <S {...p}><rect x="4" y="3" width="16" height="18" rx="1.5" /><path d="M4 9h16M4 15h16M8 6h.01M8 12h.01M8 18h.01" /></S>,
+  cloud: (p) => <S {...p}><path d="M7 18a4 4 0 0 1-.6-7.96A6 6 0 0 1 18 11a3.5 3.5 0 0 1-.5 7H7Z" /></S>,
+  gpu: (p) => <S {...p}><rect x="3" y="7" width="18" height="10" rx="1.5" /><circle cx="9" cy="12" r="2.5" /><circle cx="16" cy="12" r="2.5" /><path d="M5 17v2" /></S>,
+  chip: (p) => <S {...p}><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4" /></S>,
+  home: (p) => <S {...p}><path d="m4 11 8-7 8 7" /><path d="M6 10v10h12V10" /></S>,
+  office: (p) => <S {...p}><rect x="6" y="3" width="12" height="18" rx="1" /><path d="M10 7h.01M14 7h.01M10 11h.01M14 11h.01M10 15h.01M14 15h.01" /></S>,
+  lab: (p) => <S {...p}><path d="M10 3h4M11 3v6l-5.5 9.5A1.7 1.7 0 0 0 7 21h10a1.7 1.7 0 0 0 1.5-2.5L13 9V3" /></S>,
+  bolt: (p) => <S {...p}><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z" /></S>,
+  moon: (p) => <S {...p}><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" /></S>,
+  sun: (p) => <S {...p}><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" /></S>,
+  star: (p) => <S {...p}><path d="m12 4 2.5 5.3 5.5.8-4 4 1 5.6-5-2.8-5 2.8 1-5.6-4-4 5.5-.8L12 4Z" /></S>,
+  flame: (p) => <S {...p}><path d="M12 3c1 3 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 .5-3-1-5 1-8.5Z" /></S>,
+  leaf: (p) => <S {...p}><path d="M5 19c0-9 6-14 15-14 0 9-5 15-14 15" /><path d="M5 20c2-5 5-8 9-10" /></S>,
+  globe: (p) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" /></S>,
+  cube: (p) => <S {...p}><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="m4 7.5 8 4.5 8-4.5M12 12v9" /></S>,
+  rocket: (p) => <S {...p}><path d="M12 3c3 2 5 6 5 10l-2 3H9l-2-3c0-4 2-8 5-10Z" /><path d="M9 16l-2 3M15 16l2 3M12 9h.01" /></S>,
+  shield: (p) => <S {...p}><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z" /></S>,
+  terminal: (p) => <S {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m7 10 3 2-3 2M12 15h5" /></S>,
+  cat: (p) => <S {...p}><path d="M5 5v9a7 7 0 0 0 14 0V5l-4 3a8 8 0 0 0-6 0L5 5Z" /><path d="M9.5 13h.01M14.5 13h.01" /></S>,
+};
