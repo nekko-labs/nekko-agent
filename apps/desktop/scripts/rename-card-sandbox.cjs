@@ -9,6 +9,7 @@ if (!out) throw Error('Use layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 app.on('window-all-closed', () => {});
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((r, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(r.url) }));
@@ -22,7 +23,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
   };
   const cardTitle = title => title;
-  const centreByTitle = async (title) => run(`(() => { const el = [...document.querySelectorAll('div[role="button"]')].find(c => c.getAttribute('title') === ${JSON.stringify(title)}); const r = el?.getBoundingClientRect(); return r ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null; })()`);
+  const centreByTitle = async (title) => run(`(() => { const el = [...document.querySelectorAll('div[role="button"]')].find(c => c.getAttribute('title') === ${js(title)}); const r = el?.getBoundingClientRect(); return r ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null; })()`);
   const key = async (keyCode) => { win.webContents.sendInputEvent({ type: 'keyDown', keyCode }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode }); await sleep(250); };
   const field = `document.querySelector('input[aria-label="Chat title"]')`;
   try {
