@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import type { AgentEvent, ComputerStatus, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { AUTO_MODEL_ID, computerIdOf } from '@nekko-agent/shared';
-import { ComputerGlyph, computerBlock } from '../components/ComputerChip.js';
+import { ComputerGlyph } from '../components/ComputerChip.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
@@ -50,6 +50,9 @@ function sortable(e: Entry): SortableCard {
 }
 
 /** One group the panel shows: a project, a status, a date range, or all of it. */
+/** Beside a computer's group heading, which already names it. */
+const COMPUTER_STATE_WORD: Record<ComputerStatus['state'], string> = { online: '', connecting: 'connecting', offline: 'offline', denied: 'removed', update: 'needs an update' };
+
 /** The group heading for agents on this computer. */
 function thisComputerName(): string {
   return navigator.platform.startsWith('Mac') ? 'This Mac' : navigator.platform.startsWith('Win') ? 'This PC' : 'This computer';
@@ -748,7 +751,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   {b.computer && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: b.computer.state === 'online' ? 'var(--success)' : 'var(--ink-faint)' }} />}
                   {view.groupBy === 'computer' && view.showComputerIcons && <ComputerGlyph icon={b.computer ? b.computer.icon : b.key === 'computer:here' ? settings?.machineIcon : undefined} />}
                   <span className="agent-panel-group-label truncate font-medium" title={b.name} dir="auto">{b.name}</span>
-                  {b.computer && b.computer.state !== 'online' && <span className="shrink-0 text-2xs text-ink-faint">{computerBlock(b.computer)}</span>}
+                  {b.computer && b.computer.state !== 'online' && <span className="shrink-0 text-2xs text-ink-faint">{COMPUTER_STATE_WORD[b.computer.state]}</span>}
                   {isCollapsed && (items.length > 0 || completedGroup) && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
