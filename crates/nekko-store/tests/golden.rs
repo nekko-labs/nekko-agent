@@ -391,3 +391,19 @@ fn every_new_chat_is_the_one_create_session_makes() {
         std::fs::remove_dir_all(&data).ok();
     }
 }
+
+#[test]
+fn a_fork_keeps_what_protects_its_transcript() {
+    let data = std::env::temp_dir().join(format!("nekko-fork-protect-{}", std::process::id()));
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let chat = serde_json::json!({
+        "id": "s1", "title": "Private", "offline": true, "privacy": { "mode": "redact" },
+        "messages": [], "createdAt": 1, "updatedAt": 1,
+    });
+    std::fs::write(data.join("sessions/s1.json"), chat.to_string()).unwrap();
+    let store = nekko_store::SessionStore::new(&data);
+    let fork = store.fork("s1", &Value::Null).unwrap().unwrap();
+    assert_eq!(fork["offline"], true);
+    assert_eq!(fork["privacy"]["mode"], "redact");
+    let _ = std::fs::remove_dir_all(data);
+}

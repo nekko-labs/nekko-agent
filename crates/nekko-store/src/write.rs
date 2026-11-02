@@ -941,6 +941,11 @@ impl SessionStore {
             "memory",
             "guidance",
             "toolApproach",
+            // A fork carries the transcript, so it keeps what protects it.
+            "offline",
+            "cloudOnly",
+            "privacy",
+            "incognito",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());

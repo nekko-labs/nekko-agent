@@ -12,6 +12,8 @@ A desktop can connect to another computer the same way a phone does (Settings, C
 
 If you turn on step-up (Settings, Security), raising a chat's mode from a computer is refused until you confirm it on this computer.
 
+**Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
+
 ## How it works
 
 ```

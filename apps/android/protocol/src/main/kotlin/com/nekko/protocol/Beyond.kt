@@ -1,6 +1,7 @@
 package com.nekko.protocol
 
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -11,6 +12,29 @@ import java.text.Normalizer
 // for phones (packages/shared/src/phone-views.ts): a chat's queue, the saved
 // prompts, and the chat list's search (AN-29, the iPhone's IO-22 to
 // IO-25). Mirrors `Beyond.swift`.
+
+/**
+ * A run setting a phone shows for a chat, sent to the computer running it. No
+ * [values] means on or off. The computer checks every one, and asks for the
+ * fingerprint or screen lock for those that change what an agent may touch.
+ */
+data class RunOption(val key: String, val values: List<String> = emptyList()) {
+    companion object {
+        val all = listOf(
+            RunOption("autoModel"),
+            RunOption("offline"),
+            RunOption("cloudOnly"),
+            RunOption("incognito"),
+            RunOption("gitIsolation"),
+            RunOption("workMode", listOf("default", "better-review", "design", "best-output")),
+            RunOption("toolApproach", listOf("list", "code")),
+        )
+
+        /** A chat's run settings, as the computer holds them. */
+        fun values(o: JsonObject?): Map<String, JsonElement> =
+            all.mapNotNull { option -> o?.get(option.key)?.takeIf { it !is JsonNull }?.let { option.key to it } }.toMap()
+    }
+}
 
 /** One prompt waiting in a chat's queue on the computer. */
 data class QueuedPrompt(

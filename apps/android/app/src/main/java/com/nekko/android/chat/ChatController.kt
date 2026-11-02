@@ -98,6 +98,8 @@ data class ChatUi(
     val modelName: String? = null,
     /** The chat's own effort; null follows the computer's setting. */
     val effort: Effort? = null,
+    /** The chat's run settings ([RunOption]). */
+    val runOptions: Map<String, JsonElement> = emptyMap(),
     /** The chat's own tool policy; null follows the computer's default. */
     val mode: PcSettings.ChatMode? = null,
     /** The transcript is the phone's saved copy, saved then: read-only until the computer answers (OF-5). */
@@ -547,6 +549,7 @@ class ChatController(
                 modelId = modelId,
                 modelName = modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
                 effort = Effort.parse(state.session?.effort),
+                runOptions = state.session?.runOptions ?: emptyMap(),
                 mode = state.session?.mode,
                 context = state.context,
                 contextTokens = liveTokens(state.context, turn),

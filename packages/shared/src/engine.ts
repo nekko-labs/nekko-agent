@@ -166,6 +166,10 @@ export interface EngineSettings {
   idleTtlSeconds: number;
   /** How many models may be resident at once. */
   maxLoaded: number;
+  /** Connected computers may use these models. On unless turned off; changed on this machine only. */
+  shareWithComputers?: boolean;
+  /** Connected devices choose model settings. Off, this server's saved presets decide. On unless turned off. */
+  clientModelSettings?: boolean;
   /** Where GGUF files live. Defaults to `<dataDir>/models`. */
   modelsDir?: string;
   /**

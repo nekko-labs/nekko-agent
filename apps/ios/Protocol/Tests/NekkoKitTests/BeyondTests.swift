@@ -200,6 +200,15 @@ final class BeyondTests: XCTestCase {
         try await chat.interruptQueued(0)
     }
 
+    func testARunSettingGoesToTheComputerAndReadsBack() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        try await chat.setRunOption("workMode", "design")
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, [.string("s1"), ["workMode": "design"]])
+        XCTAssertEqual(RunOption.values(of: ["autoModel": true, "title": "x", "offline": .null]), ["autoModel": true], "only run settings, and only set ones")
+    }
+
     func testForksBeforeAPromptWithItsTextOrAfterAReply() async throws {
         let (s, c) = try await makeStore()
         let chat = ChatModel(sessionId: "s1", store: s)
