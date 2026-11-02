@@ -188,7 +188,8 @@ fn the_service_record_gives_the_same_id_as_arp() {
     assert_eq!(service_network_id(&show.replace("Router : 192.168.1.1", "Router : 10.0.0.1")), None);
     // A VPN's service has no router to resolve.
     assert_eq!(service_network_id("<dictionary> {\n  InterfaceName : utun4\n}\n"), None);
-    let global = "<dictionary> {\n  PrimaryInterface : en0\n  PrimaryService : 7115B664-E263\n  Router : 192.168.1.1\n}\n";
+    let global =
+        "<dictionary> {\n  PrimaryInterface : en0\n  PrimaryService : 7115B664-E263\n  Router : 192.168.1.1\n}\n";
     assert_eq!(scutil_field(global, "PrimaryService"), Some("7115B664-E263"));
 }
 
