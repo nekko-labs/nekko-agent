@@ -3,13 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 const theme = vi.hoisted(() => ({ preset: 'autumn' as string | undefined }));
 vi.mock('../store.js', () => ({ useStore: Object.assign(vi.fn((selector) => selector({ settings: { themePreset: theme.preset }, sessions: [], openPrPane: vi.fn() })), { getState: vi.fn() }) }));
+vi.mock('../prPolling.js', () => ({ subscribePrPolling: () => () => {} }));
 import type { PrInfo } from '@nekko-agent/shared';
-import { PrCard, PrActionDock, PrBadge } from './PrCard.js';
+import { PrCard, PrBadge } from './PrCard.js';
 const url = 'https://github.com/o/r/pull/1';
 const pr = { url, owner: 'o', repo: 'r', number: 1, title: 'A change', state: 'open', checks: 'pending', source: 'gh' } as PrInfo;
-describe('PR milestones and composer actions', () => {
+describe('PR milestones and live card', () => {
   it('keeps the created card historical even when live state is merged', () => {
-    const markup = renderToStaticMarkup(<PrCard url={url} info={{ ...pr, state: 'merged' }} event="created" />);
+    const markup = renderToStaticMarkup(<PrCard url={url} info={{ ...pr, state: 'merged' }} event="created" sessionId="s" />);
     expect(markup).toContain('PR created');
     expect(markup).not.toContain('Approve');
     expect(markup).not.toContain('Merge</button>');
@@ -50,43 +51,21 @@ describe('PR milestones and composer actions', () => {
     expect(renderToStaticMarkup(<PrCard url={url} event="merged" />)).not.toContain('🎃');
     theme.preset = 'autumn';
   });
-  it('places actions and a non-destructive hide button on the open dock', () => {
-    const markup = renderToStaticMarkup(<PrActionDock sessionId="s" prs={[pr]} urls={[url]} />);
-    expect(markup).toContain('Pending pull requests');
+  it('opens up for a live PR into the actions the composer used to carry', () => {
+    const markup = renderToStaticMarkup(<PrCard url={url} info={pr} event="created" sessionId="s" />);
+    expect(markup).toContain('data-pr-actions');
     expect(markup).toContain('Approve');
     expect(markup).toContain('Decline');
     expect(markup).toContain('Review');
-    expect(markup).toContain('Hide PR o/r#1');
-    expect(markup).toContain('does not close the PR');
-  });
-  it('uses an ownership-scoped deck with actions beside the PR details', () => {
-    const second = { ...pr, url: 'https://github.com/o/r/pull/2', number: 2 };
-    const markup = renderToStaticMarkup(<PrActionDock sessionId="s" prs={[pr, second]} urls={[url]} />);
-    expect(markup).toContain('pr-action-deck');
-    expect(markup.match(/data-pr-actions=/g)).toHaveLength(1);
-    expect(markup).not.toContain(second.url);
-    expect(markup).not.toContain('mb-2');
     expect(markup).toContain('data-pr-progress');
-    expect(markup).toContain('justify-end gap-0');
-    expect(markup).toContain('</div></div><div class="flex max-w-[55%]');
+    // The strip the composer used to show is gone; its actions live on the card itself.
+    expect(markup).not.toContain('pr-action-deck');
+    expect(markup).not.toContain('Pending pull requests');
+    expect(markup).not.toContain('Hide PR');
   });
-  it('opens upward: cards render above the toggle that sits on the footer divider', () => {
-    const markup = renderToStaticMarkup(<PrActionDock sessionId="s" prs={[pr]} urls={[url]} />);
-    expect(markup.indexOf('data-pr-actions=')).toBeLessThan(markup.indexOf('class="pr-deck-toggle"'));
-    expect(markup).toContain('data-floating="false"');
-    expect(renderToStaticMarkup(<PrActionDock sessionId="s" prs={[pr]} urls={[url]} floating />)).toContain('data-floating="true"');
-  });
-  it.each(['merged', 'closed'] as const)('automatically collapses a %s PR in the dock', (state) => {
-    const markup = renderToStaticMarkup(<PrActionDock sessionId="s" prs={[{ ...pr, state }]} urls={[url]} />);
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain('1 pull request');
+  it('falls back to the created milestone when no sessionId is given', () => {
+    const markup = renderToStaticMarkup(<PrCard url={url} info={pr} event="created" />);
+    expect(markup).toContain('PR created');
     expect(markup).not.toContain('data-pr-actions');
-  });
-  it('expands mixed statuses while keeping resolved PRs out of actions', () => {
-    const second = { ...pr, url: 'https://github.com/o/r/pull/2', number: 2, state: 'merged' as const };
-    const markup = renderToStaticMarkup(<PrActionDock sessionId="s" prs={[pr, second]} urls={[url, second.url]} />);
-    expect(markup).toContain('aria-expanded="true"');
-    expect(markup).toContain('2 pull requests');
-    expect(markup.match(/data-pr-actions=/g)).toHaveLength(1);
   });
 });
