@@ -196,7 +196,7 @@ Phone remote control and the native iOS and Android apps.
 - [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
 - [iPhone Markdown composer and rich replies (iPhone implemented 2026-10-25; Android planned)](phone/iphone-markdown-composer-and-rich-replies.md) (8 KB)
 - [iPhone: Simple and Expert modes, the model and effort control, the context gauge and the hardware monitor (2026-10-24)](phone/iphone-simple-and-expert-modes.md) (8 KB)
-- [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (7 KB)
+- [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (8 KB)
 - [Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android planned)](phone/mermaid-diagrams-on-the-phone.md) (6 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (94 KB)
 - [Native iOS app (2026-10-16)](phone/native-ios-app.md) (128 KB)
