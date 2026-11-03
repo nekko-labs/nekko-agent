@@ -116,11 +116,12 @@ pub fn cpus_per_vm(s: &RunnerSettings, host: &HostFacts) -> u8 {
     want.min(ceiling).max(2)
 }
 
-/// VMs kept booted while idle so a job starts at once.
+/// VMs kept booted while idle so a job starts at once: the owner's count, or the mode's.
 pub fn warm_slots(s: &RunnerSettings, available: u8) -> u8 {
-    match s.priority {
+    let want = s.ready_vms.unwrap_or(match s.priority {
         Priority::DoNotDisturb => 0,
-        Priority::Balanced => available.min(1),
-        Priority::RunnerFirst => available,
-    }
+        Priority::Balanced => 1,
+        Priority::RunnerFirst => MAX_MACOS_VMS,
+    });
+    want.min(available)
 }

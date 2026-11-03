@@ -20,6 +20,8 @@ export interface RunnerSettings {
   runnerMemoryMb: number | null;
   /** Null: the daemon picks from the Mac's cores. */
   cpusPerVm: number | null;
+  /** VMs kept booted while idle, 0 to 2. Null or missing: the mode's default (`readyVms`). */
+  readyVms?: number | null;
   diskBudgetGb: number;
   diskFloorGb: number;
   maxJobMinutes: number;
@@ -161,13 +163,14 @@ const TICKED_BY_DEFAULT = 5;
 
 export const DEFAULT_RUNNER_SETTINGS: RunnerSettings = {
   enabled: false,
-  priority: 'doNotDisturb',
+  priority: 'balanced',
   keepAwake: 'whileActive',
   macosSlots: 1,
   linuxSlots: 0,
   memoryPerVmMb: 8192,
   runnerMemoryMb: null,
   cpusPerVm: null,
+  readyVms: null,
   diskBudgetGb: 150,
   diskFloorGb: 25,
   maxJobMinutes: 120,
@@ -184,6 +187,18 @@ export const DEFAULT_RUNNER_LABEL = 'nekko-cloud-mac';
 export const MAX_MACOS_SLOTS = 2;
 export const MAX_JOB_CHOICES = [30, 60, 120, 360];
 
+/** Balanced first: it is the default and the one to recommend. */
+export const PRIORITIES: Priority[] = ['balanced', 'doNotDisturb', 'runnerFirst'];
+/** The ready VM counts offered. Apple allows 2 macOS VMs per Mac, so never more. */
+export const READY_VM_CHOICES = [0, 1, 2];
+export const DEFAULT_READY_VMS = 1;
+
+/** VMs kept booted while idle, as nekkod's `warm_slots` reads the settings (before the slot limit). */
+export function readyVms(s: Pick<RunnerSettings, 'priority' | 'readyVms'>): number {
+  if (s.readyVms !== null && s.readyVms !== undefined) return Math.min(s.readyVms, MAX_MACOS_SLOTS);
+  return s.priority === 'doNotDisturb' ? 0 : s.priority === 'balanced' ? 1 : MAX_MACOS_SLOTS;
+}
+
 export const PRIORITY_LABELS: Record<Priority, string> = {
   doNotDisturb: "Do not disturb: Only run when I'm idle",
   balanced: 'Balanced: in the background',
@@ -191,8 +206,8 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 };
 export const PRIORITY_DESCRIPTIONS: Record<Priority, string> = {
   doNotDisturb: "Only when you're away and plugged in. Steps aside the moment you need the Mac.",
-  balanced: "Takes jobs while you work if there's headroom. Keeps one VM ready.",
-  runnerFirst: "For a docked Mac that mostly runs CI. All slots ready, jobs finish even when you're busy.",
+  balanced: "Takes jobs while you work if there's headroom.",
+  runnerFirst: "For a docked Mac that mostly runs CI. Jobs finish even when you're busy.",
 };
 export const KEEP_AWAKE_LABELS: Record<KeepAwake, string> = {
   systemDefault: 'System default',
@@ -502,6 +517,8 @@ export interface ConnectForm {
   allowPublic: boolean;
   label: string;
   priority: Priority;
+  /** VMs kept ready, 0 to 2. */
+  readyVms: number;
 }
 
 const NAME = /^[A-Za-z0-9._-]+$/;

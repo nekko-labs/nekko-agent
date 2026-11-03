@@ -208,12 +208,16 @@ your Mac. The VM is the second layer: a job that gets in still only reaches the 
 The mode decides when the runner may take a job. You choose it when you
 [set up this Mac](#set-up-this-mac) and can change it any time in the runner's settings.
 
-- **Do not disturb: Only run when I'm idle** (default). Only when you're away and plugged in.
-  Steps aside the moment you need the Mac.
-- **Balanced: in the background**. Takes jobs while you work if there's headroom. Keeps one VM
-  ready.
-- **Runner first**. For a docked Mac that mostly runs CI. All slots ready, jobs finish even when
-  you're busy.
+- **Balanced: in the background** (default, recommended). Takes jobs while you work if there's
+  headroom.
+- **Do not disturb: Only run when I'm idle**. Only when you're away and plugged in. Steps aside
+  the moment you need the Mac.
+- **Runner first**. For a docked Mac that mostly runs CI. Jobs finish even when you're busy.
+
+**VMs kept ready** (0, 1 or 2; default 1) is how many VMs stay booted and waiting, so a job starts
+at once instead of after a boot. Each holds its memory while it waits. Apple allows 2 macOS VMs per
+Mac, so 2 is the most, and it needs **macOS slots** at 2 (choosing 2 when you connect sets that for
+you). A ready VM still waits for the mode: with Do not disturb it boots only while you're away.
 
 ## Keep awake
 

@@ -16,8 +16,8 @@ import { RunnerReady } from './RunnerReady.js';
 import { CheckIcon, MoonIcon, RocketIcon, YinYangIcon } from '../icons.js';
 
 const MODES: { priority: Priority; title: string; blurb: string; Icon(p: { className?: string }): React.JSX.Element }[] = [
+  { priority: 'balanced', title: 'Balanced', blurb: 'In the background. Recommended', Icon: YinYangIcon },
   { priority: 'doNotDisturb', title: 'Do not disturb', blurb: "Only run when I'm idle", Icon: MoonIcon },
-  { priority: 'balanced', title: 'Balanced', blurb: 'In the background', Icon: YinYangIcon },
   { priority: 'runnerFirst', title: 'Runner first', blurb: 'For a docked Mac', Icon: RocketIcon },
 ];
 
@@ -201,7 +201,7 @@ export function MacSetupSheet({ runnerId, view, image, rebuild, onClose, onWorkf
   onWorkflow(): void;
   beginReply(): (v: RunnerView) => void;
 }) {
-  const current = view?.config.settings.priority ?? 'doNotDisturb';
+  const current = view?.config.settings.priority ?? 'balanced';
   const [priority, setPriority] = useState<Priority>(current);
   const [plan, setPlan] = useState<ImagePlan | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
