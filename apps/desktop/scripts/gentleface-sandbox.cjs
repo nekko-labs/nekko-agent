@@ -20,6 +20,7 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html')); await sleep(400);
     const cdp = win.webContents.debugger; cdp.attach('1.3');
     await cdp.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
+    await run(`document.documentElement.dataset.theme=${JSON.stringify(process.env.NEKKO_THEME || 'dark')}`);
     if (process.env.NEKKO_FULL_APP) {
       await sleep(1200);
       await run("document.querySelector('.zones-intro button[aria-label=Close]')?.click()");
