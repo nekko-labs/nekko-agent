@@ -682,14 +682,14 @@ export const THEME_PRESETS: ThemePreset[] = [
     wave: { from: '#c1e5e5', to: '#daefef', peak: 0.3 },
   },
   {
-    // Plum on the stock Light surfaces: plum fills, rose as the secondary, black text.
+    // Plum on the stock Light surfaces: plum fills, #854f6c as the secondary, black text.
     id: 'x-plum-white',
     mode: 'light',
     // #190019 reads as black on thin strokes, so small accents use lighter
     // plums; the deep plum stays on the main buttons (styles.css).
     accent: '#5a2352',
     accent2: '#8a4a7f',
-    swatch: ['#190019', '#dfb6b2', '#f2f2f7'],
+    swatch: ['#190019', '#854f6c', '#f2f2f7'],
     label: 'Light Nekko',
     group: 'experimental',
     family: 'plum',
@@ -698,16 +698,41 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     // Plum on the stock Dark surfaces. #190019 is too dark to read as text on
-    // the dark paper, so rose carries the accent and plum fills behind it.
+    // the dark paper, so a lighter plum carries the accent and plum fills behind it.
     id: 'x-plum-dark',
     mode: 'dark',
     accent: '#c084b5',
-    accent2: '#dfb6b2',
-    swatch: ['#190019', '#dfb6b2', '#16161c'],
+    accent2: '#c99bb3', // #854f6c lightened: it is also small text on the dark surfaces
+    swatch: ['#190019', '#854f6c', '#16161c'],
     label: 'Dark Nekko',
     group: 'experimental',
     family: 'plum',
     familyLabel: 'Nekko',
+    ink: '#ffffff',
+  },
+  {
+    // The Nekko pair with indigo (#2b124c) as the main colour in place of plum.
+    id: 'x-indigo-white',
+    mode: 'light',
+    accent: '#4a2a7a',
+    accent2: '#6e4fa0',
+    swatch: ['#2b124c', '#854f6c', '#f2f2f7'],
+    label: 'Light Indigo',
+    group: 'experimental',
+    family: 'indigo',
+    familyLabel: 'Indigo',
+    ink: '#000000',
+  },
+  {
+    id: 'x-indigo-dark',
+    mode: 'dark',
+    accent: '#a68fd0',
+    accent2: '#c99bb3',
+    swatch: ['#2b124c', '#854f6c', '#16161c'],
+    label: 'Dark Indigo',
+    group: 'experimental',
+    family: 'indigo',
+    familyLabel: 'Indigo',
     ink: '#ffffff',
   },
   {

@@ -14,7 +14,7 @@
 /* ── the mark ─────────────────────────────────────────────────────────────── */
 
 const VIEWBOX = 512;
-const INK = '#DFB6B2';
+const INK = '#854F6C';
 /**
  * The brand gradient, left to right: deep plum to a lighter plum (the Nekko
  * themes' accents). The tile behind
