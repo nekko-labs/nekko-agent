@@ -38,7 +38,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
 });
 const render = (v: RunnerView, image: ImageView | null = null) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} onSettings={() => {}} beginReply={() => () => {}} />);
 const image = (over: Partial<ImageView> = {}): ImageView => ({
-  state: 'none', stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+  state: 'none', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
 });
 const noImage = view({ state: 'error', error: 'No VM image yet.', slots: [] });
 

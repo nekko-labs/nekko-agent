@@ -2,9 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_RUNNER_LABEL,
   IDLE_GITHUB_SETUP,
+  DEFAULT_READY_VMS,
   MAX_RUNNER_REPOS,
+  PRIORITIES,
   PRIORITY_DESCRIPTIONS,
   PRIORITY_LABELS,
+  READY_VM_CHOICES,
   defaultRepoPicks,
   githubActionsSettingsUrl,
   githubAppSettingsUrl,
@@ -32,10 +35,9 @@ import { useStore } from '../store.js';
 export type ConnectStep = 1 | 2 | 3;
 const CREATE_APP_DOCS = 'https://nekkoagent.com/docs/ci-runners#create-the-github-app';
 const STEPS = ['Install app', 'Org or repo', 'How this Mac helps'];
-const PRIORITIES: Priority[] = ['doNotDisturb', 'balanced', 'runnerFirst'];
 
 export const emptyConnectForm = (): ConnectForm => ({
-  appId: '', installationId: '', privateKeyPem: '', kind: 'repo', target: '', repos: '', allowPublic: false, label: '', priority: 'doNotDisturb',
+  appId: '', installationId: '', privateKeyPem: '', kind: 'repo', target: '', repos: '', allowPublic: false, label: '', priority: 'balanced', readyVms: DEFAULT_READY_VMS,
 });
 
 export interface ConnectDeps {
@@ -72,9 +74,11 @@ export async function submitConnect(
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e), step: 3 };
   }
-  if (form.priority !== 'doNotDisturb') {
+  // A new runner is Balanced with one VM ready; send only what differs. Two ready VMs need two slots.
+  if (form.priority !== 'balanced' || form.readyVms !== DEFAULT_READY_VMS) {
+    const slots = form.readyVms > 1 ? { macosSlots: form.readyVms } : {};
     try {
-      view = await deps.updateRunner(view.config.id, { priority: form.priority });
+      view = await deps.updateRunner(view.config.id, { priority: form.priority, readyVms: form.readyVms, ...slots });
     } catch (e) {
       deps.pushToast('error', `Connected, but could not set the mode: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -90,31 +94,50 @@ const Field = ({ label, hint, children }: { label: string; hint?: React.ReactNod
   </label>
 );
 
-const Choice = ({ name, checked, onChange, title, description }: { name: string; checked: boolean; onChange(): void; title: string; description?: string }) => (
+const Choice = ({ name, checked, onChange, title, badge, description }: { name: string; checked: boolean; onChange(): void; title: string; badge?: string; description?: string }) => (
   <label
-    className="flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2"
+    className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5"
     style={{ borderColor: checked ? 'var(--accent)' : 'var(--line)', background: checked ? 'var(--accent-soft)' : 'var(--surface)' }}
   >
-    <input type="radio" name={name} className="mt-0.5" checked={checked} onChange={onChange} />
-    <span>
-      <span className="block text-sm font-semibold text-ink">{title}</span>
+    <input type="radio" name={name} checked={checked} onChange={onChange} />
+    <span className="min-w-0 leading-tight">
+      <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+        {title}
+        {badge && <span className="rounded-md px-1.5 text-2xs font-medium" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{badge}</span>}
+      </span>
       {description && <span className="block text-xs text-ink-soft">{description}</span>}
     </span>
   </label>
 );
 
-const ModeChoices = ({ priority, onPriority }: { priority: Priority; onPriority(p: Priority): void }) => (
-  <>
-    <div>
+/** Mode, then how many VMs wait booted. 8px inside a group, 20px between groups. */
+export const ModeChoices = ({ priority, readyVms, onPriority, onReadyVms }: { priority: Priority; readyVms: number; onPriority(p: Priority): void; onReadyVms(n: number): void }) => (
+  <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       <h3 className="text-base font-semibold text-ink">How should this Mac help?</h3>
-      <p className="text-sm text-ink-soft">You can change this any time.</p>
+      <div role="radiogroup" aria-label="Priority" className="flex flex-col gap-2">
+        {PRIORITIES.map((p) => (
+          <Choice key={p} name="connect-priority" checked={priority === p} onChange={() => onPriority(p)} title={PRIORITY_LABELS[p]} badge={p === 'balanced' ? 'Recommended' : undefined} description={PRIORITY_DESCRIPTIONS[p]} />
+        ))}
+      </div>
     </div>
-    <div role="radiogroup" aria-label="Priority" className="flex flex-col gap-2">
-      {PRIORITIES.map((p) => (
-        <Choice key={p} name="connect-priority" checked={priority === p} onChange={() => onPriority(p)} title={PRIORITY_LABELS[p]} description={PRIORITY_DESCRIPTIONS[p]} />
-      ))}
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold text-ink">VMs kept ready</h3>
+      <div role="radiogroup" aria-label="VMs kept ready" className="flex gap-2">
+        {READY_VM_CHOICES.map((n) => (
+          <label
+            key={n}
+            className="cursor-pointer rounded-lg border px-3 py-1 text-sm tabular-nums"
+            style={readyVms === n ? { borderColor: 'transparent', background: 'var(--accent-soft)', color: 'var(--accent)' } : { borderColor: 'var(--line)' }}
+          >
+            <input type="radio" className="sr-only" name="connect-ready-vms" checked={readyVms === n} onChange={() => onReadyVms(n)} />
+            {n}
+          </label>
+        ))}
+      </div>
+      <p className="text-xs text-ink-faint">Booted and waiting, so a job starts at once. Each uses its memory while it waits. Apple allows 2 macOS VMs per Mac.</p>
     </div>
-  </>
+  </div>
 );
 
 /** The sheet's body for one step (mockup 2); pure so tests render it statically. */
@@ -209,7 +232,7 @@ export function ConnectBody({
 
       {step === 3 && (
         <>
-          <ModeChoices priority={form.priority} onPriority={(p) => onField('priority', p)} />
+          <ModeChoices priority={form.priority} readyVms={form.readyVms} onPriority={(p) => onField('priority', p)} onReadyVms={(n) => onField('readyVms', n)} />
           {form.allowPublic && (
             <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
               {`${scope} may be public. Keep "Require approval for all external contributors" on in the repo's Actions settings so fork pull requests wait for you.`}
@@ -221,10 +244,10 @@ export function ConnectBody({
       {error && <p role="alert" className="text-xs text-[var(--danger)]">{error}</p>}
 
       <div className="flex justify-end gap-2">
-        {step > 1 && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => onStep((step - 1) as ConnectStep)}>Back</button>}
+        {step > 1 && <button type="button" className="btn btn-outline py-1.5!" disabled={busy} onClick={() => onStep((step - 1) as ConnectStep)}>Back</button>}
         {step < 3
-          ? <button type="button" className="btn btn-primary" disabled={busy} onClick={() => onStep((step + 1) as ConnectStep)}>Next</button>
-          : <button type="button" className="btn btn-primary" disabled={busy} onClick={onSubmit}>{busy ? 'Starting…' : 'Start runner'}</button>}
+          ? <button type="button" className="btn btn-primary py-1.5!" disabled={busy} onClick={() => onStep((step + 1) as ConnectStep)}>Next</button>
+          : <button type="button" className="btn btn-primary py-1.5!" disabled={busy} onClick={onSubmit}>{busy ? 'Starting…' : 'Start runner'}</button>}
       </div>
     </div>
   );

@@ -10,10 +10,10 @@ test('CI cancels stale PR revisions without cancelling main runs', () => {
   assert.ok(ci.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
 });
 
-test('CI runs in three tiers: PR, merge queue, and a 6-hourly full run', () => {
+test('CI runs in three tiers: PR, merge queue, and a nightly full run', () => {
   const on = read('../.github/workflows/ci.yml').split('\njobs:')[0];
   for (const trigger of ['pull_request:', 'merge_group:', 'schedule:', 'workflow_dispatch:']) assert.ok(on.includes(`\n  ${trigger}`), trigger);
-  assert.ok(on.includes("cron: '17 */6 * * *'"));
+  assert.ok(on.includes("cron: '17 18 * * *'"));
   // The queue replaces per-merge runs on main.
   assert.ok(!/\n  push:/.test(on));
   assert.ok(!read('../.github/workflows/auto-merge.yml').includes('gh workflow run ci.yml'));

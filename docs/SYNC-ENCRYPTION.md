@@ -44,6 +44,7 @@ flowchart TB
 - **Free** keeps everything on your own devices, as today.
 - **Downgrading never locks you out.** If a Pro plan ends, your devices can still download and decrypt what was synced, and you can delete it; only new uploads stop.
 - **Delete everything synced** removes every record, keyring and device from Nekko Cloud at once. Your account stays, and your chats stay on your devices.
+- **Delete account** (Settings > Sync, next to Sign out) deletes your Nekko Cloud account itself: what's synced, your keys and devices, your sign-ins and any cloud computer. You type your account's email to confirm. Every device is signed out, and your chats stay on your devices; to remove those from a computer too, use **Settings > System > Delete everything** there.
 
 ## Help improve Nekko Agent (opt-in)
 

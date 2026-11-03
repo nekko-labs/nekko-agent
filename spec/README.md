@@ -19,7 +19,7 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 Vision, users, product names, scope boundaries, open questions and policies.
 
 - [Claude policy (2026-10-19)](product/claude-policy.md) (10 KB)
-- [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
+- [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (3 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
 - [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (2 KB)
@@ -49,7 +49,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Composer containment and compact subagent activity (2026-10-13)](chat/composer-containment-and-compact-subagent-activity.md) (2 KB)
 - [Composer Markdown editing tools (implemented; isolated interaction checks verified, visual inspection pending)](chat/composer-markdown-editing-tools.md) (2 KB)
 - [Default modes: where the models run (2026-10-22)](chat/default-modes-where-the-models-run.md) (4 KB)
-- [End-to-end encrypted sync for Pro and Team (2026-10-22)](chat/end-to-end-encrypted-sync-for-pro-and-team.md) (10 KB)
+- [End-to-end encrypted sync for Pro and Team (2026-10-22)](chat/end-to-end-encrypted-sync-for-pro-and-team.md) (11 KB)
 - [Find in this chat (2026-10-16)](chat/find-in-this-chat.md) (3 KB)
 - [Internet reachability and restoration recovery](chat/internet-recovery.md) (6 KB)
 - [Live streaming token rate](chat/live-streaming-token-rate.md) (1 KB)
@@ -58,6 +58,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
 - [Plan sheet on the composer (2026-10-25; folded summary, loop kinds and sub-agent chips 2026-10-28)](chat/plan-sheet-on-the-composer.md) (14 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
+- [Thinking and replies](chat/thinking-and-replies.md) (4 KB)
 - [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (19 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
@@ -111,7 +112,7 @@ Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (40 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (11 KB)
-- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (11 KB)
+- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (12 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
@@ -142,7 +143,7 @@ What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 
 Providers, local models, the Model Server, training.
 
-- [Accounts and switching (2026-10-23)](models/accounts-and-switching.md) (5 KB)
+- [Accounts and switching (2026-10-23)](models/accounts-and-switching.md) (6 KB)
 - [Anthropic image-dimension rejection prevention and continuation](models/anthropic-image-dimension-rejection-prevention-and-continuation.md) (1 KB)
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
@@ -195,7 +196,7 @@ Phone remote control and the native iOS and Android apps.
 - [iPhone chat: tables, and previews of files and local pages the agent links (2026-10-26)](phone/iphone-chat-tables-and-link-previews.md) (8 KB)
 - [iPhone Markdown composer and rich replies (iPhone implemented 2026-10-25; Android planned)](phone/iphone-markdown-composer-and-rich-replies.md) (8 KB)
 - [iPhone: Simple and Expert modes, the model and effort control, the context gauge and the hardware monitor (2026-10-24)](phone/iphone-simple-and-expert-modes.md) (8 KB)
-- [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (7 KB)
+- [iPhone: the desktop's languages and themes, and New chat's effort and computer (2026-10-23)](phone/iphone-languages-themes-and-new-chat-choices.md) (8 KB)
 - [Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android planned)](phone/mermaid-diagrams-on-the-phone.md) (6 KB)
 - [Native Android app (2026-10-11)](phone/native-android-app.md) (94 KB)
 - [Native iOS app (2026-10-16)](phone/native-ios-app.md) (128 KB)
@@ -216,8 +217,9 @@ Architecture, speed contract, distribution, builds and startup.
 - [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (17 KB)
 - [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (27 KB)
 - [Limits on what grows in the data folder](platform/data-folder-growth-limits.md) (2 KB)
+- [Nekko Cloud data rights: deletion, export, consent, logs and alerts (2026-11-03)](platform/nekko-cloud-data-rights.md) (5 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
-- [Opt-in usage and crash reports](platform/opt-in-usage-and-crash-reports.md) (3 KB)
+- [Opt-in usage and crash reports](platform/opt-in-usage-and-crash-reports.md) (4 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)
 - [Send feedback from every app (2026-10-24)](platform/send-feedback.md) (5 KB)
 - [Speed & responsiveness (the speed contract)](platform/speed-responsiveness-the-speed-contract.md) (12 KB)
@@ -229,10 +231,11 @@ Architecture, speed contract, distribution, builds and startup.
 
 Brand, website, onboarding and the mascot.
 
-- [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (3 KB)
+- [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (6 KB)
 - [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (12 KB)
+- [Colour palette: Nekko and Indigo themes, app icon and website (2026-11-03)](brand/colour-palette.md) (6 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
-- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (14 KB)
+- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (16 KB)
 
 <!-- index:end -->

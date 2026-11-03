@@ -30,6 +30,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.outlined.AltRoute
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Check
@@ -107,6 +112,10 @@ import com.nekko.protocol.MarkdownListItem
 import com.nekko.protocol.MarkdownParser
 import com.nekko.protocol.MarkdownTable
 import com.nekko.protocol.MermaidRules
+import com.nekko.protocol.ReplyTopics
+import com.nekko.protocol.Topic
+import com.nekko.protocol.TopicLine
+import com.nekko.protocol.TopicSection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -120,14 +129,54 @@ import kotlinx.coroutines.launch
  * never loaded. [bubble] draws it inside the user's own bubble, in its ink.
  */
 @Composable
-fun MarkdownText(text: String, color: Color, modifier: Modifier = Modifier, bubble: Boolean = false) {
-    val p = Nekko.palette
+fun MarkdownText(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    bubble: Boolean = false,
+    /** Draw the topics an agent's message names as headers (ReplyTopics). */
+    topics: Boolean = false,
+    /** Give a closing question a header when the message did not. For settled text: a stream ends on one in passing. */
+    askTail: Boolean = false,
+) {
     // In a chat, links to files and loopback pages open previews (AN-35); paths Markdown can't read as links are made into file: URLs first.
     val previews = LocalChatPreviews.current
-    val blocks = remember(text, previews != null) { MarkdownParser.blocks(if (previews != null) ChatLinks.linkable(text) else text) }
+    val sections = remember(text, topics, askTail) { if (topics) ReplyTopics.sections(text, askTail) else listOf(TopicSection(null, text)) }
+    val blocks = remember(sections, previews != null) { sections.map { MarkdownParser.blocks(if (previews != null) ChatLinks.linkable(it.body) else it.body) } }
     val cards = remember(text, previews != null) { if (previews != null) ChatLinks.previews(text) else emptyList() }
     val style = if (bubble) MarkdownStyle.bubble(color) else MarkdownStyle.standard(color)
-    Blocks(blocks, style, previews, cards, modifier)
+    if (sections.size == 1 && sections[0].header == null) return Blocks(blocks[0], style, previews, cards, modifier)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        sections.forEachIndexed { i, section ->
+            section.header?.let { TopicHeader(it, style, first = i == 0) }
+            if (section.body.isNotBlank()) Blocks(blocks[i], style, previews, cards)
+        }
+    }
+}
+
+/**
+ * A named topic of the agent's message, drawn as a header. The text stays in
+ * ink; the icon carries the colour, and only what asks something of the
+ * reader is loud (spec/chat/thinking-and-replies.md).
+ */
+@Composable
+private fun TopicHeader(line: TopicLine, style: MarkdownStyle, first: Boolean) {
+    val p = Nekko.palette
+    val (icon, tint) = when (line.topic) {
+        Topic.QUESTION -> Icons.AutoMirrored.Outlined.HelpOutline to p.warning
+        Topic.NEXT -> Icons.Outlined.Explore to p.warning
+        Topic.COMMAND -> Icons.Outlined.Terminal to p.warning
+        Topic.DECISION -> Icons.Outlined.AltRoute to p.accent
+        Topic.SUMMARY -> Icons.AutoMirrored.Outlined.List to style.faint
+    }
+    Row(
+        Modifier.padding(top = if (first) 0.dp else 4.dp).semantics(mergeDescendants = true) { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Text(line.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = style.ink)
+    }
 }
 
 /** The colours a Markdown body draws with. */

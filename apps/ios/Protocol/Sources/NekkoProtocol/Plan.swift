@@ -133,6 +133,13 @@ public enum AgentPlan {
     /// Finished (done or skipped) steps, for "1 of 4 done".
     public static func finished(_ plan: [PlanStep]) -> Int { plan.filter(\.squeezed).count }
 
+    /// The open plan's one finished step that starts open: the last one, in plan
+    /// order, with results for the user (a PR, or a check's evidence link).
+    /// Every other finished step starts squeezed to its title.
+    public static func openByDefault(_ plan: [PlanStep], links: [String: PlanStepLinks]) -> String? {
+        plan.last { $0.squeezed && (links[$0.id]?.prs.isEmpty == false || $0.verification?.safeEvidence != nil) }?.id
+    }
+
     /// The last reply was stopped and nothing runs: the active step shows paused.
     public static func paused(_ messages: [ChatMessage], running: Bool) -> Bool {
         !running && (messages.last { $0.role == "assistant" }?.interrupted ?? false)

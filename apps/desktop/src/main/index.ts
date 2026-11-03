@@ -70,7 +70,8 @@ const webviewGuests = new Set<number>();
 // Opt-in crash reports (telemetry.rs drops them while reports are off). A
 // monitor only: Node still crashes the way it did.
 process.on('uncaughtExceptionMonitor', (err) => {
-  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: String(err?.message ?? err), stack: String(err?.stack ?? '') }).catch(() => {});
+  // The class and message; nekkod keeps only the first line and the frames' names.
+  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: `${err?.name || 'Error'}: ${String(err?.message ?? err)}`, stack: String(err?.stack ?? '') }).catch(() => {});
 });
 let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */

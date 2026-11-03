@@ -1,6 +1,7 @@
 import { ASK_CANCELLED, ASK_UNATTENDED, groupByPurpose, parseAskRequest } from '@nekko-agent/shared';
 import type { PurposeCall, ToolPurpose } from '@nekko-agent/shared';
 import type { ChatMessage, ToolCall, ToolResult, PrInfo, PrState } from '@nekko-agent/shared';
+import { speaksToUser } from '../../replyTopics.js';
 
 /** Display-only projection of the persisted tool reply, never model history.
  * Keep the Q/A body literal: labels and notes cannot be reconstructed from the
@@ -37,10 +38,23 @@ export type Activity =
   | { kind: 'reasoning'; text: string; duration: number | null }
   | { kind: 'note'; text: string };
 
+/**
+ * How a block of the agent's text reads (spec/chat/thinking-and-replies.md):
+ * `working` is a progress note, `attention` is a mid-turn message left for the
+ * reader, and `reply` closes a turn that did work. A reply with no steps before
+ * it has nothing to stand out from, so it has no voice.
+ */
+export type Voice = 'working' | 'attention' | 'reply';
+
+/** The voice of text the agent wrote with more of its turn still to come. */
+export function midTurnVoice(text: string): Voice {
+  return speaksToUser(text) ? 'attention' : 'working';
+}
+
 /** A render block of the transcript: a message bubble (user or the final
  *  assistant answer) or a grouped run of the model's working steps. */
 export type StreamBlock =
-  | { type: 'msg'; message: ChatMessage }
+  | { type: 'msg'; message: ChatMessage; voice?: Voice }
   | { type: 'activity'; key: string; items: Activity[] };
 
 /**
@@ -53,8 +67,17 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
   const calls = new Map<string, ToolCall>();
   const replies = new Map<ChatMessage, ChatMessage>();
   const answered = new Set<string>();
+  // Assistant messages at or after a tool call in their turn. Read off the whole
+  // chat, since a PR card can split a turn across `messages` chunks.
+  const afterWork = new Set<ChatMessage>();
+  let worked = false;
   for (const m of context) {
-    if (m.role === 'assistant') for (const call of m.toolCalls ?? []) calls.set(call.id, call);
+    if (m.role === 'user') worked = false;
+    if (m.role === 'assistant') {
+      worked ||= !!m.toolCalls?.length;
+      if (worked) afterWork.add(m);
+      for (const call of m.toolCalls ?? []) calls.set(call.id, call);
+    }
     if (m.role !== 'tool' || !m.toolResult) continue;
     const call = calls.get(m.toolResult.toolCallId);
     const reply = call && !answered.has(call.id) && askReply(call, m);
@@ -81,7 +104,8 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
    */
   const say = (m: ChatMessage, i: number) => {
     flush();
-    blocks.push({ type: 'msg', message: { ...m, id: `${m.id}_said_${i}`, toolCalls: undefined } });
+    // Its reasoning is already a step of the run above.
+    blocks.push({ type: 'msg', message: { ...m, id: `${m.id}_said_${i}`, toolCalls: undefined, reasoning: undefined }, voice: midTurnVoice(m.content) });
     runKey = `${m.id}_${i}_after`;
   };
   // The turn's answer is the last assistant message's own text, even when that
@@ -111,10 +135,10 @@ export function toStreamBlocks(messages: ChatMessage[], context: ChatMessage[] =
       // Delegations, watches and memory saves show their outcome on the step itself.
       m.toolCalls.forEach((c) => run.push({ kind: 'tool', call: c, startedAt: m.createdAt, endedAt: resultAt.get(c.id), ...(results.get(c.id)?.isError ? { failed: true } : {}), ...((c.name === 'spawn_agent' || c.name === 'agent_watch' || c.name === 'remember') && results.has(c.id) ? { result: results.get(c.id) } : {}) }));
       // Reasoning already has its inline activity projection above.
-      if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: { ...m, reasoning: undefined } }); }
+      if (isFinalAnswer) { flush(); blocks.push({ type: 'msg', message: { ...m, reasoning: undefined }, voice: 'reply' }); }
     } else {
       flush();
-      blocks.push({ type: 'msg', message: m });
+      blocks.push({ type: 'msg', message: m, ...(afterWork.has(m) ? { voice: 'reply' as const } : {}) });
     }
   });
   flush();
@@ -152,7 +176,7 @@ const PR_CARD_GAP = 8;
  * PR lifecycle milestone. PR cards never live at a moving transcript tail.
  */
 export type TranscriptRow =
-  | { key: string; kind: 'msg'; message: ChatMessage; prUrls: string[]; displayOnly?: boolean; gapAfter?: number }
+  | { key: string; kind: 'msg'; message: ChatMessage; voice?: Voice; prUrls: string[]; displayOnly?: boolean; gapAfter?: number }
   | { key: string; kind: 'activity'; items: Activity[]; gapAfter?: number }
   | { key: string; kind: 'prs'; urls: string[]; event: 'created' | PrState; gapAfter?: number }
   /** A compaction summary: a divider under the turns it replaced, then the summary. */
@@ -228,7 +252,7 @@ export function toTranscriptRows(
         continue;
       }
       if (m.role === 'assistant' && !m.content && !m.reasoning && !m.toolCalls?.length && !m.images?.length) continue;
-      rows.push({ key: unique('m_' + m.id), kind: 'msg', message: m, prUrls: [], ...(persisted.has(m) ? {} : m.role === 'user' ? { displayOnly: true } : {}) });
+      rows.push({ key: unique('m_' + m.id), kind: 'msg', message: m, voice: b.voice, prUrls: [], ...(persisted.has(m) ? {} : m.role === 'user' ? { displayOnly: true } : {}) });
     }
   };
   let start = 0;

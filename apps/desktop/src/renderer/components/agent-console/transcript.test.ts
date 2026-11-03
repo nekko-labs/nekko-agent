@@ -10,6 +10,67 @@ const msg = (id: string, role: ChatMessage['role'], content: string, extra: Part
 });
 const rows = (messages: ChatMessage[]) => toTranscriptRows(messages, extractPrUrls, collectSessionPrUrls);
 
+describe('voices', () => {
+  const call = { id: 'c', name: 'read_file', input: {} };
+  const said = (content: string) => rows([
+    msg('u', 'user', 'fix it'),
+    msg('a1', 'assistant', content, { toolCalls: [call] }),
+    msg('t', 'tool', '', { toolResult: { toolCallId: 'c', output: 'x' } }),
+    msg('a2', 'assistant', 'Fixed.'),
+  ]).filter((r) => r.kind === 'msg').slice(1);
+
+  it('a progress note is working and the closing reply stands out', () => {
+    expect(said('Reading the test first.').map((r) => r.kind === 'msg' && r.voice)).toEqual(['working', 'reply']);
+  });
+
+  it('a mid-turn message left for the reader is raised', () => {
+    expect(said('Same timer in signup.\n\nShould I fix it too?').map((r) => r.kind === 'msg' && r.voice)).toEqual(['attention', 'reply']);
+    expect(said('**Decision**: kept the timeout.')[0]).toMatchObject({ voice: 'attention' });
+  });
+
+  it('a reply with no steps before it has nothing to stand out from', () => {
+    const r = rows([msg('u', 'user', 'hi'), msg('a', 'assistant', 'Hello.', { reasoning: 'A greeting.' })]);
+    expect(r[1]).toMatchObject({ kind: 'msg' });
+    expect(r[1].kind === 'msg' && r[1].voice).toBeUndefined();
+  });
+
+  it('a new prompt starts a turn with no work behind it', () => {
+    const r = rows([
+      msg('u', 'user', 'fix it'),
+      msg('a1', 'assistant', '', { toolCalls: [call] }),
+      msg('t', 'tool', '', { toolResult: { toolCallId: 'c', output: 'x' } }),
+      msg('a2', 'assistant', 'Fixed.'),
+      msg('u2', 'user', 'thanks'),
+      msg('a3', 'assistant', 'Any time.'),
+    ]);
+    expect(r.at(-1)?.kind === 'msg' && r.at(-1)).toMatchObject({ message: { id: 'a3' } });
+    expect((r.at(-1) as { voice?: string }).voice).toBeUndefined();
+  });
+
+  it('a PR card splitting the turn does not cost the reply its voice', () => {
+    const url = 'https://github.com/o/r/pull/1';
+    const r = rows([
+      msg('u', 'user', 'open it'),
+      msg('a1', 'assistant', '', { toolCalls: [{ id: 'c', name: 'bash', input: { command: 'gh pr create' } }] }),
+      msg('t', 'tool', url, { toolResult: { toolCallId: 'c', output: url } }),
+      msg('a2', 'assistant', 'Opened it.'),
+    ]);
+    expect(r.map((x) => x.kind)).toContain('prs');
+    expect(r.at(-1)).toMatchObject({ kind: 'msg', voice: 'reply' });
+  });
+
+  it('a note does not repeat the reasoning its step already shows', () => {
+    const r = rows([
+      msg('u', 'user', 'fix it'),
+      msg('a1', 'assistant', 'Reading.', { reasoning: 'Timing, probably.', toolCalls: [call] }),
+      msg('t', 'tool', '', { toolResult: { toolCallId: 'c', output: 'x' } }),
+      msg('a2', 'assistant', 'Fixed.'),
+    ]);
+    expect(r[1]).toMatchObject({ kind: 'activity', items: [{ kind: 'reasoning', text: 'Timing, probably.' }] });
+    expect(r[2].kind === 'msg' && r[2].message.reasoning).toBeUndefined();
+  });
+});
+
 describe('toTranscriptRows', () => {
   it('lays a turn out as message, steps, answer', () => {
     const r = rows([

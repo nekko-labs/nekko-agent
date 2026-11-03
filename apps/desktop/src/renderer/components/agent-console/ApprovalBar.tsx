@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ToolCall } from '@nekko-agent/shared';
-import { ShieldIcon } from '../../icons.js';
+import { ShieldQuestionIcon } from '../../gentleface-icons.js';
 import type { ApprovalScope } from './approval-decision.js';
 
 export interface PendingApproval {
@@ -82,7 +82,7 @@ export function ApprovalBar({ approval, onDecide, computerName }: { approval: Pe
       onKeyDown={(e) => handleApprovalKey(e, (ok) => void decide(ok))}
     >
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3">
-        <ShieldIcon className="h-5 w-5" />
+        <ShieldQuestionIcon className="h-5 w-5" />
         <div className="min-w-0 flex-1 basis-64">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">Approval required</span>

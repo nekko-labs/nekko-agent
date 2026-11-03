@@ -159,6 +159,25 @@ final class PlanTests: XCTestCase {
         XCTAssertEqual(AgentPlan.links(messages, plan: steps, prs: [pr])["phase:ship"]?.prs, [pr])
     }
 
+    func testTheLastFinishedStepWithResultsStartsOpen() {
+        let evidence = PlanStep.Verification(status: .passed, evidenceUrl: "https://ci.example/2")
+        let plan = [
+            PlanStep(id: "s1", title: "Explore", status: .done),
+            PlanStep(id: "s2", title: "Build", status: .done),
+            PlanStep(id: "s3", title: "Verify", status: .done, verification: evidence),
+            PlanStep(id: "s4", title: "Ship", status: .done),
+            PlanStep(id: "s5", title: "Next", status: .active),
+        ]
+        let pr = PlanStepLinks(prs: ["https://github.com/o/r/pull/7"])
+        // A task link says what the work is for; it is not a result.
+        let task = PlanStepLinks(projects: [ProjectLink(url: "https://linear.app/x/issue/NEK-1", label: "NEK-1")])
+        XCTAssertEqual(AgentPlan.openByDefault(plan, links: ["s1": task, "s2": pr]), "s3")
+        XCTAssertEqual(AgentPlan.openByDefault(plan, links: ["s4": pr, "s2": pr]), "s4")
+        // The step being worked is open anyway; only finished steps count.
+        XCTAssertEqual(AgentPlan.openByDefault(plan, links: ["s5": pr]), "s3")
+        XCTAssertNil(AgentPlan.openByDefault(Array(plan.prefix(2)), links: ["s1": task]))
+    }
+
     func testPausedAfterAnInterruptedReply() {
         let messages = [msg("u", "user", "go", at: 1), msg("a", "assistant", "", at: 2, interrupted: true)]
         XCTAssertTrue(AgentPlan.paused(messages, running: false))

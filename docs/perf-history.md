@@ -95,6 +95,21 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### Perf harness: warm pair on the board, sample end, tile read before the screenshot (2026-11-03)
+Area: perf harness
+Result: measurement fix
+Conditions: Apple M5 Max, macOS, Chromium for Testing 153, `--no-gpu`, debug `nekkod`, the build of `e3064ab9`. Latency: 40 warm switches per run, arms alternated. Memory: `--quick`, base is `c6852d2d`, before zones, built on the same machine.
+
+| Metric | Before | After |
+|---|---|---|
+| Warm switch p95, alternated runs | 66.1 / 73.5 ms | 12.1 / 11.3 / 11.8 ms |
+| Warm switch p50 | 31.7 / 38.2 ms | 10.6 / 9.1 / 10.5 ms |
+| Compositor tile memory, first read, six working windows | 448.4 / 459.0 / 466.2 / 480.3 MB | 243.5 / 217.1 MB |
+
+The six-zone board's 100 ms warm switch was two harness effects. Setup evicted chat 0 and then chat 1 from the board, so each warm sample remounted a chat in its zone instead of flipping parked windows (11 ms flipping, 25 ms remounting, with the sidebar transition off). And the sample's closing MessageChannel tick sat behind the back-to-back main frames a 150 ms `transition-colors` on the sidebar cards runs in the uncapped latency browser: in the same switches, a user-blocking task and the next rAF read about 18 ms where the tick read 19 to 75 ms. In a vsync-paced browser the off-board switch read 31 ms and the flip 13 ms, so a remount costs one extra frame on a 60 Hz display, not 100 ms.
+
+Tiles: the capture before the read added about 220 MB on this board and nothing on `c6852d2d`; why is not known. With six windows still working, head settles at 131 to 170 MB and `c6852d2d` at 163 to 178 MB, after a first read of 214 to 267 MB on both. Not yet re-read on CI. Source: this branch, #1521, #704.
+
 ### Perf harness: measure the zones board every attempt, not a converted one (2026-11-02)
 Area: perf harness
 Result: measurement fix

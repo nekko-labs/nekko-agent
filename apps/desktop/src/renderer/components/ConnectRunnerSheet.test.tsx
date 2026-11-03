@@ -26,7 +26,12 @@ const body = (step: 1 | 2 | 3, f: ConnectForm, error: string | null = null) =>
 describe('ConnectRunnerSheet', () => {
   it('steps_match_mockup_2', () => {
     const html = body(3, form());
-    for (const s of ['1 Install app', '2 Org or repo', '3 How this Mac helps', 'How should this Mac help?', 'You can change this any time.', 'Start runner']) expect(html).toContain(s);
+    for (const s of ['1 Install app', '2 Org or repo', '3 How this Mac helps', 'How should this Mac help?', 'Recommended', 'VMs kept ready', 'Apple allows 2 macOS VMs per Mac.', 'Start runner']) expect(html).toContain(s);
+    expect(html).not.toContain('You can change this any time.');
+    // Balanced comes first, is picked, and one VM is kept ready.
+    expect(html.indexOf('Balanced: in the background')).toBeLessThan(html.indexOf('Do not disturb'));
+    expect(html).toMatch(/<input type="radio" name="connect-priority" checked=""[^>]*\/><span[^>]*><span[^>]*>Balanced/);
+    expect(html).toMatch(/name="connect-ready-vms" checked=""[^>]*\/>1</);
     for (const p of ['doNotDisturb', 'balanced', 'runnerFirst'] as const) {
       expect(html).toContain(renderToStaticMarkup(<>{PRIORITY_LABELS[p]}</>));
       expect(html).toContain(renderToStaticMarkup(<>{PRIORITY_DESCRIPTIONS[p]}</>));
@@ -73,17 +78,23 @@ describe('ConnectRunnerSheet', () => {
     const updateRunner = vi.fn(async () => updated);
     const res = await submitConnect(form({ priority: 'runnerFirst' }), { connectRunner, updateRunner, pushToast: vi.fn() });
     expect(connectRunner).toHaveBeenCalledTimes(1);
-    expect(updateRunner).toHaveBeenCalledWith('r1', { priority: 'runnerFirst' });
+    expect(updateRunner).toHaveBeenCalledWith('r1', { priority: 'runnerFirst', readyVms: 1 });
     expect(res).toEqual({ view: updated, form: emptyConnectForm() });
 
+    // The defaults (Balanced, one ready VM) are what a new runner already has.
     const update2 = vi.fn();
-    await submitConnect(form({ priority: 'doNotDisturb' }), { connectRunner, updateRunner: update2, pushToast: vi.fn() });
+    await submitConnect(form({ priority: 'balanced' }), { connectRunner, updateRunner: update2, pushToast: vi.fn() });
     expect(update2).not.toHaveBeenCalled();
+
+    // Two ready VMs need two slots.
+    const update3 = vi.fn(async () => view);
+    await submitConnect(form({ readyVms: 2 }), { connectRunner, updateRunner: update3, pushToast: vi.fn() });
+    expect(update3).toHaveBeenCalledWith('r1', { priority: 'balanced', readyVms: 2, macosSlots: 2 });
   });
 
   it('a_failed_mode_update_still_connects', async () => {
     const pushToast = vi.fn();
-    const res = await submitConnect(form({ priority: 'balanced' }), {
+    const res = await submitConnect(form({ priority: 'doNotDisturb' }), {
       connectRunner: async () => view, updateRunner: () => Promise.reject(new Error('The daemon is busy.')), pushToast,
     });
     expect(res).toEqual({ view, form: emptyConnectForm() });
