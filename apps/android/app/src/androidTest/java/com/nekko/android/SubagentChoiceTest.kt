@@ -63,7 +63,7 @@ class SubagentChoiceTest {
         box.performTextInput("/review")
         compose.onNodeWithTag("composer.inSubagent").assertDoesNotExist()
         box.performTextReplacement("Fix the tests")
-        compose.onNodeWithText("uses more context").assertExists()
+        compose.onNodeWithText("Here uses more context").assertExists()
         shot("subagent-typed")
 
         compose.onNodeWithTag("composer.inSubagent").performClick()

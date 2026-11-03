@@ -95,7 +95,7 @@
     <string name="chat_add_details_for">Details für /%1$s hinzufügen (optional)</string>
     <string name="chat_queue_follow_up">Folgenachricht einreihen…</string>
     <string name="chat_do_it_here">Hier erledigen</string>
-    <string name="chat_uses_more_context">verbraucht mehr Kontext</string>
+    <string name="chat_here_uses_more_context">Hier wird mehr Kontext verbraucht</string>
     <string name="chat_in_a_subagent">In einem Subagenten</string>
     <string name="chat_message_slash_skills">Nachricht, / für Skills</string>
     <string name="chat_message_your_computer">Nachricht an deinen Computer</string>

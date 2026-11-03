@@ -803,6 +803,8 @@ struct Composer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
+            if skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
             if let blocked = chat.blocked {
                 Text(blocked).font(.caption).foregroundStyle(palette.warning)
             } else if let note = chat.offlineNote {
@@ -891,8 +893,6 @@ struct Composer: View {
                                       placeholder: chat.running ? "Queue a follow-up" : "Message",
                                       onPasteImages: pasteImages, boxed: false)
                     .padding(.horizontal, 12).padding(.top, 10)
-                // A skill or saved prompt is a slash command, not work to place.
-                if skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
                 HStack(alignment: .center, spacing: 4) {
                     Menu {
                         // As on the desktop: another agent or a terminal beside this one, or a photo for this message.
@@ -1067,21 +1067,28 @@ struct Composer: View {
 
     /// More work for a chat that has replied: run it here, or hand it to a subagent.
     private var workPlace: some View {
-        let here = Button { send() } label: { Text("Do it here").frame(minHeight: 44).contentShape(Rectangle()) }
-            .accessibilityIdentifier("composer.doItHere")
-        let cost = Text("uses more context").font(.footnote).foregroundStyle(palette.inkFaint)
-        let subagent = Button { send(wrap: Session.inSubagent) } label: { Text("In a subagent").frame(minHeight: 44).contentShape(Rectangle()) }
-            .accessibilityIdentifier("composer.inSubagent")
-        // Side by side when it fits; a large text size or a long translation stacks them.
+        let here = Button { send() } label: { outlined("Do it here") }.accessibilityIdentifier("composer.doItHere")
+        let subagent = Button { send(wrap: Session.inSubagent) } label: { outlined("In a subagent") }.accessibilityIdentifier("composer.inSubagent")
+        let cost = Text("Here uses more context").font(.caption).foregroundStyle(palette.ink)
+        // Side by side when it fits; a large text size or a long translation puts the note below.
         return ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { here; cost; subagent }
+            HStack(spacing: 8) { here; subagent; cost }
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) { here; cost }
-                subagent
+                HStack(spacing: 8) { here; subagent }
+                cost
             }
         }
-        .font(.footnote.weight(.semibold)).buttonStyle(.plain).foregroundStyle(palette.accent).disabled(!canSend)
-        .padding(.horizontal, 12)
+        .buttonStyle(.plain).disabled(!canSend)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// An outlined action, as the desktop's: accent words on the surface, a 44 pt target.
+    private func outlined(_ title: LocalizedStringKey) -> some View {
+        Text(title).font(.footnote.weight(.semibold)).foregroundStyle(canSend ? palette.accent : palette.inkFaint)
+            .padding(.horizontal, 12).frame(minHeight: 34)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.line))
+            .frame(minHeight: 44).contentShape(Rectangle())
     }
 
     private func slashChip(_ name: String, _ detail: String, saved: Bool) -> some View {

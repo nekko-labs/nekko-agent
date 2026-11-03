@@ -29276,46 +29276,6 @@
         }
       }
     },
-    "uses more context": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verbraucht mehr Kontext"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "usa más contexto"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "utilise plus de contexte"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コンテキストを多く使います"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "usa mais contexto"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "占用更多上下文"
-          }
-        }
-      }
-    },
     "In a subagent": {
       "localizations": {
         "de": {
@@ -29352,6 +29312,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "在子代理中"
+          }
+        }
+      }
+    },
+    "Here uses more context": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hier wird mehr Kontext verbraucht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aquí usa más contexto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ici consomme plus de contexte"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここで実行するとコンテキストを多く使います"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aqui usa mais contexto"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此处会占用更多上下文"
           }
         }
       }

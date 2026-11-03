@@ -673,7 +673,7 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "subagent-1-typed")
         XCTAssertTrue(inSubagent.waitForExistence(timeout: 5), "a typed follow-up can go to a subagent")
         XCTAssertTrue(app.buttons["composer.doItHere"].exists)
-        XCTAssertTrue(app.staticTexts["uses more context"].exists)
+        XCTAssertTrue(app.staticTexts["Here uses more context"].exists)
         auditAccessibility(app, "subagent-typed")
 
         inSubagent.tap()

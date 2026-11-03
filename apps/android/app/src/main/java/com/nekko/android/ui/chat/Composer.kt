@@ -68,6 +68,9 @@ import com.nekko.android.chat.SkillMenu
 import com.nekko.protocol.SkillSummary
 import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.filled.Bookmark
@@ -232,6 +235,10 @@ fun Composer(
             if (queued.isNotEmpty()) {
                 QueueList(queued, queuedPrompts, onEditQueued, if (running) onInterrupt else null) { error = it }
             }
+            // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
+            if (offerSubagent && armedNone && text.isNotBlank() && !text.trimStart().startsWith("/")) {
+                WorkPlace(canSend, onHere = { send() }, onSubagent = { send(Session.Companion::inSubagent) })
+            }
             mic?.let { m ->
                 when (val st = m.state) {
                     is MicState.Recording -> RecordingBar(st)
@@ -322,10 +329,6 @@ fun Composer(
                         inner()
                     },
                 )
-                // More work for a chat that has replied. A skill or saved prompt is a slash command, not work to place.
-                if (offerSubagent && armedNone && text.isNotBlank() && !text.trimStart().startsWith("/")) {
-                    WorkPlace(canSend, onHere = { send() }, onSubagent = { send(Session.Companion::inSubagent) })
-                }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val recording = mic?.state is MicState.Recording
                     val transcribing = mic?.state is MicState.Transcribing
@@ -402,10 +405,15 @@ fun Composer(
 @Composable
 private fun WorkPlace(enabled: Boolean, onHere: () -> Unit, onSubagent: () -> Unit) {
     val p = Nekko.palette
-    FlowRow(Modifier.padding(horizontal = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onHere, enabled = enabled, modifier = Modifier.testTag("composer.doItHere")) { Text(stringResource(R.string.chat_do_it_here)) }
-        Text(stringResource(R.string.chat_uses_more_context), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
-        TextButton(onClick = onSubagent, enabled = enabled, modifier = Modifier.testTag("composer.inSubagent")) { Text(stringResource(R.string.chat_in_a_subagent)) }
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        val colors = ButtonDefaults.outlinedButtonColors(contentColor = p.accent, disabledContentColor = p.inkFaint)
+        val border = BorderStroke(1.dp, p.line)
+        OutlinedButton(onClick = onHere, enabled = enabled, colors = colors, border = border, modifier = Modifier.testTag("composer.doItHere")) { Text(stringResource(R.string.chat_do_it_here)) }
+        OutlinedButton(onClick = onSubagent, enabled = enabled, colors = colors, border = border, modifier = Modifier.testTag("composer.inSubagent")) { Text(stringResource(R.string.chat_in_a_subagent)) }
+        Text(stringResource(R.string.chat_here_uses_more_context), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
     }
 }
 

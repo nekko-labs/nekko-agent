@@ -109,7 +109,7 @@ class LiveRelayTest {
             val box = hasContentDescription("Message")
             compose.onNode(box).performClick()
             compose.onNode(box).performTextInput("Fix the tests")
-            waitFor(hasText("uses more context"))
+            waitFor(hasText("Here uses more context"))
             shot("4-subagent-choice")
             tap(hasText("In a subagent"))
             waitFor(hasText("Do this in a subagent, then report back:", substring = true), 30_000)
