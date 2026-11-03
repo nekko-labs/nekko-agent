@@ -57,6 +57,7 @@ pub const CHANNELS: &[&str] = &[
     "cloud:beginOAuth",
     "cloud:cancelOAuth",
     "cloud:signOut",
+    "cloud:deleteAccount",
     "sync:turnOn",
     "sync:confirmRecoveryKey",
     "sync:restore",
@@ -181,6 +182,7 @@ impl Cloud {
                 Ok(self.changed())
             }
             "cloud:signOut" => self.sign_out().await,
+            "cloud:deleteAccount" => self.delete_account().await,
             "sync:turnOn" => self.turn_on().await,
             "sync:confirmRecoveryKey" => self.confirm_recovery_key(&arg(args, 0)),
             "sync:restore" => self.restore(&arg(args, 0)).await,
@@ -559,6 +561,46 @@ impl Cloud {
         self.edit(|s| s.enabled = false)?;
         lock(&self.live).remote = None;
         Ok(self.changed())
+    }
+
+    /// `DELETE /v1/account`: Nekko Cloud erases the account, its synced data
+    /// and its cloud machines. Only once it says so (204) does this device
+    /// forget its token, keys and sync state; any other answer keeps them.
+    async fn delete_account(&self) -> Result<Value, String> {
+        let token = self.token()?;
+        match self.api.send(&token, reqwest::Method::DELETE, "/v1/account", None).await {
+            Ok(_) => {}
+            Err(err) if err.status == 401 => {
+                return Err("You're signed out of Nekko Cloud. Sign in again, then delete the account.".into());
+            }
+            Err(err) if err.status == 502 => {
+                return Err("Nekko Cloud couldn't shut down your cloud computer, so your account was not deleted. Try again in a few minutes.".into());
+            }
+            Err(err) => return Err(err.message),
+        }
+        self.forget_this_device()?;
+        Ok(self.changed())
+    }
+
+    /// Forget Nekko Cloud on this device: the token, the device key, every
+    /// keyring and the sync state, from the OS keystore and the cloud folder.
+    /// Nothing is sent: [`Self::sign_out`] first to end the session too.
+    pub fn forget_this_device(&self) -> Result<(), String> {
+        self.forget_keys();
+        self.vault.delete("token");
+        let label = lock(&self.state).device_label.clone();
+        *lock(&self.state) = State { device_label: label, ..State::default() };
+        *lock(&self.live) = Live::default();
+        match std::fs::remove_file(State::path(&self.dir)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+            _ => Ok(()),
+        }
+    }
+
+    /// `cloud:signOut`, for Delete everything.
+    pub async fn sign_out_and_forget(&self) -> Result<(), String> {
+        self.sign_out().await?;
+        self.forget_this_device()
     }
 
     fn forget_keys(&self) {
