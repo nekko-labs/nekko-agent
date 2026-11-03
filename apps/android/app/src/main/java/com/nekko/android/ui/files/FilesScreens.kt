@@ -469,7 +469,7 @@ private fun isImage(name: String) = name.substringAfterLast('.', "").lowercase()
 private const val MAX_LINES = 5000
 
 @Composable
-private fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage) -> Unit) {
+internal fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage) -> Unit) {
     val p = Nekko.palette
     val files = page.files
     val context = LocalContext.current
