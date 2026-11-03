@@ -14,12 +14,56 @@ struct MarkdownText: View {
     var bubble = false
     /// Long-press selects text (replies) rather than opening the bubble's menu (the user's own messages).
     var selectable = true
+    /// Draw the topics an agent's message names as headers (`ReplyTopics`).
+    var topics = false
+    /// Give a closing question a header when the message did not. For settled text: a stream ends on one in passing.
+    var askTail = false
     @Environment(\.palette) private var palette
 
     var body: some View {
         let style = bubble ? MarkdownStyle.bubble(palette) : MarkdownStyle.standard(palette)
-        MarkdownBlocks(blocks: MarkdownParser.blocks(text), style: style)
-            .modifier(Selectable(on: selectable))
+        let sections = topics ? ReplyTopics.sections(text, askTail: askTail) : []
+        Group {
+            if sections.count > 1 || sections.first?.header != nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(sections.enumerated()), id: \.offset) { i, section in
+                        if let header = section.header { TopicHeader(line: header, first: i == 0) }
+                        if section.body.contains(where: { !$0.isWhitespace }) {
+                            MarkdownBlocks(blocks: MarkdownParser.blocks(section.body), style: style)
+                        }
+                    }
+                }
+            } else {
+                MarkdownBlocks(blocks: MarkdownParser.blocks(text), style: style)
+            }
+        }
+        .modifier(Selectable(on: selectable))
+    }
+}
+
+/// A named topic of the agent's message, drawn as a header. The text stays in
+/// ink; the icon carries the colour, and only what asks something of the
+/// reader is loud (spec/chat/thinking-and-replies.md).
+private struct TopicHeader: View {
+    let line: TopicLine
+    let first: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let (symbol, tint): (String, Color) = switch line.topic {
+        case .question: ("questionmark.circle", palette.warning)
+        case .next: ("arrow.right.circle", palette.warning)
+        case .command: ("terminal", palette.warning)
+        case .decision: ("arrow.triangle.branch", palette.accent)
+        case .summary: ("list.bullet", palette.inkFaint)
+        }
+        Label {
+            Text(line.label).fontWeight(.semibold)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(tint)
+        }
+        .padding(.top, first ? 0 : 4)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
