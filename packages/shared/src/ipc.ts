@@ -345,6 +345,8 @@ export const IpcChannels = {
   runnerSetEnabled: 'runner:setEnabled',
   /** The end of a recent job's log, from GitHub or GitLab. */
   runnerJobLog: 'runner:jobLog',
+  /** What a recent job's VM wrote to its console, kept by nekkod. */
+  runnerVmLog: 'runner:vmLog',
   /** The click-through GitHub connect, confirmed through `runner:connect`. */
   runnerGithubAccounts: 'runner:githubAccounts',
   runnerGithubStart: 'runner:githubStart',
@@ -1129,6 +1131,8 @@ export interface NekkoApi {
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
   /** The end of a recent job's log; rejects with a sentence when it cannot be read. */
   runnerJobLog(id: string, jobId: number): Promise<string>;
+  /** A recent job's VM console log, by the line's `vm`; rejects with a sentence. */
+  runnerVmLog(id: string, vm: string): Promise<string>;
   /** Accounts `gh` is signed in to; empty without `gh`. */
   githubAccounts(): Promise<GithubAccounts>;
   /** `url` is the page to open in the browser, or null when GitHub has nothing left to do. */

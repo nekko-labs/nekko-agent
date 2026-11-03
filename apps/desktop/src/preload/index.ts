@@ -368,6 +368,7 @@ const api: NekkoApi = {
   removeRunner: (id) => inv(IpcChannels.runnerRemove, id),
   setRunnerEnabled: (id, enabled) => inv(IpcChannels.runnerSetEnabled, id, enabled),
   runnerJobLog: (id, jobId) => inv(IpcChannels.runnerJobLog, id, jobId),
+  runnerVmLog: (id, vm) => inv(IpcChannels.runnerVmLog, id, vm),
   githubAccounts: () => inv(IpcChannels.runnerGithubAccounts),
   githubStart: (req) => inv(IpcChannels.runnerGithubStart, req),
   githubStatus: () => inv(IpcChannels.runnerGithubStatus),

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   NO_IMAGE_ERROR,
   STATE_LABELS,
@@ -41,24 +41,42 @@ function ExternalLink({ url, children }: { url: string; children: React.ReactNod
   return <a href={url} className="shrink-0 text-accent hover:underline" onClick={(e) => { e.preventDefault(); void openExternally(url); }}>{children}</a>;
 }
 
-/** One recent job: a summary line with its job and PR, expanding to the VM's steps and the job's log. */
+/** A log fetched when it first shows, scrolled to its end, where a failure is. */
+function LogBlock({ title, load, kind }: { title: string; load(): Promise<string>; kind: string }) {
+  const [log, setLog] = useState<{ text: string } | { error: string } | null>(null);
+  useEffect(() => {
+    load().then((text) => setLog({ text }), (e) => setLog({ error: e instanceof Error ? e.message : String(e) }));
+  }, []);
+  return (
+    <div>
+      <p className="mb-1 text-ink">{title}</p>
+      {log === null ? (
+        <p className="text-ink-faint">Loading…</p>
+      ) : 'error' in log ? (
+        <p className="text-ink-faint">Couldn't read it: {log.error}</p>
+      ) : (
+        <pre
+          className="max-h-72 overflow-auto rounded-lg p-2 font-mono text-2xs whitespace-pre-wrap break-all"
+          style={{ background: 'var(--paper)' }}
+          ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
+          data-log={kind}
+        >
+          {log.text || 'The log is empty.'}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+/** One recent job: a summary line with its job and PR, expanding to the VM's steps, the job's log and the VM's own log. */
 function RecentJob({ line: l, runnerId, rerun }: { line: AuditLine; runnerId: string; rerun: boolean }) {
   const [open, setOpen] = useState(false);
-  const [log, setLog] = useState<{ text: string } | { error: string } | null>(null);
-  const toggle = () => {
-    setOpen(!open);
-    if (!open && log === null && l.jobId != null) {
-      window.nekko.runnerJobLog(runnerId, l.jobId).then(
-        (text) => setLog({ text }),
-        (e) => setLog({ error: e instanceof Error ? e.message : String(e) }),
-      );
-    }
-  };
   const steps = auditTimeline(l);
+  const ranVm = l.result !== 'notRemoved';
   return (
     <li data-recent-job={l.ts}>
       <div className="flex items-center gap-2">
-        <button className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-ink" aria-expanded={open} onClick={toggle}>
+        <button className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
           <StatusDot tone={l.result === 'finished' ? 'success' : 'warning'} size={6} />
           <code className="font-mono text-2xs text-ink-faint">{hhmm(l.ts)}</code>
@@ -80,21 +98,15 @@ function RecentJob({ line: l, runnerId, rerun }: { line: AuditLine; runnerId: st
               ))}
             </ol>
           )}
-          {l.jobId == null ? (
-            l.result !== 'failedToStart' && l.result !== 'notRemoved' && <p className="text-ink-faint">No job log: this runner did not learn which job the VM ran.</p>
-          ) : log === null ? (
-            <p className="text-ink-faint">Loading the job log…</p>
-          ) : 'error' in log ? (
-            <p className="text-ink-faint">Couldn't read the job log: {log.error}</p>
+          {l.jobId != null ? (
+            <LogBlock title="Job log" kind="job" load={() => window.nekko.runnerJobLog(runnerId, l.jobId!)} />
           ) : (
-            <pre
-              className="max-h-72 overflow-auto rounded-lg p-2 font-mono text-2xs whitespace-pre-wrap break-all"
-              style={{ background: 'var(--paper)' }}
-              ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
-              data-job-log
-            >
-              {log.text || 'The log is empty.'}
-            </pre>
+            l.result !== 'failedToStart' && ranVm && <p className="text-ink-faint">No job log: this runner did not learn which job the VM ran.</p>
+          )}
+          {l.vm ? (
+            <LogBlock title="VM log" kind="vm" load={() => window.nekko.runnerVmLog(runnerId, l.vm!)} />
+          ) : (
+            ranVm && <p className="text-ink-faint">No VM log for this job. VMs write one once the image has the latest scripts (Update scripts in runner settings).</p>
           )}
         </div>
       )}

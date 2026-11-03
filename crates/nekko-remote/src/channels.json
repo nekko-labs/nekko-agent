@@ -187,6 +187,7 @@
  "runner:setEnabled",
  "runner:setForkApproval",
  "runner:update",
+ "runner:vmLog",
  "runtime:autoFit",
  "runtime:facts",
  "runtime:load",

@@ -23,6 +23,9 @@ use tokio::io::{AsyncBufReadExt, BufReader, Lines};
 use tokio::process::{Child, ChildStdout};
 use tokio::sync::{mpsc, oneshot};
 
+/// Beside a job VM's bundle: what the guest wrote to its serial console (`nekko-vm run --console`).
+pub const CONSOLE_LOG: &str = "console.log";
+
 /// One VM run: the clone to boot and the job's seed image.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RunSpec {
@@ -382,7 +385,8 @@ impl Vm for HelperVm {
 
     async fn start(&self, spec: RunSpec) -> Result<RunHandle, String> {
         let mut args = run_args(&spec.bundle, spec.cpus, spec.memory_mb);
-        args.extend(["--seed".into(), spec.seed.into()]);
+        let console = spec.bundle.with_file_name(CONSOLE_LOG);
+        args.extend(["--seed".into(), spec.seed.into(), "--console".into(), console.into()]);
         self.boot(args, job_net_config(self.dns().await?)).await
     }
 

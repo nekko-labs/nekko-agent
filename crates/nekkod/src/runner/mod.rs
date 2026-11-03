@@ -44,8 +44,15 @@ use supervisor::{RunnerState, RunnerView, Supervisor, TICK};
 use vm::HelperVm;
 use vm::Vm;
 
-pub const CHANNELS: &[&str] =
-    &["runner:list", "runner:connect", "runner:update", "runner:remove", "runner:setEnabled", "runner:jobLog"];
+pub const CHANNELS: &[&str] = &[
+    "runner:list",
+    "runner:connect",
+    "runner:update",
+    "runner:remove",
+    "runner:setEnabled",
+    "runner:jobLog",
+    "runner:vmLog",
+];
 /// Pushed with `RunnerView[]` whenever the views change.
 pub const EVENT: &str = "runner:changed";
 const NO_RUNNER: &str = "No runner with that id.";
@@ -73,6 +80,8 @@ fn secret_key(r: &RunnerRecord) -> String {
 }
 
 pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<GitHub<Net>, GitLab<Net>>> {
+    /// `<data>/runners`.
+    dir: PathBuf,
     store: Store,
     /// Connects new runners; `None` in tests.
     connectors: Option<Connectors>,
@@ -269,6 +278,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         sup.set_records(store.load());
         let views = sup.views();
         Arc::new(Runners {
+            dir: runners_dir.to_path_buf(),
             store,
             connectors,
             prefix: sup.prefix(),
@@ -476,6 +486,9 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         if channel == "runner:jobLog" {
             return self.job_log(&id, arg(1).as_u64()).await;
         }
+        if channel == "runner:vmLog" {
+            return self.vm_log(&id, arg(1).as_str().unwrap_or_default());
+        }
         if github_setup::CHANNELS.contains(&channel) {
             return self.github_setup(channel, arg(0)).await;
         }
@@ -534,6 +547,22 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         }
         .map_err(|e| e.to_string())?;
         Ok(json!(tail(&text, JOB_LOG_TAIL)))
+    }
+
+    /// The console log of a VM in the runner's recent list, as the guest wrote it.
+    fn vm_log(&self, id: &str, name: &str) -> Result<Value, String> {
+        let known = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.recent)
+            .any(|l| l.vm.as_deref() == Some(name));
+        if !known {
+            return Err("That VM is not one of this runner's recent jobs.".into());
+        }
+        audit::vm_log(&self.dir, name).map(|t| json!(t)).map_err(|e| format!("Couldn't read the VM log: {e}"))
     }
 
     /// A finished image build turns its runner on, with the mode chosen for it.

@@ -946,6 +946,7 @@ async fn views_carry_the_last_five_jobs() {
             url: None,
             pr: None,
             events: vec![],
+            vm: None,
         };
         h.sup.audit(&line);
     }
@@ -1373,6 +1374,22 @@ async fn job_that_ended_between_polls_is_named_with_its_links_and_timeline() {
     );
     assert_eq!(a.events.iter().map(|e| e.state).collect::<Vec<_>>(), [SlotState::Starting, SlotState::Ready]);
     assert!(a.events.iter().all(|e| e.ts <= a.ts));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_finished_vm_keeps_its_console_log() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.tick_for(5).await;
+    h.status(RunnerStatus::Busy);
+    h.tick_for(15).await;
+    let name = h.vms().pop().unwrap();
+    std::fs::write(h.dir.path().join("vms").join(&name).join("console.log"), "runner exited with 0\n").unwrap();
+    h.status(RunnerStatus::Idle);
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_eq!(h.audit()[0].vm.as_deref(), Some(name.as_str()));
+    assert_eq!(audit::vm_log(h.dir.path(), &name).unwrap(), "runner exited with 0\n");
+    assert!(!h.vms().contains(&name));
 }
 
 #[tokio::test(start_paused = true)]
