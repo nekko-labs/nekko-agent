@@ -111,6 +111,9 @@ pub struct Harness {
     /// Background tasks each chat's Claude Code still runs, by chat id
     /// (`claude:backgroundTasks`); a chat with none is not listed.
     background: Mutex<HashMap<String, usize>>,
+    /// Sub-agents still running, by parent chat and delegating call. They
+    /// outlive a turn when they run in the background (subagents.rs).
+    subagents: Mutex<HashMap<String, HashMap<String, crate::subagents::Run>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -214,6 +217,41 @@ impl Harness {
         } else {
             all.insert(session_id.to_string(), n);
         }
+    }
+
+    pub fn add_subagent(&self, parent: &str, call_id: &str, run: crate::subagents::Run) {
+        lock(&self.subagents).entry(parent.to_string()).or_default().insert(call_id.to_string(), run);
+    }
+
+    pub fn with_subagent<T>(
+        &self,
+        parent: &str,
+        call_id: &str,
+        f: impl FnOnce(&mut crate::subagents::Run) -> T,
+    ) -> Option<T> {
+        lock(&self.subagents).get_mut(parent)?.get_mut(call_id).map(f)
+    }
+
+    pub fn remove_subagent(&self, parent: &str, call_id: &str) -> Option<crate::subagents::Run> {
+        let mut all = lock(&self.subagents);
+        let runs = all.get_mut(parent)?;
+        let run = runs.remove(call_id);
+        if runs.is_empty() {
+            all.remove(parent);
+        }
+        run
+    }
+
+    /// The calls of a chat's running sub-agents, those that run in the background only if asked.
+    pub fn open_subagents(&self, parent: &str, background_too: bool) -> Vec<String> {
+        let all = lock(&self.subagents);
+        let runs = all.get(parent).into_iter().flatten();
+        runs.filter(|(_, run)| background_too || !run.background).map(|(id, _)| id.clone()).collect()
+    }
+
+    /// The child chats of every running sub-agent, for `chat:running`.
+    pub fn running_subagents(&self) -> Vec<String> {
+        lock(&self.subagents).values().flatten().map(|(_, run)| run.chat_id()).collect()
     }
 
     /// `claude:backgroundTasks`: how many background tasks each chat's Claude

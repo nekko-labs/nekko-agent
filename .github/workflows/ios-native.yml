@@ -203,13 +203,14 @@ jobs:
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           for THEME in $THEMES; do
             # The first journey after the boot can time out reading the app at any step, and the same
-            # journey then passes (#1567). So one more try, with a fresh stack and install.
+            # journey then passes (#1567). So one more try, with a fresh stack and install. Right after
+            # the boot the computer's engine can also miss its start deadline; that try counts as failed.
             for try in 1 2; do
               ready
               xcrun simctl ui "$DEVICE" appearance "$THEME"
-              ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
-              . "/tmp/stack-$THEME.env"
               journey=0
+              ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env" || { journey=1; continue; }
+              . "/tmp/stack-$THEME.env"
               TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
                 xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME-$try.xcresult" test-without-building \
                 -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || { journey=1; stack_logs "live-$THEME-$try"; }

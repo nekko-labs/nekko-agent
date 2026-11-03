@@ -64,3 +64,15 @@ Acceptance: the card bottoms meet the horizontal scrollbar, with no unused panel
 - **Every window hears a move.** The engine works the phase out from the saved transcript (`crates/nekko-store/src/phase.rs`, which runs the shared tool-purpose fixture) and adds it to the chat's summary, so it survives a restart and reaches another computer's chats. Tool calls only stream to the windows showing a chat, so when a phase changes the engine sends `session_meta` once the step is saved, and every window re-reads its list. Each move costs one list refresh, not one per call.
 - A chat summarised by an older computer has no phase and shows in Exploring. Incognito chats are not saved, so they stay in Exploring too.
 - Phones keep their own Status grouping (Needs you, Working, Idle). The summary carries the phase if they take it up later. No new storage, permissions or network use.
+
+## Subagents under their parent (2026-11-03)
+
+`[implemented; unit tested; checked in an isolated hidden renderer, not in the packaged app]`
+
+A subagent used to leave the panel the moment it had a reply and stopped running, and landed in the saved-chats list instead, so afterwards you could not see how the work was split. Now every subagent stays under its parent, in the order it was started, by the same rule as the rest of the panel: details show while they are relevant.
+
+- A **working** subagent always has a row.
+- A **finished** subagent keeps its row, with its done mark, while its chat is working or open, or while one of its subagents is open.
+- Otherwise finished subagents fold away, and the card's **N sub-agents** line, which now counts all of them, stands in. Opening the chat brings them back.
+
+Archived subagents do not appear. A subagent whose parent is archived stays in saved chats, as before.

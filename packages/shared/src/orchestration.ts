@@ -66,3 +66,23 @@ export const DEFAULT_ORCHESTRATION: OrchestrationSettings = {
 export function getStrategy(id: OrchestrationStrategy | undefined): OrchestrationStrategyDef {
   return ORCHESTRATION_STRATEGIES.find((s) => s.id === id) ?? ORCHESTRATION_STRATEGIES[1];
 }
+
+/** A follow-up the person chose to run in a sub-agent. It is their message, shown as sent, on every engine. */
+export function inSubagent(text: string): string {
+  return `Do this in a subagent, then report back:\n\n${text}`;
+}
+
+/** Whether a chat can hand a follow-up to a sub-agent: its model has replied, and nothing here rules delegation out. */
+export function canOfferSubagent(
+  session: { messages: { role: string }[]; parentSessionId?: string; incognito?: boolean; offline?: boolean; executionMode?: string; disabledTools?: string[] },
+  strategy: OrchestrationStrategy | undefined,
+): boolean {
+  return getStrategy(strategy).allowsSpawn
+    && session.messages.some((m) => m.role === 'assistant')
+    && !session.parentSessionId
+    && !session.incognito
+    && !session.offline
+    && session.executionMode !== 'sandbox'
+    && !session.disabledTools?.includes('spawn_agent');
+}
+

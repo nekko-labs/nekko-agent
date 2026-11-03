@@ -6,6 +6,16 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Watching subagents and choosing where work runs (added 2026-11-03)
+
+Spec: [subagents in Claude chats](spec/agents/claude-code-subagents.md). Decision: [0042](docs/decisions/0042-claude-code-sub-agents-are-child-chats.md).
+
+- [x] **SUB-1, Claude Code sub-agents are child chats.** The mapper hands up `Subagent` start, line and end, and names `Agent` and `Task` `spawn_agent`; `crates/nekkod/src/subagents.rs` writes the child chat through a `Mapper` of its own. `spawnCallId` links both engines' children to their call. Scripted end to end in `crates/nekkod/tests/daemon/claude_code.rs`. (2026-11-03)
+- [x] **SUB-2, Finished subagents stay under their parent.** `subagentRows` keeps them while the chat is working or open; they no longer fall into saved chats, and the card counts them all. (2026-11-03)
+- [x] **SUB-3, Run here or in a subagent.** `canOfferSubagent` and `inSubagent` in shared `orchestration.ts`; the row at the end of the conversation in `ChatPane` (moved out of the composer on review), for typed follow-ups and the suggested next step. Hidden real-App check in `subagent-evidence-sandbox.cjs`. Spec: [run here or in a subagent](spec/agents/run-here-or-in-a-subagent.md). (2026-11-03)
+- [ ] **SUB-4, The same choice on iPhone and Android.**
+- [ ] **SUB-1a, Check a live sub-agent.** Run a real Claude Code `Agent` call, foreground and background, and replace `synthetic/tools-subagent-retry.jsonl` with the recording.
+
 ## Agents panel by agent loop (#1560, added 2026-11-03)
 
 Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#activity-follows-the-agent-loop-2026-11-03).
@@ -14,7 +24,6 @@ Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#
 - [x] **APL-2, Every window hears a move.** `forward` in `turns.rs` sends `session_meta` when a checkpoint moves the phase, after the save, because tool calls only reach windows showing the chat. (2026-11-03)
 - [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
 - [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
-- [x] **APL-5, Needs input group.** A chat parked on a question or approval, or with a sub-agent that is, moves to a Needs input group above Draft that shows only with a chat in it; answering returns it to its phase. (2026-11-03)
 
 ## Third-party licensing and credits (added 2026-11-03)
 
@@ -111,7 +120,8 @@ The hosted iOS 27 simulator sometimes shut down or lost its accessibility server
 
 - [x] **T223, Recover the simulator between suites (2026-10-29).** `ios-native.yml`: `ready` (`simctl bootstatus -b` and the status bar override) before every suite, a fresh boot after the first-run suite, and one retry for a failed first-run test (`-retry-tests-on-failure -test-iterations 2`) for XCTest's hang at "Setting up automation session". Verified locally on an iOS 27.0 simulator: `simctl ui` on a shut-down device exits 149 as on CI, and exits 0 after `ready`.
 - [ ] **T224, Watch the next scheduled runs** on main for a simulator loss that `ready` did not recover.
-- [x] **T224a, One retry for the live journey (#1567, 2026-11-03).** The first journey after the fresh boot timed out reading the app at a random step, on unrelated PRs, while later journeys passed; why is not established. `ios-native.yml` gives it one more try on a fresh stack and install, and the job limit goes from 75 to 85 minutes.
+- [x] **T224a, One retry for the live journey (#1567, 2026-11-03).** The first journey after the fresh boot timed out reading the app at a random step, on unrelated PRs, while later journeys passed; why is not established. `ios-native.yml` gives it one more try on a fresh stack and install, and the job limit goes from 75 to 85 minutes. A stack whose engine misses its start deadline after the boot counts as a failed try too (2026-11-03).
+- [x] **T224b, A green batch stays green (#1575, 2026-11-03).** `ios-batch.mjs` leaves out heads that already passed. A new batch had replaced their green status with pending whenever main moved, which ejected #1312 from the merge queue with nothing failed.
 ## Vercel builds only website changes (#1328)
 
 Vercel serves only the marketing site and docs but built a deployment for every push to every branch. Spec: [spec/platform/distribution-platforms.md](spec/platform/distribution-platforms.md).

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionSummary } from '@nekko-agent/shared';
 import type { Workspace } from '../store.js';
-import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
+import { sidebarWorkspaces, subagentRows, unopenedChats } from './unopenedChats.js';
 
 const chat = (id: string, extra: Partial<SessionSummary> = {}) => ({
   id, title: id, createdAt: 1, updatedAt: 1, ...extra,
@@ -65,5 +65,25 @@ describe('sidebarWorkspaces', () => {
     const nested = new Set(['child']);
     expect(sidebarWorkspaces([workspace('child')], nested)).toEqual([]);
     expect(unopenedChats(sessions, [workspace('child')], nested).map((s) => s.id)).toEqual(['parent']);
+  });
+});
+
+describe('subagentRows', () => {
+  const kids = [chat('working'), chat('finished')];
+  const rows = (busy: string[], selected?: string) =>
+    subagentRows(kids, (id) => busy.includes(id), 'parent', selected).map((s) => s.id);
+
+  it('keeps a working sub-agent under its card whatever else is going on', () => {
+    expect(rows(['working'])).toEqual(['working']);
+  });
+
+  it('keeps finished sub-agents while their chat is working or open', () => {
+    expect(rows(['parent'])).toEqual(['working', 'finished']);
+    expect(rows([], 'parent')).toEqual(['working', 'finished']);
+    expect(rows([], 'finished')).toEqual(['working', 'finished']);
+  });
+
+  it('folds finished sub-agents away once their chat is neither', () => {
+    expect(rows([], 'something-else')).toEqual([]);
   });
 });

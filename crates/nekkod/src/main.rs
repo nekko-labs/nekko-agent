@@ -79,6 +79,7 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod subagents;
 mod telemetry;
 mod tooling;
 mod turns;
