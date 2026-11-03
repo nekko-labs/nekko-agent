@@ -33,7 +33,7 @@ describe("migrations", () => {
       [],
     );
     expect(rows.map((r) => r.table_name)).toEqual([
-      "api_tokens", "cloud_machines", "donations", "email_suppressions", "feedback", "machine_usage", "schema_migrations", "signups", "sync_devices", "sync_key_wraps", "sync_keyrings", "sync_objects", "sync_usage", "used_unsubscribe_tokens", "users",
+      "api_tokens", "cloud_machines", "donations", "email_suppressions", "feedback", "machine_usage", "pending_auth_deletions", "schema_migrations", "signups", "sync_devices", "sync_key_wraps", "sync_keyrings", "sync_objects", "sync_usage", "used_unsubscribe_tokens", "users",
     ]);
   });
 
@@ -59,7 +59,7 @@ describe("parseSignup", () => {
     });
     expect(parsed).toEqual({
       ok: true,
-      value: { email: "a@b.co", name: "Ada Lovelace", list: "beta", source: "/beta", utm: { utm_source: "hn" } },
+      value: { email: "a@b.co", name: "Ada Lovelace", list: "beta", source: "/beta", utm: { utm_source: "hn" }, marketing: false, policyVersion: null },
     });
     expect(parseSignup({ email: "a@b.co", source: "https://evil.example/x" })).toMatchObject({
       value: { source: null },
@@ -108,6 +108,31 @@ describe("POST /v1/signups", () => {
     expect((await post(app, { email: "bot@b.co", website: "spam" })).statusCode).toBe(202);
     const { rows } = await db.query("select count(*)::int as n from signups", []);
     expect(rows).toEqual([{ n: 0 }]);
+  });
+
+  it("stores marketing consent and the policy version apart from the beta signup, and a re-signup updates both", async () => {
+    const app = server();
+    await post(app, { email: "m@example.com", marketing: true, policyVersion: "2026-11-03" });
+    await post(app, { email: "b@example.com" });
+    const read = async () => (await db.query("select email, marketing_opt_in, policy_version from signups order by email", [])).rows;
+    expect(await read()).toEqual([
+      { email: "b@example.com", marketing_opt_in: false, policy_version: null },
+      { email: "m@example.com", marketing_opt_in: true, policy_version: "2026-11-03" },
+    ]);
+    await post(app, { email: "M@example.com", marketing: false, policyVersion: "2026-12-01" });
+    await post(app, { email: "b@example.com", marketing: true, policyVersion: "2026-12-01" });
+    expect(await read()).toEqual([
+      { email: "b@example.com", marketing_opt_in: true, policy_version: "2026-12-01" },
+      { email: "m@example.com", marketing_opt_in: false, policy_version: "2026-12-01" },
+    ]);
+  });
+
+  it("refuses a marketing flag that isn't a boolean and a malformed policy version", async () => {
+    const app = server();
+    expect((await post(app, { email: "a@b.co", marketing: "yes" })).statusCode).toBe(400);
+    expect((await post(app, { email: "a@b.co", policyVersion: "x".repeat(33) })).statusCode).toBe(400);
+    expect((await post(app, { email: "a@b.co", policyVersion: "<script>" })).statusCode).toBe(400);
+    expect((await post(app, { email: "a@b.co", policyVersion: 3 })).statusCode).toBe(400);
   });
 
   it("answers the CORS preflight only for allowed origins", async () => {

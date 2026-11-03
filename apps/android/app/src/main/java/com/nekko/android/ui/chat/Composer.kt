@@ -101,6 +101,7 @@ import kotlinx.coroutines.launch
  * queues the prompt on the computer and an empty box turns Send into Stop.
  * Typing `/` offers the computer's skills; a picked skill shows as a chip and
  * the box becomes its input. Photos show as thumbnails above the box.
+ * Nothing goes below the box: a [footer] row is its last row, inside it.
  */
 @Composable
 fun Composer(
@@ -144,6 +145,8 @@ fun Composer(
     sendsLater: String? = null,
     /** This chat can hand a typed follow-up to a sub-agent (`ChatUi.offersSubagent`). */
     offerSubagent: Boolean = false,
+    /** The box's bottom row (the chat's model and context), inside the box. */
+    footer: (@Composable () -> Unit)? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -395,6 +398,7 @@ fun Composer(
                         }
                     }
                 }
+                footer?.invoke()
             }
         }
     }

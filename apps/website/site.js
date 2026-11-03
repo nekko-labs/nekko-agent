@@ -41,7 +41,7 @@
       const a = Math.min(0.9, 0.15 + (1 - st.z) * 0.9);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(226, 238, 248, ${a})`;
+      ctx.fillStyle = `rgba(243, 232, 238, ${a})`;
       ctx.fill();
     }
     if (!reduced) requestAnimationFrame(frame);
@@ -86,7 +86,8 @@
 
   // ---- smart download: default to the visitor's machine, menu for everything else ----
   const RELEASES = 'https://github.com/nekko-labs/nekko-agent/releases/latest';
-  const API = 'https://api.github.com/repos/nekko-labs/nekko-agent/releases/latest';
+  // Written by scripts/build-docs.mjs at deploy time, so loading the page asks GitHub nothing.
+  const RELEASE = '/release.json';
 
   // Each build we publish, with the pattern that finds it in a release's assets.
   // `pick` is what the primary button chooses for a detected os+arch.
@@ -146,7 +147,7 @@
     return null; // unknown, keep the default
   }
 
-  let assets = null; // name -> browser_download_url, once the API answers
+  let assets = null; // name -> browser_download_url, once release.json answers
   let version = '';
 
   function urlFor(build) {
@@ -381,17 +382,15 @@
       }
     }
 
-    fetch(API, { headers: { Accept: 'application/vnd.github+json' } })
+    fetch(RELEASE)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((rel) => {
-        assets = Object.fromEntries(
-          (rel.assets || []).map((a) => [a.name, a.browser_download_url]),
-        );
-        version = rel.tag_name || '';
+        assets = rel.assets || {};
+        version = rel.version || '';
         render();
       })
       .catch(() => {
-        /* offline or rate-limited: the static links to /releases/latest still work */
+        /* no release.json (local preview, or GitHub was down at build): the static links to /releases/latest still work */
       });
   }
 })();
@@ -456,7 +455,7 @@
   const root = document.documentElement;
   const LOOKS = ['dark', 'white', 'colour'];
   const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
-  const THEME_COLOR = { dark: '#0d0b18', white: '#f3effe', colour: '#9d8ce6' };
+  const THEME_COLOR = { dark: '#0c0c11', white: '#fbf6f8', colour: '#854f6c' };
   const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'colour');
   const sync = () => {
     const now = current();
@@ -504,7 +503,7 @@
   const peek = stage.querySelector('.nekko-peek');
   const look = stage.querySelector('.np-look');
   const bubble = stage.querySelector('[data-bubble]');
-  const note = form.querySelector('.beta-note');
+  const note = form.querySelector('#beta-note');
   const lines = {
     idle: "Psst… want to see what's next?",
     watching: 'Ooh, keep going…',
@@ -529,8 +528,11 @@
   input.addEventListener('blur', () => { look.removeAttribute('transform'); if (mood === 'watching') setMood('idle'); });
   button.addEventListener('mouseenter', () => { if (mood !== 'confused') setMood('eager'); });
   button.addEventListener('mouseleave', () => { if (mood === 'eager') setMood(document.activeElement === input ? 'watching' : 'idle'); });
-  // The API's machine sleeps when idle; wake it now so Join answers quickly.
-  if (form.dataset.endpoint) fetch(new URL('/healthz', form.dataset.endpoint), { mode: 'no-cors' }).catch(() => {});
+  // The API's machine sleeps when idle; wake it once someone starts on the form
+  // (not on page load, so just reading the page contacts nothing but this site).
+  input.addEventListener('focus', () => {
+    if (form.dataset.endpoint) fetch(new URL('/healthz', form.dataset.endpoint), { mode: 'no-cors' }).catch(() => {});
+  }, { once: true });
   // idle blink every few seconds
   setInterval(() => {
     if (mood !== 'idle') return;
@@ -562,6 +564,9 @@
       source: location.pathname,
       utm,
       website: form.elements.website?.value || '',
+      // Product updates are their own unticked choice; the API records which policy text was agreed to.
+      marketing: Boolean(form.elements.marketing?.checked),
+      policyVersion: '2026-11-03',
     };
     const name = form.elements.name?.value.trim();
     if (name) body.name = name;
@@ -654,9 +659,9 @@
 // ---- dot-matrix swell background: a fine grid of pixel dots that mostly
 //      sits invisible, with a soft wave of brightness drifting through it.
 //      The grid is fixed to the screen and ignores scrolling, so the wave
-//      keeps one steady pace however the page moves. Brand gradient (indigo to
-//      lavender, left to right) on the white version, white on the colourful
-//      one, and lavender to aqua on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
+//      keeps one steady pace however the page moves. Brand gradient (plum to
+//      light plum, left to right) on the white version, white on the colourful
+//      one, and light plum to rose on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
 //      reduced-motion visitors. ----
 (() => {
   const c = document.getElementById('pixelwave');
@@ -684,11 +689,11 @@
         const s = a > 0.18 ? 3 : 2;
         const k = x / W;
         if (theme === 'dark' || theme === 'colour') {
-          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing on the dark ground, tinted on the lilac one
-          ctx.fillStyle = `rgba(${Math.round(157 - 19 * k)},${Math.round(140 + 88 * k)},${Math.round(230 + 12 * k)},${(a * 1.1).toFixed(3)})`;
+          // 0 = light plum #c084b5, 1 = rose #854f6c: glowing on the dark ground, tinted on the coloured one
+          ctx.fillStyle = `rgba(${Math.round(192 - 59 * k)},${Math.round(132 - 53 * k)},${Math.round(181 - 73 * k)},${(a * 1.1).toFixed(3)})`;
         } else {
-          // 0 = indigo #453A92, 1 = lavender #9D8CE6
-          ctx.fillStyle = `rgba(${Math.round(69 + 88 * k)},${Math.round(58 + 82 * k)},${Math.round(146 + 84 * k)},${a.toFixed(3)})`;
+          // 0 = plum #5a2352, 1 = light plum #c084b5
+          ctx.fillStyle = `rgba(${Math.round(90 + 102 * k)},${Math.round(35 + 97 * k)},${Math.round(82 + 99 * k)},${a.toFixed(3)})`;
         }
         ctx.fillRect(Math.round(x + (CELL - s) / 2), Math.round(y + (CELL - s) / 2), s, s);
       }

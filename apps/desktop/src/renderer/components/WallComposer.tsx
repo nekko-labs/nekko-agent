@@ -4,7 +4,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SessionSummary } from '@nekko-agent/shared';
 import { ChatPane } from './ChatPane.js';
 import { observeWallComposer } from '../composerSizing.js';
-import { ChatIcon, FocusLayoutIcon, LayoutIcon } from '../icons.js';
+import { ChatIcon, LayoutIcon } from '../icons.js';
+import { FocusIcon } from '../gentleface-icons.js';
 import { composerMaxWidth, type ComposerDock, type ComposerAlign, type ComposerSide } from '../commandWall.js';
 
 /** One agent window the composer can be pointed at: its number on the wall and what it is doing. */
@@ -134,7 +135,7 @@ export function WallComposer({
             <span className="text-ink-faint" data-composer-title>No agent selected</span>
           )}
           <div className="min-w-0 flex-1" />
-          {agent && <button type="button" className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Show selected chat in Focused view" aria-label="Show selected chat in Focused view" onClick={() => onFocus(agent.session.id)}><FocusLayoutIcon className="h-3.5 w-3.5" /></button>}
+          {agent && <button type="button" className="rounded-sm p-1 text-ink-faint hover:text-ink" title="Show selected chat in Focused view" aria-label="Show selected chat in Focused view" onClick={() => onFocus(agent.session.id)}><FocusIcon className="h-3.5 w-3.5" /></button>}
           <div className="relative" ref={pickerRef}>
             <button
               className={`flex items-center gap-1 rounded-sm p-1 text-ink-faint hover:text-ink ${pickerOpen ? 'text-ink' : ''}`}

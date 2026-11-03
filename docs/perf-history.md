@@ -95,17 +95,37 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
-### Website dot wave runs below the hero again (2026-11-02)
-Area: renderer
-Result: no effect (a small drop in the lowest sample, with plenty of headroom)
-Conditions: Windows 11, Firefox (installed build) headless via WebDriver BiDi, 1440×900, Dark look, rAF callbacks counted over 1 s at every 500px of scroll (20 positions), one run per side, sequential.
+### Perf harness: warm pair on the board, sample end, tile read before the screenshot (2026-11-03)
+Area: perf harness
+Result: measurement fix
+Conditions: Apple M5 Max, macOS, Chromium for Testing 153, `--no-gpu`, debug `nekkod`, the build of `e3064ab9`. Latency: 40 warm switches per run, arms alternated. Memory: `--quick`, base is `c6852d2d`, before zones, built on the same machine.
 
-| Metric (rAF/s) | Before (wave paused past the hero) | After (wave running) |
+| Metric | Before | After |
 |---|---|---|
-| Lowest position | 167 | 153 |
-| Panels stretch (y 1500 to 3500) | 309 to 321 | 262 to 288 |
+| Warm switch p95, alternated runs | 66.1 / 73.5 ms | 12.1 / 11.3 / 11.8 ms |
+| Warm switch p50 | 31.7 / 38.2 ms | 10.6 / 9.1 / 10.5 ms |
+| Compositor tile memory, first read, six working windows | 448.4 / 459.0 / 466.2 / 480.3 MB | 243.5 / 217.1 MB |
 
-Why: #1442 stopped the wave once the hero left the screen; the panels over it are already solid (no backdrop blur), so redrawing at 20 fps behind them costs little. A real-GPU Firefox was not measured. Source: this PR.
+The six-zone board's 100 ms warm switch was two harness effects. Setup evicted chat 0 and then chat 1 from the board, so each warm sample remounted a chat in its zone instead of flipping parked windows (11 ms flipping, 25 ms remounting, with the sidebar transition off). And the sample's closing MessageChannel tick sat behind the back-to-back main frames a 150 ms `transition-colors` on the sidebar cards runs in the uncapped latency browser: in the same switches, a user-blocking task and the next rAF read about 18 ms where the tick read 19 to 75 ms. In a vsync-paced browser the off-board switch read 31 ms and the flip 13 ms, so a remount costs one extra frame on a 60 Hz display, not 100 ms.
+
+Tiles: the capture before the read added about 220 MB on this board and nothing on `c6852d2d`; why is not known. With six windows still working, head settles at 131 to 170 MB and `c6852d2d` at 163 to 178 MB, after a first read of 214 to 267 MB on both. Not yet re-read on CI. Source: this branch, #1521, #704.
+
+### Perf harness: measure the zones board every attempt, not a converted one (2026-11-02)
+Area: perf harness
+Result: measurement fix
+Conditions: CI figures from the scheduled `main` runs' perf reports (ubuntu-latest, `--attempts 3 --no-gpu`); local figures on an Apple M5 Max, macOS, headless Chrome, `--no-gpu`, the build of `28217005`, 40 warm switches per attempt, arms alternated
+
+Since zones (#1205, #1206, 2026-10-27) the harness's board, saved in the browser only and from before zones, was converted on load to two zones behind the zones intro, and the converted board, saved to settings (`commandWall`, which wins over the browser's copy), was what every later attempt of the run loaded. Attempts measured different boards, and the GPU memory figures stopped measuring the six working windows the budget is about.
+
+| Metric | Before zones | Since zones |
+|---|---|---|
+| Warm switch p95, attempt 1 / attempt 2, CI | 18.0 (one attempt, `c6852d2d`) | 56.7 / 24.4 (`fdab7d9f`) ... 105.3 / 18.1 (`a4039065`) |
+| Board windows working in the GPU memory phase, CI | 6 (`c6852d2d`) | 2 (`fdab7d9f`), 0 (`a4039065`) |
+| Compositor tile memory, CI | 170.1 MB (`c6852d2d`) | 68.5 MB (`fdab7d9f`), 95.2 MB (`a4039065`) |
+
+Local A/B on the converted board, zones intro shown (A) or already seen (B), warm switch p95 per attempt in ms: A 34.6 / 8.2 / 15.9, 16.6 / 7.7 / 15.8, 17.4 / 7.8 / 16.0; B 17.0 / 8.1 / 16.5, 17.2 / 8.1 / 16.3, 17.3 / 7.9 / 16.1. The intro is closed before the warm switches start and made no difference; the one first attempt over the gate was the experiment's first run on the machine, its slow samples in the first 23 of 40. The second attempt sits about half a 60 Hz frame below the others in every run, unexplained. With the board seeded in zones, in settings and the browser alike, the GPU phase sees 6 working windows again and reads 399.1 MB of tile memory locally, over the 320 MB budget; not yet compared with a pre-zones build on the same machine.
+
+Why: every browser now starts on the same board, already in zones, written to settings and the browser before the page loads; the leak laps use chats off the board; a GPU phase with fewer working windows than asked for fails the run; every attempt's samples are kept (`attemptSamples`); `--warmup` runs the latency and frame phases once, unmeasured, first. Source: this PR, #704.
 
 ### Empty-agent wave: full-pane tiled canvas instead of a bounded texture (2026-11-02)
 Area: renderer

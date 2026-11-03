@@ -16,8 +16,8 @@ import { RunnerReady } from './RunnerReady.js';
 import { CheckIcon, MoonIcon, RocketIcon, YinYangIcon } from '../icons.js';
 
 const MODES: { priority: Priority; title: string; blurb: string; Icon(p: { className?: string }): React.JSX.Element }[] = [
+  { priority: 'balanced', title: 'Balanced', blurb: 'In the background. Recommended', Icon: YinYangIcon },
   { priority: 'doNotDisturb', title: 'Do not disturb', blurb: "Only run when I'm idle", Icon: MoonIcon },
-  { priority: 'balanced', title: 'Balanced', blurb: 'In the background', Icon: YinYangIcon },
   { priority: 'runnerFirst', title: 'Runner first', blurb: 'For a docked Mac', Icon: RocketIcon },
 ];
 
@@ -78,7 +78,7 @@ export function PlanStep({ plan, priority, rebuild, error, busy, onPriority, onB
   return (
     <Sheet>
       <Heading>{rebuild ? 'Rebuild image' : 'Set up this Mac'}</Heading>
-      <Kv label="macOS from Apple" value={MACOS_SIZE} />
+      <Kv label="macOS from Apple" value={plan?.cachedMacos ? 'Downloaded earlier' : MACOS_SIZE} />
       {!noXcode && <Kv label="iOS simulator from Apple" value={SIMULATOR_SIZE} />}
       {!noXcode && <Kv label={['Xcode', plan?.xcode, 'from this Mac'].filter(Boolean).join(' ')} value="Copied in" />}
       <Kv label="Space needed" value={`${needs} GB${free}`} />
@@ -116,9 +116,10 @@ export function ModeStep({ priority, error, busy, onPriority, onStart }: { prior
 /** Frame 6, and the same list when a stopped build offers to resume. */
 export function ProgressStep({ image, error, busy, onCancel, onResume }: { image: ImageView; error: string | null; busy: boolean; onCancel(): void; onResume?(): void }) {
   const fraction = imageFraction(image);
+  const refresh = image.kind === 'refresh';
   return (
     <Sheet>
-      <Heading>{onResume ? 'Setup paused' : 'Setting up this Mac'}</Heading>
+      <Heading>{onResume ? 'Setup paused' : refresh ? 'Updating the image' : 'Setting up this Mac'}</Heading>
       {imageStageRows(image).map((row) => (
         <React.Fragment key={row.stage}>
           <Stage row={row} />
@@ -127,7 +128,9 @@ export function ProgressStep({ image, error, busy, onCancel, onResume }: { image
       ))}
       {image.state === 'waiting' && <p role="status" className="runner-note warn">{image.detail}</p>}
       <Fine>
-        {onResume
+        {refresh
+          ? 'The image in use keeps taking jobs until the updated one passes its test boot.'
+          : onResume
           ? 'Finished stages are kept, and a stopped download picks up where it left off.'
           : 'You can close this. Setup continues while Nekko runs, and a stopped download picks up where it left off.'}
       </Fine>
@@ -201,7 +204,7 @@ export function MacSetupSheet({ runnerId, view, image, rebuild, onClose, onWorkf
   onWorkflow(): void;
   beginReply(): (v: RunnerView) => void;
 }) {
-  const current = view?.config.settings.priority ?? 'doNotDisturb';
+  const current = view?.config.settings.priority ?? 'balanced';
   const [priority, setPriority] = useState<Priority>(current);
   const [plan, setPlan] = useState<ImagePlan | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);

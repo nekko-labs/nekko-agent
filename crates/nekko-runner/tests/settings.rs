@@ -9,11 +9,11 @@ fn defaults_match_the_spec() {
     let s = RunnerSettings::default();
     assert_eq!(
         (s.priority, s.keep_awake, s.macos_slots, s.memory_per_vm_mb),
-        (Priority::DoNotDisturb, KeepAwake::WhileActive, 1, 8192)
+        (Priority::Balanced, KeepAwake::WhileActive, 1, 8192)
     );
     assert_eq!((s.disk_budget_gb, s.disk_floor_gb, s.max_job_minutes), (150, 25, 120));
     assert!(s.only_on_power && s.trusted_networks_only && s.never_on_hotspot && !s.allow_fork_prs);
-    assert!(!s.enabled && s.linux_slots == 0 && s.cpus_per_vm.is_none());
+    assert!(!s.enabled && s.linux_slots == 0 && s.cpus_per_vm.is_none() && s.ready_vms.is_none());
     assert!(s.rerun_lost_jobs && s.trusted_cache);
     assert!(!s.allow_direct_with_vpn);
 }
@@ -22,7 +22,8 @@ fn defaults_match_the_spec() {
 fn settings_round_trip_camel_case() {
     let v = serde_json::to_value(RunnerSettings::default()).unwrap();
     assert_eq!(v["keepAwake"], "whileActive");
-    assert_eq!(v["priority"], "doNotDisturb");
+    assert_eq!(v["priority"], "balanced");
+    assert_eq!(v["readyVms"], serde_json::Value::Null);
     assert_eq!(v["macosSlots"], 1);
     assert_eq!(v["memoryPerVmMb"], 8192);
     assert_eq!(v["cpusPerVm"], serde_json::Value::Null);

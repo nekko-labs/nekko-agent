@@ -223,7 +223,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let publish_hub = hub.clone();
         let busy = running.clone();
         nekko_cloud::Cloud::new(nekko_cloud::Options {
-            vault: nekko_cloud::vault::default_vault(&dir),
+            // Tests: a test run writes nothing to the login keychain (as computers.rs).
+            vault: if cfg!(debug_assertions) && std::env::var("NEKKO_FILE_VAULT").as_deref() == Ok("1") {
+                Box::new(nekko_cloud::vault::FileVault::new(dir.join("secrets.json")))
+            } else {
+                nekko_cloud::vault::default_vault(&dir)
+            },
             dir,
             api_url: feedback::cloud_url(),
             device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),

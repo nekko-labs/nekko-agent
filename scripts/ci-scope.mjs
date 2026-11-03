@@ -1,17 +1,17 @@
 // Decides which of ci.yml's slow jobs a run needs. Three tiers:
 //
-// - pull_request (fast tier): `build`, plus the daemon on Linux and capture on
-//   Windows when the PR touches what they test. Feedback in about 8 minutes.
-//   The `ci:macos` / `ci:perf` labels opt a PR into those jobs (labels are read
-//   when a run starts; adding one re-runs CI).
+// - pull_request (fast tier): `build`, gated by the paths the PR touches. The
+//   per-OS jobs (the daemon, capture) run on a PR only with a `deploy:<os>`
+//   label (`deploy:linux`, `deploy:windows`, `deploy:macos`), and only when the
+//   change touches what they test. `ci:perf` opts a PR into the speed contract.
+//   Labels are read when a run starts; adding one re-runs CI.
 // - merge_group (queue tier): what must hold before anything reaches main. Adds
-//   the Windows daemon and the speed contract, path-gated like the PR tier. A
-//   group's file list is its diff against main, so a skipped job is one that no
-//   PR in the group could affect.
+//   the speed contract and itests, path-gated like the PR tier. A group's file
+//   list is its diff against main, so a skipped job is one that no PR in the
+//   group could affect. No per-OS jobs: a labelled PR already ran them.
 // - schedule, push to main, workflow_dispatch (full tier): every job on every
-//   OS, macOS included. GitHub's Team plan runs 5 macOS jobs at once across all
-//   workflows, so macOS runs every 6 hours (and before nightly releases), not
-//   per change.
+//   OS, macOS included. The schedule is nightly: platform builds run once a
+//   day, not per change, unless a `deploy:<platform>` label asks.
 //
 // Unknown changed files (none listed, or a list at the API's 3,000-file cap) and
 // changes to CI itself fall back to every job of the tier.
@@ -20,7 +20,7 @@
 // models), never run on a pull request, and `gate` does not wait for them, so
 // they report without holding a PR or the queue. They run on what lands on
 // main: every merge-queue group (ci.yml has no `push` trigger; the queue's
-// group is the commit main moves to), the 6-hourly schedule and a dispatch.
+// group is the commit main moves to), the nightly schedule and a dispatch.
 
 const RUST = [/^crates\//, /^Cargo\.(toml|lock)$/, /^rust-toolchain\.toml$/, /^rustfmt\.toml$/];
 // Shared's contracts feed the engine's golden sets (the phone allowlist, the IPC names).
@@ -57,16 +57,16 @@ export function ciScope({ event, files = [], labels = [] }) {
   }
   const queue = event === 'merge_group';
   const all = files.length === 0 || files.length >= FILE_LIST_CAP || touches(files, EVERYTHING);
-  // `ci:macos` adds the macOS row to a job the change already needs, never to one it doesn't.
-  const macos = labels.includes('ci:macos');
+  // A `deploy:<os>` label adds that OS's row to a job the change already needs, never to one it doesn't.
+  const os = name => labels.includes(`deploy:${name}`);
   const build = all || !files.every(file => NATIVE_APPS.some(pattern => pattern.test(file)));
   const daemon = all || touches(files, DAEMON);
   const capture = all || touches(files, CAPTURE);
   const perf = labels.includes('ci:perf') || (queue && (all || touches(files, PERF)));
   return {
     build,
-    daemon_os: [...(daemon ? ['ubuntu-latest'] : []), ...(daemon && queue ? ['windows-latest'] : []), ...(daemon && macos ? ['macos-latest'] : [])],
-    capture_os: [...(capture ? ['windows-latest'] : []), ...(capture && macos ? ['macos-latest'] : [])],
+    daemon_os: [...(daemon && os('linux') ? ['ubuntu-latest'] : []), ...(daemon && os('windows') ? ['windows-latest'] : []), ...(daemon && os('macos') ? ['macos-latest'] : [])],
+    capture_os: [...(capture && os('windows') ? ['windows-latest'] : []), ...(capture && os('macos') ? ['macos-latest'] : [])],
     perf,
     itests: queue && build,
     licenses: all || touches(files, LICENSES),
@@ -77,12 +77,12 @@ export function ciScope({ event, files = [], labels = [] }) {
  * The languages codeql.yml analyses. The schedule and a dispatch take all five.
  * A PR or queue group takes the ones its files are in (every Linux one when the
  * list is unknown or CI changed); Swift needs a macOS runner, so a PR takes it
- * only with `ci:macos` and the queue never does.
+ * only with `deploy:ios` and the queue never does.
  */
 export function codeqlLanguages({ event, files = [], labels = [] }) {
   if (FULL.has(event)) return Object.keys(CODEQL);
   const all = files.length === 0 || files.length >= FILE_LIST_CAP || touches(files, EVERYTHING);
-  const swift = event === 'pull_request' && labels.includes('ci:macos');
+  const swift = event === 'pull_request' && labels.includes('deploy:ios');
   const changed = lang => all || touches(files, CODEQL[lang]);
   return Object.keys(CODEQL).filter(lang => changed(lang) && (lang !== 'swift' || swift));
 }

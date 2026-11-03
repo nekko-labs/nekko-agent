@@ -128,10 +128,10 @@ The managed edition. Everything the OSS app does, plus convenience that only a h
 - Org/team accounts (post-MVP) for shared connectors and seats.
 - Device pairing tokens link a local agent to an account (§4.5).
 
-### 4.3 Payments & plans (Stripe), implemented
+### 4.3 Payments & plans (Stripe), planned
 - **Stripe Checkout** for subscription start; **Stripe Customer Portal** for management; **webhooks** drive entitlement state (`active`, `past_due`, `canceled`).
 - Entitlements gate cloud-only features (sync, relay, managed connectors). The OSS app never checks a license, paid features are server-side only.
-- **Implementation** (`apps/nekko-agent-api/cloud/src/billing.ts`): hand-rolled against the Stripe REST API (no SDK dependency), gated on `STRIPE_SECRET_KEY` so the server runs without a Stripe account. `/api/billing/checkout` opens a Checkout Session for the chosen plan's price; `/api/billing/portal` opens the Customer Portal; `/api/billing/webhook` verifies the `Stripe-Signature` (HMAC-SHA256 over `${t}.${body}`, with a replay-window check) and applies plan changes via `store.setPlan` (`checkout.session.completed` and `customer.subscription.updated|deleted`). The account remembers its `stripeCustomerId` so subscription events map back to it. Requires keys to bill for real: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, `CLOUD_PUBLIC_URL`.
+- **Not built yet.** The earlier prototype's billing module (`cloud/src/billing.ts`) was deleted with it in #815. Plans are set by hand in `apps/nekko-agent-api` (`users.plan`) until Stripe is wired in there.
 - Plans (draft, see §6): Free (OSS, BYO everything), Pro (individual), Team.
 - Free trial of Pro; annual discount.
 
