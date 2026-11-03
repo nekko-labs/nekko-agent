@@ -449,6 +449,60 @@ export function promptCachingEnabled(settings: Pick<AppSettings, 'promptCaching'
   return settings.promptCaching !== false;
 }
 
+/**
+ * Where the settings hold secrets, as [list, id field, secret field] (`SECRETS`
+ * in crates/nekko-settings): a list's entries are told apart by their id (a
+ * connector by its kind); an empty list is the top level, an empty id field an
+ * object. The daemon keeps these in the OS keystore, and a backup leaves them out.
+ */
+export const SECRET_FIELDS: ReadonlyArray<readonly [string, string, string]> = [
+  ['providers', 'id', 'apiKey'],
+  ['connectors', 'kind', 'token'],
+  ['mcpServers', 'id', 'token'],
+  ['', '', 'hfToken'],
+  ['', '', 'typesafeApiKey'],
+  ['engine', '', 'apiKey'],
+  ['apiServer', '', 'token'],
+];
+
+type Holder = Record<string, unknown>;
+const isHolder = (v: unknown): v is Holder => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Every place a secret can sit in `s`: [name, the object holding it, its field]. */
+function secretPlaces(s: Holder): Array<[string, Holder, string]> {
+  const out: Array<[string, Holder, string]> = [];
+  for (const [list, id, field] of SECRET_FIELDS) {
+    const at = list ? s[list] : s;
+    if (!list || !id) {
+      if (isHolder(at)) out.push([list ? `${list}.${field}` : field, at, field]);
+      continue;
+    }
+    for (const e of Array.isArray(at) ? at : []) {
+      if (isHolder(e) && typeof e[id] === 'string' && e[id]) out.push([`${list}.${e[id]}.${field}`, e, field]);
+    }
+  }
+  return out;
+}
+
+/** The settings a backup carries: every API key and token left out. */
+export function withoutSecrets<T extends object>(settings: T): T {
+  const copy = structuredClone(settings) as Holder;
+  for (const [, o, field] of secretPlaces(copy)) delete o[field];
+  return copy as T;
+}
+
+/**
+ * Imported settings with this computer's own keys kept: a provider, connector or
+ * server the backup leaves without one keeps the key it has here.
+ */
+export function keepSecrets<T extends object>(imported: T, current: object): T {
+  const mine = new Map<string, unknown>();
+  for (const [name, o, field] of secretPlaces(current as Holder)) if (o[field]) mine.set(name, o[field]);
+  const copy = structuredClone(imported) as Holder;
+  for (const [name, o, field] of secretPlaces(copy)) if (o[field] === undefined && mine.has(name)) o[field] = mine.get(name);
+  return copy as T;
+}
+
 /** What the reply log says about how replies end. */
 export interface ReplyStats {
   total: number;

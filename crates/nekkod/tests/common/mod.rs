@@ -69,6 +69,9 @@ pub fn start_with_env(data_dir: &std::path::Path, extra: Value, env: &[(&str, Op
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000);
     }
+    // Nothing a test saves reaches the login keychain: the daemon's keystores
+    // are files in the data folder (a test can still remove this).
+    cmd.env("NEKKO_FILE_VAULT", "1");
     for (k, v) in env {
         match v {
             Some(v) => cmd.env(k, v),

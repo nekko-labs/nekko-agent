@@ -683,25 +683,63 @@ pub fn date_parse(s: &str) -> f64 {
     }
 }
 
-/// tokens.json in a data directory: read whole, written whole, atomically.
+/// The sign-ins of a data directory, read whole and written whole: in the OS
+/// keystore as one item (`tokens`, split over as many as it needs), or in
+/// tokens.json (0600) where there is no keystore or it refuses a save.
 pub struct TokenStore {
     path: PathBuf,
+    vault: Option<Box<dyn nekko_vault::Vault>>,
 }
 
+/// The keystore item the sign-ins are saved under.
+const VAULT_NAME: &str = "tokens";
+
 impl TokenStore {
+    /// A store kept in tokens.json.
     pub fn new(dir: impl Into<PathBuf>) -> Self {
-        TokenStore { path: dir.into().join("tokens.json") }
+        Self::with_vault(dir, None)
+    }
+
+    /// A store kept in `vault`.
+    pub fn with_vault(dir: impl Into<PathBuf>, vault: Option<Box<dyn nekko_vault::Vault>>) -> Self {
+        TokenStore { path: dir.into().join("tokens.json"), vault }
     }
 
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    /// `loadTokens()`: `{}` for a missing or unreadable file.
+    fn read_file(&self) -> Option<Value> {
+        let bytes = std::fs::read(&self.path).ok()?;
+        Some(serde_json::from_str(&String::from_utf8_lossy(&bytes)).unwrap_or_else(|_| json!({})))
+    }
+
+    /// `loadTokens()`: `{}` for a missing or unreadable file. With a vault, a
+    /// tokens.json still here (an older build's, or a save the vault refused)
+    /// is merged over the vault's copy, saved there, and deleted once read back.
     pub fn load(&self) -> Value {
-        match std::fs::read(&self.path) {
-            Ok(bytes) => serde_json::from_str(&String::from_utf8_lossy(&bytes)).unwrap_or_else(|_| json!({})),
-            Err(_) => json!({}),
+        let Some(vault) = self.vault.as_deref() else { return self.read_file().unwrap_or_else(|| json!({})) };
+        let saved = nekko_vault::get(vault, VAULT_NAME).and_then(|t| serde_json::from_str(&t).ok());
+        let Some(file) = self.read_file() else { return saved.unwrap_or_else(|| json!({})) };
+        let mut all = saved.unwrap_or_else(|| json!({}));
+        match (&mut all, &file) {
+            (Value::Object(a), Value::Object(f)) => a.extend(f.clone()),
+            _ => all = file,
+        }
+        if nekko_vault::put(vault, VAULT_NAME, &nekko_js::stringify(&all)) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+        all
+    }
+
+    /// Delete every sign-in: the vault's item and the file.
+    pub fn clear(&self) -> Result<(), String> {
+        if let Some(vault) = self.vault.as_deref() {
+            nekko_vault::delete(vault, VAULT_NAME);
+        }
+        match std::fs::remove_file(&self.path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+            _ => Ok(()),
         }
     }
 
@@ -717,7 +755,16 @@ impl TokenStore {
             Value::Array(_) => {}
             _ => return Err("Cannot create property on a token store that is not an object".into()),
         }
-        nekko_settings::write_json_atomic(&self.path, &nekko_js::js_order(tokens)).map_err(|e| e.to_string())
+        let tokens = nekko_js::js_order(tokens);
+        if let Some(vault) = self.vault.as_deref()
+            && nekko_vault::put(vault, VAULT_NAME, &nekko_js::stringify(&tokens))
+        {
+            return match std::fs::remove_file(&self.path) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+                _ => Ok(()),
+            };
+        }
+        nekko_settings::write_json_atomic(&self.path, &tokens).map_err(|e| e.to_string())
     }
 
     /// `setToken(key, token)`.
@@ -732,5 +779,78 @@ impl TokenStore {
         self.write(self.load(), |m| {
             m.shift_remove(key);
         })
+    }
+}
+
+#[cfg(test)]
+mod token_store_tests {
+    use super::*;
+    use nekko_vault::{FileVault, Vault};
+
+    fn dir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("nekko-oauth-tokens-{name}-{}", random_uuid()));
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn keystore(d: &Path) -> Option<Box<dyn Vault>> {
+        Some(Box::new(FileVault::new(d.join("keystore.json"))))
+    }
+
+    fn jwt() -> String {
+        format!("eyJ.{}.sig", "a".repeat(3000))
+    }
+
+    #[test]
+    fn tokens_json_moves_into_the_keystore_and_merges_over_what_is_there() {
+        let d = dir("migrate");
+        TokenStore::with_vault(&d, keystore(&d)).set("chatgpt:a", json!({ "accessToken": "old" })).unwrap();
+        // An older build (or a profile import) wrote tokens.json beside it.
+        let file = json!({ "chatgpt:b": { "accessToken": jwt() } });
+        std::fs::write(d.join("tokens.json"), file.to_string()).unwrap();
+        let store = TokenStore::with_vault(&d, keystore(&d));
+        let all = store.load();
+        assert_eq!(all["chatgpt:a"]["accessToken"], "old");
+        assert_eq!(all["chatgpt:b"]["accessToken"], jwt());
+        assert!(!d.join("tokens.json").exists());
+        // Idempotent: the next read finds the same, from the keystore alone.
+        assert_eq!(TokenStore::with_vault(&d, keystore(&d)).load(), all);
+        store.delete("chatgpt:a").unwrap();
+        assert_eq!(store.get("chatgpt:a"), None);
+        assert!(!d.join("tokens.json").exists());
+        store.clear().unwrap();
+        assert_eq!(store.load(), json!({}));
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    /// A keystore that will not save.
+    struct Locked;
+    impl Vault for Locked {
+        fn get(&self, _: &str) -> Option<String> {
+            None
+        }
+        fn set(&self, _: &str, _: &str) -> Result<(), String> {
+            Err("locked".into())
+        }
+        fn delete(&self, _: &str) {}
+        fn kind(&self) -> &'static str {
+            "locked"
+        }
+    }
+
+    #[test]
+    fn a_keystore_that_will_not_save_keeps_tokens_json() {
+        let d = dir("locked");
+        std::fs::write(d.join("tokens.json"), r#"{"chatgpt:a":{"accessToken":"t"}}"#).unwrap();
+        let store = TokenStore::with_vault(&d, Some(Box::new(Locked)));
+        assert_eq!(store.get("chatgpt:a").unwrap()["accessToken"], "t");
+        assert!(d.join("tokens.json").exists());
+        store.set("chatgpt:b", json!({ "accessToken": "u" })).unwrap();
+        let file: Value = serde_json::from_str(&std::fs::read_to_string(d.join("tokens.json")).unwrap()).unwrap();
+        assert_eq!(
+            (file["chatgpt:a"]["accessToken"].clone(), file["chatgpt:b"]["accessToken"].clone()),
+            (json!("t"), json!("u"))
+        );
+        let _ = std::fs::remove_dir_all(d);
     }
 }
