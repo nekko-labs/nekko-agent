@@ -44,7 +44,8 @@ import {
 import { useStore } from '../store.js';
 import { Modal } from './primitives/index.js';
 import { WorkflowCanvas } from './WorkflowCanvas.js';
-import { ModelPicker, MODEL_LIST_TIMEOUT_MS, withTimeout } from './agent-console/ModelPicker.js';
+import { ModelPicker } from './agent-console/ModelPicker.js';
+import { MODEL_LIST_TIMEOUT_MS, withTimeout } from './agent-console/modelPickerInteractions.js';
 import { RunPolicyField } from './RunPolicyField.js';
 import { CloseIcon, PlusIcon } from '../icons.js';
 

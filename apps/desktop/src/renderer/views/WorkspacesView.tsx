@@ -25,6 +25,7 @@ import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
 import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
+import { useShown } from '../simpleMode.js';
 import {
   DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
@@ -285,6 +286,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   /** Groups whose completed chats are expanded under their active ones. */
   const completionTipSessionId = useStore((s) => s.completionTipSessionId);
   const computers = useStore((s) => s.computers);
+  const computersShown = useShown('computers', { computers: computers.length > 0 });
   const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
@@ -346,6 +348,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   // The panel clips its overflow and the wall's windows stack above it, so a
   // menu drawn inside the panel was cut off or hidden behind them.
   const [newMenuPos, setNewMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const terminalShown = useShown('terminal');
   useLayoutEffect(() => {
     if (!newMenuOpen) return;
     const place = () => {
@@ -521,7 +524,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     const done = completedInGroup(sessions, '*', () => '*').filter(shownDone);
     const completed: PanelGroup[] = done.length > 0 ? [{ key: COMPLETED_GROUP, name: 'Completed', items: [], done }] : [];
     if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, done: [], bare: true }, ...completed];
-    if (view.groupBy === 'computer' && computers.length > 0) {
+    if (view.groupBy === 'computer' && computersShown) {
       const here = (e: Entry) => !computerIdOf(e.s?.id);
       return [
         { key: 'computer:here', name: thisComputerName(), items: all.filter(here), done: [] },
@@ -559,7 +562,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   useLayoutEffect(() => {
     if (cardsBefore.current) flyMovedCards(listRef.current, cardsBefore.current);
     cardsBefore.current = null;
-  }, [layoutSig]);
+  }, [layoutSig, computersShown]);
 
   const activeRowRef = useRef<HTMLDivElement>(null);
   const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));
@@ -704,7 +707,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
             >
-              <CreateMenuRows onCreate={(kind) => {
+              <CreateMenuRows terminal={terminalShown} onCreate={(kind) => {
                 closeNewMenu();
                 const action = kind === 'chat' ? newChat() : kind === 'image' ? newImageChat() : newTerminalWorkspace();
                 void Promise.resolve(action).catch((e: Error) => useStore.getState().pushToast('error', e.message));

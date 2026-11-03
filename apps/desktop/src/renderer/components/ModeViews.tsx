@@ -1,32 +1,52 @@
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formatTemperature, temperatureTone } from '@nekko-agent/shared';
-import { GaugeIcon, CubeIcon } from '../icons.js';
+import { useExpertMode, useLocalModelHost, useShown } from '../simpleMode.js';
+import { ChatIcon, CodeIcon, CubeIcon } from '../icons.js';
 import { useFloatingMenu } from './floatingMenu.js';
 import { hardwareRows, LocalModels } from './MonitorsDock.js';
-import { useMonitors, useResourceSample } from './ResourceMonitor.js';
+import { useMonitors, useResourceSample, watchComputer } from './ResourceMonitor.js';
 
 /*
- * Simple and Expert, the phone's chat modes (decision 0024, spec
- * phone/iphone-simple-and-expert-modes), on the desktop chat. Simple keeps the
- * chat's model, effort and context; Expert adds a strip of the machine's
- * hardware as dials and the models the Model Server holds.
+ * Simple and Expert (decision 0041, spec desktop/desktop-simple-and-expert-modes).
+ * Simple is the cleaner, more focused view; Expert shows every control. In
+ * both, a control that means nothing right now stays out of sight. Settings >
+ * Simple mode chooses where each control shows. Both are kept on this computer
+ * and shared by every window; a new install starts in Simple.
  */
 
-const MODE_KEY = 'nekko.chatMode';
-const modeListeners = new Set<() => void>();
-const readExpert = () => {
-  try { return window.localStorage.getItem(MODE_KEY) === 'expert'; } catch { return false; }
-};
+export { useExpertMode, useShown, useSimpleChoices } from '../simpleMode.js';
 
-/** Expert mode, saved on this machine and shared by every open chat. */
-export function useExpertMode(): [boolean, (on: boolean) => void] {
-  const expert = useSyncExternalStore((fn) => { modeListeners.add(fn); return () => { modeListeners.delete(fn); }; }, readExpert, () => false);
-  const set = (on: boolean) => {
-    try { window.localStorage.setItem(MODE_KEY, on ? 'expert' : 'simple'); } catch { /* best effort */ }
-    for (const l of modeListeners) l();
-  };
-  return [expert, set];
+/** Renders its children only while the listed control is on screen. */
+export function Shown({ id, children }: { id: string; children: React.ReactNode }) {
+  return useShown(id) ? <>{children}</> : null;
+}
+
+/**
+ * The switch: a chat bubble for Simple and angle brackets for Expert. It
+ * changes the whole app, so it sits in the title bar (in a chat's header where
+ * there is no title bar, as in the browser builds).
+ */
+export function ModeSwitch() {
+  const [expert, setExpert] = useExpertMode();
+  return (
+    <div className="mode-seg" role="radiogroup" aria-label="Mode" data-chat-mode={expert ? 'expert' : 'simple'}>
+      {([false, true] as const).map((on) => (
+        <button
+          key={String(on)}
+          type="button"
+          role="radio"
+          aria-checked={expert === on}
+          aria-label={on ? 'Expert: every control' : 'Simple: everyday controls'}
+          title={on ? 'Expert: every control' : 'Simple: everyday controls'}
+          className={expert === on ? 'on' : ''}
+          onClick={() => setExpert(on)}
+        >
+          {on ? <CodeIcon className="h-3.5 w-3.5" /> : <ChatIcon className="h-3.5 w-3.5" />}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** A popover in a portal that closes on an outside click or Escape. */
@@ -44,24 +64,6 @@ export function usePopover(width: number, tallest?: number) {
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
   return { open, setOpen, anchor, pop, style };
-}
-
-/** Simple or Expert, at the top left of the chat. */
-export function ModeToggle() {
-  const [expert, setExpert] = useExpertMode();
-  return (
-    <button
-      type="button"
-      className={`btn btn-ghost shrink-0 gap-1 px-2 py-1 text-2xs font-medium ${expert ? 'text-accent' : ''}`}
-      onClick={() => setExpert(!expert)}
-      aria-pressed={expert}
-      title={expert ? 'Expert: the hardware and loaded models are shown. Click for Simple.' : 'Simple. Click for Expert, which adds the hardware and loaded models.'}
-      data-chat-mode={expert ? 'expert' : 'simple'}
-    >
-      <GaugeIcon className="h-3.5 w-3.5" />
-      <span>{expert ? 'Expert' : 'Simple'}</span>
-    </button>
-  );
 }
 
 /* ── Gauges ─────────────────────────────────────────────────────────────── */
@@ -157,7 +159,16 @@ function useLoadedCount(): number | null {
  */
 export function ExpertMonitor() {
   const dials = useDials();
-  const loaded = useLoadedCount();
+  const host = useLocalModelHost();
+  const localCount = useLoadedCount();
+  const loaded = host ? host.loaded : localCount;
+  const hostId = host?.id;
+  // The dials follow the machine the model runs on, never this one beside its count.
+  useEffect(() => {
+    if (!hostId) return;
+    watchComputer(hostId);
+    return () => watchComputer(null);
+  }, [hostId]);
   const { open, setOpen, anchor, pop, style } = usePopover(360, 560);
   return (
     <div className="shrink-0 border-b border-line px-3 py-1" data-expert-monitor>
@@ -168,7 +179,7 @@ export function ExpertMonitor() {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Monitor: ${dials.map((d) => `${d.label} ${d.value}`).join(', ')}, ${loaded ?? 0} models loaded`}
+        aria-label={`Monitor: ${dials.map((d) => `${d.label} ${d.value}`).join(', ')}, ${loaded ?? 0} models loaded${host ? ` on ${host.name}` : ''}`}
       >
         {dials.length === 0
           ? <span className="flex h-10 items-center text-2xs text-ink-faint">Hardware monitors are off in Settings.</span>
@@ -176,7 +187,7 @@ export function ExpertMonitor() {
         <span className="ml-auto flex shrink-0 flex-col items-center gap-0.5 pl-2">
           <CubeIcon className="h-4 w-4 text-accent" />
           <span className="text-2xs font-semibold tabular-nums text-ink">{loaded ?? '–'}</span>
-          <span className="text-2xs text-ink-soft">Loaded</span>
+          <span className="max-w-24 truncate text-2xs text-ink-soft">{host ? `Loaded on ${host.name}` : 'Loaded'}</span>
         </span>
       </button>
       {open && createPortal(
@@ -184,7 +195,7 @@ export function ExpertMonitor() {
           <div className="mb-2 text-xs font-semibold text-ink">Hardware</div>
           <div className="mb-3 grid grid-cols-4 gap-3">{dials.map((d) => <RingDial key={d.label} {...d} size={60} />)}</div>
           <div className="mb-1 text-xs font-semibold text-ink">Loaded models</div>
-          <LocalModels />
+          {host ? <p className="text-xs text-ink-soft">{host.loaded} on {host.name}</p> : <LocalModels />}
         </div>,
         document.body,
       )}

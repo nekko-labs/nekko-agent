@@ -5,6 +5,8 @@ import { useStore } from '../src/renderer/store';
 import { putCachedSession } from '../src/renderer/sessionCache';
 import { clearLiveRun } from '../src/renderer/liveRuns';
 import { ChatPane } from '../src/renderer/components/ChatPane';
+import { SimpleModeSettings } from '../src/renderer/components/SimpleModeSettings';
+import { ModeSwitch } from '../src/renderer/components/ModeViews';
 import '../src/renderer/styles.css';
 
 // Synthetic records only. This fixture never connects to a host or daemon.
@@ -15,11 +17,30 @@ const provider = { id: 'fixture', kind: 'ollama', baseUrl: 'http://127.0.0.1:114
 const models = [{ id: 'claude-opus-5-5', providerId: 'fixture', name: 'Claude Opus 5.5', contextWindow: 200000, contextLength: 200000 }];
 const at = Date.now() - 3_600_000;
 
+// One capture's situation, set by the sandbox before it reloads. Nothing set
+// keeps the original evidence: a nearly full chat with two models resident.
+const scene: { local?: boolean; changes?: number; long?: boolean; agents?: number; many?: boolean; pr?: boolean; remote?: boolean; wall?: boolean } = (() => {
+  try { return JSON.parse(localStorage.getItem('fixture.scene') ?? '{}'); } catch { return {}; }
+})();
+const prUrl = 'https://github.com/fixture/app/pull/42';
+
 function makeSession() {
   const messages = [
     { id: 'u0', role: 'user', content: 'Why does the build cache miss on every CI run?', createdAt: at },
+    { id: 'a0x', role: 'assistant', content: 'Checking the workflow.', createdAt: at + 1000, toolCalls: [{ id: 'c1', name: 'read_file', input: { path: '.github/workflows/ci.yml' } }, { id: 'c2', name: 'grep', input: { pattern: 'cache-key' } }] },
+    { id: 't1', role: 'tool', content: '', createdAt: at + 2000, toolResult: { toolCallId: 'c1', output: 'key: deps-${{ hashFiles(lock) }}-${{ runner.image }}' } },
+    { id: 't2', role: 'tool', content: '', createdAt: at + 2500, toolResult: { toolCallId: 'c2', output: 'ci.yml:14 cache-key' } },
     { id: 'a0', role: 'assistant', content: 'The cache key includes the lockfile hash **and** the runner image date, so a new image each night misses it. Key it on the lockfile alone and restore with a prefix fallback.', createdAt: at + 5000 },
   ];
+  if (scene.pr) messages.push(
+    { id: 'a1', role: 'assistant', content: 'Opening the pull request.', createdAt: at + 4000, toolCalls: [{ id: 'c3', name: 'bash', input: { command: 'gh pr create --fill' } }] },
+    { id: 't3', role: 'tool', content: '', createdAt: at + 4200, toolResult: { toolCallId: 'c3', output: prUrl } },
+  );
+  // A long chat, so a right-aligned prompt can scroll up under the top of the transcript.
+  if (scene.many) for (let i = 0; i < 12; i++) messages.push(
+    { id: `mu${i}`, role: 'user', content: `Check workflow number ${i + 1} too, and tell me if its cache key has the same problem.`, createdAt: at + 5000 + i * 2000 },
+    { id: `ma${i}`, role: 'assistant', content: 'Same problem there. '.repeat(30), createdAt: at + 6000 + i * 2000 },
+  );
   return { id: 'alpha', title: 'CI cache misses', createdAt: at, updatedAt: at, providerId: 'fixture', modelId: 'claude-opus-5-5', effort: 'high', mode: 'agent', chatType: 'multimodal', messages, attachments: [], queuedPrompts: [] };
 }
 
@@ -27,15 +48,19 @@ let record: any = makeSession();
 const bridge: any = {
   getSession: async () => record, listModels: async () => models, listSessionSummaries: async () => [], listTerminals: async () => [],
   getUsageSummary: async () => ({ totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, byProvider: {}, bySession: {}, bySessionCost: {}, daily: [] }),
-  pendingInput: async () => ({}), runningSessions: async () => [], listTasks: async () => [], listShells: async () => [], listChanges: async () => [], listFiles: async () => [],
+  pendingInput: async () => ({}), runningSessions: async () => [], listTasks: async () => [], listShells: async () => [], listChanges: async () => Array.from({ length: scene.changes ?? 0 }, (_, i) => ({ path: `src/file-${i}.ts`, original: 'a\nb\n', current: 'a\nc\nd\n' })),
+  computerEngineStatus: async () => ({ running: true, resident: [{ id: 'qwen3-coder-30b' }] }),
+  computerStats: async () => ({ system: { cpuPct: 12, cpuCores: 16, memUsedMB: 8000, memTotalMB: 64000 }, gpu: null }),
+  claudeBackgroundTasks: async () => (scene.agents ? { alpha: scene.agents } : {}),
+  listSessionPrs: async () => (scene.pr ? [{ url: prUrl, owner: 'fixture', repo: 'app', number: 42, title: 'Key the cache on the lockfile', state: 'open', isDraft: false, additions: 12, deletions: 3, changedFiles: 3, checks: 'passing' }] : []), listFiles: async () => [],
   previewContext: async () => ({ contextWindow: 200000, items: [
     { id: 's', source: 'system', label: 'System prompt', tokens: 9200, included: true },
     { id: 'g', source: 'guideline', label: 'AGENTS.md', tokens: 3100, included: true },
-    { id: 'c', source: 'conversation', label: 'Conversation', tokens: 112400, included: true },
+    { id: 'c', source: 'conversation', label: 'Conversation', tokens: scene.long === false ? 12400 : 162400, included: true },
   ] }),
   getSystemStats: async () => ({ cpuPct: 38, cpuCores: 16, memUsedMB: 41000, memTotalMB: 65536, temps: { cpuC: 64 } }),
   getGpuStats: async () => ({ source: 'nvidia-smi', totalMB: 24576, usedMB: 19800, freeMB: 4776, devices: [{ name: 'RTX 4090', memoryTotalMB: 24576, memoryUsedMB: 19800, memoryFreeMB: 4776, utilizationPct: 91, temperatureC: 83 }] }),
-  engineStatus: async () => ({ install: { binPath: '/fixture/llama-server' }, running: true, resident: [
+  engineStatus: async () => ({ install: { binPath: '/fixture/llama-server' }, running: true, resident: scene.local === false ? [] : [
     { id: 'qwen3-coder-30b', vramBytes: 17.2e9, contextLength: 65536, loadedOn: 'gpu', gpuLayers: 48, totalLayers: 48 },
     { id: 'gemma-4-e4b', vramBytes: 2.4e9, contextLength: 32768, loadedOn: 'gpu+cpu', gpuLayers: 20, totalLayers: 34 },
   ], loading: [] }),
@@ -54,14 +79,18 @@ function Fixture() {
     clearLiveRun('alpha');
     record = makeSession();
     // The sandbox picks the mode before a reset; keep it.
-    useStore.setState({ view: 'chat', providers: [provider], models, activeProviderId: 'fixture', sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: 'alpha', activeProjectId: null, settings: { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'dark', effort: 'normal', experimental: {}, agent: {}, ui: {} }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: false, paletteOpen: false } as any);
+    useStore.setState({ computers: scene.remote ? [{ id: 'ab12cd34', name: 'Studio', relayUrl: '', alts: [], pairedAt: 0, color: 0, state: 'online', route: null, read: true, change: true }] : [], view: 'chat', providers: [provider], models, activeProviderId: 'fixture', sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: 'alpha', activeProjectId: null, settings: { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'dark', effort: 'normal', experimental: {}, agent: {}, ui: {} }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: false, paletteOpen: false } as any);
     putCachedSession(record);
     setEpoch(e => e + 1);
   };
   Object.assign(window, { integration: { reset } });
   React.useEffect(() => reset(), []);
   return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} className="bg-paper" key={epoch}>
-    <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" /></main>
+    {/* The title bar's switch, without the updater the real title bar needs. */}
+    <div className="titlebar"><h1 className="titlebar-heading text-gradient">Agents</h1><ModeSwitch /></div>
+    {location.hash === '#settings'
+      ? <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 24px 24px' }}><SimpleModeSettings /></main>
+      : <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" commandCenter={!!scene.wall} /></main>}
   </div>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

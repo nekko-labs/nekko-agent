@@ -62,6 +62,7 @@ app.whenReady().then(async () => {
   const scenes = {
     'first-visit': async () => {},
     running: async () => {},
+    'recent-job-open': async () => { await click(`document.querySelector('[data-recent-job] button')`); await sleep(400); },
     waiting: async () => {},
     error: async () => {},
     'off-no-vm-support': async () => {},
@@ -132,6 +133,8 @@ app.whenReady().then(async () => {
     'first-visit-connected': [['step 1 checked, step 2 lit, the card below', "(()=>{const t=document.body.innerText;return t.includes('Connected')&&!t.includes('After step 1')&&!!document.querySelector('[data-runner-card]')&&[...document.querySelectorAll('.runner-step button')].some(e=>e.textContent==='Set up this Mac')})()"],
       ['the off runner reads Off, with no error line', "(()=>{const c=document.querySelector('[data-runner-card]');const leaf=t=>[...c.querySelectorAll('*')].some(e=>!e.children.length&&e.textContent===t);return leaf('Off')&&!leaf('Waiting')&&!c.innerText.includes('No VM image yet.')})()"]],
     running: [['running job and waiting slot', "document.body.innerText.includes('ios-native · PR #904') && document.body.innerText.includes('Waiting: you\\'re using the Mac') && document.body.innerText.includes('14 jobs')"]],
+    'recent-job-open': [['the summary links the job and its PR', "(()=>{const r=document.querySelector('[data-recent-job]');const a=[...r.querySelectorAll('a')].map(e=>e.textContent);return r.innerText.includes('ios-native · iOS build · finished · 14 min')&&a.includes('PR #903')&&a.includes('Job')})()"],
+      ['expanded: the VM steps and the end of the job log', "(()=>{const r=document.querySelector('[data-recent-job]');return r.innerText.includes('VM online, waiting for a job')&&r.innerText.includes('VM deleted')&&r.querySelector('[data-job-log]')?.textContent.includes('##[error]Process completed with exit code 65.')})()"]],
     waiting: [['every reason as a sentence', "['This Mac is on battery, below what this mode allows.','This network is not one you trust. Add it in runner settings.','You\\'re using the Mac.'].every(s=>document.body.innerText.includes(s))"],
       ['memory-bound slot greyed with its sentence', "document.body.innerText.includes('Not available: Not enough runner memory for another VM.')"]],
     error: [['missing image error', "document.body.innerText.includes('No VM image yet.')"]],

@@ -16,21 +16,26 @@ describe('agent companion buttons', () => {
     expect(html).toContain('aria-label="Changes (3)"');
     expect(html).toContain('aria-label="Files"');
     expect(html).toContain('aria-label="Browser"');
-    expect(html).toContain('>3 files<');
+    expect(html).toContain('>3 files changed<');
     expect(html).toContain('agent-changes-pending');
     expect(html).toContain('+0');
+    expect(renderToStaticMarkup(<AgentCompanionButtons sessionId="s" changeCount={1} commandCenter compact={false} />)).toContain('>1 file changed<');
+  });
+
+  it('leaves Changes out while nothing has changed', () => {
     const none = renderToStaticMarkup(<AgentCompanionButtons sessionId="s" changeCount={0} commandCenter compact={false} />);
-    expect(none).toContain('aria-label="Changes"');
+    expect(none).not.toContain('aria-label="Changes');
+    expect(none).toContain('aria-label="Files"');
   });
 
   it('sits beside Logs in the chat header', () => {
     const html = renderChatPane(chatSession());
     const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
-    // Changes, Files and Browser come straight before Logs: no other control between them.
+    // Files and Browser come straight before Logs: no other control between them. Changes joins them once files change.
     const buttons = [...header.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
     const logs = buttons.indexOf('Open agent logs');
     expect(logs).toBeGreaterThan(0);
-    expect(buttons.slice(logs - 3, logs)).toEqual(['Changes', 'Files', 'Browser']);
+    expect(buttons.slice(logs - 2, logs)).toEqual(['Files', 'Browser']);
   });
 });
 

@@ -343,6 +343,8 @@ export const IpcChannels = {
   runnerUpdate: 'runner:update',
   runnerRemove: 'runner:remove',
   runnerSetEnabled: 'runner:setEnabled',
+  /** The end of a recent job's log, from GitHub or GitLab. */
+  runnerJobLog: 'runner:jobLog',
   /** The click-through GitHub connect, confirmed through `runner:connect`. */
   runnerGithubAccounts: 'runner:githubAccounts',
   runnerGithubStart: 'runner:githubStart',
@@ -1125,6 +1127,8 @@ export interface NekkoApi {
   updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
   removeRunner(id: string): Promise<null>;
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
+  /** The end of a recent job's log; rejects with a sentence when it cannot be read. */
+  runnerJobLog(id: string, jobId: number): Promise<string>;
   /** Accounts `gh` is signed in to; empty without `gh`. */
   githubAccounts(): Promise<GithubAccounts>;
   /** `url` is the page to open in the browser, or null when GitHub has nothing left to do. */
@@ -1186,6 +1190,8 @@ export interface NekkoApi {
   forgetComputer(id: string): Promise<import('./computers.js').ComputerStatus[]>;
   /** Its live hardware readings, for the Monitors dock. */
   computerStats(id: string): Promise<{ system: import('./monitor.js').SystemStats | null; gpu: import('./models.js').GpuStats | null }>;
+  /** Its Model Server, as the phone view reports it. Null with Read off over there. */
+  computerEngineStatus(id: string): Promise<{ running: boolean; resident: unknown[] } | null>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
   /** Set the icon in that machine's own settings; empty removes it. */
