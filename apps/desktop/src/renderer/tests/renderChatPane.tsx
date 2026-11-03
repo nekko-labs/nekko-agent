@@ -51,3 +51,14 @@ export function renderChatPane(session: Session, props: Partial<React.ComponentP
     </PaneDensityHint.Provider>,
   );
 }
+
+/** The markup of the message box itself (`.composer`), up to its own closing tag. */
+export function composerBox(html: string): string {
+  const start = html.indexOf('<div class="composer relative"');
+  let depth = 0;
+  for (const m of html.slice(start).matchAll(/<div\b|<\/div>/g)) {
+    depth += m[0] === '</div>' ? -1 : 1;
+    if (depth === 0) return html.slice(start, start + m.index! + 6);
+  }
+  return '';
+}

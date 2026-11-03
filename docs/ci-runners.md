@@ -18,13 +18,24 @@ the GitHub Actions queue, each in its own VM.
 
 You find it in **Scheduled Tasks**, as the **CI runners** section below your tasks.
 
-**What is not verified yet.** The pieces are built and tested, and a VM has been booted and
-checked on a real macOS 15 guest, but one real GitHub job has not yet run end to end, and the
-rule that keeps job traffic off a VPN has not yet been checked against a real tunnel. Both are
-part of the pilot (T214). The [image guide](ci-runners-image.md) and the job picker are in place;
-the image itself has not yet been booted in a VM. Connecting GitHub with clicks has been tested
-against a stand-in for GitHub, not GitHub itself, so if GitHub refuses the app, use
-[an app you already have](#use-an-app-you-already-have).
+## Why run jobs on your Mac
+
+- **Faster.** On a 2021 MacBook Pro (M1 Max), our iOS CI job took 39 minutes in a VM against 65
+  minutes on GitHub's hosted Mac the same day, and 47 minutes on a typical hosted run. App builds
+  were 2.6x faster. Newer Macs should do better. Numbers, runs and caveats:
+  [CI runner performance](ci-runner-performance.md).
+- **No hosted macOS minutes.** Jobs on your own Mac don't use GitHub's hosted macOS minutes, the
+  most expensive kind.
+- **Your work comes first.** By default it takes jobs only while you are away and the Mac is plugged
+  in, and it waits on untrusted networks or under memory pressure (see
+  [why a runner is waiting](#why-a-runner-is-waiting)).
+- **Nothing reaches your Mac.** Each job runs in its own VM that is deleted afterward, with no way
+  onto your LAN.
+
+**What is not verified yet.** Connecting GitHub with clicks works on real GitHub, and real GitHub
+jobs have run end to end in a VM built by **Set up this Mac** (Native iOS on this repo, 2026-11-03,
+passing). The rule that keeps job traffic off a VPN has not yet been checked against a real tunnel,
+and no packaged release has the setup screens yet; both are part of the pilot (T214).
 
 ## Before you start
 
@@ -45,8 +56,9 @@ copied or pasted.
 
 In **Scheduled Tasks > CI runners**, choose **Connect GitHub**:
 
-1. **Where do your repos live?** Pick your account or an org. The list comes from `gh` when it is
-   signed in; without it, type the name and say whether it is an org.
+1. **Where do your repos live?** Nekko checks GitHub first. When `gh` is signed in, pick your
+   account or an org from the list. Without it, Nekko goes straight to GitHub for your own
+   account with nothing to type; for an org, choose **Cancel**, then **For an org, type its name**.
 2. **Create.** Your browser opens GitHub with everything filled in. Click **Create**. If GitHub
    asks you to sign in first, it may then show an empty form: close it and choose
    **Open GitHub again**.
@@ -87,7 +99,9 @@ link.
 ## Set up this Mac
 
 Jobs need a VM image. The second step builds one here, with no terminal and nothing to paste. It
-needs macOS 27 and 110 GB free. The sheet shows what it will download, what it copies from this
+needs macOS 27 and 110 GB free: most of it is the VM itself (about 55 GB with Xcode and the
+simulator inside), the 26 GB macOS image is deleted once it is installed, and 25 GB stays free for
+you. The sheet shows what it will download, what it copies from this
 Mac and how much space it needs. Pick a [mode](#how-this-mac-helps) and choose
 **Download and set up**. If this Mac already has an image, only the mode is asked.
 
@@ -95,14 +109,14 @@ The build takes about 30 minutes plus the download, and runs by itself:
 
 1. **Check this Mac.** If it cannot go on, it says why before anything is downloaded, for example
    "Update this Mac to macOS 27 to set it up here."
-2. **Download macOS** from Apple.
-3. **Install macOS** into a new VM.
+2. **Download the macOS image** from Apple.
+3. **Install the macOS VM**: macOS goes into a new VM, not onto this Mac.
 4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator and Homebrew are added.
    With no Xcode on this Mac the sheet offers **macOS only**; install Xcode for iOS jobs.
 5. **Lock the VM down.**
 6. **Test a boot.** Then the image goes in and the runner turns on in the mode you chose.
 
-You can close the sheet: the runner card shows the same stage and bar, and **Details** opens the
+Choose **Continue in the background** to close the sheet: the runner card shows the same stage and bar, and **Details** opens the
 sheet again. Quitting Nekko pauses the build, and **Resume setup** picks up where it left off. The
 build holds the Mac awake while it works, and pauses with its reason on screen when there is no free
 VM slot, memory is critical, the Mac is hot, the disk is too full, or, from the install on, the Mac
@@ -258,6 +272,8 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Only when**: **On power**, **Trusted networks**, **Never on hotspots**, and
   **Let jobs use the internet directly while a VPN is on**. Job traffic never goes through a VPN
   tunnel; with that switch off, the runner waits while a VPN carries all of the Mac's traffic.
+  With **On power** off, Balanced still takes jobs on battery only above 80% charge, Runner first
+  above 50%, and Do not disturb never. A charge the Mac can't read counts as too low.
 - **Trusted networks**: up to 32, recognised by the router's hardware address and listed as
   `gw:...` ids. The address comes from macOS's own network state (`scutil`), then `arp`, which
   sees nothing without Local Network permission. **Trust this network** adds the one this Mac is on, shown with a
@@ -297,6 +313,21 @@ A waiting runner card lists every reason it is not taking jobs:
 
 A newer version of the runner may add a reason this app does not know yet; it shows as
 "A condition is not met."
+
+## Recent jobs
+
+The runner card lists the last five jobs, one line each: when it ended, the workflow and job,
+how it ended and how long it ran. **Job** opens the job on GitHub, and **PR #N** opens the pull
+request it ran for (GitHub names no pull request for a run from a fork, so those show none).
+
+Click a line to see the VM step by step (started, online, running the job, stopped, deleted,
+each with its time), the end of the job's log, read from GitHub when you open it, and the VM's
+own log: what the VM printed while it started the runner, took the job and shut down. That last
+one is where to look when a job never reached GitHub. The logs only load for jobs this runner ran.
+
+The VM log needs an image with the current scripts. If a job says "No VM log", open runner
+settings and choose **Update scripts** (a few minutes). This Mac keeps the last 20 VM logs, up
+to 1 MB each.
 
 ## The menu bar dot
 

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
 vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
+vi.mock('../simpleMode.js', async (original) => ({ ...(await original<object>()), useShown: () => true }));
 const quota = vi.hoisted(() => ({ byToken: {} as Record<string, any>, answered: new Set<string>(), nextRefreshAt: null as number | null }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => quota }));
 const emails = vi.hoisted(() => ({ byToken: {} as Record<string, string> }));

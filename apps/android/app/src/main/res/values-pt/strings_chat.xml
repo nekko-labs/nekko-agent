@@ -94,6 +94,9 @@
     <string name="chat_message">Mensagem</string>
     <string name="chat_add_details_for">Adicione detalhes para /%1$s (opcional)</string>
     <string name="chat_queue_follow_up">Coloque um acompanhamento na fila…</string>
+    <string name="chat_do_it_here">Fazer aqui</string>
+    <string name="chat_here_uses_more_context">Aqui usa mais contexto</string>
+    <string name="chat_in_a_subagent">Em um subagente</string>
     <string name="chat_message_slash_skills">Mensagem, / para skills</string>
     <string name="chat_message_your_computer">Envie uma mensagem ao seu computador</string>
     <string name="chat_hide_formatting">Ocultar formatação</string>

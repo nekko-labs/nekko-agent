@@ -36,6 +36,7 @@ import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
 import { CiRunnersView } from './CiRunnersView.js';
+import { useShown } from '../simpleMode.js';
 
 /**
  * The Scheduled Tasks tab (code name: workflows): automation modelled on GitHub Actions, where a step can be
@@ -193,6 +194,7 @@ export function WorkflowsView() {
     await window.nekko.updateWorkflow(wf.id, { enabled: !wf.enabled });
   };
 
+  const ciShown = useShown('ci');
   return (
     <div className="flex h-full min-h-0">
       {/* Filters */}
@@ -285,7 +287,7 @@ export function WorkflowsView() {
         {!loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load scheduled tasks. Reopen this tab to try again.' : 'Loading scheduled tasks…'}</p> : workflows.length === 0 ? (<>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
           {/* The wizard replaces the list, so the runners follow it: they must stay reachable with no tasks. */}
-          <div className="mx-auto mt-6 max-w-4xl px-4 sm:px-8"><CiRunnersView /></div>
+          {ciShown && <div className="mx-auto mt-6 max-w-4xl px-4 sm:px-8"><CiRunnersView /></div>}
         </>) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
             {!hasAppChrome && <h1 className="view-title">Scheduled Tasks</h1>}
@@ -393,7 +395,7 @@ export function WorkflowsView() {
                 focusRun={focusRun}
               />
             ))}
-            <CiRunnersView />
+            {ciShown && <CiRunnersView />}
           </div>
         </div>}
       </div>

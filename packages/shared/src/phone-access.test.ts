@@ -43,6 +43,7 @@ const SETTINGS = {
   chatPaneAction: 'complete',
   skipDeleteConfirmation: false,
   automationsPaused: false,
+  orchestration: { strategy: 'solo', maxDepth: 2, maxParallel: 4, delegationRoute: { providerId: 'p1', modelId: 'm1' } },
   prompts: [{ id: 'fix', name: 'fix', body: 'Find and fix the bug.' }],
   sandboxMode: 'workspace',
   providers: [{ id: 'p1', kind: 'anthropic', label: 'Claude', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
@@ -157,6 +158,7 @@ describe('settings from a phone', () => {
       expect(text).not.toMatch(/secret|sk-|hf_|ghp_|tokenKey|apiKey|providers|guardrails|workspaces|hooks|modelPath|private/);
       expect(Object.keys(view).sort()).toEqual([...new Set(PHONE_SETTINGS_VIEW.map((p) => p.split('.')[0]))].sort());
       expect(view.voice).toEqual({ enabled: true, language: 'en' });
+      expect(view.orchestration).toEqual({ strategy: 'solo' });
       expect(view.defaultModelId).toBe('m1');
       expect(view.effort).toBe('high');
     }
@@ -165,6 +167,10 @@ describe('settings from a phone', () => {
 
   it('exposes effort read-only, never as a phone-writable global setting', () => {
     expect(code(() => screenPhoneCall('settings:update', [{ effort: 'max' }]))).toBe('setting-denied');
+  });
+
+  it('exposes the delegation strategy read-only', () => {
+    expect(code(() => screenPhoneCall('settings:update', [{ orchestration: { strategy: 'swarm' } }]))).toBe('setting-denied');
   });
 
   it('strips provider records to id, kind, label and enabled', () => {

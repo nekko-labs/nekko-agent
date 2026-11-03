@@ -21,7 +21,8 @@ pub struct Settings {
 
 impl Settings {
     pub fn new(dir: std::path::PathBuf, hub: crate::hub::Hub) -> Arc<Self> {
-        Arc::new(Settings { store: Arc::new(SettingsStore::new(dir.clone())), dir, hub })
+        let store = SettingsStore::with_vault(dir.clone(), crate::keys::keystore(&dir, "settings"));
+        Arc::new(Settings { store: Arc::new(store), dir, hub })
     }
 
     fn changed(&self, settings: &Value, patch: &Value) {

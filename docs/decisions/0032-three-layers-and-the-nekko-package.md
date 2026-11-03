@@ -21,7 +21,7 @@ For storage of synced customizations: plain records on Nekko Cloud for every sig
 
 Option 2. The format is `.nekko`: an ordinary zip with `nekko.json` at the root, a published JSON Schema, and an optional `SIGNATURES` file (per-file SHA-256 plus signatures over the listing). Moving official components is a customization (`placements`), not a custom layout.
 
-Customizations sync through the end-to-end encrypted sync as a `prefs` collection (Philip's choice), so they reach people with Pro and up once sync is switched on after the outside crypto review. This amends [0030](0030-simple-hides-developer-controls-per-device.md) (on PR #1312): Simple's choices stay on the device for anyone without sync, and follow the person when sync is on, with any field pinnable as "this device only".
+Customizations sync through the end-to-end encrypted sync as a `prefs` collection (Philip's choice), so they reach people with Pro and up once sync is switched on after the outside crypto review. This amends [0044](0044-simple-hides-developer-controls-per-device.md) (on PR #1312): Simple's choices stay on the device for anyone without sync, and follow the person when sync is on, with any field pinnable as "this device only".
 
 ## Consequences
 

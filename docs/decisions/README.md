@@ -51,4 +51,6 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0040](0040-a-desktop-is-a-paired-device-with-its-own-class.md) | A desktop is a paired device, with its own access class | accepted |
 | [0041](0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md) | A computer proves itself with a key pinned at pairing, and every connection has its own key (supersedes the shared E2E key of 0036) | accepted |
 | [0043](0043-account-deletion-is-a-hard-delete-that-tears-down-cloud-machines-first.md) | Account deletion is a hard delete that tears down cloud machines first; Supabase Auth goes last through a retried outbox | accepted |
+| [0044](0044-simple-hides-developer-controls-per-device.md) | Simple hides developer controls, chosen per control (Show, Expert only, Hide) and kept per device | accepted |
 | [0045](0045-workflows-are-scheduled-tasks.md) | Workflows are called Scheduled Tasks, one concept with the chat ⚡ Automate tasks; code, channels and stored files keep the old name, and the CLI keeps `workflow` as an alias | accepted |
+| [0046](0046-secrets-live-in-the-os-keystore.md) | Provider API keys, connector tokens and sign-in tokens live in the OS keystore, moved there on first read; backups carry no keys | accepted |

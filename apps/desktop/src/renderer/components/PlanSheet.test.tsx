@@ -3,13 +3,19 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PlanStep, PrInfo, Session } from '@nekko-agent/shared';
 vi.mock('../store.js', () => ({ useStore: (selector: (state: unknown) => unknown) => selector({}) }));
+const linked = vi.hoisted(() => ({ links: null as Map<string, unknown> | null }));
+vi.mock('../planStepLinks.js', async (original) => {
+  const real = await original<typeof import('../planStepLinks.js')>();
+  return { ...real, planStepLinks: (...args: Parameters<typeof real.planStepLinks>) => linked.links ?? real.planStepLinks(...args) };
+});
 import { PlanSheet } from './PlanSheet.js';
+import { stylesheet } from '../tests/css.js';
 
 const now = 1_800_000_000_000;
 const step = (id: string, status: string, extra = {}) => ({ id, title: id, status: 'done', updatedAt: now, createdAt: now, verification: { status, ...extra } }) as PlanStep;
 const render = (agentPlan: PlanStep[], prs: PrInfo[] = []) => renderToStaticMarkup(<PlanSheet sessionId="s" session={{ agentPlan, messages: [] } as unknown as Session} streaming prs={prs} initiallyOpen />);
 const chips = (html: string, kind: string) => html.match(new RegExp(`data-plan-chip="${kind}"`, 'g'))?.length ?? 0;
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); linked.links = null; });
 
 describe('verification chips', () => {
   it('shows only explicit reports, with device and detail, never a done step on its own', () => {
@@ -47,5 +53,34 @@ describe('CI chips', () => {
     const plan = [{ id: 'a', title: 'a', status: 'done', createdAt: now, updatedAt: now }, { id: 'b', title: 'b', status: 'active', createdAt: now, updatedAt: now }] as PlanStep[];
     expect(render(plan, [pr]).slice(render(plan, [pr]).indexOf('data-plan-step-id="b"'))).toContain('2 passed');
     expect(chips(render(plan, [{ ...pr, state: 'merged' }]), 'ci')).toBe(0);
+  });
+});
+
+describe('step disclosure', () => {
+  const plain = (id: string, status: string, note?: string) => ({ id, title: id, status, note, createdAt: now, updatedAt: now }) as PlanStep;
+  const own = (patch: object) => ({ prs: [], artifacts: [], projects: [], subagents: [], ...patch });
+  const tag = (html: string, id: string) => html.match(new RegExp(`<li[^>]*data-plan-step-id="${id}"[^>]*>[^]*?</li>`))![0];
+  it('opens unfinished steps and the last finished step with results, and nothing on hover', () => {
+    linked.links = new Map([
+      ['shipped', own({ prs: ['https://github.com/o/r/pull/1'] })],
+      ['report', own({ artifacts: [{ path: '/tmp/report.pdf', filename: 'report.pdf' }] })],
+    ]);
+    const html = render([plain('shipped', 'done', 'first PR'), plain('noted', 'done', 'a note'), plain('report', 'done', 'wrote it'), plain('now', 'active', 'working'), plain('later', 'pending')]);
+    const open = (id: string) => /aria-expanded="true"/.test(tag(html, id)) && !/data-plan-more="" hidden=""/.test(tag(html, id));
+    expect(open('shipped')).toBe(false);
+    expect(open('noted')).toBe(false);
+    expect(open('report')).toBe(true);
+    expect(open('now')).toBe(true);
+    // A step with nothing to show is a plain row, not a button.
+    expect(tag(html, 'later')).not.toContain('aria-expanded');
+    // Each step is its own button; the sheet no longer opens steps from tabindex or hover.
+    expect(html.match(/class="plan-sheet-line plan-sheet-step-toggle" aria-expanded/g)).toHaveLength(4);
+    expect(html).not.toContain('tabindex');
+  });
+  it('draws no card per step and opens no step from hover or focus on the sheet', () => {
+    const rules: string[] = [];
+    stylesheet('styles.css').walkRules(rule => { if (rule.selector.includes('plan-sheet-step')) rules.push(rule.selector + rule.toString()); });
+    expect(rules.some(r => /\.plan-sheet:(hover|focus-within)/.test(r))).toBe(false);
+    expect(rules.some(r => /plan-sheet-step[^-][^{]*\{[^}]*border:/.test(r))).toBe(false);
   });
 });

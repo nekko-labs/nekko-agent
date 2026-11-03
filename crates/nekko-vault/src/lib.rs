@@ -1,10 +1,10 @@
-//! Where this device's secrets live: the Nekko Cloud token, the device's
-//! P-256 key and each key epoch's keyring. Values are base64url strings.
+//! Where this device's secrets live: Nekko Cloud's token and keys, linked
+//! computers' and CI runners' keys, provider API keys and sign-in tokens.
 //!
 //! macOS and Windows use the OS keystore (Keychain, Credential Manager), one
 //! item per secret under a service name scoped to the data directory, so a
 //! dev profile and the installed app never share keys. Elsewhere a 0600 JSON
-//! file in the cloud folder, the same protection `tokens.json` gets.
+//! file in the data directory.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -26,15 +26,72 @@ pub fn default_vault(dir: &Path) -> Box<dyn Vault> {
 /// A vault of its own for one part of the app (`name`), scoped to `dir`;
 /// `file` is the fallback where there is no OS keystore.
 pub fn scoped_vault(dir: &Path, name: &str, file: PathBuf) -> Box<dyn Vault> {
+    keystore(dir, name).unwrap_or_else(|| Box::new(FileVault::new(file)))
+}
+
+/// The OS keystore's vault for one part of the app, or `None` where there is
+/// no keystore (the caller keeps its 0600 file then).
+pub fn keystore(dir: &Path, name: &str) -> Option<Box<dyn Vault>> {
     #[cfg(any(target_os = "macos", windows))]
     {
-        let _ = file;
-        return Box::new(KeychainVault { service: service(dir, name) });
+        return Some(Box::new(KeychainVault { service: service(dir, name) }));
     }
     #[allow(unreachable_code)]
     {
         let _ = (dir, name);
-        Box::new(FileVault::new(file))
+        None
+    }
+}
+
+/// Characters per keystore item: Credential Manager holds 2560 bytes of
+/// UTF-16, and a sign-in token's JWTs are longer than that.
+const PIECE: usize = 1000;
+
+fn piece(name: &str, i: usize) -> String {
+    if i == 0 { name.to_string() } else { format!("{name}#{i}") }
+}
+
+/// Save `value` under `name`, split over as many items as it needs, then
+/// read it back. True only when the vault now returns exactly `value`; on
+/// false nothing is left under `name`, so the caller keeps its own copy.
+pub fn put(v: &dyn Vault, name: &str, value: &str) -> bool {
+    let chars: Vec<char> = value.chars().collect();
+    let mut pieces: Vec<String> = chars.chunks(PIECE).map(|c| c.iter().collect()).collect();
+    if pieces.is_empty() {
+        pieces.push(String::new());
+    }
+    let saved = pieces.iter().enumerate().all(|(i, p)| v.set(&piece(name, i), p).is_ok());
+    // A longer earlier value's tail.
+    drop_from(v, name, pieces.len());
+    if saved && get(v, name).as_deref() == Some(value) {
+        return true;
+    }
+    delete(v, name);
+    false
+}
+
+/// What [`put`] saved under `name`.
+pub fn get(v: &dyn Vault, name: &str) -> Option<String> {
+    let mut out = v.get(name)?;
+    let mut i = 1;
+    while let Some(p) = v.get(&piece(name, i)) {
+        out.push_str(&p);
+        i += 1;
+    }
+    Some(out)
+}
+
+/// Remove what [`put`] saved under `name`.
+pub fn delete(v: &dyn Vault, name: &str) {
+    v.delete(name);
+    drop_from(v, name, 1);
+}
+
+fn drop_from(v: &dyn Vault, name: &str, from: usize) {
+    let mut i = from;
+    while v.get(&piece(name, i)).is_some() {
+        v.delete(&piece(name, i));
+        i += 1;
     }
 }
 
@@ -93,7 +150,7 @@ impl FileVault {
         let text = serde_json::to_vec_pretty(map).map_err(|e| e.to_string())?;
         // Readable by its owner only.
         nekko_js::fs::atomic_write(&self.path, &text, nekko_js::fs::AtomicWrite::PRIVATE)
-            .map_err(|e| format!("could not save the cloud keys: {e}"))
+            .map_err(|e| format!("could not save the keys: {e}"))
     }
 }
 
@@ -134,6 +191,43 @@ mod tests {
         assert!(cloud.starts_with("dev.nekkolabs.nekko-agent.cloud.") && cloud.len() == 44);
         assert_eq!(service(dir, "runner"), cloud.replace(".cloud.", ".runner."));
         assert_ne!(service(Path::new("/other"), "cloud"), cloud);
+    }
+
+    #[test]
+    fn put_splits_long_values_reads_them_back_and_drops_old_tails() {
+        let dir = tempfile::tempdir().unwrap();
+        let v = FileVault::new(dir.path().join("keys.json"));
+        let long = "é".repeat(PIECE * 2 + 5);
+        assert!(put(&v, "t", &long));
+        assert_eq!(get(&v, "t").as_deref(), Some(long.as_str()));
+        assert!(v.get("t#2").is_some());
+        assert!(put(&v, "t", "short"));
+        assert_eq!(get(&v, "t").as_deref(), Some("short"));
+        assert_eq!(v.get("t#1"), None);
+        assert!(put(&v, "e", ""));
+        assert_eq!(get(&v, "e").as_deref(), Some(""));
+        delete(&v, "t");
+        assert_eq!(get(&v, "t"), None);
+    }
+
+    /// A keystore that refuses every save.
+    struct Refusing;
+    impl Vault for Refusing {
+        fn get(&self, _: &str) -> Option<String> {
+            None
+        }
+        fn set(&self, _: &str, _: &str) -> Result<(), String> {
+            Err("locked".into())
+        }
+        fn delete(&self, _: &str) {}
+        fn kind(&self) -> &'static str {
+            "refusing"
+        }
+    }
+
+    #[test]
+    fn put_reports_a_save_it_cannot_read_back() {
+        assert!(!put(&Refusing, "t", "secret"));
     }
 
     #[test]

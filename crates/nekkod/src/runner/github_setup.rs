@@ -54,7 +54,11 @@ pub enum Owner {
 }
 
 /// `Nekko Runner <owner> <suffix>`, the owner cut so it fits GitHub's limit.
+/// No owner (an account Nekko learns from GitHub's answer) is `Nekko Runner <suffix>`.
 pub fn app_name(owner: &str, suffix: &str) -> String {
+    if owner.is_empty() {
+        return format!("Nekko Runner {suffix}");
+    }
     let room = MAX_NAME.saturating_sub("Nekko Runner  ".len() + suffix.chars().count());
     format!("Nekko Runner {} {suffix}", owner.chars().take(room).collect::<String>())
 }
@@ -112,6 +116,8 @@ pub struct Converted {
     pub app_id: u64,
     pub slug: String,
     pub pem: String,
+    /// The account GitHub made the app on, when its answer names one.
+    pub owner: Option<String>,
 }
 
 impl std::fmt::Debug for Converted {
@@ -119,6 +125,7 @@ impl std::fmt::Debug for Converted {
         f.debug_struct("Converted")
             .field("app_id", &self.app_id)
             .field("slug", &self.slug)
+            .field("owner", &self.owner)
             .field("pem", &"(redacted)")
             .finish()
     }
@@ -130,7 +137,17 @@ pub fn parse_conversion(v: &Value) -> Result<Converted, String> {
     let slug = v["slug"].as_str().filter(|s| plain_name(s, 100)).ok_or(BAD_CONVERSION)?;
     let pem = v["pem"].as_str().ok_or(BAD_CONVERSION)?;
     pkcs1_der(pem)?;
-    Ok(Converted { app_id, slug: slug.to_string(), pem: pem.to_string() })
+    let owner = v["owner"]["login"].as_str().filter(|o| plain_name(o, 100)).map(str::to_string);
+    Ok(Converted { app_id, slug: slug.to_string(), pem: pem.to_string(), owner })
+}
+
+/// Whether `owner`, of `kind`, is the account `req` asks for. An empty name asks for
+/// the signed-in user's own account, whoever GitHub says that is.
+fn same_owner(req: &StartRequest, owner: &str, kind: Kind) -> bool {
+    if req.owner.is_empty() {
+        return req.kind == Kind::User && kind == Kind::User;
+    }
+    owner.eq_ignore_ascii_case(&req.owner)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -376,8 +393,12 @@ impl<H: Http + 'static> GithubSetup<H> {
 
     /// An app this owner already has: pending, or saved with a runner and its slug.
     fn saved_app(&self, req: &StartRequest, records: &[RunnerRecord]) -> Option<PendingApp> {
-        let pending = self.usable_pending().filter(|p| p.owner.eq_ignore_ascii_case(&req.owner));
+        let pending = self.usable_pending().filter(|p| same_owner(req, &p.owner, p.kind));
+        // shortcut: a nameless start reuses only a pending app; a saved repo record can't say if its owner is a user.
         pending.or_else(|| {
+            if req.owner.is_empty() {
+                return None;
+            }
             records.iter().find_map(|r| {
                 let link = r.github()?;
                 let slug = link.slug.clone()?;
@@ -581,7 +602,8 @@ impl<H: Http + 'static> GithubSetup<H> {
     /// Pressing the button again carries on: it must never make a second app.
     fn current(&self, req: &StartRequest) -> Option<Option<String>> {
         let mut s = self.lock();
-        if !s.view.owner.as_ref().is_some_and(|o| o.eq_ignore_ascii_case(&req.owner)) {
+        let (Some(owner), Some(kind)) = (&s.view.owner, s.view.kind) else { return None };
+        if !same_owner(req, owner, kind) {
             return None;
         }
         match s.view.step {
@@ -599,7 +621,8 @@ impl<H: Http + 'static> GithubSetup<H> {
 
     /// `{ url }`: the page to open, or null when there is nothing to do on GitHub.
     pub async fn start(self: &Arc<Self>, req: StartRequest, records: &[RunnerRecord]) -> Result<Value, String> {
-        if !plain_name(&req.owner, 100) {
+        let own_account = req.owner.is_empty() && req.kind == Kind::User;
+        if !own_account && !plain_name(&req.owner, 100) {
             return Err("That is not a GitHub account name.".into());
         }
         let _op = self.op.lock().await;
@@ -717,6 +740,12 @@ impl<H: Http + 'static> GithubSetup<H> {
             Ok(c) => c,
             Err(message) => return stopped(&message),
         };
+        // A start with no name learns the account here; the poll and a later resume need it.
+        let owner = match (owner.is_empty(), &c.owner) {
+            (false, _) => owner,
+            (true, Some(login)) => login.clone(),
+            (true, None) => return stopped("GitHub did not say which account owns the new app."),
+        };
         if let Err(e) = self.gh.vault().set(&key_name(c.app_id), &c.pem) {
             return stopped(&format!("Could not save the new app's key: {e}"));
         }
@@ -730,6 +759,7 @@ impl<H: Http + 'static> GithubSetup<H> {
             let current = s.id == id;
             if current {
                 s.view.step = Step::Install;
+                s.view.owner = Some(owner.clone());
                 s.view.slug = Some(c.slug.clone());
                 s.view.app_id = Some(c.app_id);
             }
