@@ -81,6 +81,19 @@ app.whenReady().then(async () => {
     await sleep(1400);
     await shot('activity-with-draft');
     report.draftGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + e.querySelectorAll('[role=button][title]').length)");
+    // Answering b sends it back to its phase, and the empty Needs input group goes with it.
+    await run(`layoutFixture.emitAgent({ type: 'question_resolved', sessionId: 'b' })`);
+    await sleep(1400);
+    await shot('activity-after-answer');
+    report.afterAnswerGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + e.querySelectorAll('[role=button][title]').length)");
+    // A sub-agent has no card, so its question lifts its parent, a, to Needs input.
+    const child = { ...draft, d: { exchangeCount: 1, parentSessionId: 'a' } };
+    await run(`localStorage.setItem('fixture.summaries', ${JSON.stringify(JSON.stringify(child))}); layoutFixture.emitAgent({ type: 'session_meta', sessionId: 'd' })`);
+    await sleep(400);
+    await run(`layoutFixture.emitAgent({ type: 'question', sessionId: 'd' })`);
+    await sleep(1400);
+    await shot('activity-sub-agent-waiting');
+    report.subAgentGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + Array.from(e.querySelectorAll('[role=button][title]')).map(c => c.title).join('|'))");
     // toBitmap is BGRA; swap to RGBA for the encoder.
     for (const f of frames) for (let i = 0; i < f.length; i += 4) { const b = f[i]; f[i] = f[i + 2]; f[i + 2] = b; }
     const { width, height } = report.frameSize;
