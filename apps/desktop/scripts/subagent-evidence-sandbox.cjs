@@ -68,17 +68,17 @@ app.whenReady().then(async () => {
     await run(`(() => { const r = layoutFixture.records[0]; r.messages = r.messages.filter(m => !m.interrupted); layoutFixture.putCachedSession(r); })()`);
     report.facts.noDraft = await run(`!!document.querySelector('[data-work-place]')`);
     // The agent's suggested next step, offered after the reply.
-    await run(`layoutFixture.bridge.suggestReplies = async () => ({ options: [], next: 'Add a regression test for the rounding fix' })`);
+    await run(`void (layoutFixture.bridge.suggestReplies = async () => ({ options: [], next: 'Add a regression test for the rounding fix' }))`);
     await run(`layoutFixture.emitAgent({ type: 'done', sessionId: 'a', messageId: 'a1' })`);
     await sleep(700);
     report.facts.suggestion = await run(`document.querySelector('[data-work-place]')?.textContent ?? null`);
     report.facts.inTranscript = await run(`!!document.querySelector('[data-transcript-scroll] [data-work-place]')`);
     report.facts.inComposer = await run(`!!document.querySelector('.composer-editor-wrap')?.parentElement?.querySelector('[data-work-place]')`);
-    await shot('conversation-suggestion', { x: 420, y: 380, width: 1020, height: 520 });
+    await shot('conversation-suggestion');
     await run(`(() => { const e = document.querySelector('.composer-editor-wrap [contenteditable]') || document.querySelector('.composer-editor-wrap textarea'); e.focus(); document.execCommand('insertText', false, 'Also add a refund test'); })()`);
     await sleep(500);
     report.facts.withDraft = await run(`document.querySelector('[data-work-place]')?.textContent ?? null`);
-    await shot('conversation-follow-up', { x: 420, y: 380, width: 1020, height: 520 });
+    await shot('conversation-follow-up');
     report.facts.clicked = await clickSubagent();
     await sleep(400);
     report.facts.sent = await run(`layoutFixture.lastSend?.text ?? null`);
