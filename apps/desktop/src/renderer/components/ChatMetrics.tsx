@@ -209,14 +209,19 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
     const next = options[Math.max(0, Math.min(options.length - 1, index + by))];
     if (next) pick(next);
   };
+  // The chat follows the app-wide setting when it has no choice of its own,
+  // so the sheet footer says so instead of flattening to the same copy.
+  const following = session ? session.effort == null : false;
   // A dial with one notch per level the model takes, as on the phone; the
-  // levels themselves are stops in the popover, and the arrow keys step them.
+  // button mirrors the iOS/Android ModelEffortButton (just the gauge, no label
+  // text) and the popover mirrors the ModelEffortSheet (large dial, capsule
+  // row, one footer sentence). Arrow keys step the level without opening.
   return (
-    <div className="effort-slider flex shrink-0 items-center rounded-lg border border-line text-2xs" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort, remembered for new chats on this computer'}>
+    <div className="effort-slider flex shrink-0 items-center" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort, remembered for new chats on this computer'}>
       <button
         ref={pop.anchor}
         type="button"
-        className="flex items-center gap-2 px-2 py-1"
+        className="flex h-7 w-7 items-center justify-center rounded-lg border border-line hover:border-accent"
         onClick={() => pop.setOpen((o) => !o)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); step(1); }
@@ -229,29 +234,29 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
         data-effort-count={options.length}
       >
         <EffortDial index={index} count={options.length} size={18} />
-        <span className="text-ink-faint">Effort</span>
-        <span className="min-w-12 text-ink-soft">{shown}</span>
       </button>
       {pop.open && createPortal(
-        <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-3 shadow-(--shadow-float)" role="dialog" aria-label="Reasoning effort" data-effort-popover>
-          <div className="flex flex-col items-center gap-2">
-            <EffortDial index={index} count={options.length} size={88} />
+        <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-4 shadow-(--shadow-float)" role="dialog" aria-label="Reasoning effort" data-effort-popover>
+          <div className="flex flex-col items-center gap-3">
+            <EffortDial index={index} count={options.length} size={96} />
             <span className="text-sm font-semibold text-ink">{shown}</span>
-            <div className="flex w-full gap-1" role="radiogroup" aria-label="Reasoning effort">
+            <div className="flex w-full flex-wrap gap-1.5" role="radiogroup" aria-label="Reasoning effort">
               {options.map((o, i) => (
                 <button
                   key={o}
                   type="button"
                   role="radio"
                   aria-checked={i === index}
-                  className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-1 text-2xs font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink'}`}
+                  className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-3 py-1.5 text-2xs font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink hover:bg-(--surface-3)'}`}
                   onClick={() => pick(o)}
                   data-effort={o}
                   title={o === modelDefaultEffort(modelId) ? 'Recommended' : undefined}
-                >{EFFORT_LABEL[o]}{o === modelDefaultEffort(modelId) && <span className="block text-2xs">Recommended</span>}</button>
+                >{EFFORT_LABEL[o]}{o === modelDefaultEffort(modelId) && <span className="block text-2xs opacity-80">Recommended</span>}</button>
               ))}
             </div>
-            <p className="text-center text-2xs text-ink-faint">Higher effort thinks longer and spends more tokens.</p>
+            <p className="text-center text-2xs leading-snug text-ink-faint">
+              {following ? "Following this computer's effort setting. " : ''}Higher effort thinks longer and spends more tokens.
+            </p>
           </div>
         </div>,
         document.body,

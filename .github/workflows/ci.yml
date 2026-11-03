@@ -2,26 +2,27 @@ name: CI
 
 # Three tiers (scripts/ci-scope.mjs decides which jobs each run needs):
 #
-#   pull_request   fast feedback: build, Linux daemon, Windows capture, gated by
-#                  the paths the PR touches. About 8 minutes. A change only to
-#                  the native phone apps (apps/ios, apps/android) skips them all:
-#                  its own workflows test it.
-#   merge_group    the merge queue: adds the Windows daemon and the speed
-#                  contract for the queued group, before anything reaches main.
-#   schedule       every 6 hours, and before the nightly release: every job on
-#                  every OS, macOS included. Skipped when main has not moved.
+#   pull_request   fast feedback: build, gated by the paths the PR touches. A
+#                  change only to the native phone apps (apps/ios, apps/android)
+#                  skips it: their own workflows test them.
+#   merge_group    the merge queue: adds the speed contract and itests for the
+#                  queued group, before anything reaches main.
+#   schedule       nightly: every job on every OS (the Linux, Windows and macOS
+#                  daemon and capture). Skipped when main has not moved.
 #
-# macOS runs on the schedule rather than per change: the Team plan runs 5 macOS
-# jobs at once across every workflow, and per-PR macOS jobs queued 50-100
-# minutes. `ci:macos` / `ci:perf` labels opt a single PR in; with `ci:macos`,
-# `gate` also waits for the macOS runs the label turns on in other workflows
+# Platform builds run nightly rather than per change, here and in the iOS,
+# Android, installer and development-identity workflows. A `deploy:linux`,
+# `deploy:windows`, `deploy:macos`, `deploy:ios` or `deploy:android` label opts
+# a single PR into that platform's runs (`ci:perf` into the speed contract), and
+# `gate` waits for the runs a deploy label turns on in other workflows
 # (scripts/ci-label-gate.mjs). Adding a label re-runs CI so it takes effect.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   merge_group:
   schedule:
-    - cron: '17 */6 * * *'
+    # 03:17 JST.
+    - cron: '17 18 * * *'
   # Full run on any branch: `gh workflow run ci.yml --ref <branch>`.
   workflow_dispatch:
 
@@ -46,6 +47,7 @@ jobs:
       capture_os: ${{ steps.scope.outputs.capture_os }}
       perf: ${{ steps.scope.outputs.perf }}
       itests: ${{ steps.scope.outputs.itests }}
+      licenses: ${{ steps.scope.outputs.licenses }}
       run: ${{ steps.fresh.outputs.run }}
     steps:
       - uses: actions/checkout@v7
@@ -359,12 +361,24 @@ jobs:
   # queue need not know which jobs a change runs. A scheduled run that fails
   # opens (or comments on) one `ci-scheduled` issue, so nobody has to watch it.
   #
-  # With `ci:macos` it also waits (up to about 3 hours: macOS runners queue) for
-  # the label's runs in other workflows, so nothing queues a PR before they are
-  # green. In the queue it fails a group holding a draft, a `hold` PR, or a
-  # `ci:macos` PR without green runs, which ejects it (#1002).
+  # With a `deploy:*` label it also waits (up to about 3 hours: macOS runners
+  # queue) for the label's runs in other workflows, so nothing queues a PR before
+  # they are green. In the queue it fails a group holding a draft, a `hold` PR, or
+  # a deploy-labelled PR without green runs, which ejects it (#1002).
+  # Only when dependencies or ASSETS.md change: a new package with a license the
+  # policy has not seen stops here, before it ships. docs/runbooks/third-party.md.
+  licenses:
+    needs: scope
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.licenses == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: node scripts/third-party.mjs check
+
   gate:
-    needs: [scope, build, daemon, capture, perf]
+    needs: [scope, build, daemon, capture, perf, licenses]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 190
@@ -379,17 +393,17 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@v7
-        if: github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
+        if: github.event_name == 'merge_group' || contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
         with:
           sparse-checkout: scripts
-      - name: The macOS runs ci:macos turned on passed
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:macos')
+      - name: The platform runs the deploy labels turned on passed
+        if: github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/ci-label-gate.mjs pr --pr "$PR" --sha "$SHA"
-      - name: Every PR in the group is ready, not held, and its macOS runs passed
+      - name: Every PR in the group is ready, not held, and its deploy-label runs passed
         if: github.event_name == 'merge_group'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -402,7 +416,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          body="The 6-hourly full CI run (every OS, macOS and the speed contract) failed on $GITHUB_SHA: $RUN_URL"
+          body="The nightly full CI run (every OS and the speed contract) failed on $GITHUB_SHA: $RUN_URL"
           open=$(gh issue list -R "$GITHUB_REPOSITORY" --label ci-scheduled --state open --limit 1 --json number -q '.[0].number')
           if [ -n "$open" ]; then
             gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$body"

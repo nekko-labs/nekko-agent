@@ -5,11 +5,10 @@ name: iOS TestFlight
 # signing, and uploads it to App Store Connect, where it appears in TestFlight
 # after Apple's processing (usually 5-30 minutes).
 #
-# Runs on its own on a push to main that changes what the app ships: apps/ios/
-# minus its tests, scripts, evidence and Markdown (the merge queue's merges are
-# pushes too). It still uploads only when those sources changed since the last
-# successful upload from main, so a rerun or a push that only touches tests
-# uploads nothing. By hand it always uploads:
+# Runs on its own nightly on main, and uploads only when what the app ships
+# (apps/ios/ minus its tests, scripts, evidence and Markdown, plus the bundled
+# Mermaid) changed since the last successful upload from main, so a night with
+# no app change uploads nothing. By hand it always uploads:
 #   gh workflow run ios-testflight.yml
 #
 # Signing uses the App Store Connect API key the desktop release already holds
@@ -38,20 +37,9 @@ name: iOS TestFlight
 # increasing. The marketing version comes from apps/ios/project.yml.
 
 on:
-  push:
-    branches: [main]
-    # Keep in step with the `changed` job's filter below.
-    paths:
-      - 'apps/ios/**'
-      - '!apps/ios/UITests/**'
-      - '!apps/ios/Tests/**'
-      - '!apps/ios/Protocol/Tests/**'
-      - '!apps/ios/scripts/**'
-      - '!apps/ios/evidence/**'
-      - '!apps/ios/**/*.md'
-      # The bundled Mermaid ships in the app (apps/ios/project.yml).
-      - 'vendor/mermaid/**'
-      - '!vendor/mermaid/**/*.md'
+  schedule:
+    # 04:07 JST, after the nightly Native iOS run.
+    - cron: '7 19 * * *'
   workflow_dispatch:
     inputs:
       notes:

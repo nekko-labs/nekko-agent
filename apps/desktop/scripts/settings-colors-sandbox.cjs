@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
     for (const width of [1440, 900, 460]) {
       win.setContentSize(width, 900); await sleep(700);
       if (process.env.NEKKO_AFTER === '1') {
-        if(!await run(`(() => { const e=document.querySelector('.clean-start-model .effort-slider'),s=getComputedStyle(e),r=e.getBoundingClientRect();return s.borderLeftWidth==='1px' && parseFloat(s.borderTopLeftRadius)>0 && r.left>=0 && r.right<=innerWidth && getComputedStyle(document.querySelector('.wall-workspace').parentElement).paddingTop==='0px' && getComputedStyle(document.querySelector('.wall-workspace').parentElement).marginTop==='-1px'; })()`)) throw Error('Effort border or wall inset failed at '+width);
+        if(!await run(`(() => { const e=document.querySelector('.clean-start-model .effort-slider button'),s=getComputedStyle(e),r=e.getBoundingClientRect();return s.borderLeftWidth==='1px' && parseFloat(s.borderTopLeftRadius)>0 && r.left>=0 && r.right<=innerWidth && getComputedStyle(document.querySelector('.wall-workspace').parentElement).paddingTop==='0px' && getComputedStyle(document.querySelector('.wall-workspace').parentElement).marginTop==='-1px'; })()`)) throw Error('Effort border or wall inset failed at '+width);
       }
       const file = path.join(out, `new-chat-${width}.png`);
       fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG());

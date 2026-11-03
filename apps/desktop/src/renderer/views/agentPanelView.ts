@@ -3,10 +3,12 @@
  * each group is in, and what it shows. A per-window preference, remembered like
  * the panel's width, not a setting.
  *
- * The defaults group the cards by activity (what each agent is doing), in the
+ * The defaults group the cards by activity (where each agent is in its loop), in the
  * order cards were dragged into (newest first for the rest), every detail and
  * every group shown.
  */
+
+import type { SessionSummary } from '@nekko-agent/shared';
 
 export type AgentGroupBy = 'project' | 'status' | 'date' | 'computer' | 'none';
 export type AgentSortBy = 'manual' | 'updated' | 'created' | 'name';
@@ -135,16 +137,38 @@ export function compareCards(view: Pick<AgentPanelView, 'sortBy' | 'direction'>)
   };
 }
 
-/** The activity groups, most urgent first. */
+/** Chats parked on a question or an approval. Shows only while it has some. */
+export const NEEDS_INPUT_GROUP = 'status:input';
+
+/** Chats nothing has been sent in yet. This group shows only while it has some. */
+export const DRAFT_GROUP = 'status:draft';
+
+/** The activity groups: what needs you first, the agent loop in order, then the stopped. */
 export const STATUS_GROUPS = [
-  { key: 'status:input', name: 'Needs input' },
-  { key: 'status:working', name: 'Working' },
-  { key: 'status:error', name: 'Error' },
+  { key: NEEDS_INPUT_GROUP, name: 'Needs input' },
+  { key: DRAFT_GROUP, name: 'Draft' },
+  { key: 'status:exploring', name: 'Exploring' },
+  { key: 'status:building', name: 'Building' },
+  { key: 'status:verifying', name: 'Verifying' },
+  { key: 'status:watching', name: 'Watching' },
   { key: 'status:done', name: 'Done' },
 ] as const;
 
-export function statusGroupOf(status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
-  return !status || status === 'idle' ? 'status:done' : `status:${status}`;
+/**
+ * A chat's activity group. Any `status` covers a first message on its way, which
+ * no summary shows yet. A chat waiting on you leaves its phase until answered.
+ * A working chat is in its phase, landing work (Shipping) included under
+ * Verifying; one stopped on an error stays there, its glyph saying so. A chat
+ * that has stopped is Watching while a watch is armed, otherwise Done.
+ */
+export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase' | 'activeWatchCount'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+  if (status === 'input') return NEEDS_INPUT_GROUP;
+  if (status !== 'working' && status !== 'error') {
+    if (chat?.exchangeCount === 0) return DRAFT_GROUP;
+    return (chat?.activeWatchCount ?? 0) > 0 ? 'status:watching' : 'status:done';
+  }
+  const phase = chat?.phase ?? 'exploring';
+  return `status:${phase === 'shipping' ? 'verifying' : phase}`;
 }
 
 /** The date groups, newest first. */

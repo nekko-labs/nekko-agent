@@ -73,6 +73,13 @@ it('falls back to the title for missing or blank tasks', () => {
   expect(activitySentence(delegationActivity(call))).toBe('Subagent waiting · Inspect the files.');
 });
 
+it('finds a child by the call that started it, even one this window never saw start', () => {
+  const call = { id: 'call_7', name: 'spawn_agent', input: { title: 'Elsewhere' } } as ToolCall;
+  expect(delegationChild(call, [child])).toBeUndefined();
+  const named = { ...child, id: 'n', title: 'Another title', spawnCallId: 'call_7' };
+  expect(delegationChild(call, [child, named])).toBe(named);
+});
+
 it('associates only a unique observed child in the parent and spawn time scope', () => {
   expect(delegationChild(call, [child])).toBeUndefined();
   foldSubagentActivity({ type: 'tool_call', sessionId: 'p', call }, 100);

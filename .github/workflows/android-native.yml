@@ -2,9 +2,11 @@ name: Native Android
 # The Kotlin / Jetpack Compose app in apps/android. JVM unit tests for the
 # protocol and app logic, a cross-language E2E check against the agent's
 # WebCrypto implementation, the live phone ↔ relay ↔ computer integration test,
-# lint, and debug + release (unsigned, minified) builds.
+# lint, and debug + release (unsigned, minified) builds. Nightly on main; on a
+# PR only with the `deploy:android` label (ci-label-gate.mjs makes `gate` wait).
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'apps/android/**'
       - 'apps/relay-server/**'
@@ -15,11 +17,9 @@ on:
       - 'packages/shared/src/ipc.ts'
       - 'packages/shared/src/pairing-link.ts'
       - '.github/workflows/android-native.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'apps/android/**'
-      - '.github/workflows/android-native.yml'
+  schedule:
+    # 03:27 JST.
+    - cron: '27 18 * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,6 +28,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build-and-test:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'deploy:android')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -86,6 +87,7 @@ jobs:
   # AN-5: the app on an emulator, driven by Compose UI tests against the same
   # real relay + headless agent + fake model, with screenshots per step.
   emulator:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'deploy:android')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

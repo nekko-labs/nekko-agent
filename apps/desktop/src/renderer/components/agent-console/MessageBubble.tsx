@@ -1,10 +1,10 @@
-import { CheckIcon, CopyIcon } from '../../icons.js';
+import { CheckIcon, CopyIcon, ThoughtIcon } from '../../icons.js';
 import React, { memo, useState } from 'react';
 import type { ChatMessage } from '@nekko-agent/shared';
 import { Markdown } from '../Markdown.js';
 import { ReasoningBlock } from './ReasoningBlock.js';
 import { ToolCard } from './ToolCard.js';
-import { fmtDateTime, fmtTime } from './transcript.js';
+import { fmtDateTime, fmtTime, type Voice } from './transcript.js';
 import { useRowState } from './rowState.js';
 import { isRecoveryNotice, RecoveryNotice } from './RecoveryNotice.js';
 import { isWatchWake } from '../../agentWatches.js';
@@ -17,6 +17,7 @@ import { DoneRow } from './TurnStatsLine.js';
  */
 export const MessageBubble = memo(function MessageBubble({
   message,
+  voice,
   basePath,
   onResend,
   onReset,
@@ -29,6 +30,8 @@ export const MessageBubble = memo(function MessageBubble({
   chronological,
 }: {
   message: ChatMessage;
+  /** How this text reads in its turn: a note, something left for the reader, or the reply. */
+  voice?: Voice;
   basePath?: string;
   onResend?: (id: string, text: string) => void;
   /** Rewind the chat to this message and re-run it (replaces the old Regenerate). */
@@ -97,9 +100,11 @@ export const MessageBubble = memo(function MessageBubble({
     if (displayText) {
       parts.push(
         <div key="text" className={`group ${entering ? 'fade-in ' : ''}flex justify-start`}>
-          <div className="msg-ai">
-            <div data-chat-search-text><Markdown basePath={basePath} text={message.content} /></div>
-            {!entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length} stats={message.turnStats} />}
+          <div className="msg-ai" data-voice={voice}>
+            {voice === 'working' && <ThoughtIcon className="msg-voice-icon" />}
+            <div data-chat-search-text><Markdown basePath={basePath} text={message.content} topics askTail={voice === 'reply' || voice === 'attention'} /></div>
+            {/* A note between steps is not the end of anything. */}
+            {!entering && <DoneRow done={!message.interrupted && !message.toolCalls?.length && voice !== 'working' && voice !== 'attention'} stats={message.turnStats} />}
             {displayText && message.content && (
               <div className="mt-1 flex gap-3 text-2xs text-ink-faint opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-70">
                 <button onClick={copy} title="Copy message" className="inline-flex items-center gap-1 hover:text-ink">{copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}{copied ? 'Copied' : 'Copy'}</button>

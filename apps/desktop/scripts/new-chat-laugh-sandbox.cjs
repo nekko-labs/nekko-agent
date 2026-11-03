@@ -35,7 +35,7 @@ app.whenReady().then(async () => {
       if (!before) {
         await run(`document.querySelector('[data-mode-panel] [data-chat-mode="ask"]').click()`); await sleep(200);
         await check(`layoutFixture.store.getState().settings.defaultChatMode==='ask'`, 'Tool policy remembered on this computer at '+width);
-        await check(`document.querySelector('[data-mode-panel]').textContent.includes('Guardrails is recommended for general use')`, 'Guardrails recommendation independent of saved Ask at '+width);
+        await check(`[...document.querySelectorAll('[data-mode-panel] [data-hover-tip]')].some(e => e.dataset.hoverTip.includes('Guardrails is recommended for general use'))`, 'Guardrails recommendation independent of saved Ask at '+width);
         await run(`document.querySelector('[data-mode-panel] [data-chat-mode="guardrails"]').click()`); await sleep(150);
       }
       await run(`document.querySelector('[data-chat-mode-button]').click()`); await sleep(150);
