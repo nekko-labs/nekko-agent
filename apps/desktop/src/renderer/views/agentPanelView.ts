@@ -143,26 +143,32 @@ export const NEEDS_INPUT_GROUP = 'status:input';
 /** Chats nothing has been sent in yet. This group shows only while it has some. */
 export const DRAFT_GROUP = 'status:draft';
 
-/** The activity groups: what needs you first, then the agent loop in order. */
+/** The activity groups: what needs you first, the agent loop in order, then the stopped. */
 export const STATUS_GROUPS = [
   { key: NEEDS_INPUT_GROUP, name: 'Needs input' },
   { key: DRAFT_GROUP, name: 'Draft' },
   { key: 'status:exploring', name: 'Exploring' },
   { key: 'status:building', name: 'Building' },
   { key: 'status:verifying', name: 'Verifying' },
-  { key: 'status:shipping', name: 'Shipping' },
+  { key: 'status:watching', name: 'Watching' },
+  { key: 'status:done', name: 'Done' },
 ] as const;
 
 /**
  * A chat's activity group. Any `status` covers a first message on its way, which
- * no summary shows yet. A chat waiting on you leaves its phase until answered;
- * otherwise it stays in its phase when it stops, and the card's own glyph says
- * whether it is working or stopped on an error.
+ * no summary shows yet. A chat waiting on you leaves its phase until answered.
+ * A working chat is in its phase, landing work (Shipping) included under
+ * Verifying; one stopped on an error stays there, its glyph saying so. A chat
+ * that has stopped is Watching while a watch is armed, otherwise Done.
  */
-export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase' | 'activeWatchCount'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
   if (status === 'input') return NEEDS_INPUT_GROUP;
-  if (!status && chat?.exchangeCount === 0) return DRAFT_GROUP;
-  return `status:${chat?.phase ?? 'exploring'}`;
+  if (status !== 'working' && status !== 'error') {
+    if (chat?.exchangeCount === 0) return DRAFT_GROUP;
+    return (chat?.activeWatchCount ?? 0) > 0 ? 'status:watching' : 'status:done';
+  }
+  const phase = chat?.phase ?? 'exploring';
+  return `status:${phase === 'shipping' ? 'verifying' : phase}`;
 }
 
 /** The date groups, newest first. */
