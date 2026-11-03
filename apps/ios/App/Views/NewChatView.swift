@@ -306,7 +306,7 @@ struct NewChatView: View {
         }
         .font(.footnote.weight(.medium)).lineLimit(1)
             .foregroundStyle(faint ? palette.inkSoft : palette.ink)
-            .padding(.horizontal, 12).frame(minHeight: 34)
+            .padding(.horizontal, 10).frame(minHeight: 34)
             .background(palette.surface, in: Capsule())
             .overlay(Capsule().stroke(palette.line))
             .frame(minHeight: 44).contentShape(Rectangle())

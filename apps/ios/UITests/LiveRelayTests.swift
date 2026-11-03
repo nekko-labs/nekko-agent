@@ -625,7 +625,8 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Found the message box"].exists, "a finished step without results is squeezed")
         settle()
         attach(app, "plan-2-open")
-        let first = app.descendants(matching: .any)["chat.planStep.step_1"].firstMatch
+        // Its title, not the row's centre: open, the centre is the task link's chip.
+        let first = app.staticTexts["Read the composer code"].firstMatch
         first.tap()
         XCTAssertTrue(app.staticTexts["Found the message box"].waitForExistence(timeout: 5), "tapping a finished step opens it")
         XCTAssertTrue(app.staticTexts["NEK-412"].exists, "the task link sits on the first step")
