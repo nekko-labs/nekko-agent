@@ -3952,12 +3952,20 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child { fill: var(--accent); stroke: var(--accent); }
 .pixel-mascot[data-mascot-pose="working"] [data-part="pixel-eyes"] { fill: var(--on-accent); }
 
-/* Settings and Models share the panel surface and navigation alignment. */
-.settings-panel, main:has(> .models-workspace) { background: var(--surface); }
+/* Settings and Models share the panel surface and navigation alignment.
+   Both sit on the same paper field as the Agents view (the command wall),
+   and inner content cards read as panels floating on that field: the lighter
+   `--win` surface used by wall windows, borderless, with the same squircle
+   corner as every other panel. The outer surface itself takes `--pane-radius`
+   with a small inset so the whole page reads as a rounded floating panel
+   rather than a flat destination. */
+.settings-panel, main:has(> .models-workspace) { background: var(--paper); border-radius: var(--pane-radius); corner-shape: squircle; }
+main:has(> .settings-panel), main:has(> .settings-destination), main:has(> .models-workspace) { padding: var(--pane-gap); }
 .settings-page { width: 80%; margin-inline: auto; padding-block: 32px; }
-.settings-destination { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--surface); }
+.settings-destination { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--paper); border-radius: var(--pane-radius); corner-shape: squircle; }
 .settings-back-bar { padding: 16px 24px 0; }
 .settings-destination-content { flex: 1; min-height: 0; overflow-y: auto; }
+.settings-panel .card, .settings-destination .card { background: var(--win); border-color: transparent; border-radius: var(--pane-radius); corner-shape: squircle; }
 @media (max-width: 767px) {
   .settings-page { width: 100%; padding: 24px 16px; }
   .settings-nav { column-gap: 20px; }
