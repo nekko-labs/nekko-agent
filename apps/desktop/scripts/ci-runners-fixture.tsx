@@ -23,7 +23,7 @@ const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['conf
     settings: { ...DEFAULT_RUNNER_SETTINGS, enabled: true, macosSlots: 2, trustedNetworks: ['gw:a4:83:e7:1c:22:9f'], ...settings },
   },
   state: 'ready', slots: [], reasons: [], available: 2, limit: null, awake: false, error: null,
-  today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [], ...over,
+  today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [], suggestedSize: null, ...over,
 });
 const off = (over: Partial<RunnerView> = {}) => view({ state: 'off', reasons: ['off'], ...over }, { enabled: false, macosSlots: 1 });
 // The daemon reports the missing image on a switched-off runner too.
@@ -81,6 +81,10 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'card-ready': async () => [view({ today: { jobs: 3, seconds: 41 * 60 } })],
   settings: async () => [view({ limit: 'memory', available: 1 })],
   'settings-bottom': async () => [view({ limit: 'memory', available: 1 })],
+  'settings-suggested': async () => [view(
+    { suggestedSize: { jobs: 6, cpus: 4, memoryMb: 8 * GB, reasons: ['The biggest job used 5.4 GB at most and never swapped.'] } },
+    { memoryPerVmMb: 12 * GB },
+  )],
   'settings-unsampled': async () => [view({ host: unsampled, state: 'waiting', reasons: ['hostStateUnknown'] })],
 };
 
@@ -164,6 +168,8 @@ function Fixture() {
   const [epoch, setEpoch] = useState(0);
   const show = (next: string) => {
     localStorage.clear();
+    // CI runners is an Expert section; Simple mode hides the switch to it.
+    localStorage.setItem('nekko.chatMode', 'expert');
     scene = next;
     useStore.setState({ view: 'workflows', providers: [], models: [], sessions: [], terminals: [], workspaces: [], settings, settingsLoaded: true, installedSkillDefs: [] } as any);
     setEpoch((e) => e + 1);

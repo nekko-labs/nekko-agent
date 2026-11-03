@@ -82,6 +82,26 @@ export interface AuditLine {
   seconds: number;
   /** `Reason` names, or the daemon's own (`slept`, `maxJobTime`, ...). */
   reason: string[];
+  /** What a finished job used inside its VM, when its stats disk was readable. */
+  usage?: Usage;
+}
+/** One job's usage summary (CI runners, "Suggested VM size"). */
+export interface Usage {
+  cpus: number;
+  memoryMb: number;
+  cpuP95: number;
+  cpuFullShare: number;
+  memPeakMb: number;
+  compressedPeakMb: number;
+  swapOutMb: number;
+}
+/** The VM size that fits a runner's jobs at its current size; the current size when it fits or before enough jobs. */
+export interface SizeSuggestion {
+  jobs: number;
+  cpus: number;
+  memoryMb: number;
+  /** The daemon's sentences: why it changed, and any limit that held it back. */
+  reasons: string[];
 }
 export interface RunnerView {
   config: RunnerConfig;
@@ -100,6 +120,8 @@ export interface RunnerView {
   forkApprovalOpen: boolean;
   /** Newest first. */
   recent: AuditLine[];
+  /** `null` until the Mac has been read. */
+  suggestedSize: SizeSuggestion | null;
 }
 export type ConnectRequest = GithubConnectRequest | GitlabConnectRequest;
 export interface GithubConnectRequest {
@@ -365,6 +387,32 @@ export function networkText(h: HostView): string {
 export function recommendationText(h: HostView): string {
   const gb = Math.round(h.recommendedMemoryMb / 1024);
   return gb > 0 ? `Recommended: ${gb} GB for this Mac` : '';
+}
+
+/** Jobs at the current size before the daemon suggests a size (`SUGGEST_MIN_JOBS` in nekko-runner). */
+export const SUGGEST_MIN_JOBS = 3;
+
+const sizeLabel = (cpus: number, memoryMb: number) => `${cpus} vCPUs, ${Math.round(memoryMb / 1024)} GB`;
+
+/**
+ * The suggested-size row in runner settings: one line, the daemon's reasons, and the patch Apply
+ * sends when the suggestion differs from the saved size. `null` hides the row (the Mac is unread).
+ */
+export function suggestedSizeRow(v: RunnerView): { line: string; reasons: string[]; apply: Pick<RunnerSettings, 'cpusPerVm' | 'memoryPerVmMb'> | null } | null {
+  const s = v.suggestedSize;
+  if (!s) return null;
+  if (s.jobs < SUGGEST_MIN_JOBS) {
+    return { line: `Suggested size after ${SUGGEST_MIN_JOBS} jobs at this size (${s.jobs} so far).`, reasons: [], apply: null };
+  }
+  const now = { cpus: v.host.cpusPerVm, memoryMb: v.config.settings.memoryPerVmMb };
+  if (s.cpus === now.cpus && s.memoryMb === now.memoryMb) {
+    return { line: `Fits your last ${s.jobs} jobs.`, reasons: s.reasons, apply: null };
+  }
+  return {
+    line: `Suggested for your jobs: ${sizeLabel(s.cpus, s.memoryMb)} (now ${sizeLabel(now.cpus, now.memoryMb)}).`,
+    reasons: s.reasons,
+    apply: { cpusPerVm: s.cpus, memoryPerVmMb: s.memoryMb },
+  };
 }
 
 /** The keys of `draft` that differ from `base` (arrays by value): `runner:update` merges a patch, so unchanged keys a push moved meanwhile stay as the daemon has them. */

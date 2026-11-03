@@ -28,7 +28,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   awake: true,
   error: null,
   today: { jobs: 14, seconds: 7800 },
-  repos: [], forkApprovalOpen: false,
+  repos: [], forkApprovalOpen: false, suggestedSize: null,
   host: { ramMb: 32768, cores: 10, recommendedMemoryMb: 16384, runnerMemoryMb: 16384, cpusPerVm: 4, onBattery: false, batteryPct: 100, networkId: 'home', networkTrusted: true },
   recent: [
     { ts: now - 600, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'mobile', job: 'iOS build', result: 'finished', seconds: 660, reason: [] },
