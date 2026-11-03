@@ -4,9 +4,9 @@
    but quiet: no aura, no display type. */
 
 :root {
-  --bg: #fdf7f6;
+  --bg: #fbf6f8;
   --bg-2: #ffffff;
-  --bg-3: #fdf7f6;
+  --bg-3: #fbf6f8;
   --ink: #16161c;
   --ink-2: #2b2838;
   --muted: #5d5970;
@@ -15,7 +15,7 @@
   --accent: #a9659c;
   --accent-2: #a9659c;
   --on-accent: #ffffff;
-  --code-bg: #fdf7f6;
+  --code-bg: #fbf6f8;
   --sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
   --top: 60px;
@@ -26,10 +26,10 @@
    and a white column for the article, so the colour frames the reading
    rather than sitting under it */
 :root[data-theme='colour'] {
-  --bg: #fdf7f6; --bg-2: #ffffff; --bg-3: #f7e9e7;
+  --bg: #fbf6f8; --bg-2: #ffffff; --bg-3: #f3e8ee;
   --line: rgba(169, 101, 156, 0.14); --line-2: rgba(169, 101, 156, 0.24);
   --muted: #8a4a7f; --accent: #a9659c; --accent-2: #8a4a7f;
-  --code-bg: #fdf7f6; --topbar-bg: rgba(223, 182, 178, 0.94);
+  --code-bg: #fbf6f8; --topbar-bg: rgba(133, 79, 108, 0.94);
 }
 :root[data-theme='colour'] main { background: var(--bg-2); border-inline: 1px solid var(--line); }
 
@@ -42,7 +42,7 @@ body {
   line-height: 1.65;
   font-size: 16px;
 }
-::selection { background: rgba(223, 182, 178, 0.35); }
+::selection { background: rgba(133, 79, 108, 0.35); }
 a { color: var(--accent-2); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 

@@ -41,7 +41,7 @@
       const a = Math.min(0.9, 0.15 + (1 - st.z) * 0.9);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(247, 233, 231, ${a})`;
+      ctx.fillStyle = `rgba(243, 232, 238, ${a})`;
       ctx.fill();
     }
     if (!reduced) requestAnimationFrame(frame);
@@ -456,7 +456,7 @@
   const root = document.documentElement;
   const LOOKS = ['dark', 'white', 'colour'];
   const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
-  const THEME_COLOR = { dark: '#0c0c11', white: '#fdf7f6', colour: '#dfb6b2' };
+  const THEME_COLOR = { dark: '#0c0c11', white: '#fbf6f8', colour: '#854f6c' };
   const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'colour');
   const sync = () => {
     const now = current();
@@ -684,8 +684,8 @@
         const s = a > 0.18 ? 3 : 2;
         const k = x / W;
         if (theme === 'dark' || theme === 'colour') {
-          // 0 = light plum #c084b5, 1 = rose #dfb6b2: glowing on the dark ground, tinted on the coloured one
-          ctx.fillStyle = `rgba(${Math.round(192 + 31 * k)},${Math.round(132 + 50 * k)},${Math.round(181 - 3 * k)},${(a * 1.1).toFixed(3)})`;
+          // 0 = light plum #c084b5, 1 = rose #854f6c: glowing on the dark ground, tinted on the coloured one
+          ctx.fillStyle = `rgba(${Math.round(192 - 59 * k)},${Math.round(132 - 53 * k)},${Math.round(181 - 73 * k)},${(a * 1.1).toFixed(3)})`;
         } else {
           // 0 = plum #5a2352, 1 = light plum #c084b5
           ctx.fillStyle = `rgba(${Math.round(90 + 102 * k)},${Math.round(35 + 97 * k)},${Math.round(82 + 99 * k)},${a.toFixed(3)})`;
