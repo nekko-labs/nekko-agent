@@ -1366,13 +1366,13 @@
     --titlebar-bg: transparent;
     --titlebar-overlay: #00000000;
     --field:
-      radial-gradient(60% 900px at 12% 0%, rgba(157, 140, 230, 0.26), transparent 70%),
-      radial-gradient(50% 800px at 92% 6%, rgba(138, 228, 242, 0.12), transparent 70%),
-      radial-gradient(50% 900px at 88% 40%, rgba(138, 228, 242, 0.1), transparent 70%),
-      radial-gradient(55% 900px at 8% 58%, rgba(157, 140, 230, 0.16), transparent 70%),
-      radial-gradient(60% 900px at 90% 80%, rgba(165, 249, 223, 0.08), transparent 70%),
-      radial-gradient(60% 800px at 20% 100%, rgba(157, 140, 230, 0.22), transparent 70%),
-      var(--paper);
+      radial-gradient(60% 900px at 12% 0%, rgba(133, 79, 108, 0.26), transparent 70%),
+    radial-gradient(50% 800px at 92% 6%, rgba(133, 79, 108, 0.12), transparent 70%),
+    radial-gradient(50% 900px at 88% 40%, rgba(133, 79, 108, 0.1), transparent 70%),
+    radial-gradient(55% 900px at 8% 58%, rgba(133, 79, 108, 0.16), transparent 70%),
+    radial-gradient(60% 900px at 90% 80%, rgba(165, 249, 223, 0.08), transparent 70%),
+    radial-gradient(60% 800px at 20% 100%, rgba(133, 79, 108, 0.22), transparent 70%),
+    var(--paper);
   }
 
   /* Experimental: candidate brand colour pairings (Settings → Theme → Experimental).
