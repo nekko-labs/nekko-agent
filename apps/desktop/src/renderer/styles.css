@@ -3982,3 +3982,35 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) {
   .runner-burst .ring, .runner-burst .badge, .runner-burst .badge path, .runner-burst i { animation: none; }
 }
+
+/* Gentleface icons: a line glyph by default, a solid glyph on hover/active/focus.
+ * The two SVGs stack and swap opacity so the hover feels like a weight change
+ * instead of a replacement. `className` sizes the wrapper (e.g. `h-4 w-4`), and
+ * both SVGs fill it. Buttons, links, menu items and summaries pick up the hover
+ * automatically; anything else can opt in with `data-icon-hover`. */
+.gf-icon { position: relative; display: inline-grid; place-items: center; vertical-align: middle; line-height: 0; }
+.gf-icon > svg { grid-area: 1 / 1; width: 100%; height: 100%; display: block; transition: opacity 120ms ease; }
+.gf-icon > .gf-icon-solid { opacity: 0; }
+@media (hover: hover) {
+  :is(button, a, [role="button"], summary, label):hover > .gf-icon > .gf-icon-line,
+  :is(button, a, [role="button"], summary, label):hover .gf-icon > .gf-icon-line,
+  [data-icon-hover]:hover > .gf-icon > .gf-icon-line,
+  [data-icon-hover]:hover .gf-icon > .gf-icon-line { opacity: 0; }
+  :is(button, a, [role="button"], summary, label):hover > .gf-icon > .gf-icon-solid,
+  :is(button, a, [role="button"], summary, label):hover .gf-icon > .gf-icon-solid,
+  [data-icon-hover]:hover > .gf-icon > .gf-icon-solid,
+  [data-icon-hover]:hover .gf-icon > .gf-icon-solid { opacity: 1; }
+}
+:is(button, a, [role="button"], summary, label):focus-visible .gf-icon > .gf-icon-line,
+[data-icon-hover]:focus-visible .gf-icon > .gf-icon-line { opacity: 0; }
+:is(button, a, [role="button"], summary, label):focus-visible .gf-icon > .gf-icon-solid,
+[data-icon-hover]:focus-visible .gf-icon > .gf-icon-solid { opacity: 1; }
+:is(button, a, [role="button"], summary, label)[aria-pressed="true"] .gf-icon > .gf-icon-line,
+:is(button, a, [role="button"], summary, label)[aria-expanded="true"] .gf-icon > .gf-icon-line,
+:is(button, a, [role="button"], summary, label).is-active .gf-icon > .gf-icon-line { opacity: 0; }
+:is(button, a, [role="button"], summary, label)[aria-pressed="true"] .gf-icon > .gf-icon-solid,
+:is(button, a, [role="button"], summary, label)[aria-expanded="true"] .gf-icon > .gf-icon-solid,
+:is(button, a, [role="button"], summary, label).is-active .gf-icon > .gf-icon-solid { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .gf-icon > svg { transition: none; }
+}

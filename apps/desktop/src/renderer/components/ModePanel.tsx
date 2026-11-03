@@ -14,6 +14,7 @@ import {
   ExternalIcon, FileIcon, FolderIcon, GaugeIcon, InfoIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
   RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
 } from '../icons.js';
+import { GfGaugeIcon, GfLockIcon, ShieldQuestionIcon } from '../gentleface-icons.js';
 import { HoverTip } from './HoverTip.js';
 
 const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
@@ -434,7 +435,7 @@ export function ModePanel({
               </span></span>
             </div>
             <div className="mode-row is-stacked">
-              <span className="mode-ic"><GaugeIcon /></span>
+              <span className="mode-ic"><GfGaugeIcon /></span>
               <span className="min-w-0 flex-1">{title('Effort', `How long the model thinks before acting. Your choice is remembered for new chats on this computer. Recommended: ${EFFORT_LABEL[modelDefaultEffort(modelId)]}.`)}</span>
               {tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, o === 'xhigh' ? 'X-high' : EFFORT_LABEL[o], <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
                 (v) => void actions.setEffort(v))}
@@ -442,7 +443,7 @@ export function ModePanel({
           </section>
 
           <section className="mode-col" aria-label="Privacy">
-            <p className="mode-sec"><LockIcon /> Privacy</p>
+            <p className="mode-sec"><GfLockIcon /> Privacy</p>
             <div className="mode-row">
               <span className="mode-ic"><IncognitoIcon /></span>
               <span className="min-w-0 flex-1">{title('Incognito', 'This chat is not saved to your history.')}</span>
@@ -467,7 +468,7 @@ export function ModePanel({
               </span>
             </div>
             <div className="mode-row is-stacked">
-              <span className="mode-ic"><ShieldIcon /></span>
+              <span className="mode-ic"><ShieldQuestionIcon /></span>
               <span className="min-w-0 flex-1">{title('Approvals', sandbox ? 'Sandbox always asks first.' : `${APPROVAL_DESC[approvals]} Guardrails is recommended for general use.`)}</span>
               {tiles<ChatMode>('Approvals', approvals, [['ask', 'Ask', <HandIcon />, { 'data-chat-mode': 'ask' }], ['guardrails', 'Guardrails', <ShieldCheckIcon />, { 'data-chat-mode': 'guardrails' }], ['yolo', 'YOLO', <YoloIcon />, { 'data-chat-mode': 'yolo' }]],
                 (v) => void (!sandbox && actions.setApprovals(v)))}
