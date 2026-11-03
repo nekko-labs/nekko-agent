@@ -1,3 +1,8 @@
+---
+title: "Live link previews in chat"
+area: chat
+---
+
 # Live link previews in chat
 
 **Implemented in this change; automated renderer tests passed, visual inspection and packaged-app verification pending.** A web link in a chat reply has a Preview control next to it. Clicking it loads the live page in a compact inline frame inside that chat message. Nothing is fetched until the person clicks Preview. Closing it removes the frame. The original link still opens normally and the frame offers Open in browser pane, using the existing in-app browser.
