@@ -2995,7 +2995,8 @@ mod tests {
             "messages": [{ "role": "user", "content": "Fix login" }] });
         std::fs::write(&path, session.to_string()).unwrap();
         let store = Arc::new(SessionStore::new(&dir));
-        let accounts = Arc::new(Accounts::new(dir.clone(), Hub::new()));
+        let accounts =
+            Arc::new(Accounts::new(dir.clone(), Hub::new(), Arc::new(nekko_settings::SettingsStore::new(&dir))));
         let flights = TitleFlights::default();
         let spec = json!({ "opts": { "sessionId": "s_title", "modelId": "synthetic" },
             "facts": { "provider": { "id": "p1", "kind": "openai-compat",

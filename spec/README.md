@@ -149,7 +149,7 @@ Providers, local models, the Model Server, training.
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (5 KB)
-- [Models & providers](models/models-providers.md) (47 KB)
+- [Models & providers](models/models-providers.md) (49 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
@@ -180,7 +180,7 @@ Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
-- [CI runners](automation/ci-runners.md) (53 KB)
+- [CI runners](automation/ci-runners.md) (54 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
@@ -237,6 +237,6 @@ Brand, website, onboarding and the mascot.
 - [Colour palette: Nekko and Indigo themes, app icon and website (2026-11-03)](brand/colour-palette.md) (6 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
-- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (16 KB)
+- [Mascot, polish & onboarding](brand/mascot-polish-onboarding.md) (17 KB)
 
 <!-- index:end -->

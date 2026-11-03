@@ -12,6 +12,7 @@ chrono.workspace = true
 getrandom.workspace = true
 nekko-js = { path = "../nekko-js" }
 nekko-settings = { path = "../nekko-settings" }
+nekko-vault = { path = "../nekko-vault" }
 serde_json.workspace = true
 sha2 = "0.10"
 url = "2.5"

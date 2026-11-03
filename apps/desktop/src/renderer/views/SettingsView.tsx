@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, promptCachingEnabled, RUN_POLICY_OPTIONS } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
@@ -701,7 +701,8 @@ function BackupSection({ settings, onSettings }: { settings: AppSettings; onSett
   const { pushToast, refreshProviders } = useStore(useShallow((s) => ({ pushToast: s.pushToast, refreshProviders: s.refreshProviders })));
 
   const exportSettings = () => {
-    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+    // API keys and tokens stay on this computer, in its keystore.
+    const blob = new Blob([JSON.stringify(withoutSecrets(settings), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -721,7 +722,7 @@ function BackupSection({ settings, onSettings }: { settings: AppSettings; onSett
         const parsed = JSON.parse(await file.text());
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Not a settings object');
         if (!window.confirm('Import these settings? This overwrites your current configuration.')) return;
-        const next = await window.nekko.updateSettings(parsed);
+        const next = await window.nekko.updateSettings(keepSecrets(parsed, settings));
         onSettings(next);
         await refreshProviders();
         pushToast('success', 'Settings imported.');
@@ -735,7 +736,7 @@ function BackupSection({ settings, onSettings }: { settings: AppSettings; onSett
   return (
     <section className="card mt-5 p-5">
       <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">Backup &amp; restore</h2></div>
-      <p className="mt-1 text-xs text-ink-faint">Export your configuration (providers, guardrails, prompts, MCP servers…) to a JSON file, or restore it on another machine.</p>
+      <p className="mt-1 text-xs text-ink-faint">Export your configuration (providers, guardrails, prompts, MCP servers…) to a JSON file, or restore it on another machine. The file leaves out API keys and tokens: they stay in this computer's keystore, so add them again on a new machine. Importing here keeps the keys you already have.</p>
       <div className="mt-3 flex gap-2">
         <button className="btn btn-outline py-1 text-xs" onClick={exportSettings}>Export settings</button>
         <button className="btn btn-outline py-1 text-xs" onClick={importSettings}>Import settings…</button>
