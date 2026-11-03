@@ -532,12 +532,16 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   // Rejects on a daemon that predates this: the sheet then stays on the account step, and the manual path still works.
   useEffect(() => {
     let live = true;
-    void window.nekko.githubAccounts().then((a) => {
+    const current = window.nekko.githubStatus().then((v) => { if (live) setStatus(v); return v; }, () => null);
+    void window.nekko.githubAccounts().then(async (a) => {
+      if (!live) return;
+      // Without `gh` there is nothing to choose, so go straight to GitHub for the user's own account.
+      // The sheet keeps "Checking GitHub…" meanwhile; Cancel on the next screen offers an org or an existing app.
+      if (!a.accounts.length && (await current)?.step === 'idle' && live) await start({ owner: '', kind: 'user', repoAdmin: false });
       if (!live) return;
       setAccounts(a);
       if (a.accounts.length) setChoice((c) => (c.login ? c : a.accounts[0]));
     }, () => { if (live) setAccounts(NO_ACCOUNTS); });
-    void window.nekko.githubStatus().then((v) => { if (live) setStatus(v); }, () => {});
     const off = window.nekko.onGithubSetupChanged(setStatus);
     return () => {
       live = false;

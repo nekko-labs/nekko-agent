@@ -138,6 +138,7 @@ const github: Record<string, GithubSetupView> = {
 let scene = 'first-visit';
 let imageChanged: (v: ImageView) => void = () => {};
 let runnersChanged: (v: RunnerView[]) => void = () => {};
+let githubChanged: (v: GithubSetupView) => void = () => {};
 let imageRefused = false;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const settings = { providers: [], workspaceFolders: [], workspaces: [], monitors: {}, theme: 'dark', experimental: {}, agent: {}, ui: {}, connectors: [] };
@@ -146,6 +147,14 @@ const bridge: any = {
   // `checking` never answers, so the sheet stays on its first frame.
   githubAccounts: () => (scene === 'github-account-checking' ? new Promise(() => {}) : Promise.resolve(scene.startsWith('github-account-no-gh') ? { login: null, accounts: [] } : signedIn)),
   githubStatus: async () => github[scene] ?? IDLE_GITHUB_SETUP,
+  // A nameless start makes a pending app for the user's own account, as the daemon does.
+  githubStart: async (req: { owner: string; kind: 'user' | 'org' }) => {
+    githubChanged({ ...IDLE_GITHUB_SETUP, step: 'create', owner: req.owner || null, kind: req.kind });
+    return { url: 'https://github.com/settings/apps/new' };
+  },
+  githubCancel: async () => { githubChanged(IDLE_GITHUB_SETUP); return IDLE_GITHUB_SETUP; },
+  onGithubSetupChanged: (cb: (v: GithubSetupView) => void) => { githubChanged = cb; return () => {}; },
+  openPath: async (url: string) => { (window as any).opened = [...((window as any).opened ?? []), url]; },
   connectRunner: async () => { if (scene === 'connect-busy') await sleep(1500); return off(); },
   setRunnerEnabled: async () => view({}),
   imageStatus: async () => {
@@ -168,6 +177,7 @@ function Fixture() {
   const show = (next: string) => {
     localStorage.clear();
     scene = next;
+    (window as any).opened = [];
     useStore.setState({ view: 'workflows', providers: [], models: [], sessions: [], terminals: [], workspaces: [], settings, settingsLoaded: true, installedSkillDefs: [] } as any);
     setEpoch((e) => e + 1);
   };

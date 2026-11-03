@@ -43,8 +43,8 @@ copied or pasted.
 In **Workflows > CI runners**, choose **Connect GitHub**:
 
 1. **Where do your repos live?** Nekko checks GitHub first. When `gh` is signed in, pick your
-   account or an org from the list. Without it, **Continue on GitHub** sets up your own account
-   with nothing to type; for an org, choose **For an org, type its name**.
+   account or an org from the list. Without it, Nekko goes straight to GitHub for your own
+   account with nothing to type; for an org, choose **Cancel**, then **For an org, type its name**.
 2. **Create.** Your browser opens GitHub with everything filled in. Click **Create**. If GitHub
    asks you to sign in first, it may then show an empty form: close it and choose
    **Open GitHub again**.
