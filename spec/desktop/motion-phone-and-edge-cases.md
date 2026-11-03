@@ -49,3 +49,13 @@ User intent: motion should never fight the user or cost frames, the Local Web UI
 - Done from the edge-case audit (#1478): toasts are capped, sticky for errors and have an exit motion; the chat list's Completed group and the model library are paged. Verified in a headless Chromium fixture of the real App with 400 completed chats and 400 models, not on a real library.
 - Not done from the edge-case audit: a pasted 50k-character prompt is not clamped; token and duration stats in the done row are not compact (`2400k in`). The RunBoard best-run label (`slice(0, 26)`) is left for the change already editing that file.
 - Not done: the held window card still moves by left/top per pointer move (one fixed element), and the rail's hover expansion still animates its width (bounded to the rail).
+
+## Gentleface control icons
+
+Intent: use the actual Gentleface animated icons in the app, not only export unused glyphs or crossfade two static variants.
+
+- Implemented: 14 bundled Gentleface 0.3.0 native SVG motion assets. The shared Info, Files/folder, Terminal, Server, Send, Privacy/lock and Effort/gauge exports now use them, as do the existing Gentleface sidebar and Focus controls. The colorful navigation rail remains unchanged.
+- Interaction: play once on the nearest control's pointer entry, keyboard focus or activation (including touch click), then stop at the rest pose. Decorative standalone icons stay still. Disabled controls do not play. System reduced motion prevents playback and stops an active animation when the preference changes. No idle loops.
+- Safety: assets are embedded locally with their MIT notice, with no runtime requests, scripts, permissions or provider calls. SVG clip/mask IDs are scoped per mounted instance. Icons remain decorative unless given a title; control labels and actions are unchanged.
+- Static fallback: brain-circuit and shield-question have no matching motion in this upstream set, so retain their line/solid variants. Exported check-circle, sign-out, workflow and router animations are available, but this change does not replace the colorful rail or add icons to text-only actions.
+- Acceptance: shared imports render animated SVGs; hidden Electron checks cover pointer, focus, click, disabled and live reduced-motion behavior at desktop and narrow renderer widths. Matching base/head screenshots and motion evidence are required. Native iOS/Android use their own icon implementation and are outside this renderer-only change.

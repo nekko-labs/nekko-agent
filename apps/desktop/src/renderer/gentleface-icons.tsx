@@ -1,9 +1,10 @@
 /*
  * Gentleface icons (https://www.gentleface.com, MIT license).
  * Icon paths are embedded from the gentleface iconify JSON.
- * Each icon has a line (static) and a solid (hover/active) variant.
+ * Motion assets play once on interaction; icons without motion use line/solid variants.
  */
-import React from 'react';
+import React, { useId, useLayoutEffect, useRef } from 'react';
+import { GENTLEFACE_MOTION } from './gentleface-motion-assets.js';
 
 export type GfIconName =
   | 'sidebar-collapse'
@@ -95,21 +96,68 @@ const PATHS: Record<GfIconName, Variant> = {
 type P = { className?: string; title?: string };
 
 /**
- * A gentleface icon. By default the line variant renders, and the solid variant
- * swaps in on hover and keyboard focus of the nearest parent that carries
+ * A Gentleface icon. Motion plays once on hover, focus and activation of the
+ * nearest control. Static-only icons swap line/solid variants. Supports
  * `data-icon-hover` (and inside `button`, `a`, `[role="button"]`,
  * `summary` and `label` without needing the attribute).
  *
  * Size and color follow `className` and the inherited `color`. Icons use
- * `fill="currentColor"` on a 16x16 viewBox.
+ * the inherited currentColor on a 16x16 viewBox.
  */
 export const GfIcon = ({ name, className, title }: P & { name: GfIconName }) => {
   const v = PATHS[name];
+  const motion = GENTLEFACE_MOTION[name];
+  const wrapper = useRef<HTMLSpanElement>(null);
+  const id = useId().replace(/:/g, '');
+  useLayoutEffect(() => {
+    if (!motion) return;
+    const el = wrapper.current!;
+    const svg = el.querySelector<SVGSVGElement>('.gf-icon-motion')!;
+    const control = el.closest<HTMLElement>('button, a, [role="button"], summary, label, [data-icon-hover]');
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      clearTimeout(timer);
+      svg.pauseAnimations();
+      svg.setCurrentTime(0);
+    };
+    const play = () => {
+      if (media.matches || control?.matches(':disabled, [aria-disabled="true"]')) return;
+      stop();
+      svg.setCurrentTime(motion.frames[0]);
+      svg.unpauseAnimations();
+      timer = setTimeout(stop, (motion.frames[1] - motion.frames[0]) * 1000);
+    };
+    const hover = (event: Event) => {
+      if ((event as PointerEvent).pointerType !== 'touch') play();
+    };
+    stop();
+    control?.addEventListener('pointerenter', hover);
+    control?.addEventListener('focus', play);
+    control?.addEventListener('click', play);
+    media.addEventListener('change', stop);
+    return () => {
+      stop();
+      control?.removeEventListener('pointerenter', hover);
+      control?.removeEventListener('focus', play);
+      control?.removeEventListener('click', play);
+      media.removeEventListener('change', stop);
+    };
+  }, [motion]);
+  // Some upstream motion assets use clip paths. Scope references per instance.
+  const motionBody = motion?.svg.replace(/^<svg[^>]*>|<\/svg>$/g, '')
+    .replace(/\bid="([^"]+)"/g, `id="${id}-$1"`)
+    .replace(/url\(#([^)]+)\)/g, `url(#${id}-$1)`)
+    .replace(/href="#([^"]+)"/g, `href="#${id}-$1"`);
   return (
-    <span className={'gf-icon ' + (className ?? '')} aria-hidden={title ? undefined : true} role={title ? 'img' : undefined}>
+    <span ref={wrapper} data-gf-icon={name} className={'gf-icon ' + (className ?? '')} aria-hidden={title ? undefined : true} role={title ? 'img' : undefined}>
       {title ? <span className="sr-only">{title}</span> : null}
-      <svg className="gf-icon-line" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.line }} />
-      <svg className="gf-icon-solid" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.solid }} />
+      {motionBody ? (
+        <svg className="gf-icon-motion" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.001" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: motionBody }} />
+      ) : <>
+        <svg className="gf-icon-line" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.line }} />
+        <svg className="gf-icon-solid" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.solid }} />
+      </>}
     </span>
   );
 };
