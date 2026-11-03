@@ -137,11 +137,15 @@ export function compareCards(view: Pick<AgentPanelView, 'sortBy' | 'direction'>)
   };
 }
 
+/** Chats parked on a question or an approval. Shows only while it has some. */
+export const NEEDS_INPUT_GROUP = 'status:input';
+
 /** Chats nothing has been sent in yet. This group shows only while it has some. */
 export const DRAFT_GROUP = 'status:draft';
 
-/** The activity groups, in the order the agent loop goes through them. */
+/** The activity groups: what needs you first, then the agent loop in order. */
 export const STATUS_GROUPS = [
+  { key: NEEDS_INPUT_GROUP, name: 'Needs input' },
   { key: DRAFT_GROUP, name: 'Draft' },
   { key: 'status:exploring', name: 'Exploring' },
   { key: 'status:building', name: 'Building' },
@@ -150,12 +154,14 @@ export const STATUS_GROUPS = [
 ] as const;
 
 /**
- * A chat's activity group. `running` covers a first message on its way, which
- * no summary shows yet. A chat stays in its phase when it stops: the card's own
- * glyph says whether it is working, waiting on you or stopped on an error.
+ * A chat's activity group. Any `status` covers a first message on its way, which
+ * no summary shows yet. A chat waiting on you leaves its phase until answered;
+ * otherwise it stays in its phase when it stops, and the card's own glyph says
+ * whether it is working or stopped on an error.
  */
-export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase'> | null | undefined, running: boolean): string {
-  if (!running && chat?.exchangeCount === 0) return DRAFT_GROUP;
+export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+  if (status === 'input') return NEEDS_INPUT_GROUP;
+  if (!status && chat?.exchangeCount === 0) return DRAFT_GROUP;
   return `status:${chat?.phase ?? 'exploring'}`;
 }
 

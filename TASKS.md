@@ -14,6 +14,7 @@ Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#
 - [x] **APL-2, Every window hears a move.** `forward` in `turns.rs` sends `session_meta` when a checkpoint moves the phase, after the save, because tool calls only reach windows showing the chat. (2026-11-03)
 - [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
 - [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
+- [x] **APL-5, Needs input group.** A chat parked on a question or approval, or with a sub-agent that is, moves to a Needs input group above Draft that shows only with a chat in it; answering returns it to its phase. (2026-11-03)
 
 ## Third-party licensing and credits (added 2026-11-03)
 
