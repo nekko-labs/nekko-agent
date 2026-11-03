@@ -9,8 +9,9 @@ import SwiftUI
 /// Folded (the default) it is one or two lines: the step being worked (its
 /// mark, loop kind, title, pass and "2 of 4") and a row of chips for it.
 /// Tapping it opens the whole plan, every step with its detail and chips;
-/// finished steps squeeze to their title and open when tapped (the desktop
-/// opens them on hover). Chips are placed by the app, not the model:
+/// finished steps squeeze to their title and open or fold when tapped, except
+/// the last one with results for the user (a PR, a check's evidence), which
+/// starts open. Chips are placed by the app, not the model:
 /// sub-agents, verification, PRs and task links.
 struct PlanSheet: View {
     let chat: ChatModel
@@ -20,8 +21,8 @@ struct PlanSheet: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var open = false
-    /// Squeezed steps the user tapped open.
-    @State private var unsqueezed: Set<String> = []
+    /// Finished steps the user tapped open (true) or folded (false); the rest follow `AgentPlan.openByDefault`.
+    @State private var tapped: [String: Bool] = [:]
     @State private var prs: [PullRequest] = []
     @State private var risen = false
 
@@ -122,8 +123,9 @@ struct PlanSheet: View {
             .accessibilityHint("Folds the plan")
             .accessibilityIdentifier("chat.planOpen")
             ScrollView {
+                let opened = AgentPlan.openByDefault(plan, links: links)
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(plan) { step in row(step, links: links[step.id], paused: paused) }
+                    ForEach(plan) { step in row(step, links: links[step.id], paused: paused, opened: opened) }
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -131,11 +133,11 @@ struct PlanSheet: View {
         }
     }
 
-    private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool) -> some View {
+    private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool, opened: String?) -> some View {
         let kids = (own?.subagents ?? []).compactMap { id in chat.children.first { $0.id == id } }
         let chips = own?.prs.isEmpty == false || own?.projects.isEmpty == false || !kids.isEmpty || step.verification != nil
         let more = step.detail != nil || chips
-        let shown = !step.squeezed || unsqueezed.contains(step.id)
+        let shown = !step.squeezed || (tapped[step.id] ?? (step.id == opened))
         return HStack(alignment: .firstTextBaseline, spacing: 8) {
             PlanStepMark(status: step.status, paused: paused)
             VStack(alignment: .leading, spacing: 2) {
@@ -175,7 +177,7 @@ struct PlanSheet: View {
         .onTapGesture {
             guard step.squeezed, more else { return }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
-                if unsqueezed.contains(step.id) { unsqueezed.remove(step.id) } else { unsqueezed.insert(step.id) }
+                tapped[step.id] = !shown
             }
         }
         .accessibilityElement(children: .contain)
@@ -287,7 +289,7 @@ private struct KindLabel: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text(kind.label).font(.caption.weight(.medium)).foregroundStyle(current ? palette.accent : palette.inkSoft).fixedSize()
+        Text(kind.label).font(.caption.weight(.semibold)).foregroundStyle(current ? palette.accent : palette.inkSoft).fixedSize()
     }
 }
 

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +43,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -74,6 +80,7 @@ import com.nekko.protocol.Purpose
 import com.nekko.protocol.PurposeCall
 import com.nekko.protocol.ToolPurpose
 import com.nekko.protocol.Transcript
+import com.nekko.protocol.Voice
 import com.nekko.protocol.ToolStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -86,12 +93,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 data class ForkAction(val label: String, val run: () -> Unit)
 
 @Composable
-fun BlockView(block: Block, fork: ForkAction? = null) {
+fun BlockView(block: Block, fork: ForkAction? = null, voice: Voice? = null) {
     when (block) {
         // A watch's wake-up is a step of the run, not something the user typed.
         is Block.User -> AgentRows.parseWake(block.text)?.takeIf { block.thumbs.isEmpty() }?.let { WatchWakeRow(it, block.text, block.at) }
             ?: UserBubble(block, fork)
-        is Block.Assistant -> Reply(block, fork)
+        is Block.Assistant -> Reply(block, fork, voice)
         // The agent's work, drawn as the desktop draws it: no fill, no stroke, one line each.
         is Block.Tool -> AgentToolRow(block)
     }
@@ -127,7 +134,7 @@ private fun UserBubble(b: Block.User, fork: ForkAction?) {
 }
 
 @Composable
-private fun Reply(b: Block.Assistant, fork: ForkAction?) {
+private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?) {
     val p = Nekko.palette
     var open by rememberSaveable(b.id) { mutableStateOf(false) }
     val reasoning = b.reasoning
@@ -173,7 +180,17 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
             }
         }
         if (b.text.isNotEmpty()) {
-            LongPressMenu(b.text, fork) { press -> MarkdownText(b.text, color = p.ink, modifier = Modifier.fillMaxWidth().then(press)) }
+            Voiced(voice) {
+                LongPressMenu(b.text, fork) { press ->
+                    MarkdownText(
+                        b.text,
+                        color = if (voice == Voice.WORKING) p.inkSoft else p.ink,
+                        topics = true,
+                        askTail = voice == Voice.REPLY || voice == Voice.ATTENTION,
+                        modifier = Modifier.fillMaxWidth().then(press),
+                    )
+                }
+            }
             // Cards come once the reply is finished; a tapped link works meanwhile.
             if (!b.streaming) PreviewCards(b.text)
         } else if (b.streaming && reasoning.isNullOrEmpty()) {
@@ -187,6 +204,44 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?) {
             Text(stringResource(R.string.chat_stopped_before_finishing), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
     }
+}
+
+/**
+ * Who a reply's text is for (spec/chat/thinking-and-replies.md). A note is
+ * quiet with the thought icon; a reply, or anything left for the reader
+ * mid-turn, sits on a panel. The icon and the panel's edge live in the list's
+ * 16dp side padding, so a block that settles its voice keeps its width and
+ * does not re-wrap.
+ */
+@Composable
+private fun Voiced(voice: Voice?, content: @Composable () -> Unit) {
+    val p = Nekko.palette
+    when (voice) {
+        null -> content()
+        Voice.WORKING -> Box {
+            content()
+            Icon(Icons.Filled.Psychology, contentDescription = null, tint = p.inkFaint, modifier = Modifier.offset(x = (-15).dp, y = 4.dp).size(13.dp))
+        }
+        Voice.REPLY, Voice.ATTENTION -> {
+            val tone = if (voice == Voice.REPLY) p.accent else p.warning
+            Box(
+                Modifier
+                    .bleed(10.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(tone.copy(alpha = 0.08f))
+                    .drawBehind { drawRect(tone, size = Size(2.dp.toPx(), size.height)) }
+                    .padding(10.dp),
+            ) { content() }
+        }
+    }
+}
+
+/** Grows [by] into the space on each side, as the desktop's panels grow into its gutter. */
+private fun Modifier.bleed(by: Dp) = layout { measurable, constraints ->
+    val px = by.roundToPx()
+    val placeable = measurable.measure(constraints.offset(horizontal = 2 * px))
+    layout(placeable.width - 2 * px, placeable.height) { placeable.place(-px, 0) }
 }
 
 /**

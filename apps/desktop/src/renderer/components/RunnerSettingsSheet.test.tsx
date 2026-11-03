@@ -24,12 +24,17 @@ const esc = (s: string) => renderToStaticMarkup(<>{s}</>);
 
 describe('RunnerSettingsSheet', () => {
   it('rebuild_image_shows_only_with_an_image_at_rest', () => {
-    const image: ImageView = { state: 'ready', stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: { macos: '27.2', xcode: '27.2', actionsRunner: '2.330.0', built: '2026-11-01' }, canResume: false };
+    const image: ImageView = { state: 'ready', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: { macos: '27.2', xcode: '27.2', actionsRunner: '2.330.0', built: '2026-11-01' }, canResume: false };
     const html = render(view(), undefined, image);
     expect(html).toContain('Rebuild image');
     expect(html).toContain('macOS 27.2 · Xcode 27.2');
     expect(render(view(), undefined, { ...image, state: 'building' })).not.toContain('Rebuild image');
     expect(render(view())).not.toContain('Rebuild image');
+    // Update scripts sits beside it when the sheet can start one.
+    expect(html).not.toContain('Update scripts');
+    const withRefresh = renderToStaticMarkup(<SettingsBody view={view()} image={image} draft={view().config.settings} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} onRefresh={() => {}} saving={false} />);
+    expect(withRefresh).toContain('>Update scripts<');
+    expect(withRefresh).toContain(esc("Update scripts puts this version of Nekko's scripts into the image in a few minutes. A new macOS or Xcode needs Rebuild image."));
   });
 
   it('settings_match_mockup_4', () => {

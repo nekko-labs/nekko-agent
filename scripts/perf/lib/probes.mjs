@@ -4,18 +4,18 @@
  * the end of the first frame that shows the effect.
  *
  * "End of the frame" is a requestAnimationFrame callback followed by a
- * MessageChannel tick: the rAF runs in the frame's rendering step, style,
- * layout and paint follow it in the same task, and the posted message runs in
- * the next task, after the frame has been produced.
+ * user-blocking task: the rAF runs in the frame's rendering step, style, layout
+ * and paint follow it in the same task, and the posted task runs after the
+ * frame has been produced. Not a MessageChannel message: with the frame-rate
+ * limiter off, a main-thread CSS transition (the sidebar cards' 150 ms colour
+ * change) runs frames back to back, and those frames held an ordinary message
+ * back for up to 60 ms after the frame it was timing.
  */
 
 /** Pure DOM helpers shared by the probes, as page-side source. */
 const HELPERS = String.raw`
-  const afterFrame = (fn) => requestAnimationFrame(() => {
-    const ch = new MessageChannel();
-    ch.port1.onmessage = () => fn(performance.now());
-    ch.port2.postMessage(0);
-  });
+  const nextTask = (fn) => scheduler.postTask(fn, { priority: 'user-blocking' });
+  const afterFrame = (fn) => requestAnimationFrame(() => nextTask(() => fn(performance.now())));
   // Transcript-only wall windows have a separate shared composer. Locate the
   // titled transcript itself; a composer is not evidence that history painted.
   const visiblePanel = (title) => {
@@ -145,14 +145,12 @@ export const INSTALL = String.raw`(() => {
       if (frameNow) sawFrame = true;
       if (historyNow) sawHistory = true;
       if (frameNow || historyNow) {
-        const ch = new MessageChannel();
-        ch.port1.onmessage = () => {
+        nextTask(() => {
           const d = performance.now() - start;
           if (frameNow) res.frame = d;
           if (historyNow) res.history = d;
           if (res.frame != null && res.history != null) finish();
-        };
-        ch.port2.postMessage(0);
+        });
       }
       if (sawFrame && sawHistory) return;
       if (performance.now() - start > timeoutMs) { res.timeout = true; finish(); return; }

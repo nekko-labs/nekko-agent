@@ -99,3 +99,23 @@ export function supabaseVerifier(cfg: SupabaseConfig): VerifyAccessToken {
     return { subject: payload.sub, email, emailVerified: confirmed };
   };
 }
+
+/** Deletes a Supabase Auth user; throws on failure. */
+export type DeleteAuthUser = (subject: string) => Promise<void>;
+
+/**
+ * Supabase Auth's admin API (`DELETE /auth/v1/admin/users/:id`) with the
+ * project's service-role key. A user already gone (404) counts as deleted.
+ * The error names only the status, never the user.
+ */
+export function supabaseAdminDeleter(url: string, serviceRoleKey: string, fetchImpl: typeof fetch = fetch): DeleteAuthUser {
+  const base = url.replace(/\/+$/, "");
+  return async (subject) => {
+    const res = await fetchImpl(`${base}/auth/v1/admin/users/${encodeURIComponent(subject)}`, {
+      method: "DELETE",
+      headers: { apikey: serviceRoleKey, authorization: `Bearer ${serviceRoleKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok && res.status !== 404) throw new Error(`Supabase admin delete answered ${res.status}`);
+  };
+}

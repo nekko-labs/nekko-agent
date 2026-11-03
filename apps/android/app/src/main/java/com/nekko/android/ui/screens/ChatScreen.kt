@@ -86,6 +86,7 @@ import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
+import com.nekko.protocol.ReplyTopics
 import com.nekko.protocol.PurposeRun
 import java.util.Locale
 import android.content.ClipData
@@ -253,6 +254,8 @@ fun ChatScreen(
     val footerCount = 1
     // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
     val rows = remember(keyed) { Purpose.group(keyed) { Purpose.role(it.second) } }
+    // How each reply reads in its turn: a note, something left for you, or the reply (spec/chat/thinking-and-replies.md).
+    val voices = remember(keyed, chat.running) { keyed.map { it.first }.zip(ReplyTopics.voices(chat.blocks, chat.running)).toMap() }
     val lastIndex = headerCount + rows.size + footerCount - 1
 
     // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
@@ -504,7 +507,8 @@ fun ChatScreen(
                                         // In a pane a message can be dragged into the other pane's message box.
                                         // A reply's links to files and loopback pages open previews from the computer (AN-35).
                                         CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
-                                            if (pane == null) BlockView(block, fork) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork) }
+                                            val voice = voices[run.item.first]
+                                            if (pane == null) BlockView(block, fork, voice) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, voice) }
                                         }
                                     }
                                     is PurposeRun.Group -> {
@@ -601,8 +605,8 @@ fun ChatScreen(
                     onInterrupt = vm::interruptQueued,
                     onNewAgent = onNewChat,
                     onTerminal = vm::openTerminals,
+                    footer = { ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }) },
                 )
-                ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
             }
         }
         ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)

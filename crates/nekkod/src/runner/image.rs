@@ -46,6 +46,14 @@ const DISK_GB: &str = "140";
 const NEEDS_GB: f64 = 110.0;
 const MEMORY_MB: u32 = 8192;
 const IPSW: &str = "restore.ipsw";
+/// The last restore image downloaded, kept under its Apple file name for the next build.
+const CACHE: &str = "cache";
+/// The two files `provision.sh` installs from `runner-image/`, and where they live in the guest.
+const SCRIPTS: [(&str, &str); 2] = [
+    ("nekko-runner-boot.sh", "usr/local/libexec/nekko-runner-boot.sh"),
+    ("dev.nekkolabs.runner-boot.plist", "Library/LaunchDaemons/dev.nekkolabs.runner-boot.plist"),
+];
+const NO_IMAGE_TO_UPDATE: &str = "There is no image to update. Set up this Mac first.";
 const PROOF_FILE: &str = "usr/local/share/nekko-runner-image.json";
 const PROVISION_LOG: &str = "private/var/log/nekko-provision.log";
 const BOOT_LOG: &str = "private/var/log/nekko-runner-boot.log";
@@ -79,18 +87,29 @@ pub enum Stage {
     Install,
     Xcode,
     Lockdown,
+    /// A refresh: a copy of the image with Nekko's scripts written in.
+    Scripts,
     Test,
     Finish,
 }
 
 const STAGES: [Stage; 7] =
     [Stage::Check, Stage::Download, Stage::Install, Stage::Xcode, Stage::Lockdown, Stage::Test, Stage::Finish];
+const REFRESH_STAGES: [Stage; 4] = [Stage::Check, Stage::Scripts, Stage::Test, Stage::Finish];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Kind {
     Xcode,
     MacosOnly,
+    /// The image in use with only Nekko's own scripts replaced: minutes, not half an hour.
+    Refresh,
+}
+
+impl Kind {
+    fn stages(self) -> &'static [Stage] {
+        if self == Kind::Refresh { &REFRESH_STAGES } else { &STAGES }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -118,6 +137,8 @@ pub struct ImageInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ImageView {
     pub state: ImageState,
+    /// The build under way or stopped, which says which stages it has.
+    pub kind: Option<Kind>,
     pub stage: Option<Stage>,
     pub done_stages: Vec<Stage>,
     pub detail: String,
@@ -140,6 +161,8 @@ pub struct ImagePlan {
     pub xcode: Option<String>,
     pub free_gb: Option<f64>,
     pub needs_gb: f64,
+    /// A restore image kept from an earlier build, reused while it is still Apple's newest.
+    pub cached_macos: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -173,7 +196,7 @@ impl BuildFile {
     }
 
     fn next(&self) -> Option<Stage> {
-        STAGES.into_iter().find(|s| !self.done.contains(s))
+        self.kind.stages().iter().copied().find(|s| !self.done.contains(s))
     }
 }
 
@@ -329,6 +352,8 @@ pub trait BuildHost: Send + Sync + 'static {
     /// A clone must boot, reject a bad seed and power itself off.
     fn test_boot(&self, bundle: &Path) -> impl Future<Output = Result<(), String>> + Send;
     fn clone_bundle(&self, from: &Path, to: &Path) -> impl Future<Output = Result<(), String>> + Send;
+    /// Writes this build of Nekko's `SCRIPTS` over the ones on `bundle`'s disk.
+    fn write_scripts(&self, bundle: &Path) -> impl Future<Output = Result<(), String>> + Send;
     fn swap(&self, bundle: &Path, default: &Path) -> impl Future<Output = Result<(), String>> + Send;
     fn enable_runner(&self, id: &str, priority: Priority) -> impl Future<Output = Result<(), String>> + Send;
 }
@@ -361,6 +386,55 @@ async fn remove_any(path: &Path) -> Result<(), String> {
     let p = path.to_path_buf();
     let done = tokio::task::spawn_blocking(move || remove_any_sync(&p)).await;
     done.map_err(|e| e.to_string())?.map_err(|e| format!("Cannot delete {}: {e}", path.display()))
+}
+
+/// The restore image's file name in Apple's URL, or a fixed one for an odd URL (never kept then).
+fn restore_name(url: &str) -> &str {
+    let name = url.rsplit('/').next().unwrap_or_default();
+    let plain = name.ends_with(".ipsw")
+        && !name.starts_with('.')
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b));
+    if plain { name } else { IPSW }
+}
+
+/// Keeps `ipsw` as `cache/name`, a hard link that outlives the build's copy, and drops older ones.
+fn keep_restore_image(cache: &Path, name: &str, ipsw: &Path) -> std::io::Result<()> {
+    clear_cache(cache)?;
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(cache)?;
+    std::fs::hard_link(ipsw, cache.join(name))
+}
+
+fn clear_cache(cache: &Path) -> std::io::Result<()> {
+    match std::fs::remove_dir_all(cache) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
+/// What the kept restore images take, in GB.
+fn cache_gb(cache: &Path) -> f64 {
+    let files = std::fs::read_dir(cache).into_iter().flatten().flatten();
+    files.filter_map(|e| e.metadata().ok()).map(|m| m.len() as f64 / 1e9).sum()
+}
+
+/// The `/dev/diskNsM` of the volume with the Data role among `devices`, from
+/// `diskutil apfs list -plist` as JSON.
+fn data_volume(json: &[u8], devices: &[&str]) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(json).ok()?;
+    let volumes = v["Containers"].as_array()?.iter().filter_map(|c| c["Volumes"].as_array()).flatten();
+    volumes
+        .filter(|vol| vol["Roles"].as_array().is_some_and(|r| r.iter().any(|x| x == "Data")))
+        .filter_map(|vol| vol["DeviceIdentifier"].as_str())
+        .map(|id| format!("/dev/{id}"))
+        .find(|dev| devices.contains(&dev.as_str()))
+}
+
+/// Rewrites `path` in its own inode: the guest file keeps its owner and mode,
+/// which a host mount that ignores ownership could not set on a new file.
+fn overwrite_in_place(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut f = std::fs::OpenOptions::new().write(true).truncate(true).open(path)?;
+    f.write_all(bytes)?;
+    f.sync_all()
 }
 
 /// Clears the keep-awake wish however the job ends, a cancel included.
@@ -430,6 +504,7 @@ impl<H: BuildHost> ImageJob<H> {
         let build = self.read_build();
         ImageView {
             state: if default.is_dir() { ImageState::Ready } else { ImageState::None },
+            kind: build.as_ref().map(|b| b.kind),
             stage: build.as_ref().and_then(BuildFile::next),
             done_stages: build.as_ref().map(|b| b.done.clone()).unwrap_or_default(),
             info,
@@ -479,6 +554,7 @@ impl<H: BuildHost> ImageJob<H> {
         self.update(|v| {
             *v = ImageView {
                 state: ImageState::Building,
+                kind: Some(build.kind),
                 stage: build.next(),
                 done_stages: build.done.clone(),
                 info: v.info.clone(),
@@ -521,6 +597,7 @@ impl<H: BuildHost> ImageJob<H> {
                 self.update(|v| {
                     *v = ImageView {
                         state: ImageState::Failed,
+                        kind: Some(build.kind),
                         stage: Some(stage),
                         done_stages: build.done.clone(),
                         error: Some(error),
@@ -618,7 +695,19 @@ impl<H: BuildHost> ImageJob<H> {
                     return Ok(());
                 }
                 let url = self.host.restore_image().await?;
-                self.host.download(&url, &ipsw, &report).await
+                // Apple names each restore image by version and build, so a kept one with the
+                // newest one's name is that same image.
+                let cache = self.images.join(CACHE);
+                let name = restore_name(&url);
+                if std::fs::hard_link(cache.join(name), &ipsw).is_ok() {
+                    self.detail("Using the macOS image downloaded earlier");
+                    return Ok(());
+                }
+                self.host.download(&url, &ipsw, &report).await?;
+                if let Err(e) = keep_restore_image(&cache, name, &ipsw) {
+                    self.log(&format!("Could not keep the macOS image for next time: {e}"));
+                }
+                Ok(())
             }
             Stage::Install => {
                 // Quit after the restore image went: the checkpoint is already whole.
@@ -663,6 +752,24 @@ impl<H: BuildHost> ImageJob<H> {
                 let image = proof.image.ok_or("The lockdown did not finish: the VM has no proof file.")?;
                 serde_json::from_str::<ImageInfo>(&image).map_err(|e| format!("The proof file is not valid: {e}"))?;
                 std::fs::write(dir.join("proof.json"), image).map_err(|e| format!("Cannot save the proof: {e}"))
+            }
+            Stage::Scripts => {
+                let default = self.images.join("default");
+                if !default.is_dir() {
+                    return Err(NO_IMAGE_TO_UPDATE.into());
+                }
+                remove_any(&bundle).await?;
+                self.detail("Copying the image");
+                self.host.clone_bundle(&default, &bundle).await?;
+                self.detail("Writing the new scripts into the copy");
+                self.host.write_scripts(&bundle).await?;
+                // Only the scripts changed, so the image's own proof carries over.
+                match std::fs::read(default.join("image.json")) {
+                    Ok(info) => {
+                        std::fs::write(dir.join("proof.json"), info).map_err(|e| format!("Cannot save the proof: {e}"))
+                    }
+                    Err(_) => Ok(()),
+                }
             }
             Stage::Test => {
                 self.detail("Booting a test clone");
@@ -983,6 +1090,55 @@ impl RealBuildHost {
         Err(format!("Cannot close the VM's disk ({device})."))
     }
 
+    /// Attaches `bundle`'s disk with nothing mounted, mounts only its Data volume
+    /// read-write and runs `write` on it. Mounting the whole disk read-write breaks
+    /// the system volume's seal, and a guest with a broken seal may not boot.
+    async fn with_data_volume<T>(&self, bundle: &Path, write: impl FnOnce(&Path) -> T) -> Result<T, String> {
+        self.detach_leftovers().await;
+        let mut attach = Command::new("/usr/bin/hdiutil");
+        attach
+            .args(["attach", "-nomount", "-noverify", "-noautofsck", "-imagekey", "diskimage-class=CRawDiskImage"])
+            .arg(bundle.join("disk.img"));
+        let out = output_within(attach, minutes(2), "hdiutil").await?;
+        if !out.status.success() {
+            return Err(format!("Cannot open the VM's disk: {}", String::from_utf8_lossy(&out.stderr).trim()));
+        }
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        let devices: Vec<&str> = text.lines().filter_map(|l| l.split_whitespace().next()).collect();
+        let device = devices.first().copied().ok_or("hdiutil named no device")?.to_owned();
+        let found = self.mount_data(&devices, write).await;
+        for flags in [&[][..], &["-force"][..]] {
+            let mut detach = Command::new("/usr/bin/hdiutil");
+            detach.arg("detach").args(flags).arg(&device);
+            if output_within(detach, minutes(1), "hdiutil").await.is_ok_and(|o| o.status.success()) {
+                return found;
+            }
+        }
+        Err(format!("Cannot close the VM's disk ({device})."))
+    }
+
+    async fn mount_data<T>(&self, devices: &[&str], write: impl FnOnce(&Path) -> T) -> Result<T, String> {
+        // As JSON: plutil reads diskutil's plist, so nekkod needs no plist parser.
+        let mut list = Command::new("/bin/sh");
+        list.args(["-c", "/usr/sbin/diskutil apfs list -plist | /usr/bin/plutil -convert json -o - -"]);
+        let out = output_within(list, minutes(1), "diskutil").await?;
+        let data = data_volume(&out.stdout, devices).ok_or("The VM's disk has no Data volume.")?;
+        let at = self.dir().join("mnt").join(new_password()?);
+        std::fs::create_dir_all(&at).map_err(|e| format!("Cannot make the mount folder: {e}"))?;
+        let mut mount = Command::new("/usr/sbin/diskutil");
+        mount.args(["mount", "-mountPoint"]).arg(&at).arg(&data);
+        let out = output_within(mount, minutes(2), "diskutil").await?;
+        if !out.status.success() {
+            return Err(format!("Cannot mount the VM's Data volume: {}", String::from_utf8_lossy(&out.stderr).trim()));
+        }
+        let done = write(&at);
+        let mut unmount = Command::new("/usr/sbin/diskutil");
+        unmount.arg("unmount").arg(&at);
+        let unmounted = output_within(unmount, minutes(1), "diskutil").await.is_ok_and(|o| o.status.success());
+        let _ = std::fs::remove_dir(&at);
+        if unmounted { Ok(done) } else { Err("Cannot unmount the VM's Data volume.".into()) }
+    }
+
     /// An attachment outlives nekkod, so a quit can strand one under `mnt/`,
     /// where it would block deleting the build folder.
     async fn detach_leftovers(&self) {
@@ -1023,20 +1179,37 @@ impl RealBuildHost {
             }
             None => None,
         };
-        ImagePlan { xcode, free_gb: self.mac().map(|m| m.free_disk_gb), needs_gb: NEEDS_GB }
+        let cached_macos = cache_gb(&self.images.join(CACHE)) > 0.0;
+        ImagePlan { xcode, free_gb: self.mac().map(|m| m.free_disk_gb), needs_gb: NEEDS_GB, cached_macos }
     }
 }
 
 impl BuildHost for RealBuildHost {
     async fn preflight(&self, kind: Kind) -> Result<(), String> {
         self.vm()?;
+        if kind == Kind::Refresh {
+            // A clone costs no space, and nothing here needs Xcode or a first boot.
+            if !self.images.join("default").is_dir() {
+                return Err(NO_IMAGE_TO_UPDATE.into());
+            }
+            let src = self.helper_dir()?.join("runner-image");
+            return match SCRIPTS.iter().all(|(file, _)| src.join(file).is_file()) {
+                true => Ok(()),
+                false => Err("The VM setup scripts are not installed.".into()),
+            };
+        }
         let version = super::signals::output("/usr/bin/sw_vers", &["-productVersion"], Duration::from_secs(5)).await;
         if version.as_deref().map_or(0, os_major) < 27 {
             return Err(UPDATE_MACOS.into());
         }
         if let Some(m) = self.mac() {
-            if m.free_disk_gb < NEEDS_GB {
+            // A kept restore image gives its space back before a build is refused for it.
+            let cache = self.images.join(CACHE);
+            if m.free_disk_gb + cache_gb(&cache) < NEEDS_GB {
                 return Err(no_room(m.free_disk_gb));
+            }
+            if m.free_disk_gb < NEEDS_GB {
+                clear_cache(&cache).map_err(|e| format!("Cannot free the kept macOS image: {e}"))?;
             }
             if m.security_update_overdue_days.is_some_and(|d| d > SECURITY_GRACE_DAYS) {
                 return Err("Install this Mac's security update, then try again.".into());
@@ -1252,6 +1425,26 @@ impl BuildHost for RealBuildHost {
 
     async fn clone_bundle(&self, from: &Path, to: &Path) -> Result<(), String> {
         self.vm()?.clone_bundle(from, to).await
+    }
+
+    async fn write_scripts(&self, bundle: &Path) -> Result<(), String> {
+        let src = self.helper_dir()?.join("runner-image");
+        let mut new = Vec::new();
+        for (file, at) in SCRIPTS {
+            let bytes = std::fs::read(src.join(file)).map_err(|e| format!("Cannot read {file}: {e}"))?;
+            new.push((bytes, at));
+        }
+        self.with_data_volume(bundle, |root| {
+            // Only replaced, never created: an image without them is older than this and needs a rebuild.
+            if !SCRIPTS.iter().all(|(_, at)| root.join(at).is_file()) {
+                return Err("This image has no Nekko scripts to update. Rebuild it instead.".to_owned());
+            }
+            for (bytes, at) in &new {
+                overwrite_in_place(&root.join(at), bytes).map_err(|e| format!("Cannot write {at}: {e}"))?;
+            }
+            Ok(())
+        })
+        .await?
     }
 
     async fn swap(&self, bundle: &Path, default: &Path) -> Result<(), String> {

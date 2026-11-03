@@ -1366,13 +1366,13 @@
     --titlebar-bg: transparent;
     --titlebar-overlay: #00000000;
     --field:
-      radial-gradient(60% 900px at 12% 0%, rgba(157, 140, 230, 0.26), transparent 70%),
-      radial-gradient(50% 800px at 92% 6%, rgba(138, 228, 242, 0.12), transparent 70%),
-      radial-gradient(50% 900px at 88% 40%, rgba(138, 228, 242, 0.1), transparent 70%),
-      radial-gradient(55% 900px at 8% 58%, rgba(157, 140, 230, 0.16), transparent 70%),
-      radial-gradient(60% 900px at 90% 80%, rgba(165, 249, 223, 0.08), transparent 70%),
-      radial-gradient(60% 800px at 20% 100%, rgba(157, 140, 230, 0.22), transparent 70%),
-      var(--paper);
+      radial-gradient(60% 900px at 12% 0%, rgba(133, 79, 108, 0.26), transparent 70%),
+    radial-gradient(50% 800px at 92% 6%, rgba(133, 79, 108, 0.12), transparent 70%),
+    radial-gradient(50% 900px at 88% 40%, rgba(133, 79, 108, 0.1), transparent 70%),
+    radial-gradient(55% 900px at 8% 58%, rgba(133, 79, 108, 0.16), transparent 70%),
+    radial-gradient(60% 900px at 90% 80%, rgba(165, 249, 223, 0.08), transparent 70%),
+    radial-gradient(60% 800px at 20% 100%, rgba(133, 79, 108, 0.22), transparent 70%),
+    var(--paper);
   }
 
   /* Experimental: candidate brand colour pairings (Settings → Theme → Experimental).
@@ -3981,4 +3981,36 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @keyframes runner-spark { 0%, 19% { transform: rotate(var(--a)) translateY(-30px) scale(.5); opacity: 0; } 36% { opacity: .9; } 100% { transform: rotate(var(--a)) translateY(-50px) scale(1); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .runner-burst .ring, .runner-burst .badge, .runner-burst .badge path, .runner-burst i { animation: none; }
+}
+
+/* Gentleface icons: a line glyph by default, a solid glyph on hover/active/focus.
+ * The two SVGs stack and swap opacity so the hover feels like a weight change
+ * instead of a replacement. `className` sizes the wrapper (e.g. `h-4 w-4`), and
+ * both SVGs fill it. Buttons, links, menu items and summaries pick up the hover
+ * automatically; anything else can opt in with `data-icon-hover`. */
+.gf-icon { position: relative; display: inline-grid; place-items: center; vertical-align: middle; line-height: 0; }
+.gf-icon > svg { grid-area: 1 / 1; width: 100%; height: 100%; display: block; transition: opacity 120ms ease; }
+.gf-icon > .gf-icon-solid { opacity: 0; }
+@media (hover: hover) {
+  :is(button, a, [role="button"], summary, label):hover > .gf-icon > .gf-icon-line,
+  :is(button, a, [role="button"], summary, label):hover .gf-icon > .gf-icon-line,
+  [data-icon-hover]:hover > .gf-icon > .gf-icon-line,
+  [data-icon-hover]:hover .gf-icon > .gf-icon-line { opacity: 0; }
+  :is(button, a, [role="button"], summary, label):hover > .gf-icon > .gf-icon-solid,
+  :is(button, a, [role="button"], summary, label):hover .gf-icon > .gf-icon-solid,
+  [data-icon-hover]:hover > .gf-icon > .gf-icon-solid,
+  [data-icon-hover]:hover .gf-icon > .gf-icon-solid { opacity: 1; }
+}
+:is(button, a, [role="button"], summary, label):focus-visible .gf-icon > .gf-icon-line,
+[data-icon-hover]:focus-visible .gf-icon > .gf-icon-line { opacity: 0; }
+:is(button, a, [role="button"], summary, label):focus-visible .gf-icon > .gf-icon-solid,
+[data-icon-hover]:focus-visible .gf-icon > .gf-icon-solid { opacity: 1; }
+:is(button, a, [role="button"], summary, label)[aria-pressed="true"] .gf-icon > .gf-icon-line,
+:is(button, a, [role="button"], summary, label)[aria-expanded="true"] .gf-icon > .gf-icon-line,
+:is(button, a, [role="button"], summary, label).is-active .gf-icon > .gf-icon-line { opacity: 0; }
+:is(button, a, [role="button"], summary, label)[aria-pressed="true"] .gf-icon > .gf-icon-solid,
+:is(button, a, [role="button"], summary, label)[aria-expanded="true"] .gf-icon > .gf-icon-solid,
+:is(button, a, [role="button"], summary, label).is-active .gf-icon > .gf-icon-solid { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .gf-icon > svg { transition: none; }
 }

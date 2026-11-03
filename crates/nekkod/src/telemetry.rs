@@ -7,7 +7,11 @@
 //! - which features get used ([`EVENTS`]), with the few properties each allows;
 //! - errors and crashes, with every string scrubbed ([`scrub`]): secrets,
 //!   emails, phone numbers, card numbers, IP addresses and the user's name are
-//!   replaced, and file paths are cut to their last part.
+//!   replaced, and file paths are cut to their last part. An error carries
+//!   only its class and the first line of its message, at most
+//!   [`ERROR_CHARS`] characters ([`error_message`]), and stack frames as
+//!   function and file names ([`error_stack`]): never the rest of a message,
+//!   which could echo a prompt.
 //!
 //! Never chat text, prompts, file contents, folder names, model output or
 //! account names. PostHog is told not to look up the IP's location and not to
@@ -32,6 +36,10 @@ const FLUSH_EVERY: Duration = Duration::from_secs(60);
 const QUEUE_MAX: usize = 500;
 /// A string property is cut to this many characters.
 const STRING_MAX: usize = 2000;
+/// An error's message is cut to this many characters, after scrubbing.
+pub const ERROR_CHARS: usize = 200;
+/// Stack frames an error report keeps.
+const FRAMES_MAX: usize = 30;
 
 /// Each event the app may send, with the properties it may carry.
 const EVENTS: &[(&str, &[&str])] = &[
@@ -93,6 +101,8 @@ fn push(event: &str, props: &Value, mut s: std::sync::MutexGuard<'static, State>
     let mut p = s.facts.clone();
     for k in allowed.iter() {
         let v = match &props[*k] {
+            Value::String(text) if event == "error" && *k == "message" => json!(error_message(text)),
+            Value::String(text) if event == "error" && *k == "stack" => json!(error_stack(text)),
             Value::String(text) => json!(scrub(&text.chars().take(STRING_MAX).collect::<String>())),
             v @ (Value::Bool(_) | Value::Number(_)) => v.clone(),
             _ => continue,
@@ -147,6 +157,32 @@ pub fn scrub(text: &str) -> String {
     cut
 }
 
+/// An error's message as a report carries it: the first non-empty line
+/// (`TypeError: x is undefined`, the class first as JavaScript and the
+/// callers put it), scrubbed, then cut to [`ERROR_CHARS`] characters.
+pub fn error_message(text: &str) -> String {
+    let first = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
+    let first: String = first.chars().take(STRING_MAX).collect();
+    scrub(&first).chars().take(ERROR_CHARS).collect()
+}
+
+/// A stack as a report carries it: only its frames (`at name (file:line:col)`),
+/// each reduced to the function and the file's last part, one per line. The
+/// message lines a JavaScript stack starts with are dropped.
+pub fn error_stack(text: &str) -> String {
+    let frames = text.lines().filter_map(|line| {
+        let frame = line.trim().strip_prefix("at ")?;
+        let (name, place) = match frame.strip_suffix(')').and_then(|f| f.split_once(" (")) {
+            Some((name, place)) => (name.trim(), place),
+            None => ("", frame),
+        };
+        let file = place.rsplit(['/', '\\']).next().unwrap_or(place);
+        let out = if name.is_empty() { file.to_string() } else { format!("{name} ({file})") };
+        Some(scrub(&out.chars().take(200).collect::<String>()))
+    });
+    frames.take(FRAMES_MAX).collect::<Vec<_>>().join("\n")
+}
+
 /// Send what is queued. Kept for the next try when the send fails.
 async fn flush() {
     let key = key();
@@ -183,7 +219,15 @@ pub fn start(ctx: Ctx) {
     std::panic::set_hook(Box::new(move |info| {
         // A panic while the queue is locked must not wait on itself.
         if let Ok(s) = cell().try_lock() {
-            push("error", &json!({ "source": "engine-panic", "message": info.to_string() }), s);
+            // The panic's own words and where it happened: its file, never a folder.
+            let payload = info.payload();
+            let what = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str));
+            let place = info.location().map(|l| format!("at {}:{}:{}", l.file(), l.line(), l.column()));
+            let props = json!({ "source": "engine-panic", "message": format!("panic: {}", what.unwrap_or("")), "stack": place.unwrap_or_default() });
+            push("error", &props, s);
         }
         previous(info);
     }));
@@ -241,6 +285,27 @@ mod tests {
         assert_eq!(scrub("TypeError: x is undefined"), "TypeError: x is undefined");
     }
 
+    #[test]
+    fn an_error_keeps_its_class_and_first_line_only() {
+        let echoed = "TypeError: cannot read 'x' of undefined\nwhile handling: please summarise my divorce papers for bob@example.com";
+        assert_eq!(error_message(echoed), "TypeError: cannot read 'x' of undefined");
+        let long = format!("Error: {}", "word ".repeat(100));
+        assert_eq!(error_message(&long).chars().count(), ERROR_CHARS);
+        // Scrubbed before it is cut, so a cut never leaves half a secret.
+        assert_eq!(error_message("\n  Error: failed for bob@example.com\n"), "Error: failed for [EMAIL]");
+        assert_eq!(error_message(""), "");
+    }
+
+    #[test]
+    fn a_stack_keeps_frames_as_function_and_file_names() {
+        let stack = "Error: my secret prompt text\n    more of the prompt\n    at Object.send (/Users/philip/code/client-x/src/send.ts:12:5)\n    at file:///Users/philip/app/index.js:3:1\n    at async run (C:\\Users\\a\\app\\main.js:9:2)";
+        let out = error_stack(stack);
+        assert_eq!(out, "Object.send (send.ts:12:5)\nindex.js:3:1\nasync run (main.js:9:2)");
+        assert!(!out.contains("prompt") && !out.contains("philip"));
+        assert_eq!(error_stack("panicked without frames"), "");
+        assert_eq!(error_stack("at crates/nekkod/src/x.rs:4:9"), "x.rs:4:9");
+    }
+
     // One test: the state is process-wide.
     #[test]
     fn off_unless_on_and_only_known_events_and_properties() {
@@ -261,6 +326,14 @@ mod tests {
         assert!(p.get("path").is_none() && p.get("chat").is_none());
         assert_eq!(p["$process_person_profile"], false);
         assert_eq!(p["$geoip_disable"], true);
+
+        capture(
+            "error",
+            &json!({ "source": "renderer", "message": "Error: boom\nmy prompt", "stack": "Error: boom\nmy prompt\n    at f (/a/b.js:1:2)" }),
+        );
+        let e = state().queue.pop().unwrap();
+        assert_eq!(e["properties"]["message"], "Error: boom");
+        assert_eq!(e["properties"]["stack"], "f (b.js:1:2)");
 
         for _ in 0..QUEUE_MAX + 10 {
             capture("feature_used", &json!({ "feature": "x" }));
