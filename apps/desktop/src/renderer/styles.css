@@ -1801,32 +1801,54 @@
      accents change. --nekko-main is the deep main colour as RGB channels. */
   [data-preset^='x-plum'] { --nekko-main: 25 0 25; }
   [data-preset^='x-indigo'] { --nekko-main: 43 18 76; }
-
-  [data-theme='light'][data-preset='x-plum-white'] { --accent-soft: color-mix(in srgb, #8a4a7f 16%, transparent); }
-  [data-theme='light'][data-preset='x-indigo-white'] { --accent-soft: color-mix(in srgb, #6e4fa0 16%, transparent); }
-  [data-theme='light']:is([data-preset='x-plum-white'], [data-preset='x-indigo-white']) {
+  [data-theme='light'][data-preset='x-plum-white'] {
+    --paper: #fbfbfd;
+    --win: #fcfcfe;
     --ink: #000000;
     --on-accent: #ffffff;
-    --merged-ink: rgb(var(--nekko-main));
-    --merged-wash: rgb(var(--nekko-main) / 0.08);
-    --merged-wash-soft: rgb(var(--nekko-main) / 0.04);
-    --merged-chip: rgb(var(--nekko-main) / 0.1);
+    --accent-soft: color-mix(in srgb, #8a4a7f 16%, transparent);
+    --merged-ink: #190019;
+    --merged-wash: rgba(25, 0, 25, 0.08);
+    --merged-wash-soft: rgba(25, 0, 25, 0.04);
+    --merged-chip: rgba(25, 0, 25, 0.1);
+  }
+  [data-theme='light'][data-preset='x-indigo-white'] {
+    --paper: #fbfbfd;
+    --win: #fcfcfe;
+    --ink: #000000;
+    --on-accent: #ffffff;
+    --accent-soft: color-mix(in srgb, #6e4fa0 16%, transparent);
+    --merged-ink: #2b124c;
+    --merged-wash: rgba(43, 18, 76, 0.08);
+    --merged-wash-soft: rgba(43, 18, 76, 0.04);
+    --merged-chip: rgba(43, 18, 76, 0.1);
+  }
+  [data-theme='dark'][data-preset='x-plum-dark'] {
+    --paper: #0c0c11;
+    --win: #17171e;
+    --ink: #ffffff;
+    --on-accent: #190019;
+    --accent-soft: color-mix(in srgb, #5a2352 55%, var(--surface));
+    --merged-ink: #c99bb3;
+    --merged-wash: rgba(133, 79, 108, 0.14);
+    --merged-wash-soft: rgba(133, 79, 108, 0.06);
+    --merged-chip: rgba(133, 79, 108, 0.16);
+  }
+  [data-theme='dark'][data-preset='x-indigo-dark'] {
+    --paper: #0c0c11;
+    --win: #17171e;
+    --ink: #ffffff;
+    --on-accent: #2b124c;
+    --accent-soft: color-mix(in srgb, #4a2a7a 55%, var(--surface));
+    --merged-ink: #c99bb3;
+    --merged-wash: rgba(133, 79, 108, 0.14);
+    --merged-wash-soft: rgba(133, 79, 108, 0.06);
+    --merged-chip: rgba(133, 79, 108, 0.16);
   }
 
   /* The main action keeps the deep colour the lighter accents are drawn from. */
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .btn-primary { background: rgb(var(--nekko-main)); color: #ffffff; }
   [data-theme='dark']:is([data-preset='x-plum-dark'], [data-preset='x-indigo-dark']) .btn-primary { box-shadow: inset 0 0 0 1px #854f6c; }
-
-  [data-theme='dark'][data-preset='x-plum-dark'] { --accent-soft: color-mix(in srgb, #5a2352 55%, var(--surface)); }
-  [data-theme='dark'][data-preset='x-indigo-dark'] { --accent-soft: color-mix(in srgb, #4a2a7a 55%, var(--surface)); }
-  [data-theme='dark']:is([data-preset='x-plum-dark'], [data-preset='x-indigo-dark']) {
-    --ink: #ffffff;
-    --on-accent: rgb(var(--nekko-main));
-    --merged-ink: #854f6c;
-    --merged-wash: rgba(133, 79, 108, 0.14);
-    --merged-wash-soft: rgba(133, 79, 108, 0.06);
-    --merged-chip: rgba(133, 79, 108, 0.16);
-  }
 
   [data-theme='light'][data-preset='x-mulberry-white'] {
     --paper: #fffafa;

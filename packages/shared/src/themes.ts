@@ -695,6 +695,10 @@ export const THEME_PRESETS: ThemePreset[] = [
     family: 'plum',
     familyLabel: 'Nekko',
     ink: '#000000',
+    paper: '#fbfbfd',
+    surface: '#ffffff',
+    surface2: '#f2f2f7',
+    wave: { from: '#190019', to: '#854f6c', peak: 0.26 },
   },
   {
     // Plum on the stock Dark surfaces. #190019 is too dark to read as text on
@@ -709,6 +713,10 @@ export const THEME_PRESETS: ThemePreset[] = [
     family: 'plum',
     familyLabel: 'Nekko',
     ink: '#ffffff',
+    paper: '#0c0c11',
+    surface: '#16161c',
+    surface2: '#20202a',
+    wave: { from: '#c084b5', to: '#854f6c', peak: 0.3 },
   },
   {
     // The Nekko pair with indigo (#2b124c) as the main colour in place of plum.
@@ -722,6 +730,10 @@ export const THEME_PRESETS: ThemePreset[] = [
     family: 'indigo',
     familyLabel: 'Indigo',
     ink: '#000000',
+    paper: '#fbfbfd',
+    surface: '#ffffff',
+    surface2: '#f2f2f7',
+    wave: { from: '#2b124c', to: '#854f6c', peak: 0.26 },
   },
   {
     id: 'x-indigo-dark',
@@ -734,6 +746,10 @@ export const THEME_PRESETS: ThemePreset[] = [
     family: 'indigo',
     familyLabel: 'Indigo',
     ink: '#ffffff',
+    paper: '#0c0c11',
+    surface: '#16161c',
+    surface2: '#20202a',
+    wave: { from: '#a68fd0', to: '#854f6c', peak: 0.3 },
   },
   {
     id: 'x-mulberry-white',
