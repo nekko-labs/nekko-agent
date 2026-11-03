@@ -277,6 +277,17 @@ describe('disk storage', () => {
     if (dir) await rm(dir, { recursive: true, force: true });
   });
 
+  it('refuses a key that would leave its folder', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'nekko-artifacts-'));
+    const storage = new DiskStorage(join(dir, 'data'));
+    for (const key of ['../outside', 'objects/../../outside', 'a/../../b']) {
+      await expect(storage.put(key, Buffer.from('x'))).rejects.toThrow(/outside the data folder/);
+      await expect(storage.get(key)).rejects.toThrow(/outside the data folder/);
+      await expect(storage.deletePrefix(`${key}/`)).rejects.toThrow(/outside the data folder/);
+    }
+    await expect(storage.get('objects/ok')).resolves.toBeNull();
+  });
+
   it('publishes and serves through a real folder', async () => {
     dir = await mkdtemp(join(tmpdir(), 'nekko-artifacts-'));
     const { api, content, storage } = server({}, new DiskStorage(dir));

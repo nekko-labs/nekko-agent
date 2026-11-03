@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
 /**
@@ -23,10 +23,21 @@ export interface Storage {
 
 /** A folder on this machine: the self-host default. */
 export class DiskStorage implements Storage {
-  constructor(private readonly root: string) {}
+  private readonly root: string;
 
+  constructor(root: string) {
+    this.root = resolve(root);
+  }
+
+  /**
+   * The file for `key`. The server only passes checked keys, but this folder
+   * is the one place a bad key could reach the disk, so it checks again: the
+   * resolved path must stay inside the root.
+   */
   private path(key: string): string {
-    return join(this.root, ...key.split('/'));
+    const path = resolve(this.root, ...key.split('/'));
+    if (path !== this.root && !path.startsWith(this.root + sep)) throw new Error(`Storage key outside the data folder: ${key}`);
+    return path;
   }
 
   async put(key: string, body: Uint8Array): Promise<void> {
