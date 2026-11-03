@@ -6,6 +6,12 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Nothing below the message box and a denser plan (#1599, added 2026-11-03)
+
+Spec: [Simple and Expert modes, Android](spec/phone/iphone-simple-and-expert-modes.md), [native Android app](spec/phone/native-android-app.md).
+
+- [x] **BOX-4, Android: the model row inside the message box.** `Composer` takes a `footer` drawn as the box's last row; the chat's model and effort and its context ring moved there from under the box, in Simple and Expert. ChatModesTest screenshots before and after.
+
 ## Thinking and replies in chat (#1574, added 2026-11-03)
 
 Spec: [thinking and replies](spec/chat/thinking-and-replies.md).
