@@ -15,7 +15,10 @@
  * --strict       judge against the SPEC targets (real hardware at 120 Hz), not the CI gate
  * --no-gpu       run the browsers without GPU emulation (for runners with no GPU)
  * --attempts <n> measure again (up to n runs) when a budget is missed, judging each
- *                budget on its best attempt; every attempt's p95 is reported
+ *                budget on its best attempt; every attempt's p95 is reported, and
+ *                its samples are kept in perf-report.json (`attemptSamples`)
+ * --warmup       run the latency and frame phases once, unmeasured, before the
+ *                first attempt (a fresh runner's first browser is the slowest)
  * --report-only  write the report but exit 0 even when a budget is missed
  * --invalidation include streaming style/layout invalidation events (diagnostic overhead)
  * --dump-trace   also write the streaming trace (large) to the output directory
@@ -106,23 +109,30 @@ const cleanup = async () => {
 process.on('SIGINT', async () => { await cleanup(); process.exit(130); });
 
 /**
- * The chats the Command Center's wall should show, set once the data dir is
- * seeded. The wall remembers itself in localStorage and seeds a fresh profile
- * with at most a handful of recent chats, so the harness writes every seeded
- * chat onto it before the page loads and opens them from there.
+ * The chats the Command Center's board shows, set once the data dir is
+ * seeded: the ones measureMemory sets working, so its GPU figures see every
+ * one of them on screen.
  */
 let WALL_IDS = [];
-/** The wall as `commandWall.ts` saves it: a column of rows of four chat windows, no panels, auto-add off. */
+/**
+ * The board as `commandWall.ts` saves it: already in zones (rows of three, one
+ * chat each), the zones intro already seen, no panels, auto-add off. A board
+ * from before zones is converted on load to two zones with everything else
+ * minimized, behind the intro's looping demos; and the saved board in
+ * settings (`commandWall`) wins over the browser's copy, so a run's first
+ * browser saw that conversion and the ones after it saw what the first one
+ * saved. Every browser gets this same board in both places (openApp).
+ */
 const wallState = (ids) => {
   let seq = 0;
-  const pane = (refId) => ({ id: `pane_${(++seq).toString(36)}`, kind: 'chat', refId });
+  const panes = ids.map((refId, i) => ({ id: `pane_${(++seq).toString(36)}`, kind: 'chat', refId, zone: `Zone ${i + 1}`, tint: i }));
   const rows = [];
-  for (let i = 0; i < ids.length; i += 4) {
-    const slice = ids.slice(i, i + 4).map(pane);
+  for (let i = 0; i < panes.length; i += 3) {
+    const slice = panes.slice(i, i + 3);
     rows.push(slice.length === 1 ? slice[0] : { id: `split_${(++seq).toString(36)}`, dir: 'row', children: slice, sizes: slice.map(() => 1 / slice.length) });
   }
   const root = rows.length === 0 ? null : rows.length === 1 ? rows[0] : { id: `split_${(++seq).toString(36)}`, dir: 'col', children: rows, sizes: rows.map(() => 1 / rows.length) };
-  return JSON.stringify({ layout: { mode: 'grid', cols: 3, rows: 2 }, dock: { side: 'right', show: false, panels: {}, minimized: {} }, root, autoAdd: false, filter: 'all', insights: { panels: {} }, watermark: Date.now() });
+  return { layout: { mode: 'grid', cols: 3, rows: 2 }, dock: { side: 'right', show: false, panels: {}, minimized: {} }, root, autoAdd: false, filter: 'all', insights: { panels: {} }, watermark: Date.now(), zones: true, activeZone: panes[0]?.id ?? null, zonesIntro: true };
 };
 
 /** One browser on the app, with the handful of gestures the scenarios need. */
@@ -138,7 +148,10 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     cdp.on('Runtime.consoleAPICalled', (p) => console.log('[page]', p.args.map((a) => a.value ?? a.description ?? JSON.stringify(a.preview?.properties?.map((x) => `${x.name}=${x.value}`))).join(' ')));
   }
   await cdp.send('Emulation.setDeviceMetricsOverride', { ...CFG.viewport, deviceScaleFactor: 1, mobile: false });
-  await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('nekko.commandWall', ${JSON.stringify(wallState(WALL_IDS))}); } catch {}` });
+  const wall = wallState(WALL_IDS);
+  const saved = await fetch(new URL('api/settings:update', appUrl), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ args: [{ commandWall: wall }] }) });
+  if (!saved.ok) throw new Error(`could not save the board to settings: ${saved.status}`);
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('nekko.commandWall', ${JSON.stringify(JSON.stringify(wall))}); } catch {}` });
   await cdp.send('Page.navigate', { url: appUrl });
 
   const waitFor = async (expr, what, timeoutMs = 30000) => {
@@ -564,16 +577,20 @@ async function measureMemory({ appUrl, mock, api, ids }) {
 
   // ---- leaks: laps of switches between the seeded chats.
   log(`switching ${CFG.memory.lapChats} chats for ${CFG.memory.laps} laps, reading the heap after each`);
-  await app.openChat(1);
+  // Chats off the board (it holds the first `working`), each opened afresh as a lap comes round to it.
+  const home = CFG.memory.working;
+  await app.openChat(home);
   const laps = [];
   for (let lap = 0; lap < CFG.memory.laps; lap++) {
-    for (let i = 2; i < 2 + CFG.memory.lapChats; i++) await app.switchTo(i);
-    await app.switchTo(1);
+    for (let i = home + 1; i <= home + CFG.memory.lapChats; i++) await app.switchTo(i);
+    await app.switchTo(home);
     laps.push(await metrics());
   }
   const warm = laps[0];
   const last = laps[laps.length - 1];
   const perLap = (k) => (last[k] - warm[k]) / Math.max(1, laps.length - 1);
+  // A chat opened from the list takes the active zone's place: put the board back as seeded.
+  await app.switchTo(0);
 
   // ---- GPU layers: every visible wall window working at once.
   await cdp.send('Emulation.setDeviceMetricsOverride', { ...CFG.viewport, deviceScaleFactor: CFG.memory.scale, mobile: false });
@@ -593,18 +610,28 @@ async function measureMemory({ appUrl, mock, api, ids }) {
     // Not awaited: the call returns when the turn ends.
     api('chat:send', { sessionId: id, providerId: 'mock', modelId: 'mock-1', text: `${STREAM_TRIGGER} write the long report` }).catch(() => {});
   }
+  // Measured as soon as every window is working: a reply that finishes takes
+  // its window off a Dynamic board (#1201), so a late measurement sees fewer.
   const t = Date.now();
-  while (mock.state.streamsStarted - before < working.length && Date.now() - t < 20000) await sleep(50);
-  await sleep(1500);
-  const beams = await cdp.evaluate(`document.querySelectorAll('[data-wall-working]').length`);
+  let beams = 0;
+  while (Date.now() - t < 20000) {
+    beams = await cdp.evaluate(`document.querySelectorAll('[data-wall-working]').length`);
+    if (beams >= working.length) break;
+    await sleep(100);
+  }
+  const workingAfterMs = Date.now() - t;
+  const streamsStarted = mock.state.streamsStarted - before;
+  await sleep(500);
+  writeFileSync(join(OUT, 'memory-wall.png'), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
+  const onBoard = await cdp.evaluate(`[...document.querySelectorAll('.panel')].filter((p) => p.checkVisibility()).map((p) => p.firstElementChild?.querySelector('span.truncate')?.textContent ?? null)`);
+  log(`GPU board: ${beams} of ${working.length} windows working after ${workingAfterMs} ms (${streamsStarted} replies started); on the board ${JSON.stringify(onBoard)}`);
   const tiles = await tileMemory(cdp);
   const overdraw = await layerOverdraw(cdp);
-  writeFileSync(join(OUT, 'memory-wall.png'), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   for (const id of working) await api('chat:abort', id);
   await app.close();
   return {
     browser: app.browser.version,
-    gpu: { working: beams, tileMb: tiles, overdraw: overdraw.worst, overdrawLayer: overdraw.layer, layers: overdraw.layers },
+    gpu: { working: beams, wanted: working.length, workingAfterMs, streamsStarted, onBoard, tileMb: tiles, overdraw: overdraw.worst, overdrawLayer: overdraw.layer, layers: overdraw.layers },
     leak: { laps: laps.length, heapMbPerLap: perLap('heapMb'), nodesPerLap: perLap('nodes'), listenersPerLap: perLap('listeners'), warm, last },
   };
 }
@@ -740,7 +767,7 @@ async function main() {
   cleanups.push(() => mock.close());
 
   const { dir: dataDir, ids } = seedDataDir({ mockPort: CFG.mockPort, chats: CFG.chats });
-  WALL_IDS = ids;
+  WALL_IDS = ids.slice(0, CFG.memory.working);
   cleanups.push(() => rmSync(dataDir, { recursive: true, force: true }));
   log(`scratch data dir ${dataDir}`);
 
@@ -774,6 +801,12 @@ async function main() {
   // (one that misses every time) still shows, and still fails.
   const attempts = Math.max(1, Number(opt('attempts', 1)));
   const tries = [];
+  if (flag('warmup')) {
+    log('warm-up: the latency and frame phases once, unmeasured');
+    if (!only || only === 'latency') await measureLatency({ appUrl, mock, api, bigChat: ids[0] });
+    if (!only || only === 'frames') await measureFrames({ appUrl, mock, api, bigChat: ids[0] });
+    await resetChat(api, ids[0], CFG.chats[0]);
+  }
   let rows = [];
   let latency = null;
   let frames = null;
@@ -817,6 +850,10 @@ async function main() {
     config: CFG,
     judgedAgainst: strict ? 'SPEC target (--strict)' : 'CI regression gate (2x the SPEC target)',
     attempts: tries.length,
+    warmup: flag('warmup'),
+    // Every attempt's samples per budget, not only the best attempt's: a first
+    // attempt that is always slow is a finding, not noise to hide.
+    attemptSamples: tries.map((t) => Object.fromEntries(Object.entries(t).filter(([, r]) => r.samples).map(([id, r]) => [id, r.samples]))),
     budgets: rows,
     memory,
     memoryBudgets: memoryRows.map(({ measure, ...r }) => r),

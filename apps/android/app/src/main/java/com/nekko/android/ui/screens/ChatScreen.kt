@@ -87,6 +87,7 @@ import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
 import com.nekko.protocol.Purpose
+import com.nekko.protocol.ReplyTopics
 import com.nekko.protocol.PurposeRun
 import com.nekko.android.chat.TurnSteps
 import com.nekko.android.ui.chat.StepsLine
@@ -307,6 +308,8 @@ private fun ChatScreenContent(
     // Simple folds each turn's reasoning and tool steps into one line that opens in place (the approval card still asks).
     var openTurns by remember(vm.sessionId) { mutableStateOf(setOf<String>()) }
     val rows = remember(keyed, showSteps, chat.running, openTurns) { transcriptRows(keyed, showSteps, chat.running, openTurns) }
+    // How each reply reads in its turn: a note, something left for you, or the reply (spec/chat/thinking-and-replies.md).
+    val voices = remember(keyed, chat.running) { keyed.map { it.first }.zip(ReplyTopics.voices(chat.blocks, chat.running)).toMap() }
     val lastIndex = headerCount + rows.size + footerCount - 1
 
     // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
@@ -561,7 +564,8 @@ private fun ChatScreenContent(
                                             // A reply's links to files and loopback pages open previews from the computer (AN-35).
                                             CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
                                                 val reasoning = (row as TranscriptRow.Run).stepsOpen
-                                                if (pane == null) BlockView(block, fork, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, reasoning) }
+                                                val voice = voices[run.item.first]
+                                                if (pane == null) BlockView(block, fork, voice, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, voice, reasoning) }
                                             }
                                         }
                                         run is PurposeRun.Group -> {
@@ -665,8 +669,8 @@ private fun ChatScreenContent(
                         onInterrupt = vm::interruptQueued,
                         onNewAgent = onNewChat,
                         onTerminal = if (showTerminal) vm::openTerminals else null,
+                        footer = { ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }, asks = chat.mode ?: vm.defaultMode, onOpenAsks = { showMode = true }) },
                     )
-                    ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }, asks = chat.mode ?: vm.defaultMode, onOpenAsks = { showMode = true })
                 }
             }
             ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)

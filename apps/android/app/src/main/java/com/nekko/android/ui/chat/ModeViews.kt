@@ -296,7 +296,7 @@ fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit
     val plainAsks = asks?.takeIf { !simple.expert && simple.shown("asks") }
     if (!model && !effort && !context && plainAsks == null) return
     Row(
-        modifier.fillMaxWidth().background(Nekko.palette.paper).padding(horizontal = 8.dp),
+        modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort && (simple.expert || !model))

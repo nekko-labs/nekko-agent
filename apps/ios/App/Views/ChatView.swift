@@ -115,7 +115,7 @@ struct ChatView: View {
                         case .row(let row, let reasoning):
                         switch row {
                         case .block(let b):
-                            BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: reasoning) { i in
+                            BlockView(block: b, chat: chat, voice: rowCache.voices[b.id], photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: reasoning) { i in
                                 viewing = PhotoSet(photos: chat.photos(b.id), index: i)
                             }
                             .id(b.id)
@@ -562,18 +562,30 @@ final class TranscriptRowCache {
     private var chat: ObjectIdentifier?
     private var layout = -1
     private var rows: [TranscriptRow] = []
+    private var running = false
+    /// How each reply reads in its turn (spec/chat/thinking-and-replies.md), as of the last `rows`.
+    private(set) var voices: [String: Voice] = [:]
 
     func rows(_ chat: ChatModel) -> [TranscriptRow] {
         let blocks = chat.blocks
-        if ObjectIdentifier(chat) == self.chat, chat.blocksLayout == layout, let last = blocks.last,
-           case .block(let shown)? = rows.last, shown.id == last.id, Self.breaker(shown), Self.breaker(last) {
+        // A streaming reply has no voice yet, so growing it changes none.
+        if ObjectIdentifier(chat) == self.chat, chat.blocksLayout == layout, chat.turn.running == running, let last = blocks.last,
+           case .block(let shown)? = rows.last, shown.id == last.id, Self.breaker(shown), Self.breaker(last),
+           Self.streaming(shown), Self.streaming(last) {
             rows[rows.count - 1] = .block(last)
             return rows
         }
         self.chat = ObjectIdentifier(chat)
         layout = chat.blocksLayout
+        running = chat.turn.running
         rows = TranscriptRow.of(blocks)
+        voices = Dictionary(zip(blocks.map(\.id), ReplyTopics.voices(blocks, running: running)).compactMap { id, v in v.map { (id, $0) } }) { a, _ in a }
         return rows
+    }
+
+    private static func streaming(_ b: Block) -> Bool {
+        if case .assistant(_, _, _, let streaming, _) = b { return streaming }
+        return false
     }
 
     /// A reply with text ends any purpose group (`Purpose.role`): its own row
@@ -588,6 +600,8 @@ struct BlockView: View {
     let block: Block
     /// The chat, for rows that read more than the block (watch chips, subagent children). Nil in previews.
     var chat: ChatModel? = nil
+    /// How a reply reads in its turn: a note, something left for the reader, or the reply.
+    var voice: Voice? = nil
     /// A prompt's photos as the computer sent them (small copies; `""` for one it kept back).
     var photos: [String] = []
     /// Simple mode hides what the model thought (`thinking`).
@@ -631,12 +645,16 @@ struct BlockView: View {
                     }
                 }
                 if !text.isEmpty {
-                    if let chat {
-                        // Links route to the preview window or Safari; linked files and pages get cards (#1095).
-                        AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId)
-                    } else {
-                        MarkdownText(text: text).foregroundStyle(palette.ink)
+                    Group {
+                        if let chat {
+                            // Links route to the preview window or Safari; linked files and pages get cards (#1095).
+                            AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId, voice: voice)
+                        } else {
+                            MarkdownText(text: text, topics: true, askTail: voice == .reply || voice == .attention)
+                                .foregroundStyle(voice == .working ? palette.inkSoft : palette.ink)
+                        }
                     }
+                    .modifier(Voiced(voice: voice))
                 }
                 if interrupted { Label("Interrupted", systemImage: "pause.circle").font(.caption).foregroundStyle(palette.warning) }
             }
@@ -650,6 +668,37 @@ struct BlockView: View {
             default:
                 ToolRow(label: label, status: status, output: output)
             }
+        }
+    }
+}
+
+/// Who a reply's text is for (spec/chat/thinking-and-replies.md). A note is
+/// quiet with the thought icon; a reply, or anything left for the reader
+/// mid-turn, sits on a panel. The icon and the panel's edge live in the
+/// transcript's 16pt side padding, so a block that settles its voice keeps its
+/// width and does not re-wrap.
+private struct Voiced: ViewModifier {
+    let voice: Voice?
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        switch voice {
+        case .working?:
+            content.overlay(alignment: .topLeading) {
+                Image(systemName: "brain").font(.system(size: 9)).foregroundStyle(palette.inkFaint)
+                    .frame(width: 12).offset(x: -14, y: 6).accessibilityHidden(true)
+            }
+        case .reply?, .attention?:
+            let tone = voice == .reply ? palette.accent : palette.warning
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(tone.opacity(0.08))
+                .overlay(alignment: .leading) { tone.frame(width: 2) }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, -10)
+        case nil:
+            content
         }
     }
 }

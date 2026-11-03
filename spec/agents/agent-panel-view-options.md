@@ -52,14 +52,27 @@ Acceptance: the card bottoms meet the horizontal scrollbar, with no unused panel
 
 `[implemented; unit-tested; daemon test over real sockets for chats a window is not showing; verified in the hidden layout-evidence fixture (agent-activity-motion-sandbox.cjs) with before/after captures and motion frames in the default dark theme; not yet watched in a real chat in the packaged desktop app]`
 
-**User intent:** Philip asked (#1560) for the panel's statuses to follow the agent loop: "draft (only show when drafts exist), exploring, building, verifying, and shipping".
+**User intent:** Philip asked (#1560) for the panel's statuses to follow the agent loop: "draft (only show when drafts exist), exploring, building, verifying, and shipping". He then asked for Needs input back above them, so a chat waiting on him cannot get lost in a phase. Then (#1587): "remove the shipping group and add done for ones that are complete and another group for watching for ones with watchers still active", because finished agents piled up in the phase they stopped in.
 
-- **The groups** are Draft, Exploring, Building, Verifying and Shipping, in that order, with Completed folded at the bottom as before. They replace Needs input, Working, Error and Done.
+- **The groups** are Needs input, Draft, Exploring, Building, Verifying, Watching and Done, in that order, with Completed folded at the bottom as before. The phases hold agents that are working; Watching and Done hold the ones that have stopped. There is no Shipping group (#1587).
+- **Needs input** holds chats parked on a question or an approval, and a chat whose sub-agent is, since a sub-agent has no card of its own. Answering sends the chat back to its phase. Like Draft it shows only while it has a chat, whatever **Show > Empty groups** says.
 - **Draft** holds chats nothing has been sent in yet. Unlike the others it shows only while it has a chat, whatever **Show > Empty groups** says. A chat with earlier turns and unsent text in its composer stays in its phase.
-- **A chat's phase is its latest tool call that names one.** Reading, searching and web tools are Exploring. Edits are Building. Tests, builds, linters and type checks are Verifying. `git commit`, `git push`, `gh pr create`, `gh pr merge` and `gh release create` are Shipping. It is the latest rather than the furthest, because the loop goes round: an edit after a failed test is Building again.
+- **A chat's phase is its latest tool call that names one.** Reading, searching and web tools are Exploring. Edits are Building. Tests, builds, linters and type checks are Verifying. `git commit`, `git push`, `gh pr create`, `gh pr merge` and `gh release create` are Shipping, which the engine still names but the panel files under Verifying: an agent landing its work is still checking it. It is the latest rather than the furthest, because the loop goes round: an edit after a failed test is Building again. Reading only sends a chat back to Exploring from a new message of yours: within one reply, the reads an agent does while wrapping up (a runbook, a memory file, a last screenshot) leave it where it got to. A watch waking the agent to check on its work is not a new message (#1581).
 - **Everything else leaves a chat where it was:** plans, sub-agents, MCP tools, reading git (`git status`, `git diff`, `gh pr view`) and commands with no clear purpose. A chat that has been sent something starts at Exploring and stays there until a call says otherwise, so a chat that only talks is in Exploring.
-- **A chat stays in its phase when it stops,** and a new message does not reset it. Stopped work sits in Shipping (or wherever it reached) until it is completed.
-- **What an agent is doing now stays on the card:** the rocket while it works, the orange **?** when it waits on you, the warning on an error, the check when finished. Waiting on you no longer has a group of its own, so such a card stays in its phase with its highlighted background. The wall's ring is unchanged.
+- **A chat that stops leaves the loop.** It goes to **Done**, or to **Watching** while it has an armed watch (the card's Zz). When the watch wakes it, it goes back to its phase while it works, and to Watching or Done when it stops again. A new message does not reset the phase. **Done** is not **Completed**: Completed still holds the chats you closed out.
+- **What an agent is doing now stays on the card:** the rocket while it works, the orange **?** when it waits on you, the warning on an error, the check when finished. An error has no group of its own, so a card stopped on an error stays in its phase. The wall's ring is unchanged.
 - **Every window hears a move.** The engine works the phase out from the saved transcript (`crates/nekko-store/src/phase.rs`, which runs the shared tool-purpose fixture) and adds it to the chat's summary, so it survives a restart and reaches another computer's chats. Tool calls only stream to the windows showing a chat, so when a phase changes the engine sends `session_meta` once the step is saved, and every window re-reads its list. Each move costs one list refresh, not one per call.
-- A chat summarised by an older computer has no phase and shows in Exploring. Incognito chats are not saved, so they stay in Exploring too.
+- A working chat summarised by an older computer has no phase and shows in Exploring. Incognito chats are not saved, so they show in Exploring while they work too.
 - Phones keep their own Status grouping (Needs you, Working, Idle). The summary carries the phase if they take it up later. No new storage, permissions or network use.
+
+## Subagents under their parent (2026-11-03)
+
+`[implemented; unit tested; checked in an isolated hidden renderer, not in the packaged app]`
+
+A subagent used to leave the panel the moment it had a reply and stopped running, and landed in the saved-chats list instead, so afterwards you could not see how the work was split. Now every subagent stays under its parent, in the order it was started, by the same rule as the rest of the panel: details show while they are relevant.
+
+- A **working** subagent always has a row.
+- A **finished** subagent keeps its row, with its done mark, while its chat is working or open, or while one of its subagents is open.
+- Otherwise finished subagents fold away, and the card's **N sub-agents** line, which now counts all of them, stands in. Opening the chat brings them back.
+
+Archived subagents do not appear. A subagent whose parent is archived stays in saved chats, as before.

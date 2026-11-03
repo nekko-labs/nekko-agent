@@ -11,7 +11,9 @@
 //! | `assistant` `tool_use` | `tool_call` (`executedBy: claude-code`) |
 //! | the step's last block, before its tool results | assistant message, `step` |
 //! | `user` `tool_result` | tool message, `tool_result` |
-//! | `parent_tool_use_id` set (a sub-agent) | `tool_call` / `tool_result` with `parentToolCallId`, no transcript |
+//! | a main-thread `Agent` / `Task` call | `tool_call` named `spawn_agent` (the delegation row every client has), [`Subagent::Started`] |
+//! | `parent_tool_use_id` set (a sub-agent's own lines) | [`Subagent::Line`], for the child chat's own mapper |
+//! | the delegating call's `tool_result`, or `system/task_notification` for a background one | [`Subagent::Ended`] |
 //! | `system/api_retry` | `retry` |
 //! | `system/permission_denied` | the call's `tool_result` marked `denied` |
 //! | `assistant` with `is_api_error_message` | `error` |
@@ -63,6 +65,33 @@ fn str_at<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str)
 }
 
+/// The tools Claude Code delegates with: `Agent`, and `Task` on older versions.
+const DELEGATION_TOOLS: [&str; 2] = ["Agent", "Task"];
+/// What they are called here, so their row is the one a Nekko delegation gets.
+const DELEGATE_AS: &str = "spawn_agent";
+
+/// A sub-agent's part of the stream. Claude Code runs it inside the chat's
+/// session, so nothing else tells Nekko it exists: the daemon turns these into
+/// a child chat, which every client already lists, opens and nests.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Subagent {
+    Started {
+        call_id: String,
+        title: String,
+        task: String,
+        background: bool,
+    },
+    /// One of its stream-json lines, unmarked, ready for a [`Mapper`] of its own.
+    Line {
+        call_id: String,
+        line: Value,
+    },
+    Ended {
+        call_id: String,
+        outcome: Outcome,
+    },
+}
+
 /// One mapped piece of the stream, in order.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Mapped {
@@ -75,12 +104,21 @@ pub enum Mapped {
     /// `system/init`: Claude Code's session, at the start of each of its turns.
     Init(Init),
     /// The answer to a control request Nekko sent.
-    ControlResponse { request_id: String, error: Option<String> },
+    ControlResponse {
+        request_id: String,
+        error: Option<String>,
+    },
     /// A control request from Claude Code. Nekko asks for none, so it is declined.
-    ControlRequest { request_id: String, subtype: String },
+    ControlRequest {
+        request_id: String,
+        subtype: String,
+    },
     /// Where a message Nekko wrote stands (`queued`, `started`, `completed`),
     /// by the `uuid` it was written with.
-    Command { uuid: String, state: String },
+    Command {
+        uuid: String,
+        state: String,
+    },
     /// `result`: Claude Code's turn is over.
     End(TurnEnd),
     /// Plan usage Claude Code reported itself: a `rate_limit_event`, or an
@@ -89,6 +127,7 @@ pub enum Mapped {
     PlanUsage(Value),
     /// Claude Code changed its own plan: the change, for the chat's `agentPlan`.
     Plan(PlanCall),
+    Subagent(Subagent),
     /// A stdout line that was not JSON (kept for an exit's diagnostics).
     Unparsed(String),
 }
@@ -200,6 +239,9 @@ pub struct Mapper {
     context: ReportedContext,
     /// Main-thread plan calls waiting for their result: id to (name, input).
     planning: HashMap<String, (String, Value)>,
+    /// Delegating calls waiting for their result: id to whether the sub-agent
+    /// runs in the background, where that result only says it started.
+    delegating: HashMap<String, bool>,
 }
 
 /// A user message's content for stream-json: its text, and its images as
@@ -272,6 +314,7 @@ impl Mapper {
             model: None,
             context: ReportedContext::default(),
             planning: HashMap::new(),
+            delegating: HashMap::new(),
         }
     }
 
@@ -321,23 +364,27 @@ impl Mapper {
     /// One parsed stream-json event.
     pub fn map(&mut self, v: &Value) -> Vec<Mapped> {
         let mut out = Vec::new();
-        let parent = str_at(v, "parent_tool_use_id").map(str::to_string);
+        if let Some(call_id) = str_at(v, "parent_tool_use_id")
+            && matches!(str_at(v, "type"), Some("stream_event" | "assistant" | "user"))
+        {
+            let mut line = v.clone();
+            line["parent_tool_use_id"] = Value::Null;
+            return vec![Mapped::Subagent(Subagent::Line { call_id: call_id.into(), line })];
+        }
         match str_at(v, "type") {
             Some("system") => self.system(v, &mut out),
-            Some("stream_event") if parent.is_none() => {
-                self.stream_event(v.get("event").unwrap_or(&Value::Null), &mut out)
-            }
+            Some("stream_event") => self.stream_event(v.get("event").unwrap_or(&Value::Null), &mut out),
             Some("assistant") => {
                 if v.get("usage_report").is_some_and(Value::is_object) {
                     out.push(Mapped::PlanUsage(v.clone()));
                 }
-                self.assistant(v, parent, &mut out)
+                self.assistant(v, &mut out)
             }
             Some("rate_limit_event") => out.push(Mapped::PlanUsage(v.clone())),
             // A message Nekko wrote, echoed as Claude Code takes it up.
             Some("user") if v.get("isReplay") == Some(&Value::Bool(true)) => out
                 .push(Mapped::Command { uuid: str_at(v, "uuid").unwrap_or_default().into(), state: "started".into() }),
-            Some("user") => self.user(v, parent, &mut out),
+            Some("user") => self.user(v, &mut out),
             Some("control_response") => {
                 let r = v.get("response").unwrap_or(&Value::Null);
                 let error = (str_at(r, "subtype") != Some("success"))
@@ -414,6 +461,28 @@ impl Mapper {
                 let reason = str_at(v, "decision_reason").or_else(|| str_at(v, "message")).unwrap_or("Denied");
                 self.denied.insert(id, reason.to_string());
             }
+            Some("task_started") if v.get("is_backgrounded") == Some(&Value::Bool(true)) => {
+                if let Some(background) = str_at(v, "tool_use_id").and_then(|id| self.delegating.get_mut(id)) {
+                    *background = true;
+                }
+            }
+            // Also said of background commands, which have no child to end.
+            Some("task_notification") => {
+                if let Some(call_id) = str_at(v, "tool_use_id") {
+                    self.delegating.remove(call_id);
+                    let outcome = match str_at(v, "status") {
+                        Some("completed") => Outcome::Completed,
+                        Some("stopped" | "killed") => Outcome::Interrupted,
+                        _ => Outcome::Failed(
+                            str_at(v, "summary")
+                                .filter(|s| !s.is_empty())
+                                .unwrap_or("The sub-agent failed.")
+                                .to_string(),
+                        ),
+                    };
+                    out.push(Mapped::Subagent(Subagent::Ended { call_id: call_id.into(), outcome }));
+                }
+            }
             _ => {}
         }
     }
@@ -458,7 +527,7 @@ impl Mapper {
         })
     }
 
-    fn assistant(&mut self, v: &Value, parent: Option<String>, out: &mut Vec<Mapped>) {
+    fn assistant(&mut self, v: &Value, out: &mut Vec<Mapped>) {
         let message = v.get("message").unwrap_or(&Value::Null);
         let blocks = message.get("content").and_then(Value::as_array).cloned().unwrap_or_default();
         if v.get("is_api_error_message") == Some(&Value::Bool(true)) {
@@ -473,20 +542,8 @@ impl Mapper {
             out.push(self.error(&message));
             return;
         }
-        if parent.is_none()
-            && let Some(used) = occupancy(message.get("usage"))
-        {
+        if let Some(used) = occupancy(message.get("usage")) {
             self.context.used = Some(used);
-        }
-        if let Some(parent) = parent {
-            // A sub-agent's steps: shown under the call that started it, never
-            // in the chat's own transcript (Claude Code keeps that history).
-            for b in blocks.iter().filter(|b| str_at(b, "type") == Some("tool_use")) {
-                let mut call = tool_call(b);
-                call["parentToolCallId"] = json!(parent);
-                out.push(self.event("tool_call", json!({ "call": call })));
-            }
-            return;
         }
         let claude_id = str_at(message, "id").unwrap_or_default().to_string();
         let streamed = self.streamed.contains(&claude_id);
@@ -519,13 +576,21 @@ impl Mapper {
                     }
                     self.draft_for(&claude_id, out).calls.push(call.clone());
                     out.push(self.event("tool_call", json!({ "call": call })));
+                    if name == DELEGATE_AS {
+                        let call_id = str_at(&call, "id").unwrap_or_default().to_string();
+                        let background = call["input"].get("run_in_background") == Some(&Value::Bool(true));
+                        self.delegating.insert(call_id.clone(), background);
+                        let text = |key| str_at(&call["input"], key).unwrap_or_default().to_string();
+                        let (title, task) = (text("title"), text("task"));
+                        out.push(Mapped::Subagent(Subagent::Started { call_id, title, task, background }));
+                    }
                 }
                 _ => {}
             }
         }
     }
 
-    fn user(&mut self, v: &Value, parent: Option<String>, out: &mut Vec<Mapped>) {
+    fn user(&mut self, v: &Value, out: &mut Vec<Mapped>) {
         let Some(blocks) = v.pointer("/message/content").and_then(Value::as_array) else { return };
         for b in blocks.iter().filter(|b| str_at(b, "type") == Some("tool_result")) {
             let id = str_at(b, "tool_use_id").unwrap_or_default().to_string();
@@ -537,11 +602,6 @@ impl Mapper {
                 result["denied"] = json!(true);
                 result["deniedReason"] = json!(reason);
             }
-            if let Some(parent) = &parent {
-                result["parentToolCallId"] = json!(parent);
-                out.push(self.event("tool_result", json!({ "result": result })));
-                continue;
-            }
             // The step that asked for this tool is complete: save it first.
             self.flush_into(false, false, out);
             out.push(Mapped::Message(json!({
@@ -552,6 +612,14 @@ impl Mapper {
                 "createdAt": nekko_js::now_ms(),
             })));
             out.push(self.event("tool_result", json!({ "result": result })));
+            if self.delegating.remove(&id) == Some(false) {
+                let outcome = if result.get("isError").is_some() {
+                    Outcome::Failed(str_at(&result, "output").unwrap_or_default().to_string())
+                } else {
+                    Outcome::Completed
+                };
+                out.push(Mapped::Subagent(Subagent::Ended { call_id: id.clone(), outcome }));
+            }
             if let Some((name, input)) = self.planning.remove(&id)
                 && result.get("isError").is_none()
                 && result.get("denied").is_none()
@@ -692,6 +760,21 @@ impl Mapper {
         out
     }
 
+    /// The end of a sub-agent's child chat: what it had in progress, then `done` or `error`.
+    pub fn close(&mut self, outcome: Outcome) -> Vec<Mapped> {
+        let mut out = self.flush(outcome == Outcome::Interrupted, false);
+        out.extend(self.finish(&TurnEnd {
+            outcome,
+            session_id: None,
+            cost_usd: None,
+            num_turns: None,
+            usage: None,
+            terminal_reason: None,
+            context: None,
+        }));
+        out
+    }
+
     /// An error that ends the turn from outside the stream (an exit, a kill).
     pub fn fail(&mut self, message: &str) -> Vec<Mapped> {
         if self.error_sent {
@@ -704,12 +787,14 @@ impl Mapper {
 /// A Claude Code `tool_use` block as Nekko's `ToolCall`, marked as run by
 /// Claude Code (display only: Nekko does not run it).
 fn tool_call(b: &Value) -> Value {
-    json!({
-        "id": str_at(b, "id").unwrap_or_default(),
-        "name": str_at(b, "name").unwrap_or_default(),
-        "input": b.get("input").cloned().unwrap_or_else(|| json!({})),
-        "executedBy": "claude-code",
-    })
+    let mut name = str_at(b, "name").unwrap_or_default();
+    let mut input = b.get("input").cloned().unwrap_or_else(|| json!({}));
+    if DELEGATION_TOOLS.contains(&name) {
+        name = DELEGATE_AS;
+        input["title"] = json!(str_at(&input, "description").unwrap_or_default());
+        input["task"] = json!(str_at(&input, "prompt").unwrap_or_default());
+    }
+    json!({ "id": str_at(b, "id").unwrap_or_default(), "name": name, "input": input, "executedBy": "claude-code" })
 }
 
 #[cfg(test)]

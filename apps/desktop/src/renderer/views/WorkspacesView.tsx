@@ -18,7 +18,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../com
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
-import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
+import { sidebarWorkspaces, unopenedChats, subagentRows } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
@@ -27,7 +27,7 @@ import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
-  DATE_GROUPS, DRAFT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
+  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -439,13 +439,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
 
   const childrenOf = useMemo(() => {
     const m = new Map<string, SessionSummary[]>();
-    for (const s of sessions) if (s.parentSessionId && (statuses.has(s.id) || !s.lastReplyText)) {
+    for (const s of sessions) if (s.parentSessionId && !s.archivedAt) {
       const arr = m.get(s.parentSessionId) ?? [];
       arr.push(s);
       m.set(s.parentSessionId, arr);
     }
+    for (const kids of m.values()) kids.sort((a, b) => a.createdAt - b.createdAt);
     return m;
-  }, [sessions, statuses]);
+  }, [sessions]);
 
   // Closing a workspace only closes its windows, not the saved conversation.
   // Keep those chats reachable without reopening every transcript at startup.
@@ -531,14 +532,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         ...completed,
       ];
     }
+    // A sub-agent has no card of its own, so its question lifts the parent's.
+    const kidIsWaiting = (e: Entry) => !!e.s && !!childrenOf.get(e.s.id)?.some((k) => statuses.get(k.id) === 'input');
     const groupOf = view.groupBy === 'status'
-      ? (e: Entry) => statusGroupOf(e.s, !!e.s && statuses.has(e.s.id))
+      ? (e: Entry) => statusGroupOf(e.s, kidIsWaiting(e) ? 'input' : e.s ? statuses.get(e.s.id) : undefined)
       : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
     const defs = view.groupBy === 'status' ? STATUS_GROUPS : DATE_GROUPS;
     return [
       ...defs.flatMap((d): PanelGroup[] => {
         const items = all.filter((e) => groupOf(e) === d.key);
-        return items.length > 0 || (view.showEmptyGroups && d.key !== DRAFT_GROUP) ? [{ key: d.key, name: d.name, items, done: [] }] : [];
+        return items.length > 0 || (view.showEmptyGroups && d.key !== DRAFT_GROUP && d.key !== NEEDS_INPUT_GROUP) ? [{ key: d.key, name: d.name, items, done: [] }] : [];
       }),
       ...completed,
     ];
@@ -848,7 +851,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
-                        {kids.map((kid) => (
+                        {s && subagentRows(kids, (id) => statuses.has(id), s.id, selectedId).map((kid) => (
                           <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
