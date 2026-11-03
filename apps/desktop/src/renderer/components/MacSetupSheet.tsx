@@ -78,10 +78,14 @@ export function PlanStep({ plan, priority, rebuild, error, busy, onPriority, onB
   return (
     <Sheet>
       <Heading>{rebuild ? 'Rebuild image' : 'Set up this Mac'}</Heading>
-      <Kv label="macOS from Apple" value={MACOS_SIZE} />
+      <Kv label="macOS image from Apple" value={MACOS_SIZE} />
       {!noXcode && <Kv label="iOS simulator from Apple" value={SIMULATOR_SIZE} />}
       {!noXcode && <Kv label={['Xcode', plan?.xcode, 'from this Mac'].filter(Boolean).join(' ')} value="Copied in" />}
       <Kv label="Space needed" value={`${needs} GB${free}`} />
+      <Fine>
+        {noXcode ? 'Most of it is the VM itself.' : 'Most of it is the VM itself, about 55 GB with Xcode and the simulator inside.'}
+        {' '}The macOS image is deleted once it is installed, and 25 GB stays free for you.
+      </Fine>
       {noXcode && (
         <div className="runner-pick on">
           <i className="radio" />
@@ -114,7 +118,7 @@ export function ModeStep({ priority, error, busy, onPriority, onStart }: { prior
 }
 
 /** Frame 6, and the same list when a stopped build offers to resume. */
-export function ProgressStep({ image, error, busy, onCancel, onResume }: { image: ImageView; error: string | null; busy: boolean; onCancel(): void; onResume?(): void }) {
+export function ProgressStep({ image, error, busy, onCancel, onResume, onBackground }: { image: ImageView; error: string | null; busy: boolean; onCancel(): void; onResume?(): void; onBackground?(): void }) {
   const fraction = imageFraction(image);
   return (
     <Sheet>
@@ -129,12 +133,13 @@ export function ProgressStep({ image, error, busy, onCancel, onResume }: { image
       <Fine>
         {onResume
           ? 'Finished stages are kept, and a stopped download picks up where it left off.'
-          : 'You can close this. Setup continues while Nekko runs, and a stopped download picks up where it left off.'}
+          : 'Setup continues while Nekko runs, and a stopped download picks up where it left off.'}
       </Fine>
       <Alert error={error} />
       <Buttons>
         <button type="button" className="btn btn-outline" disabled={busy} onClick={onCancel}>Cancel setup</button>
         {onResume && <button type="button" className="btn btn-primary" disabled={busy} onClick={onResume}>Resume setup</button>}
+        {!onResume && onBackground && <button type="button" className="btn btn-primary" onClick={onBackground}>Continue in the background</button>}
       </Buttons>
     </Sheet>
   );
@@ -257,7 +262,7 @@ export function MacSetupSheet({ runnerId, view, image, rebuild, onClose, onWorkf
         <PlanStep plan={plan} priority={priority} rebuild={rebuild} error={error} busy={busy} onPriority={setPriority} onBuild={() => void act(() => window.nekko.buildImage(buildRequest(plan, priority, runnerId, rebuild)))} />
       )}
       {screen === 'mode' && <ModeStep priority={priority} error={error} busy={busy} onPriority={setPriority} onStart={() => void start()} />}
-      {screen === 'progress' && image && <ProgressStep image={image} error={error} busy={busy} onCancel={() => void cancel()} />}
+      {screen === 'progress' && image && <ProgressStep image={image} error={error} busy={busy} onCancel={() => void cancel()} onBackground={onClose} />}
       {screen === 'resume' && image && <ProgressStep image={image} error={error} busy={busy} onCancel={() => void cancel()} onResume={() => void act(() => window.nekko.resumeImage())} />}
       {screen === 'failed' && image && <FailedStep image={image} error={error} busy={busy} onCancel={() => void cancel()} onRetry={() => void act(() => window.nekko.resumeImage())} />}
       {screen === 'ready' && <RunnerReady on={view?.config.settings.enabled ?? false} forkOpen={view?.forkApprovalOpen ?? false} onDone={onClose} onWorkflow={onWorkflow} />}

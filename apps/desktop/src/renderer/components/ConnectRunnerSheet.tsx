@@ -25,6 +25,7 @@ import {
   type SetupPicks,
 } from '@nekko-agent/shared';
 import { Modal } from './primitives/index.js';
+import { Spinner } from './UpdateBanner.js';
 import { CheckIcon, ExternalIcon } from '../icons.js';
 import { useStore } from '../store.js';
 
@@ -238,11 +239,16 @@ const Alert = ({ error }: { error: string | null }) => (error ? <p role="alert" 
 /** The account the sheet will set up. `typed` means its name came from the text box. */
 export interface AccountChoice { login: string; kind: 'user' | 'org'; canGroup: boolean | null; typed?: boolean }
 
-/** Frame 2: where the repos live. From `gh` when it is signed in, otherwise one text box. */
+/** The signed-in user's own account, with no name: the daemon reads it from GitHub's answer. */
+export const OWN_ACCOUNT: AccountChoice = { login: '', kind: 'user', canGroup: null };
+const TYPED_ORG: AccountChoice = { login: '', kind: 'org', canGroup: null, typed: true };
+
+/** Frame 2: where the repos live. From `gh` when it is signed in; otherwise straight to GitHub for
+ *  the user's own account, or one box for an org. `accounts` is undefined while `gh` is asked. */
 export function AccountStep({
   accounts, choice, error, busy, onChoice, onContinue, onManual,
 }: {
-  accounts: GithubAccounts;
+  accounts: GithubAccounts | undefined;
   choice: AccountChoice;
   error: string | null;
   busy: boolean;
@@ -250,11 +256,23 @@ export function AccountStep({
   onContinue(repoAdmin: boolean): void;
   onManual(): void;
 }) {
+  if (!accounts) {
+    return (
+      <div className="flex flex-col gap-3 p-5">
+        <Heading>Where do your repos live?</Heading>
+        <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-ink-soft"><Spinner /> Checking GitHub…</p>
+      </div>
+    );
+  }
   const known = accounts.accounts.length > 0;
   const free = choice.canGroup === false;
+  const own = !choice.typed && choice.kind === 'user' && !choice.login;
   return (
     <div className="flex flex-col gap-3 p-5">
       <Heading>Where do your repos live?</Heading>
+      {!known && !choice.typed && (
+        <p className="text-sm text-ink-soft">Nekko makes the runner's app on your GitHub account. On GitHub you only click Create, then Install.</p>
+      )}
       {known && (
         <div role="radiogroup" aria-label="GitHub account" className="flex flex-col gap-2">
           {accounts.accounts.map((a) => (
@@ -263,7 +281,7 @@ export function AccountStep({
           <Choice name="github-account" checked={!!choice.typed} onChange={() => onChoice({ login: '', kind: 'org', canGroup: null, typed: true })} title="Another account" description="Type its name" />
         </div>
       )}
-      {choice.typed && (
+      {choice.typed && known && (
         <>
           <Field label="GitHub account or org">
             <input className="input w-full" autoComplete="off" spellCheck={false} value={choice.login} onChange={(e) => onChoice({ ...choice, login: e.target.value.trim() })} />
@@ -274,6 +292,12 @@ export function AccountStep({
           </div>
         </>
       )}
+      {choice.typed && !known && (
+        // GitHub needs an org's name in the page's address; the user's own account needs none.
+        <Field label="Org name">
+          <input className="input w-full" autoComplete="off" spellCheck={false} value={choice.login} onChange={(e) => onChoice({ ...choice, login: e.target.value.trim() })} />
+        </Field>
+      )}
       {free && (
         <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
           <b>{choice.login}</b> is on GitHub's Free plan, which has no runner groups, so a runner can't be limited to some of its repos. Nekko can connect one repo instead. That app gets the repo's Administration permission.
@@ -281,13 +305,16 @@ export function AccountStep({
       )}
       <Alert error={error} />
       <div className="flex justify-end">
-        <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !choice.login} onClick={() => onContinue(free)}>
+        <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || (!choice.login && !own)} onClick={() => onContinue(free)}>
           {free ? 'Connect one repo on GitHub' : 'Continue on GitHub'}
         </button>
       </div>
       {choice.kind === 'org' && choice.canGroup === null && choice.login && (
         <TextLink onClick={() => onContinue(true)}>On the Free plan? Connect one repo instead</TextLink>
       )}
+      {!known && (choice.typed
+        ? <TextLink onClick={() => onChoice(OWN_ACCOUNT)}>Use my own account instead</TextLink>
+        : <TextLink onClick={() => onChoice(TYPED_ORG)}>For an org, type its name</TextLink>)}
       <TextLink onClick={onManual}>Use an app I already have</TextLink>
     </div>
   );
@@ -462,7 +489,6 @@ export function sheetScreen({ status, manual, submitting, approval }: { status: 
 }
 
 const NO_ACCOUNTS: GithubAccounts = { login: null, accounts: [] };
-const TYPED: AccountChoice = { login: '', kind: 'org', canGroup: null, typed: true };
 
 /** The Connect GitHub sheet. The pasted key lives only in this sheet's form, and only until it closes or connects. */
 /** `onConnected` gets the new runner's id when it goes on to Mac setup; the manual path starts its runner itself. */
@@ -474,8 +500,8 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState(false);
   const [status, setStatus] = useState<GithubSetupView>(IDLE_GITHUB_SETUP);
-  const [accounts, setAccounts] = useState<GithubAccounts>(NO_ACCOUNTS);
-  const [choice, setChoice] = useState<AccountChoice>(TYPED);
+  const [accounts, setAccounts] = useState<GithubAccounts | undefined>(undefined);
+  const [choice, setChoice] = useState<AccountChoice>(OWN_ACCOUNT);
   const [picks, setPicks] = useState<SetupPicks>({ repos: [], allowPublic: false, label: '' });
   const [submitting, setSubmitting] = useState(false);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
@@ -487,7 +513,7 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
       if (!live) return;
       setAccounts(a);
       if (a.accounts.length) setChoice((c) => (c.login ? c : a.accounts[0]));
-    }, () => {});
+    }, () => { if (live) setAccounts(NO_ACCOUNTS); });
     void window.nekko.githubStatus().then((v) => { if (live) setStatus(v); }, () => {});
     const off = window.nekko.onGithubSetupChanged(setStatus);
     return () => {

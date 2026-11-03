@@ -18,13 +18,10 @@ the GitHub Actions queue, each in its own VM.
 
 You find it in **Workflows**, under the **Workflows | CI runners** switch at the top.
 
-**What is not verified yet.** The pieces are built and tested, and a VM has been booted and
-checked on a real macOS 15 guest, but one real GitHub job has not yet run end to end, and the
-rule that keeps job traffic off a VPN has not yet been checked against a real tunnel. Both are
-part of the pilot (T214). The [image guide](ci-runners-image.md) and the job picker are in place;
-the image itself has not yet been booted in a VM. Connecting GitHub with clicks has been tested
-against a stand-in for GitHub, not GitHub itself, so if GitHub refuses the app, use
-[an app you already have](#use-an-app-you-already-have).
+**What is not verified yet.** Connecting GitHub with clicks works on real GitHub, and real jobs
+have passed on an image this Mac built, each in its own VM. The rule that keeps job traffic off a
+VPN has not yet been checked against a real tunnel, and no packaged release has the setup screens
+yet; both are part of the pilot (T214).
 
 ## Before you start
 
@@ -45,8 +42,9 @@ copied or pasted.
 
 In **Workflows > CI runners**, choose **Connect GitHub**:
 
-1. **Where do your repos live?** Pick your account or an org. The list comes from `gh` when it is
-   signed in; without it, type the name and say whether it is an org.
+1. **Where do your repos live?** Nekko checks GitHub first. When `gh` is signed in, pick your
+   account or an org from the list. Without it, **Continue on GitHub** sets up your own account
+   with nothing to type; for an org, choose **For an org, type its name**.
 2. **Create.** Your browser opens GitHub with everything filled in. Click **Create**. If GitHub
    asks you to sign in first, it may then show an empty form: close it and choose
    **Open GitHub again**.
@@ -87,7 +85,9 @@ link.
 ## Set up this Mac
 
 Jobs need a VM image. The second step builds one here, with no terminal and nothing to paste. It
-needs macOS 27 and 110 GB free. The sheet shows what it will download, what it copies from this
+needs macOS 27 and 110 GB free: most of it is the VM itself (about 55 GB with Xcode and the
+simulator inside), the 26 GB macOS image is deleted once it is installed, and 25 GB stays free for
+you. The sheet shows what it will download, what it copies from this
 Mac and how much space it needs. Pick a [mode](#how-this-mac-helps) and choose
 **Download and set up**. If this Mac already has an image, only the mode is asked.
 
@@ -95,14 +95,14 @@ The build takes about 30 minutes plus the download, and runs by itself:
 
 1. **Check this Mac.** If it cannot go on, it says why before anything is downloaded, for example
    "Update this Mac to macOS 27 to set it up here."
-2. **Download macOS** from Apple.
-3. **Install macOS** into a new VM.
+2. **Download the macOS image** from Apple.
+3. **Install the macOS VM**: macOS goes into a new VM, not onto this Mac.
 4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator and Homebrew are added.
    With no Xcode on this Mac the sheet offers **macOS only**; install Xcode for iOS jobs.
 5. **Lock the VM down.**
 6. **Test a boot.** Then the image goes in and the runner turns on in the mode you chose.
 
-You can close the sheet: the runner card shows the same stage and bar, and **Details** opens the
+Choose **Continue in the background** to close the sheet: the runner card shows the same stage and bar, and **Details** opens the
 sheet again. Quitting Nekko pauses the build, and **Resume setup** picks up where it left off. The
 build holds the Mac awake while it works, and pauses with its reason on screen when there is no free
 VM slot, memory is critical, the Mac is hot, the disk is too full, or, from the install on, the Mac

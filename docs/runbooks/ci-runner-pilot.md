@@ -13,48 +13,37 @@ One docked Mac runs `ios-native.yml` jobs for at least 7 days or 20 jobs, whiche
 with the hosted `xcode-27` runner as the fallback. Done when the results are posted on #1038
 (see [Record the results](#record-the-results)).
 
-## What is still owed before the pilot can start
+## Still owed
 
-- **[Philip]** The VM boot check of the golden image ([image guide, Check it](../ci-runners-image.md#check-it)).
-  Tart is not installed on the dev Mac yet: approve the Hypergate install request, then
-  `brew install cirruslabs/cli/tart` lands. The Cirrus `macos-sequoia-base` image is already in
-  Tart's cache, so the check needs no download.
 - **[Philip]** A Developer ID signed build with `nekko-vm`, and notarization on the next tag: the
   checklist in [docs/signing.md](../signing.md#the-vm-helpers-entitlement). A dev build is
-  enough for the pilot itself.
-- **[Philip]** The GitHub App, its key, and connecting the Mac (below).
-- **[Philip]** The Xcode image download (tens of GB) and the image build.
-- **[Philip]** The `MAC_RUNNER_STATUS_TOKEN` secret and the `NEKKO_MAC_RUNNERS` variable, only after
-  every check in [Security](#security-before-the-switch-goes-on) passes.
+  enough for the pilot itself; v0.8.2 predates the two-step setup.
 
-The pilot itself then owns: one real job end to end, the real-tunnel VPN check (Tailscale exit
-node and subnet route), sleep and the lid (Testing R3), and the menu bar dot on a real menu bar.
+The pilot itself owns: the real-tunnel VPN check (Tailscale exit node and subnet route), sleep and
+the lid (Testing R3), and the menu bar dot on a real menu bar.
 
 ## Before you start [Philip]
 
-- [ ] An Apple silicon MacBook Pro on power, with an external display, on wired Ethernet or a
-  trusted Wi-Fi network.
-- [ ] A build of the stack with `nekko-vm`: a dev build (`node apps/desktop/scripts/stage-daemon.mjs --dev`
-  stages and ad-hoc signs it), or the signed dist from [docs/signing.md](../signing.md#the-vm-helpers-entitlement).
-- [x] The GitHub App **Nekko Cloud Mac** (App ID 5510353), created 2026-10-28 and installed on the
-  `nekko-labs` org (all repos, so other nekko-labs repos can use the Mac later), per [Create the GitHub App](../ci-runners.md#create-the-github-app)
-  (the org runner's permissions: Organization **Self-hosted runners: Read and write**, Repository
-  **Actions: Read and write**).
-- [ ] The image, built from the Cirrus `macos-tahoe-xcode:27.1` base (Xcode 27.1, the Xcode CI moves to in #1302) with
-  [the image guide](../ci-runners-image.md), and its VM boot check passed.
+- An Apple silicon Mac on macOS 27 with Xcode, on power, on wired Ethernet or a trusted Wi-Fi
+  network, with 110 GB free.
+- A build with `nekko-vm`: `npm run dev` stages and ad-hoc signs it. Keep that app running for the
+  whole pilot: quitting it stops the runner.
 
 ## Connect the Mac
 
-1. Workflows tab, **CI runners**, **Connect GitHub**.
-2. Step 1: the App ID, installation ID and private key.
-3. Step 2: **An org**, `nekko-labs`, repos `nekko-agent`, tick **Allow public repos**
-   (nekko-agent is public), label `nekko-cloud-mac`. An org runner is needed for the workflow
-   restriction under [Security](#security-before-the-switch-goes-on): a repo runner has no runner
-   group. Nekko creates the runner group `nekko-nekko-cloud-mac` limited to nekko-agent.
-4. Step 3: **Balanced: in the background**. Then in the runner's settings set keep awake to
-   **While a runner is active**. Balanced keeps one VM ready, so the picker can see an idle
-   runner; in **Do not disturb: Only run when I'm idle** no VM is up until a job is queued, and
-   the picker would always pick hosted.
+The two-step setup in [CI runners on your Mac](../ci-runners.md#connect-github), with these
+choices:
+
+1. **Connect GitHub**: the `nekko-labs` org. On GitHub, **Create**, then **Install** on
+   `nekko-agent` only. An org runner is needed for the workflow restriction under
+   [Security](#security-before-the-switch-goes-on): a repo runner has no runner group. Nekko
+   creates the runner group `nekko-nekko-cloud-mac` limited to nekko-agent.
+2. **Confirm**: tick `nekko-agent`, label `nekko-cloud-mac`.
+3. **Set up this Mac**: **Balanced**, then **Download and set up**. Balanced keeps one VM ready, so
+   the picker can see an idle runner; in **Do not disturb** no VM is up until a job is queued, and
+   the picker would always pick hosted. If the Mac already has an image from before 2026-11-02,
+   move `<data>/runners/images/default` aside first: its boot script predates #1513, and the sheet
+   would only ask the mode and keep it.
 
 Check: the card shows a ready slot, and GitHub lists one online runner with labels `self-hosted`,
 `macOS`, `ARM64`, `nekko-cloud-mac`:

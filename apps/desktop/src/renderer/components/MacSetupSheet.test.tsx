@@ -18,22 +18,25 @@ const image = (over: Partial<ImageView> = {}): ImageView => ({
 });
 const planStep = (p: ImagePlan | null | undefined, rebuild = false, error: string | null = null) =>
   renderToStaticMarkup(<PlanStep plan={p} priority="doNotDisturb" rebuild={rebuild} error={error} busy={false} onPriority={() => {}} onBuild={() => {}} />);
-const progress = (v: ImageView, onResume?: () => void) => renderToStaticMarkup(<ProgressStep image={v} error={null} busy={false} onCancel={() => {}} onResume={onResume} />);
+const progress = (v: ImageView, onResume?: () => void) => renderToStaticMarkup(<ProgressStep image={v} error={null} busy={false} onCancel={() => {}} onResume={onResume} onBackground={() => {}} />);
 const failed = (v: ImageView) => renderToStaticMarkup(<FailedStep image={v} error={null} busy={false} onCancel={() => {}} onRetry={() => {}} />);
 const button = (html: string, name: string) => html.match(new RegExp(`<button[^>]*>${name}`))?.[0] ?? '';
 
 describe('MacSetupSheet', () => {
   it('plan_matches_frame_5', () => {
     const html = planStep(plan());
-    for (const s of ['Set up this Mac', 'macOS from Apple', 'iOS simulator from Apple', 'Xcode 27.2 from this Mac', 'Copied in', 'Space needed', '110 GB of 369 GB free', 'Do not disturb', 'Only run when I&#x27;m idle', 'Balanced', 'In the background', 'Runner first', 'For a docked Mac', 'Continuing accepts Apple&#x27;s macOS and Xcode licenses for this VM.', 'Download and set up']) expect(html).toContain(s);
+    for (const s of ['Set up this Mac', 'macOS image from Apple', 'iOS simulator from Apple', 'Xcode 27.2 from this Mac', 'Copied in', 'Space needed', '110 GB of 369 GB free', 'Do not disturb', 'Only run when I&#x27;m idle', 'Balanced', 'In the background', 'Runner first', 'For a docked Mac', 'Continuing accepts Apple&#x27;s macOS and Xcode licenses for this VM.', 'Download and set up']) expect(html).toContain(s);
     expect(html.match(/type="radio"/g)).toHaveLength(3);
     expect(html).not.toContain('macOS only');
+    // The download is a quarter of the space: the sheet says where the rest goes.
+    for (const s of ['Most of it is the VM itself, about 55 GB with Xcode and the simulator inside.', 'The macOS image is deleted once it is installed, and 25 GB stays free for you.']) expect(html).toContain(s);
   });
 
   it('no_xcode_offers_macos_only', () => {
     const html = planStep(plan({ xcode: null }));
     for (const s of ['macOS only', 'No Xcode on this Mac. Install Xcode for iOS jobs.', 'Continuing accepts Apple&#x27;s macOS license for this VM.']) expect(html).toContain(s);
-    for (const s of ['Copied in', 'iOS simulator from Apple', 'Xcode licenses']) expect(html).not.toContain(s);
+    for (const s of ['Copied in', 'iOS simulator from Apple', 'Xcode licenses', 'about 55 GB']) expect(html).not.toContain(s);
+    expect(html).toContain('Most of it is the VM itself.');
     expect(buildRequest(plan({ xcode: null }), 'balanced', 'r1', false)).toEqual({ kind: 'macosOnly', priority: 'balanced', runnerId: 'r1' });
   });
 
@@ -80,7 +83,11 @@ describe('MacSetupSheet', () => {
 
   it('progress_renders_each_stage', () => {
     const html = progress(image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] }));
-    for (const s of ['Setting up this Mac', 'Check this Mac', 'Download macOS', '12.4 of 25.6 GB', 'Install macOS', 'Add Xcode and tools', 'Lock the VM down', 'Test a boot', 'You can close this.', 'Cancel setup']) expect(html).toContain(s);
+    for (const s of ['Setting up this Mac', 'Check this Mac', 'Download the macOS image', '12.4 of 25.6 GB', 'Install the macOS VM', 'Add Xcode and tools', 'Lock the VM down', 'Test a boot', 'Setup continues while Nekko runs', 'Cancel setup']) expect(html).toContain(s);
+    // Leaving is the main thing to do while it builds; cancelling is the way out.
+    expect(button(html, 'Continue in the background')).toContain('btn-primary');
+    expect(button(html, 'Cancel setup')).toContain('btn-outline');
+    expect(html).not.toContain('You can close this.');
     expect(html).toContain('runner-bar');
     expect(html).toContain('role="progressbar"');
     expect(html).not.toContain('Resume setup');
@@ -96,15 +103,15 @@ describe('MacSetupSheet', () => {
   it('a_stopped_build_offers_to_resume', () => {
     const html = progress(image({ stage: 'xcode', doneStages: ['check', 'download', 'install'], canResume: true }), () => {});
     for (const s of ['Setup paused', 'Paused', 'Resume setup', 'Cancel setup']) expect(html).toContain(s);
-    expect(html).not.toContain('You can close this.');
+    expect(html).not.toContain('Continue in the background');
   });
 
   it('failed_shows_the_sentence_and_try_again', () => {
     const sentence = 'This Mac has 18 GB free. Free up 42 GB, then try again.';
     const html = failed(image({ state: 'failed', stage: 'xcode', doneStages: ['check', 'download', 'install'], error: sentence, log: 'tail', canResume: true }));
     expect(html).toMatch(new RegExp(`role="alert"[^>]*>${sentence}`));
-    for (const s of ['Setup stopped', 'Install macOS', 'Add Xcode and tools', 'Failed', 'Finished stages are kept.', 'Show log', 'Try again', 'Cancel setup']) expect(html).toContain(s);
-    expect(html).not.toContain('Download macOS');
+    for (const s of ['Setup stopped', 'Install the macOS VM', 'Add Xcode and tools', 'Failed', 'Finished stages are kept.', 'Show log', 'Try again', 'Cancel setup']) expect(html).toContain(s);
+    expect(html).not.toContain('Download the macOS image');
   });
 
   it('a_failed_lockdown_says_it_goes_back_further', () => {
