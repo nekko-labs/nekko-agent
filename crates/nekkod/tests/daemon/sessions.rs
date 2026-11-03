@@ -466,6 +466,9 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         ("logs/app.log.1", "older\n".into()),
         ("models/m.gguf", "weights".into()),
         ("runners/runners.json", "[]".into()),
+        // Not ours: the data folder can be one the user chose (NEKKO_DATA_DIR, a volume).
+        ("notes.txt", "mine".into()),
+        ("my-project/a.txt", "mine".into()),
         (
             "agent-watches.json",
             json!([{ "id": "w1", "sessionId": "s_a", "kind": "timer", "prompt": "secret", "nextPollAt": 4102444800000_u64, "intervalMs": 60000,
@@ -527,6 +530,12 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
     let (status, _) = post(d.port, "data:wipe", json!([{ "models": true }]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     assert!(!data.join("models").exists(), "downloads go when asked");
+    assert_eq!(std::fs::read_to_string(data.join("notes.txt")).unwrap(), "mine", "a file that is not ours stays");
+    assert_eq!(
+        std::fs::read_to_string(data.join("my-project/a.txt")).unwrap(),
+        "mine",
+        "a folder that is not ours stays"
+    );
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(saved["theme"], json!("system"));
     drop(d);

@@ -219,21 +219,64 @@ pub async fn pick_folder(ctx: &Ctx) -> Result<Option<String>, String> {
 
 // ---- data:wipe ----
 
-/// What a wipe leaves at the top of the data directory: what the running app
-/// needs (the window's own browser profile, which the window clears itself;
-/// the process list; the lock; the CLI's link to this server), CI runners
-/// (virtual machines the user set up and removes in Automations), and the
-/// folders and files emptied in place below.
-const WIPE_KEEPS: &[&str] = &[
-    "desktop",
-    "run",
-    crate::datalock::LOCK_FILE,
-    crate::cli_install::CLI_LINK_FILE,
-    "runners",
-    "sessions",
-    "memory",
-    "logs",
-    "settings.json",
+/// What a wipe deletes at the top of the data directory: only names the
+/// engine or the desktop app create there, never anything else, since the
+/// data folder can be one the user chose (`NEKKO_DATA_DIR`, a Docker volume)
+/// with their own files beside ours. `sessions/`, `memory/` and `logs/` are
+/// emptied in place, `settings.json` is reset, and `desktop/agent-browser`
+/// goes. Left alone: what the running app needs (`desktop/`, the window's
+/// browser profile, which the window clears itself; `run/`; the lock; the
+/// CLI's link to this server) and `runners/` (CI runner virtual machines, removed in
+/// Automations). Add a name here when something new is written to the data
+/// folder.
+pub const WIPE_OWNED: &[&str] = &[
+    // Sign-ins, keys and remote access.
+    "tokens.json",
+    "cloud",
+    "computers",
+    "computers.json",
+    "computers-secrets.json",
+    "secrets.json",
+    "remote.json",
+    "remote-activity.json",
+    "local-relay.json",
+    "security.json",
+    "provider-seal.key",
+    "network-visibility.json",
+    "messaging-state.json",
+    // Automation.
+    "tasks.json",
+    "workflows.json",
+    "workflow-runs.json",
+    "workflow-cursors.json",
+    "workflow-checkouts",
+    "training.json",
+    "dojo.json",
+    "agent-watches.json",
+    "resource-queue.json",
+    // What the user made, used and saw.
+    "attachments",
+    "backups",
+    "comments.json",
+    "design.json",
+    "fonts",
+    "harness",
+    "sandboxes",
+    "skills.json",
+    "skill-sources.json",
+    "vaizer.json",
+    "usage.jsonl",
+    "replies.jsonl",
+    "quota-history.jsonl",
+    // About this computer and the window.
+    "machine-profile.json",
+    "measured-speeds.json",
+    "recommendations-seen.json",
+    "runtime-calibration.json",
+    "claude-policy.json",
+    "window-state.json",
+    "display-windows.json",
+    "migration.json",
 ];
 
 /// Downloads: large and not personal, so deleted only when the user ticks
@@ -248,8 +291,8 @@ pub const DOWNLOADS: &[&str] = &["models", "engine", "voice"];
 /// tasks and workflows, remote access and paired phones, linked computers and
 /// their keys, Nekko Cloud's token and keys (the session is ended too), the
 /// keys in the OS keystore, logs, backups, the agent browser's files, and
-/// every other file in the data folder except [`WIPE_KEEPS`] and, unless
-/// `models` is set, [`DOWNLOADS`]. Settings go back to their defaults.
+/// the rest of [`WIPE_OWNED`]; with `models`, the [`DOWNLOADS`] too.
+/// Settings go back to their defaults.
 async fn wipe(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
     let models = opts.get("models").and_then(Value::as_bool) == Some(true);
     let store = ctx.sessions.clone();
@@ -270,19 +313,13 @@ async fn wipe(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
     // Keys in the OS keystore: linked computers', and Nekko Cloud's.
     ctx.computers.forget_all().await?;
     ctx.cloud.sign_out_and_forget().await?;
-    // A models folder the user put inside the data folder is a download too.
-    let settings = crate::settings::current(ctx).await;
-    let models_dir =
-        nekko_js::truthy_str(settings.get("engine").and_then(|e| e.get("modelsDir"))).map(std::path::PathBuf::from);
     // Chats, each command log first (a failure there keeps that chat).
     let logs = ctx.turns.agent_logs.clone();
     let cleared = tokio::task::spawn_blocking(move || store.clear_with("all", |id| logs.delete_blocking(id)))
         .await
         .map_err(|e| e.to_string())?;
     let files = data_dir.clone();
-    tokio::task::spawn_blocking(move || wipe_files(&files, models, models_dir.as_deref()))
-        .await
-        .map_err(|e| e.to_string())??;
+    tokio::task::spawn_blocking(move || wipe_files(&files, models)).await.map_err(|e| e.to_string())??;
     nekko_net::clear();
     ctx.accounts.clear(None);
     let next = crate::settings::route(&ctx.settings, "settings:reset", &[]).await?;
@@ -292,15 +329,11 @@ async fn wipe(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
 
 /// The files a wipe removes under `data_dir` (see [`wipe`]): everything in
 /// `memory/` (the folder itself stays) and whatever chat files the store left
-/// in `sessions/` (command logs of deleted chats), every log (the live ones emptied in place, as their writers
-/// hold them open; rotated ones deleted), the agent browser's files, and every
-/// other top-level entry but [`WIPE_KEEPS`] and, unless `models`, the
-/// [`DOWNLOADS`] and a models folder inside the data folder.
-pub fn wipe_files(
-    data_dir: &std::path::Path,
-    models: bool,
-    models_dir: Option<&std::path::Path>,
-) -> Result<(), String> {
+/// in `sessions/` (command logs of deleted chats), every log (the live ones
+/// emptied in place, as their writers hold them open; rotated ones deleted),
+/// the agent browser's files, [`WIPE_OWNED`] and, with `models`, the
+/// [`DOWNLOADS`]. Nothing else in the data folder is touched.
+pub fn wipe_files(data_dir: &std::path::Path, models: bool) -> Result<(), String> {
     let gone = |r: std::io::Result<()>| match r {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
         _ => Ok(()),
@@ -322,21 +355,9 @@ pub fn wipe_files(
     }
     crate::logs::clear_dir(&data_dir.join("logs")).map_err(|e| e.to_string())?;
     remove(&data_dir.join("desktop").join("agent-browser"))?;
-    // The top of the models folder when it is inside the data folder.
-    let own_models = models_dir
-        .and_then(|d| d.strip_prefix(data_dir).ok())
-        .and_then(|rel| rel.components().next())
-        .map(|c| c.as_os_str().to_os_string());
-    for path in entries(data_dir) {
-        let name = path.file_name().unwrap_or_default().to_os_string();
-        let text = name.to_string_lossy();
-        if WIPE_KEEPS.contains(&text.as_ref()) {
-            continue;
-        }
-        if !models && (DOWNLOADS.contains(&text.as_ref()) || own_models.as_ref() == Some(&name)) {
-            continue;
-        }
-        remove(&path)?;
+    let downloads: &[&str] = if models { DOWNLOADS } else { &[] };
+    for name in WIPE_OWNED.iter().chain(downloads) {
+        remove(&data_dir.join(name))?;
     }
     Ok(())
 }
@@ -628,8 +649,7 @@ mod tests {
                 })
                 .unwrap();
             std::fs::create_dir_all(dir.join("sessions")).unwrap();
-            let models = case["models"].as_bool() == Some(true);
-            wipe_files(&dir, models, case["modelsDir"].as_str().map(|d| dir.join(d)).as_deref()).unwrap();
+            wipe_files(&dir, case["models"].as_bool() == Some(true)).unwrap();
             let next = nekko_settings::SettingsStore::new(&dir).reset().unwrap();
             assert_eq!(next, Value::Object(nekko_settings::defaults()));
             assert_eq!(tree(&dir), case["after"], "{}", case["name"]);
