@@ -111,7 +111,7 @@ Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (40 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (11 KB)
-- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (7 KB)
+- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (10 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
@@ -130,7 +130,7 @@ What the model sees: Context Inspector, modes, work modes, rules, memory, specs.
 - [Context, guardrails & memory (the differentiators)](context/context-guardrails-memory-the-differentiators.md) (13 KB)
 - [Floop task connector](context/floop-task-connector.md) (2 KB)
 - [Living spec from a conversation](context/living-spec-from-a-conversation.md) (1 KB)
-- [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (8 KB)
+- [Mode panel and saved modes (2026-10-17)](context/mode-panel-and-saved-modes.md) (10 KB)
 - [Privacy Shield: control what a cloud model receives](context/privacy-shield.md) (4 KB)
 - [Seeing exactly what the model gets (Context Inspector)](context/seeing-exactly-what-the-model-gets-context-inspector.md) (2 KB)
 - [Work Modes: a better chat in one click (2026-10-17)](context/work-modes-a-better-chat-in-one-click.md) (3 KB)
@@ -145,7 +145,7 @@ Providers, local models, the Model Server, training.
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (5 KB)
-- [Models & providers](models/models-providers.md) (46 KB)
+- [Models & providers](models/models-providers.md) (47 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)
@@ -220,6 +220,7 @@ Architecture, speed contract, distribution, builds and startup.
 - [Send feedback from every app (2026-10-24)](platform/send-feedback.md) (5 KB)
 - [Speed & responsiveness (the speed contract)](platform/speed-responsiveness-the-speed-contract.md) (12 KB)
 - [Startup splash and window launch (2026-10-21)](platform/startup-splash-and-window-launch.md) (2 KB)
+- [Third-party licensing and credits (2026-11-03)](platform/third-party-licensing-and-credits.md) (2 KB)
 - [Windows installs without Visual Studio, and a smaller download (2026-10-12)](platform/windows-installs-without-visual-studio-and-a-smaller-download.md) (6 KB)
 
 ### brand

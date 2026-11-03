@@ -17,6 +17,7 @@ fi
 git diff --quiet "$base" HEAD -- \
   apps/website \
   docs \
+  ASSETS.md \
   CONTRIBUTING.md \
   scripts/build-docs.mjs \
   scripts/vercel-ignore.sh \

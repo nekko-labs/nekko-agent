@@ -34,9 +34,12 @@ describe('Mode panel markup', () => {
   it('shows the rail, the four sections and every setting', () => {
     const out = html();
     for (const name of STARTER_MODES.map((m) => m.name)) expect(out).toContain(name);
-    for (const text of ['Environment', 'Model', 'Privacy', 'Approach', 'Run on', 'Use worktrees', 'Incognito', 'Internet access', 'Folders', 'Approvals', 'Tools', 'MCP servers', 'Connectors', 'Skills', 'System prompt', 'Memory', 'Model router', 'Models run', 'Effort']) expect(out).toContain(text);
+    for (const text of ['Environment', 'Nekko router', 'Privacy', 'Approach', 'Run on', 'Use worktrees', 'Incognito', 'Internet access', 'Folders', 'Approvals', 'Tools', 'MCP servers', 'Connectors', 'Skills', 'System prompt', 'Memory', 'Model router', 'Models run', 'Effort']) expect(out).toContain(text);
     expect(out).toContain('git-scm.com/docs/git-worktree');
     expect(out).toContain('agent-nekko');
+    // Explanation copy still ships, now as HoverTip labels on the row's info trigger.
+    expect(out).toContain('data-hover-tip="Your machine, with your shell, apps and credentials.');
+    expect(out).toContain('data-hover-tip="This chat is not saved to your history.');
   });
   it('marks the matching saved mode and the planned settings', () => {
     session = { ...base, cloudOnly: true };

@@ -99,7 +99,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorElement, {
     redo.current = [];
   };
   const paint = (el: MarkdownEditorElement, text: string) => {
-    const html = text ? renderToStaticMarkup(<>{composerMarkdownNodes(text)}</>) + (text.endsWith('\n') ? '<br>' : '') : '<br>';
+    // Keep an empty editor truly empty, so its `:empty::before` placeholder
+    // (and ghost suggestions written into it) can show. A `<br>` child counts
+    // as a child element and defeats `:empty`.
+    const html = text ? renderToStaticMarkup(<>{composerMarkdownNodes(text)}</>) + (text.endsWith('\n') ? '<br>' : '') : '';
     // Most keys leave the highlighting as it was: the browser's own edit
     // already reads the same, caret included. Rewriting it anyway and putting
     // the caret back forced a layout of the whole page on every key.

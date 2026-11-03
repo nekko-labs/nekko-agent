@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_AGENT_PANEL_VIEW, canReorder, compareCards, dateGroupOf, isDefaultView,
+  DEFAULT_AGENT_PANEL_VIEW, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, isDefaultView,
   parseAgentPanelView, statusGroupOf, withSort, type SortableCard,
 } from './agentPanelView.js';
 
@@ -54,11 +54,20 @@ describe('agent panel view', () => {
     expect(titles('name', 'desc')).toEqual(['gamma 10', 'gamma 9', 'beta', 'Alpha']);
   });
 
-  it('files a card under its activity, done when nothing is running', () => {
-    expect(statusGroupOf('input')).toBe('status:input');
-    expect(statusGroupOf('done')).toBe('status:done');
-    expect(statusGroupOf('idle')).toBe('status:done');
-    expect(statusGroupOf(undefined)).toBe('status:done');
+  it('lists the agent loop in order, with Draft first', () => {
+    expect(STATUS_GROUPS.map((g) => g.name)).toEqual(['Draft', 'Exploring', 'Building', 'Verifying', 'Shipping']);
+  });
+
+  it('files a chat under its loop phase, and a chat nothing was sent in under Draft', () => {
+    expect(statusGroupOf({ exchangeCount: 0 }, false)).toBe('status:draft');
+    expect(statusGroupOf({ exchangeCount: 2, phase: 'building' }, false)).toBe('status:building');
+    expect(statusGroupOf({ exchangeCount: 2, phase: 'shipping' }, true)).toBe('status:shipping');
+  });
+
+  it('starts a sent chat at Exploring until a tool call names a phase', () => {
+    expect(statusGroupOf({ exchangeCount: 0 }, true)).toBe('status:exploring');
+    expect(statusGroupOf({ exchangeCount: 2 }, false)).toBe('status:exploring');
+    expect(statusGroupOf(null, false)).toBe('status:exploring');
   });
 
   it('files a time under calendar-day date groups', () => {

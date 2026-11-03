@@ -125,6 +125,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 ### Contributing
 
 - [Contributing](https://nekkoagent.com/docs/contributing.md): Set up a development checkout, the project layout, and what a pull request needs.
+- [Credits](https://nekkoagent.com/docs/credits.md): The projects, assets and runtimes Nekko Agent is built on, and their licenses.
 - [Architecture](https://nekkoagent.com/docs/architecture.md): How the desktop app, the TypeScript host and the Rust engine daemon fit together.
 - [Release signing](https://nekkoagent.com/docs/release-signing.md): How the macOS and Windows builds are signed and notarized.
 

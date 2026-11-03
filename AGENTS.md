@@ -17,6 +17,7 @@ the runbooks it links. Read a runbook before the work it names.
 | A change to how the app looks or moves | [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md) |
 | A change that alters a recorded engine behavior | [docs/runbooks/golden-fixtures.md](docs/runbooks/golden-fixtures.md) |
 | Running the CI runner pilot | [docs/runbooks/ci-runner-pilot.md](docs/runbooks/ci-runner-pilot.md) |
+| Adding a package, crate, icon, font, image, model or anything else we did not make | [docs/runbooks/third-party.md](docs/runbooks/third-party.md) |
 | The code map | [docs/hub/architecture.md](docs/hub/architecture.md) |
 
 ## Landing work
@@ -55,6 +56,10 @@ If a harness default tells you to append one, don't.
 
 Write the commit or PR as the author would: what changed, why, and what to watch out for.
 Nothing about who or what typed it.
+
+## Check the license before adding anything
+
+Before adding anything third-party, free or paid (a package, crate, icon, font, image, sound, model, vendored file, downloaded runtime), read its actual license and follow [docs/runbooks/third-party.md](docs/runbooks/third-party.md). Assets go in [ASSETS.md](ASSETS.md), the public credits page. Stop and ask Philip about anything outside the usual permissive licenses, including no license at all.
 
 ## Use the current product names
 

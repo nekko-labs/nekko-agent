@@ -1840,6 +1840,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     let mut deltas = Deltas::default();
     // A step's save still being written.
     let mut saving: Option<tokio::task::JoinHandle<()>> = None;
+    let mut phase = lock(&f.session).get("messages").and_then(Value::as_array).and_then(|m| nekko_store::loop_phase(m));
     loop {
         let due = deltas.due();
         let out = tokio::select! {
@@ -1900,6 +1901,13 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 accounts.turn_end(opts, account, f.started_at, &event, finished.as_ref());
             }
         }
+        // The chat moved along the agent loop. Tool calls only reach the windows
+        // showing it, so the rest hear `session_meta` once the save has landed.
+        let next = snapshot.as_deref().and_then(nekko_store::loop_phase);
+        let moved = next.is_some() && next != phase;
+        if moved {
+            phase = next;
+        }
         if is_checkpoint(&event) {
             // Saves land in order.
             if let Some(save) = saving.take() {
@@ -1909,7 +1917,14 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 Some(messages) if str_at(&event, "type") == Some("step") => {
                     note_error(&f.last_error, &event);
                     f.hub.publish("agent:event", event, false);
-                    saving = Some(tokio::spawn(checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito)));
+                    let (hub, id) = (f.hub.clone(), f.session_id.clone());
+                    let save = checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito);
+                    saving = Some(tokio::spawn(async move {
+                        save.await;
+                        if moved {
+                            hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": id }), false);
+                        }
+                    }));
                     continue;
                 }
                 Some(messages) => checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito).await,
@@ -1923,7 +1938,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         let steered = str_at(&event, "type") == Some("steered");
         note_error(&f.last_error, &event);
         f.hub.publish("agent:event", event, false);
-        if steered {
+        if steered || moved {
             // The steering message is in the transcript now; panes re-read it.
             f.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": f.session_id }), false);
         }
