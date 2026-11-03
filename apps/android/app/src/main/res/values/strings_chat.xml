@@ -94,6 +94,9 @@
     <string name="chat_message">Message</string>
     <string name="chat_add_details_for">Add details for /%1$s (optional)</string>
     <string name="chat_queue_follow_up">Queue a follow-up…</string>
+    <string name="chat_do_it_here">Do it here</string>
+    <string name="chat_uses_more_context">uses more context</string>
+    <string name="chat_in_a_subagent">In a subagent</string>
     <string name="chat_message_slash_skills">Message, / for skills</string>
     <string name="chat_message_your_computer">Message your computer</string>
     <string name="chat_hide_formatting">Hide formatting</string>

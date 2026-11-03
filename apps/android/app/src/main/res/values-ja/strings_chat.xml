@@ -94,6 +94,9 @@
     <string name="chat_message">メッセージ</string>
     <string name="chat_add_details_for">/%1$s の詳細を追加（任意）</string>
     <string name="chat_queue_follow_up">フォローアップをキューに追加…</string>
+    <string name="chat_do_it_here">ここで実行</string>
+    <string name="chat_uses_more_context">コンテキストを多く使います</string>
+    <string name="chat_in_a_subagent">サブエージェントで</string>
     <string name="chat_message_slash_skills">メッセージ、/ でスキル</string>
     <string name="chat_message_your_computer">コンピュータにメッセージ</string>
     <string name="chat_hide_formatting">書式を隠す</string>

@@ -71,7 +71,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import com.nekko.protocol.QueuedPrompt
+import com.nekko.protocol.Session
 import com.nekko.protocol.SavedPrompt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
@@ -136,6 +139,8 @@ fun Composer(
     onRestored: () -> Unit = {},
     /** The computer is out of reach: what is sent waits on the phone (offline mode); said under the box. */
     sendsLater: String? = null,
+    /** This chat can hand a typed follow-up to a sub-agent (`ChatUi.offersSubagent`). */
+    offerSubagent: Boolean = false,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -189,7 +194,7 @@ fun Composer(
         error = null
     }
 
-    val send = {
+    fun send(wrap: (String) -> String = { it }) {
         if (canSend) {
             // `/name rest` typed out in full runs that skill too, as on the desktop.
             val typedText = text
@@ -205,7 +210,7 @@ fun Composer(
             error = null
             scope.launch {
                 try {
-                    onSend(value, armed, sentPhotos.map { it.dataUrl })
+                    onSend(wrap(value), armed, sentPhotos.map { it.dataUrl })
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -317,6 +322,10 @@ fun Composer(
                         inner()
                     },
                 )
+                // More work for a chat that has replied. A skill or saved prompt is a slash command, not work to place.
+                if (offerSubagent && armedNone && text.isNotBlank() && !text.trimStart().startsWith("/")) {
+                    WorkPlace(canSend, onHere = { send() }, onSubagent = { send(Session.Companion::inSubagent) })
+                }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val recording = mic?.state is MicState.Recording
                     val transcribing = mic?.state is MicState.Transcribing
@@ -385,6 +394,18 @@ fun Composer(
                 }
             }
         }
+    }
+}
+
+/** Where a typed follow-up runs: in this chat, or in a subagent that reports back. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WorkPlace(enabled: Boolean, onHere: () -> Unit, onSubagent: () -> Unit) {
+    val p = Nekko.palette
+    FlowRow(Modifier.padding(horizontal = 4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onHere, enabled = enabled, modifier = Modifier.testTag("composer.doItHere")) { Text(stringResource(R.string.chat_do_it_here)) }
+        Text(stringResource(R.string.chat_uses_more_context), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        TextButton(onClick = onSubagent, enabled = enabled, modifier = Modifier.testTag("composer.inSubagent")) { Text(stringResource(R.string.chat_in_a_subagent)) }
     }
 }
 

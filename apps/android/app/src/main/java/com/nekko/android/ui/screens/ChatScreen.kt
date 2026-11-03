@@ -579,6 +579,7 @@ fun ChatScreen(
                     restore = restore,
                     onRestored = vm::restored,
                     sendsLater = chat.sendsLater,
+                    offerSubagent = chat.offersSubagent,
                     // A fork's prompt, else what was typed here last time (the saved draft).
                     initialText = initialDraft ?: vm.savedDraft.text.ifEmpty { null },
                     initialSkillName = vm.savedDraft.skill?.name.takeIf { initialDraft == null },

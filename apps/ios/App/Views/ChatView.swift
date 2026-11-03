@@ -891,6 +891,8 @@ struct Composer: View {
                                       placeholder: chat.running ? "Queue a follow-up" : "Message",
                                       onPasteImages: pasteImages, boxed: false)
                     .padding(.horizontal, 12).padding(.top, 10)
+                // A skill or saved prompt is a slash command, not work to place.
+                if skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
                 HStack(alignment: .center, spacing: 4) {
                     Menu {
                         // As on the desktop: another agent or a terminal beside this one, or a photo for this message.
@@ -1063,6 +1065,25 @@ struct Composer: View {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || prompt != nil || !images.isEmpty
     }
 
+    /// More work for a chat that has replied: run it here, or hand it to a subagent.
+    private var workPlace: some View {
+        let here = Button { send() } label: { Text("Do it here").frame(minHeight: 44).contentShape(Rectangle()) }
+            .accessibilityIdentifier("composer.doItHere")
+        let cost = Text("uses more context").font(.footnote).foregroundStyle(palette.inkFaint)
+        let subagent = Button { send(wrap: Session.inSubagent) } label: { Text("In a subagent").frame(minHeight: 44).contentShape(Rectangle()) }
+            .accessibilityIdentifier("composer.inSubagent")
+        // Side by side when it fits; a large text size or a long translation stacks them.
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { here; cost; subagent }
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) { here; cost }
+                subagent
+            }
+        }
+        .font(.footnote.weight(.semibold)).buttonStyle(.plain).foregroundStyle(palette.accent).disabled(!canSend)
+        .padding(.horizontal, 12)
+    }
+
     private func slashChip(_ name: String, _ detail: String, saved: Bool) -> some View {
         VStack(alignment: .leading) {
             Label(name, systemImage: saved ? "text.badge.star" : "wand.and.stars").font(.caption.weight(.semibold))
@@ -1224,9 +1245,9 @@ struct Composer: View {
             title: { chat.title })
     }
 
-    /// Sends what is in the box; the task says whether the computer took it (a refusal puts the text back).
+    /// Sends what is in the box, through `wrap`; the task says whether the computer took it (a refusal puts the text back).
     @discardableResult
-    private func send() -> Task<Bool, Never> {
+    private func send(wrap: (String) -> String = { $0 }) -> Task<Bool, Never> {
         var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var s = skill
         // "/name rest" typed out in full runs that skill.
@@ -1243,7 +1264,7 @@ struct Composer: View {
         if s == nil, let prompt { body = prompt.text(input: body) }
         let sentPrompt = prompt
         let sentImages = images
-        let sentBody = body
+        let sentBody = wrap(body)
         let sentSkill = s
         let saved = text
         text = ""

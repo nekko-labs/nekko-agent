@@ -94,6 +94,9 @@
     <string name="chat_message">消息</string>
     <string name="chat_add_details_for">为 /%1$s 添加详情（可选）</string>
     <string name="chat_queue_follow_up">排队发送后续消息…</string>
+    <string name="chat_do_it_here">在此处执行</string>
+    <string name="chat_uses_more_context">占用更多上下文</string>
+    <string name="chat_in_a_subagent">在子代理中</string>
     <string name="chat_message_slash_skills">消息，输入 / 使用技能</string>
     <string name="chat_message_your_computer">给你的电脑发消息</string>
     <string name="chat_hide_formatting">隐藏格式</string>
