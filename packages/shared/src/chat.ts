@@ -10,8 +10,6 @@ export interface ToolCall {
   input: Record<string, unknown>;
   /** Set when Claude Code ran the call (a Claude Agent chat): shown, never run by Nekko. */
   executedBy?: 'claude-code';
-  /** A Claude Code sub-agent's call: the id of the call that started the sub-agent. */
-  parentToolCallId?: string;
 }
 
 export interface ToolResult {
@@ -24,8 +22,6 @@ export interface ToolResult {
   /** Claude Code denied the call itself (a Claude Agent chat), with its reason. */
   denied?: boolean;
   deniedReason?: string;
-  /** A Claude Code sub-agent's result: the id of the call that started the sub-agent. */
-  parentToolCallId?: string;
 }
 
 /**
@@ -250,6 +246,13 @@ export interface Session {
    * final answer back to the parent's `spawn_agent` tool call.
    */
   parentSessionId?: string;
+  /** The `spawn_agent` call that started this sub-agent, in its parent's transcript. */
+  spawnCallId?: string;
+  /**
+   * This sub-agent ran inside its parent's Claude Code session, which keeps the
+   * real history. This chat is a copy to watch, so nothing can be sent to it.
+   */
+  claudeCodeSubagent?: boolean;
   /** When set, this chat is driven by an automation task (shown in the Tasks
    *  board, kept out of the regular chat boards/lanes). */
   taskId?: string;
