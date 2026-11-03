@@ -6,6 +6,13 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Nothing below the message box and a denser plan (#1599, added 2026-11-03)
+
+Spec: [Simple and Expert modes, message box bottom row](spec/desktop/desktop-simple-and-expert-modes.md#message-box-bottom-row-2026-11-03), [plan sheet, dense steps](spec/chat/plan-sheet-on-the-composer.md#dense-steps-that-open-on-their-own-implemented-2026-11-03).
+
+- [x] **BOX-1, Desktop composer row.** `ChatPane` draws the footer (folder, model and effort, context, usage, Tools, MCP, internet) and the model note as the message box's bottom row, inside `.composer` after its bar; the wall's new chat drops its duplicate model row under the box (the bar already has it); wall windows keep no footer. Tests: `AgentWindowIndicators.test.tsx`, `cleanStart.test.tsx`, `StatusIcon.test.tsx` (`composerBox` helper in `tests/renderChatPane.tsx`); hidden chat-modes and new-chat captures.
+- [x] **BOX-2, Desktop plan.** `PlanSheet` steps lose their cards (dense rows, semibold kind word); each step with details is its own disclosure button with a caret, no hover or focus-within opening. Unfinished steps start open, finished ones closed except the last with PRs or files. Tests: `PlanSheet.test.tsx`; `plan-sheet-sandbox.cjs` (click and Enter toggles, hover opens nothing).
+
 ## Thinking and replies in chat (#1574, added 2026-11-03)
 
 Spec: [thinking and replies](spec/chat/thinking-and-replies.md).

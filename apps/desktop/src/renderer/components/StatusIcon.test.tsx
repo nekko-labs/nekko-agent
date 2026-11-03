@@ -88,7 +88,6 @@ describe('wall chat chrome', () => {
   it('draws no empty strip under the wall composer', () => {
     withProvider();
     const html = renderChatPane(chatSession(), { surface: 'composer', commandCenter: true });
-    expect(html).toMatch(/<div class="shrink-0" aria-label="Chat actions and information"><\/div>/);
-    expect(html).not.toMatch(/border-t border-line bg-surface px-3 py-1\.5" aria-label="Chat actions and information"/);
+    expect(html).not.toContain('aria-label="Chat actions and information"');
   });
 });

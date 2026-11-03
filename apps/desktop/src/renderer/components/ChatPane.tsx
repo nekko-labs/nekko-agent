@@ -3287,22 +3287,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
-            </div>
-            {/* The footer is hidden while the chat starts clean, but the model
-                is still the user's to pick before the first send. */}
-            {cleanStart && <div className="clean-start-model mt-2 flex justify-center" data-clean-start-model>
-              {modelControls}
-             </div>}
-          </div>
-        </div>
-        )}
-        {/* Open PRs show their status and actions on their own PR card in the
-            transcript, and on the plan sheet's PR chip. The composer no longer
-            carries a dedicated strip for them. */}
-        {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1'} aria-label="Chat actions and information">
-          {/* Said once, next to the control that fixes it, in the window being driven. */}
-          {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
-          {!imageMode && surface !== 'composer' && !wallWindow && <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+              {/* Nothing renders under the message box: its settings are the
+                  box's own bottom row. A new chat keeps only the model there,
+                  and a wall window already carries it in the bar above. */}
+              {cleanStart ? !wallWindow && (
+                <div className="clean-start-model composer-foot-row flex border-t border-line px-2 py-1" data-clean-start-model>
+                  {modelControls}
+                </div>
+              ) : surface !== 'composer' && !imageMode && (modelHint || !wallWindow) && (
+                <div className="composer-foot-row border-t border-line px-2 py-1" aria-label="Chat actions and information">
+                  {/* Said once, next to the control that fixes it, in the window being driven. */}
+                  {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
+                  {!wallWindow && <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                   <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />
                   {modelControls}
                   <>
@@ -3339,9 +3335,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </>}
               <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />
                           </div>
-          </div>}
-          {/* An image chat runs no agent, so no tools or internet switch: just its status. */}
                   </div>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        )}
       </section>
 
       {/* The work rail, in the quarter the transcript gives back. Kept inside

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '../tests/browserGlobals.js';
 import { liveStore } from '../tests/liveStore.js';
 import { elementWidthMock, paneWidth } from '../tests/paneWidth.js';
-import { chatSession, renderChatPane, withProvider } from '../tests/renderChatPane.js';
+import { chatSession, composerBox, renderChatPane, withProvider } from '../tests/renderChatPane.js';
 import { loadWall, summary, windowBody } from '../tests/renderWall.js';
 import { useStore } from '../store.js';
 
@@ -59,11 +59,21 @@ describe('wall clean start', () => {
     expect(clean).toMatch(/<section class="[^"]*\bclean-start justify-center\b/);
   });
 
-  it('still offers the model and effort under the composer', () => {
+  it('still offers the model and effort as the composer\'s bottom row', () => {
     const clean = renderChatPane(empty(), { cleanStart: true });
     const normal = renderChatPane(empty(), { cleanStart: false });
     expect(clean).toContain('data-clean-start-model');
+    // The box's own bottom row, never under it.
+    const box = composerBox(clean);
+    expect(box.indexOf('data-clean-start-model')).toBeGreaterThan(box.indexOf('composer-bar'));
+    const after = clean.slice(clean.indexOf(box) + box.length);
+    expect(after.slice(0, after.indexOf('</section>'))).not.toMatch(/<button/);
     expect(clean).toContain('aria-haspopup="listbox"');
+    // On the wall the bar already carries the model, so no second copy.
+    const wall = renderChatPane(empty(), { commandCenter: true, cleanStart: true });
+    expect(wall).toContain('data-clean-start');
+    expect(composerBox(wall)).toContain('data-composer-foot');
+    expect(wall).not.toContain('data-clean-start-model');
     // Out of the clean start it lives in the footer, not twice.
     expect(normal).not.toContain('data-clean-start-model');
   });
