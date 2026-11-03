@@ -294,7 +294,9 @@ final class StatusWidgetTests: XCTestCase {
 @MainActor
 final class SavedListNoteTests: XCTestCase {
     func testTheNoteSaysWhenAndThatItIsNotLive() {
-        let cal = Calendar(identifier: .gregorian)
+        // UTC: west of it, ten minutes before `now` falls on the previous day.
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let today = SavedListNote.text(savedAt: Int64((now.timeIntervalSince1970 - 600) * 1000), computer: "Mac", now: now, calendar: cal)
         XCTAssertTrue(today.hasPrefix("Saved list from "))

@@ -672,8 +672,9 @@ final class LiveRelayTests: XCTestCase {
 
     private func allowSystemAlerts() {
         addUIInterruptionMonitor(withDescription: "system alerts") { alert in
+            // firstMatch: on some simulators the camera alert lists its Allow button twice.
             for label in ["Allow", "OK", "Allow While Using App"] where alert.buttons[label].exists {
-                alert.buttons[label].tap()
+                alert.buttons[label].firstMatch.tap()
                 return true
             }
             return false
@@ -683,7 +684,7 @@ final class LiveRelayTests: XCTestCase {
     /// Notification permission is asked right after pairing.
     private func tapSystemAlertIfShown() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let allow = springboard.buttons["Allow"]
+        let allow = springboard.buttons["Allow"].firstMatch
         if allow.waitForExistence(timeout: 4) { allow.tap() }
     }
 
