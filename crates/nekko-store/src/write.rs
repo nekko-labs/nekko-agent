@@ -185,6 +185,13 @@ const USER_FIELDS: &[&str] = &[
     "connectivityNotices",
 ];
 
+/// A queued prompt's text, when text is all it is.
+fn plain_text(item: &Value) -> Option<&str> {
+    let carried = |k: &str| item.get(k).is_some_and(|v| v.as_array().map_or(!v.is_null(), |a| !a.is_empty()));
+    let text = item.as_str().or_else(|| item.get("text").and_then(Value::as_str))?;
+    (!text.trim().is_empty() && !carried("images") && !carried("videos") && !carried("skill")).then_some(text)
+}
+
 /// `queueItemPayload`: a queued prompt as `{ text, images?, skill? }`.
 fn queue_payload(item: &Value) -> Value {
     match item {
@@ -941,6 +948,11 @@ impl SessionStore {
             "memory",
             "guidance",
             "toolApproach",
+            // A fork carries the transcript, so it keeps what protects it.
+            "offline",
+            "cloudOnly",
+            "privacy",
+            "incognito",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());
@@ -1245,6 +1257,24 @@ impl SessionStore {
         })
     }
 
+    /// The messages an agent can read at its next step: the queue's head, up to
+    /// the first with photos or a skill, which waits for a turn of its own so
+    /// nothing overtakes it. Taken off the queue, so none runs twice.
+    pub fn take_queued_text(&self, id: &str) -> Result<Vec<String>, String> {
+        let waiting = |s: &Map<String, Value>| s.get("queue").and_then(Value::as_array).is_some_and(|q| !q.is_empty());
+        if !self.meta(id).is_some_and(|m| waiting(&m.fields)) {
+            return Ok(Vec::new());
+        }
+        let mut taken = Vec::new();
+        self.patch(id, |s| {
+            let q = s.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
+            taken = q.iter().map_while(plain_text).map(str::to_string).collect();
+            s.insert("queue".into(), Value::Array(q[taken.len()..].to_vec()));
+            !taken.is_empty()
+        })?;
+        Ok(taken)
+    }
+
     /// `editQueuedPrompt`: change or remove the queued prompt at `index`, only
     /// while it still shows the text the editor saw (`edit.expect`). A missing
     /// `text`, or a blank one with no photos, removes it; a skill's prompt can
@@ -1321,6 +1351,21 @@ impl SessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_next_step_takes_the_queues_plain_head_and_nothing_past_a_photo() {
+        let dir = std::env::temp_dir().join(format!("nekko-take-queued-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        let store = SessionStore::new(&dir);
+        let id = store.create(None).unwrap()["id"].as_str().unwrap().to_string();
+        assert!(store.take_queued_text(&id).unwrap().is_empty());
+        let photo = json!({ "text": "see this", "images": ["data:x"] });
+        store.assign(&id, &[("queue", json!(["one", { "text": "two" }, photo.clone(), "after the photo"]))]).unwrap();
+        assert_eq!(store.take_queued_text(&id).unwrap(), ["one", "two"]);
+        assert_eq!(store.get(&id).unwrap()["queue"], json!([photo, "after the photo"]));
+        assert!(store.take_queued_text(&id).unwrap().is_empty(), "the photo holds its place");
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn connectivity_notices_survive_checkpoints_without_entering_model_messages() {

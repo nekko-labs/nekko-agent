@@ -1,4 +1,5 @@
 import { ActiveWatchChips } from './ActiveWatchChips.js';
+import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
 import { ClaudeBackgroundTasks, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
@@ -21,7 +22,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, inSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -69,7 +70,6 @@ import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { ExpertMonitor, ModeToggle, useExpertMode } from './ModeViews.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
-import { sheetPlan } from '../claudeAgentPlan.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
 import { useWallLogs } from '../wallLogs.js';
@@ -81,7 +81,7 @@ import { ChatControls, InternetToggle, McpMenu, MODE_LABEL, ToolsMenu } from './
 import { useElementCompact } from './agent-console/useElementWidth.js';
 import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
-import { PrCard, PrActionDock } from './PrCard.js';
+import { PrCard } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
 import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
@@ -419,7 +419,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
   if (row.kind === 'stats') return <div className="msg-ai"><TurnStatsLine stats={row.stats} /></div>;
   if (row.kind === 'prs') {
     // Historical milestones stay anchored to their original transcript positions.
-    return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} />)}</>;
+    return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} sessionId={sessionId} />)}</>;
   }
   const persisted = !row.displayOnly && row.message.id !== 'tmp' && row.message.id !== 'live';
   const editable = !readOnly && !streaming && row.message.role === 'user' && persisted;
@@ -442,7 +442,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
       </MarkdownSession.Provider>
       {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath).filter(artifact => !artifact.inlineImage)} sessionId={sessionId} />}
       {/* A PR card right after the message that first names it. */}
-      {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" />)}
+      {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" sessionId={sessionId} />)}
     </>
   );
 });
@@ -588,18 +588,25 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
   // What a delegation that names no model runs on: the saved route, else this chat's model.
   const delegationDefaultModel = useStore(s => s.settings?.orchestration?.delegationRoute?.modelId);
-  const { providers, setMascotMood, refreshSessions } = useStore(
+  const delegationStrategy = useStore(s => s.settings?.orchestration?.strategy);
+  const computer = useComputerOf(sessionId);
+  const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
+  const { providers: localProviders, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
       providers: s.providers,
       setMascotMood: s.setMascotMood,
       refreshSessions: s.refreshSessions,
     })),
   );
+  // A chat on another computer picks from that computer's providers, never this one's.
+  const providers = computer ? remoteProviders ?? [] : localProviders;
   const settings = useStore(useShallow((s) => chatPaneSettings(s.settings)));
 
   // Painted straight from the session cache when this chat was open recently;
   // the host copy is fetched regardless and replaces it (stale-while-revalidate).
   const [session, setSession] = useState<Session | null>(() => getCachedSession(sessionId) ?? null);
+  // A Claude Code sub-agent's chat is a copy to watch: Claude Code holds the real one.
+  const remoteBlock = session?.claudeCodeSubagent ? 'This subagent runs inside its parent chat. Send your message there.' : computerBlock(computer);
   const [liveConnectivity, setLiveConnectivity] = useState<import('@nekko-agent/shared').ConnectivityNotice[]>(() => rememberedConnectivityNotices(sessionId));
   useEffect(() => { setLiveConnectivity(rememberedConnectivityNotices(sessionId)); }, [sessionId]);
   const claudeBackground = useClaudeBackgroundTasks(sessionId);
@@ -1567,7 +1574,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * Sends the draft, or `override` instead of it. False when a gate refused it (voice puts the text back then).
    * `admitted` fires once the turn has begun or been queued; the returned promise settles only when the turn ends.
    */
-  const send = async (override?: string, admitted?: () => void): Promise<boolean | undefined> => {
+  const send = async (override?: string, admitted?: () => void, wrap: (text: string) => string = (t) => t): Promise<boolean | undefined> => {
+    if (remoteBlock) {
+      useStore.getState().pushToast('error', `${remoteBlock}. This message wasn't sent.`);
+      return false;
+    }
     if (session?.executionMode === 'sandbox') {
       try {
         const status = await window.nekko.sandboxStatus(session.id);
@@ -1577,16 +1588,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const input = override ?? draft;
     if (imageMode) return input.trim() ? sendImage(input.trim(), override === undefined, admitted) : false;
     const skill = activeSkill;
-    const text = [skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n');
+    const text = wrap([skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n'));
     const images = pendingImages;
     const videos = pendingVideos;
     if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return false;
     // A follow-up never interrupts work by accident. Queue the same payload the
     // turn would have sent so attachments and skills run when their turn arrives.
     if (streamingRef.current && !imageMode) {
-      if (override === undefined) await queueDraft();
+      if (override === undefined) await queueDraft(wrap);
       else {
-        const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(input, images, skill, videos));
+        const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(wrap(input), images, skill, videos));
         if (updated) { setSession(updated); refreshSessions(); }
       }
       return;
@@ -1677,8 +1688,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   // Queue the draft to run after the current reply (and any earlier queued
   // items). Useful for lining up follow-ups while an agent is working.
-  const queueDraft = async () => {
-    const text = draft.trim();
+  const queueDraft = async (wrap: (text: string) => string = (t) => t) => {
+    const typed = draft.trim();
+    const text = typed ? wrap(typed) : typed;
     const images = pendingImages;
     const videos = pendingVideos;
     const skill = activeSkill;
@@ -1692,29 +1704,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     setActiveSkill(null);
     clearDraft(sessionId);
     setSession(updated);
-    refreshSessions();
-  };
-
-  // Steer the running reply with the draft: it joins the transcript at the
-  // next tool boundary, the turn carries on. Ctrl/⌘+Enter while a reply runs.
-  const steerDraft = async () => {
-    const text = draft.trim();
-    if (!text) return;
-    const updated = await window.nekko.steerChat(sessionId, text);
-    setDraft('');
-    clearDraft(sessionId);
-    if (updated) setSession(updated);
-    refreshSessions();
-  };
-
-  // Steer with a queued message instead of waiting for the turn to end.
-  const steerQueued = async (index: number) => {
-    const text = queueItemText(session?.queue?.[index] ?? '');
-    if (!text.trim()) return;
-    const updated = await window.nekko.dequeuePrompt(sessionId, index);
-    if (updated) setSession(updated);
-    const steered = await window.nekko.steerChat(sessionId, text);
-    if (steered) setSession(steered);
     refreshSessions();
   };
 
@@ -1868,7 +1857,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   };
 
 
-  const hasProvider = !needsProviderSetup(providers, modelId ?? models[0]?.id);
+  const hasProvider = !!computer || !needsProviderSetup(providers, modelId ?? models[0]?.id);
   // An image chat runs on the engine's image model, not a chat provider, so it
   // can compose with no provider configured at all.
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
@@ -2014,6 +2003,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // placeholder while the box is empty; ArrowRight types it in.
   const ghostSuggestion = !draft && !errorNotice && liveSuggestions?.next ? liveSuggestions.next : null;
 
+  // More work for a chat that has replied: run it here, or hand it to a subagent.
+  // A slash command isn't work to place, and Enter still means here.
+  const followUp = draft.trim() ? (draft.trimStart().startsWith('/') ? null : draft) : ghostSuggestion;
+  const offerSubagent = !!followUp && !imageMode && !remoteBlock && hasProvider && !!session
+    && canOfferSubagent(session, delegationStrategy);
+  const runFollowUp = (wrap?: (text: string) => string) => void send(draft.trim() ? undefined : followUp ?? undefined, undefined, wrap);
+
   const onComposerKeyDown = (e: React.KeyboardEvent<MarkdownEditorElement>) => {
     if (e.nativeEvent.isComposing) return;
     const menuCount = slashMenuOpen ? skillMatches.length + slashMatches.length : atMenuOpen ? atMatches.length : 0;
@@ -2059,9 +2055,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Ctrl/⌘+Enter while a reply runs steers it; Enter queues the follow-up.
-      if ((e.ctrlKey || e.metaKey) && streamingRef.current && !imageMode) void steerDraft();
-      else void send();
+      void send();
     }
   };
 
@@ -2335,7 +2329,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Every PR the transcript mentions, scanned once per transcript: the scan is
   // a regular expression over every message, and it used to run on every
   // render of the pane, including each streaming frame.
-  const sessionPrUrls = useMemo(() => (messages ? collectSessionPrUrls(messages) : []), [messages]);
   const prByUrl = useMemo(() => new Map(prs.map((p) => [p.url, p])), [prs]);
   // Handlers handed to rows go through refs, so a row never re-renders because
   // this pane re-rendered.
@@ -2457,8 +2450,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />
-    {/* On the wall effort is in the Mode panel; the bar keeps just the model. */}
-    {!wallWindow && <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />}
+    {/* Effort rides the composer in every surface now: an icon-sized gauge
+        beside the model picker, matching iOS/Android ModelEffortButton. */}
+    <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />
     </div>
   );
 
@@ -2598,12 +2592,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 />
                 {!streaming && <ClaudeBackgroundTasks tasks={claudeBackground} />}
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
+                {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
                 </div>}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
+                {/* Where the next piece of work runs, offered in the conversation like the other next steps. */}
+                {offerSubagent && (
+                  <div className="flex flex-wrap items-center gap-2 py-2 text-xs" role="group" aria-label="Where this work runs" data-work-place>
+                    {!draft.trim() && <span className="min-w-0 text-ink-faint [overflow-wrap:anywhere]">Next: {followUp}</span>}
+                    <button type="button" className="btn btn-outline py-1 text-xs" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
+                    <button type="button" className="btn btn-outline py-1 text-xs" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
+                    <span className="text-2xs text-ink-faint">Here uses more context</span>
+                  </div>
+                )}
                 {errorNotice && !question && !streaming && (() => {
                   // A stop the user asked for is not a failure, so it doesn't wear
                   // the failure colour. Either way the run is resumable whenever it
@@ -2706,12 +2710,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </div>
         )}
 
-        {approval && surface !== 'composer' && <ApprovalBar approval={approval} onDecide={approve} />}
+        {approval && surface !== 'composer' && <ApprovalBar approval={approval} onDecide={approve} computerName={computer?.name} />}
 
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
-        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-4 pt-1`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
+        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
           {/* The resize grip rides the composer's top border: a wide invisible
               hit area over a hairline that lights up on hover. */}
           {surface !== 'composer' && !cleanStart && <div
@@ -2727,7 +2731,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
-          <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
+          <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : 'w-[min(90%,calc(100%-8px))]'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
             )}
@@ -2860,7 +2864,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               <div className="min-h-0 overflow-hidden">
                 <div className="border-b border-line bg-surface-2 px-3 py-2">
                   <div className="mb-1 flex items-center gap-2 text-xs text-ink-soft">
-                    <ListIcon className="h-3 w-3" /> Queued · {queued.length} {streaming ? 'after this reply' : 'waiting to run'}
+                    <ListIcon className="h-3 w-3" /> Queued · {queued.length} {streaming ? 'waiting for the agent' : 'waiting to run'}
                   </div>
                   <div className="space-y-1">
                     {queued.map((q, i) => {
@@ -2872,8 +2876,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <span className="min-w-0 flex-1 truncate text-ink-soft" title={label}>{payload.text || '(no text)'}</span>
                         {payload.skill && <span className="skill-pill shrink-0 text-2xs" title={`Skill: ${payload.skill.name}`}><span className="skill-pill-slash">/</span>{payload.skill.name}</span>}
                         {!!payload.images?.length && <span className="shrink-0 rounded-full border border-line px-2 py-px text-2xs text-ink-faint">{payload.images.length} image{payload.images.length === 1 ? '' : 's'}</span>}
-                        {streaming && !payload.images?.length && !payload.skill && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="The agent reads this at its next step and keeps going" onClick={() => void steerQueued(i)}>Next step</button>}
-                        {streaming && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Stop the reply and send this now" onClick={() => void sendQueuedNow(i)}>Interrupt</button>}
+                        {streaming && <button className="shrink-0 rounded-md px-2 py-0.5 text-accent hover:bg-surface" title="Stops the reply and sends this now" onClick={() => void sendQueuedNow(i)}>Interrupt and send now</button>}
                         <button
                           className="shrink-0 rounded-sm px-1 text-ink-faint hover:text-(--danger)"
                           title="Remove from queue"
@@ -3082,7 +3085,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <MarkdownEditor
                     ref={composerRef}
                     className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[52px] py-2'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
-                    placeholder={imageMode ? 'Describe the image you want…' : streaming ? 'Queue a follow-up… (Ctrl/⌘+Enter sends it at the next step)' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
+                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}
@@ -3275,7 +3278,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       className={`${wallWindow ? 'wall-send' : 'send-avatar'} grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[background-color,border-color,color,opacity,transform] duration-150 disabled:opacity-40`}
                       onClick={() => void send()}
                       disabled={imageMode ? streaming || !draft.trim() : (!draft.trim() && pendingImages.length === 0 && pendingVideos.length === 0 && !activeSkill) || !hasProvider}
-                      title={streaming ? 'Add to queue after this reply' : 'Send'}
+                      title={streaming ? 'Add to the queue' : 'Send'}
                       aria-label={streaming ? 'Add to queue' : 'Send'}
                     >
                       {/* On the wall Nekko wears the window's status in its header, so Send is a plain arrow. */}
@@ -3292,12 +3295,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>
         </div>
         )}
-        {/* In the wall composer this strip only carries the PR dock (the model,
-            folder and usage controls live in the agent window), so it draws no
-            chrome of its own: empty, it used to show as a bare band under the
-            composer. */}
-        {/* The PR deck sits between the composer and the footer controls, on the window surface. */}
-        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!sheetPlan(session, providers, streaming)?.length} />}
+        {/* Open PRs show their status and actions on their own PR card in the
+            transcript, and on the plan sheet's PR chip. The composer no longer
+            carries a dedicated strip for them. */}
         {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}

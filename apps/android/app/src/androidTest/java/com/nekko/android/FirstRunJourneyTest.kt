@@ -57,7 +57,7 @@ class FirstRunJourneyTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val device = InstrumentationRegistry.getArguments().getString("nekkoDevice") ?: Build.MODEL.replace(' ', '_')
-    private val link = "nekko-agent-pair:?relay=wss%3A%2F%2Frelay.example.dev&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff"
+    private val link = testPairingLink()
 
     @Test fun allowNotifications() {
         val app = ApplicationProvider.getApplicationContext<NekkoApp>()

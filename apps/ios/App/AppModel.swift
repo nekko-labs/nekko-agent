@@ -455,7 +455,8 @@ final class AppModel {
             return RelayRoute.message(p, computer: "Your computer")
         }
         start()
-        let id = await store.pair(link)
+        let id: String
+        do { id = try await store.pair(link) } catch { return error.localizedDescription }
         if prefs.defaultComputer == nil { prefs.defaultComputer = id }
         if prefs.onboarded {
             if await notifier.requestPermission() { registerForPush() }

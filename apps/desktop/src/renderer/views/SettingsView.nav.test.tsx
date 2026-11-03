@@ -23,6 +23,6 @@ describe('Settings section nav', () => {
     expect(activeGroup(scroller([0, 200, 400]))).toBe('general');
   });
   it('highlights the last group once scrolled to the bottom, even if it is short', () => {
-    expect(activeGroup(scroller([-800, -500, 80], true))).toBe('style');
+    expect(activeGroup(scroller([-800, -500, 80], true))).toBe('computers');
   });
 });

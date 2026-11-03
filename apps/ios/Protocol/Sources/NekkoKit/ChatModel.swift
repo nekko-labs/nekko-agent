@@ -506,6 +506,15 @@ public final class ChatModel {
         await reload()
     }
 
+    public var runOptions: [String: JSONValue] { session?.runOptions ?? [:] }
+
+    /// Set one run setting on the computer running this chat. One that changes
+    /// what an agent may touch asks for Face ID: the computer says when.
+    public func setRunOption(_ key: String, _ value: JSONValue) async throws {
+        _ = try await store.call(raising: Channels.sessionSetOptions, [.string(sessionId), .object([key: value])])
+        await reload()
+    }
+
     // MARK: The queue, forks and pull requests
 
     /// Editing the computer's queue needs the computer: an edit made offline could land after the prompt ran.
@@ -523,27 +532,6 @@ public final class ChatModel {
             _ = try await store.remote().call(Channels.chatEditQueued, [.string(sessionId), .int(Int64(index)), edit])
         } catch {
             // Show the queue as it is now, whatever happened to this edit.
-            await reload()
-            throw store.readable(error)
-        }
-        await reload()
-    }
-
-    /// Give the running agent the queued prompt at `index` at its next step, keeping its work.
-    /// It leaves the queue first, through the check an edit gets, so it can't run twice.
-    public func sendQueuedAtNextStep(_ index: Int, expect: String) async throws {
-        guard store.conn == .online else { throw RelayError(Self.reconnectToEditQueue) }
-        do {
-            let r = try store.remote()
-            _ = try await r.call(Channels.chatEditQueued, [.string(sessionId), .int(Int64(index)), QueuedPrompt.edit(expect: expect, text: nil)])
-            do {
-                _ = try await r.call(Channels.chatSteer, [.string(sessionId), .string(expect)])
-            } catch {
-                // A computer too old for this, or the link dropped: the prompt goes back in line.
-                _ = try? await r.call(Channels.chatQueue, [.string(sessionId), .string(expect)])
-                throw error
-            }
-        } catch {
             await reload()
             throw store.readable(error)
         }

@@ -16,6 +16,7 @@ import com.nekko.protocol.Channels
 import com.nekko.protocol.E2E
 import com.nekko.protocol.Events
 import com.nekko.protocol.ModelInfo
+import com.nekko.protocol.Pairing
 import com.nekko.protocol.PairingLink
 import com.nekko.protocol.PendingInput
 import com.nekko.protocol.PublicProvider
@@ -203,6 +204,7 @@ class ComputersRepository(
         if (!_checking.compareAndSet(false, true)) return
         try {
             val secret = StoredJson.decodeSecret(store.get(secretKey(computer.id))) ?: return
+            val hostKey = secret.pin ?: return
             val routes = RouteSupervisor.order(listOf(computer.relayUrl) + computer.alts)
             _checks.value = routes.map { RouteReport(it) }
             routes.forEachIndexed { i, url ->
@@ -217,6 +219,7 @@ class ComputersRepository(
                                 room = secret.room,
                                 key = secret.key,
                                 keyBytes = E2E.fromHex(secret.keyHex),
+                                hostKey = hostKey,
                                 deviceId = deviceId(),
                                 deviceName = deviceName(),
                                 pairCode = null,
@@ -371,17 +374,21 @@ class ComputersRepository(
 
     /** Save a scanned/pasted pairing and connect. Returns the computer's id. */
     suspend fun pair(link: PairingLink): String {
+        val hostKey = link.hostKey ?: throw RelayException(Pairing.NEEDS_HOST_KEY)
         val keyHex = E2E.toHex(deriveKey(link.key, link.room))
-        // Paired again after signing out: the old sign-out must never reach the new pairing.
-        signOuts.cancel(link.relayUrl, link.room)
         val id = lock.withLock {
             // Re-scanning a computer we already know keeps its id and name.
             val list = _state.value.computers
             val existing = list.lastOrNull { c ->
                 c.relayUrl == link.relayUrl && StoredJson.decodeSecret(store.get(secretKey(c.id)))?.room == link.room
             }
+            // Rotating a pairing changes the room, so a new key here is not the same computer.
+            val pinned = existing?.let { StoredJson.decodeSecret(store.get(secretKey(it.id))) }?.pin
+            if (pinned != null && pinned != hostKey) throw RelayException(Pairing.DIFFERENT_COMPUTER)
+            // Paired again after signing out: the old sign-out must never reach the new pairing.
+            signOuts.cancel(link.relayUrl, link.room)
             val id = existing?.id ?: newId()
-            store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair)))
+            store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair, hostKey)))
             // The computer's routes may have changed since (another Wi-Fi, LAN addresses on or off).
             val next = if (existing != null) list.map { if (it.id == id) it.copy(alts = link.alts) else it }
             else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now(), alts = link.alts)
@@ -463,9 +470,10 @@ class ComputersRepository(
             )
         }
         liveList = false
-        if (secret.version < E2E.PAIRING_VERSION) {
-            // Paired before the computer replaced its pairing secret (decision 0036): it no longer
-            // answers on this pairing, so say so and ask for a fresh QR instead of dialing.
+        val hostKey = secret.pin
+        if (hostKey == null) {
+            // Paired before the computer replaced its pairing secret (decision 0036) or named its
+            // host key (decision 0041): say so and ask for a fresh QR instead of dialing.
             logStatus(RelayState.DENIED, denied = DenyReason.BAD_KEY)
             _state.update { it.copy(conn = RelayState.DENIED, denied = DenyReason.BAD_KEY) }
             return@withLock
@@ -479,6 +487,7 @@ class ComputersRepository(
             room = secret.room,
             key = secret.key,
             keyBytes = E2E.fromHex(secret.keyHex),
+            hostKey = hostKey,
             deviceId = deviceId(),
             deviceName = deviceName(),
             pairCode = secret.pair,
@@ -574,6 +583,13 @@ class ComputersRepository(
         _state.update { it.copy(pcSettings = PcSettings.from(reply)) }
     }
 
+    /** Set the active computer's icon, there, so every device shows the same one: a name from `COMPUTER_ICONS`, or "" for none. */
+    suspend fun setMachineIcon(name: String) {
+        val id = _state.value.activeId ?: return
+        updatePcSettings(PcSettings.patch(icon = name))
+        learnIcon(id, name.ifEmpty { null })
+    }
+
     /**
      * A fresh step-up challenge from the active computer (SK-7): single use,
      * two minutes, and which kinds of method it has. Fetched for every try.
@@ -610,11 +626,13 @@ class ComputersRepository(
         } catch (_: Exception) {
             false
         }
-        if (!sent && secret != null) {
-            signOuts.add(PendingSignOut(computer.relayUrl, secret.room, secret.key, secret.keyHex, deviceId(), now()))
+        // A pairing with no host key can't be dialed, so there is nothing to queue.
+        val hostKey = secret?.pin?.takeIf { !sent }
+        if (secret != null && hostKey != null) {
+            signOuts.add(PendingSignOut(computer.relayUrl, secret.room, secret.key, secret.keyHex, hostKey, deviceId(), now()))
         }
         forget(id)
-        return if (sent || secret == null) SignOutResult.SENT else SignOutResult.QUEUED
+        return if (hostKey == null) SignOutResult.SENT else SignOutResult.QUEUED
     }
 
     /**
@@ -660,6 +678,7 @@ class ComputersRepository(
                 room = p.room,
                 key = p.key,
                 keyBytes = E2E.fromHex(p.keyHex),
+                hostKey = p.hostKey,
                 deviceId = p.deviceId,
                 deviceName = deviceName(),
                 platform = "android",
@@ -728,6 +747,11 @@ class ComputersRepository(
     suspend fun setChatMode(sessionId: String, mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         val args = listOf(JsonPrimitive(sessionId), buildJsonObject { put("mode", mode.wire) })
         if (stepUp == null) callRaising(Channels.SESSION_SET_OPTIONS, args) else callChange(Channels.SESSION_SET_OPTIONS, args, stepUp)
+    }
+
+    /** Set one run setting on the computer running a chat; one that loosens an agent is signed ([callRaising]). */
+    suspend fun setRunOption(sessionId: String, key: String, value: JsonElement) {
+        callRaising(Channels.SESSION_SET_OPTIONS, listOf(JsonPrimitive(sessionId), buildJsonObject { put(key, value) }))
     }
 
     private fun setArchived(sessionId: String, at: Long?) {
@@ -799,6 +823,8 @@ class ComputersRepository(
             liveList = true
             saveList()
             learnPlatform(r.info?.platform)
+            // A failed read says nothing about the icon; an answer without one clears it.
+            if (r.info != null) _state.value.activeId?.let { learnIcon(it, r.info.machineIcon) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -907,6 +933,16 @@ class ComputersRepository(
             // First connection names the computer after its OS, unless the user renamed it.
             val name = if (c.name == DEFAULT_COMPUTER_NAME) osName(platform) else c.name
             val next = list.map { if (it.id == id) it.copy(platform = platform, name = name) else it }
+            _state.update { it.copy(computers = next) }
+            saveIndex(next)
+        }
+    }
+
+    private suspend fun learnIcon(id: String, icon: String?) {
+        lock.withLock {
+            val list = _state.value.computers
+            if (list.firstOrNull { it.id == id }?.let { it.icon != icon } != true) return
+            val next = list.map { if (it.id == id) it.copy(icon = icon) else it }
             _state.update { it.copy(computers = next) }
             saveIndex(next)
         }

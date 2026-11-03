@@ -6,11 +6,17 @@ use crate::common::*;
 type RelaySide = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
 
 /// The agent's next frame, and what it seals when it is a data frame.
-async fn next_agent_frame(agent: &mut RelaySide, key: &nekko_remote::e2e::Key) -> (Value, Option<Value>) {
-    let f = next_json(agent, Duration::from_secs(20)).await.expect("an agent frame");
+async fn next_agent_frame(agent: &mut RelaySide, key: &Phones) -> (Value, Option<Value>) {
+    let f = loop {
+        let f = next_json(agent, Duration::from_secs(20)).await.expect("an agent frame");
+        // For the relay alone, which this test doesn't gate on.
+        if f["type"] != "welcomed" {
+            break f;
+        }
+    };
     let sealed = (f["type"] == "d")
         .then(|| serde_json::from_str::<Value>(f["data"].as_str().unwrap()).unwrap())
-        .and_then(|d| nekko_remote::e2e::open(key, d["enc"].as_str().unwrap()));
+        .and_then(|d| key.open(f["cid"].as_str().unwrap_or_default(), d["enc"].as_str().unwrap()));
     (f, sealed)
 }
 
@@ -21,56 +27,61 @@ fn device_key(device: &str) -> p256::ecdsa::SigningKey {
 }
 
 /// A current phone app's frames on each connection: its HELLO answers the
-/// connection's challenge and is signed with the device key (protocol 5), and
-/// each request after it carries that challenge and the next seq.
-#[derive(Default)]
+/// connection's challenge, runs the key exchange and is signed with the device
+/// key, and each request after it carries that challenge and the next seq.
 struct Phones {
     room: String,
-    /// cid to (challenge, last seq).
-    conns: std::sync::Mutex<std::collections::HashMap<String, (String, u64)>>,
+    /// Only ever carries a challenge.
+    key: nekko_remote::e2e::Key,
+    conns: std::sync::Mutex<std::collections::HashMap<String, Conn>>,
+}
+
+#[derive(Default)]
+struct Conn {
+    challenge: Value,
+    seq: u64,
+    session: Option<nekko_remote::e2e::Key>,
 }
 
 impl Phones {
-    fn new(room: &str) -> Self {
-        Phones { room: room.to_string(), conns: Default::default() }
+    fn new(room: &str, secret: &str) -> Self {
+        let key = nekko_remote::e2e::derive_key(secret, room);
+        Phones { room: room.to_string(), key, conns: Default::default() }
     }
 
     fn challenged(&self, cid: &str, challenge: &Value) {
-        let c = challenge["challenge"].as_str().expect("a challenge").to_string();
-        self.conns.lock().unwrap().insert(cid.to_string(), (c, 0));
+        let conn = Conn { challenge: challenge.clone(), ..Conn::default() };
+        self.conns.lock().unwrap().insert(cid.to_string(), conn);
     }
 
-    fn frame(&self, cid: &str, mut v: Value) -> Value {
-        use base64::Engine;
-        use p256::ecdsa::signature::Signer;
+    /// What the agent sent `cid`, under that connection's key or, for a challenge, the room's.
+    fn open(&self, cid: &str, enc: &str) -> Option<Value> {
+        let session = self.conns.lock().unwrap().get(cid).and_then(|c| c.session.clone());
+        session.and_then(|k| nekko_remote::e2e::open(&k, enc)).or_else(|| nekko_remote::e2e::open(&self.key, enc))
+    }
+
+    /// The `data` of a frame from `cid`.
+    fn data(&self, cid: &str, mut v: Value) -> String {
         let mut conns = self.conns.lock().unwrap();
-        let p = conns.entry(cid.to_string()).or_default();
-        match v["type"].as_str() {
-            Some("hello") => {
-                let device = v["deviceId"].as_str().unwrap_or_default().to_string();
-                let k = device_key(&device);
-                let text = nekko_remote::hello::hello_text(&device, &self.room, &p.0);
-                let sig: p256::ecdsa::Signature = k.sign(text.as_bytes());
-                let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
-                v["protocol"] = json!(nekko_remote::hello::PROTOCOL_VERSION);
-                v["challenge"] = json!(p.0);
-                v["helloKey"] = json!(b64(k.verifying_key().to_encoded_point(false).as_bytes()));
-                v["sig"] = json!(b64(&sig.to_bytes()));
-                p.1 = 0;
-            }
-            Some("req") => {
-                p.1 += 1;
-                v["seq"] = json!(p.1);
-                v["challenge"] = json!(p.0);
-            }
-            _ => {}
+        let conn = conns.entry(cid.to_string()).or_default();
+        if v["type"] == "hello" {
+            let device = v["deviceId"].as_str().unwrap_or_default();
+            v["signWith"] = json!(nekko_remote::proof::key_text(&device_key(device)));
+            let (data, session) = nekko_remote::agent::answer_challenge(&self.room, &conn.challenge, v);
+            conn.session = Some(session);
+            conn.seq = 0;
+            return data;
         }
-        v
+        conn.seq += 1;
+        v["seq"] = json!(conn.seq);
+        v["challenge"] = conn.challenge["challenge"].clone();
+        let key = conn.session.as_ref().unwrap_or(&self.key);
+        json!({ "enc": nekko_remote::e2e::seal_with_iv(key, &v, nekko_remote::e2e::random_iv()) }).to_string()
     }
 }
 
 /// Announce a connection and read the challenge the agent seals to it first.
-async fn open_conn(agent: &mut RelaySide, key: &nekko_remote::e2e::Key, phones: &Phones, cid: &str) {
+async fn open_conn(agent: &mut RelaySide, key: &Phones, phones: &Phones, cid: &str) {
     agent.send(Message::text(json!({ "type": "client-open", "cid": cid }).to_string())).await.unwrap();
     loop {
         let (f, sealed) = next_agent_frame(agent, key).await;
@@ -115,17 +126,14 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     .unwrap();
     // The relay gets a credential derived from the secret, never the secret.
     let auth = nekko_remote::e2e::relay_auth(&secret, &room);
-    assert_eq!(path, format!("/relay?role=agent&room={room}&key={auth}"));
+    assert_eq!(path, format!("/relay?role=agent&room={room}&key={auth}&proto=6"));
     assert!(!path.contains(&secret));
-    let key = nekko_remote::e2e::derive_key(&secret, &room);
-    let seal = |v: Value| {
-        json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()
-    };
+    let key = Phones::new(&room, &secret);
     // A current phone: its HELLO answers the connection's challenge and is
     // signed with its device key; each request carries the challenge and the next seq.
-    let phones = Phones::new(&room);
+    let phones = &key;
     let client = |cid: &str, v: Value| {
-        Message::text(json!({ "type": "c", "cid": cid, "data": seal(phones.frame(cid, v)) }).to_string())
+        Message::text(json!({ "type": "c", "cid": cid, "data": phones.data(cid, v) }).to_string())
     };
 
     agent.send(Message::text(json!({ "type": "client-open", "cid": "c1" }).to_string())).await.unwrap();
@@ -135,10 +143,9 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     let challenge = challenge.unwrap();
     assert_eq!(challenge["type"], "challenge", "{challenge}");
     phones.challenged("c1", &challenge);
-    // Nothing is served before the handshake.
+    // Nothing is served before the handshake: that request goes unanswered, so
+    // the next frame the agent sends is the welcome.
     agent.send(client("c1", json!({ "type": "req", "id": 1, "channel": "tasks:list", "args": [] }))).await.unwrap();
-    let (_, res) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(res.unwrap(), json!({ "type": "res", "id": 1, "error": "not paired (send hello first)" }));
     // Enroll with the one-time code.
     let hello = json!({ "type": "hello", "deviceId": "phone-1", "name": "Pixel", "platform": "android", "pair": code });
     agent.send(client("c1", hello)).await.unwrap();
@@ -352,13 +359,7 @@ async fn the_daemon_runs_the_phone_relay_agent() {
 
 /// Reads the agent's frames until `cid`'s reply to request `id`, keeping
 /// every `terminal:event` it passes as `(cid, payload)`.
-async fn reply_to(
-    agent: &mut RelaySide,
-    key: &nekko_remote::e2e::Key,
-    cid: &str,
-    id: u32,
-    events: &mut Vec<(String, Value)>,
-) -> Value {
+async fn reply_to(agent: &mut RelaySide, key: &Phones, cid: &str, id: u32, events: &mut Vec<(String, Value)>) -> Value {
     loop {
         let (f, sealed) = next_agent_frame(agent, key).await;
         let Some(s) = sealed else { continue };
@@ -397,19 +398,16 @@ async fn a_phone_attaches_to_a_chat_terminal_over_the_relay() {
     let (tcp, _) =
         tokio::time::timeout(Duration::from_secs(20), relay.accept()).await.expect("the agent dials").unwrap();
     let mut agent = tokio_tungstenite::accept_async(tcp).await.unwrap();
-    let key = nekko_remote::e2e::derive_key(&secret, &room);
-    let seal = |v: Value| {
-        json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()
-    };
-    let phones = Phones::new(&room);
+    let key = Phones::new(&room, &secret);
+    let phones = &key;
     let client = |cid: &str, v: Value| {
-        Message::text(json!({ "type": "c", "cid": cid, "data": seal(phones.frame(cid, v)) }).to_string())
+        Message::text(json!({ "type": "c", "cid": cid, "data": phones.data(cid, v) }).to_string())
     };
     let mut events = Vec::new();
     // Two phones, each enrolled with its own one-time code.
     for (cid, device, name) in [("c1", "phone-1", "Pixel"), ("c2", "phone-2", "Other phone")] {
         let (_, grant) = post(d.port, "remote:pair", json!([]), Some(TOKEN)).await;
-        open_conn(&mut agent, &key, &phones, cid).await;
+        open_conn(&mut agent, &key, phones, cid).await;
         let hello =
             json!({ "type": "hello", "deviceId": device, "name": name, "platform": "ios", "pair": grant["code"] });
         agent.send(client(cid, hello)).await.unwrap();
@@ -605,18 +603,15 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
     let (tcp, _) =
         tokio::time::timeout(Duration::from_secs(20), relay.accept()).await.expect("the agent dials").unwrap();
     let mut agent = tokio_tungstenite::accept_async(tcp).await.unwrap();
-    let key = nekko_remote::e2e::derive_key(&secret, &room);
-    let seal = |v: Value| {
-        json!({ "enc": nekko_remote::e2e::seal_with_iv(&key, &v, nekko_remote::e2e::random_iv()) }).to_string()
-    };
-    let phones = Phones::new(&room);
+    let key = Phones::new(&room, &secret);
+    let phones = &key;
     let client = |cid: &str, v: Value| {
-        Message::text(json!({ "type": "c", "cid": cid, "data": seal(phones.frame(cid, v)) }).to_string())
+        Message::text(json!({ "type": "c", "cid": cid, "data": phones.data(cid, v) }).to_string())
     };
     let mut events = Vec::new();
     for (cid, device, name) in [("c1", "phone-1", "Pixel"), ("c2", "phone-2", "Philip's iPhone")] {
         let (_, grant) = post(d.port, "remote:pair", json!([]), Some(TOKEN)).await;
-        open_conn(&mut agent, &key, &phones, cid).await;
+        open_conn(&mut agent, &key, phones, cid).await;
         let hello =
             json!({ "type": "hello", "deviceId": device, "name": name, "platform": "ios", "pair": grant["code"] });
         agent.send(client(cid, hello)).await.unwrap();
@@ -761,8 +756,7 @@ async fn a_phone_raises_a_mode_with_a_security_key_and_stops_remote_access() {
 struct Machine {
     d: Daemon,
     agent: RelaySide,
-    key: nekko_remote::e2e::Key,
-    phones: Phones,
+    key: Phones,
     change: p256::ecdsa::SigningKey,
     sid: String,
     data: std::path::PathBuf,
@@ -788,16 +782,14 @@ impl Machine {
         let (tcp, _) =
             tokio::time::timeout(Duration::from_secs(20), relay.accept()).await.expect("the agent dials").unwrap();
         let mut agent = tokio_tungstenite::accept_async(tcp).await.unwrap();
-        let key = nekko_remote::e2e::derive_key(&secret, &room);
+        let key = Phones::new(&room, &secret);
         let (_, grant) = post(d.port, "remote:pair", json!([]), Some(TOKEN)).await;
-        let phones = Phones::new(&room);
-        open_conn(&mut agent, &key, &phones, "c1").await;
+        open_conn(&mut agent, &key, &key, "c1").await;
         let hello = json!({ "type": "hello", "deviceId": "phone-1", "name": "Pixel", "platform": "android", "pair": grant["code"] });
         let mut m = Machine {
             d,
             agent,
             key,
-            phones,
             change: p256::ecdsa::SigningKey::from_slice(&[7; 32]).unwrap(),
             sid: String::new(),
             data,
@@ -822,9 +814,7 @@ impl Machine {
     }
 
     async fn send(&mut self, v: Value) {
-        let v = self.phones.frame("c1", v);
-        let data = json!({ "enc": nekko_remote::e2e::seal_with_iv(&self.key, &v, nekko_remote::e2e::random_iv()) });
-        let frame = json!({ "type": "c", "cid": "c1", "data": data.to_string() });
+        let frame = json!({ "type": "c", "cid": "c1", "data": self.key.data("c1", v) });
         self.agent.send(Message::text(frame.to_string())).await.unwrap();
     }
 

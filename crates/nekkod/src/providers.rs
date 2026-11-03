@@ -549,6 +549,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn api_catalog_cache_is_scoped_to_credentials_and_does_not_keep_empty_results() {
+        let cache = CatalogCache::default();
+        let a = catalog_key(&json!({"kind": "chatgpt", "accountId": "a", "apiKey": "first"}));
+        let b = catalog_key(&json!({"kind": "chatgpt", "accountId": "b", "apiKey": "second"}));
+        let models = vec![nekko_agent::ModelInfo { id: "api-model".into(), ..Default::default() }];
+        cache.put("provider", a, &models);
+        assert_eq!(cache.get("provider", a).unwrap()[0].id, "api-model");
+        assert!(cache.get("provider", b).is_none());
+        cache.put("provider", a, &[]);
+        assert!(cache.get("provider", a).is_none());
+    }
+
+    #[test]
     fn localhost_urls_are_recognised_as_lms_js_did() {
         assert!(is_localhost_url("http://localhost:1234/v1"));
         assert!(is_localhost_url("http://127.0.0.1:1234"));

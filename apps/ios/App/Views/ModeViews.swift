@@ -197,6 +197,50 @@ struct ModelEffortButton: View {
     }
 }
 
+/// One run setting: a switch, or a choice of its values.
+struct RunOptionRow: View {
+    let option: RunOption
+    let value: JSONValue?
+    var set: (JSONValue) -> Void
+
+    private var title: LocalizedStringKey {
+        switch option.key {
+        case "autoModel": "Choose the model automatically"
+        case "offline": "Offline"
+        case "cloudOnly": "Cloud only"
+        case "incognito": "Incognito"
+        case "gitIsolation": "Separate Git branch"
+        case "workMode": "Work mode"
+        default: "Tool style"
+        }
+    }
+
+    private func label(_ v: String) -> LocalizedStringKey {
+        switch v {
+        case "better-review": "Better review"
+        case "design": "Design"
+        case "best-output": "Best output"
+        case "list": "List"
+        case "code": "Code"
+        default: "Default"
+        }
+    }
+
+    var body: some View {
+        if option.values.isEmpty {
+            Toggle(title, isOn: Binding(get: { value?.bool ?? false }, set: { set(.bool($0)) }))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("run.\(option.key)")
+        } else {
+            Picker(title, selection: Binding(get: { value?.string ?? option.values[0] }, set: { set(.string($0)) })) {
+                ForEach(option.values, id: \.self) { Text(label($0)).tag($0) }
+            }
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("run.\(option.key)")
+        }
+    }
+}
+
 /// The chat's model, and its effort on a dial with one stop per level.
 struct ModelEffortSheet: View {
     let chat: ChatModel
@@ -259,6 +303,16 @@ struct ModelEffortSheet: View {
                     Text(chat.effort == nil
                          ? "Following \(computer)’s effort setting. Higher effort thinks longer and spends more tokens."
                          : "Higher effort thinks longer and spends more tokens.")
+                }
+                Section("Run settings") {
+                    ForEach(RunOption.all) { option in
+                        RunOptionRow(option: option, value: chat.runOptions[option.key]) { value in
+                            error = nil
+                            Task {
+                                do { try await chat.setRunOption(option.key, value) } catch { self.error = error.localizedDescription }
+                            }
+                        }
+                    }
                 }
                 if let error {
                     Section { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger) }

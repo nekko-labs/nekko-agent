@@ -13,6 +13,7 @@ mod automation;
 mod backendless;
 mod claude_code;
 mod claude_policy;
+mod computers;
 mod desktop;
 mod engine;
 mod git;

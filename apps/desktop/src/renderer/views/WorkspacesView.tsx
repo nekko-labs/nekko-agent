@@ -4,12 +4,13 @@ import { confirmDeletion } from '../components/DeleteConfirmation.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID } from '@nekko-agent/shared';
+import type { AgentEvent, ComputerStatus, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, computerIdOf } from '@nekko-agent/shared';
+import { ComputerGlyph } from '../components/ComputerChip.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { StatusIcon, WorkspaceCard, agentStatusOfLane, type AgentStatus } from '../components/WorkspaceCard.js';
+import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
@@ -17,7 +18,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../com
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
-import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
+import { sidebarWorkspaces, unopenedChats, subagentRows } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
@@ -25,7 +26,7 @@ import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
 import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import {
-  DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
+  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -49,11 +50,21 @@ function sortable(e: Entry): SortableCard {
 }
 
 /** One group the panel shows: a project, a status, a date range, or all of it. */
+/** Beside a computer's group heading, which already names it. */
+const COMPUTER_STATE_WORD: Record<ComputerStatus['state'], string> = { online: '', connecting: 'connecting', offline: 'offline', denied: 'removed', stale: 'needs pairing again', update: 'needs an update' };
+
+/** The group heading for agents on this computer. */
+function thisComputerName(): string {
+  return navigator.platform.startsWith('Mac') ? 'This Mac' : navigator.platform.startsWith('Win') ? 'This PC' : 'This computer';
+}
+
 type PanelGroup = {
   key: string;
   name: string;
   /** The project folder, when grouped by project. */
   ws?: WorkspaceFolder;
+  /** The computer, when grouped by computer. */
+  computer?: ComputerStatus;
   items: Entry[];
   /** Completed chats folded under the group. */
   done: SessionSummary[];
@@ -206,6 +217,20 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
   const [doneMenu, setDoneMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  // The chat whose card title is a text field, from the pencil or the menu's Rename.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const renameChat = async (id: string, typed: string | null) => {
+    setRenamingId(null);
+    const title = chatRenameTitle(typed, sessions.find((s) => s.id === id)?.title);
+    if (!title) return;
+    try {
+      const saved = await window.nekko.setSessionOptions(id, { title });
+      if (!saved) throw new Error('Chat no longer exists');
+      // An open pane's header shows its own copy of the chat.
+      window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id, session: saved } }));
+      await refreshSessions();
+    } catch (e) { useStore.getState().pushToast('error', `Could not rename the chat: ${e instanceof Error ? e.message : String(e)}`); }
+  };
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
@@ -259,6 +284,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   /** Groups whose completed chats are expanded under their active ones. */
   const completionTipSessionId = useStore((s) => s.completionTipSessionId);
+  const computers = useStore((s) => s.computers);
+  const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
   /** Completed rows rendered per group past the first page ("Show more"). */
@@ -409,13 +436,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
 
   const childrenOf = useMemo(() => {
     const m = new Map<string, SessionSummary[]>();
-    for (const s of sessions) if (s.parentSessionId && (statuses.has(s.id) || !s.lastReplyText)) {
+    for (const s of sessions) if (s.parentSessionId && !s.archivedAt) {
       const arr = m.get(s.parentSessionId) ?? [];
       arr.push(s);
       m.set(s.parentSessionId, arr);
     }
+    for (const kids of m.values()) kids.sort((a, b) => a.createdAt - b.createdAt);
     return m;
-  }, [sessions, statuses]);
+  }, [sessions]);
 
   // Closing a workspace only closes its windows, not the saved conversation.
   // Keep those chats reachable without reopening every transcript at startup.
@@ -437,13 +465,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
 
   // Project buckets: a "General" bucket for project-less work (kept at the top,
   // hidden when empty), then one bucket per project folder.
+  const remoteFolders = useMemo(() => computers.flatMap((c) => computerCatalogs[c.id]?.workspaces ?? []), [computers, computerCatalogs]);
   const buckets: Array<{ ws?: WorkspaceFolder; key: string; name: string }> = [
     { key: '__none', name: 'General' },
     ...(settings?.workspaces ?? []).map((w) => ({ ws: w, key: w.id, name: w.name })),
+    // Same-named projects on two computers are two checkouts: two groups.
+    ...remoteFolders.map((w) => ({ ws: w, key: w.id, name: `${w.name} · ${computers.find((c) => c.id === computerIdOf(w.id))?.name ?? ''}` })),
   ];
 
   const chatGroupOf = (s: SessionSummary): string =>
-    settings?.workspaces.some((p) => p.id === s.workspaceId) ? (s.workspaceId as string) : '__none';
+    settings?.workspaces.some((p) => p.id === s.workspaceId) || remoteFolders.some((p) => p.id === s.workspaceId) ? (s.workspaceId as string) : '__none';
 
   /**
    * Every active agent in a bucket: open workspaces and chats that are not
@@ -490,20 +521,30 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     const done = completedInGroup(sessions, '*', () => '*').filter(shownDone);
     const completed: PanelGroup[] = done.length > 0 ? [{ key: COMPLETED_GROUP, name: 'Completed', items: [], done }] : [];
     if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, done: [], bare: true }, ...completed];
+    if (view.groupBy === 'computer' && computers.length > 0) {
+      const here = (e: Entry) => !computerIdOf(e.s?.id);
+      return [
+        { key: 'computer:here', name: thisComputerName(), items: all.filter(here), done: [] },
+        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id), done: [] })),
+        ...completed,
+      ];
+    }
+    // A sub-agent has no card of its own, so its question lifts the parent's.
+    const kidIsWaiting = (e: Entry) => !!e.s && !!childrenOf.get(e.s.id)?.some((k) => statuses.get(k.id) === 'input');
     const groupOf = view.groupBy === 'status'
-      ? (e: Entry) => statusGroupOf(e.s ? statuses.get(e.s.id) : undefined)
+      ? (e: Entry) => statusGroupOf(e.s, kidIsWaiting(e) ? 'input' : e.s ? statuses.get(e.s.id) : undefined)
       : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
     const defs = view.groupBy === 'status' ? STATUS_GROUPS : DATE_GROUPS;
     return [
       ...defs.flatMap((d): PanelGroup[] => {
         const items = all.filter((e) => groupOf(e) === d.key);
-        return items.length > 0 || view.showEmptyGroups ? [{ key: d.key, name: d.name, items, done: [] }] : [];
+        return items.length > 0 || (view.showEmptyGroups && d.key !== DRAFT_GROUP && d.key !== NEEDS_INPUT_GROUP) ? [{ key: d.key, name: d.name, items, done: [] }] : [];
       }),
       ...completed,
     ];
   })()];
 
-  // When a card changes group (Working to Done), note where every card was
+  // When a card changes group (Exploring to Building), note where every card was
   // before this render commits, then fly the movers from there. Not when the
   // grouping itself changed: then every card moves and none of them is news.
   const listRef = useRef<HTMLDivElement>(null);
@@ -724,7 +765,10 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     className={`h-3 w-3 shrink-0 text-accent transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
+                  {b.computer && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: b.computer.state === 'online' ? 'var(--success)' : 'var(--ink-faint)' }} />}
+                  {view.groupBy === 'computer' && view.showComputerIcons && <ComputerGlyph icon={b.computer ? b.computer.icon : b.key === 'computer:here' ? settings?.machineIcon : undefined} />}
                   <span className="agent-panel-group-label truncate font-medium" title={b.name} dir="auto">{b.name}</span>
+                  {b.computer && b.computer.state !== 'online' && <span className="shrink-0 text-2xs text-ink-faint">{COMPUTER_STATE_WORD[b.computer.state]}</span>}
                   {isCollapsed && (items.length > 0 || completedGroup) && (
                     <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
@@ -762,7 +806,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
-                        draggable={reorderable || !!s || !!entry.t}
+                        draggable={(reorderable || !!s || !!entry.t) && !(s && s.id === renamingId)}
                         {...{ [CARD_ATTR]: entry.key }}
                         onDragStart={(e) => {
                           if (reorderable) startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id });
@@ -790,6 +834,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
                           showProvider={view.showProvider}
+                          showComputer={view.showComputer}
+                          showComputerIcons={view.showComputerIcons}
                           zoneTint={zoneTints?.get(s?.id ?? entry.t?.id ?? '')}
                           onOpen={() => {
                             if (s) onOpenChat(s.id);
@@ -797,9 +843,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                             setMobileNav(false);
                           }}
                           onClose={() => (w ? archiveWorkspace(w.id) : s ? archiveChat(s.id) : undefined)}
+                          renaming={!!s && s.id === renamingId}
+                          onRenameStart={s ? () => setRenamingId(s.id) : undefined}
+                          onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
-                        {kids.map((kid) => (
+                        {s && subagentRows(kids, (id) => statuses.has(id), s.id, selectedId).map((kid) => (
                           <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
@@ -880,6 +929,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
+          <ContextAction disabled={menu.ids.length !== 1} onClick={() => { setRenamingId(menu.ids[0]); setMenu(null); }}>Rename</ContextAction>
           <ContextAction onClick={() => void runAction('complete',menu.ids)}>Mark as completed</ContextAction>
           <ContextAction onClick={() => setMenu({...menu, model:true})}>Change model</ContextAction>
           <ContextAction disabled={!menu.ids.some(id => statuses.has(id))} onClick={() => void runAction('stop',menu.ids)}>Stop{menu.ids.length > 1 ? ' all' : ''}</ContextAction>

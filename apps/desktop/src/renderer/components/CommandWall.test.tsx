@@ -8,7 +8,7 @@ import { type WbPane, type WbSplit } from '../layout.js';
 import type { Workspace } from '../store.js';
 
 const fixture = vi.hoisted(() => ({ workspaces: [] as Workspace[] }));
-vi.mock('../store.js', () => ({ useStore: (select: (s: { workspaces: Workspace[] }) => unknown) => select(fixture) }));
+vi.mock('../store.js', () => ({ useStore: (select: (s: never) => unknown) => select({ computers: [], ...fixture } as never) }));
 vi.mock('./ChatPane.js', () => ({ ChatPane: ({ sessionId, surface }: { sessionId: string; surface: string }) => <textarea data-surface={surface} defaultValue={`draft:${sessionId}`} /> }));
 vi.mock('./TerminalPane.js', () => ({ TerminalPane: ({ terminalId }: { terminalId: string }) => <div data-terminal={terminalId} /> }));
 vi.mock('./FilePane.js', () => ({ FilePane: ({ path }: { path: string }) => <div data-file={path} /> }));

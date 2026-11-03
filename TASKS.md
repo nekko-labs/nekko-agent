@@ -1,10 +1,39 @@
 ---
 status: active
-last-updated: 2026-10-31
+last-updated: 2026-11-03
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Watching subagents and choosing where work runs (added 2026-11-03)
+
+Spec: [subagents in Claude chats](spec/agents/claude-code-subagents.md). Decision: [0042](docs/decisions/0042-claude-code-sub-agents-are-child-chats.md).
+
+- [x] **SUB-1, Claude Code sub-agents are child chats.** The mapper hands up `Subagent` start, line and end, and names `Agent` and `Task` `spawn_agent`; `crates/nekkod/src/subagents.rs` writes the child chat through a `Mapper` of its own. `spawnCallId` links both engines' children to their call. Scripted end to end in `crates/nekkod/tests/daemon/claude_code.rs`. (2026-11-03)
+- [x] **SUB-2, Finished subagents stay under their parent.** `subagentRows` keeps them while the chat is working or open; they no longer fall into saved chats, and the card counts them all. (2026-11-03)
+- [x] **SUB-3, Run here or in a subagent.** `canOfferSubagent` and `inSubagent` in shared `orchestration.ts`; the row at the end of the conversation in `ChatPane` (moved out of the composer on review), for typed follow-ups and the suggested next step. Hidden real-App check in `subagent-evidence-sandbox.cjs`. Spec: [run here or in a subagent](spec/agents/run-here-or-in-a-subagent.md). (2026-11-03)
+- [ ] **SUB-4, The same choice on iPhone and Android.**
+- [ ] **SUB-1a, Check a live sub-agent.** Run a real Claude Code `Agent` call, foreground and background, and replace `synthetic/tools-subagent-retry.jsonl` with the recording.
+
+## Agents panel by agent loop (#1560, added 2026-11-03)
+
+Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#activity-follows-the-agent-loop-2026-11-03).
+
+- [x] **APL-1, Loop phase on the summary.** `loop_phase` in `crates/nekko-store/src/phase.rs` names a chat's phase from its latest telling tool call and runs the shared tool-purpose fixture; `summarize` adds it as `phase`. (2026-11-03)
+- [x] **APL-2, Every window hears a move.** `forward` in `turns.rs` sends `session_meta` when a checkpoint moves the phase, after the save, because tool calls only reach windows showing the chat. (2026-11-03)
+- [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
+- [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
+
+## Third-party licensing and credits (added 2026-11-03)
+
+Spec: [third-party licensing and credits](spec/platform/third-party-licensing-and-credits.md). Runbook: [third-party](docs/runbooks/third-party.md).
+
+- [x] **TP-1, License check.** `scripts/third-party.mjs check` against `scripts/license-policy.json`, as a `licenses` CI job that runs only on dependency or `ASSETS.md` changes, with `gate` waiting for it. (2026-11-03)
+- [x] **TP-2, Notices file.** `dist` and `release` generate `THIRD_PARTY_NOTICES.txt` from what the bundler used, production packages and crates. Settings shows it. macOS also gets Chromium's notices. (2026-11-03)
+- [x] **TP-3, Assets list and credits page.** `ASSETS.md` is both, published at /docs/credits. (2026-11-03)
+- [ ] **TP-4, Notices in the npm packages.** `apps/cli` and the `nekkod` packages bundle third-party code and carry no notices file.
+- [ ] **TP-5, Crates in the Docker notices.** The builder stage has no cargo, so the image's file lists npm packages only.
 
 ## Live Activity language and the bottom of a chat (#1487, added 2026-11-02)
 
@@ -16,15 +45,17 @@ Philip's Live Activity read in Japanese on an English-first iPhone, and he asked
 
 A desktop connects to other computers the way a phone does, and shows every agent they run in one place. Where the agent runs and where the model runs are separate choices. [Design](docs/superpowers/specs/2026-11-02-connected-computers-design.md), [plan](docs/superpowers/plans/2026-11-02-connected-computers.md). Prefix **CC**.
 
-- [ ] **CC0, Messages during a run.** Queued, Next step and Interrupt on all clients; the word steer leaves the app and docs.
-- [ ] **CC1, Link and host class.** Rust relay client, `computers.rs`, the computer access class, Settings > Computers.
-- [ ] **CC2, Federation.** Qualified ids, routing, rewriting, merged summaries, offline cache.
-- [ ] **CC3, See and drive.** Per-computer catalogs, chips, Group by Computer, offline states, icons.
-- [ ] **CC4, Start and monitor.** *Run on*, Monitors switcher, Keep this computer awake.
-- [ ] **CC5, Model sources.** The model tunnel, generated provider rows, two Model Server settings.
-- [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys, the phone sheet.
-- [ ] **CC7, A host with no window.** `nekko computer serve`, `link`, `revoke`.
+- [ ] **CC0, Messages during a run.** Queued messages reach the agent at its next step on their own, and **Interrupt and send now** is the one action on all clients; the word steer leaves the app and docs.
+- [x] **CC1, Link and host class (2026-11-02).** Rust relay client, `computers.rs`, the computer access class, Settings > Computers. Decision [0040](docs/decisions/0040-a-desktop-is-a-paired-device-with-its-own-class.md), [spec](spec/desktop/connected-computers.md).
+- [x] **CC2, Federation (2026-11-02).** Qualified ids, routing, rewriting, merged summaries, offline cache.
+- [x] **CC3, See and drive (2026-11-02).** Per-computer catalogs, chips, Group by Computer, offline states, icons. Notifications still name the chat only.
+- [ ] **CC4, Start and monitor.** *Run on* and the Hardware monitor's switch done 2026-11-02. Left: Local models and Utilization following the switch, Keep this computer awake.
+- [x] **CC5, Model sources (2026-11-02).** The model tunnel, generated provider rows, two Model Server settings.
+- [ ] **CC6, Every run setting from any client.** The wider gate, guarded keys and the phone section done 2026-11-02. Left: controls for model loading on any client, and for disabled tools, memory and privacy on phones.
+- [x] **CC7, A host with no window (2026-11-02).** `nekko-agent computer serve`, `link`, `list`, `revoke`.
 - [ ] **CC8, Pair without pasting.** Discovery, relay lobby, comparison code.
+- [x] **CC9, Computer icons on phones (2026-11-02).** `scripts/computer-icons.mjs` renders the desktop's glyphs into an SVG imageset per icon (template, vector kept) and an Android vector drawable per icon; `scripts/computer-icons.test.mjs` keeps `COMPUTER_ICONS`, both phones' lists and the assets equal. Each phone keeps `machineIcon` from `app:info` on the computer's record, shows it beside the name in lists and switchers, and sets it from the computer's page with `settings:update`. No gate change: the key was already phone-settable and needs no proof.
+- [x] **CC10, The host proves itself (2026-11-02).** Protocol 6, a host key pinned at pairing and a key for each connection on the computer, desktop link, browser and both phones. Decision [0041](docs/decisions/0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md). #1501. Left: per-device relay credentials, so a revoked device can't reach the room at all.
 
 ## Model scheduler (#1462, added 2026-11-01)
 
@@ -89,6 +120,8 @@ The hosted iOS 27 simulator sometimes shut down or lost its accessibility server
 
 - [x] **T223, Recover the simulator between suites (2026-10-29).** `ios-native.yml`: `ready` (`simctl bootstatus -b` and the status bar override) before every suite, a fresh boot after the first-run suite, and one retry for a failed first-run test (`-retry-tests-on-failure -test-iterations 2`) for XCTest's hang at "Setting up automation session". Verified locally on an iOS 27.0 simulator: `simctl ui` on a shut-down device exits 149 as on CI, and exits 0 after `ready`.
 - [ ] **T224, Watch the next scheduled runs** on main for a simulator loss that `ready` did not recover.
+- [x] **T224a, One retry for the live journey (#1567, 2026-11-03).** The first journey after the fresh boot timed out reading the app at a random step, on unrelated PRs, while later journeys passed; why is not established. `ios-native.yml` gives it one more try on a fresh stack and install, and the job limit goes from 75 to 85 minutes. A stack whose engine misses its start deadline after the boot counts as a failed try too (2026-11-03).
+- [x] **T224b, A green batch stays green (#1575, 2026-11-03).** `ios-batch.mjs` leaves out heads that already passed. A new batch had replaced their green status with pending whenever main moved, which ejected #1312 from the merge queue with nothing failed.
 ## Vercel builds only website changes (#1328)
 
 Vercel serves only the marketing site and docs but built a deployment for every push to every branch. Spec: [spec/platform/distribution-platforms.md](spec/platform/distribution-platforms.md).

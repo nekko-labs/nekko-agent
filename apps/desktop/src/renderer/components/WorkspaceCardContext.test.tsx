@@ -14,7 +14,7 @@ const state: Record<string, unknown> = {
 vi.mock('../store.js', () => ({ useStore: (pick: (s: typeof state) => unknown) => pick(state) }));
 vi.mock('../useGitStatus.js', () => ({ useGitStatus: () => null }));
 vi.mock('../compactionStatus.js', () => ({ useCompactionStore: () => false }));
-import { WorkspaceCard } from './WorkspaceCard.js';
+import { WorkspaceCard, chatRenameTitle } from './WorkspaceCard.js';
 
 const session = {
   id: 's1', title: 'Chat', modelId: 'm', providerId: 'p', transcriptTokens: 76_000,
@@ -105,5 +105,36 @@ describe('workspace card model line and attention', () => {
     expect(render({ status: 'input' })).toContain('bg-accent-soft');
     expect(render({ status: 'error' })).toContain('bg-accent-soft');
     expect(render({ status: 'input' })).toContain('var(--attention)');
+  });
+});
+
+describe('workspace card rename', () => {
+  const terminal = { id: 't1', title: 'zsh', shell: '/bin/zsh' } as unknown as Parameters<typeof WorkspaceCard>[0]['terminal'];
+
+  it('offers a pencil beside the X on a chat card, not on a terminal', () => {
+    const chat = renderToStaticMarkup(
+      <WorkspaceCard workspace={null} session={session} terminal={null} status={undefined} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} onRenameStart={() => {}} onRename={() => {}} />,
+    );
+    expect(chat).toContain('aria-label="Rename Chat"');
+    expect(chat.indexOf('aria-label="Rename Chat"')).toBeLessThan(chat.indexOf('aria-label="Complete Chat"'));
+    const shell = renderToStaticMarkup(
+      <WorkspaceCard workspace={null} session={null} terminal={terminal} status={undefined} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} onRenameStart={() => {}} onRename={() => {}} />,
+    );
+    expect(shell).not.toContain('aria-label="Rename');
+  });
+
+  it('turns the title into a text field while renaming, with no pencil', () => {
+    const html = renderToStaticMarkup(
+      <WorkspaceCard workspace={null} session={session} terminal={null} status={undefined} isActive={false} now={0} projects={[]} renaming onOpen={() => {}} onClose={() => {}} onRenameStart={() => {}} onRename={() => {}} />,
+    );
+    expect(html).toMatch(/<input[^>]*aria-label="Chat title"[^>]*value="Chat"/);
+    expect(html).not.toContain('aria-label="Rename Chat"');
+  });
+
+  it('saves a trimmed new title and nothing else', () => {
+    expect(chatRenameTitle('  Login form fix ', 'Chat')).toBe('Login form fix');
+    expect(chatRenameTitle(null, 'Chat')).toBeNull();
+    expect(chatRenameTitle('   ', 'Chat')).toBeNull();
+    expect(chatRenameTitle('Chat', 'Chat')).toBeNull();
   });
 });

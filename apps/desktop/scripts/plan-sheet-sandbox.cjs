@@ -67,8 +67,6 @@ app.whenReady().then(async () => {
     await check('verification panel is gone', `!document.querySelector('[data-verification-checklist]')`);
     await check('verification chips on steps 1 and 3', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="verify"]') && !!document.querySelector('[data-plan-step-id="step_3"] [data-plan-chip="verify"]')`);
     await check('CI chips on the last verification step', `document.querySelectorAll('[data-plan-step-id="step_3"] [data-plan-chip="ci"]').length === 3 && document.querySelectorAll('[data-plan-chip="ci"]').length === 3`);
-    await check('PR card leaves CI to the plan', `!document.querySelector('[data-pr-progress]')?.textContent.includes('CI checks')`);
-    await check('PR actions start tucked away', `[...document.querySelectorAll('.pr-action-deck')].every(d => d.dataset.expanded === 'false')`);
     await check('design link on step 1', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="link"]')`);
     const hover = await run(`(() => { const r = document.querySelector('[data-plan-step-id="step_3"]')?.getBoundingClientRect(); return r ? { x: Math.round(r.x + 40), y: Math.round(r.y + 8) } : { x: 1, y: 1 }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...hover });

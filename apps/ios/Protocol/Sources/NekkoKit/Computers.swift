@@ -59,14 +59,17 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
     public var platform: String?
     /// Other addresses of the same relay, from the pairing link (TASKS.md IO-20).
     public var alts: [String]
+    /// Its `machineIcon`, learned from `app:info` once connected. Nil shows nothing.
+    public var icon: String?
 
-    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = []) {
+    public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = [], icon: String? = nil) {
         self.id = id
         self.name = name
         self.relayUrl = relayUrl
         self.pairedAt = pairedAt
         self.platform = platform
         self.alts = alts
+        self.icon = icon
     }
 
     /// Pairings saved before routes existed have no `alts`.
@@ -78,6 +81,7 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         pairedAt = try c.decode(Int64.self, forKey: .pairedAt)
         platform = try c.decodeIfPresent(String.self, forKey: .platform)
         alts = try c.decodeIfPresent([String].self, forKey: .alts) ?? []
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
     }
 
     /// Every address, best first (the order the client tries them).
@@ -94,8 +98,13 @@ struct ComputerSecret: Codable, Equatable {
     var keyHex: String
     /// The one-time code, until the computer has welcomed this phone once.
     var pair: String?
+    /// The computer's public key, pinned from the pairing link (decision 0041).
+    var hostKey: String?
     /// `E2E.pairingVersion` when saved; `nil` from an older app, which must pair again (decision 0036).
     var v: Int?
+
+    /// The key to dial with; nil on a pairing that must be made again. Never a first-seen key.
+    var pinned: String? { (v ?? 1) < E2E.pairingVersion ? nil : hostKey }
 }
 
 public struct ModelGroup: Equatable, Sendable, Identifiable {
@@ -490,11 +499,12 @@ public final class ComputersStore {
                 heard = false
             }
         }
-        // A phone the computer never welcomed (it still holds a pairing code) is unknown there.
-        if !heard && secret.pair == nil {
+        // A phone the computer never welcomed (it still holds a pairing code) is unknown there,
+        // and a pairing from before the host key can't reach it.
+        if !heard && secret.pair == nil, let hostKey = secret.pinned {
             var list = decodeSignOuts().filter { $0.computerId != id }
             list.append(PendingSignOut(computerId: id, name: computer.name, relayUrl: computer.relayUrl, alts: computer.alts,
-                                       room: secret.room, key: secret.key, keyHex: secret.keyHex, at: now()))
+                                       room: secret.room, key: secret.key, keyHex: secret.keyHex, hostKey: hostKey, at: now()))
             saveSignOuts(list)
         }
         forget(id)
@@ -513,11 +523,11 @@ public final class ComputersStore {
         defer { flushingSignOuts = false }
         var done: Set<String> = []
         for p in list {
-            guard let keyBytes = E2E.fromHex(p.keyHex) else {
+            guard let keyBytes = E2E.fromHex(p.keyHex), let hostKey = p.hostKey else {
                 done.insert(p.computerId)
                 continue
             }
-            var config = RelayConfig(relayUrl: p.relayUrl, room: p.room, key: p.key, keyBytes: keyBytes,
+            var config = RelayConfig(relayUrl: p.relayUrl, room: p.room, key: p.key, hostKey: hostKey, keyBytes: keyBytes,
                                      deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
             config.alternates = p.alts
             config.helloSigner = helloSigner
@@ -611,13 +621,16 @@ public final class ComputersStore {
     }
 
     /// Save a scanned/pasted pairing and connect. Returns the computer's id.
+    /// Throws `PairingRefusal` for a link with no host key, or one that would replace a pin.
     @discardableResult
-    public func pair(_ link: PairingLink) async -> String {
-        let keyHex = E2E.toHex(await deriveKey(link.key, link.room))
+    public func pair(_ link: PairingLink) async throws -> String {
+        guard let hostKey = link.hostKey else { throw PairingRefusal.noHostKey }
         // Re-scanning a computer we already know keeps its id and name.
         let existing = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
+        if let pinned = existing.flatMap({ secret($0.id)?.pinned }), pinned != hostKey { throw PairingRefusal.differentComputer }
+        let keyHex = E2E.toHex(await deriveKey(link.key, link.room))
         let id = existing?.id ?? newId()
-        saveSecret(id, ComputerSecret(room: link.room, key: link.key, keyHex: keyHex, pair: link.pair, v: E2E.pairingVersion))
+        saveSecret(id, ComputerSecret(room: link.room, key: link.key, keyHex: keyHex, pair: link.pair, hostKey: hostKey, v: E2E.pairingVersion))
         if existing == nil {
             computers.append(Computer(id: id, name: defaultComputerName, relayUrl: link.relayUrl, pairedAt: now(), alts: link.alts))
             saveIndex()
@@ -698,9 +711,10 @@ public final class ComputersStore {
         route = nil
         connectionLog.record(.connecting)
         clearComputerState()
-        if (secret.v ?? 1) < E2E.pairingVersion {
-            // Paired before the computer replaced its pairing secret (decision 0036): it no longer
-            // answers on this pairing, so ask for a fresh QR instead of dialing.
+        guard let hostKey = secret.pinned else {
+            // Paired before the computer replaced its pairing secret (decision 0036) or could prove
+            // itself (decision 0041): it no longer answers on this pairing, so ask for a fresh QR
+            // instead of dialing.
             conn = .denied
             denied = .badKey
             connectionLog.record(.denied, denied: .badKey)
@@ -712,7 +726,7 @@ public final class ComputersStore {
             workspaces = saved.folders
             savedListAt = saved.savedAt
         }
-        var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
+        var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
                                  deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
         config.alternates = computer.alts
         config.helloSigner = helloSigner
@@ -894,13 +908,13 @@ public final class ComputersStore {
     /// computer answers, each timed. Never the live connection: the hello is
     /// a separate socket, closed once the relay and computer have answered.
     public func runChecks() async {
-        guard !checking, let computer = active, let secret = secret(computer.id),
+        guard !checking, let computer = active, let secret = secret(computer.id), let hostKey = secret.pinned,
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
         checking = true
         defer { checking = false }
         let routes = computer.routes
         checks = routes.map { RouteReport(url: $0) }
-        var base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, keyBytes: keyBytes,
+        var base = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
                                deviceId: deviceId(), deviceName: deviceName(), pairCode: nil, platform: platform)
         base.helloSigner = helloSigner
         // A constant for the concurrently run probes (Swift 6 mode: a captured var is an error).
@@ -934,6 +948,8 @@ public final class ComputersStore {
         let ms = Int((Date().timeIntervalSince(start) * 1000).rounded())
         switch s?.state {
         case .online?: return ProbeStep(ok: true, ms: ms, detail: "\(computer) answered")
+        case .offline? where s?.detail == RelayStatus.badPairingKey:
+            return ProbeStep(ok: false, ms: ms, detail: "Refused: \(DenyReason.badKey.rawValue)")
         case .offline?: return ProbeStep(ok: true, ms: ms, detail: "The relay answered; \(computer) isn’t connected to it")
         case .denied?: return ProbeStep(ok: false, ms: ms, detail: "Refused: \(s?.denied?.rawValue ?? "denied")")
         default: return ProbeStep(ok: false, ms: ms, detail: "No answer in \(Int(timeout)) s")
@@ -1026,6 +1042,8 @@ public final class ComputersStore {
             hostVersion = appInfo.version
             quitFromPhone = appInfo.quitFromPhone
             learnPlatform(appInfo.platform)
+            // A failed read says nothing about the icon; an answer without one clears it.
+            if r.4 != nil, let id = activeId { learnIcon(appInfo.machineIcon, for: id) }
             summariesLoading = false
             summariesLoaded = true
             savedListAt = nil
@@ -1167,6 +1185,13 @@ public final class ComputersStore {
         pcSettings = PcSettings.from(try await call(raising: Channels.settingsUpdate, [patch]))
     }
 
+    /// Set the active computer's icon, there, so every device shows the same one: a name from `computerIcons`, or "" for none.
+    public func setMachineIcon(_ name: String) async throws {
+        guard let id = activeId else { return }
+        try await updatePcSettings(PcSettings.patch(icon: name))
+        learnIcon(name.isEmpty ? nil : name, for: id)
+    }
+
     // MARK: Internals
 
     private func setArchived(_ sessionId: String, _ at: Int64?) {
@@ -1232,6 +1257,12 @@ public final class ComputersStore {
         // First connection names the computer after its OS, unless the user renamed it.
         if computers[i].name == defaultComputerName { computers[i].name = osName(platform) }
         computers[i].platform = platform
+        saveIndex()
+    }
+
+    private func learnIcon(_ icon: String?, for id: String) {
+        guard let i = computers.firstIndex(where: { $0.id == id }), computers[i].icon != icon else { return }
+        computers[i].icon = icon
         saveIndex()
     }
 

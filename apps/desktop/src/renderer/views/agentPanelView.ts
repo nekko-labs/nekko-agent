@@ -3,12 +3,14 @@
  * each group is in, and what it shows. A per-window preference, remembered like
  * the panel's width, not a setting.
  *
- * The defaults group the cards by activity (what each agent is doing), in the
+ * The defaults group the cards by activity (where each agent is in its loop), in the
  * order cards were dragged into (newest first for the rest), every detail and
  * every group shown.
  */
 
-export type AgentGroupBy = 'project' | 'status' | 'date' | 'none';
+import type { SessionSummary } from '@nekko-agent/shared';
+
+export type AgentGroupBy = 'project' | 'status' | 'date' | 'computer' | 'none';
 export type AgentSortBy = 'manual' | 'updated' | 'created' | 'name';
 export type SortDirection = 'desc' | 'asc';
 
@@ -24,6 +26,10 @@ export type AgentPanelView = {
   showAutomations: boolean;
   /** Groups with nothing in them, shown with their "No active agents" line. */
   showEmptyGroups: boolean;
+  /** Which computer a card's agent runs on, for a card on another computer. */
+  showComputer: boolean;
+  /** A computer's icon on its card and group heading, when it has one. */
+  showComputerIcons: boolean;
 };
 
 export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
@@ -34,12 +40,15 @@ export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
   showProvider: true,
   showAutomations: true,
   showEmptyGroups: true,
+  showComputer: true,
+  showComputerIcons: true,
 };
 
 export const GROUP_BY_LABELS: Record<AgentGroupBy, string> = {
   project: 'Project',
   status: 'Activity',
   date: 'Date',
+  computer: 'Computer',
   none: 'None',
 };
 
@@ -52,7 +61,7 @@ export const SORT_BY_LABELS: Record<AgentSortBy, string> = {
 
 export const AGENT_PANEL_VIEW_KEY = 'nekko.agentPanelView';
 
-const GROUPS: AgentGroupBy[] = ['project', 'status', 'date', 'none'];
+const GROUPS: AgentGroupBy[] = ['project', 'status', 'date', 'computer', 'none'];
 const SORTS: AgentSortBy[] = ['manual', 'updated', 'created', 'name'];
 
 /** Read a saved view, keeping only fields that are still valid. */
@@ -71,6 +80,8 @@ export function parseAgentPanelView(raw: string | null): AgentPanelView {
     showProvider: bool(saved.showProvider, d.showProvider),
     showAutomations: bool(saved.showAutomations, d.showAutomations),
     showEmptyGroups: bool(saved.showEmptyGroups, d.showEmptyGroups),
+    showComputer: bool(saved.showComputer, d.showComputer),
+    showComputerIcons: bool(saved.showComputerIcons, d.showComputerIcons),
   };
 }
 
@@ -126,16 +137,32 @@ export function compareCards(view: Pick<AgentPanelView, 'sortBy' | 'direction'>)
   };
 }
 
-/** The activity groups, most urgent first. */
+/** Chats parked on a question or an approval. Shows only while it has some. */
+export const NEEDS_INPUT_GROUP = 'status:input';
+
+/** Chats nothing has been sent in yet. This group shows only while it has some. */
+export const DRAFT_GROUP = 'status:draft';
+
+/** The activity groups: what needs you first, then the agent loop in order. */
 export const STATUS_GROUPS = [
-  { key: 'status:input', name: 'Needs input' },
-  { key: 'status:working', name: 'Working' },
-  { key: 'status:error', name: 'Error' },
-  { key: 'status:done', name: 'Done' },
+  { key: NEEDS_INPUT_GROUP, name: 'Needs input' },
+  { key: DRAFT_GROUP, name: 'Draft' },
+  { key: 'status:exploring', name: 'Exploring' },
+  { key: 'status:building', name: 'Building' },
+  { key: 'status:verifying', name: 'Verifying' },
+  { key: 'status:shipping', name: 'Shipping' },
 ] as const;
 
-export function statusGroupOf(status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
-  return !status || status === 'idle' ? 'status:done' : `status:${status}`;
+/**
+ * A chat's activity group. Any `status` covers a first message on its way, which
+ * no summary shows yet. A chat waiting on you leaves its phase until answered;
+ * otherwise it stays in its phase when it stops, and the card's own glyph says
+ * whether it is working or stopped on an error.
+ */
+export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+  if (status === 'input') return NEEDS_INPUT_GROUP;
+  if (!status && chat?.exchangeCount === 0) return DRAFT_GROUP;
+  return `status:${chat?.phase ?? 'exploring'}`;
 }
 
 /** The date groups, newest first. */

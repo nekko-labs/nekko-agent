@@ -192,6 +192,62 @@ pub fn fake_claude() {
             let reply = format!("done: {}", decision["behavior"].as_str().unwrap_or("?"));
             out(assistant("m2", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "delegate" || text == "delegate and stop" || text == "delegate in the background" {
+            let background = text.ends_with("background");
+            let sub = |content: Value, role: &str| {
+                let id = if role == "user" { "" } else { "m_sub" };
+                json!({ "type": role, "message": { "id": id, "role": role, "model": "claude-haiku-5-5", "content": content }, "parent_tool_use_id": "toolu_agent", "session_id": session })
+            };
+            let input = json!({ "description": "Read the notes", "prompt": "Read notes.txt and report back", "run_in_background": background });
+            out(assistant(
+                "m_d1",
+                json!([{ "type": "tool_use", "id": "toolu_agent", "name": "Agent", "input": input }]),
+            ));
+            let notes = json!([{ "type": "tool_use", "id": "toolu_read", "name": "Read", "input": { "file_path": "notes.txt" } }]);
+            let read = json!([{ "type": "tool_result", "tool_use_id": "toolu_read", "content": "hello" }]);
+            let answer = json!([{ "type": "text", "text": "The notes say hello." }]);
+            let delegated = |output: &str| {
+                json!({ "type": "user", "message": { "role": "user", "content": [{
+                "type": "tool_result", "tool_use_id": "toolu_agent", "content": output }] }, "parent_tool_use_id": null, "session_id": session })
+            };
+            if background {
+                out(delegated("Async agent launched"));
+                out(assistant("m_d2", json!([{ "type": "text", "text": "started it" }])));
+                out(result("started it", "completed"));
+            }
+            out(sub(notes, "assistant"));
+            out(sub(read, "user"));
+            // A test watches the child run, until it says to go on.
+            let gate = std::env::current_dir().unwrap().join("go-on");
+            while text == "delegate" && !gate.exists() {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            if text == "delegate and stop" {
+                for line in lines.by_ref() {
+                    let Ok(m) = serde_json::from_str::<Value>(&line.unwrap_or_default()) else { continue };
+                    if m["type"] == "control_request" {
+                        out(
+                            json!({ "type": "control_response", "response": { "subtype": "success", "request_id": m["request_id"], "response": { "still_queued": [] } } }),
+                        );
+                        break;
+                    }
+                }
+                out(result("", "aborted_streaming"));
+                continue;
+            }
+            let mut sub_answer = sub(answer, "assistant");
+            sub_answer["message"]["id"] = json!("m_sub2");
+            out(sub_answer);
+            if background {
+                out(
+                    json!({ "type": "system", "subtype": "task_notification", "task_id": "a1", "tool_use_id": "toolu_agent", "status": "completed", "summary": "" }),
+                );
+                out(init());
+            } else {
+                out(delegated("The notes say hello."));
+            }
+            out(assistant("m_d3", json!([{ "type": "text", "text": "They say hello." }])));
+            out(result("They say hello.", "completed"));
         } else if text == "hang" {
             out(
                 json!({ "type": "stream_event", "event": { "type": "message_start", "message": { "id": "m_h" } }, "parent_tool_use_id": null }),
@@ -492,6 +548,103 @@ async fn stop_interrupts_claude_code_and_keeps_the_partial_reply() {
     let last = s["messages"].as_array().unwrap().last().unwrap().clone();
     assert_eq!(last["interrupted"], true, "{last}");
     assert!(last["content"].as_str().unwrap().starts_with("1\n2"));
+}
+
+/// The chats on disk that are not `s_cc`, for what a sub-agent left.
+fn children(rig: &Rig) -> Vec<Value> {
+    std::fs::read_dir(rig.data.join("sessions"))
+        .unwrap()
+        .filter_map(|f| serde_json::from_str::<Value>(&std::fs::read_to_string(f.ok()?.path()).ok()?).ok())
+        .filter(|s| s["id"] != "s_cc")
+        .collect()
+}
+
+async fn the_child_starts(rig: &Rig) -> Value {
+    until("the sub-agent's child chat", Duration::from_secs(30), || async {
+        children(rig).into_iter().find(|c| c["messages"].as_array().is_some_and(|m| m.len() >= 3))
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sub_agent_is_a_child_chat_to_watch() {
+    let rig = rig("subagent", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccD", "delegate")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let child = the_child_starts(&rig).await;
+    let id = child["id"].as_str().unwrap().to_string();
+    assert_eq!(child["parentSessionId"], "s_cc");
+    assert_eq!(child["title"], "Read the notes");
+    assert_eq!(child["modelId"], "claude-haiku-5-5", "what it runs on, not the parent's model");
+    assert_eq!(child["spawnCallId"], "toolu_agent");
+    assert_eq!(child["messages"][0]["content"], "Read notes.txt and report back");
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert!(running.as_array().unwrap().contains(&json!(id)), "listed as running: {running}");
+    std::fs::write(rig.workspace.join("go-on"), "").unwrap();
+    let (_, end) = turn_record(&rig, "ccD", "s_cc").await;
+    assert_eq!(end["aborted"], false, "{end}");
+
+    let done = until("the child to end", Duration::from_secs(30), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == json!(id) && e["type"] == "done").cloned()
+    })
+    .await;
+    assert_eq!(done["stop"], "complete");
+    let child = children(&rig).remove(0);
+    assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "The notes say hello.");
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert_eq!(running, json!([]));
+    // In the parent it is a delegation, with none of the sub-agent's steps.
+    let parent = saved(&rig);
+    let calls: Vec<&Value> = parent["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|m| m["toolCalls"].as_array().into_iter().flatten())
+        .collect();
+    assert_eq!(calls.iter().map(|c| c["name"].clone()).collect::<Vec<_>>(), [json!("spawn_agent")]);
+    assert_eq!(assistant_texts(&parent).last().unwrap(), "They say hello.");
+    // Claude Code holds the real chat, so a message here could only go astray.
+    let mut send = spec(&rig, "ccD2", "more");
+    write_settings(&rig, send["settings"].clone()).await;
+    send["opts"]["sessionId"] = json!(id);
+    let (_, body) = post(rig.d.port, "chat:send", json!([send["opts"]]), Some(TOKEN)).await;
+    let refused = until("the refusal", Duration::from_secs(10), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == json!(id) && e["type"] == "error").cloned()
+    })
+    .await;
+    assert!(refused["message"].as_str().unwrap().contains("parent chat"), "{refused} {body}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stopping_the_chat_stops_its_sub_agent() {
+    let rig = rig("substop", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccD", "delegate and stop")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let id = the_child_starts(&rig).await["id"].clone();
+    post(rig.d.port, "chat:abort", json!(["s_cc"]), Some(TOKEN)).await;
+    turn_record(&rig, "ccD", "s_cc").await;
+    let stopped = until("the child to stop", Duration::from_secs(30), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == id && e["type"] == "error").cloned()
+    })
+    .await;
+    assert_eq!(stopped["message"], "Stopped");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_background_sub_agent_outlives_the_turn_that_started_it() {
+    let rig = rig("subbg", "guardrails", true);
+    let (status, _) =
+        post(rig.d.port, "chat:turn", json!([spec(&rig, "ccD", "delegate in the background")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccD", "s_cc").await;
+    let id = the_child_starts(&rig).await["id"].clone();
+    let done = until("the child to end", Duration::from_secs(30), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == id && e["type"] == "done").cloned()
+    })
+    .await;
+    assert_eq!(done["stop"], "complete");
+    let child = children(&rig).remove(0);
+    assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "The notes say hello.");
 }
 
 #[tokio::test(flavor = "multi_thread")]

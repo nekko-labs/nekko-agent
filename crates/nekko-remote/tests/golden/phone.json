@@ -3130,11 +3130,11 @@
     "s1",
     {
      "mode": "guardrails",
-     "disabledTools": []
+     "unattended": true
     }
    ],
    "calls": [],
-   "error": "Not allowed from a paired phone (option-denied): disabledTools"
+   "error": "Not allowed from a paired phone (option-denied): unattended"
   },
   {
    "channel": "session:setOptions",

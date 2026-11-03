@@ -121,8 +121,6 @@ fun Composer(
     queuedPrompts: List<QueuedPrompt> = emptyList(),
     /** Change ([text]) or remove (null) the queued prompt at an index, checked against what was shown. */
     onEditQueued: (suspend (index: Int, expect: String, text: String?) -> Unit)? = null,
-    /** Give the running agent a queued prompt at its next step. */
-    onNextStep: (suspend (index: Int, expect: String) -> Unit)? = null,
     /** Stop the reply and start a queued prompt. */
     onInterrupt: (suspend (index: Int) -> Unit)? = null,
     /** **+** → New agent, as on the desktop; null leaves it out. */
@@ -227,7 +225,7 @@ fun Composer(
         HorizontalDivider(color = p.line)
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (queued.isNotEmpty()) {
-                QueueList(queued, queuedPrompts, onEditQueued, if (running) onNextStep else null, if (running) onInterrupt else null) { error = it }
+                QueueList(queued, queuedPrompts, onEditQueued, if (running) onInterrupt else null) { error = it }
             }
             mic?.let { m ->
                 when (val st = m.state) {
@@ -466,7 +464,6 @@ private fun QueueList(
     queued: List<String>,
     prompts: List<QueuedPrompt>,
     onEdit: (suspend (Int, String, String?) -> Unit)?,
-    onNextStep: (suspend (Int, String) -> Unit)?,
     onInterrupt: (suspend (Int) -> Unit)?,
     onError: (String?) -> Unit,
 ) {
@@ -511,16 +508,8 @@ private fun QueueList(
                 }
             }
         }
-        val prompt = prompts.getOrNull(i)
-        if (prompt != null && (onNextStep != null || onInterrupt != null)) {
-            Row(Modifier.padding(start = 20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (onNextStep != null && prompt.canTakeAtNextStep) {
-                    TextButton(onClick = { run { onNextStep(i, prompt.text) } }, modifier = Modifier.heightIn(min = 36.dp).testTag("queue.nextStep.$i")) { Text("Next step") }
-                }
-                if (onInterrupt != null) {
-                    TextButton(onClick = { run { onInterrupt(i) } }, modifier = Modifier.heightIn(min = 36.dp).testTag("queue.interrupt.$i")) { Text("Interrupt") }
-                }
-            }
+        if (onInterrupt != null && prompts.getOrNull(i) != null) {
+            TextButton(onClick = { run { onInterrupt(i) } }, modifier = Modifier.padding(start = 20.dp).heightIn(min = 36.dp).testTag("queue.interrupt.$i")) { Text(stringResource(R.string.chat_interrupt_send_now)) }
         }
     }
     editing?.let { i ->

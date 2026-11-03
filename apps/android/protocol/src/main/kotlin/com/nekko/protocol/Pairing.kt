@@ -4,7 +4,7 @@ import java.net.URLDecoder
 
 /**
  * Pairing links. Settings → Remote access on the computer shows a QR carrying
- * `nekko-agent-pair:?relay=&room=&key=&pair=` (or, from the Local Web UI,
+ * `nekko-agent-pair:?relay=&room=&key=&host=&pair=` (or, from the Local Web UI,
  * `https://host/?relay=…`), plus one `alt=` per extra route to the same relay
  * (the relay on the computer's LAN addresses, TASKS.md IO-20). Either form, or
  * a bare query string, parses to the same credentials. Mirrors
@@ -19,6 +19,8 @@ data class PairingLink(
     val pair: String? = null,
     /** Other addresses of the same relay, in the link's order; [RouteSupervisor] picks among them and [relayUrl]. */
     val alts: List<String> = emptyList(),
+    /** The computer's public key (X9.63 P-256, base64) to pin; null when the link has none, and such a link can't pair. */
+    val hostKey: String? = null,
 ) {
     /** Never print the secret. */
     override fun toString(): String = "PairingLink(relay=$relayUrl, room=$room, pair=${pair != null}, alts=${alts.size})"
@@ -28,9 +30,16 @@ object Pairing {
     private val ROOM = Regex("^[0-9a-fA-F]{8,128}$")
     private val KEY = Regex("^[0-9a-fA-F]{16,256}$")
     private val WS = Regex("^wss?://", RegexOption.IGNORE_CASE)
+    private val HOST_KEY = Regex("^[A-Za-z0-9+/]{87}=$")
 
     /** At most this many `alt` routes are kept (`MAX_PAIRING_ALTS`). */
     const val MAX_ALTS = 4
+
+    /** A link from a computer too old to name its host key: a first-seen key is never trusted. */
+    const val NEEDS_HOST_KEY = "Update Nekko Agent on your computer, then make a new pairing code."
+
+    /** A link for a pinned room that names another key: rotating a pairing changes the room, so it isn't that computer. */
+    const val DIFFERENT_COMPUTER = "This link names a different computer than the one you paired with. Forget that computer first if it was reset."
 
     fun parse(input: String): PairingLink? {
         val raw = input.trim()
@@ -46,7 +55,8 @@ object Pairing {
         if (!ROOM.matches(room) || !KEY.matches(key)) return null
         val pair = first("pair")?.trim()?.uppercase()?.ifEmpty { null }
         val relayUrl = relay.trimEnd('/')
-        return PairingLink(relayUrl, room, key, pair, alts(params.filter { it.first == "alt" }.map { it.second }, relayUrl))
+        val hostKey = first("host")?.trim()?.takeIf { HOST_KEY.matches(it) }
+        return PairingLink(relayUrl, room, key, pair, alts(params.filter { it.first == "alt" }.map { it.second }, relayUrl), hostKey)
     }
 
     /** The usable `alt` values: PH1-clean, no trailing slashes, no repeats of the relay or each other. */
@@ -75,8 +85,9 @@ object Pairing {
         val out = ArrayList<Pair<String, String>>()
         for (part in q.split('&')) {
             if (part.isEmpty()) continue
-            val k = URLDecoder.decode(part.substringBefore('='), Charsets.UTF_8)
-            val v = if ('=' in part) URLDecoder.decode(part.substringAfter('='), Charsets.UTF_8) else ""
+            // By name: the Charset overload only exists from Android 13, and the app runs from Android 9.
+            val k = URLDecoder.decode(part.substringBefore('='), "UTF-8")
+            val v = if ('=' in part) URLDecoder.decode(part.substringAfter('='), "UTF-8") else ""
             out += k to v
         }
         out

@@ -237,9 +237,9 @@ struct NewChatView: View {
                 if isLocal || pickedComputer {
                     Menu {
                         Picker("Run on", selection: Binding(get: { store.activeId }, set: { if let id = $0 { switchComputer(id) } })) {
-                            ForEach(store.computers) { c in Text(c.name).tag(Optional(c.id)) }
+                            ForEach(store.computers) { c in ComputerLabel(c: c).tag(Optional(c.id)) }
                         }
-                    } label: { chip(store.active?.name ?? String(localized: "Computer"), icon: "desktopcomputer") }
+                    } label: { chip(store.active?.name ?? String(localized: "Computer"), icon: "desktopcomputer", computerIcon: store.active?.icon) }
                     .accessibilityHint("A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.")
                     .accessibilityIdentifier("newChat.computer")
                 }
@@ -296,8 +296,13 @@ struct NewChatView: View {
     }
 
     /// A solid, readable control over the decorative ground, as the desktop's clean-start controls.
-    private func chip(_ title: String, icon: String, faint: Bool = false) -> some View {
-        Label(title, systemImage: icon).font(.footnote.weight(.medium)).lineLimit(1)
+    private func chip(_ title: String, icon: String, computerIcon: String? = nil, faint: Bool = false) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            if let computerIcon { ComputerGlyph(icon: computerIcon, size: 15) } else { Image(systemName: icon) }
+        }
+        .font(.footnote.weight(.medium)).lineLimit(1)
             .foregroundStyle(faint ? palette.inkSoft : palette.ink)
             .padding(.horizontal, 12).frame(minHeight: 34)
             .background(palette.surface, in: Capsule())
@@ -356,7 +361,7 @@ struct NewChatView: View {
         defer { cloudBusy = false }
         do {
             let made = try await cloud.createMachine(name: "Nekko Cloud", region: "nrt", scope: CloudSync.MachineScope())
-            let id = await store.pair(made.link)
+            let id = try await store.pair(made.link)
             store.rename(id, to: made.machine.name)
             cloud.link(made.machine, computer: id)
             switchComputer(id)

@@ -5,6 +5,11 @@
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+  <url>
+    <loc>https://nekkoagent.com/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
 
   <!-- docs:start -->
   <url>
@@ -154,6 +159,11 @@
   </url>
   <url>
     <loc>https://nekkoagent.com/docs/contributing</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://nekkoagent.com/docs/credits</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>

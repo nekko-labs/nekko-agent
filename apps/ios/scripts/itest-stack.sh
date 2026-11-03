@@ -11,6 +11,7 @@
 # A route proxy (route-proxy.mjs) is a second address of the same relay: the
 # pairing link carries it as `alt`, and NEKKO_ITEST_ROUTE_CTL takes it down and
 # up again for the failover test (IO-20).
+# The link carries the computer's host key, read from the agent's own printed link.
 # Needs Node and a root build of shared, core, host, cli, server and relay.
 set -euo pipefail
 out="${1:?usage: itest-stack.sh <env-file>}"
@@ -58,13 +59,15 @@ JSON
   exec nohup node "$root/apps/local-web-ui/dist/index.js" >"$logs/agent.log" 2>&1) &
 agent_pid=$!
 pair=""
+host=""
 for _ in $(seq 150); do
   pair="$(grep -oE 'pairing code \(10 min\): [A-Z2-9]+' "$logs/agent.log" | head -n1 | awk '{print $NF}' || true)"
-  [ -n "$pair" ] && break
+  host="$(grep -oE 'pairing link: .*[?&]host=[^&]+' "$logs/agent.log" | head -n1 | sed 's/.*host=//' || true)"
+  [ -n "$pair" ] && [ -n "$host" ] && break
   sleep 0.1
 done
-if [ -z "$pair" ]; then
-  echo "agent printed no pairing code:" >&2
+if [ -z "$pair" ] || [ -z "$host" ]; then
+  echo "agent printed no pairing code and host key:" >&2
   cat "$logs/agent.log" >&2
   kill "$model_pid" "$relay_pid" "$route_pid" "$agent_pid" 2>/dev/null || true
   exit 1
@@ -74,7 +77,8 @@ export NEKKO_ITEST_RELAY="$relay_url"
 export NEKKO_ITEST_ROOM="$room"
 export NEKKO_ITEST_KEY="$key"
 export NEKKO_ITEST_PAIR="$pair"
-export NEKKO_ITEST_LINK="nekko-agent-pair:?relay=ws%3A%2F%2Flocalhost%3A$relay_port&room=$room&key=$key&pair=$pair&alt=ws%3A%2F%2F127.0.0.1%3A$route_port"
+export NEKKO_ITEST_HOST="$host"
+export NEKKO_ITEST_LINK="nekko-agent-pair:?relay=ws%3A%2F%2Flocalhost%3A$relay_port&room=$room&key=$key&host=$host&pair=$pair&alt=ws%3A%2F%2F127.0.0.1%3A$route_port"
 export NEKKO_ITEST_RELAY_CTL="http://127.0.0.1:$ctl_port"
 export NEKKO_ITEST_ROUTE="ws://127.0.0.1:$route_port"
 export NEKKO_ITEST_ROUTE_CTL="http://127.0.0.1:$route_ctl_port"

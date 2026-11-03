@@ -7,6 +7,32 @@ import Foundation
 // Run now on an automation the owner already set up.
 
 /// One prompt waiting in a chat's queue on the computer.
+/// A run setting a phone shows for a chat, sent to the computer running it. No
+/// `values` means on or off. The computer checks every one, and asks for Face ID
+/// for those that change what an agent may touch.
+public struct RunOption: Sendable, Identifiable, Equatable {
+    public let key: String
+    public let values: [String]
+    public var id: String { key }
+
+    public static let all = [
+        RunOption(key: "autoModel", values: []),
+        RunOption(key: "offline", values: []),
+        RunOption(key: "cloudOnly", values: []),
+        RunOption(key: "incognito", values: []),
+        RunOption(key: "gitIsolation", values: []),
+        RunOption(key: "workMode", values: ["default", "better-review", "design", "best-output"]),
+        RunOption(key: "toolApproach", values: ["list", "code"]),
+    ]
+
+    /// A chat's run settings, as the computer holds them.
+    public static func values(of v: JSONValue?) -> [String: JSONValue] {
+        var out: [String: JSONValue] = [:]
+        for o in all { if let value = v?[o.key], !value.isNull { out[o.key] = value } }
+        return out
+    }
+}
+
 public struct QueuedPrompt: Equatable, Sendable {
     /// The text the computer holds: what an edit is checked against (`expect`).
     public let text: String
@@ -30,8 +56,6 @@ public struct QueuedPrompt: Equatable, Sendable {
     /// A skill's text is its instructions: it can be removed, not edited.
     public var editable: Bool { skillName == nil }
 
-    /// The agent takes only text at its next step: photos and skills wait for their turn.
-    public var canTakeAtNextStep: Bool { skillName == nil && images == 0 }
 
     public static func list(_ v: JSONValue?) -> [QueuedPrompt] {
         (v?.array ?? []).compactMap { q in

@@ -97,6 +97,9 @@ export function activitySentence(activity: SubagentActivity): string {
 }
 
 export function delegationChild(call: ToolCall, sessions: SessionSummary[]): SessionSummary | undefined {
+  const named = sessions.find(child => child.spawnCallId === call.id);
+  if (named) return named;
+  // A child made before the engine recorded its call: matched by title and time.
   const title = typeof call.input.title === 'string' && call.input.title.trim() ? call.input.title.trim() : typeof call.input.task === 'string' ? call.input.task.trim().slice(0, 40) : '';
   // The host exposes no spawn-call ID in child metadata or successful results.
   // Only associate observed live calls, within their parent-scoped time window.

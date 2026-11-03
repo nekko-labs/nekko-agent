@@ -71,7 +71,9 @@ import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
 import com.nekko.android.data.modelGroups
 import com.nekko.android.ui.chat.effortLabel
+import com.nekko.android.ui.components.ComputerIcon
 import com.nekko.android.ui.components.NCard
+import com.nekko.android.ui.components.computerIconRes
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
@@ -306,7 +308,7 @@ fun NewChatScreen(
                     NCard {
                         Label(Icons.Filled.Computer, stringResource(R.string.chats_run_on))
                         Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.runOn"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            c.computers.forEach { pc -> Chip(pc.name, pc.id == c.activeId) { runOn(pc.id) } }
+                            c.computers.forEach { pc -> Chip(pc.name, pc.id == c.activeId, pc.icon) { runOn(pc.id) } }
                         }
                         Text(
                             stringResource(R.string.chats_run_on_note),
@@ -355,13 +357,14 @@ private fun Label(icon: androidx.compose.ui.graphics.vector.ImageVector, text: S
 }
 
 @Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun Chip(label: String, selected: Boolean, icon: String? = null, onClick: () -> Unit) {
     val p = Nekko.palette
     FilterChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = p.accent, selectedLabelColor = p.accentInk),
+        leadingIcon = computerIconRes(icon)?.let { { ComputerIcon(icon) } },
+        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = p.accent, selectedLabelColor = p.accentInk, selectedLeadingIconColor = p.accentInk),
         modifier = Modifier.heightIn(min = 48.dp),
     )
 }

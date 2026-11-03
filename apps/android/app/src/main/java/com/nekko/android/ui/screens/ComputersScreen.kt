@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -61,6 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.Computer
 import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.ComputersState
+import com.nekko.android.ui.components.ComputerTileIcon
 import com.nekko.android.ui.components.Dot
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.Pill
@@ -197,7 +197,7 @@ private fun ComputerCard(
     val active = s.activeId == c.id
     val state = when {
         !active -> CardState.IDLE
-        s.denied != null || s.conn == RelayState.DENIED -> CardState.DENIED
+        s.denied != null || s.conn == RelayState.DENIED || s.badKey -> CardState.DENIED
         s.conn == RelayState.ONLINE -> CardState.ONLINE
         s.conn == RelayState.OFFLINE -> CardState.OFFLINE
         s.conn == RelayState.CONNECTING -> CardState.CONNECTING
@@ -215,7 +215,7 @@ private fun ComputerCard(
                 Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(p.accentSoft),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Computer, contentDescription = null, tint = p.accent, modifier = Modifier.size(20.dp))
+                ComputerTileIcon(c.icon, 20.dp, p.accent)
             }
             Column(Modifier.weight(1f)) {
                 Text(c.name, style = MaterialTheme.typography.titleMedium, color = p.ink)

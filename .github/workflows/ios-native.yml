@@ -72,8 +72,8 @@ jobs:
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))) }}
     runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
     # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
-    # passing runs off mid-test.
-    timeout-minutes: 75
+    # passing runs off mid-test. A slow runner reaches 75 by itself, and a retried journey adds about 8.
+    timeout-minutes: 85
     steps:
       - uses: actions/checkout@v4
         with:
@@ -202,16 +202,24 @@ jobs:
           # The first-run suite already asked for notifications; a fresh install gets the prompt again.
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
           for THEME in $THEMES; do
-            ready
-            xcrun simctl ui "$DEVICE" appearance "$THEME"
-            ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env"
-            . "/tmp/stack-$THEME.env"
-            TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
-              xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME.xcresult" test-without-building \
-              -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || { failed=1; stack_logs "live-$THEME"; }
-            kill $NEKKO_ITEST_PIDS 2>/dev/null || true
-            # The app is reinstalled per run; wipe it so the next theme pairs from scratch.
-            xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+            # The first journey after the boot can time out reading the app at any step, and the same
+            # journey then passes (#1567). So one more try, with a fresh stack and install. Right after
+            # the boot the computer's engine can also miss its start deadline; that try counts as failed.
+            for try in 1 2; do
+              ready
+              xcrun simctl ui "$DEVICE" appearance "$THEME"
+              journey=0
+              ../../apps/ios/scripts/itest-stack.sh "/tmp/stack-$THEME.env" || { journey=1; continue; }
+              . "/tmp/stack-$THEME.env"
+              TEST_RUNNER_NEKKO_ITEST_LINK="$NEKKO_ITEST_LINK" TEST_RUNNER_NEKKO_ITEST_THEME="$THEME" \
+                xcodebuild "${COMMON[@]}" -resultBundlePath "evidence/live-$THEME-$try.xcresult" test-without-building \
+                -only-testing:NekkoNativeUITests/LiveRelayTests/testPairStreamAndApproveFromThePhone || { journey=1; stack_logs "live-$THEME-$try"; }
+              kill $NEKKO_ITEST_PIDS 2>/dev/null || true
+              # The app is reinstalled per run; wipe it so the next run pairs from scratch.
+              xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
+              [ "$journey" = 1 ] || break
+            done
+            failed=$((failed | journey))
           done
           # Offline mode: a prompt sent with the relay down waits, then goes exactly once when it is back.
           ready

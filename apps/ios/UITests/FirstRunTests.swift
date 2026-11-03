@@ -34,6 +34,20 @@ final class FirstRunTests: XCTestCase {
         auditAccessibility(app, "pair")
     }
 
+    /// A computer too old to prove who it is can't pair: its first-seen key is never trusted.
+    func testRefusesALinkWithNoHostKey() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
+        app.launch()
+        app.buttons["Pair with your computer"].tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("relay=wss://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff")
+        app.buttons["Pair"].tap()
+        XCTAssertTrue(app.staticTexts["Update Nekko Agent on your computer, then make a new pairing code."].waitForExistence(timeout: 5))
+    }
+
     /// A plain ws:// relay on the open internet is refused before anything is dialed.
     func testRefusesAPublicCleartextRelay() {
         let app = XCUIApplication()

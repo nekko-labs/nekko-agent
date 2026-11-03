@@ -41,8 +41,6 @@ object Channels {
     const val CHAT_SEND = "chat:send"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
-    /** Text the running agent reads at its next step, without stopping. */
-    const val CHAT_STEER = "chat:steer"
     /** Stop the reply and start the queued prompt at an index. */
     const val CHAT_INTERRUPT_QUEUED = "chat:interruptQueued"
     const val CHAT_PENDING = "chat:pending"
@@ -277,6 +275,8 @@ data class Session(
     val clientMessageIds: List<String> = emptyList(),
     /** A turn is running on the computer (`activeRun`): a prompt sent now waits in its queue. */
     val running: Boolean = false,
+    /** The chat's run settings ([RunOption]). */
+    val runOptions: Map<String, JsonElement> = emptyMap(),
 ) {
     companion object {
         fun from(e: JsonElement?): Session? {
@@ -297,6 +297,7 @@ data class Session(
                 mode = PcSettings.ChatMode.of(o.str("mode")),
                 clientMessageIds = o["clientMessageIds"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 running = o["activeRun"].let { it != null && it !is JsonNull },
+                runOptions = RunOption.values(o),
             )
         }
     }
@@ -491,10 +492,11 @@ data class PcSettings(
         }
 
         /** The `settings:update` patch for one change: never more than the phone-settable keys. */
-        fun patch(mode: ChatMode? = null, action: ChatAction? = null, skipConfirm: Boolean? = null) = buildJsonObject {
+        fun patch(mode: ChatMode? = null, action: ChatAction? = null, skipConfirm: Boolean? = null, icon: String? = null) = buildJsonObject {
             mode?.let { put("defaultChatMode", it.wire) }
             action?.let { put("chatPaneAction", it.wire) }
             skipConfirm?.let { put("skipDeleteConfirmation", it) }
+            icon?.let { put("machineIcon", it) }
         }
     }
 }
@@ -676,11 +678,29 @@ data class WorkspaceFolder(
  * (SK-3): only then does the phone offer *Quit Nekko Agent on the computer*.
  * Absent (an older computer) reads as off.
  */
-data class AppInfo(val version: String?, val platform: String?, val quitFromPhone: Boolean = false) {
+data class AppInfo(
+    val version: String?,
+    val platform: String?,
+    val quitFromPhone: Boolean = false,
+    /** The computer's icon, one of [COMPUTER_ICONS]; null when it has none, or one this app doesn't draw. */
+    val machineIcon: String? = null,
+) {
     companion object {
-        fun from(e: JsonElement?): AppInfo = e.obj().let { AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true) }
+        fun from(e: JsonElement?): AppInfo = e.obj().let {
+            AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true, it?.str("machineIcon")?.takeIf { i -> i in COMPUTER_ICONS })
+        }
     }
 }
+
+/**
+ * The icons a computer can have, as `COMPUTER_ICONS` in packages/shared/src/computers.ts.
+ * `scripts/computer-icons.test.mjs` fails when this or the app's drawables drift from it.
+ */
+val COMPUTER_ICONS = listOf(
+    "laptop", "desktop", "tower", "mini", "server", "rack", "cloud", "gpu",
+    "chip", "home", "office", "lab", "bolt", "moon", "sun", "star",
+    "flame", "leaf", "globe", "cube", "rocket", "shield", "terminal", "cat",
+)
 
 // ---------------------------------------------------------------------------
 // Ask / approvals

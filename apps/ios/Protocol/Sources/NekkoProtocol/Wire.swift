@@ -30,8 +30,6 @@ public enum Channels {
     public static let chatSend = "chat:send"
     public static let chatAbort = "chat:abort"
     public static let chatQueue = "chat:queue"
-    /// Text the running agent reads at its next step, without stopping.
-    public static let chatSteer = "chat:steer"
     /// Stop the reply and start the queued prompt at an index.
     public static let chatInterruptQueued = "chat:interruptQueued"
     public static let chatPending = "chat:pending"
@@ -123,7 +121,7 @@ public enum Channels {
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatSteer, chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, skillsRunnable, changesList,
+        chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
@@ -134,6 +132,8 @@ public enum Channels {
         MonitorChannels.systemStats, MonitorChannels.gpuStats, MonitorChannels.engineStatus, MonitorChannels.contextPreview,
         MonitorChannels.modelUnload,
         artifactRead, previewFetch,
+        // Allowed for clients that aren't this app: a connected computer's plan changes and model settings.
+        "chat:steer", chatInterruptQueued, "engine:settings", "engine:saveModelPreset", "engine:unloadAll", "model:load",
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
         TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
@@ -373,6 +373,8 @@ public struct Session: Equatable, Sendable {
     public var effort: String?
     /// The plan the agent wrote for this chat (`update_plan`, or Claude Code's own plan calls).
     public var agentPlan: [PlanStep] = []
+    /// The chat's run settings (`RunOption`).
+    public var runOptions: [String: JSONValue] = [:]
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -388,7 +390,8 @@ public struct Session: Equatable, Sendable {
             clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
             running: v["activeRun"].map { !$0.isNull } ?? false,
             effort: v.str("effort"),
-            agentPlan: PlanStep.list(v["agentPlan"]))
+            agentPlan: PlanStep.list(v["agentPlan"]),
+            runOptions: RunOption.values(of: v))
     }
 }
 
@@ -566,11 +569,12 @@ public struct PcSettings: Equatable, Sendable {
     }
 
     /// The `settings:update` patch for one change: never more than the phone-settable keys.
-    public static func patch(mode: ChatMode? = nil, action: ChatAction? = nil, skipConfirm: Bool? = nil) -> JSONValue {
+    public static func patch(mode: ChatMode? = nil, action: ChatAction? = nil, skipConfirm: Bool? = nil, icon: String? = nil) -> JSONValue {
         var o: [String: JSONValue] = [:]
         if let mode { o["defaultChatMode"] = .string(mode.rawValue) }
         if let action { o["chatPaneAction"] = .string(action.rawValue) }
         if let skipConfirm { o["skipDeleteConfirmation"] = .bool(skipConfirm) }
+        if let icon { o["machineIcon"] = .string(icon) }
         return .object(o)
     }
 }
@@ -728,11 +732,22 @@ public struct AppInfo: Equatable, Sendable {
     public let platform: String?
     /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
     public var quitFromPhone = false
+    /// The computer's icon, one of `computerIcons`; nil when it has none, or one this app doesn't draw.
+    public var machineIcon: String?
 
     public static func from(_ v: JSONValue?) -> AppInfo {
-        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false)
+        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false,
+                machineIcon: v?.str("machineIcon").flatMap { computerIcons.contains($0) ? $0 : nil })
     }
 }
+
+/// The icons a computer can have, as `COMPUTER_ICONS` in packages/shared/src/computers.ts.
+/// `scripts/computer-icons.test.mjs` fails when this or the app's assets drift from it.
+public let computerIcons = [
+    "laptop", "desktop", "tower", "mini", "server", "rack", "cloud", "gpu",
+    "chip", "home", "office", "lab", "bolt", "moon", "sun", "star",
+    "flame", "leaf", "globe", "cube", "rocket", "shield", "terminal", "cat",
+]
 
 public struct VoiceInstall: Equatable, Sendable {
     public let installed: Bool

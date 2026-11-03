@@ -109,7 +109,14 @@ struct HubLink {
 }
 
 impl Link for HubLink {
-    fn connect(&self, relay_url: &str, room: &str, key: &str, verify: Verifier) -> Arc<dyn LinkHandle> {
+    fn connect(
+        &self,
+        relay_url: &str,
+        room: &str,
+        key: &str,
+        host_key: nekko_remote::client::SigningKey,
+        verify: Verifier,
+    ) -> Arc<dyn LinkHandle> {
         let (tx, events) = tokio::sync::mpsc::unbounded_channel();
         let mut rx = self.hub.subscribe();
         // Ends once the agent stops and drops its receiver.
@@ -148,6 +155,7 @@ impl Link for HubLink {
                 url: nekko_remote::agent_url(relay_url, room, key, std::env::var("NEKKO_RELAY_ACCESS").ok().as_deref()),
                 secret: key.to_string(),
                 room: room.to_string(),
+                host_key,
                 verify,
                 dispatch,
                 events,

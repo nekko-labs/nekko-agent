@@ -29,7 +29,6 @@ import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '..
 import { allPanes, type PaneKind } from '../layout.js';
 import {
   applySnap,
-  minimizeFinishedReply,
   DEFAULT_ASPECT,
   openWallPane,
   agentZoneTints,
@@ -226,10 +225,11 @@ export function CommandCenterView() {
       if (e.type === 'done' && (!e.stop || e.stop === 'complete')) {
         // Recheck the host: a question can still be pending when a turn ends.
         // Ignore stale answers if another event/turn arrived or the view left.
+        // The pane stays in its zone when the agent finishes; the Agents panel's
+        // "Done" group lists it on the left (additive), as of 2026-11-03.
         void window.nekko.pendingInput().then((inputs) => {
           if (!live || eventVersions.current.get(e.sessionId) !== version) return;
           setPending(inputs);
-          setWall((w) => minimizeFinishedReply(w, e, inputs));
         }).catch(() => {}); // An unavailable input state must not hide a window.
       }
       if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
@@ -244,7 +244,7 @@ export function CommandCenterView() {
       if (!known.has(e.sessionId)) { known.add(e.sessionId); refreshSessions(); }
     });
     return () => { live = false; off(); };
-  }, [refreshSessions, setWall]);
+  }, [refreshSessions]);
 
   // The automation countdowns tick every 30s.
   useEffect(() => {
@@ -315,11 +315,13 @@ export function CommandCenterView() {
     // Folders picked in Add window override the project default: the first is
     // the chat's working folder, any others are supporting folders.
     const [primaryFolder, ...supportingFolders] = selection?.workspaceIds ?? [];
-    let s = unfinishedChat.current ?? await window.nekko.createSession(selection?.workspaceIds ? primaryFolder : projectId);
+    let s = unfinishedChat.current ?? (selection?.computerId
+      ? await window.nekko.createSessionOn(selection.computerId, primaryFolder)
+      : await window.nekko.createSession(selection?.workspaceIds ? primaryFolder : projectId));
     if (unfinishedChat.current && !selection) selection = { kind: 'chat', chatType: 'multimodal' };
     if (selection) {
       try {
-        if (unfinishedChat.current && selection.workspaceIds) {
+        if (unfinishedChat.current && selection.workspaceIds && !selection.computerId) {
           const relocated = await window.nekko.setSessionWorkspace(s.id, primaryFolder);
           if (!relocated) throw new Error('Could not configure the new agent working folder.');
           s = relocated;
@@ -333,7 +335,7 @@ export function CommandCenterView() {
           if (!updated) throw new Error('Could not configure the new agent window.');
           s = updated;
         }
-        if (needs.supporting) {
+        if (needs.supporting && !selection.computerId) {
           const configured = await window.nekko.setSessionSupportingWorkspaces(s.id, supportingFolders);
           if (!configured) throw new Error('Could not configure the new agent folders.');
           s = configured;

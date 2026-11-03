@@ -129,7 +129,11 @@ fn rig(access: DeviceAccess) -> Rig {
     let phones = Arc::new(Phones::default());
     *phones.now.lock().unwrap() = NOW;
     for id in ["phone-1", "phone-2"] {
-        phones.devices.lock().unwrap().push((id.into(), PhoneDevice { access, key: Some(public.clone()) }));
+        phones
+            .devices
+            .lock()
+            .unwrap()
+            .push((id.into(), PhoneDevice { access, key: Some(public.clone()), computer: false }));
     }
     let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
     let terminals = PhoneTerminals::new();
@@ -347,28 +351,37 @@ fn a_disconnected_phone_is_detached_on_the_computer() {
 
 // The relay agent: output goes only to attached phones, paced.
 
-fn core(terminals: Arc<PhoneTerminals>) -> (AgentCore, e2e::Key) {
+fn core(terminals: Arc<PhoneTerminals>) -> AgentCore {
     let key = e2e::derive_key("00112233445566778899aabbccddeeff", "room-1");
-    let core = AgentCore::new(key.clone(), Box::new(e2e::random_iv))
-        .with_terminals(terminals)
-        .with_flow(Coalescer::new(8, 100, 64));
-    (core, key)
+    let host = nekko_remote::agent::Host {
+        room: "room-1".into(),
+        key: nekko_remote::proof::new_key(&nekko_remote::hello::os_random()),
+    };
+    AgentCore::new(key, host, Box::new(e2e::random_iv)).with_terminals(terminals).with_flow(Coalescer::new(8, 100, 64))
 }
 
-fn client(key: &e2e::Key, cid: &str, v: Value) -> String {
-    let data = json!({ "enc": e2e::seal_with_iv(key, &v, e2e::random_iv()) }).to_string();
-    json!({ "type": "c", "cid": cid, "data": data }).to_string()
+fn welcome(h: &Value) -> Value {
+    json!({ "type": "welcome", "device": { "id": h["deviceId"] } })
+}
+
+/// Each connection's key, by cid.
+type Keys = std::collections::HashMap<String, e2e::Key>;
+
+fn connect(core: &mut AgentCore, keys: &mut Keys, cid: &str, device: &str) {
+    let (_, key) = core.say_hello(cid, json!({ "type": "hello", "deviceId": device }), &welcome);
+    keys.insert(cid.to_string(), key);
 }
 
 /// `(cid, payload)` of each event frame.
-fn opened(key: &e2e::Key, frames: &[String]) -> Vec<(String, Value)> {
+fn opened(keys: &Keys, frames: &[String]) -> Vec<(String, Value)> {
     frames
         .iter()
         .map(|f| {
             let f: Value = serde_json::from_str(f).unwrap();
             let d: Value = serde_json::from_str(f["data"].as_str().unwrap()).unwrap();
-            let ev = e2e::open(key, d["enc"].as_str().unwrap()).unwrap();
-            (f["cid"].as_str().unwrap().to_string(), ev["payload"].clone())
+            let cid = f["cid"].as_str().unwrap();
+            let ev = e2e::open(&keys[cid], d["enc"].as_str().unwrap()).unwrap();
+            (cid.to_string(), ev["payload"].clone())
         })
         .collect()
 }
@@ -379,10 +392,10 @@ fn terminal_output_reaches_only_attached_phones_paced() {
     let gone: Arc<Mutex<Vec<String>>> = Arc::default();
     let g = gone.clone();
     terminals.on_device_gone(Arc::new(move |d| g.lock().unwrap().push(d)));
-    let (mut core, key) = core(terminals.clone());
-    let welcome = |h: &Value| json!({ "type": "welcome", "device": { "id": h["deviceId"] } });
+    let mut core = core(terminals.clone());
+    let mut key = Keys::new();
     for (cid, device) in [("c1", "phone-1"), ("c2", "phone-2"), ("c3", "phone-1")] {
-        core.on_relay(&client(&key, cid, json!({ "type": "hello", "deviceId": device })), &welcome);
+        connect(&mut core, &mut key, cid, device);
     }
     let data = |t: &str, d: &str| json!({ "type": "data", "terminalId": t, "data": d });
     // Nobody attached: nothing goes out (this used to go to every phone).
@@ -420,9 +433,9 @@ fn terminal_output_reaches_only_attached_phones_paced() {
 #[test]
 fn an_exit_flushes_what_waits_then_ends_the_session() {
     let terminals = PhoneTerminals::new();
-    let (mut core, key) = core(terminals.clone());
-    let welcome = |h: &Value| json!({ "type": "welcome", "device": { "id": h["deviceId"] } });
-    core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome);
+    let mut core = core(terminals.clone());
+    let mut key = Keys::new();
+    connect(&mut core, &mut key, "c1", "phone-1");
     terminals.open("phone-1", "term_1", 0.0);
     core.on_event_at("terminal:event", &json!({ "type": "data", "terminalId": "term_1", "data": "0123456789" }), 0);
     let exit = json!({ "type": "exit", "terminalId": "term_1", "code": 0 });

@@ -27,7 +27,7 @@ sha2 = "0.10"
 hmac = "0.12"
 sha1 = "0.10"
 # Verifies the ECDSA P-256 proof a phone signs for a Change action (IO-33).
-p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+p256 = { version = "0.13", default-features = false, features = ["ecdh", "ecdsa", "std"] }
 tokio.workspace = true
 # native-tls: the managed relay is wss://. It is the TLS stack reqwest already uses here.
 tokio-tungstenite = { workspace = true, features = ["native-tls"] }

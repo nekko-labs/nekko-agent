@@ -478,6 +478,7 @@ impl Turns {
     pub fn running_sessions(&self) -> Vec<String> {
         let mut ids: Vec<String> = lock(&self.running).values().map(|s| s.session_id.clone()).collect();
         ids.dedup();
+        ids.extend(self.harness.running_subagents());
         ids
     }
 
@@ -1052,6 +1053,7 @@ impl Turns {
                 None => self.harness.take(&session_id).await,
             };
             self.claude_code_turn(
+                hub,
                 shared,
                 slot,
                 &store,
@@ -1282,6 +1284,7 @@ impl Turns {
     #[allow(clippy::too_many_arguments)]
     async fn claude_code_turn(
         self: &Arc<Self>,
+        hub: &Hub,
         shared: &Arc<Shared>,
         mut slot: tokio::sync::OwnedMutexGuard<crate::harness::Slot>,
         store: &Arc<SessionStore>,
@@ -1397,6 +1400,28 @@ impl Turns {
         let Some(child) = slot.session.as_mut() else { return };
         let resumed = matches!(child.spec.session, SessionStart::Resume(_));
         let mut mapper = Mapper::new(session_id.clone());
+        let subagents =
+            crate::subagents::Sink { harness: self.harness.clone(), store: store.clone(), hub: hub.clone() };
+        if !reuse {
+            // The process those ran in is gone; no notification will come.
+            subagents.sweep(&session_id, true).await;
+        }
+        let (sub_tx, sub_rx) = mpsc::unbounded_channel();
+        let reader = (!incognito).then(|| {
+            let (ids, this) = (crate::spawn::workspace_ids(&lock(session)), subagents.clone());
+            let id = |v: &Value| v.as_str().map(str::to_string);
+            tokio::spawn(this.drive(
+                crate::subagents::Parent {
+                    id: session_id.clone(),
+                    workspace: ids.first().and_then(id),
+                    supporting: ids.iter().skip(1).cloned().collect(),
+                    provider_id: opts.get("providerId").cloned().unwrap_or(Value::Null),
+                    model_id: opts.get("modelId").cloned().unwrap_or(Value::Null),
+                    settings: self.settings.get(),
+                },
+                sub_rx,
+            ))
+        });
         let input = TurnInput {
             content: if wake { None } else { user.as_ref().map(nekko_harness::user_content) },
             cancel: &shared.cancel,
@@ -1427,10 +1452,19 @@ impl Turns {
                 // After the call's checkpoint, which saves the plan with it.
                 shared.emit(json!({ "type": "session_meta", "sessionId": session_id }));
             }
+            // An incognito chat leaves nothing on disk, its sub-agents included.
+            Mapped::Subagent(event) => {
+                let _ = sub_tx.send(event);
+            }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })
         .await;
+        drop(sub_tx);
+        if let Some(reader) = reader {
+            let _ = reader.await;
+        }
+        subagents.sweep(&session_id, exit == TurnExit::Dead).await;
 
         let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
         let next = match (&seen, exit) {
@@ -1840,6 +1874,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     let mut deltas = Deltas::default();
     // A step's save still being written.
     let mut saving: Option<tokio::task::JoinHandle<()>> = None;
+    let mut phase = lock(&f.session).get("messages").and_then(Value::as_array).and_then(|m| nekko_store::loop_phase(m));
     loop {
         let due = deltas.due();
         let out = tokio::select! {
@@ -1900,6 +1935,13 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 accounts.turn_end(opts, account, f.started_at, &event, finished.as_ref());
             }
         }
+        // The chat moved along the agent loop. Tool calls only reach the windows
+        // showing it, so the rest hear `session_meta` once the save has landed.
+        let next = snapshot.as_deref().and_then(nekko_store::loop_phase);
+        let moved = next.is_some() && next != phase;
+        if moved {
+            phase = next;
+        }
         if is_checkpoint(&event) {
             // Saves land in order.
             if let Some(save) = saving.take() {
@@ -1909,7 +1951,14 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 Some(messages) if str_at(&event, "type") == Some("step") => {
                     note_error(&f.last_error, &event);
                     f.hub.publish("agent:event", event, false);
-                    saving = Some(tokio::spawn(checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito)));
+                    let (hub, id) = (f.hub.clone(), f.session_id.clone());
+                    let save = checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito);
+                    saving = Some(tokio::spawn(async move {
+                        save.await;
+                        if moved {
+                            hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": id }), false);
+                        }
+                    }));
                     continue;
                 }
                 Some(messages) => checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito).await,
@@ -1923,7 +1972,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         let steered = str_at(&event, "type") == Some("steered");
         note_error(&f.last_error, &event);
         f.hub.publish("agent:event", event, false);
-        if steered {
+        if steered || moved {
             // The steering message is in the transcript now; panes re-read it.
             f.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": f.session_id }), false);
         }
@@ -2073,6 +2122,16 @@ impl ToolRunner for TurnTools {
             }
         }
         self.guarded(call).await
+    }
+
+    /// What the user sent mid-turn stays in the queue, where they can still
+    /// interrupt with it, until this boundary reads it.
+    async fn before_step(&self) {
+        let id = str_at(&lock(&self.session), "id").unwrap_or_default().to_string();
+        let store = self.store.clone();
+        let taken = tokio::task::spawn_blocking(move || store.take_queued_text(&id)).await;
+        let texts = taken.ok().and_then(Result::ok).unwrap_or_default();
+        lock(&self.shared.steering).extend(texts.iter().map(|t| Turns::steering_message(t)));
     }
 }
 
@@ -2554,7 +2613,7 @@ impl TurnTools {
                     let mut parent = without_messages(&lock(&self.session));
                     parent["mode"] = json!(self.mode);
                     let req = json!({
-                        "parent": parent, "providerId": self.provider_id, "modelId": self.model_id,
+                        "parent": parent, "providerId": self.provider_id, "modelId": self.model_id, "callId": id,
                         "input": call.get("input").cloned().unwrap_or(Value::Null), "attempt": attempt, "childId": child,
                     });
                     d("turn:spawnPrepare".into(), vec![req]).await

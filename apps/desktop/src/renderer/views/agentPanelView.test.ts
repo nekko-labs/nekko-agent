@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_AGENT_PANEL_VIEW, canReorder, compareCards, dateGroupOf, isDefaultView,
+  DEFAULT_AGENT_PANEL_VIEW, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, isDefaultView,
   parseAgentPanelView, statusGroupOf, withSort, type SortableCard,
 } from './agentPanelView.js';
 
@@ -11,6 +11,8 @@ describe('agent panel view', () => {
     expect(DEFAULT_AGENT_PANEL_VIEW).toEqual({
       groupBy: 'status', sortBy: 'manual', direction: 'desc',
       showMetadata: true, showProvider: true, showAutomations: true, showEmptyGroups: true,
+      showComputer: true,
+      showComputerIcons: true,
     });
     expect(isDefaultView(DEFAULT_AGENT_PANEL_VIEW)).toBe(true);
     expect(isDefaultView({ ...DEFAULT_AGENT_PANEL_VIEW, showMetadata: false })).toBe(false);
@@ -52,11 +54,27 @@ describe('agent panel view', () => {
     expect(titles('name', 'desc')).toEqual(['gamma 10', 'gamma 9', 'beta', 'Alpha']);
   });
 
-  it('files a card under its activity, done when nothing is running', () => {
-    expect(statusGroupOf('input')).toBe('status:input');
-    expect(statusGroupOf('done')).toBe('status:done');
-    expect(statusGroupOf('idle')).toBe('status:done');
-    expect(statusGroupOf(undefined)).toBe('status:done');
+  it('lists the agent loop in order, with Needs input and Draft above it', () => {
+    expect(STATUS_GROUPS.map((g) => g.name)).toEqual(['Needs input', 'Draft', 'Exploring', 'Building', 'Verifying', 'Shipping']);
+  });
+
+  it('files a chat under its loop phase, and a chat nothing was sent in under Draft', () => {
+    expect(statusGroupOf({ exchangeCount: 0 }, undefined)).toBe('status:draft');
+    expect(statusGroupOf({ exchangeCount: 2, phase: 'building' }, undefined)).toBe('status:building');
+    expect(statusGroupOf({ exchangeCount: 2, phase: 'shipping' }, 'working')).toBe('status:shipping');
+    expect(statusGroupOf({ exchangeCount: 2, phase: 'verifying' }, 'error')).toBe('status:verifying');
+  });
+
+  it('files a chat waiting on you under Needs input, whatever its phase', () => {
+    expect(statusGroupOf({ exchangeCount: 2, phase: 'building' }, 'input')).toBe('status:input');
+    expect(statusGroupOf({ exchangeCount: 0 }, 'input')).toBe('status:input');
+    expect(statusGroupOf(null, 'input')).toBe('status:input');
+  });
+
+  it('starts a sent chat at Exploring until a tool call names a phase', () => {
+    expect(statusGroupOf({ exchangeCount: 0 }, 'working')).toBe('status:exploring');
+    expect(statusGroupOf({ exchangeCount: 2 }, undefined)).toBe('status:exploring');
+    expect(statusGroupOf(null, undefined)).toBe('status:exploring');
   });
 
   it('files a time under calendar-day date groups', () => {
