@@ -589,7 +589,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // What a delegation that names no model runs on: the saved route, else this chat's model.
   const delegationDefaultModel = useStore(s => s.settings?.orchestration?.delegationRoute?.modelId);
   const computer = useComputerOf(sessionId);
-  const remoteBlock = computerBlock(computer);
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
   const { providers: localProviders, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
@@ -605,6 +604,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Painted straight from the session cache when this chat was open recently;
   // the host copy is fetched regardless and replaces it (stale-while-revalidate).
   const [session, setSession] = useState<Session | null>(() => getCachedSession(sessionId) ?? null);
+  // A Claude Code sub-agent's chat is a copy to watch: Claude Code holds the real one.
+  const remoteBlock = session?.claudeCodeSubagent ? 'This subagent runs inside its parent chat. Send your message there.' : computerBlock(computer);
   const [liveConnectivity, setLiveConnectivity] = useState<import('@nekko-agent/shared').ConnectivityNotice[]>(() => rememberedConnectivityNotices(sessionId));
   useEffect(() => { setLiveConnectivity(rememberedConnectivityNotices(sessionId)); }, [sessionId]);
   const claudeBackground = useClaudeBackgroundTasks(sessionId);

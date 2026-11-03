@@ -336,6 +336,9 @@ pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String
     }
 }
 
+/// A Claude Code sub-agent's chat is a copy to watch: Claude Code holds the real one.
+const SUBAGENT_READ_ONLY: &str = "This subagent runs inside its parent chat. Send your message there.";
+
 /// `chat:send`.
 pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
     let opts = args.first().cloned().unwrap_or(Value::Null);
@@ -500,6 +503,9 @@ async fn admit(
         return ended(ctx, &session_id, refusal.message).await;
     }
     let Some(mut session) = session else { return ended(ctx, &session_id, "Session not found.").await };
+    if nekko_js::truthy(session.get("claudeCodeSubagent")) {
+        return ended(ctx, &session_id, SUBAGENT_READ_ONLY).await;
+    }
     if sandbox && let Some(refusal) = nekko_turn::variants::sandbox_admission_refusal(&session, &opts) {
         return ended(ctx, &session_id, refusal).await;
     }
