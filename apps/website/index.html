@@ -37,16 +37,7 @@
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
     <link rel="stylesheet" href="styles.css?v=10" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Non-blocking webfont load: the system stack renders immediately; Inter
-         Tight / JetBrains Mono swap in when fetched (site works fully offline). -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&family=Handjet:wght@400..700&family=Space+Mono:wght@400;700&display=swap"
-      rel="stylesheet"
-      media="print"
-      onload="this.media='all'"
-    />
+    <link rel="stylesheet" href="fonts.css?v=1" />
     <!-- Structured data: so search and answer engines describe Nekko Agent accurately -->
     <script type="application/ld+json">
       {
@@ -299,10 +290,10 @@
           <div class="panel-copy">
             <span class="mf-num">SECURE</span>
             <h3>A safe space. Even we can't see in.</h3>
-            <p>People need a place where their information stays theirs. We took Apple's idea of a service that cannot see your data even if it wanted to, and built Nekko around it. Local chats never leave your computer. Your phone talks to it through end-to-end encryption, so the relay in between carries only ciphertext. And when you do choose a cloud model, Privacy Shield swaps your emails, keys, card numbers and private names for placeholders before anything is sent, then puts the real values back on the way home.</p>
+            <p>People need a place where their information stays theirs. We took Apple's idea of a service that cannot see your data even if it wanted to, and built Nekko around it. Local chats never leave your computer. Your phone talks to it through end-to-end encryption, so your chats and commands cross the relay only as ciphertext (the short status on your Lock Screen is the exception: it goes through Apple's and Google's push services as plain text). And when you do choose a cloud model, Privacy Shield swaps your emails, keys, card numbers and private names for placeholders before anything is sent, then puts the real values back on the way home.</p>
             <ul class="panel-points">
               <li>Local models: nothing leaves your machine, works offline</li>
-              <li>Phone to computer: end-to-end encrypted, the relay only sees ciphertext</li>
+              <li>Phone to computer: chats and commands are end-to-end encrypted through the relay. The short status on your Lock Screen goes through Apple's and Google's push services as plain text</li>
               <li>Cloud models: Privacy Shield hides private values, Incognito keeps no transcript</li>
             </ul>
             <a class="card-link" href="/docs/privacy-shield">How Privacy Shield works <span aria-hidden="true">→</span></a>
@@ -385,10 +376,13 @@
                 <h3>Join the beta</h3>
                 <label for="beta-email">YOUR EMAIL</label>
                 <div class="beta-field">
-                  <input id="beta-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required aria-describedby="beta-note" />
-                  <button class="btn btn-primary" type="submit">Count me in</button>
+                  <input id="beta-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required aria-describedby="beta-note beta-age" />
+                  <button class="btn btn-primary" type="submit">Get beta invites</button>
                 </div>
+                <!-- Unticked by default: product updates are a separate choice from the beta invite -->
+                <label class="beta-opt"><input type="checkbox" name="marketing" /> Also send me product updates</label>
                 <p class="beta-note" id="beta-note">We'll email you when spots open and new builds are ready to try.</p>
+                <p class="beta-note" id="beta-age">You must be 16 or older to sign up.</p>
                 <!-- Bots fill every field; people never see this one. The API fakes success when it is filled. -->
                 <input class="beta-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
               </div>
@@ -398,7 +392,7 @@
                 <p>You're in. Nekko will be in touch when new builds are ready to try.</p>
               </div>
             </form>
-            <p class="beta-privacy micro">We'll only use your email to send beta invites and Nekko Agent updates. No spam, and we never share it. To be removed, email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>. <a href="/privacy">Privacy policy</a>.</p>
+            <p class="beta-privacy micro">We'll only use your email to send beta invites, and product updates only if you tick the box. No spam, and we never share it. To be removed, email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>. <a href="/privacy">Privacy policy</a>.</p>
           </div>
         </div>
       </section>
@@ -625,7 +619,7 @@
       <button class="lightbox-close btn btn-ghost btn-sm" type="button" aria-label="Close">Close ✕</button>
       <div class="lightbox-stage"></div>
     </div>
-    <script src="site.js?v=12"></script>
+    <script src="site.js?v=13"></script>
     <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

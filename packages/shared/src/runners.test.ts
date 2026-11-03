@@ -228,12 +228,20 @@ describe('runnerWorkflowPrompt', () => {
 
 describe('image progress', () => {
   const image = (over: Partial<ImageView>): ImageView => ({
-    state: 'building', stage: 'download', doneStages: ['check'], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+    state: 'building', kind: 'xcode', stage: 'download', doneStages: ['check'], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
   });
   const marks = (v: ImageView) => imageStageRows(v).map((r) => r.mark);
 
   it('lists the six stages a person follows', () => {
     expect(imageStageRows(image({})).map((r) => r.label)).toEqual(['Check this Mac', 'Download macOS', 'Install macOS', 'Add Xcode and tools', 'Lock the VM down', 'Test a boot']);
+  });
+
+  it('a refresh lists only its own stages', () => {
+    const v = image({ kind: 'refresh', stage: 'scripts', doneStages: ['check'], detail: 'Writing the new scripts into the copy' });
+    expect(imageStageRows(v).map((r) => r.label)).toEqual(['Check this Mac', "Update Nekko's scripts", 'Test a boot']);
+    expect(marks(v)).toEqual(['done', 'now', 'todo']);
+    // No build at all lists a full one.
+    expect(imageStageRows(image({ kind: null, state: 'none', stage: null, doneStages: [] }))).toHaveLength(6);
   });
 
   it('marks each stage of a running build', () => {

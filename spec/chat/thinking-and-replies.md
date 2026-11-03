@@ -23,8 +23,11 @@ User intent: in a long agent turn, tell the agent thinking apart from the agent 
 
 Topics are read from the text the model wrote, with no model call and no change to what is stored. Copy and Find in this chat keep working on the original text. Only agent text is read this way: your own messages and reasoning render as before.
 
+## On the phones
+
+- `[implemented; Kotlin and Swift unit tests with the desktop's cases, emulator and simulator captures of a fixture turn]` The iOS and Android transcripts draw the same three voices and topic headers ([#1580](https://github.com/nekko-labs/nekko-agent/issues/1580), TASKS VOICE-3). The thought icon and the panels' edges sit in the transcript's 16pt side padding, so a block that settles its voice does not re-wrap. A phone puts the closing question's header over the question's own paragraph rather than over the whole closing run of text.
+
 ## Limits
 
-- `[planned, TASKS VOICE-3]` The iOS and Android transcripts still draw notes and replies alike, and show labels as bold text.
 - Labels are recognised in English. A reply in another language gets its panels and the closing question header (`？` counts), but a translated label stays bold text.
 - A model that ignores the labels still gets the panels and the closing question header, not the other headers.

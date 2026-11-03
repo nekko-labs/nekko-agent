@@ -86,7 +86,8 @@
 
   // ---- smart download: default to the visitor's machine, menu for everything else ----
   const RELEASES = 'https://github.com/nekko-labs/nekko-agent/releases/latest';
-  const API = 'https://api.github.com/repos/nekko-labs/nekko-agent/releases/latest';
+  // Written by scripts/build-docs.mjs at deploy time, so loading the page asks GitHub nothing.
+  const RELEASE = '/release.json';
 
   // Each build we publish, with the pattern that finds it in a release's assets.
   // `pick` is what the primary button chooses for a detected os+arch.
@@ -146,7 +147,7 @@
     return null; // unknown, keep the default
   }
 
-  let assets = null; // name -> browser_download_url, once the API answers
+  let assets = null; // name -> browser_download_url, once release.json answers
   let version = '';
 
   function urlFor(build) {
@@ -381,17 +382,15 @@
       }
     }
 
-    fetch(API, { headers: { Accept: 'application/vnd.github+json' } })
+    fetch(RELEASE)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((rel) => {
-        assets = Object.fromEntries(
-          (rel.assets || []).map((a) => [a.name, a.browser_download_url]),
-        );
-        version = rel.tag_name || '';
+        assets = rel.assets || {};
+        version = rel.version || '';
         render();
       })
       .catch(() => {
-        /* offline or rate-limited: the static links to /releases/latest still work */
+        /* no release.json (local preview, or GitHub was down at build): the static links to /releases/latest still work */
       });
   }
 })();
@@ -504,7 +503,7 @@
   const peek = stage.querySelector('.nekko-peek');
   const look = stage.querySelector('.np-look');
   const bubble = stage.querySelector('[data-bubble]');
-  const note = form.querySelector('.beta-note');
+  const note = form.querySelector('#beta-note');
   const lines = {
     idle: "Psst… want to see what's next?",
     watching: 'Ooh, keep going…',
@@ -529,8 +528,11 @@
   input.addEventListener('blur', () => { look.removeAttribute('transform'); if (mood === 'watching') setMood('idle'); });
   button.addEventListener('mouseenter', () => { if (mood !== 'confused') setMood('eager'); });
   button.addEventListener('mouseleave', () => { if (mood === 'eager') setMood(document.activeElement === input ? 'watching' : 'idle'); });
-  // The API's machine sleeps when idle; wake it now so Join answers quickly.
-  if (form.dataset.endpoint) fetch(new URL('/healthz', form.dataset.endpoint), { mode: 'no-cors' }).catch(() => {});
+  // The API's machine sleeps when idle; wake it once someone starts on the form
+  // (not on page load, so just reading the page contacts nothing but this site).
+  input.addEventListener('focus', () => {
+    if (form.dataset.endpoint) fetch(new URL('/healthz', form.dataset.endpoint), { mode: 'no-cors' }).catch(() => {});
+  }, { once: true });
   // idle blink every few seconds
   setInterval(() => {
     if (mood !== 'idle') return;
@@ -562,6 +564,9 @@
       source: location.pathname,
       utm,
       website: form.elements.website?.value || '',
+      // Product updates are their own unticked choice; the API records which policy text was agreed to.
+      marketing: Boolean(form.elements.marketing?.checked),
+      policyVersion: '2026-11-03',
     };
     const name = form.elements.name?.value.trim();
     if (name) body.name = name;

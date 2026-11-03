@@ -193,6 +193,13 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
             setSettingsFor(null);
             setSetup({ id: settingsView.config.id, rebuild: true });
           }}
+          onRefresh={async () => {
+            // Nothing to choose first: it starts at once, and the setup sheet follows it.
+            const id = settingsView.config.id;
+            await window.nekko.buildImage({ kind: 'refresh', priority: settingsView.config.settings.priority });
+            setSettingsFor(null);
+            setSetup({ id, rebuild: true });
+          }}
           beginReply={beginReply}
         />
       )}

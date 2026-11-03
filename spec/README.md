@@ -58,7 +58,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
 - [Plan sheet on the composer (2026-10-25; folded summary, loop kinds and sub-agent chips 2026-10-28)](chat/plan-sheet-on-the-composer.md) (14 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
-- [Thinking and replies](chat/thinking-and-replies.md) (3 KB)
+- [Thinking and replies](chat/thinking-and-replies.md) (4 KB)
 - [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (19 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
@@ -179,7 +179,7 @@ Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
-- [CI runners](automation/ci-runners.md) (50 KB)
+- [CI runners](automation/ci-runners.md) (51 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
@@ -217,6 +217,7 @@ Architecture, speed contract, distribution, builds and startup.
 - [Hardware keys, step-up on phone and desktop, and remote sign-out (2026-10-24)](platform/hardware-keys-step-up-and-remote-sign-out.md) (17 KB)
 - [How it's built: the window and the engine daemon](platform/how-its-built-the-window-and-the-engine-daemon.md) (27 KB)
 - [Limits on what grows in the data folder](platform/data-folder-growth-limits.md) (2 KB)
+- [Nekko Cloud data rights: deletion, export, consent, logs and alerts (2026-11-03)](platform/nekko-cloud-data-rights.md) (5 KB)
 - [Noninteractive shell input and bounded stop cleanup](platform/noninteractive-shell-input-and-bounded-stop-cleanup.md) (1 KB)
 - [Opt-in usage and crash reports](platform/opt-in-usage-and-crash-reports.md) (3 KB)
 - [Page recovery and startup appearance (2026-10-12)](platform/page-recovery-and-startup-appearance.md) (2 KB)
@@ -230,7 +231,7 @@ Architecture, speed contract, distribution, builds and startup.
 
 Brand, website, onboarding and the mascot.
 
-- [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (3 KB)
+- [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (6 KB)
 - [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (12 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)
