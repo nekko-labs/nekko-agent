@@ -1,14 +1,14 @@
 # Automations
 
-An automation is a workflow that runs on its own: on a schedule, when something happens in a
-connected app, or when you start it. They live in the **Workflows** tab. This page covers the
+An automation is a scheduled task that runs on its own: on a schedule, when something happens in a
+connected app, or when you start it. They live in the **Scheduled Tasks** tab. This page covers the
 ready-made ones, how you hear about their runs, and how to stop them all at once. For building
-your own step by step, see the Workflows tab's **How workflows work** strip; for running a repo's
+your own step by step, see the Scheduled Tasks tab's **How scheduled tasks work** strip; for running a repo's
 CI on your machine, see [Local CI runner](git-runner.md).
 
 ## Turn on a ready-made automation
 
-**Workflows → New workflow** opens on a gallery. An empty Workflows tab shows the same cards.
+**Scheduled Tasks → New scheduled task** opens on a gallery. An empty Scheduled Tasks tab shows the same cards.
 
 | Automation | When it runs | What it needs |
 |---|---|---|
@@ -30,7 +30,7 @@ Each card marks what you already have. Click one to open its setup sheet:
 3. **Notify me.** Digests default to *After every run*; change it here or later in the editor.
 4. **Turn on.** The automation is created, enabled and armed. The toast says when it runs first.
 
-**Customize** opens the same automation in the workflow editor instead, where you can change its
+**Customize** opens the same automation in the scheduled task editor instead, where you can change its
 steps, triggers and model before saving.
 
 Every ready-made automation but two only reads: it summarizes or reviews, and never comments,
@@ -52,12 +52,12 @@ Runs a skill on every new pull request in a repo and keeps its verdict in one co
   code: package managers, builds, linters and scripts are off, and the comment says
   *lint/audit skipped: untrusted PR*.
 - **The comment.** Posted by an action step, not by the model: one comment per PR, marked with the
-  workflow's name, with @mentions quieted and the length capped. Turn on the template's second
+  scheduled task's name, with @mentions quieted and the length capped. Turn on the template's second
   trigger (*PR updated*) to re-review each new commit; the same comment is updated.
 - **Model.** **Local models only** starts on when you have a local model set up; turn it off to
   use your default model.
 
-How skills, plugins and the checkout work: [Workflows](workflows.md#skill-steps).
+How skills, plugins and the checkout work: [Scheduled tasks](workflows.md#skill-steps).
 
 Digests read text other people wrote, such as notification titles or package advisories. So a
 fixed command fetches it first, and the agent that summarizes it has **no tools**: it can only
@@ -67,7 +67,7 @@ chat and see the same text.
 
 ## How a run went
 
-Expand a workflow to see its runs. The selected run shows how long it took and when it started,
+Expand a scheduled task to see its runs. The selected run shows how long it took and when it started,
 then either:
 
 - **Failed at "step"**: the step that failed, its error, and a **Transcript** button for that
@@ -79,26 +79,26 @@ them, and the step a failed run stopped at.
 
 ## Notifications
 
-Each workflow's **Notify me** setting decides when a finished run tells you:
+Each scheduled task's **Notify me** setting decides when a finished run tells you:
 
-- **When a run fails** (the default, also for workflows made before this setting existed),
+- **When a run fails** (the default, also for scheduled tasks made before this setting existed),
 - **After every run**, for digests, or
 - **Never**.
 
-Clicking a notification opens the Workflows tab on that run. Notifications follow
-**Settings → Notifications → Desktop notifications**, and stay quiet while the Workflows tab is on
+Clicking a notification opens the Scheduled Tasks tab on that run. Notifications follow
+**Settings → Notifications → Desktop notifications**, and stay quiet while the Scheduled Tasks tab is on
 screen. A run cut short because the app quit is reported as a failure the next time it starts.
 
 Phone notifications for failed runs are not available yet.
 
 ## Pause all automations
 
-The **Pause all automations** switch in the Workflows header is the kill switch:
+The **Pause all automations** switch in the Scheduled Tasks header is the kill switch:
 
 - schedules, pull request and push events, Slack messages, connector polls and webhooks start no
   runs, and scheduled tasks (from a chat's **⚡ Automate** menu) wait;
 - whatever is running when you switch it on is stopped;
-- the **Run** button, a task's **Run now** and `nekko-agent workflow run` still work.
+- the **Run** button, a task's **Run now** and `nekko-agent scheduled-task run` still work.
 
 A schedule that came due while paused runs once when you resume. Events that arrived during the
 pause are skipped, not replayed. The setting is shared, so pausing from one window or the web
@@ -114,7 +114,7 @@ GPU, memory and fans otherwise. You count as away when:
 - the computer is on mains power and not running hot.
 
 A run that has waited 2 hours starts anyway, so nothing is skipped. While it waits, the
-workflow row and the task in the Automations window say **waiting for you to be away**. The run
+scheduled task row and the task in the Automations window say **waiting for you to be away**. The run
 that starts says **low priority · waited 2 hr** in its history.
 
 Choose this yourself:
@@ -123,7 +123,7 @@ Choose this yourself:
   the model runs** (the default above), **Only when I'm away**, **Low priority** (runs on time,
   even while you work, but not on a low battery or a hot computer) or **On time**.
 - **Away after** sets how many minutes without input count as away (5 by default).
-- **When it runs**, in a workflow's editor (under **Runs**) and in a chat's **⚡ Automate**
+- **When it runs**, in a scheduled task's editor (under **Runs**) and in a chat's **⚡ Automate**
   dialog, overrides the setting for that one automation.
 
 A run that is already going steps aside too. If you come back while it is working on a local
@@ -141,7 +141,7 @@ What does not wait:
 
 - runs on a **cloud model**, which do not load your computer;
 - pull request, push, Slack, connector and webhook events, which run at once so none is lost;
-- the **Run** button, a task's **Run now** and `nekko-agent workflow run`;
+- the **Run** button, a task's **Run now** and `nekko-agent scheduled-task run`;
 - goal runs, which you start yourself.
 
 On a machine nobody sits at (Docker, a server), you always count as away. On Linux, Nekko

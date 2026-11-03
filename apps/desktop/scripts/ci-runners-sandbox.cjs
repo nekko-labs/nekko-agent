@@ -46,7 +46,7 @@ app.whenReady().then(async () => {
     await run(`integration.show(${js(scene)})`); await sleep(400);
     await click(byText('[role=dialog] button', 'Cancel')); // the confirmation a cancel scene left open
     await run(`document.documentElement.dataset.theme=${js(theme)}`);
-    await click(byText('[aria-label=Section] button', 'CI runners')); await sleep(700);
+    await run(`document.querySelector('[data-ci-runners]')?.scrollIntoView()`); await sleep(700);
   };
   const connect = async () => { await click(byText('button', 'Connect GitHub')); await sleep(400); };
   const toSetup = async () => { await click(byText('[role=dialog] button', 'Continue to Mac setup')); await sleep(400); };
@@ -65,6 +65,7 @@ app.whenReady().then(async () => {
     'recent-job-open': async () => { await click(`document.querySelector('[data-recent-job] button')`); await sleep(400); },
     waiting: async () => {},
     error: async () => {},
+    'with-tasks': async () => {},
     'off-no-vm-support': async () => {},
     'settings-no-vm-support': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     unavailable: async () => {},
@@ -141,9 +142,10 @@ app.whenReady().then(async () => {
     error: [['missing image error', "document.body.innerText.includes('No VM image yet.')"]],
     'off-no-vm-support': [['off runner shows the daemon error', "document.querySelector('[role=alert]')?.textContent.includes('VM support unavailable') && document.body.innerText.includes('Unavailable')"]],
     'settings-no-vm-support': [['the sheet says why instead of waiting', "document.querySelector('[role=dialog]').innerText.includes('VM support unavailable') && !document.body.innerText.includes('first reading')"]],
-    unavailable: [['one plain sentence', "document.body.innerText.includes('They need a Mac with Apple silicon') && !document.body.innerText.includes('unknown channel') && !document.querySelector('[data-runner-card]')"]],
+    unavailable: [['no runners section where the daemon has none', "!document.querySelector('[data-ci-runners]') && !document.body.innerText.includes('unknown channel')"]],
+    'with-tasks': [['the runners are a section below the tasks, with no switcher', "(()=>{const r=document.querySelector('[data-ci-runners]');const rows=document.querySelectorAll('[data-workflow-row]');return r&&rows.length===2&&!!(rows[1].compareDocumentPosition(r)&Node.DOCUMENT_POSITION_FOLLOWING)&&!document.querySelector('[aria-label=Section]')})()"]],
     'connect-step-1': [['manual step 1 fields', "document.querySelector('[role=dialog]').innerText.includes('Installation ID')"]],
-    'connect-step-3': [['connect step 3 with public callout', "document.querySelector('[aria-current=step]')?.textContent.includes('How this Mac helps') && document.body.innerText.includes('may be public')"]],
+    'connect-step-3': [['connect step 3 with public callout', "document.querySelector('[role=dialog] [aria-current=step]')?.textContent.includes('How this Mac helps') && document.body.innerText.includes('may be public')"]],
     'github-account': [['accounts from gh', "['nekko-labs','Organization','Your account','Another account','Continue on GitHub','Use an app I already have'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"]],
     'github-account-no-gh': [['straight to GitHub, no chooser', "(()=>{const d=document.querySelector('[role=dialog]');return d.innerText.includes('Finish on GitHub')&&!d.innerText.includes('Where do your repos live?')&&(window.opened||[]).length===1})()"]],
     'github-account-no-gh-org': [['one box for the org', "(()=>{const d=document.querySelector('[role=dialog]');return d.innerText.includes('Org name')&&d.querySelectorAll('input').length===1&&d.innerText.includes('Use my own account instead')})()"]],

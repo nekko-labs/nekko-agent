@@ -143,9 +143,9 @@
         },
         {
           "slug": "workflows",
-          "title": "Workflow runs",
+          "title": "Scheduled task runs",
           "source": "docs/workflows.md",
-          "description": "Pick a workflow's model, keep it on local models, and control what its unattended runs may do."
+          "description": "Pick a scheduled task's model, keep it on local models, and control what its unattended runs may do."
         },
         {
           "slug": "local-ci-runner",

@@ -117,7 +117,7 @@ export function IntegrationsStep({
       <h1 className="text-center text-2xl font-semibold tracking-tight">Meet your tools</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-ink-soft">
         Nekko Agent can run as a subagent inside the agent CLIs you already use, and plug into your
-        apps so chats and workflows can reach them.
+        apps so chats and scheduled tasks can reach them.
       </p>
 
       <section className="mt-6 w-full">

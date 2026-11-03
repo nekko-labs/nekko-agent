@@ -54,6 +54,14 @@ Spec: [third-party licensing and credits](spec/platform/third-party-licensing-an
 - [ ] **TP-4, Notices in the npm packages.** `apps/cli` and the `nekkod` packages bundle third-party code and carry no notices file.
 - [ ] **TP-5, Crates in the Docker notices.** The builder stage has no cargo, so the image's file lists npm packages only.
 
+## Scheduled Tasks and the CI runners section (#1591, added 2026-11-03)
+
+Philip asked for Workflows to be called Scheduled Tasks everywhere and for the CI runners to be a section of the list, not a tab. Spec: [Scheduled tasks](spec/automation/workflows-procedural-automation.md). Decision: [0045](docs/decisions/0045-workflows-are-scheduled-tasks.md).
+
+- [x] **T229, CI runners as a list section (2026-11-03).** The **Workflows | CI runners** switch is gone; `CiRunnersView` renders a section at the foot of the task list (and under the first-task wizard), and leaves itself out when the daemon has no runner channel. Evidence: `ci-runners-integration.cjs`, new `with-tasks` scene.
+- [x] **T230, Scheduled Tasks name (2026-11-03).** User-facing strings in the desktop renderer, shared labels and docs say Scheduled Tasks / scheduled task; `nekko-agent scheduled-task` with `workflow` kept as an alias. Code, channels and stored files keep `workflow`.
+- [ ] **T231, Engine run messages.** nekkod's run messages ("Untitled workflow", nested-step errors) still say workflow; change them with the TS host goldens.
+
 ## Simple and Expert, reframed (#1311, added 2026-10-28)
 
 Simple becomes the everyday app with developer controls out of sight, chosen per control in Settings > Simple mode (Show, Expert only, Hide), per device, Simple for new installs, controls not pages. Spec: [Desktop Simple and Expert modes](spec/desktop/desktop-simple-and-expert-modes.md), [iPhone and Android](spec/phone/iphone-simple-and-expert-modes.md); [decision 0044](docs/decisions/0044-simple-hides-developer-controls-per-device.md); docs page `docs/simple-and-expert.md`. Prefix **SEM**. Built on branch `simple-expert-modes` for Philip to test before merging.

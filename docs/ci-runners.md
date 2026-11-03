@@ -16,7 +16,7 @@ This is not the [Local CI runner](git-runner.md) workflow template. That one run
 directly on the machine and reports a commit status; this one picks up real `runs-on:` jobs from
 the GitHub Actions queue, each in its own VM.
 
-You find it in **Workflows**, under the **Workflows | CI runners** switch at the top.
+You find it in **Scheduled Tasks**, as the **CI runners** section below your tasks.
 
 ## Why run jobs on your Mac
 
@@ -39,7 +39,7 @@ and no packaged release has the setup screens yet; both are part of the pilot (T
 
 ## Before you start
 
-- **An Apple silicon Mac.** Windows and Linux show "CI runners aren't available here", and a Mac
+- **An Apple silicon Mac.** Windows and Linux leave the CI runners section out, and a Mac
   that cannot run VMs shows "VM support unavailable" on the runner card.
 - **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. On macOS 27
   Nekko [builds it](#set-up-this-mac) from Apple's restore image; on macOS 26 you
@@ -54,7 +54,7 @@ The runner talks to GitHub as a GitHub App you own, so its access is limited to 
 you can revoke it at any time. Nekko creates the app for you with two clicks on GitHub. Nothing is
 copied or pasted.
 
-In **Workflows > CI runners**, choose **Connect GitHub**:
+In **Scheduled Tasks > CI runners**, choose **Connect GitHub**:
 
 1. **Where do your repos live?** Nekko checks GitHub first. When `gh` is signed in, pick your
    account or an org from the list. Without it, Nekko goes straight to GitHub for your own
@@ -170,7 +170,7 @@ list workflow runs and re-run a job. See GitHub's
 
 ### Connect this Mac
 
-In **Workflows > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
+In **Scheduled Tasks > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
 sheet has three steps:
 
 1. **Install app.** Paste the App ID, the installation ID and the whole private key file. The key

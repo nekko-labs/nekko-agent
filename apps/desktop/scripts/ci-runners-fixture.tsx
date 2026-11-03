@@ -73,6 +73,8 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
     today: { jobs: 3, seconds: 41 * 60 },
   })],
   error: async () => [view({ state: 'error', error: 'No VM image yet.', today: { jobs: 0, seconds: 0 } }, { macosSlots: 1 })],
+  // The runner below a list of scheduled tasks, as the tab shows it once tasks exist.
+  'with-tasks': async () => [view({ state: 'waiting', reasons: ['userActive'], available: 0, limit: 'memory', today: { jobs: 0, seconds: 0 } }, { macosSlots: 1 })],
   'off-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   'settings-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   unavailable: async () => { throw new Error('unknown channel runner:list'); },
@@ -171,6 +173,10 @@ let githubChanged: (v: GithubSetupView) => void = () => {};
 let imageRefused = false;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const settings = { providers: [], workspaceFolders: [], workspaces: [], monitors: {}, theme: 'dark', experimental: {}, agent: {}, ui: {}, connectors: [] };
+const TASKS = [
+  { id: 'w1', name: 'Summarize my GitHub notifications', category: 'Reporting', enabled: true, steps: [{ id: 's1', name: 'Summarize', kind: 'prompt', run: 'x' }], triggers: [{ id: 't1', kind: 'manual' }] },
+  { id: 'w2', name: 'Nightly dependency check', category: 'Maintenance', enabled: true, steps: [{ id: 's1', name: 'Check', kind: 'shell', run: 'npm outdated' }], triggers: [{ id: 't1', kind: 'manual' }] },
+] as any[];
 const bridge: any = {
   listRunners: () => scenes[scene](),
   // `checking` never answers, so the sheet stays on its first frame.
@@ -199,7 +205,7 @@ const bridge: any = {
   onImageChanged: (cb: (v: ImageView) => void) => { imageChanged = cb; return () => {}; },
   onRunnersChanged: (cb: (v: RunnerView[]) => void) => { runnersChanged = cb; return () => {}; },
   setForkApproval: async () => ({ done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions' }),
-  listWorkflows: async () => ({ workflows: [], runs: [] }),
+  listWorkflows: async () => ({ workflows: scene === 'with-tasks' ? TASKS : [], runs: [] }),
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
