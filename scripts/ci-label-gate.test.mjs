@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { LABEL_WORKFLOWS, groupPrNumbers, labelRuns, needsMacos, queueBlockers } from './ci-label-gate.mjs';
+import { LABEL_WORKFLOWS, groupPrNumbers, labelRuns, needsLabelRuns, queueBlockers } from './ci-label-gate.mjs';
 
 const run = (id, path, status, conclusion = null) => ({ id, name: path.split('/').pop(), path, status, conclusion, html_url: `https://example/${id}` });
 const ios = '.github/workflows/ios-native.yml';
@@ -44,19 +44,23 @@ test("a group's PRs come from its squashed commit subjects", () => {
   ]), [1001, 994]);
 });
 
-test('drafts and hold block the group; ci:macos is read from either label shape', () => {
+test('drafts and hold block the group; deploy labels are read from either label shape', () => {
   const prs = [
     { number: 1, isDraft: true, labels: { nodes: [] } },
     { number: 2, isDraft: false, labels: { nodes: [{ name: 'hold' }] } },
-    { number: 3, isDraft: false, labels: [{ name: 'ci:macos' }] },
+    { number: 3, isDraft: false, labels: [{ name: 'deploy:macos' }] },
+    { number: 4, isDraft: false, labels: { nodes: [{ name: 'deploy:android' }] } },
+    { number: 5, isDraft: false, labels: ['ci:perf'] },
   ];
   assert.deepEqual(queueBlockers(prs), ['#1 is a draft.', '#2 is labelled `hold`.']);
-  assert.deepEqual(prs.filter(needsMacos).map(pr => pr.number), [3]);
+  assert.deepEqual(prs.filter(needsLabelRuns).map(pr => pr.number), [3, 4]);
 });
 
-test('every listed workflow exists and is switched on by ci:macos', () => {
+test('every listed workflow exists, and is switched on by a deploy label', () => {
   for (const path of LABEL_WORKFLOWS) {
-    assert.match(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), /ci:macos/, path);
+    const yml = readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+    assert.match(yml, /deploy:(linux|windows|macos|ios|android)/, path);
+    assert.doesNotMatch(yml, /ci:macos/, path);
   }
 });
 

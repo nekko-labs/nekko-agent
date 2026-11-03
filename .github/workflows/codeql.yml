@@ -5,7 +5,7 @@ name: CodeQL
 # otherwise; the Team plan's 5 macOS runners are shared by every workflow (see
 # ci.yml). Here a PR or queue group analyses only the languages its files are in
 # (scripts/ci-scope.mjs, codeqlLanguages); Swift (apps/ios) needs macOS, so it
-# runs on the weekly schedule and on a PR that changes Swift and carries `ci:macos`.
+# runs on the weekly schedule and on a PR that changes Swift and carries `deploy:ios`.
 #
 # Swift needs a build for CodeQL to trace; the protocol package is a plain
 # SwiftPM package, so `swift build` covers it. The app targets need Xcode and
