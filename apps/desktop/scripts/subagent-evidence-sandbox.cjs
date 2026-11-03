@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
   const run = s => win.webContents.executeJavaScript(s, true);
   const shot = async (name, rect) => { const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(rect, { stayHidden: true, stayAwake: false })).toPNG()); report.captures.push(f); };
   const rows = () => run(`[...document.querySelectorAll('[data-agent-panel] button.pl-6')].map(b => b.textContent.trim())`);
-  const clickText = t => run(`(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === ${JSON.stringify(t)}); if (b) b.click(); return !!b; })()`);
+  const clickSubagent = () => run(`(() => { const b = [...document.querySelectorAll('[data-work-place] button')].find(x => x.textContent.trim() === 'In a subagent'); if (b) b.click(); return !!b; })()`);
   const panel = { x: 0, y: 0, width: 420, height: 640 };
   try {
     await win.loadFile(path.join(out, 'index.html'));
@@ -71,7 +71,7 @@ app.whenReady().then(async () => {
     await sleep(500);
     report.facts.withDraft = await run(`document.querySelector('[data-work-place]')?.textContent ?? null`);
     await shot('composer-follow-up', { x: 0, y: 620, width: 1440, height: 280 });
-    report.facts.clicked = await clickText('In a subagent');
+    report.facts.clicked = await clickSubagent();
     await sleep(400);
     report.facts.sent = await run(`layoutFixture.lastSend?.text ?? null`);
     report.facts.draftAfter = await run(`document.querySelector('.composer-editor-wrap [contenteditable]')?.textContent ?? null`);
