@@ -26,7 +26,7 @@ import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
 import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import {
-  DATE_GROUPS, DRAFT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
+  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -529,14 +529,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         ...completed,
       ];
     }
+    // A sub-agent has no card of its own, so its question lifts the parent's.
+    const kidIsWaiting = (e: Entry) => !!e.s && !!childrenOf.get(e.s.id)?.some((k) => statuses.get(k.id) === 'input');
     const groupOf = view.groupBy === 'status'
-      ? (e: Entry) => statusGroupOf(e.s, !!e.s && statuses.has(e.s.id))
+      ? (e: Entry) => statusGroupOf(e.s, kidIsWaiting(e) ? 'input' : e.s ? statuses.get(e.s.id) : undefined)
       : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
     const defs = view.groupBy === 'status' ? STATUS_GROUPS : DATE_GROUPS;
     return [
       ...defs.flatMap((d): PanelGroup[] => {
         const items = all.filter((e) => groupOf(e) === d.key);
-        return items.length > 0 || (view.showEmptyGroups && d.key !== DRAFT_GROUP) ? [{ key: d.key, name: d.name, items, done: [] }] : [];
+        return items.length > 0 || (view.showEmptyGroups && d.key !== DRAFT_GROUP && d.key !== NEEDS_INPUT_GROUP) ? [{ key: d.key, name: d.name, items, done: [] }] : [];
       }),
       ...completed,
     ];
