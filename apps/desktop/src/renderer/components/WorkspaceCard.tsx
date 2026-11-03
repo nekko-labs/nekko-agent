@@ -3,6 +3,7 @@ import React, { memo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
@@ -211,6 +212,7 @@ function WorkspaceCardImpl({
   const liveCtxEstimate = useStore((s) => (session ? s.sessionCtxEstimate[session.id] : undefined));
   const compacting = useCompactionStore((s) => (session ? s.bySession[session.id]?.state === 'running' : false));
   const computer = useComputerOf(session?.id);
+  const computersShown = useShown('computers', { computers: !!computer });
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
   const provider = (remoteProviders ?? providers).find((p) => p.id === session?.providerId);
 
@@ -374,10 +376,10 @@ function WorkspaceCardImpl({
         )}
       </div>
 
-      {((showProvider && provider) || (showComputer && computer)) && (
+      {((showProvider && provider) || (showComputer && computersShown && computer)) && (
         <div className="flex min-w-0 items-center gap-1 truncate pl-3 text-2xs leading-[13px] text-ink-faint">
-          {showComputer && computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />}
-          {showComputer && computer && showProvider && provider && <span aria-hidden>·</span>}
+          {showComputer && computersShown && computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />}
+          {showComputer && computersShown && computer && showProvider && provider && <span aria-hidden>·</span>}
           {showProvider && provider && <span className="truncate" data-card-provider>{isLocalProvider(provider.kind) ? 'Local' : provider.label}</span>}
         </div>
       )}

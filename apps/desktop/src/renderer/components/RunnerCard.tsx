@@ -149,7 +149,7 @@ export function RunnerCard({ view: given, now, image = null, onSettings, onSetup
   const view: RunnerView = settingUp && given.error === NO_IMAGE_ERROR ? { ...given, state: given.state === 'error' ? 'waiting' : given.state, error: null } : given;
   const { config, state, host, today } = view;
   const sampled = host.ramMb > 0;
-  const power = host.onBattery === null ? 'Unknown' : host.onBattery ? `On battery, ${Math.round(host.batteryPct ?? 0)}%` : 'On AC';
+  const power = host.onBattery === null ? 'Unknown' : !host.onBattery ? 'On AC' : host.batteryPct === null ? 'On battery' : `On battery, ${Math.round(host.batteryPct)}%`;
   const network = networkText(host);
 
   const setEnabled = async (enabled: boolean) => {

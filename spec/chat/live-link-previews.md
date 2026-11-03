@@ -1,0 +1,10 @@
+---
+title: "Live link previews in chat"
+area: chat
+---
+
+# Live link previews in chat
+
+**Implemented in this change; automated renderer tests passed, visual inspection and packaged-app verification pending.** A web link in a chat reply has a Preview control next to it. Clicking it loads the live page in a compact inline frame inside that chat message. Nothing is fetched until the person clicks Preview. Closing it removes the frame. The original link still opens normally and the frame offers Open in browser pane, using the existing in-app browser.
+
+The frame accepts only absolute HTTP(S) URLs already approved by the markdown link guard. It has a sandbox allowing scripts and forms but not same-origin access, and sends no referrer. A remote site can block embedding with CSP or X-Frame-Options; in that case use Open in browser pane. This is a live page, not a saved screenshot or a trusted execution environment: the website controls its own contents and can change or track visitors after they opt in. Preview buttons are not added to `mailto:` or unsafe schemes. Planned: none; unverified: sites that forbid embedding, and interaction in a packaged desktop build.

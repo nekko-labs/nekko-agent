@@ -11,18 +11,18 @@ const { useStore } = await import('./store.js');
 beforeEach(() => useStore.setState({ planRailOpen: true, planRailOpenBySession: {} }));
 
 describe('per-agent plan visibility', () => {
-  it('only toggles the correlated chat and retains other preferences', () => {
-    useStore.getState().togglePlanRail('alpha');
+  it('only changes the correlated chat and retains other preferences', () => {
+    useStore.getState().setPlanRail('alpha', false);
     expect(useStore.getState().planRailOpenBySession).toEqual({ alpha: false });
     expect(useStore.getState().planRailOpen).toBe(true);
-    useStore.getState().togglePlanRail('beta');
-    useStore.getState().togglePlanRail('alpha');
+    useStore.getState().setPlanRail('beta', false);
+    useStore.getState().setPlanRail('alpha', true);
     expect(useStore.getState().planRailOpenBySession).toEqual({ alpha: true, beta: false });
     expect(JSON.parse(storage.getItem('nekko.planRail.sessions')!)).toEqual({ alpha: true, beta: false });
   });
-  it('uses the existing preference only as a default, not as a shared toggle', () => {
+  it('keeps the shared preference out of a chat\'s choice', () => {
     useStore.setState({ planRailOpen: false });
-    useStore.getState().togglePlanRail('alpha');
+    useStore.getState().setPlanRail('alpha', true);
     expect(useStore.getState().planRailOpenBySession).toEqual({ alpha: true });
     expect(useStore.getState().planRailOpen).toBe(false);
   });

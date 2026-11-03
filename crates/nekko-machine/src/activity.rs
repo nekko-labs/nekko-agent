@@ -240,20 +240,27 @@ pub fn fold_windows_power(ac_line: u8, flag: u8, percent: u8) -> Option<Power> {
     })
 }
 
-/// IOKit's summary: `IOPSGetTimeRemainingEstimate` (-2 on AC power) and
-/// `IOPSGetBatteryWarningLevel` (1 none, 2 early, 3 final).
-pub fn fold_mac_power(time_remaining: f64, warning: i32) -> Option<Power> {
+/// IOKit's summary: `IOPSGetTimeRemainingEstimate` (-2 on AC power),
+/// `IOPSGetBatteryWarningLevel` (1 none, 2 early, 3 final) and the internal
+/// battery's charge, when it has one.
+pub fn fold_mac_power(time_remaining: f64, warning: i32, percent: Option<f64>) -> Option<Power> {
     const UNLIMITED: f64 = -2.0;
     if time_remaining == UNLIMITED {
         // On AC, or a Mac with no battery: the same to background work.
-        return Some(Power { on_battery: false, percent: None, low: false });
+        return Some(Power { on_battery: false, percent, low: false });
     }
-    Some(Power { on_battery: true, percent: None, low: warning >= 2 })
+    let low = warning >= 2 || percent.is_some_and(|p| p <= LOW_BATTERY_PCT);
+    Some(Power { on_battery: true, percent, low })
 }
 
 #[cfg(target_os = "macos")]
 mod platform {
     use super::Power;
+    use core_foundation::array::{CFArray, CFArrayRef};
+    use core_foundation::base::{CFType, CFTypeRef, TCFType};
+    use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
+    use core_foundation::number::CFNumber;
+    use core_foundation::string::CFString;
 
     #[link(name = "CoreGraphics", kind = "framework")]
     unsafe extern "C" {
@@ -264,6 +271,9 @@ mod platform {
     unsafe extern "C" {
         fn IOPSGetTimeRemainingEstimate() -> f64;
         fn IOPSGetBatteryWarningLevel() -> i32;
+        fn IOPSCopyPowerSourcesInfo() -> CFTypeRef;
+        fn IOPSCopyPowerSourcesList(blob: CFTypeRef) -> CFArrayRef;
+        fn IOPSGetPowerSourceDescription(blob: CFTypeRef, source: CFTypeRef) -> CFDictionaryRef;
     }
 
     /// `kCGEventSourceStateHIDSystemState`: input from every source, as the
@@ -281,7 +291,43 @@ mod platform {
     pub fn power() -> Option<Power> {
         // SAFETY: pure queries with no pointers.
         let (remaining, warning) = unsafe { (IOPSGetTimeRemainingEstimate(), IOPSGetBatteryWarningLevel()) };
-        super::fold_mac_power(remaining, warning)
+        super::fold_mac_power(remaining, warning, battery_percent())
+    }
+
+    /// The internal battery's charge from IOKit's power source list
+    /// (`kIOPSCurrentCapacityKey` of `kIOPSMaxCapacityKey`), or `None` without one.
+    fn battery_percent() -> Option<f64> {
+        // SAFETY: the blob and list follow the Create rule and each description the
+        // Get rule, as IOPowerSources.h says; the wrappers release what they own.
+        unsafe {
+            let blob = IOPSCopyPowerSourcesInfo();
+            if blob.is_null() {
+                return None;
+            }
+            let blob = CFType::wrap_under_create_rule(blob);
+            let list = IOPSCopyPowerSourcesList(blob.as_CFTypeRef());
+            if list.is_null() {
+                return None;
+            }
+            let list: CFArray<CFType> = CFArray::wrap_under_create_rule(list);
+            list.iter().find_map(|source| {
+                let desc = IOPSGetPowerSourceDescription(blob.as_CFTypeRef(), source.as_CFTypeRef());
+                if desc.is_null() {
+                    return None;
+                }
+                let desc: CFDictionary<CFString, CFType> = CFDictionary::wrap_under_get_rule(desc);
+                let text =
+                    |k: &str| desc.find(CFString::new(k)).and_then(|v| v.downcast::<CFString>()).map(|s| s.to_string());
+                let num = |k: &str| {
+                    desc.find(CFString::new(k)).and_then(|v| v.downcast::<CFNumber>()).and_then(|n| n.to_f64())
+                };
+                if text("Type").as_deref() != Some("InternalBattery") {
+                    return None;
+                }
+                let (now, max) = (num("Current Capacity")?, num("Max Capacity")?);
+                (max > 0.0).then(|| (now / max * 100.0).clamp(0.0, 100.0))
+            })
+        }
     }
 }
 
@@ -419,9 +465,24 @@ mod tests {
 
     #[test]
     fn mac_power_summary() {
-        assert_eq!(fold_mac_power(-2.0, 1), Some(Power { on_battery: false, percent: None, low: false }));
-        assert_eq!(fold_mac_power(-1.0, 1), Some(Power { on_battery: true, percent: None, low: false }));
-        assert_eq!(fold_mac_power(5400.0, 2), Some(Power { on_battery: true, percent: None, low: true }));
+        assert_eq!(
+            fold_mac_power(-2.0, 1, Some(64.0)),
+            Some(Power { on_battery: false, percent: Some(64.0), low: false })
+        );
+        assert_eq!(
+            fold_mac_power(-1.0, 1, Some(86.0)),
+            Some(Power { on_battery: true, percent: Some(86.0), low: false })
+        );
+        assert_eq!(
+            fold_mac_power(5400.0, 2, Some(40.0)),
+            Some(Power { on_battery: true, percent: Some(40.0), low: true })
+        );
+        // A charge at the low line is low before macOS warns; a Mac with no battery reads no charge.
+        assert_eq!(
+            fold_mac_power(5400.0, 1, Some(18.0)),
+            Some(Power { on_battery: true, percent: Some(18.0), low: true })
+        );
+        assert_eq!(fold_mac_power(-2.0, 1, None), Some(Power { on_battery: false, percent: None, low: false }));
     }
 
     #[test]
@@ -430,6 +491,10 @@ mod tests {
         assert!(r.idle_seconds.is_none_or(|s| s >= 0.0), "{r:?}");
         if cfg!(target_os = "macos") {
             assert!(r.idle_seconds.is_some(), "{r:?}");
+        }
+        // A Mac on battery knows its charge: without it the runner held every job (read as 0%).
+        if cfg!(target_os = "macos") && r.power.is_some_and(|p| p.on_battery) {
+            assert!(r.power.and_then(|p| p.percent).is_some_and(|p| (0.0..=100.0).contains(&p)), "{r:?}");
         }
     }
 }
