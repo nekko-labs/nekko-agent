@@ -1031,11 +1031,18 @@ struct Composer: View {
                let saving = SimpleMode.longChatSaving(longChatContext, used: chat.contextTokens) {
                 LongChatNote(tokens: saving, startFresh: startFresh, dismiss: { prefs.dismissLongChat(chat.sessionId) })
             }
+            // Voice and dictation say what they heard above the box, with the other notes.
+            if let pending = voice.pending { voicePending(pending) }
+            if let said = voice.notice {
+                Text(said.text).font(.caption2).foregroundStyle(palette.inkSoft).accessibilityIdentifier("composer.voiceNotice")
+            }
+            if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
+            else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
             // The agent's plan, tucked behind the box's top edge (drawn first, so the box covers its foot).
             if !PlanSheet.plan(chat, store).isEmpty {
                 PlanSheet(chat: chat).padding(.bottom, -(PlanSheet.tuck + 6))
             }
-            // One box the width of the screen: the message on top, + and Send inside it below.
+            // One box the width of the screen: the message on top, + and Send below it, then model and context.
             VStack(alignment: .leading, spacing: 0) {
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
                 // "Hide keyboard" action is on the text view itself.
@@ -1131,28 +1138,23 @@ struct Composer: View {
                         .accessibilityLabel(chat.running ? "Queue" : "Send")
                     }
                 }
-                .padding(.horizontal, 4).padding(.bottom, 2)
+                .padding(.horizontal, 4)
+                // The chat's model and effort, and its context window: the box's bottom row, as Settings > Simple mode says.
+                // Nothing sits below the box (#1599).
+                let parts = ModelEffortButton.parts(prefs, chat)
+                if parts.model || parts.effort || prefs.shows("context") {
+                    HStack(spacing: 0) {
+                        if parts.model || parts.effort { ModelEffortButton(chat: chat) }
+                        if !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
+                        Spacer(minLength: 8)
+                        if prefs.shows("context") { ContextGauge(chat: chat) }
+                    }
+                    .padding(.horizontal, 4).padding(.top, -6)
+                }
             }
             .frame(maxWidth: .infinity)
             .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
-            // The chat's model and effort, and its context window, as Settings > Simple mode says.
-            let parts = ModelEffortButton.parts(prefs, chat)
-            if parts.model || parts.effort || prefs.shows("context") {
-                HStack(spacing: 0) {
-                    if parts.model || parts.effort { ModelEffortButton(chat: chat) }
-                    if !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
-                    Spacer(minLength: 8)
-                    if prefs.shows("context") { ContextGauge(chat: chat) }
-                }
-                .padding(.top, -4)
-            }
-            if let pending = voice.pending { voicePending(pending) }
-            if let said = voice.notice {
-                Text(said.text).font(.caption2).foregroundStyle(palette.inkSoft).accessibilityIdentifier("composer.voiceNotice")
-            }
-            if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
-            else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
         }
         .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
         // Send waits for the photos (it used to send without them, and they came back later).

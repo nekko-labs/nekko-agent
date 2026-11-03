@@ -98,6 +98,7 @@ const api: NekkoApi = {
   cloudBeginOAuth: (provider) => inv(IpcChannels.cloudBeginOAuth, provider),
   cloudCancelOAuth: () => inv(IpcChannels.cloudCancelOAuth),
   cloudSignOut: () => inv(IpcChannels.cloudSignOut),
+  cloudDeleteAccount: () => inv(IpcChannels.cloudDeleteAccount),
   connectionsStatus: () => inv(IpcChannels.connectionsStatus),
   connectionsEvents: (id, limit) => inv(IpcChannels.connectionsEvents, id, limit),
   connectionsClear: () => inv(IpcChannels.connectionsClear),
@@ -239,7 +240,7 @@ const api: NekkoApi = {
   forkSession: (id, beforeMessageId) => inv(IpcChannels.sessionFork, id, beforeMessageId),
   resetSettings: () => inv(IpcChannels.settingsReset),
   listFonts: () => inv(IpcChannels.fontsList),
-  wipeAllData: () => inv(IpcChannels.dataWipe),
+  wipeAllData: (opts) => inv(IpcChannels.dataWipe, opts ?? {}),
   listTools: () => inv(IpcChannels.toolsList),
 
   openFilesDialog: () => inv(IpcChannels.dialogOpenFiles),

@@ -34,7 +34,8 @@ pub fn start(data_dir: &Path, settings: &Arc<Settings>) {
             let log = Mutex::new(log);
             nekko_net::set_sink(move |line| {
                 let mut l = log.lock().unwrap_or_else(|e| e.into_inner());
-                let _ = l.append(format!("{line}\n").as_bytes());
+                // Redacted on write: a path or an error can carry a token.
+                let _ = l.append(format!("{}\n", crate::logs::redact(line)).as_bytes());
             });
         }
         Err(e) => crate::logs::note(&format!("nekkod: could not open {}: {e}", path.display())),

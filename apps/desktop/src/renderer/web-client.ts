@@ -412,6 +412,7 @@ function makeWebClient(): NekkoApi {
     cloudBeginOAuth: (provider) => call(IpcChannels.cloudBeginOAuth, provider),
     cloudCancelOAuth: () => call(IpcChannels.cloudCancelOAuth),
     cloudSignOut: () => call(IpcChannels.cloudSignOut),
+    cloudDeleteAccount: () => call(IpcChannels.cloudDeleteAccount),
     connectionsStatus: () => call(IpcChannels.connectionsStatus),
     connectionsEvents: (id, limit) => call(IpcChannels.connectionsEvents, id, limit),
     connectionsClear: () => call(IpcChannels.connectionsClear),
@@ -557,7 +558,7 @@ function makeWebClient(): NekkoApi {
     forkSession: (id, beforeMessageId) => call(IpcChannels.sessionFork, id, beforeMessageId),
     resetSettings: () => call(IpcChannels.settingsReset),
     listFonts: () => call(IpcChannels.fontsList),
-    wipeAllData: () => call(IpcChannels.dataWipe),
+    wipeAllData: (opts) => call(IpcChannels.dataWipe, opts ?? {}),
     listTools: () => call(IpcChannels.toolsList),
 
     // No native picker in the browser, ask for server-side path(s).

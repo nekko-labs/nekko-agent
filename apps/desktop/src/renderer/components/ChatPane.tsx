@@ -94,6 +94,7 @@ import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
+import { GfSendIcon } from '../gentleface-icons.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 
@@ -3372,8 +3373,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       title={streaming ? 'Add to the queue' : 'Send'}
                       aria-label={streaming ? 'Add to queue' : 'Send'}
                     >
-                      {/* On the wall Nekko wears the window's status in its header, so Send is a plain arrow. */}
-                      {wallWindow ? <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg> : <NekkoAvatar size={24} />}
+                      {/* On the wall Nekko wears the window's status in its header, so Send is the gentleface paper plane. */}
+                      {wallWindow ? <GfSendIcon className="h-[17px] w-[17px]" /> : <NekkoAvatar size={24} />}
                     </button>
                 </div>
               </div>
