@@ -13,3 +13,13 @@ export function unopenedChats(sessions: SessionSummary[], workspaces: Workspace[
 export function sidebarWorkspaces(workspaces: Workspace[], visibleChildIds: ReadonlySet<string>): Workspace[] {
   return workspaces.filter((w) => w.anchor.kind !== 'chat' || !visibleChildIds.has(w.anchor.refId));
 }
+
+/**
+ * Which of a chat's sub-agents get a row under its card. One that is working
+ * always does. A finished one does while the chat is working or open, so you
+ * can see how the work was split; otherwise the card's count stands in for it.
+ */
+export function subagentRows<T extends { id: string }>(kids: T[], working: (id: string) => boolean, parentId: string, selectedId?: string | null): T[] {
+  const inFocus = working(parentId) || parentId === selectedId || kids.some((kid) => kid.id === selectedId);
+  return inFocus ? kids : kids.filter((kid) => working(kid.id));
+}
