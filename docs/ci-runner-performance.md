@@ -66,6 +66,44 @@ A cache's version includes its compression and its paths, so the two kinds never
 other's caches either. Adding `zstd` and `gnu-tar` to the image would cut the compression and the
 size; the upload stays bound by the Mac's own internet connection.
 
+## What the job used, and how big a VM it needs
+
+A third run of the same job ([41640874762](https://github.com/nekko-labs/nekko-agent/actions/runs/41640874762),
+passed, 39 minutes, warm Rust cache) was sampled from the host every 5 seconds: the VM process's CPU
+time, its memory, and the Mac's GPU use. The VM had 6 vCPUs and 10 GB.
+
+**CPU: 6 vCPUs fits this job.** It averaged 2.7 busy vCPUs over the job, but the work comes in bursts:
+
+| Busy vCPUs | Share of the job |
+| --- | --- |
+| under 3 | 68% |
+| 3 to 5 | 18% |
+| 5 or more (all 6 nearly full) | 14% |
+
+The app build averaged 4.0 vCPUs and the simulator tests 2.9, with bursts to all 6 when tests run in
+parallel. Four vCPUs would stretch every burst; eight could shorten only the 11% of the job where all
+six were full, a minute or so at most.
+
+| Step | Avg busy vCPUs |
+| --- | --- |
+| Protocol and app-state tests | 1.5 |
+| `cargo build -p nekkod` (cache hit) | 2.3 |
+| Phone, relay and computer over URLSession | 0.3 |
+| Build the app and its tests for the simulator | 4.0 |
+| Simulator tests and live screenshots | 2.9 |
+
+**Memory: the VM holds all of it from boot.** The VM process's physical footprint is the full 10 GB
+even while a warm VM waits for a job, because macOS in the guest touches all of its memory. Every
+gigabyte given to a VM is taken from the host whether or not the job needs it. The resident size seen
+from the host rose to 18.9 GB during the simulator tests, most of it graphics surfaces shared with the
+host's GPU process, so it overstates what the VM costs. The host never left normal memory pressure.
+How much of the 10 GB the job really uses can only be read inside the guest. That is not measured
+yet; GitHub's standard runner passes this job with 7 GB.
+
+**GPU: nothing to size.** A VM gets a paravirtualized GPU that shares the host's; there is no core or
+memory setting for it. The Mac's GPU averaged 13% during the simulator tests, a figure for the whole
+Mac, the owner's apps included.
+
 ## Measure it yourself
 
 Dispatch [`ios-native.yml`](../.github/workflows/ios-native.yml) on `main` with
