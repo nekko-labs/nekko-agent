@@ -94,6 +94,8 @@ export interface AuditLine {
   pr?: PrRef | null;
   /** When the VM entered each state, oldest first; `ts` is when it was deleted. */
   events?: { ts: number; state: SlotState }[];
+  /** The VM's name when nekkod kept its console log, for `runner:vmLog`. */
+  vm?: string | null;
 }
 export interface RunnerView {
   config: RunnerConfig;

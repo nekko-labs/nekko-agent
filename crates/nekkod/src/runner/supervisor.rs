@@ -12,7 +12,7 @@ use super::provider::{JobRef, Provider, ProviderError, RunnerStatus};
 use super::signals::{MacState, Sense, signals_for};
 use super::store::{RunnerRecord, overlaps};
 use super::updates::write_atomic;
-use super::vm::{RunHandle, RunSpec, Stopped, Vm, reap};
+use super::vm::{CONSOLE_LOG, RunHandle, RunSpec, Stopped, Vm, reap};
 use nekko_runner::{
     Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SlotLimit, cpus_per_vm, evaluate, hold_awake, keep_idle,
     macos_slots_explained, recommended_runner_memory_mb, runner_memory_mb, vms_wanted, warm_slots,
@@ -577,6 +577,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             url: None,
             pr: None,
             events: vec![],
+            vm: None,
         };
         self.audit(&line);
     }
@@ -1020,12 +1021,12 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     eprintln!("runner: cannot remove {}: {err}", dir.display());
                 }
                 self.remove(record, minted.runner_id, name, now).await;
-                self.start_failed(ri, e, now);
+                self.start_failed(ri, e, now, None);
             }
         }
     }
 
-    fn start_failed(&mut self, ri: usize, e: String, now: f64) {
+    fn start_failed(&mut self, ri: usize, e: String, now: f64, vm: Option<String>) {
         eprintln!("runner {}: a job VM did not start: {e}", self.runners[ri].record.config.id);
         let r = &mut self.runners[ri];
         r.start_failures += 1;
@@ -1045,6 +1046,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             url: None,
             pr: None,
             events: vec![],
+            vm,
         };
         self.audit(&line);
     }
@@ -1086,6 +1088,16 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             && slot.busy_since.is_none()
             && matches!(call(self.provider.status(&record, slot.runner_id)).await, Ok(RunnerStatus::Offline));
         let dir = self.vms_dir().join(&slot.name);
+        // Only a VM that gets an audit line keeps its console log.
+        let audited = never_connected || own_stop || slot.busy_since.is_some();
+        let vm = match audited.then(|| audit::keep_vm_log(&self.runners_dir, &dir.join(CONSOLE_LOG), &slot.name)) {
+            Some(Ok(true)) => Some(slot.name.clone()),
+            Some(Err(e)) => {
+                eprintln!("runner: cannot keep the console log of {}: {e}", slot.name);
+                None
+            }
+            _ => None,
+        };
         if let Err(e) = tokio::fs::remove_dir_all(&dir).await
             && e.kind() != std::io::ErrorKind::NotFound
         {
@@ -1093,7 +1105,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         }
         self.remove(record.clone(), slot.runner_id, slot.name.clone(), now).await;
         if never_connected {
-            self.start_failed(ri, "it powered off before its runner connected".into(), now);
+            self.start_failed(ri, "it powered off before its runner connected".into(), now, vm);
             return;
         }
         if slot.busy_since.is_none() && !own_stop {
@@ -1120,6 +1132,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             url: job.map(|j| j.url.clone()).filter(|u| !u.is_empty()),
             pr: job.and_then(|j| j.pr.clone()),
             events: std::mem::take(&mut slot.events),
+            vm,
         };
         self.audit(&line);
         if let Some(job) = slot.job

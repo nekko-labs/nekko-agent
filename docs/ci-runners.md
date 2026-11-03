@@ -321,8 +321,13 @@ how it ended and how long it ran. **Job** opens the job on GitHub, and **PR #N**
 request it ran for (GitHub names no pull request for a run from a fork, so those show none).
 
 Click a line to see the VM step by step (started, online, running the job, stopped, deleted,
-each with its time) and the end of the job's log, read from GitHub when you open it. The log
-only loads for jobs this runner ran.
+each with its time), the end of the job's log, read from GitHub when you open it, and the VM's
+own log: what the VM printed while it started the runner, took the job and shut down. That last
+one is where to look when a job never reached GitHub. The logs only load for jobs this runner ran.
+
+The VM log needs an image with the current scripts. If a job says "No VM log", open runner
+settings and choose **Update scripts** (a few minutes). This Mac keeps the last 20 VM logs, up
+to 1 MB each.
 
 ## The menu bar dot
 

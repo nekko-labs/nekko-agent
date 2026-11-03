@@ -21,6 +21,7 @@ const audit = (ago: number, job: string, result: AuditLine['result'], seconds: n
     ts: end, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'ios-native', job, result, seconds, reason,
     jobId, url: `https://github.com/nekko-labs/nekko-agent/actions/runs/${jobId}/job/${jobId}`,
     pr: pr ? { number: pr, url: `https://github.com/nekko-labs/nekko-agent/pull/${pr}` } : null,
+    vm: `nekko-macbookpro-77cce2cf-${end}-1`,
     events: [
       { ts: end - seconds - 95, state: 'starting' }, { ts: end - seconds - 41, state: 'ready' }, { ts: end - seconds, state: 'running' },
       ...(result === 'finished' ? [] : [{ ts: end - 12, state: 'cleaning' as const }]),
@@ -31,6 +32,19 @@ const audit = (ago: number, job: string, result: AuditLine['result'], seconds: n
 const JOB_LOG = Array.from({ length: 60 }, (_, i) => `2026-11-03T07:${String(10 + Math.floor(i / 6)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}.1234567Z ${
   i === 0 ? 'Current runner version: \'2.329.0\'' : i < 55 ? `[command]/usr/bin/xcodebuild -scheme NekkoAgent -destination 'platform=iOS Simulator' build (step ${i})` : i === 58 ? '##[error]Process completed with exit code 65.' : 'Testing failed: NekkoKitTests.CloudSyncTests'
 }`).join('\n');
+// The guest's console, as nekko-runner-boot.sh and the runner print it.
+const VM_LOG = [
+  '2026-11-03T07:04:12Z starting the GitHub Actions runner',
+  '',
+  '√ Connected to GitHub',
+  '',
+  'Current runner version: \'2.329.0\'',
+  '2026-11-03 07:04:15Z: Listening for Jobs',
+  '2026-11-03 07:04:17Z: Running job: iOS build',
+  '2026-11-03 07:19:51Z: Job iOS build completed with result: Failed',
+  '2026-11-03T07:19:52Z runner exited with 0',
+  '2026-11-03T07:19:52Z shutting down',
+].join('\n');
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['config']['settings']> = {}): RunnerView => ({
   config: {
     id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac',
@@ -173,6 +187,7 @@ const bridge: any = {
   connectRunner: async () => { if (scene === 'connect-busy') await sleep(1500); return off(); },
   setRunnerEnabled: async () => view({}),
   runnerJobLog: async () => JOB_LOG,
+  runnerVmLog: async () => VM_LOG,
   openPath: async () => {},
   imageStatus: async () => {
     // A daemon that is not ready for the first call, as at launch.
