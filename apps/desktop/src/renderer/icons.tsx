@@ -1,3 +1,4 @@
+export { InfoIcon, FolderOpenIcon as FolderIcon, GfTerminalIcon as TerminalIcon, GfServerIcon as ServerIcon, GfSendIcon as SendIcon, GfLockIcon as LockIcon, GfGaugeIcon as GaugeIcon } from './gentleface-icons.js';
 import React from 'react';
 import type { ComputerIcon as ComputerIconName } from '@nekko-agent/shared';
 
@@ -31,12 +32,6 @@ export const ChatIcon = (p: P) => (
 export const FeedbackIcon = (p: P) => (
   <S {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M12 7v4M12 14h.01" /></S>
 );
-export const FolderIcon = (p: P) => (
-  <S {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></S>
-);
-export const ServerIcon = (p: P) => (
-  <S {...p}><rect x="3" y="4" width="18" height="7" rx="2" /><rect x="3" y="13" width="18" height="7" rx="2" /><path d="M7 7.5h.01M7 16.5h.01" /></S>
-);
 export const PlugIcon = (p: P) => (
   <S {...p}><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0zM12 16v6" /></S>
 );
@@ -45,9 +40,6 @@ export const BrainIcon = (p: P) => (
 );
 export const GearIcon = (p: P) => (
   <S {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></S>
-);
-export const SendIcon = (p: P) => (
-  <S {...p}><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></S>
 );
 export const PlusIcon = (p: P) => (<S {...p}><path d="M12 5v14M5 12h14" /></S>);
 export const SearchIcon = (p: P) => (<S {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4" /></S>);
@@ -76,7 +68,6 @@ export const SunIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="4" /><pat
 /** A tilted instant photo: Nekko's own, not the stock picture glyph. */
 export const PhotoIcon = (p: P) => (<S {...p}><g transform="rotate(-8 12 12)"><rect x="4.5" y="3" width="15" height="18" rx="2" /><rect x="7" y="5.5" width="10" height="9.5" rx="1" /><path d="m7 13.5 3.2-3 2.3 2 1.5-1.2 3 2.5" /><circle cx="14.2" cy="8.4" r="1" /></g></S>);
 /** A prompt and cursor, no frame: a terminal. */
-export const TerminalIcon = (p: P) => (<S {...p}><path d="m5 17 5-5-5-5M12 18h7" /></S>);
 /** Changes: a plus over a minus in a square, the usual diff glyph. */
 export const DiffIcon = (p: P) => (<S {...p}><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M12 7v6M9 10h6M9 16h6" /></S>);
 /** More: three dots stacked, for an overflow menu. */
@@ -136,7 +127,6 @@ export const RocketIcon = (p: P) => (
 );
 /** A question mark in a ring: something is waiting on you. */
 export const QuestionIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.8M12 17h.01" /></S>);
-export const InfoIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="M12 8.5h.01M11 12h1v4.5h1" /></S>);
 /** "Zz": idle, asleep until you wake it. */
 export const SleepIcon = (p: P) => (<S {...p}><path d="M4 9h6l-6 8h6M14 5h5l-5 6h5" /></S>);
 /** Two arrows squeezing inward onto a line: a transcript being compacted. */
@@ -174,10 +164,8 @@ export const CubeIcon = (p: P) => (<S {...p}><path d="M12 2.5 20.5 7v10L12 21.5 
 export const HandIcon = (p: P) => (<S {...p}><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13c0 4.2-2.7 7.5-6.7 7.5-2.4 0-3.9-1.2-5-3L3.4 14.4a1.5 1.5 0 0 1 2.4-1.8L8 15" /></S>);
 export const ShieldCheckIcon = (p: P) => (<S {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m8.8 12 2.2 2.2 4.2-4.4" /></S>);
 export const RouteIcon = (p: P) => (<S {...p}><circle cx="5.5" cy="18.5" r="2" /><circle cx="18.5" cy="5.5" r="2" /><path d="M7.5 18.5h7a3 3 0 0 0 0-6h-5a3 3 0 0 1 0-6h7" /></S>);
-export const GaugeIcon = (p: P) => (<S {...p}><path d="M3.5 17a8.5 8.5 0 1 1 17 0" /><path d="m12 17 4-5.5" /></S>);
 export const CompassIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></S>);
 export const CapIcon = (p: P) => (<S {...p}><path d="M2 9 12 4.5 22 9l-10 4.5zM6 10.8v4.7c1.8 1.5 3.8 2.2 6 2.2s4.2-.7 6-2.2v-4.7M22 9v6" /></S>);
-export const LockIcon = (p: P) => (<S {...p}><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></S>);
 export const DialIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="m12 12 4.5-4.5" /></S>);
 export const SparkleIcon = (p: P) => (<S {...p}><path d="M11 3c.6 4.6 2.2 6.8 6.5 7.5-4.3.7-5.9 2.9-6.5 7.5-.6-4.6-2.2-6.8-6.5-7.5C8.8 9.8 10.4 7.6 11 3z" /><path d="M19 15.5v5M16.5 18h5" /></S>);
 export const DocTextIcon = (p: P) => (<S {...p}><path d="M14 2.5H6.5a1.5 1.5 0 0 0-1.5 1.5v16a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V7.5z" /><path d="M14 2.5v5h5M8.5 12h7M8.5 15.5h7M8.5 8.5h3" /></S>);
