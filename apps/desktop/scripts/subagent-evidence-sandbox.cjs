@@ -1,4 +1,4 @@
-// The Agents panel with subagents, and the composer's "where does this run"
+// The Agents panel with subagents, and the conversation's "where does this run"
 // choice, in the real App against the layout fixture. Hidden, off-screen and
 // non-focusable. Launch: NEKKO_LAYOUT_SANDBOX=subagent-evidence-sandbox.cjs
 // node apps/desktop/scripts/layout-evidence-integration.cjs
@@ -62,15 +62,23 @@ app.whenReady().then(async () => {
     report.facts.anotherChatOpen = await rows();
     report.facts.card = await run(`[...document.querySelectorAll('[data-agent-panel] [title*="spawned by this chat"]')].map(e => e.textContent.trim())`);
     await shot('panel-another-chat-open', panel);
-    // Follow-up in the composer, in the real ChatPane.
+    // The choice sits in the conversation, in the real ChatPane.
     await run('layoutFixture.showRetry()');
     await sleep(900);
     await run(`(() => { const r = layoutFixture.records[0]; r.messages = r.messages.filter(m => !m.interrupted); layoutFixture.putCachedSession(r); })()`);
     report.facts.noDraft = await run(`!!document.querySelector('[data-work-place]')`);
+    // The agent's suggested next step, offered after the reply.
+    await run(`layoutFixture.bridge.suggestReplies = async () => ({ options: [], next: 'Add a regression test for the rounding fix' })`);
+    await run(`layoutFixture.emitAgent({ type: 'done', sessionId: 'a', messageId: 'a1' })`);
+    await sleep(700);
+    report.facts.suggestion = await run(`document.querySelector('[data-work-place]')?.textContent ?? null`);
+    report.facts.inTranscript = await run(`!!document.querySelector('[data-transcript-scroll] [data-work-place]')`);
+    report.facts.inComposer = await run(`!!document.querySelector('.composer-editor-wrap')?.parentElement?.querySelector('[data-work-place]')`);
+    await shot('conversation-suggestion', { x: 420, y: 380, width: 1020, height: 520 });
     await run(`(() => { const e = document.querySelector('.composer-editor-wrap [contenteditable]') || document.querySelector('.composer-editor-wrap textarea'); e.focus(); document.execCommand('insertText', false, 'Also add a refund test'); })()`);
     await sleep(500);
     report.facts.withDraft = await run(`document.querySelector('[data-work-place]')?.textContent ?? null`);
-    await shot('composer-follow-up', { x: 0, y: 620, width: 1440, height: 280 });
+    await shot('conversation-follow-up', { x: 420, y: 380, width: 1020, height: 520 });
     report.facts.clicked = await clickSubagent();
     await sleep(400);
     report.facts.sent = await run(`layoutFixture.lastSend?.text ?? null`);

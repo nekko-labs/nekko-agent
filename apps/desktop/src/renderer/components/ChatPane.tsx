@@ -2599,6 +2599,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
+                {/* Where the next piece of work runs, offered in the conversation like the other next steps. */}
+                {offerSubagent && (
+                  <div className="flex flex-wrap items-center gap-2 py-2 text-xs" role="group" aria-label="Where this work runs" data-work-place>
+                    {!draft.trim() && <span className="min-w-0 text-ink-faint [overflow-wrap:anywhere]">Next: {followUp}</span>}
+                    <button type="button" className="btn btn-outline text-xs" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
+                    <button type="button" className="btn btn-outline text-xs" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
+                    <span className="text-2xs text-ink-faint">Here uses more context</span>
+                  </div>
+                )}
                 {errorNotice && !question && !streaming && (() => {
                   // A stop the user asked for is not a failure, so it doesn't wear
                   // the failure colour. Either way the run is resumable whenever it
@@ -3087,14 +3096,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   />
                   <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
-                {offerSubagent && (
-                  <div className="flex flex-wrap items-center gap-x-1 px-3 text-2xs text-ink-faint" role="group" aria-label="Where this work runs" data-work-place>
-                    <button type="button" className="rounded-md px-2 py-0.5 text-accent hover:bg-surface-2" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
-                    <span>uses more context</span>
-                    <span aria-hidden>·</span>
-                    <button type="button" className="rounded-md px-2 py-0.5 text-accent hover:bg-surface-2" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
-                  </div>
-                )}
                 <div className="composer-bar flex items-center gap-2 px-2 pb-2 pt-1">
                   {!imageMode && (<>
                   <div
