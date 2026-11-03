@@ -14,16 +14,17 @@
 /* ── the mark ─────────────────────────────────────────────────────────────── */
 
 const VIEWBOX = 512;
-const INK = '#ffffff';
+const INK = '#DFB6B2';
 /**
- * The brand gradient, left to right: deep indigo to lavender. The tile behind
+ * The brand gradient, left to right: deep plum to a lighter plum (the Nekko
+ * themes' accents). The tile behind
  * the mark is painted in it. `TILE` is its deep end, for anything that needs a
  * single flat colour (the phone splash, Android's adaptive-icon background
  * colour); `RIM` is its light end, used for the installer banner's edge stripe.
  */
-const TILE = '#453A92';
-const TILE_END = '#9D8CE6';
-const RIM = TILE_END;
+const TILE = '#190019';
+const TILE_END = '#5A2352';
+const RIM = INK;
 /** A horizontal linear gradient across whatever it fills, as an SVG <defs> entry. */
 const tileGradient = (id) =>
   `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${TILE}"/><stop offset="1" stop-color="${TILE_END}"/></linearGradient>`;
