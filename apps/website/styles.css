@@ -893,12 +893,18 @@ h3 { font-size: 21px; }
 .beta-card label { font-family: var(--retro-mono); font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
 .beta-field { display: flex; gap: 10px; flex-wrap: wrap; }
 .beta-field input {
-  flex: 1 1 220px; min-width: 0; font: inherit; font-size: 16px; color: #17151f;
+  flex: 1 1 180px; min-width: 0; font: inherit; font-size: 16px; color: #17151f;
   padding: 12px 14px; border: 2px solid var(--sticker); border-radius: 12px; background: #fbfaff;
 }
 .beta-field input:focus-visible { outline: 3px solid #9d8ce6; outline-offset: 2px; }
 .beta-field .btn { flex: 0 0 auto; cursor: pointer; font: inherit; font-weight: 700; font-size: 16px; }
 .beta-note { font-size: 13px; color: #5d5970; }
+.beta-card .beta-opt {
+  display: flex; gap: 10px; align-items: center; margin-top: 12px; cursor: pointer;
+  font-family: var(--sans); font-size: 15px; letter-spacing: 0; color: #17151f;
+}
+.beta-opt input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: #7c6ad6; cursor: pointer; }
+.beta-opt input:focus-visible { outline: 3px solid #9d8ce6; outline-offset: 2px; }
 .beta-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .beta-privacy { margin-top: 12px; max-width: 46ch; }
 :root[data-theme='colour'] .beta-card { background: #ffffff; }
@@ -1190,6 +1196,7 @@ footer a.with-gh { gap: 7px; }
 :root[data-theme='dark'] .dl-copy.done { background: rgba(94, 224, 143, 0.14); }
 :root[data-theme='dark'] .beta-card { background: #181430; }
 :root[data-theme='dark'] .beta-field input { background: #0d0b18; color: #ffffff; }
+:root[data-theme='dark'] .beta-card .beta-opt { color: #ffffff; }
 :root[data-theme='dark'] .beta-note,
 :root[data-theme='dark'] .beta-done p:last-child { color: var(--muted); }
 :root[data-theme='dark'] .beta-badge { color: #17151f; }

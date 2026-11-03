@@ -23,7 +23,8 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 - Your computer **dials out** to a relay and claims a room. No inbound ports, no port-forwarding.
 - Your phone connects to the same relay with the pairing credentials.
 - Every payload is **end-to-end encrypted** (AES-GCM) under a key made fresh for that one connection.
-  The relay routes ciphertext; it cannot read prompts, replies, files, or model output.
+  The relay routes ciphertext; it cannot read prompts, replies, files, or model output. The one
+  exception is the short Lock Screen status, if you turn it on (see [what the relay does see](#what-the-relay-does-see)).
 - Your computer **proves who it is** on every connection, with a key your phone pins when it pairs.
   Anything that can't prove it gets no prompt and no pairing code
   ([decision 0041](decisions/0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md)).
@@ -562,7 +563,7 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 
 | Threat | Defense |
 |---|---|
-| Relay operator reads your traffic | E2E encryption: every connection has its own key, from a key exchange the relay can't take part in, and it sees only ciphertext and a room credential (decisions 0036, 0041) |
+| Relay operator reads your traffic | E2E encryption: every connection has its own key, from a key exchange the relay can't take part in, and it sees only ciphertext and a room credential (decisions 0036, 0041), apart from the Lock Screen status described below |
 | Someone records your traffic and steals a key later | Each connection's key is made for that connection and thrown away with it, so a recording stays closed even with every long-term key |
 | Something poses as your computer | Your computer signs every connection with its host key, which your phone pinned from the pairing link. A phone sends nothing, pairing code included, to anything that can't, even if it holds the pairing secret (decision 0041) |
 | Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, then a live pairing code, or the private key of a device that enrolled (every HELLO is signed with it, for that connection alone) |
@@ -577,9 +578,16 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 | Someone records the relay's traffic and plays it back | Every connection starts with a fresh random challenge from your computer that the phone's sealed hello must answer, once; every request after it carries that challenge and a number that only goes up. A replayed hello or request is dropped and never runs. (Phone apps from before this are accepted for one release, see *Older phone apps*.) |
 | Someone else picks up the phone, or the relay replays a request, to make a change | Each change must be signed by the phone's Secure Enclave key, which needs Face ID or the passcode (one check lasts 5 minutes); your computer checks the signature, its age and that it was not used before, and logs every attempt in the phone's activity |
 
-What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
-enable push, device push tokens plus the content-free fact "a run finished". That's the whole list,
-and it's why relayed local-model use is inherently zero-data-retention for content.
+### What the relay does see
+
+Connection metadata (IPs, timing, frame sizes), the room code, and, if you enable push, device push
+tokens plus the content-free fact "a run finished". If you turn on the iPhone's Live Activity, the
+short status it shows (chat titles, the current step and, at Detailed, reply lines, at the level you
+choose) is the exception: ActivityKit draws only what the push holds, so that text goes through the
+relay and Apple's push service (APNs) as plain text. Lock Screen notifications on both phones also
+pass through Apple's and Google's push services, with generic text. The relay keeps all of this in
+memory only. Everything else (chats, commands, files, model output) is end-to-end encrypted, which is
+why relayed local-model use is zero-data-retention for content.
 
 ## Choosing a relay
 

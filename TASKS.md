@@ -464,6 +464,16 @@ See [SPEC](spec/brand/beta-signups-and-website-analytics.md). Decided: Neon free
 - [ ] The signup form on the website: `POST {api}/v1/signups`, call `/healthz` on load, hidden `website` honeypot field, send `source` as the page path and any `utm_*`. Point it at a custom domain (e.g. `api.nekkoagent.com`, `fly certs add`) or `nekko-agent-api.fly.dev`.
 - [ ] Before the form ships: a privacy line on the site saying what the form keeps, and how to unsubscribe.
 
+## GDPR audit fixes: website (added 2026-11-03)
+
+Tracked in [#1610](https://github.com/nekko-labs/nekko-agent/issues/1610). See [SPEC](spec/brand/beta-signups-and-website-analytics.md). The API half (log redaction, account deletion, storing `marketing` and `policyVersion`) has its own tasks.
+
+- [x] ✅ 2026-11-03 GD1 Self-hosted fonts: Inter Tight, JetBrains Mono, Handjet and Space Mono as latin woff2 subsets in `apps/website/fonts/` (Fontsource, OFL-1.1, license texts beside them, rows in ASSETS.md), loaded by `apps/website/fonts.css` from `index.html`, `privacy.html` and every docs page (`scripts/build-docs.mjs`). No Google Fonts links remain.
+- [x] ✅ 2026-11-03 GD2 No third-party calls on page load: `build-docs.mjs` (Vercel's build command) fetches the latest GitHub release into a gitignored `apps/website/release.json` (`releaseInfo`, tested), and `site.js` reads that instead of api.github.com; without the file the buttons link to the releases page. The `/healthz` warm-up fires on the first focus of the signup email field, not on load. Checked in a headless browser: `/`, `/privacy` and docs pages request nothing outside the site.
+- [x] ✅ 2026-11-03 GD3 Separate marketing consent and age: an unticked **Also send me product updates** box; the POST body adds `marketing: true|false` and `policyVersion: "2026-11-03"` (the API ignores unknown fields until its half lands). Button reads **Get beta invites**; the privacy line says product updates only with the tick; **You must be 16 or older to sign up** by the form.
+- [x] ✅ 2026-11-03 GD4 Privacy policy version 2026-11-03: every recipient and region (Vercel, Fly.io `iad` API and `nrt` Relay, Neon `aws-us-east-1`, Resend, Supabase Auth, APNs and FCM), transfers on the vendors' Standard Contractual Clauses, the full rights list, minimum age 16, product updates only with the tick, confirmed signups kept until the beta ends or unsubscribe, Nekko Cloud accounts and their deletion, no IPs or token links in API logs. Homepage and `docs/REMOTE.md` no longer say the relay sees only ciphertext without the Lock Screen status exception.
+- [ ] Owner: confirm each vendor's DPA (with SCCs) is accepted in its console: Vercel, Fly.io, Neon, Resend, Supabase, plus Apple and Google push terms. Confirm the Supabase project's region and add it to the policy.
+
 ## Swoop navigation rail (added 2026-10-17)
 
 See [SPEC](spec/desktop/swoop-navigation-rail.md).
