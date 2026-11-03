@@ -549,7 +549,7 @@ const LiveReplyStatus = memo(function LiveReplyStatus({
   return <ReplyStatus {...status} tps={liveRate?.rate ?? status.tps} estimatedRate={!!liveRate} status={label} iconState={status.streaming ? replyIconState(run?.activity) : 'idle'} elapsed={status.streaming ? elapsed : 0} nextWakeAt={nextWakeAt} now={now} />;
 });
 
-function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCenter = false, surface = 'full', status, selected, resting = false, header, cleanStart: cleanStartWanted = false }: {
+function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCenter = false, surface = 'full', status, selected, header, cleanStart: cleanStartWanted = false }: {
   sessionId: string;
   /** What the agent is doing (rocket, Zz, ?), drawn in the far bottom-right corner of the window's footer. */
   // A value, not an element: ChatPane is memoized, and a fresh <StatusIcon/>
@@ -558,11 +558,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   commandCenter?: boolean;
   /** On the Agents wall: whether this window is the selected one. Undefined off the wall. */
   selected?: boolean;
-  /**
-   * A tiled wall window that is not the selected one: its composer rests as a
-   * single row (+, the draft or placeholder, send) until the window is picked.
-   */
-  resting?: boolean;
   /**
    * The wall composer's own top row (which agent it speaks for, its status and
    * dock controls). Given, it replaces the controls strip: mode and incognito
@@ -2786,7 +2781,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
-        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
+        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
           {/* The resize grip rides the composer's top border: a wide invisible
               hit area over a hairline that lights up on hover. */}
           {surface !== 'composer' && !cleanStart && <div

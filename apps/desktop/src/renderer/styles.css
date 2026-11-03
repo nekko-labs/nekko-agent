@@ -3479,15 +3479,6 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-section[data-wall-composer] [data-composer-foot] { flex: 0 1 auto; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
 .composer-section[data-wall-composer] [data-composer-foot] > * { flex-shrink: 1; min-width: 0; }
 .composer-section[data-wall-composer] [data-composer-foot] button { white-space: nowrap; }
-/* A wall window that is not selected: its composer rests as one row of +, the draft and Send. */
-.composer-section[data-resting] > [role="separator"] { display: none; }
-.composer-section[data-resting] .composer-editing-body { display: flex; align-items: center; }
-.composer-section[data-resting] .composer-editor-wrap { order: 1; flex: 1; min-width: 0; }
-.composer-section[data-resting] .composer-bar { display: contents; }
-.composer-section[data-resting] .composer-bar > * { order: 2; }
-.composer-section[data-resting] .composer-bar > :first-child { order: 0; margin-left: 8px; }
-.composer-section[data-resting] .composer-bar > :not(:first-child):not(:last-child) { display: none; }
-.composer-section[data-resting] .composer-editor-wrap [contenteditable] { min-height: 0; max-height: 2.5rem; padding-block: 0.5rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* The wall composer's panel clips its overflow, so the composer's outer
    focus halo and drop shadow were cut into a band along the bottom edge and
