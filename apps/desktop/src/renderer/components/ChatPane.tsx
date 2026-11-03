@@ -3427,12 +3427,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>}
                   </div>
                 )}
+                {/* Nothing renders under the message box: a new chat keeps only
+                    the model, as the box's own bottom row, and a wall window
+                    already carries it in the bar above. */}
+                {cleanStart && !wallWindow && (
+                  <div className="clean-start-model composer-foot-row flex border-t border-line px-2 py-1" data-clean-start-model>
+                    {modelControls}
+                  </div>
+                )}
             </div>
-            {/* The footer is hidden while the chat starts clean, but the model
-                is still the user's to pick before the first send. */}
-            {cleanStart && <div className="clean-start-model mt-2 flex justify-center" data-clean-start-model>
-              {modelControls}
-             </div>}
           </div>
         </div>
         )}
