@@ -50,7 +50,14 @@ describe('CLI identity and compatibility', () => {
     }
   });
 
-  it.each(['workspace', 'tasks', 'workflow', 'train'])('uses canonical %s usage without changing exit codes', async (command) => {
+  it('keeps workflow as an alias of scheduled-task', async () => {
+    await expect(runCli(['workflow', 'invalid', '--url', 'http://127.0.0.1:1'])).rejects.toMatchObject({
+      message: expect.stringContaining('Usage: nekko-agent scheduled-task'),
+      exitCode: EXIT_CODES.usage,
+    });
+  });
+
+  it.each(['workspace', 'tasks', 'scheduled-task', 'train'])('uses canonical %s usage without changing exit codes', async (command) => {
     await expect(runCli([command, 'invalid', '--url', 'http://127.0.0.1:1'])).rejects.toMatchObject({
       message: expect.stringContaining(`Usage: nekko-agent ${command}`),
       exitCode: EXIT_CODES.usage,

@@ -1420,7 +1420,7 @@ export function AutomationsSection({ settings, update }: { settings: AppSettings
     <section id="automations" className="card mt-5 p-5" aria-labelledby="automations-heading" data-settings-automations>
       <h2 id="automations-heading" className="font-semibold">Automations</h2>
       <p className="mt-1 text-xs text-ink-faint">
-        Scheduled tasks and workflows on a model that runs on this computer compete with you for its GPU, memory and fans.
+        Scheduled tasks on a model that runs on this computer compete with you for its GPU, memory and fans.
         Choose when they may start. Each automation can override this in its editor.
       </p>
       <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
@@ -1499,7 +1499,7 @@ export function ClaudePlanFeaturesSection({ settings, update }: { settings: AppS
     <section id="claude-plan-features" className="card mt-5 p-5" aria-labelledby="claude-plan-features-heading" data-settings-claude-plan>
       <h2 id="claude-plan-features-heading" className="font-semibold">Claude plan features</h2>
       <p className="mt-1 text-xs text-ink-faint">
-        On a Claude plan (Pro, Max or Team) through Claude Code, Nekko keeps these off: scheduled tasks, workflows and auto-continue,
+        On a Claude plan (Pro, Max or Team) through Claude Code, Nekko keeps these off: scheduled tasks and auto-continue,
         Nekko's own tools inside a Claude chat, and the project note Nekko adds to a chat.
         With an Anthropic API key or a cloud account they are always on.
       </p>

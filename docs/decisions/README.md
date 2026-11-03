@@ -50,3 +50,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0039](0039-one-release-signing-key-signs-the-update-feed.md) | One Ed25519 release signing key signs the update feed (`latest*.yml.sig`) and the Claude policy override; the updater refuses an unsigned or wrongly signed feed once a real key is built in | accepted |
 | [0040](0040-a-desktop-is-a-paired-device-with-its-own-class.md) | A desktop is a paired device, with its own access class | accepted |
 | [0041](0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md) | A computer proves itself with a key pinned at pairing, and every connection has its own key (supersedes the shared E2E key of 0036) | accepted |
+| [0043](0043-workflows-are-scheduled-tasks.md) | Workflows are called Scheduled Tasks, one concept with the chat ⚡ Automate tasks; code, channels and stored files keep the old name, and the CLI keeps `workflow` as an alias | accepted |

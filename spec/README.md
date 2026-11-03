@@ -176,14 +176,14 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 
 Workflows, goals, integrations and tools.
 
-- [Automating repeatable work (Workflows tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
+- [Automating repeatable work (Scheduled Tasks tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
 - [CI runners](automation/ci-runners.md) (50 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
+- [Scheduled tasks (procedural automation)](automation/workflows-procedural-automation.md) (24 KB)
 - [Tooling & integrations](automation/tooling-integrations.md) (8 KB)
-- [Workflows (procedural automation)](automation/workflows-procedural-automation.md) (22 KB)
 
 ### phone
 

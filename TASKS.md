@@ -35,6 +35,14 @@ Spec: [third-party licensing and credits](spec/platform/third-party-licensing-an
 - [ ] **TP-4, Notices in the npm packages.** `apps/cli` and the `nekkod` packages bundle third-party code and carry no notices file.
 - [ ] **TP-5, Crates in the Docker notices.** The builder stage has no cargo, so the image's file lists npm packages only.
 
+## Scheduled Tasks and the CI runners section (#1591, added 2026-11-03)
+
+Philip asked for Workflows to be called Scheduled Tasks everywhere and for the CI runners to be a section of the list, not a tab. Spec: [Scheduled tasks](spec/automation/workflows-procedural-automation.md). Decision: [0043](docs/decisions/0043-workflows-are-scheduled-tasks.md).
+
+- [x] **T229, CI runners as a list section (2026-11-03).** The **Workflows | CI runners** switch is gone; `CiRunnersView` renders a section at the foot of the task list (and under the first-task wizard), and leaves itself out when the daemon has no runner channel. Evidence: `ci-runners-integration.cjs`, new `with-tasks` scene.
+- [x] **T230, Scheduled Tasks name (2026-11-03).** User-facing strings in the desktop renderer, shared labels and docs say Scheduled Tasks / scheduled task; `nekko-agent scheduled-task` with `workflow` kept as an alias. Code, channels and stored files keep `workflow`.
+- [ ] **T231, Engine run messages.** nekkod's run messages ("Untitled workflow", nested-step errors) still say workflow; change them with the TS host goldens.
+
 ## Live Activity language and the bottom of a chat (#1487, added 2026-11-02)
 
 Philip's Live Activity read in Japanese on an English-first iPhone, and he asked for a lighter bottom of a chat. Spec: [The bottom of a chat](spec/phone/native-ios-app.md).

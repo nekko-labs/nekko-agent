@@ -45,7 +45,7 @@ node and subnet route), sleep and the lid (Testing R3), and the menu bar dot on 
 
 ## Connect the Mac
 
-1. Workflows tab, **CI runners**, **Connect GitHub**.
+1. Scheduled Tasks tab, the **CI runners** section at the foot of the list, **Connect GitHub**.
 2. Step 1: the App ID, installation ID and private key.
 3. Step 2: **An org**, `nekko-labs`, repos `nekko-agent`, tick **Allow public repos**
    (nekko-agent is public), label `nekko-cloud-mac`. An org runner is needed for the workflow

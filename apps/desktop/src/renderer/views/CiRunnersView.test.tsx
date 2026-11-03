@@ -10,7 +10,6 @@ vi.mock('../components/primitives/index.js', async (original) => ({
 
 import { CiRunnersFirstVisit, afterList, afterReply, retryDelay, runnersBody } from './CiRunnersView.js';
 import { DEFAULT_RUNNER_SETTINGS, type ImageView, type RunnerView } from '@nekko-agent/shared';
-import { SectionSegment } from './WorkflowsView.js';
 
 (globalThis as unknown as { window: unknown }).window = {
   nekko: {
@@ -63,15 +62,6 @@ describe('CI runners section', () => {
     expect(afterList(pushed, { kind: 'unavailable', message: 'x' })).toBe(pushed);
     expect(afterList(pushed, { kind: 'ready', views: [] })).toBe(pushed);
     expect(afterList({ kind: 'unavailable', message: 'x' }, pushed)).toBe(pushed); // a retry recovers
-  });
-
-  it('segment_switches_sections', () => {
-    // Plain toggle buttons: a tablist would promise arrow keys and a tabpanel.
-    const html = renderToStaticMarkup(<SectionSegment value="ciRunners" onChange={() => {}} />);
-    expect(html).toContain('role="group" aria-label="Section"');
-    expect(html).not.toContain('role="tab');
-    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-pressed="true"[^>]*>CI runners</);
-    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-pressed="false"[^>]*>Workflows</);
   });
 
   it('a reply loses to a push that arrived after its request started', () => {
