@@ -9,7 +9,7 @@ import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ChatIcon, ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -32,6 +32,8 @@ import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
 import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
 import { StyleSection } from './StyleSection.js';
+import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
+import { useExpertMode, useShown } from '../simpleMode.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -54,6 +56,7 @@ export const SETTINGS_GROUPS = [
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
   { id: 'computers', label: 'Computers', icon: ComputerIcon },
   { id: 'style', label: 'Style', icon: SlidersIcon },
+  { id: 'simple', label: 'Simple mode', icon: ChatIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
   { id: 'connections', label: 'Connections', icon: GlobeIcon },
@@ -69,6 +72,22 @@ function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.
       <h2 id={`settings-${id}-title`} className="settings-group-title">{label}</h2>
       {children}
     </div>
+  );
+}
+
+/**
+ * Developer settings in Simple mode: folded behind one row rather than gone,
+ * so they stay one click away (Settings > Simple mode, Advanced settings).
+ */
+function AdvancedFold({ children }: { children: React.ReactNode }) {
+  const shown = useShown('set-tools');
+  const [open, setOpen] = useState(false);
+  if (shown || open) return <>{children}</>;
+  return (
+    <section className="card mt-6 flex flex-wrap items-center gap-3 p-5" data-advanced-fold>
+      <p className="min-w-0 flex-1 text-xs text-ink-soft">Git management, project management, pull requests, the terminal and MCP servers are kept for Expert.</p>
+      <button type="button" className="btn btn-outline px-3 py-1 text-xs" onClick={() => setOpen(true)}>Show advanced settings</button>
+    </section>
   );
 }
 
@@ -89,6 +108,10 @@ export function SettingsView() {
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<SettingsGroupId>('general');
+  // Simple says nothing about computers until one is connected; Expert is where the first one is paired.
+  const [expert] = useExpertMode();
+  const hasComputers = useStore((s) => s.computers.length > 0);
+  const computersPage = expert || hasComputers;
   const jumping = useRef(0);
   // Section spy: it measures the page, so at most once a frame, not per scroll event.
   const spyFrame = useRef(0);
@@ -160,7 +183,7 @@ export function SettingsView() {
         </div>
         <div className="flex flex-col gap-6 md:flex-row md:gap-8">
           <nav aria-label="Settings sections" className="settings-nav" data-settings-search>
-            {SETTINGS_GROUPS.map((g) => (
+            {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
               <button
                 key={g.id}
                 type="button"
@@ -297,11 +320,14 @@ export function SettingsView() {
               {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
               <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
             </SettingsGroup>
-            <SettingsGroup id="computers">
+            {computersPage && <SettingsGroup id="computers">
               <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
-            </SettingsGroup>
+            </SettingsGroup>}
             <SettingsGroup id="style">
               <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="simple">
+              <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="agents">
               {/* Chat modes */}
@@ -421,6 +447,7 @@ export function SettingsView() {
               <ErrorBoundary label="Connections"><ConnectionsSettings settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="tools">
+              <AdvancedFold>
               <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Project management"><ProjectManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Pull requests"><PullRequestsSection settings={settings} update={update} /></ErrorBoundary>
@@ -428,6 +455,7 @@ export function SettingsView() {
               <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
               {/* MCP servers */}
               <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
+              </AdvancedFold>
             </SettingsGroup>
             <SettingsGroup id="system">
               {/* Updates */}

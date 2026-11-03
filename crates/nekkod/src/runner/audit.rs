@@ -1,6 +1,8 @@
 //! `<data>/runners/audit.jsonl`: one line per job a runner ran, lost or
 //! stopped, and per VM that failed to start.
 
+use super::provider::PrRef;
+use super::supervisor::SlotState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -28,6 +30,22 @@ pub struct AuditLine {
     pub result: AuditResult,
     pub seconds: u64,
     pub reason: Vec<String>,
+    /// The provider's id for the job, for fetching its log.
+    #[serde(default)]
+    pub job_id: Option<u64>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub pr: Option<PrRef>,
+    /// When the VM entered each state, oldest first; `ts` is when it was deleted.
+    #[serde(default)]
+    pub events: Vec<SlotEvent>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlotEvent {
+    pub ts: u64,
+    pub state: SlotState,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,6 +113,10 @@ mod tests {
             result,
             seconds: 100,
             reason: vec![],
+            job_id: None,
+            url: None,
+            pr: None,
+            events: vec![],
         }
     }
 

@@ -100,6 +100,18 @@ describe('Markdown', () => {
       expect(linkContextActions('mailto:test@example.com').map((a) => a.label)).not.toContain('Open in in-app browser');
     } finally { vi.unstubAllGlobals(); }
   });
+  it('offers a live web preview without loading any remote frame before a click', () => {
+    const out = html('[Spinner](https://css-loaders.com/spinner/) and [mail](mailto:hi@example.com)');
+    expect(out).toContain('href="https://css-loaders.com/spinner/"');
+    expect(out).toContain('aria-expanded="false">Preview</button>');
+    expect(out).not.toContain('<iframe');
+    expect(out.match(/>Preview<\/button>/g)).toHaveLength(1);
+    expect(html('[bad](javascript:alert(1))')).not.toContain('>Preview</button>');
+  });
+  it('keeps document links free of chat-only preview controls', () => {
+    const out = renderToStaticMarkup(<Markdown text="[Guide](https://example.com)" doc />);
+    expect(out).not.toContain('>Preview</button>');
+  });
   it('renders the reported GitHub PR reply as a labeled link', () => {
     const out = html('Yes—the GitHub integration is in [PR #309](https://github.com/nekko-labs/nekko-agent/pull/309). It’s an open draft with passing checks, not merged or verified against a live GitHub installation.');
     expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/pull/309"');

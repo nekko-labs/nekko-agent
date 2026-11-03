@@ -500,12 +500,20 @@ async fn job_finds_the_runner_by_name() {
     let mut replies = vec![token()];
     replies.extend(in_progress());
     replies.extend(in_progress());
+    replies.push((200, json!({ "workflow_runs": [] })));
     let t = rig(replies, true);
     let r = repo_record();
     let job = t.gh.job(&r, 0, "nekko-mac1-1-1").await.unwrap();
     assert_eq!(
         job,
-        Some(JobRef { repo: "o/r".into(), run_id: 100, job_id: 5, workflow: "CI".into(), job: "build".into() })
+        Some(JobRef {
+            repo: "o/r".into(),
+            run_id: 100,
+            job_id: 5,
+            workflow: "CI".into(),
+            job: "build".into(),
+            ..Default::default()
+        })
     );
     assert_eq!(t.http.urls()[1], "GET https://api.github.com/repos/o/r/actions/runs?status=in_progress&per_page=10");
     // A runner that never took a job has none.
@@ -513,9 +521,57 @@ async fn job_finds_the_runner_by_name() {
 }
 
 #[tokio::test]
+async fn job_that_already_ended_is_found_with_its_pull_request() {
+    let t = rig(
+        vec![
+            token(),
+            (200, json!({ "workflow_runs": [] })),
+            (
+                200,
+                json!({ "workflow_runs": [{
+                    "id": 100,
+                    "name": "CI",
+                    "pull_requests": [{ "number": 42 }],
+                    "repository": { "html_url": "https://github.com/o/r" },
+                }] }),
+            ),
+            (
+                200,
+                json!({ "jobs": [{
+                    "id": 5,
+                    "name": "build",
+                    "runner_name": "nekko-mac1-1-1",
+                    "html_url": "https://github.com/o/r/actions/runs/100/job/5",
+                }] }),
+            ),
+        ],
+        true,
+    );
+    let job = t.gh.job(&repo_record(), 0, "nekko-mac1-1-1").await.unwrap().unwrap();
+    assert_eq!(t.http.urls()[2], "GET https://api.github.com/repos/o/r/actions/runs?status=completed&per_page=10");
+    assert_eq!(job.url, "https://github.com/o/r/actions/runs/100/job/5");
+    assert_eq!(job.pr, Some(PrRef { number: 42, url: "https://github.com/o/r/pull/42".into() }));
+}
+
+#[tokio::test]
+async fn job_log_is_the_text_github_returns() {
+    let t = rig(vec![token(), (200, json!("line one\nline two"))], true);
+    let log = t.gh.job_log(&repo_record(), "o/r", 5).await.unwrap();
+    assert_eq!(t.http.urls()[1], "GET https://api.github.com/repos/o/r/actions/jobs/5/logs");
+    assert!(log.contains("line two"));
+}
+
+#[tokio::test]
 async fn rerun_posts_the_job() {
     let t = rig(vec![token(), (201, json!({}))], true);
-    let job = JobRef { repo: "o/r".into(), run_id: 100, job_id: 5, workflow: "CI".into(), job: "build".into() };
+    let job = JobRef {
+        repo: "o/r".into(),
+        run_id: 100,
+        job_id: 5,
+        workflow: "CI".into(),
+        job: "build".into(),
+        ..Default::default()
+    };
     assert_eq!(t.gh.rerun(&repo_record(), &job).await, Ok(()));
     assert_eq!(t.http.urls()[1], "POST https://api.github.com/repos/o/r/actions/jobs/5/rerun");
 }

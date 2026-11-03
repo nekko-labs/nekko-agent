@@ -17,6 +17,7 @@ describe('command palette settings search', () => {
 
   it('finds the Settings group that holds an unindexed section', () => {
     expect(matchSettingsPages('guardrail').map((p) => p.group)).toEqual(['safety']);
+    expect(matchSettingsPages('simple').map((p) => p.group)).toEqual(['simple']);
   });
 
   it('keeps sibling keys when a nested switch flips, and inverts Confirm deletions', () => {

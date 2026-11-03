@@ -74,6 +74,7 @@ export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: str
   { group: 'general', label: 'General', keywords: 'usage reports view appearance theme agents wall customization voice notifications chat history desktop behavior fun' },
   { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
   { group: 'style', label: 'Style', keywords: 'fonts text size' },
+  { group: 'simple', label: 'Simple mode', keywords: 'expert controls hide show developer' },
   { group: 'agents', label: 'Agents', keywords: 'chat modes agent loop hooks spec-driven development orchestration delegation routes automations' },
   { group: 'safety', label: 'Safety', keywords: 'security sandbox guardrails permissions' },
   { group: 'connections', label: 'Connections', keywords: 'network activity log' },
