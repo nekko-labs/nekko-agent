@@ -54,6 +54,12 @@ Spec: [third-party licensing and credits](spec/platform/third-party-licensing-an
 - [ ] **TP-4, Notices in the npm packages.** `apps/cli` and the `nekkod` packages bundle third-party code and carry no notices file.
 - [ ] **TP-5, Crates in the Docker notices.** The builder stage has no cargo, so the image's file lists npm packages only.
 
+## How this Mac helps, Balanced by default (#1593, added 2026-11-03)
+
+Philip asked for a tighter "How should this Mac help?" step, Balanced as the recommended default, and a choice of how many VMs stay ready. Spec: [CI runners](spec/automation/ci-runners.md).
+
+- [x] **T232, Ready VMs and Balanced default (2026-11-03).** `readyVms` (0 to 2, `None` keeps the mode's count for saved runners) drives `warm_slots`; the Rust and shared defaults are Balanced. The connect sheet's step 3 lists Balanced first with **Recommended**, drops "You can change this any time", spaces on 8px/20px with slimmer rows and buttons, and adds **VMs kept ready** (default 1; 2 also sets 2 slots). Runner settings gets the same row. Mac setup lists Balanced first.
+
 ## Live Activity language and the bottom of a chat (#1487, added 2026-11-02)
 
 Philip's Live Activity read in Japanese on an English-first iPhone, and he asked for a lighter bottom of a chat. Spec: [The bottom of a chat](spec/phone/native-ios-app.md).

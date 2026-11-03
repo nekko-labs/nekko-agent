@@ -32,6 +32,7 @@ import {
   type ImageView,
   type RunnerView,
   type SlotView,
+  readyVms,
 } from './runners.js';
 
 const now = 1_800_000_000;
@@ -82,10 +83,18 @@ describe('runner helpers', () => {
     expect([formatMinutes(20), formatMinutes(360), formatMinutes(7800), formatMinutes(7200)]).toEqual(['under 1 min', '6 min', '2 h 10 min', '2 h']);
   });
 
+  it("reads ready VMs like the daemon: the owner's count, else the mode's", () => {
+    expect(readyVms({ priority: 'doNotDisturb', readyVms: null })).toBe(0);
+    expect(readyVms({ priority: 'balanced' })).toBe(1);
+    expect(readyVms({ priority: 'runnerFirst', readyVms: null })).toBe(2);
+    expect(readyVms({ priority: 'doNotDisturb', readyVms: 1 })).toBe(1);
+    expect(readyVms({ priority: 'balanced', readyVms: 5 })).toBe(2);
+  });
+
   it('titles a runner like the mockup', () => {
     const v = view();
     expect(runnerTitle(v)).toBe('This Mac · GitHub · nekko-labs/nekko-agent');
-    expect(runnerSubtitle(v)).toBe("repo scope · label nekko-cloud-mac · Do not disturb: Only run when I'm idle · While a runner is active");
+    expect(runnerSubtitle(v)).toBe("repo scope · label nekko-cloud-mac · Balanced: in the background · While a runner is active");
     expect(runnerTitle(view({ config: { ...v.config, scope: { kind: 'org', org: 'acme' } } }))).toBe('This Mac · GitHub · acme');
   });
 
@@ -153,7 +162,7 @@ describe('runner helpers', () => {
   });
 
   it('builds a connect request', () => {
-    const f: ConnectForm = { appId: '123', installationId: '456', privateKeyPem: '-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----', kind: 'org', target: 'acme', repos: 'api, acme/web', allowPublic: false, label: '', priority: 'balanced' };
+    const f: ConnectForm = { appId: '123', installationId: '456', privateKeyPem: '-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----', kind: 'org', target: 'acme', repos: 'api, acme/web', allowPublic: false, label: '', priority: 'balanced', readyVms: 1 };
     expect(toConnectRequest(f, false)).toEqual({ provider: 'github', scope: { kind: 'org', org: 'acme' }, appId: 123, installationId: 456, privateKeyPem: f.privateKeyPem, repos: ['acme/api', 'acme/web'], allowPublic: false, label: 'nekko-cloud-mac' });
     expect(toConnectRequest({ ...f, kind: 'repo', target: 'o/r', repos: 'ignored' }, false)).toMatchObject({ scope: { kind: 'repo', owner: 'o', repo: 'r' }, repos: [] });
 
