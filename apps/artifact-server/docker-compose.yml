@@ -1,0 +1,37 @@
+# Self-hosted Nekko Artifacts server.
+#
+#   cd apps/artifact-server
+#   echo "NEKKO_ARTIFACTS_TOKEN=$(openssl rand -hex 32)" > .env
+#   docker compose up -d
+#
+# The upload API is then on http://<this host>:4500 with the token from .env
+# (README.md has a curl example). Publishing from Nekko Agent itself comes
+# with Settings > Artifacts (#1622).
+#
+# Published artifacts are served on port 4501. When you put this behind a
+# proxy with TLS, give the published artifacts their own hostname (for
+# example artifacts.example.com for 4501 and artifacts-api.example.com for
+# 4500), never a path under your app's or the API's domain, and set
+# NEKKO_ARTIFACTS_PUBLIC_URL to that hostname.
+services:
+  artifacts:
+    build:
+      context: ../..
+      dockerfile: apps/artifact-server/Dockerfile
+    environment:
+      NEKKO_ARTIFACTS_TOKEN: ${NEKKO_ARTIFACTS_TOKEN:?set NEKKO_ARTIFACTS_TOKEN in .env, for example with openssl rand -hex 32}
+      NEKKO_ARTIFACTS_PUBLIC_URL: ${NEKKO_ARTIFACTS_PUBLIC_URL:-http://localhost:4501}
+      # Optional limits (these are the defaults):
+      # NEKKO_ARTIFACTS_MAX_ARTIFACTS: 100
+      # NEKKO_ARTIFACTS_MAX_MB: 25
+      # NEKKO_ARTIFACTS_MAX_FILES: 500
+      # NEKKO_ARTIFACTS_KEEP_VERSIONS: 10
+    ports:
+      - "4500:4500"
+      - "4501:4501"
+    volumes:
+      - artifacts:/data
+    restart: unless-stopped
+
+volumes:
+  artifacts:
