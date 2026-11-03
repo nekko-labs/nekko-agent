@@ -12,6 +12,8 @@ Spec: [subagents in Claude chats](spec/agents/claude-code-subagents.md). Decisio
 
 - [x] **SUB-1, Claude Code sub-agents are child chats.** The mapper hands up `Subagent` start, line and end, and names `Agent` and `Task` `spawn_agent`; `crates/nekkod/src/subagents.rs` writes the child chat through a `Mapper` of its own. `spawnCallId` links both engines' children to their call. Scripted end to end in `crates/nekkod/tests/daemon/claude_code.rs`. (2026-11-03)
 - [x] **SUB-2, Finished subagents stay under their parent.** `subagentRows` keeps them while the chat is working or open; they no longer fall into saved chats, and the card counts them all. (2026-11-03)
+- [x] **SUB-3, Run here or in a subagent.** `canOfferSubagent` and `inSubagent` in shared `orchestration.ts`; the row at the end of the conversation in `ChatPane` (moved out of the composer on review), for typed follow-ups and the suggested next step. Hidden real-App check in `subagent-evidence-sandbox.cjs`. Spec: [run here or in a subagent](spec/agents/run-here-or-in-a-subagent.md). (2026-11-03)
+- [ ] **SUB-4, The same choice on iPhone and Android.**
 - [ ] **SUB-1a, Check a live sub-agent.** Run a real Claude Code `Agent` call, foreground and background, and replace `synthetic/tools-subagent-retry.jsonl` with the recording.
 
 ## Agents panel by agent loop (#1560, added 2026-11-03)
