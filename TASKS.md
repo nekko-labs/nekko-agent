@@ -12,7 +12,7 @@ Spec: [thinking and replies](spec/chat/thinking-and-replies.md).
 
 - [x] **VOICE-1, Who a block of text is for.** `toStreamBlocks` gives each block of agent text a voice: `working` (progress note, quiet, thought icon in the gutter), `attention` (mid-turn text that names a topic or stops on a question, on a panel) or `reply` (closing a turn that did work, on a panel). The live turn settles the same voices as more text arrives. Notes no longer say Done or repeat their step's reasoning. Tests: `transcript.test.ts`, `MessageBubble.test.tsx`, `LiveTurn.test.tsx`.
 - [x] **VOICE-2, Topic headers.** `replyTopics.ts` reads headings and bold labels (questions, next steps, commands, decisions, summaries), `Markdown` draws them as headers, a closing question with no label gets one, and the system prompt asks for the labels in any message of a turn. Tests: `replyTopics.test.ts`, `Markdown.test.tsx`, the prompt goldens.
-- [ ] **VOICE-3, Phones.** The iOS and Android transcripts still draw notes and replies alike and show labels as bold text.
+- [x] **VOICE-3, Phones.** `ReplyTopics` ports the parser and the voice rule to Kotlin (`apps/android/protocol`) and Swift (`NekkoProtocol`) with the desktop's test cases; `BlockView` on both phones draws the voices and `MarkdownText` the topic headers. Debug fixtures (`ReplyVoicesEvidenceActivity`, `-uiTestReplyVoices`) render a scripted turn for captures. (2026-11-03)
 
 ## Watching subagents and choosing where work runs (added 2026-11-03)
 
