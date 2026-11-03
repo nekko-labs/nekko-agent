@@ -21,6 +21,7 @@ import {
   nextZoneName,
   nextZoneTint,
   agentZoneTints,
+  renameZone,
   setZoneTint,
   zoneTints,
   openWallPane,
@@ -285,6 +286,10 @@ describe('zones', () => {
     // The colour belongs to the zone, not the agent in it.
     const swapped = fillZone(root, z1.id, 'chat', 'b');
     expect(agentZoneTints(swapped)).toEqual(new Map([['b', 0], ['a', 1]]));
+    const renamed = renameZone(root, z2.id, '  Backend ');
+    expect(allPanes(renamed).map((p) => p.zone)).toEqual(['Zone 1', 'Backend']);
+    expect(renameZone(root, z2.id, '   ')).toBe(root);
+    expect(nextZoneName(renamed)).toBe('Zone 2');
     const recoloured = setZoneTint(root, z2.id, 4);
     expect(agentZoneTints(recoloured).get('b')).toBe(4);
     expect(nextZoneTint(recoloured)).toBe(1);

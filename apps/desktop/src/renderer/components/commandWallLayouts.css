@@ -387,6 +387,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 }
 .wall-zone-swatch { flex: none; width: 8px; height: 8px; border-radius: 3px; }
 .wall-zone-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wall-zone-rename { min-width: 0; flex: 1 1 auto; height: 14px; padding: 0 4px; border-radius: 4px; background: var(--surface); color: var(--ink); font: inherit; outline: 1px solid var(--accent); cursor: text; user-select: text; }
 /* The header menu's row of colours, the zone's own one ringed. */
 .wall-zone-tints { display: flex; gap: 8px; padding: 4px 12px 8px; }
 .wall-zone-tint { width: 16px; height: 16px; border-radius: 5px; cursor: pointer; transition: transform 100ms var(--ease-out); }
