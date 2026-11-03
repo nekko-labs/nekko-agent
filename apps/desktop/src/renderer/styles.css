@@ -2346,6 +2346,52 @@
 }
 :is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
 
+/* Who a block of agent text is for (spec/chat/thinking-and-replies.md). Thinking
+   is quiet, with its icon out in the transcript's 30px gutter. A reply, and
+   anything left for the reader mid-turn, sits on a panel that grows into the
+   gutter. Neither moves the text column, so a block that changes voice when
+   the turn moves on does not re-wrap. */
+.msg-ai[data-voice='working'] {
+  position: relative;
+  color: var(--ink-soft);
+}
+.msg-voice-icon {
+  position: absolute;
+  inset-inline-start: -22px;
+  top: 4px;
+  width: 16px;
+  height: 16px;
+  color: var(--ink-faint);
+}
+.msg-ai:is([data-voice='reply'], [data-voice='attention']) {
+  width: calc(100% + 28px);
+  margin-inline: -14px;
+  /* The hidden hover actions under the text are the bottom padding. */
+  padding: 10px 14px 2px 12px;
+  border-inline-start: 2px solid var(--accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.msg-ai[data-voice='attention'] {
+  border-inline-start-color: var(--attention);
+  background: color-mix(in srgb, var(--attention) 8%, transparent);
+}
+
+/* A named topic of the agent's message. Text stays in ink for contrast; the icon
+   carries the colour, and only what asks something of the reader is loud. */
+.md-topic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.md-topic:first-child { margin-top: 0; }
+.md-topic svg { color: var(--ink-faint); }
+.md-topic[data-topic='decision'] svg { color: var(--accent); }
+.md-topic:is([data-topic='question'], [data-topic='next'], [data-topic='command']) svg { color: var(--attention); }
+
 /* Find in this chat (ChatSearchBar): a small bar floating at the top right of
    the transcript, and the highlights it draws with the CSS Custom Highlight
    API. Every match gets a soft warning wash; the current one is solid, so it
