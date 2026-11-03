@@ -428,6 +428,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
       <MarkdownSession.Provider value={sessionId}>
       <MessageBubble
         message={row.message}
+        voice={row.voice}
         basePath={basePath}
         onResend={editable ? onEditResend : undefined}
         onReset={editable ? onEditResend : undefined}
