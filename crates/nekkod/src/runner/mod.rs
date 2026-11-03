@@ -404,7 +404,13 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     repos: Vec::new(),
                     fork_approval_open: false,
                     recent: Vec::new(),
+                    suggested_size: None,
                 });
+                let (was, now) = (&v.config.settings, &r.config.settings);
+                // A new size has no jobs behind it yet; the next tick says so.
+                if (was.cpus_per_vm, was.memory_per_vm_mb) != (now.cpus_per_vm, now.memory_per_vm_mb) {
+                    v.suggested_size = None;
+                }
                 v.config = r.config.clone();
                 v.repos = r.repos().to_vec();
                 v.fork_approval_open = r.fork_approval_open();

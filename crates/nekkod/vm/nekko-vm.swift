@@ -6,7 +6,7 @@
 //
 // One JSON object per stdout line.
 //   clone --from <bundle> --to <bundle>        {"ok":true} | {"ok":false,"error"} (exit 1)
-//   run --bundle <dir> --cpus N --memory-mb M --net-fd 3 [--seed <img>] [--cache <img>]
+//   run --bundle <dir> --cpus N --memory-mb M --net-fd 3 [--seed <img>] [--cache <img>] [--stats <img>]
 //       [--first-boot-user U --first-boot-password-file F]
 //                                              {"event":"started"}, then
 //                                              {"event":"stopped","reason":"guest|signal|error","detail"}
@@ -257,10 +257,13 @@ func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32
 
     // The clone's own disk, read-write; the seed (the job's single-use runner
     // config) read-only, so the guest cannot alter what the host handed it; the
-    // cache read-write, shared by nothing else while this VM runs.
+    // cache read-write, shared by nothing else while this VM runs; the stats disk
+    // read-write and raw: the guest writes its usage samples there and nekkod reads
+    // the bytes after the VM stops, never mounting it.
     var disks = [(path: "\(bundle)/disk.img", readOnly: false)]
     if let seed = flag("--seed") { disks.append((seed, true)) }
     if let cache = flag("--cache") { disks.append((cache, false)) }
+    if let stats = flag("--stats") { disks.append((stats, false)) }
     config.storageDevices = try disks.map {
         let attachment = try VZDiskImageStorageDeviceAttachment(url: URL(fileURLWithPath: $0.path), readOnly: $0.readOnly)
         return VZVirtioBlockDeviceConfiguration(attachment: attachment)

@@ -1,6 +1,7 @@
 //! `<data>/runners/audit.jsonl`: one line per job a runner ran, lost or
 //! stopped, and per VM that failed to start.
 
+use nekko_runner::Usage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -17,7 +18,7 @@ pub enum AuditResult {
     NotRemoved,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuditLine {
     pub ts: u64,
@@ -28,6 +29,9 @@ pub struct AuditLine {
     pub result: AuditResult,
     pub seconds: u64,
     pub reason: Vec<String>,
+    /// What a finished job used inside its VM, when its stats disk was readable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +85,16 @@ pub fn recent(runners_dir: &Path, runner_id: &str, n: usize) -> Vec<AuditLine> {
         .collect()
 }
 
+/// One runner's job usage since `since_ts`, oldest first, with each line's time.
+pub fn usage(runners_dir: &Path, runner_id: &str, since_ts: u64) -> Vec<(u64, Usage)> {
+    let text = std::fs::read_to_string(runners_dir.join("audit.jsonl")).unwrap_or_default();
+    text.lines()
+        .filter_map(|l| serde_json::from_str::<AuditLine>(l).ok())
+        .filter(|l| l.runner_id == runner_id && l.ts >= since_ts)
+        .filter_map(|l| Some((l.ts, l.usage?)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,6 +109,7 @@ mod tests {
             result,
             seconds: 100,
             reason: vec![],
+            usage: None,
         }
     }
 

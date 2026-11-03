@@ -28,6 +28,19 @@ function stubs() {
   stub('id', 'echo 501');
   stub('stat', 'echo "${FAKE_CONSOLE:-runner}"');
   stub('launchctl', 'shift 2; exec "$@"');
+  stub('top', 'sleep 0.1; echo "CPU usage: 10.0% user, 15.0% sys, 75.00% idle"');
+  stub(
+    'vm_stat',
+    `cat <<'EOF'
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                               1000.
+Anonymous pages:                        131072.
+Pages wired down:                        65536.
+Pages occupied by compressor:             6400.
+Swapouts:                                   64.
+EOF`,
+  );
+  mkdirSync(join(root, 'dev'));
   // Exec only commands inside the temp root, so a real /usr/local/bin/gitlab-runner never runs.
   // `env PATH=...` in front of the job runs it as env would.
   stub('sudo', `shift 4; [ "$1" = /usr/bin/env ] && shift 2; case "$1" in '${root}'/*) exec "$@";; esac`);
@@ -38,6 +51,7 @@ function stubs() {
     join(home, 'actions-runner/run.sh'),
     `#!/bin/bash
 echo "run.sh $*" >> '${log}'
+sleep "\${FAKE_SLEEP:-0}"
 if [ -e '${home}/.nekko/jit-config' ]; then echo "run.sh saw jit-config" >> '${log}'; fi
 if [ -n "\${FAKE_HOSTILE:-}" ]; then
   mkdir -p '${victim}' && echo keep > '${victim}/jit-config' && echo keep > '${victim}/gitlab-runner.toml'
@@ -70,6 +84,8 @@ function run({ seed: files, env = {}, prepare, late } = {}) {
       NEKKO_SEED_WAIT: '1',
       NEKKO_LOGIN_WAIT: '1',
       NEKKO_POLL: '0.1',
+      NEKKO_DEV_DIR: join(root, 'dev'),
+      NEKKO_STATS_EVERY: '0',
       ...(late && { FAKE_SEED_LATE: join(seedDir, 'jit-config') }),
       ...env,
     },
@@ -107,6 +123,35 @@ test('github_seed_starts_run_sh_as_runner_then_shuts_down', () => {
   assert.ok(!calls.includes('run.sh saw jit-config'), 'the copy is gone before the job starts');
   assert.ok(!out.includes('QUJD'), 'the JIT config is never logged');
   assert.match(out, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ /m);
+});
+
+test('usage_is_sampled_onto_the_stats_disk_only', () => {
+  const header = Buffer.alloc(512);
+  header.write('NEKKOSTATS1\n');
+  const disk = (name, head) => writeFileSync(join(root, 'dev', name), Buffer.concat([head, Buffer.alloc(4096)]));
+  const { calls } = run({
+    seed: { 'jit-config': 'QUJD' },
+    env: { FAKE_SLEEP: '1' },
+    prepare: () => {
+      disk('disk1', Buffer.alloc(512)); // the guest's own disk: no header
+      disk('disk1s1', header); // a partition is never the stats disk
+      disk('disk9', header);
+    },
+  });
+  startsRunSh(calls);
+  const body = (name) => readFileSync(join(root, 'dev', name)).subarray(512).toString().replace(/\0+$/, '');
+  const lines = body('disk9').trim().split('\n');
+  assert.ok(lines.length >= 1, 'at least one sample');
+  // 16 KiB pages: (65536 wired + 131072 app + 6400 compressed) pages is 3172 MB, 64 swapouts 1 MB.
+  for (const l of lines) assert.match(l, /^\d{10} 75\.00 3172 100 1$/);
+  assert.equal(body('disk1'), '');
+  assert.equal(body('disk1s1'), '');
+});
+
+test('no_stats_disk_samples_nothing', () => {
+  const { calls } = run({ seed: { 'jit-config': 'QUJD' } });
+  startsRunSh(calls);
+  assert.ok(!calls.some((c) => c.startsWith('top')), calls.join('\n'));
 });
 
 test('jobs_get_homebrew_on_their_path', () => {

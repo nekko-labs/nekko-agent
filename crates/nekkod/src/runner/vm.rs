@@ -23,13 +23,15 @@ use tokio::io::{AsyncBufReadExt, BufReader, Lines};
 use tokio::process::{Child, ChildStdout};
 use tokio::sync::{mpsc, oneshot};
 
-/// One VM run: the clone to boot and the job's seed image.
+/// One VM run: the clone to boot, the job's seed image and, for a job, the raw
+/// stats disk its guest writes usage samples to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RunSpec {
     pub bundle: PathBuf,
     pub cpus: u8,
     pub memory_mb: u32,
     pub seed: PathBuf,
+    pub stats: Option<PathBuf>,
 }
 
 /// One image-build VM (decision 0038): never a job. The only way to give a VM a
@@ -383,6 +385,9 @@ impl Vm for HelperVm {
     async fn start(&self, spec: RunSpec) -> Result<RunHandle, String> {
         let mut args = run_args(&spec.bundle, spec.cpus, spec.memory_mb);
         args.extend(["--seed".into(), spec.seed.into()]);
+        if let Some(stats) = spec.stats {
+            args.extend(["--stats".into(), stats.into()]);
+        }
         self.boot(args, job_net_config(self.dns().await?)).await
     }
 
