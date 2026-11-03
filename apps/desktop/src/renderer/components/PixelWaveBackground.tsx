@@ -19,123 +19,112 @@ export function pixelWaveFor(presetId: string | undefined): PixelWave | null {
     : preset.wave;
 }
 
-/**
- * One seamless tile, in dots: the wave repeats every `cols` columns and `rows`
- * rows, so copies of it cover a pane of any size with no edge or band.
- */
-export const WAVE_TILE = { cols: 80, rows: 40, pitch: 9 } as const;
-
-/** Opacity of the dot at a tile column and row; periodic in both. */
-export function waveDot(col: number, row: number, peak: number): number {
-  const w = Math.sin((2 * Math.PI * col) / WAVE_TILE.cols + Math.sin((2 * Math.PI * row) / WAVE_TILE.rows) * 1.6);
-  const opacity = Math.max(0, w) ** 3 * peak;
-  return opacity < 0.02 ? 0 : opacity;
-}
-
-/**
- * Rasterize the tile once, in white at whole device pixels so every dot is
- * crisp at any display scale; the pane's colour gradient is applied per paint.
- */
-function waveTile(peak: number, scale: number): HTMLCanvasElement {
-  const pitch = Math.max(1, Math.round(WAVE_TILE.pitch * scale));
-  const tile = document.createElement('canvas');
-  tile.width = WAVE_TILE.cols * pitch;
-  tile.height = WAVE_TILE.rows * pitch;
-  const ctx = tile.getContext('2d')!;
-  ctx.fillStyle = '#fff';
-  for (let col = 0; col < WAVE_TILE.cols; col++) {
-    for (let row = 0; row < WAVE_TILE.rows; row++) {
-      const opacity = waveDot(col, row, peak);
-      if (!opacity) continue;
-      const size = Math.max(1, Math.round((opacity > peak * 0.55 ? 3 : 2) * scale));
-      ctx.globalAlpha = opacity;
-      ctx.fillRect(col * pitch + Math.round(3 * scale), row * pitch + Math.round(3 * scale), size, size);
-    }
-  }
-  return tile;
-}
+/** Nominal pitch between dots, in CSS pixels. */
+export const DOT_CELL = 9;
 
 /** Eligibility is deliberately independent of a welcome screen's model/setup UI. */
 export function showEmptyAgentWave({ loaded, messages, running, composer, enabled, readOnly = false }: { loaded: boolean; messages: number; running: boolean; composer: boolean; enabled: boolean; readOnly?: boolean }): boolean {
   return loaded && messages === 0 && !running && !composer && enabled && !readOnly;
 }
 
-/** Milliseconds between one-column steps: about 48 CSS px a second at the default speed. */
-export const waveStepMs = (speed = 0.8) => Math.round((WAVE_TILE.pitch / (60 * speed)) * 1000);
-
 /**
- * Empty-agent decoration only. The pattern advances one dot column per step,
- * like a dot-matrix sign: dots never leave the grid, and each step only copies
- * the pre-rendered tile. Pane visibility, app focus and reduced motion hold it.
+ * Empty-agent decoration. A fine grid of pixel dots with a soft wave of
+ * brightness drifting through it: every dot's opacity is recomputed each frame
+ * from `sin(x/110 - t*1.4 + sin(y/150 + t*0.5) * 1.6)`, so rows phase against
+ * each other and the pattern flows like water rather than sliding as one block.
+ * Pane visibility, app focus and reduced motion hold it still.
  */
 export function PixelWaveBackground({ wave, visible = true }: { wave: PixelWave; visible?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [intersecting, setIntersecting] = React.useState(false);
-  const step = useRef(0);
-  const paint = useRef<() => void>(() => {});
   useEffect(() => {
     const element = ref.current, canvas = canvasRef.current;
     if (!element || !canvas) return;
-    let tile: HTMLCanvasElement | null = null, tileScale = 0;
-    paint.current = () => {
-      const scale = window.devicePixelRatio || 1;
-      const width = Math.round(element.clientWidth * scale), height = Math.round(element.clientHeight * scale);
-      if (!width || !height) return;
-      if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
-      if (!tile || tileScale !== scale) { tile = waveTile(wave.peak, scale); tileScale = scale; }
-      const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const speed = wave.speed ?? 0.8;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let w = 0, h = 0, t = 0, last = 0, raf = 0;
+
+    const size = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = element.clientWidth;
+      h = element.clientHeight;
+      if (!w || !h) return;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+    };
+    const draw = () => {
+      if (!w || !h) return;
+      ctx.setTransform(Math.min(window.devicePixelRatio || 1, 2), 0, 0, Math.min(window.devicePixelRatio || 1, 2), 0, 0);
       ctx.globalCompositeOperation = 'source-over';
-      ctx.clearRect(0, 0, width, height);
-      const pitch = tile.width / WAVE_TILE.cols;
-      const shift = (step.current % WAVE_TILE.cols) * pitch;
-      for (let y = 0; y < height; y += tile.height) {
-        for (let x = -shift; x < width; x += tile.width) ctx.drawImage(tile, x, y);
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#fff';
+      for (let y = 0; y < h; y += DOT_CELL) {
+        const yPhase = Math.sin(y / 150 + t * 0.5) * 1.6;
+        for (let x = 0; x < w; x += DOT_CELL) {
+          const amp = Math.sin(x / 110 - t * 1.4 + yPhase);
+          if (amp <= 0) continue;
+          const a = amp ** 3 * wave.peak;
+          if (a < 0.02) continue;
+          const s = a > wave.peak * 0.55 ? 3 : 2;
+          ctx.globalAlpha = a;
+          ctx.fillRect(Math.round(x + (DOT_CELL - s) / 2), Math.round(y + (DOT_CELL - s) / 2), s, s);
+        }
       }
+      ctx.globalAlpha = 1;
       // Tint the white dots: the gradient stays put while the wave moves through it.
-      const gradient = ctx.createLinearGradient(0, 0, width, 0);
+      const gradient = ctx.createLinearGradient(0, 0, w, 0);
       gradient.addColorStop(0, wave.from);
       gradient.addColorStop(1, wave.to);
       ctx.globalCompositeOperation = 'source-in';
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
-      canvas.dataset.step = String(step.current);
+      ctx.fillRect(0, 0, w, h);
     };
-    paint.current();
-    const resize = new ResizeObserver(() => paint.current());
+    const still = () => !visible || !intersecting || document.hidden || !document.hasFocus() || reduced.matches;
+    // ~20 fps is enough for a continuous flow to read as smooth; dropping lower looks staccato.
+    const FRAME_MS = 50;
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      if (still()) { last = now; return; }
+      if (now - last < FRAME_MS) return;
+      t += ((now - last) / 1000) * speed;
+      last = now;
+      draw();
+    };
+    const start = () => {
+      if (raf) return;
+      last = performance.now();
+      raf = requestAnimationFrame(loop);
+    };
+    const stop = () => { if (raf) cancelAnimationFrame(raf); raf = 0; };
+
+    size();
+    draw();
+    start();
+
+    const resize = new ResizeObserver(() => { size(); draw(); });
     resize.observe(element);
     const observer = new IntersectionObserver(([entry]) => setIntersecting(entry.isIntersecting));
     observer.observe(element);
-    return () => { resize.disconnect(); observer.disconnect(); };
-  }, [wave.from, wave.to, wave.peak]);
-  useEffect(() => {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let timer = 0;
-    const still = () => !visible || !intersecting || document.hidden || !document.hasFocus() || reduced.matches;
-    const schedule = () => {
-      window.clearInterval(timer);
-      timer = 0;
-      if (still()) return;
-      // Re-checked per step too: a media query's change event can arrive late.
-      timer = window.setInterval(() => {
-        if (still()) return schedule();
-        step.current += 1;
-        paint.current();
-      }, waveStepMs(wave.speed));
-    };
-    schedule();
-    window.addEventListener('focus', schedule);
-    window.addEventListener('blur', schedule);
-    document.addEventListener('visibilitychange', schedule);
-    reduced.addEventListener('change', schedule);
+    const onFocusChange = () => { if (still()) stop(); else start(); };
+    window.addEventListener('focus', onFocusChange);
+    window.addEventListener('blur', onFocusChange);
+    document.addEventListener('visibilitychange', onFocusChange);
+    reduced.addEventListener('change', onFocusChange);
     return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', schedule);
-      window.removeEventListener('blur', schedule);
-      document.removeEventListener('visibilitychange', schedule);
-      reduced.removeEventListener('change', schedule);
+      stop();
+      resize.disconnect();
+      observer.disconnect();
+      window.removeEventListener('focus', onFocusChange);
+      window.removeEventListener('blur', onFocusChange);
+      document.removeEventListener('visibilitychange', onFocusChange);
+      reduced.removeEventListener('change', onFocusChange);
     };
-  }, [visible, intersecting, wave.speed]);
+  }, [wave.from, wave.to, wave.peak, wave.speed, visible, intersecting]);
   return <div ref={ref} className="pixel-wave-background" data-wave-paused={!visible || !intersecting || undefined} aria-hidden="true">
     <canvas ref={canvasRef} className="pixel-wave-canvas" />
   </div>;
