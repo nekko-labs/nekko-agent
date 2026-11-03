@@ -2,7 +2,6 @@
 <!-- From the iPhone's String Catalog (apps/ios/App/Localizable.xcstrings), machine-drafted there. -->
 <resources>
     <string name="your_computer">deinem Computer</string>
-    <string name="mode_label">Modus</string>
     <string name="mode_simple">Einfach</string>
     <string name="mode_expert">Experte</string>
     <string name="effort_low">Niedrig</string>
@@ -38,8 +37,9 @@
     <string name="hw_gpu_n">GPU %1$d</string>
     <string name="hw_gpu_memory">GPU-Speicher</string>
     <string name="hw_vram">VRAM</string>
+    <string name="hw_cores">%1$d Kerne</string>
+    <string name="details">Details</string>
     <string name="monitor">Monitor</string>
-    <string name="monitor_loaded">Geladen</string>
     <string name="monitor_models_loaded">%1$d Modelle geladen</string>
     <string name="monitor_reading">%1$s wird gelesen…</string>
     <string name="monitor_hardware">Hardware</string>
@@ -65,4 +65,8 @@
     <string name="run_split">GPU + CPU</string>
     <string name="run_cpu">Nur CPU</string>
     <string name="model_context">%1$s Kontext</string>
+    <string name="pill_done">Fertig</string>
+    <string name="pill_move_top">Nach oben verschieben</string>
+    <string name="pill_dock_left">Links andocken</string>
+    <string name="pill_dock_right">Rechts andocken</string>
 </resources>

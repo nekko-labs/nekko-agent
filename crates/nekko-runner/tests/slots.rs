@@ -100,6 +100,15 @@ fn warm_slots_by_mode() {
 }
 
 #[test]
+fn ready_vms_overrides_the_mode_within_what_is_available() {
+    let s = |p, n| RunnerSettings { priority: p, ready_vms: Some(n), ..Default::default() };
+    assert_eq!(warm_slots(&s(Priority::DoNotDisturb, 1), 2), 1);
+    assert_eq!(warm_slots(&s(Priority::RunnerFirst, 0), 2), 0);
+    assert_eq!(warm_slots(&s(Priority::Balanced, 2), 1), 1);
+    assert_eq!(RunnerSettings { ready_vms: Some(5), ..Default::default() }.sanitized().ready_vms, Some(2));
+}
+
+#[test]
 fn slot_limit_names_the_binding_bound() {
     let big = HostFacts { ram_mb: 131072, cores: 16, other_macos_vms: 0, user_memory_mb: None };
     let two = RunnerSettings { macos_slots: 2, ..Default::default() };

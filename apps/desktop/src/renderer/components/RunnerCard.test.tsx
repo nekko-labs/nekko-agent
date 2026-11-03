@@ -38,7 +38,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
 });
 const render = (v: RunnerView, image: ImageView | null = null) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} onSettings={() => {}} beginReply={() => () => {}} />);
 const image = (over: Partial<ImageView> = {}): ImageView => ({
-  state: 'none', stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+  state: 'none', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
 });
 const noImage = view({ state: 'error', error: 'No VM image yet.', slots: [] });
 
@@ -70,6 +70,10 @@ describe('RunnerCard', () => {
 
   it('rounds the battery percent', () => {
     expect(render(view({ host: { ...view().host, onBattery: true, batteryPct: 61.6 } }))).toContain('On battery, 62%');
+    // An unread charge is not an empty battery.
+    const unread = render(view({ host: { ...view().host, onBattery: true, batteryPct: null } }));
+    expect(unread).toContain('On battery<');
+    expect(unread).not.toContain('On battery, 0%');
   });
 
   it('waiting_card_lists_every_reason', () => {

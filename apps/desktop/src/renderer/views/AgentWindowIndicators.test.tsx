@@ -73,7 +73,7 @@ describe('agent window indicators', () => {
     expect(order).toEqual(['Tools', 'MCP', 'internet']);
     // That footer is the message box's own bottom row; nothing renders under the box.
     const box = composerBox(html);
-    for (const marker of ['aria-label="Chat actions and information"', 'data-agent-footer-controls', 'aria-haspopup="listbox"']) expect(box, marker).toContain(marker);
+    for (const marker of ['data-composer-details', 'data-agent-footer-controls', 'aria-haspopup="listbox"']) expect(box, marker).toContain(marker);
     expect(box.indexOf('data-agent-footer-controls')).toBeGreaterThan(box.indexOf('composer-bar'));
     const after = html.slice(html.indexOf(box) + box.length);
     expect(after.slice(0, after.indexOf('</section>'))).not.toMatch(/<button/);

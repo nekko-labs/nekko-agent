@@ -88,6 +88,8 @@ describe('wall chat chrome', () => {
   it('draws no empty strip under the wall composer', () => {
     withProvider();
     const html = renderChatPane(chatSession(), { surface: 'composer', commandCenter: true });
+    // The chat's details live inside the agent window's composer, not the wall's.
+    expect(html).not.toContain('data-composer-details');
     expect(html).not.toContain('aria-label="Chat actions and information"');
   });
 });

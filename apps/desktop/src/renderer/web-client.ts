@@ -412,6 +412,7 @@ function makeWebClient(): NekkoApi {
     cloudBeginOAuth: (provider) => call(IpcChannels.cloudBeginOAuth, provider),
     cloudCancelOAuth: () => call(IpcChannels.cloudCancelOAuth),
     cloudSignOut: () => call(IpcChannels.cloudSignOut),
+    cloudDeleteAccount: () => call(IpcChannels.cloudDeleteAccount),
     connectionsStatus: () => call(IpcChannels.connectionsStatus),
     connectionsEvents: (id, limit) => call(IpcChannels.connectionsEvents, id, limit),
     connectionsClear: () => call(IpcChannels.connectionsClear),
@@ -557,7 +558,7 @@ function makeWebClient(): NekkoApi {
     forkSession: (id, beforeMessageId) => call(IpcChannels.sessionFork, id, beforeMessageId),
     resetSettings: () => call(IpcChannels.settingsReset),
     listFonts: () => call(IpcChannels.fontsList),
-    wipeAllData: () => call(IpcChannels.dataWipe),
+    wipeAllData: (opts) => call(IpcChannels.dataWipe, opts ?? {}),
     listTools: () => call(IpcChannels.toolsList),
 
     // No native picker in the browser, ask for server-side path(s).
@@ -689,6 +690,7 @@ function makeWebClient(): NekkoApi {
     updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
     removeRunner: (id) => call(IpcChannels.runnerRemove, id),
     setRunnerEnabled: (id, enabled) => call(IpcChannels.runnerSetEnabled, id, enabled),
+    runnerJobLog: (id, jobId) => call(IpcChannels.runnerJobLog, id, jobId),
     githubAccounts: () => call(IpcChannels.runnerGithubAccounts),
     githubStart: (req) => call(IpcChannels.runnerGithubStart, req),
     githubStatus: () => call(IpcChannels.runnerGithubStatus),
@@ -739,6 +741,7 @@ function makeWebClient(): NekkoApi {
     forgetComputer: async () => [],
     setComputerIcon: async () => [],
     computerStats: async () => ({ system: null, gpu: null }),
+    computerEngineStatus: async () => null,
     createSessionOn: () => Promise.reject(new Error('Connected computers are in the desktop app.')),
     computerCatalog: async () => null,
     onComputersUpdated: () => () => {},

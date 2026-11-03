@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef } from 'react';
 type AgentPanelOrientation = 'vertical' | 'horizontal';
-import { PanelLeftIcon, PanelSwapIcon } from '../icons.js';
+import { PanelSwapIcon } from '../icons.js';
+import { SidebarCollapseIcon, SidebarExpandIcon } from '../gentleface-icons.js';
 import { HoverTip } from './HoverTip.js';
 import { EASE_OUT } from '../easing.js';
 
@@ -62,7 +63,7 @@ export function AgentPanelControls({ show, orientation, onToggle, onOrientation,
           aria-pressed={show}
           onClick={onToggle}
         >
-          <PanelLeftIcon className="h-4 w-4 shrink-0" />
+          {show ? <SidebarCollapseIcon className="h-4 w-4 shrink-0" /> : <SidebarExpandIcon className="h-4 w-4 shrink-0" />}
         </button>
       </HoverTip>
       <HoverTip label={orientationLabel} side={tipSide}>

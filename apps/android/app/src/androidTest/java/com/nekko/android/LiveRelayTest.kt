@@ -30,6 +30,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.theme.ThemeChoice
 import java.io.File
 import org.junit.Assume.assumeTrue
@@ -67,6 +68,8 @@ class LiveRelayTest {
             // A test device has no enrolled biometrics; the lock is covered by unit tests.
             app.appLock.setEnabled(false)
             app.themePrefs.set(if (theme == "dark") ThemeChoice.DARK else ThemeChoice.LIGHT)
+            // The + menu's Terminal is Expert only, and a fresh install starts in Simple.
+            app.phonePrefs.set(EXPERT_MODE, true)
         }
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -141,7 +144,8 @@ class LiveRelayTest {
             send("write a note")
             Thread.sleep(3_000)
             waitGone(hasContentDescription("Stop"), 30_000)
-            tap(hasContentDescription("Changes"))
+            // The button says how many files changed, and only shows once there are some.
+            tap(hasContentDescription("1 file changed"))
             waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 45_000)
             waitFor(hasText("Read only", substring = true))
             shot("8-changes")

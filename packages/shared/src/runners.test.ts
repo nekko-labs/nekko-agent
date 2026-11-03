@@ -9,6 +9,7 @@ import {
   STATE_LABELS,
   VPN_DIRECT_LABEL,
   auditText,
+  auditTimeline,
   formatMinutes,
   githubActionsSettingsUrl,
   imageFraction,
@@ -32,6 +33,7 @@ import {
   type ImageView,
   type RunnerView,
   type SlotView,
+  readyVms,
 } from './runners.js';
 
 const now = 1_800_000_000;
@@ -82,10 +84,18 @@ describe('runner helpers', () => {
     expect([formatMinutes(20), formatMinutes(360), formatMinutes(7800), formatMinutes(7200)]).toEqual(['under 1 min', '6 min', '2 h 10 min', '2 h']);
   });
 
+  it("reads ready VMs like the daemon: the owner's count, else the mode's", () => {
+    expect(readyVms({ priority: 'doNotDisturb', readyVms: null })).toBe(0);
+    expect(readyVms({ priority: 'balanced' })).toBe(1);
+    expect(readyVms({ priority: 'runnerFirst', readyVms: null })).toBe(2);
+    expect(readyVms({ priority: 'doNotDisturb', readyVms: 1 })).toBe(1);
+    expect(readyVms({ priority: 'balanced', readyVms: 5 })).toBe(2);
+  });
+
   it('titles a runner like the mockup', () => {
     const v = view();
     expect(runnerTitle(v)).toBe('This Mac · GitHub · nekko-labs/nekko-agent');
-    expect(runnerSubtitle(v)).toBe("repo scope · label nekko-cloud-mac · Do not disturb: Only run when I'm idle · While a runner is active");
+    expect(runnerSubtitle(v)).toBe("repo scope · label nekko-cloud-mac · Balanced: in the background · While a runner is active");
     expect(runnerTitle(view({ config: { ...v.config, scope: { kind: 'org', org: 'acme' } } }))).toBe('This Mac · GitHub · acme');
   });
 
@@ -113,22 +123,38 @@ describe('runner helpers', () => {
 
   it('describes recent jobs', () => {
     const line = (over: Partial<AuditLine>): AuditLine => ({ ts: now, runnerId: 'r', repo: 'o/r', workflow: 'ci', job: 'darwin daemon', result: 'finished', seconds: 120, reason: [], ...over });
-    expect(auditText(line({ workflow: 'mobile', job: 'iOS build', seconds: 660 }))).toBe('mobile · iOS build · finished · 11 min · VM deleted');
-    expect(auditText(line({ result: 'stopped', reason: ['userBusy'] }))).toBe('ci · darwin daemon · stopped after 2 min (your apps are busy) · VM deleted');
+    expect(auditText(line({ workflow: 'mobile', job: 'iOS build', seconds: 660 }))).toBe('mobile · iOS build · finished · 11 min');
+    expect(auditText(line({ result: 'stopped', reason: ['userBusy'] }))).toBe('ci · darwin daemon · stopped after 2 min (your apps are busy)');
     // AuditLine does not say whether that job was re-run; only the current setting is known.
     expect(auditText(line({ result: 'lost', reason: ['slept'] }))).toBe('ci · darwin daemon · lost (this Mac slept) · re-run if allowed');
     expect(auditText(line({ result: 'lost', reason: ['slept'] }), false)).toBe('ci · darwin daemon · lost (this Mac slept)');
-    expect(auditText(line({ result: 'stopped', reason: ['maxJobTime'] }))).toBe('ci · darwin daemon · stopped at the max job time · VM deleted');
+    expect(auditText(line({ result: 'stopped', reason: ['maxJobTime'] }))).toBe('ci · darwin daemon · stopped at the max job time');
     expect(auditText(line({ result: 'failedToStart', workflow: null, job: null }))).toBe('A VM failed to start');
     expect(auditText(line({ result: 'notRemoved', workflow: null, job: null, reason: ['runner 77 (nekko-mac1-1-0) in group g (id 9) at https://gitlab.com could not be removed; delete it by hand'] }))).toBe('runner 77 (nekko-mac1-1-0) in group g (id 9) at https://gitlab.com could not be removed; delete it by hand');
-    expect(auditText(line({ result: 'stopped', reason: ['bootTimeout'] }))).toBe('ci · darwin daemon · stopped after 2 min (the VM never started) · VM deleted');
-    expect(auditText(line({ result: 'stopped', reason: ['idle'] }))).toBe('ci · darwin daemon · stopped after 2 min (idle too long) · VM deleted');
+    expect(auditText(line({ result: 'stopped', reason: ['bootTimeout'] }))).toBe('ci · darwin daemon · stopped after 2 min (the VM never started)');
+    expect(auditText(line({ result: 'stopped', reason: ['idle'] }))).toBe('ci · darwin daemon · stopped after 2 min (idle too long)');
     expect(auditText(line({ result: 'lost', reason: ['signal'] }))).toBe('ci · darwin daemon · lost (the daemon stopped it) · re-run if allowed');
     expect(auditText(line({ result: 'lost', reason: ['removed'] }))).toBe('ci · darwin daemon · lost (the runner was removed) · re-run if allowed');
     // The supervisor writes free-form error text as a reason: show it, bounded, not a generic phrase.
-    expect(auditText(line({ result: 'stopped', reason: ['clone failed: disk full'] }))).toBe('ci · darwin daemon · stopped after 2 min (clone failed: disk full) · VM deleted');
-    expect(auditText(line({ result: 'stopped', reason: ['x'.repeat(200)] }))).toBe(`ci · darwin daemon · stopped after 2 min (${'x'.repeat(79)}…) · VM deleted`);
+    expect(auditText(line({ result: 'stopped', reason: ['clone failed: disk full'] }))).toBe('ci · darwin daemon · stopped after 2 min (clone failed: disk full)');
+    expect(auditText(line({ result: 'stopped', reason: ['x'.repeat(200)] }))).toBe(`ci · darwin daemon · stopped after 2 min (${'x'.repeat(79)}…)`);
     expect(auditText(line({ result: 'stopped', reason: ['memoryCritical'] }))).toContain('(memory is critically low)');
+  });
+
+  it('tells a recent job step by step', () => {
+    const line = (over: Partial<AuditLine>): AuditLine => ({ ts: 1000, runnerId: 'r', repo: 'o/r', workflow: 'ci', job: 'build', result: 'finished', seconds: 120, reason: [], ...over });
+    const events = [{ ts: 700, state: 'starting' as const }, { ts: 760, state: 'ready' as const }, { ts: 800, state: 'running' as const }];
+    expect(auditTimeline(line({ events }))).toEqual([
+      { ts: 700, text: 'Starting a VM' },
+      { ts: 760, text: 'VM online, waiting for a job' },
+      { ts: 800, text: 'Running the job' },
+      { ts: 1000, text: 'The job finished and the VM powered off; VM deleted' },
+    ]);
+    // An older daemon's line has no events: the end is still told.
+    expect(auditTimeline(line({ result: 'stopped', reason: ['slept'] }))).toEqual([{ ts: 1000, text: 'Stopped (this Mac slept); VM deleted' }]);
+    expect(auditTimeline(line({ result: 'failedToStart', reason: ['it powered off before its runner connected'] }))[0].text)
+      .toBe('The VM failed to start (it powered off before its runner connected); VM deleted');
+    expect(auditTimeline(line({ result: 'notRemoved' }))).toEqual([]);
   });
 
   it('names the network with its trust state', () => {
@@ -153,7 +179,7 @@ describe('runner helpers', () => {
   });
 
   it('builds a connect request', () => {
-    const f: ConnectForm = { appId: '123', installationId: '456', privateKeyPem: '-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----', kind: 'org', target: 'acme', repos: 'api, acme/web', allowPublic: false, label: '', priority: 'balanced' };
+    const f: ConnectForm = { appId: '123', installationId: '456', privateKeyPem: '-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----', kind: 'org', target: 'acme', repos: 'api, acme/web', allowPublic: false, label: '', priority: 'balanced', readyVms: 1 };
     expect(toConnectRequest(f, false)).toEqual({ provider: 'github', scope: { kind: 'org', org: 'acme' }, appId: 123, installationId: 456, privateKeyPem: f.privateKeyPem, repos: ['acme/api', 'acme/web'], allowPublic: false, label: 'nekko-cloud-mac' });
     expect(toConnectRequest({ ...f, kind: 'repo', target: 'o/r', repos: 'ignored' }, false)).toMatchObject({ scope: { kind: 'repo', owner: 'o', repo: 'r' }, repos: [] });
 
@@ -228,12 +254,20 @@ describe('runnerWorkflowPrompt', () => {
 
 describe('image progress', () => {
   const image = (over: Partial<ImageView>): ImageView => ({
-    state: 'building', stage: 'download', doneStages: ['check'], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+    state: 'building', kind: 'xcode', stage: 'download', doneStages: ['check'], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
   });
   const marks = (v: ImageView) => imageStageRows(v).map((r) => r.mark);
 
   it('lists the six stages a person follows', () => {
     expect(imageStageRows(image({})).map((r) => r.label)).toEqual(['Check this Mac', 'Download macOS', 'Install macOS', 'Add Xcode and tools', 'Lock the VM down', 'Test a boot']);
+  });
+
+  it('a refresh lists only its own stages', () => {
+    const v = image({ kind: 'refresh', stage: 'scripts', doneStages: ['check'], detail: 'Writing the new scripts into the copy' });
+    expect(imageStageRows(v).map((r) => r.label)).toEqual(['Check this Mac', "Update Nekko's scripts", 'Test a boot']);
+    expect(marks(v)).toEqual(['done', 'now', 'todo']);
+    // No build at all lists a full one.
+    expect(imageStageRows(image({ kind: null, state: 'none', stage: null, doneStages: [] }))).toHaveLength(6);
   });
 
   it('marks each stage of a running build', () => {

@@ -4,6 +4,7 @@ import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/sha
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
 import { sheetPlan } from '../claudeAgentPlan.js';
+import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
 import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
@@ -191,6 +192,8 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   const [collapsed, setCollapsed] = useState(initiallyOpen === false);
   // The user's own open/close per step; unset steps follow the defaults below.
   const [stepOpen, setStepOpen] = useState<Record<string, boolean>>({});
+  // These chips are pull requests, so the condition holds wherever they would draw.
+  const prsShown = useShown('pr-status', { pr: true });
   const sessions = useStore((s) => s.sessions);
   const providers = useStore((s) => s.providers);
   const liveVersion = useLiveRunsVersion();
@@ -243,7 +246,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   // for, else the step that opened the PR, else whatever is running now.
   const checker = plan.filter(step => step.verification).pop()?.id;
   const ci = new Map<string, PrInfo[]>();
-  for (const pr of prs) {
+  for (const pr of prsShown ? prs : []) {
     if (pr.state !== 'open' || !pr.checkProgress?.items.length) continue;
     const id = checker ?? [...links].find(([, own]) => own.prs.includes(pr.url))?.[0] ?? current?.id;
     if (id) ci.set(id, [...(ci.get(id) ?? []), pr]);
@@ -267,7 +270,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
     const own = links.get(current.id);
     const allKids = [...childById.values()];
     // The current step's PRs, else the newest PR the chat opened, so a finished plan still shows where it landed.
-    const shownPrs = own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
+    const shownPrs = !prsShown ? [] : own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
     const chips = [
       allKids.length > 0 && <SubagentSummary key="subagents" children={allKids} />,
       current.verification && <VerificationChip key="verify" step={current} />,
@@ -305,7 +308,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         const own = links.get(step.id);
         const checks = ci.get(step.id) ?? [];
         const stepKids = kids(own);
-        const chips = !!(own?.prs.length || own?.artifacts.length || own?.projects.length || stepKids.length || step.verification || checks.length);
+        const chips = !!((prsShown && own?.prs.length) || own?.artifacts.length || own?.projects.length || stepKids.length || step.verification || checks.length);
         const detail = step.verification?.detail || step.note;
         const squeezed = step.status === 'done' || step.status === 'skipped';
         const more = !!(detail || chips);
@@ -330,7 +333,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
                 {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
                 {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}
                 {step.verification && <VerificationChip step={step} />}
-                {own?.prs.map(prChip)}
+                {prsShown && own?.prs.map(prChip)}
                 {checks.map(pr => <CiChips key={pr.url} info={pr} />)}
                 {own?.artifacts.map(artifactChip)}
               </div>}

@@ -1,8 +1,8 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createRotatingLog, teeConsole } from './appLog.js';
+import { createRotatingLog, MAX_AGE_MS, teeConsole } from './appLog.js';
 
 const dirs: string[] = [];
 const temp = () => {
@@ -69,6 +69,37 @@ describe('app log', () => {
     expect(readFileSync(join(dir, 'app.log'), 'utf8')).toBe(
       '2026-10-20T10:00:00.000Z LOG engine: ready\n2026-10-20T10:00:00.000Z ERROR two\n2026-10-20T10:00:00.000Z ERROR lines\n',
     );
+  });
+
+  it('redacts secrets before they reach the file', async () => {
+    const dir = temp();
+    const log = createRotatingLog(dir);
+    const quiet = (..._args: unknown[]) => {};
+    const target = { log: quiet, info: quiet, warn: quiet, error: quiet, debug: quiet };
+    teeConsole(log, target as unknown as Console, () => new Date('2026-10-20T10:00:00.000Z'));
+    target.log('engine: calling with Authorization: Bearer abcdef0123456789xyz');
+    target.error('key sk-ant-api03-abcdefghijklmnopqrstu\nnext line');
+    await log.flush();
+    const text = readFileSync(join(dir, 'app.log'), 'utf8');
+    expect(text).not.toContain('abcdef0123456789xyz');
+    expect(text).not.toContain('abcdefghijklmnopqrstu');
+    expect(text).toContain('LOG engine: calling with Authorization: Bearer [redacted]');
+    expect(text).toContain('ERROR next line');
+  });
+
+  it('deletes rotated files older than the limit when it opens', async () => {
+    const dir = temp();
+    const now = Date.now();
+    for (const [name, age] of [['app.log.1', 1000], ['app.log.2', MAX_AGE_MS + 60_000], ['app.log', MAX_AGE_MS + 60_000]] as const) {
+      writeFileSync(join(dir, name), 'old\n');
+      utimesSync(join(dir, name), (now - age) / 1000, (now - age) / 1000);
+    }
+    const log = createRotatingLog(dir, 'app.log', { now: () => now });
+    log.write('new');
+    await log.flush();
+    expect(existsSync(join(dir, 'app.log.1'))).toBe(true);
+    expect(existsSync(join(dir, 'app.log.2'))).toBe(false);
+    expect(readFileSync(join(dir, 'app.log'), 'utf8')).toBe('old\nnew\n');
   });
 
   it('drops writes it cannot make without throwing', async () => {

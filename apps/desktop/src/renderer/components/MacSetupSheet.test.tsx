@@ -12,14 +12,15 @@ vi.mock('./primitives/index.js', async (original) => ({
 
 import { FailedStep, MacSetupSheet, ModeStep, PlanStep, ProgressStep, buildRequest, setupScreen, startRunner } from './MacSetupSheet.js';
 
-const plan = (over: Partial<ImagePlan> = {}): ImagePlan => ({ xcode: '27.2', freeGb: 369.4, needsGb: 110, ...over });
+const plan = (over: Partial<ImagePlan> = {}): ImagePlan => ({ xcode: '27.2', freeGb: 369.4, needsGb: 110, cachedMacos: false, ...over });
 const image = (over: Partial<ImageView> = {}): ImageView => ({
-  state: 'none', stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+  state: 'none', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
 });
 const planStep = (p: ImagePlan | null | undefined, rebuild = false, error: string | null = null) =>
   renderToStaticMarkup(<PlanStep plan={p} priority="doNotDisturb" rebuild={rebuild} error={error} busy={false} onPriority={() => {}} onBuild={() => {}} />);
 const progress = (v: ImageView, onResume?: () => void) => renderToStaticMarkup(<ProgressStep image={v} error={null} busy={false} onCancel={() => {}} onResume={onResume} />);
 const failed = (v: ImageView) => renderToStaticMarkup(<FailedStep image={v} error={null} busy={false} onCancel={() => {}} onRetry={() => {}} />);
+const esc = (t: string) => renderToStaticMarkup(<>{t}</>);
 const button = (html: string, name: string) => html.match(new RegExp(`<button[^>]*>${name}`))?.[0] ?? '';
 
 describe('MacSetupSheet', () => {
@@ -28,6 +29,11 @@ describe('MacSetupSheet', () => {
     for (const s of ['Set up this Mac', 'macOS from Apple', 'iOS simulator from Apple', 'Xcode 27.2 from this Mac', 'Copied in', 'Space needed', '110 GB of 369 GB free', 'Do not disturb', 'Only run when I&#x27;m idle', 'Balanced', 'In the background', 'Runner first', 'For a docked Mac', 'Continuing accepts Apple&#x27;s macOS and Xcode licenses for this VM.', 'Download and set up']) expect(html).toContain(s);
     expect(html.match(/type="radio"/g)).toHaveLength(3);
     expect(html).not.toContain('macOS only');
+  });
+
+  it('a_kept_macos_image_is_not_downloaded_again', () => {
+    expect(planStep(plan({ cachedMacos: true }))).toContain('Downloaded earlier');
+    expect(planStep(plan())).toContain('About 26 GB');
   });
 
   it('no_xcode_offers_macos_only', () => {
@@ -84,6 +90,12 @@ describe('MacSetupSheet', () => {
     expect(html).toContain('runner-bar');
     expect(html).toContain('role="progressbar"');
     expect(html).not.toContain('Resume setup');
+  });
+
+  it('a_refresh_says_the_image_in_use_keeps_working', () => {
+    const html = progress(image({ kind: 'refresh', state: 'building', stage: 'scripts', doneStages: ['check'] }));
+    for (const s of ['Updating the image', esc("Update Nekko's scripts"), 'Test a boot', 'keeps taking jobs']) expect(html).toContain(s);
+    for (const s of ['Download', 'Add Xcode', 'Lock the VM down']) expect(html).not.toContain(s);
   });
 
   it('waiting_shows_its_reason', () => {
