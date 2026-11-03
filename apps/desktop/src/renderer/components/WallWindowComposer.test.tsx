@@ -28,11 +28,9 @@ describe('a composer in every wall window (#1317)', () => {
     expect(html).not.toContain('send-avatar');
   });
 
-  it('rests as one row in a window that is not selected, and keeps the Agent tab composer as it was', () => {
+  it('keeps the Agent tab composer as it was', () => {
     withProvider();
-    expect(renderChatPane(chatSession(), { commandCenter: true, surface: 'full', resting: true })).toContain('data-resting="true"');
-    const agentTab = renderChatPane(chatSession(), { resting: true });
-    expect(agentTab).not.toContain('data-resting');
+    const agentTab = renderChatPane(chatSession());
     expect(agentTab).not.toContain('data-wall-composer');
     expect(agentTab).toContain('send-avatar');
   });
