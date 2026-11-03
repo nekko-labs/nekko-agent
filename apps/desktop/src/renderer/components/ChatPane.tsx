@@ -22,7 +22,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, inSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -588,6 +588,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
   // What a delegation that names no model runs on: the saved route, else this chat's model.
   const delegationDefaultModel = useStore(s => s.settings?.orchestration?.delegationRoute?.modelId);
+  const delegationStrategy = useStore(s => s.settings?.orchestration?.strategy);
   const computer = useComputerOf(sessionId);
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
   const { providers: localProviders, setMascotMood, refreshSessions } = useStore(
@@ -1573,7 +1574,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * Sends the draft, or `override` instead of it. False when a gate refused it (voice puts the text back then).
    * `admitted` fires once the turn has begun or been queued; the returned promise settles only when the turn ends.
    */
-  const send = async (override?: string, admitted?: () => void): Promise<boolean | undefined> => {
+  const send = async (override?: string, admitted?: () => void, wrap: (text: string) => string = (t) => t): Promise<boolean | undefined> => {
     if (remoteBlock) {
       useStore.getState().pushToast('error', `${remoteBlock}. This message wasn't sent.`);
       return false;
@@ -1587,16 +1588,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const input = override ?? draft;
     if (imageMode) return input.trim() ? sendImage(input.trim(), override === undefined, admitted) : false;
     const skill = activeSkill;
-    const text = [skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n');
+    const text = wrap([skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n'));
     const images = pendingImages;
     const videos = pendingVideos;
     if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return false;
     // A follow-up never interrupts work by accident. Queue the same payload the
     // turn would have sent so attachments and skills run when their turn arrives.
     if (streamingRef.current && !imageMode) {
-      if (override === undefined) await queueDraft();
+      if (override === undefined) await queueDraft(wrap);
       else {
-        const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(input, images, skill, videos));
+        const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(wrap(input), images, skill, videos));
         if (updated) { setSession(updated); refreshSessions(); }
       }
       return;
@@ -1687,8 +1688,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   // Queue the draft to run after the current reply (and any earlier queued
   // items). Useful for lining up follow-ups while an agent is working.
-  const queueDraft = async () => {
-    const text = draft.trim();
+  const queueDraft = async (wrap: (text: string) => string = (t) => t) => {
+    const typed = draft.trim();
+    const text = typed ? wrap(typed) : typed;
     const images = pendingImages;
     const videos = pendingVideos;
     const skill = activeSkill;
@@ -2000,6 +2002,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
   const ghostSuggestion = !draft && !errorNotice && liveSuggestions?.next ? liveSuggestions.next : null;
+
+  // More work for a chat that has replied: run it here, or hand it to a subagent.
+  // A slash command isn't work to place, and Enter still means here.
+  const followUp = draft.trim() ? (draft.trimStart().startsWith('/') ? null : draft) : ghostSuggestion;
+  const offerSubagent = !!followUp && !imageMode && !remoteBlock && hasProvider && !!session
+    && canOfferSubagent(session, delegationStrategy);
+  const runFollowUp = (wrap?: (text: string) => string) => void send(draft.trim() ? undefined : followUp ?? undefined, undefined, wrap);
 
   const onComposerKeyDown = (e: React.KeyboardEvent<MarkdownEditorElement>) => {
     if (e.nativeEvent.isComposing) return;
@@ -3078,6 +3087,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   />
                   <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
+                {offerSubagent && (
+                  <div className="flex flex-wrap items-center gap-x-1 px-3 text-2xs text-ink-faint" role="group" aria-label="Where this work runs" data-work-place>
+                    <button type="button" className="rounded-md px-2 py-0.5 text-accent hover:bg-surface-2" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
+                    <span>uses more context</span>
+                    <span aria-hidden>·</span>
+                    <button type="button" className="rounded-md px-2 py-0.5 text-accent hover:bg-surface-2" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
+                  </div>
+                )}
                 <div className="composer-bar flex items-center gap-2 px-2 pb-2 pt-1">
                   {!imageMode && (<>
                   <div
