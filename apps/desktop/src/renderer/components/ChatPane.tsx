@@ -2603,8 +2603,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {offerSubagent && (
                   <div className="flex flex-wrap items-center gap-2 py-2 text-xs" role="group" aria-label="Where this work runs" data-work-place>
                     {!draft.trim() && <span className="min-w-0 text-ink-faint [overflow-wrap:anywhere]">Next: {followUp}</span>}
-                    <button type="button" className="btn btn-outline text-xs" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
-                    <button type="button" className="btn btn-outline text-xs" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
+                    <button type="button" className="btn btn-outline py-1 text-xs" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
+                    <button type="button" className="btn btn-outline py-1 text-xs" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
                     <span className="text-2xs text-ink-faint">Here uses more context</span>
                   </div>
                 )}
