@@ -47,6 +47,17 @@ area: desktop
 - **A chat getting long (Simple only).** When the chat's context reaches 85% of the model's window, a line above the composer, clear of the cat, says *This chat is getting long. Starting fresh saves about N tokens.*, where N is the conversation's tokens in the context breakdown, with **Start fresh** (a new chat in the same folder) and **Not now** (until the app restarts, for that chat).
 - **Effort and context in Expert** keep their 2026-10-25 forms, the dial with a popover and the ring with a count.
 
+## Message box bottom row (2026-11-03)
+
+Issue: [#1599](https://github.com/nekko-labs/nekko-agent/issues/1599). Philip: nothing should ever go below the message box; a lower row belongs inside it.
+
+- **Simple and Expert.** The row under the message box (the details panel above) is the box's own bottom row, under the editor and the bar with + and Send, behind a hairline. The "this chat needs a model" note sits at the top of that row, inside the box.
+- **New chat.** On the wall's new chat the model and effort already ride the composer's bar, so the copy that floated under the box is gone. A new chat outside the wall keeps the model and effort as the box's bottom row.
+- **Wall windows** still have no footer row ([a composer in every wall window](a-composer-in-every-wall-window.md)). An archived chat has no message box and now shows no footer either.
+- Nothing renders under the message box in any of these.
+
+Verification: `AgentWindowIndicators.test.tsx` and `cleanStart.test.tsx` check the controls sit inside the box after its bar and that no control follows the box; captured before and after in the hidden chat-modes and new-chat harnesses.
+
 ## Wide phones
 
 - **iPhone app, regular width** (an open folding phone, iPad): each pane in `PanesView` shows the same `ChatView`, so the switch, the model and effort control, the context gauge and the Expert panel apply per pane.
