@@ -258,6 +258,8 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Only when**: **On power**, **Trusted networks**, **Never on hotspots**, and
   **Let jobs use the internet directly while a VPN is on**. Job traffic never goes through a VPN
   tunnel; with that switch off, the runner waits while a VPN carries all of the Mac's traffic.
+  With **On power** off, Balanced still takes jobs on battery only above 80% charge, Runner first
+  above 50%, and Do not disturb never. A charge the Mac can't read counts as too low.
 - **Trusted networks**: up to 32, recognised by the router's hardware address and listed as
   `gw:...` ids. The address comes from macOS's own network state (`scutil`), then `arp`, which
   sees nothing without Local Network permission. **Trust this network** adds the one this Mac is on, shown with a
