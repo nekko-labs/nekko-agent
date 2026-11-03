@@ -452,5 +452,6 @@ class ChatViewModel(
         computerName = s.active?.name ?: "your computer",
         models = s.models,
         canQueue = true,
+        strategy = s.pcSettings.orchestrationStrategy,
     )
 }

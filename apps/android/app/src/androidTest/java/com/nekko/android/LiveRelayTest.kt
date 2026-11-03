@@ -108,6 +108,18 @@ class LiveRelayTest {
             waitFor(hasText("Hello from your computer."), 30_000)
             shot("4-reply")
 
+            // More work for this chat: a typed follow-up can go to a subagent, as a plain message.
+            val box = hasContentDescription("Message")
+            compose.onNode(box).performClick()
+            compose.onNode(box).performTextInput("Fix the tests")
+            waitFor(hasText("Here uses more context"))
+            shot("4-subagent-choice")
+            tap(hasText("In a subagent"))
+            waitFor(hasText("Do this in a subagent, then report back:", substring = true), 30_000)
+            Thread.sleep(3_000)
+            waitGone(hasContentDescription("Stop"), 30_000)
+            shot("4-subagent-sent")
+
             // + sits inside the message box and offers another agent or a terminal, as on the desktop.
             tap(hasContentDescription("Add"))
             waitFor(hasText("New agent"))
