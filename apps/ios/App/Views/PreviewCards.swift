@@ -12,6 +12,7 @@ struct AssistantReply: View {
     let text: String
     let streaming: Bool
     let sessionId: String
+    var voice: Voice? = nil
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var palette
     @State private var previewing: ChatPreviewLink?
@@ -20,7 +21,8 @@ struct AssistantReply: View {
         // Cards come once the reply is finished; a tapped link works meanwhile.
         let links = streaming ? [] : PreviewLinks.of(text)
         VStack(alignment: .leading, spacing: 10) {
-            MarkdownText(text: text).foregroundStyle(palette.ink)
+            MarkdownText(text: text, topics: true, askTail: voice == .reply || voice == .attention)
+                .foregroundStyle(voice == .working ? palette.inkSoft : palette.ink)
                 .environment(\.openURL, OpenURLAction { url in route(url, links) })
             if !links.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
