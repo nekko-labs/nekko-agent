@@ -78,6 +78,8 @@ each PR's head as the `Native iOS (batch)` status, which `gate` accepts
 one that conflicts only with others in the batch waits for a later batch. A red batch
 marks every PR in it red: run `gh workflow run ios-native.yml --ref <branch>` on your
 branch to see whether the failure is yours (a green run on the PR beats a red batch).
+A head with a green batch is left out of later ones, so main moving can't turn it
+pending and push it out of the merge queue; a new push gets a new batch.
 Preview the next batch with `node scripts/ios-batch.mjs --dry-run`.
 
 On a PR, Native iOS checks dark mode only when the change touches colours
