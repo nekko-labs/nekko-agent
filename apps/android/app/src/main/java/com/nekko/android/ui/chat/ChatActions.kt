@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.settings.modeDetailRes
 import com.nekko.android.ui.settings.modeTitleRes
+import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PcSettings.ChatMode
 
@@ -66,6 +67,10 @@ fun RenameChatDialog(title: String, onDismiss: () -> Unit, onRename: (String) ->
 @Composable
 fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDismiss: () -> Unit, onPick: (ChatMode) -> Unit) {
     val p = Nekko.palette
+    // Simple names the same values in plain words.
+    val expert = LocalSimple.current.expert
+    val title = { m: ChatMode -> if (expert) modeTitleRes(m) else asksTitleRes(m) }
+    val detail = { m: ChatMode -> if (expert) modeDetailRes(m) else asksDetailRes(m) }
     val shown = current ?: default
     var askYolo by rememberSaveable { mutableStateOf(false) }
     if (askYolo) {
@@ -80,7 +85,7 @@ fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDi
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.chat_chat_mode)) },
+        title = { Text(stringResource(if (expert) R.string.chat_chat_mode else R.string.simple_asks_first)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Column(Modifier.selectableGroup()) {
@@ -103,15 +108,15 @@ fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDi
                         ) {
                             RadioButton(selected = shown == m, onClick = null)
                             Column(Modifier.weight(1f)) {
-                                Text(stringResource(modeTitleRes(m)), style = MaterialTheme.typography.bodyLarge, color = if (m == ChatMode.YOLO) p.danger else p.ink)
-                                Text(stringResource(modeDetailRes(m)), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                                Text(stringResource(title(m)), style = MaterialTheme.typography.bodyLarge, color = if (m == ChatMode.YOLO) p.danger else p.ink)
+                                Text(stringResource(detail(m)), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                             }
                         }
                     }
                 }
                 if (current == null) {
                     Text(
-                        stringResource(R.string.chat_follows_default, computer, stringResource(modeTitleRes(default))),
+                        stringResource(R.string.chat_follows_default, computer, stringResource(title(default))),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkFaint,
                     )

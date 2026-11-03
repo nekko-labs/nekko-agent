@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -61,6 +61,7 @@ import com.nekko.android.monitors.MonitorsViewModel
 import com.nekko.android.ui.chat.QuestionCard
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Pill
+import com.nekko.android.ui.components.RowDivider
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.components.toneColor
@@ -135,9 +136,7 @@ fun MonitorsScreen(
         }
         val hardwareTitle = stringResource(R.string.settings_hardware_on, computer)
         val runningTitle = stringResource(R.string.settings_running)
-        val nothingRunning = stringResource(R.string.settings_nothing_running)
         val needsTitle = stringResource(R.string.settings_needs_you)
-        val nothingWaiting = stringResource(R.string.settings_nothing_waiting)
         val automationsTitle = stringResource(R.string.settings_automations)
         val noScheduled = stringResource(R.string.settings_no_scheduled)
         val automationName = stringResource(R.string.settings_automation)
@@ -162,20 +161,24 @@ fun MonitorsScreen(
                 return@LazyColumn
             }
 
-            item(key = "hardware") { SectionHeader(hardwareTitle) }
+            val needs = state.needsYou
+            val sections = monitorSections(summary.running.size, needs.size)
+            item(key = "hardware") { SectionHeader(hardwareTitle, accent = true) }
             item(key = "hw-rows") { HardwareRows(summary.hardware) }
 
-            item(key = "running") { SectionHeader(runningTitle) }
-            if (summary.running.isEmpty()) item(key = "running-none") { Empty(nothingRunning) }
-            items(summary.running, key = { "run:${it.id}" }) { r ->
-                val elapsed = r.elapsedMs?.let { it + (now - (state.readAt ?: now)).coerceAtLeast(0) }
-                RunningRow(r, elapsed) { onOpenChat(r.id) }
+            // Running and Needs you show only while they hold something.
+            if (MonitorSection.RUNNING in sections) {
+                item(key = "running") { SectionHeader(runningTitle, accent = true) }
+                itemsIndexed(summary.running, key = { _, r -> "run:${r.id}" }) { i, r ->
+                    if (i > 0) RowDivider(40.dp)
+                    val elapsed = r.elapsedMs?.let { it + (now - (state.readAt ?: now)).coerceAtLeast(0) }
+                    RunningRow(r, elapsed) { onOpenChat(r.id) }
+                }
             }
 
-            val needs = state.needsYou
-            item(key = "needs") { SectionHeader(needsTitle) }
-            if (needs.isEmpty()) item(key = "needs-none") { Empty(nothingWaiting) }
-            items(needs, key = { "need:${it.key}" }) { row ->
+            if (MonitorSection.NEEDS_YOU in sections) item(key = "needs") { SectionHeader(needsTitle, accent = true) }
+            itemsIndexed(needs, key = { _, n -> "need:${n.key}" }) { i, row ->
+                if (i > 0) RowDivider()
                 NeedsYouRow(
                     row = row,
                     onOpen = { onOpenChat(row.sessionId) },
@@ -185,9 +188,10 @@ fun MonitorsScreen(
                 )
             }
 
-            item(key = "automations") { SectionHeader(automationsTitle) }
+            item(key = "automations") { SectionHeader(automationsTitle, accent = true) }
             if (summary.automations.isEmpty()) item(key = "auto-none") { Empty(noScheduled) }
-            items(summary.automations, key = { "auto:${it.kind}:${it.id}" }) { a ->
+            itemsIndexed(summary.automations, key = { _, a -> "auto:${a.kind}:${a.id}" }) { i, a ->
+                if (i > 0) RowDivider(40.dp)
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -200,6 +204,17 @@ fun MonitorsScreen(
             }
         }
     }
+}
+
+/** The Monitors screen's groups, in order. */
+internal enum class MonitorSection { HARDWARE, RUNNING, NEEDS_YOU, AUTOMATIONS }
+
+/** Which groups show: Running and Needs you only while they hold at least one chat. */
+internal fun monitorSections(running: Int, needsYou: Int): List<MonitorSection> = buildList {
+    add(MonitorSection.HARDWARE)
+    if (running > 0) add(MonitorSection.RUNNING)
+    if (needsYou > 0) add(MonitorSection.NEEDS_YOU)
+    add(MonitorSection.AUTOMATIONS)
 }
 
 @Composable

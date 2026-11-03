@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pickerPlacement } from './pickerPlacement.js';
-import { filteredModelGroups, isModelPickerEscape, modelRowLabel, nextFavoriteModels, shouldDismissModelPickerPointer } from './modelPickerInteractions.js';
+import { MODEL_LIST_TIMEOUT_MS, filteredModelGroups, isModelPickerEscape, modelRowLabel, nextFavoriteModels, shouldDismissModelPickerPointer, withTimeout } from './modelPickerInteractions.js';
 import type { AutoQuality, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 import {
   AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, formatModelPriceLabel,
@@ -13,16 +13,6 @@ import { useAllProviderLimits } from '../../useLimits.js';
 import { accountEmailOf, accountShortName, accountSiblings, providerDisplayName, useAccountEmails } from '../../accountEmails.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
 import { CloudIcon, GridIcon, LaptopIcon, RouteIcon, StarIcon } from '../../icons.js';
-
-/** How long one provider's model list may take before it is shown as unreachable. */
-export const MODEL_LIST_TIMEOUT_MS = 6000;
-
-export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timed out')), ms);
-    work.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
-  });
-}
 
 /**
  * Provider + model as one legible control (instead of two microscopic selects):
@@ -47,6 +37,7 @@ export function ModelPicker({
   filterProviders,
   placeholder,
   resolvedModelId,
+  footer,
 }: {
   providers: ProviderConfig[];
   providerId: string | null;
@@ -83,6 +74,8 @@ export function ModelPicker({
    * picker lists both.
    */
   resolvedModelId?: string;
+  /** Under the list, for what belongs with the model (Simple keeps effort here). */
+  footer?: React.ReactNode;
 }) {
   // A provider switched off on the Models page is neither listed nor contacted.
   const providers = useMemo(() => allProviders.filter((p) => p.enabled !== false && (!filterProviders || filterProviders(p))), [allProviders, filterProviders]);
@@ -431,6 +424,7 @@ export function ModelPicker({
               );
             })}
           </div>
+          {footer}
         </div>
   );
 

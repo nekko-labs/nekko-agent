@@ -9,6 +9,7 @@ import {
   STATE_LABELS,
   VPN_DIRECT_LABEL,
   auditText,
+  auditTimeline,
   formatMinutes,
   githubActionsSettingsUrl,
   imageFraction,
@@ -122,22 +123,38 @@ describe('runner helpers', () => {
 
   it('describes recent jobs', () => {
     const line = (over: Partial<AuditLine>): AuditLine => ({ ts: now, runnerId: 'r', repo: 'o/r', workflow: 'ci', job: 'darwin daemon', result: 'finished', seconds: 120, reason: [], ...over });
-    expect(auditText(line({ workflow: 'mobile', job: 'iOS build', seconds: 660 }))).toBe('mobile · iOS build · finished · 11 min · VM deleted');
-    expect(auditText(line({ result: 'stopped', reason: ['userBusy'] }))).toBe('ci · darwin daemon · stopped after 2 min (your apps are busy) · VM deleted');
+    expect(auditText(line({ workflow: 'mobile', job: 'iOS build', seconds: 660 }))).toBe('mobile · iOS build · finished · 11 min');
+    expect(auditText(line({ result: 'stopped', reason: ['userBusy'] }))).toBe('ci · darwin daemon · stopped after 2 min (your apps are busy)');
     // AuditLine does not say whether that job was re-run; only the current setting is known.
     expect(auditText(line({ result: 'lost', reason: ['slept'] }))).toBe('ci · darwin daemon · lost (this Mac slept) · re-run if allowed');
     expect(auditText(line({ result: 'lost', reason: ['slept'] }), false)).toBe('ci · darwin daemon · lost (this Mac slept)');
-    expect(auditText(line({ result: 'stopped', reason: ['maxJobTime'] }))).toBe('ci · darwin daemon · stopped at the max job time · VM deleted');
+    expect(auditText(line({ result: 'stopped', reason: ['maxJobTime'] }))).toBe('ci · darwin daemon · stopped at the max job time');
     expect(auditText(line({ result: 'failedToStart', workflow: null, job: null }))).toBe('A VM failed to start');
     expect(auditText(line({ result: 'notRemoved', workflow: null, job: null, reason: ['runner 77 (nekko-mac1-1-0) in group g (id 9) at https://gitlab.com could not be removed; delete it by hand'] }))).toBe('runner 77 (nekko-mac1-1-0) in group g (id 9) at https://gitlab.com could not be removed; delete it by hand');
-    expect(auditText(line({ result: 'stopped', reason: ['bootTimeout'] }))).toBe('ci · darwin daemon · stopped after 2 min (the VM never started) · VM deleted');
-    expect(auditText(line({ result: 'stopped', reason: ['idle'] }))).toBe('ci · darwin daemon · stopped after 2 min (idle too long) · VM deleted');
+    expect(auditText(line({ result: 'stopped', reason: ['bootTimeout'] }))).toBe('ci · darwin daemon · stopped after 2 min (the VM never started)');
+    expect(auditText(line({ result: 'stopped', reason: ['idle'] }))).toBe('ci · darwin daemon · stopped after 2 min (idle too long)');
     expect(auditText(line({ result: 'lost', reason: ['signal'] }))).toBe('ci · darwin daemon · lost (the daemon stopped it) · re-run if allowed');
     expect(auditText(line({ result: 'lost', reason: ['removed'] }))).toBe('ci · darwin daemon · lost (the runner was removed) · re-run if allowed');
     // The supervisor writes free-form error text as a reason: show it, bounded, not a generic phrase.
-    expect(auditText(line({ result: 'stopped', reason: ['clone failed: disk full'] }))).toBe('ci · darwin daemon · stopped after 2 min (clone failed: disk full) · VM deleted');
-    expect(auditText(line({ result: 'stopped', reason: ['x'.repeat(200)] }))).toBe(`ci · darwin daemon · stopped after 2 min (${'x'.repeat(79)}…) · VM deleted`);
+    expect(auditText(line({ result: 'stopped', reason: ['clone failed: disk full'] }))).toBe('ci · darwin daemon · stopped after 2 min (clone failed: disk full)');
+    expect(auditText(line({ result: 'stopped', reason: ['x'.repeat(200)] }))).toBe(`ci · darwin daemon · stopped after 2 min (${'x'.repeat(79)}…)`);
     expect(auditText(line({ result: 'stopped', reason: ['memoryCritical'] }))).toContain('(memory is critically low)');
+  });
+
+  it('tells a recent job step by step', () => {
+    const line = (over: Partial<AuditLine>): AuditLine => ({ ts: 1000, runnerId: 'r', repo: 'o/r', workflow: 'ci', job: 'build', result: 'finished', seconds: 120, reason: [], ...over });
+    const events = [{ ts: 700, state: 'starting' as const }, { ts: 760, state: 'ready' as const }, { ts: 800, state: 'running' as const }];
+    expect(auditTimeline(line({ events }))).toEqual([
+      { ts: 700, text: 'Starting a VM' },
+      { ts: 760, text: 'VM online, waiting for a job' },
+      { ts: 800, text: 'Running the job' },
+      { ts: 1000, text: 'The job finished and the VM powered off; VM deleted' },
+    ]);
+    // An older daemon's line has no events: the end is still told.
+    expect(auditTimeline(line({ result: 'stopped', reason: ['slept'] }))).toEqual([{ ts: 1000, text: 'Stopped (this Mac slept); VM deleted' }]);
+    expect(auditTimeline(line({ result: 'failedToStart', reason: ['it powered off before its runner connected'] }))[0].text)
+      .toBe('The VM failed to start (it powered off before its runner connected); VM deleted');
+    expect(auditTimeline(line({ result: 'notRemoved' }))).toEqual([]);
   });
 
   it('names the network with its trust state', () => {

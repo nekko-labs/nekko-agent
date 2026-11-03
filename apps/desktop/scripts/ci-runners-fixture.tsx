@@ -14,9 +14,23 @@ const host: HostView = {
   onBattery: false, batteryPct: 100, networkId: 'gw:a4:83:e7:1c:22:9f', networkTrusted: true,
 };
 const unsampled: HostView = { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false };
-const audit = (ago: number, job: string, result: AuditLine['result'], seconds: number, reason: string[] = []): AuditLine => ({
-  ts: NOW - ago, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'ios-native', job, result, seconds, reason,
-});
+const audit = (ago: number, job: string, result: AuditLine['result'], seconds: number, reason: string[] = [], pr?: number): AuditLine => {
+  const end = NOW - ago;
+  const jobId = 9000 + ago;
+  return {
+    ts: end, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'ios-native', job, result, seconds, reason,
+    jobId, url: `https://github.com/nekko-labs/nekko-agent/actions/runs/${jobId}/job/${jobId}`,
+    pr: pr ? { number: pr, url: `https://github.com/nekko-labs/nekko-agent/pull/${pr}` } : null,
+    events: [
+      { ts: end - seconds - 95, state: 'starting' }, { ts: end - seconds - 41, state: 'ready' }, { ts: end - seconds, state: 'running' },
+      ...(result === 'finished' ? [] : [{ ts: end - 12, state: 'cleaning' as const }]),
+    ],
+  };
+};
+// A job log as GitHub returns it: timestamped lines, the failure at the end.
+const JOB_LOG = Array.from({ length: 60 }, (_, i) => `2026-11-03T07:${String(10 + Math.floor(i / 6)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}.1234567Z ${
+  i === 0 ? 'Current runner version: \'2.329.0\'' : i < 55 ? `[command]/usr/bin/xcodebuild -scheme NekkoAgent -destination 'platform=iOS Simulator' build (step ${i})` : i === 58 ? '##[error]Process completed with exit code 65.' : 'Testing failed: NekkoKitTests.CloudSyncTests'
+}`).join('\n');
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['config']['settings']> = {}): RunnerView => ({
   config: {
     id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac',
@@ -36,8 +50,9 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
     state: 'running', awake: true, reasons: ['userActive'],
     slots: [{ state: 'running', job: { repo: 'nekko-labs/nekko-agent', runId: 904, jobId: 9041, workflow: 'ios-native', job: 'PR #904' }, since: NOW - 11 * 60, drainEndsAt: null }],
     today: { jobs: 14, seconds: 2 * 3600 + 38 * 60 },
-    recent: [audit(25 * 60, 'PR #903', 'finished', 14 * 60), audit(70 * 60, 'main', 'finished', 17 * 60), audit(3 * 3600, 'PR #899', 'lost', 6 * 60, ['slept'])],
+    recent: [audit(25 * 60, 'iOS build', 'finished', 14 * 60, [], 903), audit(70 * 60, 'iOS build', 'finished', 17 * 60), audit(3 * 3600, 'iOS build', 'lost', 6 * 60, ['slept'], 899)],
   }, { priority: 'balanced' })],
+  'recent-job-open': async () => scenes.running(),
   waiting: async () => [view({
     state: 'waiting', reasons: ['onBattery', 'network', 'userActive'], available: 1, limit: 'memory',
     host: { ...host, onBattery: true, batteryPct: 62, networkId: 'gw:10:0c:6e:5b:01:aa', networkTrusted: false },
@@ -145,6 +160,8 @@ const bridge: any = {
   githubStatus: async () => github[scene] ?? IDLE_GITHUB_SETUP,
   connectRunner: async () => { if (scene === 'connect-busy') await sleep(1500); return off(); },
   setRunnerEnabled: async () => view({}),
+  runnerJobLog: async () => JOB_LOG,
+  openPath: async () => {},
   imageStatus: async () => {
     // A daemon that is not ready for the first call, as at launch.
     if (scene === 'image-retry' && !imageRefused) { imageRefused = true; throw new Error('not yet'); }

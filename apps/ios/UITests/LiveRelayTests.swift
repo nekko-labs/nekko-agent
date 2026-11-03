@@ -28,7 +28,7 @@ final class LiveRelayTests: XCTestCase {
         let app = XCUIApplication()
         // Settings persist across runs on one simulator: start each from the defaults it checks.
         // Live Activities stay off until the step that checks one (see there).
-        let defaults = ["-splash", "NO", "-appLock", "NO", "-notifyFinished", "YES", "-dictationHold", "NO", "-theme", theme == "dark" ? "dark" : "light"]
+        let defaults = ["-splash", "NO", "-appLock", "NO", "-expertMode", "YES", "-notifyFinished", "YES", "-dictationHold", "NO", "-theme", theme == "dark" ? "dark" : "light"]
         app.launchArguments = defaults + ["-onboarded", "NO", "-liveActivityLevel", "none", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
@@ -145,7 +145,8 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(step.waitForExistence(timeout: computerWait), "the write step shows in the chat")
         sleep(2)
         app.buttons["More"].tap()
-        app.buttons["Changes"].tap()
+        // It says how many files changed, and only shows once there are some.
+        app.buttons["1 file changed"].tap()
         let note = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "nekko-itest-note.txt", "new file, 2 added")).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: computerWait), "the changed file reaches the phone")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Read only")).firstMatch.exists)
@@ -243,9 +244,15 @@ final class LiveRelayTests: XCTestCase {
         settle()
         test.tap()
         let result = app.staticTexts["settings.notify.testResult"]
-        XCTAssertTrue(result.waitForExistence(timeout: 20), "the test reports which path it took")
-        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        // A slow simulator can drop the first-run prompt, and then iOS asks here instead.
+        // Not a fixed wait: the banner checked below is only up for a few seconds.
+        let deadline = Date().addingTimeInterval(20)
+        while !result.exists, Date() < deadline {
+            if springboard.buttons["Allow"].exists { springboard.buttons["Allow"].tap() }
+        }
+        XCTAssertTrue(result.exists, "the test reports which path it took")
+        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
         let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Test notification")).firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 10), "the test notification shows over the app")
         let bannerShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
@@ -499,9 +506,9 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "beyond-11-log")
     }
 
-    /// Simple and Expert (2026-10-24): the composer's model and effort control
-    /// and context gauge, the effort sheet, Expert's monitor panel and the whole
-    /// monitor with the computer's real hardware.
+    /// Simple and Expert: Simple's model control alone, then Expert's effort
+    /// sheet, context gauge, monitor panel and the whole monitor with the
+    /// computer's real hardware.
     func testSimpleAndExpertModes() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
@@ -521,6 +528,26 @@ final class LiveRelayTests: XCTestCase {
         tapSystemAlertIfShown()
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
 
+        // Search is in the computer menu, in place of the slim row; Cancel brings the row back.
+        let menu = app.buttons["chats.menu"].firstMatch
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let search = app.textFields["chats.search"]
+        XCTAssertTrue(app.buttons["chats.menu.search"].firstMatch.tapUntil { search.exists }, "the menu opens the search")
+        attach(app, "modes-0-search")
+        app.buttons["chats.search.cancel"].tap()
+        XCTAssertTrue(waitGone(search, 5), "Cancel closes the search")
+        XCTAssertTrue(app.buttons["Simple: everyday controls"].waitForExistence(timeout: 5), "the slim row is back")
+
+        // Logs: this phone's, then each computer's.
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["computer.logs"].firstMatch.tapUntil { app.navigationBars["Logs"].exists }, "the menu opens Logs")
+        XCTAssertTrue(app.buttons["logs.phone"].waitForExistence(timeout: 10), "Logs leads with this phone's connection log")
+        XCTAssertTrue(app.buttons["logs.row"].firstMatch.waitForExistence(timeout: 20), "then the computer's logs")
+        attach(app, "modes-0b-logs")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
         app.navigationBars.buttons["New chat"].tap()
         let prompt = app.input("What should your computer do?")
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
@@ -529,53 +556,79 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["Start"].tap()
         XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the first reply streamed in")
 
-        // Simple: the model and effort control and the context gauge, and no monitor.
+        // Simple: the model and effort control, the context gauge, and no monitor (no local model is loaded).
         let modelEffort = app.buttons["chat.modelEffort"]
-        XCTAssertTrue(modelEffort.waitForExistence(timeout: 10), "the composer has the model and effort control")
-        XCTAssertTrue(app.buttons["chat.context"].exists, "the context gauge shows in Simple mode")
-        XCTAssertFalse(app.buttons["chat.monitor"].exists, "Simple mode has no monitor")
+        XCTAssertTrue(modelEffort.waitForExistence(timeout: 10), "the composer has the model control")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "Simple mode shows the context gauge")
+        XCTAssertFalse(app.buttons["chat.monitor"].exists, "Simple mode has no monitor without a local model")
         settle()
         attach(app, "modes-1-simple")
         auditAccessibility(app, "modes-simple")
 
-        // The effort sheet: pick High, and the control says so.
-        modelEffort.tap()
-        let high = app.buttons["modelEffort.high"]
-        XCTAssertTrue(high.waitForExistence(timeout: 10), "the sheet offers the model's effort levels")
-        high.tap()
-        XCTAssertTrue(app.staticTexts["High"].waitForExistence(timeout: 10), "the chat's effort is now High")
-        attach(app, "modes-2-model-effort")
-        app.buttons["Done"].firstMatch.tap()
-        XCTAssertTrue(modelEffort.waitForExistence(timeout: 5))
-
-        // Expert: the monitor panel under the title, then the whole monitor.
-        app.buttons["chat.mode"].tap()
-        let expert = app.buttons["Expert"]
+        // Expert: the context gauge. The hardware stays away here too until a local model runs.
+        let expert = app.buttons["Expert: every control"]
         XCTAssertTrue(expert.waitForExistence(timeout: 5))
         expert.tap()
         let panel = app.buttons["chat.monitor"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the monitor panel")
-        XCTAssertTrue(app.buttons["chat.context"].exists, "the context gauge stays in Expert mode")
+        XCTAssertFalse(panel.waitForExistence(timeout: 5), "Expert has no monitor without a local model")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "Expert shows the context gauge")
+
+        // The effort dropdown: pick High on the slider, and it says so.
+        modelEffort.tap()
+        let high = app.buttons["modelEffort.high"]
+        XCTAssertTrue(high.waitForExistence(timeout: 10), "the dropdown offers the model's effort levels")
+        let slider = app.descendants(matching: .any)["modelEffort.slider"]
+        XCTAssertTrue(slider.exists, "effort is a slider")
+        high.tap()
+        wait(for: [expectation(for: NSPredicate(format: "value == %@", "High"), evaluatedWith: slider)], timeout: 10)
+        attach(app, "modes-2-model-effort")
+        // A popover goes with a tap outside it.
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
+        XCTAssertTrue(modelEffort.waitForExistence(timeout: 5))
+
+        // A local model loads: the minimal monitor joins the row under the title.
+        app.terminate()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-expertMode", "YES", "-uiTestLocalModel"]
+        app.launch()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer again")
+        let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the chat is still in the list")
+        row.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 15), "the monitor shows while a local model runs")
+
         // A reading or two: the panel reads every 3 seconds.
         RunLoop.current.run(until: Date().addingTimeInterval(4))
         attach(app, "modes-3-expert")
         auditAccessibility(app, "modes-expert")
+        // Touch and hold the pill, drag it to the right edge: it docks there, its gauges stacked.
+        let window = app.windows.firstMatch
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.7, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.4)))
+        settle()
+        XCTAssertGreaterThan(panel.frame.midX, window.frame.width * 0.7, "the pill docks on the right")
+        XCTAssertGreaterThan(panel.frame.height, panel.frame.width, "docked at a side, the gauges stack")
+        attach(app, "modes-3b-docked-right")
+        // And back under the bar, across.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.7, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.14)))
+        settle()
+        XCTAssertLessThan(panel.frame.height, panel.frame.width, "back across the top")
+        // A tap opens the pill into the agent's details.
         panel.tap()
-        XCTAssertTrue(app.navigationBars["Monitor"].waitForExistence(timeout: 10), "the whole monitor opens")
+        // The pill opens into the agent's details.
         // A list section header can read in capitals, so match its identifier or its words in any case.
         let models = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier == %@ OR label ==[c] %@", "monitor.models", "Loaded models")).firstMatch
-        XCTAssertTrue(models.waitForExistence(timeout: 10), "the monitor lists the loaded models")
+        XCTAssertTrue(models.waitForExistence(timeout: 10), "the agent's panel lists the loaded models")
         settle()
         attach(app, "modes-4-monitor")
         app.buttons["Done"].firstMatch.tap()
 
-        // Back to Simple: the panel goes.
-        app.buttons["chat.mode"].tap()
-        let simple = app.buttons["Simple"]
+        // Back to Simple: the panel stays while the local model runs.
+        let simple = app.buttons["Simple: everyday controls"]
         XCTAssertTrue(simple.waitForExistence(timeout: 5))
         simple.tap()
-        XCTAssertTrue(waitGone(panel, 10), "Simple mode hides the monitor")
+        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the monitor stays in Simple while a local model runs")
     }
 
     /// The plan sheet (#1474): the agent's `update_plan` shows behind the
@@ -725,8 +778,9 @@ final class LiveRelayTests: XCTestCase {
 
     private func allowSystemAlerts() {
         addUIInterruptionMonitor(withDescription: "system alerts") { alert in
+            // firstMatch: on some simulators the camera alert lists its Allow button twice.
             for label in ["Allow", "OK", "Allow While Using App"] where alert.buttons[label].exists {
-                alert.buttons[label].tap()
+                alert.buttons[label].firstMatch.tap()
                 return true
             }
             return false
@@ -736,7 +790,7 @@ final class LiveRelayTests: XCTestCase {
     /// Notification permission is asked right after pairing.
     private func tapSystemAlertIfShown() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let allow = springboard.buttons["Allow"]
+        let allow = springboard.buttons["Allow"].firstMatch
         if allow.waitForExistence(timeout: 4) { allow.tap() }
     }
 
