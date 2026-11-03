@@ -80,6 +80,48 @@ fn str_at<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str)
 }
 
+/// Claude's permission-prompt contract expects answers keyed by the original
+/// question text, not Nekko's question IDs. A skipped or stopped question must
+/// be denied rather than letting Claude choose on the user's behalf.
+fn claude_question_decision(input: &Value, request: &Value, answers: &Value) -> Value {
+    let Some(given) = answers.as_array().filter(|a| !a.is_empty()) else {
+        return json!({ "behavior": "deny", "message": "The user did not answer this question. Do not treat an option as selected." });
+    };
+    let mut by_text = Map::new();
+    for question in request.get("questions").and_then(Value::as_array).into_iter().flatten() {
+        let id = str_at(question, "id").unwrap_or_default();
+        let text = str_at(question, "question").unwrap_or_default();
+        let Some(answer) = given.iter().find(|a| str_at(a, "questionId") == Some(id)) else {
+            return json!({ "behavior": "deny", "message": "The user did not answer every question." });
+        };
+        let labels: Vec<String> = answer
+            .get("labels")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect();
+        let note = str_at(answer, "note").unwrap_or_default().trim();
+        let choice = if labels.is_empty() {
+            note.to_string()
+        } else if note.is_empty() {
+            labels.join(", ")
+        } else {
+            format!("{} — {}", labels.join(", "), note)
+        };
+        if choice.is_empty() {
+            return json!({ "behavior": "deny", "message": "The user did not answer every question." });
+        }
+        by_text.insert(text.into(), json!(choice));
+    }
+    let mut updated = input.clone();
+    if let Some(obj) = updated.as_object_mut() {
+        obj.insert("answers".into(), Value::Object(by_text));
+    }
+    json!({ "behavior": "allow", "updatedInput": updated })
+}
+
 /// What every session's running turn is waiting on a person for, and the
 /// turns parked on it. The board asks on mount (`chat:pending`), so the
 /// question lives here until it is answered, as `pendingBySession` did in TS.
@@ -578,6 +620,24 @@ impl Turns {
         };
         let tool = str_at(prompt, "tool_name").or_else(|| str_at(prompt, "toolName")).unwrap_or_default().to_string();
         let input = prompt.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
+        // Claude Code's AskUserQuestion is a request for an answer, not permission
+        // to perform a tool action. Keep the CLI's permission callback pending until
+        // the same question card used by native turns receives an answer.
+        if tool == "AskUserQuestion" {
+            let id = str_at(prompt, "tool_use_id")
+                .or_else(|| str_at(prompt, "toolUseID"))
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("claude_question_{}", crate::harness::new_token()));
+            let request = match turn::parse_ask_request(&id, &input, nekko_js::now_ms()) {
+                Ok(request) => request,
+                Err(message) => return Some(deny(&message)),
+            };
+            let rx = self.pending.park_question(&shared.session_id, &request);
+            shared.emit(json!({ "type": "question", "sessionId": shared.session_id, "request": request }));
+            let answers = rx.await.unwrap_or_else(|_| json!([]));
+            shared.emit(json!({ "type": "question_resolved", "sessionId": shared.session_id, "callId": id }));
+            return Some(claude_question_decision(&input, &request, &answers));
+        }
         let mode = self.live_mode(&shared).await;
         let rules: Vec<nekko_tools::GuardrailRule> = self
             .settings
@@ -2809,6 +2869,51 @@ impl TurnTools {
 mod tests {
     use super::*;
 
+    #[test]
+    fn claude_question_returns_original_input_with_answers_by_question_text() {
+        let input = json!({ "questions": [
+            { "question": "How?", "header": "Style", "multiSelect": false, "options": [
+                { "label": "Tooltip", "description": "Compact" }, { "label": "Inline", "description": "On row" }
+            ] },
+            { "question": "Which?", "header": "Area", "multiSelect": true, "options": [
+                { "label": "One" }, { "label": "Two" }
+            ] }
+        ] });
+        let request = turn::parse_ask_request("claude-1", &input, 1).unwrap();
+        let answer = claude_question_decision(
+            &input,
+            &request,
+            &json!([
+                { "questionId": "q1", "labels": ["Tooltip"], "note": "keep it small" },
+                { "questionId": "q2", "labels": ["One", "Two"] }
+            ]),
+        );
+        assert_eq!(answer["behavior"], "allow");
+        assert_eq!(answer["updatedInput"]["questions"], input["questions"]);
+        assert_eq!(answer["updatedInput"]["answers"]["How?"], "Tooltip — keep it small");
+        assert_eq!(answer["updatedInput"]["answers"]["Which?"], "One, Two");
+    }
+
+    #[test]
+    fn claude_question_skip_or_partial_answer_never_selects_for_user() {
+        let input = json!({ "questions": [
+            { "question": "How?", "options": ["A", "B"] },
+            { "question": "Where?", "options": ["Here", "There"] }
+        ] });
+        let request = turn::parse_ask_request("claude-2", &input, 1).unwrap();
+        assert_eq!(claude_question_decision(&input, &request, &json!([]))["behavior"], "deny");
+        assert_eq!(
+            claude_question_decision(
+                &input,
+                &request,
+                &json!([
+                    { "questionId": "q1", "labels": ["A"] }
+                ])
+            )["behavior"],
+            "deny"
+        );
+    }
+
     #[tokio::test]
     async fn a_run_of_deltas_goes_out_first_then_joined_per_window() {
         let hub = Hub::new();
@@ -2890,7 +2995,8 @@ mod tests {
             "messages": [{ "role": "user", "content": "Fix login" }] });
         std::fs::write(&path, session.to_string()).unwrap();
         let store = Arc::new(SessionStore::new(&dir));
-        let accounts = Arc::new(Accounts::new(dir.clone(), Hub::new()));
+        let accounts =
+            Arc::new(Accounts::new(dir.clone(), Hub::new(), Arc::new(nekko_settings::SettingsStore::new(&dir))));
         let flights = TitleFlights::default();
         let spec = json!({ "opts": { "sessionId": "s_title", "modelId": "synthetic" },
             "facts": { "provider": { "id": "p1", "kind": "openai-compat",

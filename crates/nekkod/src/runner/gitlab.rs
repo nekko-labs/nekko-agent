@@ -162,6 +162,19 @@ impl<H: Http> GitLab<H> {
         path: &str,
         body: Option<Value>,
     ) -> Result<(u16, Value), ProviderError> {
+        let (status, text) = self.send_text(base, token, method, path, body).await?;
+        Ok((status, serde_json::from_str(&text).unwrap_or(Value::Null)))
+    }
+
+    /// One API call; the body as text.
+    async fn send_text(
+        &self,
+        base: &str,
+        token: &str,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<(u16, String), ProviderError> {
         let url = format!("{base}/api/v4{path}");
         let mut h = vec![("PRIVATE-TOKEN", token), ("User-Agent", "nekko-agent")];
         let body = body.map(|b| b.to_string());
@@ -184,7 +197,20 @@ impl<H: Http> GitLab<H> {
                 "GitLab redirected the request to {host}. Use the instance's own address."
             )));
         }
-        Ok((res.status, serde_json::from_str(&res.body).unwrap_or(Value::Null)))
+        Ok((res.status, res.body))
+    }
+
+    /// A job's whole log (its trace) as plain text.
+    pub async fn job_log(&self, r: &RunnerRecord, project: &str, job_id: u64) -> Result<String, ProviderError> {
+        let base = link(r)?.base_url.trim_end_matches('/');
+        let token = self.vault.get(&token_key(&r.config.id)).ok_or_else(|| ProviderError::Auth(NO_TOKEN.into()))?;
+        match self
+            .send_text(base, &token, "GET", &format!("/projects/{}/jobs/{job_id}/trace", enc(project)), None)
+            .await?
+        {
+            (s, text) if ok(s) => Ok(text),
+            (s, _) => Err(refused(s)),
+        }
     }
 
     /// Like `call`, but anything not 2xx is an error.
@@ -507,6 +533,9 @@ impl<H: Http + 'static> Provider for GitLab<H> {
                 job_id: j["id"].as_u64()?,
                 workflow: j["ref"].as_str().unwrap_or_default().to_string(),
                 job: j["name"].as_str().unwrap_or_default().to_string(),
+                url: j["web_url"].as_str().unwrap_or_default().to_string(),
+                // shortcut: GitLab's merge request is not looked up, so its jobs show none.
+                pr: None,
             })
         }))
     }

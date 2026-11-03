@@ -291,6 +291,8 @@ fn xcode_steps(kind: Kind) -> Vec<Step> {
             false,
             minutes(20),
         ),
+        // `actions/cache` compresses with zstd only when it finds `gtar` and `zstd`, as on hosted Macs.
+        step("Installing zstd and GNU tar", "/opt/homebrew/bin/brew install zstd gnu-tar", false, minutes(10)),
         step("Removing the Homebrew allowance", "rm -f /etc/sudoers.d/build", true, minutes(1)),
     ]);
     steps

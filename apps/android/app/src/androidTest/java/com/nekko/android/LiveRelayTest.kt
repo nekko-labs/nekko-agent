@@ -30,6 +30,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.theme.ThemeChoice
 import java.io.File
 import org.junit.Assume.assumeTrue
@@ -67,6 +68,8 @@ class LiveRelayTest {
             // A test device has no enrolled biometrics; the lock is covered by unit tests.
             app.appLock.setEnabled(false)
             app.themePrefs.set(if (theme == "dark") ThemeChoice.DARK else ThemeChoice.LIGHT)
+            // The + menu's Terminal is Expert only, and a fresh install starts in Simple.
+            app.phonePrefs.set(EXPERT_MODE, true)
         }
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -105,6 +108,18 @@ class LiveRelayTest {
             waitFor(hasText("Hello from your computer."), 30_000)
             shot("4-reply")
 
+            // More work for this chat: a typed follow-up can go to a subagent, as a plain message.
+            val box = hasContentDescription("Message")
+            compose.onNode(box).performClick()
+            compose.onNode(box).performTextInput("Fix the tests")
+            waitFor(hasText("Here uses more context"))
+            shot("4-subagent-choice")
+            tap(hasText("In a subagent"))
+            waitFor(hasText("Do this in a subagent, then report back:", substring = true), 30_000)
+            Thread.sleep(3_000)
+            waitGone(hasContentDescription("Stop"), 30_000)
+            shot("4-subagent-sent")
+
             // + sits inside the message box and offers another agent or a terminal, as on the desktop.
             tap(hasContentDescription("Add"))
             waitFor(hasText("New agent"))
@@ -141,7 +156,8 @@ class LiveRelayTest {
             send("write a note")
             Thread.sleep(3_000)
             waitGone(hasContentDescription("Stop"), 30_000)
-            tap(hasContentDescription("Changes"))
+            // The button says how many files changed, and only shows once there are some.
+            tap(hasContentDescription("1 file changed"))
             waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 45_000)
             waitFor(hasText("Read only", substring = true))
             shot("8-changes")

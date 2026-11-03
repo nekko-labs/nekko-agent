@@ -28,6 +28,12 @@
           "description": "Follow verification checklists, device activity, CI checks and resolved or unresolved review threads in chat."
         },
         {
+          "slug": "simple-and-expert",
+          "title": "Simple and Expert",
+          "source": "docs/simple-and-expert.md",
+          "description": "Switch between the everyday app and every control, and choose what Simple shows."
+        },
+        {
           "slug": "fonts-and-text",
           "title": "Fonts and text",
           "source": "docs/fonts-and-text.md",
@@ -137,9 +143,9 @@
         },
         {
           "slug": "workflows",
-          "title": "Workflow runs",
+          "title": "Scheduled task runs",
           "source": "docs/workflows.md",
-          "description": "Pick a workflow's model, keep it on local models, and control what its unattended runs may do."
+          "description": "Pick a scheduled task's model, keep it on local models, and control what its unattended runs may do."
         },
         {
           "slug": "local-ci-runner",
@@ -158,6 +164,12 @@
           "title": "Bring your own CI runner image",
           "source": "docs/ci-runners-image.md",
           "description": "What Nekko's image build does, and how to build the macOS image yourself on macOS 26."
+        },
+        {
+          "slug": "ci-runner-performance",
+          "title": "CI runner performance",
+          "source": "docs/ci-runner-performance.md",
+          "description": "How fast a job runs on your Mac compared with GitHub's hosted Macs, measured on our own iOS CI."
         },
         {
           "slug": "decision-models",

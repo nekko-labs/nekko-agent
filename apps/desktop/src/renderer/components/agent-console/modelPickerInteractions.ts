@@ -1,5 +1,16 @@
 import type { ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 
+// Kept out of ModelPicker.tsx so that file only exports components and Fast Refresh keeps working.
+/** How long one provider's model list may take before it is shown as unreachable. */
+export const MODEL_LIST_TIMEOUT_MS = 6000;
+
+export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out')), ms);
+    work.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
+}
+
 export const modelPickerKey = (providerId: string, modelId: string) => `${providerId}::${modelId}`;
 
 export function matchesModelQuery(model: Pick<ModelInfo, 'id' | 'name' | 'details'>, query: string): boolean {

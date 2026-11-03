@@ -17,7 +17,7 @@ export const EXPERIMENTAL_FLAGS = [
   { key: 'training', label: 'Model training', desc: 'Show the Training tab: launch and watch data-scientist agent runs.' },
   { key: 'design', label: 'Design board', desc: 'Show the Design tab: sketch or describe a UI and generate live prototypes.' },
   { key: 'memory', label: 'Memory', desc: 'Show the Memory tab: browse and edit global and per-project memory.' },
-  { key: 'workflowLoopbackListener', label: 'Workflow loopback listener', desc: 'Listen on 127.0.0.1:1441 for inbound workflow webhooks (desktop only).' },
+  { key: 'workflowLoopbackListener', label: 'Scheduled task loopback listener', desc: 'Listen on 127.0.0.1:1441 for inbound scheduled task webhooks (desktop only).' },
 ] as const;
 
 export type SettingControl =
@@ -74,6 +74,7 @@ export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: str
   { group: 'general', label: 'General', keywords: 'usage reports view appearance theme agents wall customization voice notifications chat history desktop behavior fun' },
   { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
   { group: 'style', label: 'Style', keywords: 'fonts text size' },
+  { group: 'simple', label: 'Simple mode', keywords: 'expert controls hide show developer' },
   { group: 'agents', label: 'Agents', keywords: 'chat modes agent loop hooks spec-driven development orchestration delegation routes automations' },
   { group: 'safety', label: 'Safety', keywords: 'security sandbox guardrails permissions' },
   { group: 'connections', label: 'Connections', keywords: 'network activity log' },

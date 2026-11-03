@@ -39,4 +39,26 @@ extension ModelEffortTests {
         XCTAssertNil(PcSettings.from(nil).effort)
         XCTAssertNil(PcSettings.patch(mode: .ask)["effort"])
     }
+
+    func testReadsTheComputersDelegationStrategy() {
+        XCTAssertEqual(PcSettings.from(.object(["orchestration": .object(["strategy": .string("solo")])])).orchestrationStrategy, "solo")
+        XCTAssertNil(PcSettings.from(.object([:])).orchestrationStrategy, "a computer from before this says nothing")
+    }
+
+    func testOffersASubagentOnlyWhereDelegationCanRun() throws {
+        let reply: [String: JSONValue] = ["id": "s", "messages": .array([.object(["id": "a", "role": "assistant", "content": "Done"])])]
+        func chat(_ extra: [String: JSONValue] = [:]) throws -> Session { try XCTUnwrap(Session.from(.object(reply.merging(extra) { _, new in new }))) }
+        XCTAssertTrue(try chat().canOfferSubagent(strategy: "balanced"))
+        XCTAssertTrue(try chat().canOfferSubagent(strategy: nil))
+        XCTAssertFalse(try chat().canOfferSubagent(strategy: "solo"))
+        XCTAssertFalse(try chat(["messages": .array([.object(["id": "u", "role": "user", "content": "Hi"])])]).canOfferSubagent(strategy: nil), "needs a reply to follow up on")
+        for extra: [String: JSONValue] in [["parentSessionId": "p"], ["incognito": true], ["offline": true], ["executionMode": "sandbox"],
+                                           ["disabledTools": .array(["spawn_agent"])], ["chatType": "image"]] {
+            XCTAssertFalse(try chat(extra).canOfferSubagent(strategy: nil), "\(extra)")
+        }
+    }
+
+    func testAskingForASubagentKeepsTheMessageWhole() {
+        XCTAssertEqual(Session.inSubagent("Fix the tests"), "Do this in a subagent, then report back:\n\nFix the tests")
+    }
 }

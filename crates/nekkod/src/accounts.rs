@@ -94,6 +94,8 @@ impl TurnAccount {
 
 pub struct Accounts {
     dir: PathBuf,
+    /// The daemon's settings: the providers, with their API keys.
+    settings: Arc<nekko_settings::SettingsStore>,
     hub: Hub,
     http: reqwest::Client,
     state: Mutex<State>,
@@ -126,10 +128,18 @@ fn prune_quota_history(path: &std::path::Path, now_ms: f64) {
 }
 
 impl Accounts {
-    pub fn new(dir: PathBuf, hub: Hub) -> Self {
+    pub fn new(dir: PathBuf, hub: Hub, settings: Arc<nekko_settings::SettingsStore>) -> Self {
         prune_quota_history(&dir.join("quota-history.jsonl"), nekko_oauth::now_ms());
         let http = reqwest::Client::builder().timeout(READ_TIMEOUT).build().unwrap_or_default();
-        Self { dir, hub, http, state: Mutex::default(), append: Mutex::new(()), oauth: std::sync::OnceLock::new() }
+        Self {
+            dir,
+            settings,
+            hub,
+            http,
+            state: Mutex::default(),
+            append: Mutex::new(()),
+            oauth: std::sync::OnceLock::new(),
+        }
     }
 
     pub async fn route(self: &Arc<Self>, channel: &str, args: &[Value]) -> Result<Value, String> {
@@ -230,21 +240,12 @@ impl Accounts {
         }
     }
 
-    fn settings(&self) -> Value {
-        std::fs::read(self.file("settings.json"))
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or(Value::Null)
-    }
-
     fn providers(&self) -> Vec<Value> {
-        self.settings().get("providers").and_then(Value::as_array).cloned().unwrap_or_default()
+        self.settings.shared().get("providers").and_then(Value::as_array).cloned().unwrap_or_default()
     }
 
     fn token(&self, key: &str) -> Option<Value> {
-        let tokens: Value =
-            std::fs::read(self.file("tokens.json")).ok().and_then(|b| serde_json::from_slice(&b).ok())?;
-        tokens.get(key).filter(|t| t.is_object()).cloned()
+        crate::keys::tokens(&self.dir).get(key).filter(|t| t.is_object())
     }
 
     fn quota_history(&self, key: &str, source: &str, limits: &Value) {
@@ -560,7 +561,7 @@ mod tests {
     }
 
     fn accounts(dir: &std::path::Path) -> Arc<Accounts> {
-        Arc::new(Accounts::new(dir.to_path_buf(), Hub::new()))
+        Arc::new(Accounts::new(dir.to_path_buf(), Hub::new(), Arc::new(nekko_settings::SettingsStore::new(dir))))
     }
 
     fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
@@ -647,7 +648,7 @@ mod tests {
     #[test]
     fn turn_lines_are_the_hosts() {
         let dir = temp_dir("lines");
-        let a = Accounts::new(dir.clone(), Hub::new());
+        let a = Accounts::new(dir.clone(), Hub::new(), Arc::new(nekko_settings::SettingsStore::new(&dir)));
         let account = TurnAccount::from_facts(&json!({ "account": { "auth": "apikey", "kind": "llamacpp" } }));
         let opts = json!({ "sessionId": "s", "providerId": "p", "modelId": "m" });
         a.turn_usage(&opts, &account, &json!({ "type": "usage", "inputTokens": 1, "outputTokens": 2 }));

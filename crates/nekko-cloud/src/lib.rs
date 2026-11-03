@@ -29,7 +29,7 @@
 mod http;
 pub mod records;
 pub mod state;
-pub mod vault;
+pub use nekko_vault as vault;
 
 use http::{Api, HttpError, Supabase};
 use nekko_store::SessionStore;

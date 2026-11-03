@@ -47,6 +47,20 @@ test('refuses a spec file without its area', () => {
   fs.rmSync(root, { recursive: true });
 });
 
+test('the check ignores a stale size but not a missing file', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-index-'));
+  fs.mkdirSync(path.join(root, 'spec', 'chat'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'spec', 'chat', 'find.md'), '---\ntitle: Find in this chat\narea: chat\n---\n');
+  fs.writeFileSync(path.join(root, 'spec', 'README.md'), '<!-- index:start -->\n<!-- index:end -->\n');
+  writeIndex(root);
+  const readme = path.join(root, 'spec', 'README.md');
+  fs.writeFileSync(readme, fs.readFileSync(readme, 'utf8').replace('(1 KB)', '(7 KB)'));
+  assert.equal(writeIndex(root, { check: true }), true);
+  fs.writeFileSync(path.join(root, 'spec', 'chat', 'other.md'), '---\ntitle: Other\narea: chat\n---\n');
+  assert.equal(writeIndex(root, { check: true }), false);
+  fs.rmSync(root, { recursive: true });
+});
+
 test('the repository index is current', () => {
   assert.equal(writeIndex(path.resolve(import.meta.dirname, '..'), { check: true }), true, 'run node scripts/spec-index.mjs');
 });
