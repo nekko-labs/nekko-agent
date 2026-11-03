@@ -121,6 +121,7 @@ The hosted iOS 27 simulator sometimes shut down or lost its accessibility server
 - [x] **T223, Recover the simulator between suites (2026-10-29).** `ios-native.yml`: `ready` (`simctl bootstatus -b` and the status bar override) before every suite, a fresh boot after the first-run suite, and one retry for a failed first-run test (`-retry-tests-on-failure -test-iterations 2`) for XCTest's hang at "Setting up automation session". Verified locally on an iOS 27.0 simulator: `simctl ui` on a shut-down device exits 149 as on CI, and exits 0 after `ready`.
 - [ ] **T224, Watch the next scheduled runs** on main for a simulator loss that `ready` did not recover.
 - [x] **T224a, One retry for the live journey (#1567, 2026-11-03).** The first journey after the fresh boot timed out reading the app at a random step, on unrelated PRs, while later journeys passed; why is not established. `ios-native.yml` gives it one more try on a fresh stack and install, and the job limit goes from 75 to 85 minutes.
+- [x] **T224b, A green batch stays green (#1575, 2026-11-03).** `ios-batch.mjs` leaves out heads that already passed. A new batch had replaced their green status with pending whenever main moved, which ejected #1312 from the merge queue with nothing failed.
 ## Vercel builds only website changes (#1328)
 
 Vercel serves only the marketing site and docs but built a deployment for every push to every branch. Spec: [spec/platform/distribution-platforms.md](spec/platform/distribution-platforms.md).
