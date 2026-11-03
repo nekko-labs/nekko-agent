@@ -62,6 +62,9 @@ struct ChatView: View {
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
+            // A chat on another computer makes that computer active first, over the
+            // link the phone already holds to it, so the model talks to the right one.
+            store.focus(chat: sessionId)
             if chat?.sessionId != sessionId {
                 chat?.stop()
                 chat = ChatModel(sessionId: sessionId, store: store)

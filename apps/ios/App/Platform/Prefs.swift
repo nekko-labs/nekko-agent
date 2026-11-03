@@ -35,6 +35,8 @@ final class Prefs {
     var liveActivityLevel: LiveLevel { didSet { d.set(liveActivityLevel.rawValue, forKey: "liveActivityLevel") } }
     /// The computer to connect to at launch; nil = the one used last.
     var defaultComputer: String? { didSet { d.set(defaultComputer, forKey: "defaultComputer") } }
+    /// The chat list shows one computer's chats; nil = every paired computer's (2026-11-04).
+    var chatsFilter: String? { didSet { d.set(chatsFilter, forKey: "chatsFilter") } }
     /// Dictation: the computer's Whisper when installed, else this iPhone's recognizer.
     var dictationOnComputer: Bool { didSet { d.set(dictationOnComputer, forKey: "dictationOnComputer") } }
     /// Dictation: hold the microphone to talk and let go to stop (IO-28), instead of tap to start and tap to stop.
@@ -102,6 +104,7 @@ final class Prefs {
             defaults.set(first.rawValue, forKey: "liveActivityLevel")
         }
         defaultComputer = d.string(forKey: "defaultComputer")
+        chatsFilter = d.string(forKey: "chatsFilter")
         dictationOnComputer = flag("dictationOnComputer", true)
         dictationHold = flag("dictationHold", false)
         voiceIntroSeen = flag("voiceIntroSeen", false)

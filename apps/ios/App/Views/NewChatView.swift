@@ -239,13 +239,24 @@ struct NewChatView: View {
                 }
             }
             HStack(spacing: 6) {
-                if isLocal || pickedComputer {
+                // Where it runs, whenever there is a choice (2026-11-04): it starts on the
+                // computer the list was showing, or the one used last, and every paired
+                // computer is already connected, so picking another is instant.
+                if isLocal || pickedComputer || store.computers.count > 1 {
                     Menu {
                         Picker("Run on", selection: Binding(get: { store.activeId }, set: { if let id = $0 { switchComputer(id) } })) {
-                            ForEach(store.computers) { c in ComputerLabel(c: c).tag(Optional(c.id)) }
+                            ForEach(store.computers) { c in
+                                Label {
+                                    Text(c.name)
+                                    Text(stateName(store.state(of: c.id)))
+                                } icon: {
+                                    if let icon = c.icon { Image("computer-\(icon)") } else { Image(systemName: cloud.machine(forComputer: c.id) == nil ? "desktopcomputer" : "cloud") }
+                                }
+                                .tag(Optional(c.id))
+                            }
                         }
                     } label: { chip(store.active?.name ?? String(localized: "Computer"), icon: "desktopcomputer", computerIcon: store.active?.icon) }
-                    .accessibilityHint("A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.")
+                    .accessibilityHint("Where the chat runs. Choosing another computer shows its models and folders; a local model runs on that computer’s own hardware.")
                     .accessibilityIdentifier("newChat.computer")
                 }
                 Menu {

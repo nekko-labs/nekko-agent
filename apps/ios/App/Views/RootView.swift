@@ -55,10 +55,20 @@ struct RootView: View {
             .onChange(of: phase) { _, _ in syncCover() }
             .onChange(of: app.prefs.theme) { _, _ in syncCover() }
             .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
-            // Another computer drops this one's chat; its own panes come back.
+            // Another computer became active. Every computer stays connected now
+            // (2026-11-04), so what is open stays, except a chat on another computer
+            // (its screen talks to the active one). The panes come back as that
+            // computer left them, with the chat that made it active in focus.
             .onChange(of: store.activeId) { _, id in
-                path = []
+                if let cut = path.firstIndex(where: { r in
+                    if case .chat(let chat) = r, let on = store.computerId(ofChat: chat) { return on != id }
+                    return false
+                }) { path.removeSubrange(cut...) }
+                let focused = panes.layout.focusedChatId
                 panes.sync(computer: id, prefs: app.prefs)
+                if let focused, store.computerId(ofChat: focused) == id, panes.layout.focusedChatId != focused {
+                    panes.open(.chat(focused))
+                }
             }
             // Closing a folding phone: one column, on the chat that was focused.
             // Opening it again restores the panes as they were.
@@ -382,6 +392,61 @@ struct ProtocolBanner: View {
             .background(palette.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("protocol-banner")
+        }
+    }
+}
+
+/// The other paired computers in view that can't be reached now (2026-11-04),
+/// a line each with Reconnect. Each link keeps trying on its own; the button
+/// dials at once. A computer that is only connecting says nothing until it fails.
+struct FleetBanner: View {
+    /// The computers in view: every paired one (nil), or one.
+    let computer: String?
+    @Environment(AppModel.self) private var app
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ForEach(down, id: \.0.id) { item in row(item.0, item.1) }
+    }
+
+    private func row(_ c: Computer, _ peer: Peer) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: peer.conn == .denied ? "lock.slash" : "moon.zzz")
+                .foregroundStyle(peer.conn == .denied ? palette.danger : palette.warning)
+                .accessibilityHidden(true)
+            Text(line(c.name, peer)).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if peer.conn == .denied {
+                Button("Pair again") { app.openPair = true }.font(.footnote.weight(.semibold))
+            } else {
+                Button("Reconnect") { store.reconnect(computer: c.id) }.font(.footnote.weight(.semibold))
+                    .accessibilityIdentifier("fleet.reconnect")
+            }
+        }
+        .padding(12)
+        .background((peer.conn == .denied ? palette.danger : palette.warning).opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .contain)
+    }
+
+    private var down: [(Computer, Peer)] {
+        store.computers.compactMap { c in
+            guard computer == nil || computer == c.id, let peer = store.peers[c.id] else { return nil }
+            let failing = peer.conn == .offline || peer.conn == .denied || (peer.conn == .connecting && peer.detail != nil)
+            return failing ? (c, peer) : nil
+        }
+    }
+
+    private func line(_ name: String, _ peer: Peer) -> String {
+        switch peer.conn {
+        case .denied:
+            return peer.denied == .badKey || peer.denied == .badCode
+                ? String(localized: "The pairing key no longer matches \(name).")
+                : String(localized: "\(name) doesn’t know this iPhone any more.")
+        case .offline:
+            return String(localized: "\(name) is offline. This phone keeps trying.")
+        default:
+            return String(localized: "Can’t reach \(name) right now. This phone keeps trying.")
         }
     }
 }
