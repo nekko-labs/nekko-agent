@@ -1,4 +1,4 @@
-// Native iOS in batches: one simulator run covers every open `ci:macos` iOS PR
+// Native iOS in batches: one simulator run covers every open `deploy:ios` iOS PR
 // that merges cleanly onto main, instead of one 30-minute run per PR per push
 // (60 runs on 18 branches in one day, 2026-10-24).
 //
@@ -12,6 +12,8 @@
 // (ci-label-gate.mjs) accepts in place of a run on the PR itself.
 //
 // A batch that matches the last one (same main, same heads) is not run again.
+// A head that already passed is left out: a new batch would run it again whenever main
+// moved, and its pending status would push the PR back out of the merge queue.
 // A red batch marks every PR in it red: dispatch Native iOS on one branch
 // (`gh workflow run ios-native.yml --ref <branch>`) to see whether it is yours.
 //
@@ -36,14 +38,17 @@ export const touchesIos = files => files.some(f => IOS_PATHS.some(p => p.test(f)
 
 const labelsOf = pr => (pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
 
-/** The PRs a batch may take, oldest first: ready, same-repo, into main, `ci:macos`, not `hold`, touching iOS. */
+/** The PRs a batch may take, oldest first: ready, same-repo, into main, `deploy:ios`, not `hold`, touching iOS. */
 export function batchCandidates(prs) {
   return prs
     .filter(pr => !pr.isDraft && !pr.isCrossRepository && pr.baseRefName === 'main')
-    .filter(pr => labelsOf(pr).includes('ci:macos') && !labelsOf(pr).includes('hold'))
+    .filter(pr => labelsOf(pr).includes('deploy:ios') && !labelsOf(pr).includes('hold'))
     .filter(pr => touchesIos((pr.files ?? []).map(f => f.path ?? f)))
     .sort((a, b) => a.number - b.number);
 }
+
+/** Whether a head's commit statuses already hold a green batch. */
+export const batchPassed = statuses => statuses.some(s => s.context === BATCH_CONTEXT && s.state === 'success');
 
 /** The batch commit's message; its trailers say which heads it holds. */
 export function batchMessage(included) {
@@ -106,7 +111,7 @@ function main({ dryRun }) {
   const runUrl = process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}` : undefined;
   const open = JSON.parse(sh('gh', ['pr', 'list', '-R', repo, '--state', 'open', '--limit', '100',
     '--json', 'number,headRefOid,isDraft,isCrossRepository,baseRefName,labels,files']));
-  const candidates = batchCandidates(open);
+  const candidates = batchCandidates(open).filter(pr => !batchPassed(JSON.parse(sh('gh', ['api', `repos/${repo}/commits/${pr.headRefOid}/status`])).statuses));
   console.log(`Candidates: ${candidates.map(pr => `#${pr.number}`).join(', ') || 'none'}`);
   if (!candidates.length) return;
 

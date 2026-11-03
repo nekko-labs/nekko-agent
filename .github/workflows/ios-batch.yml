@@ -1,5 +1,5 @@
 name: Native iOS batch
-# Gathers the open `ci:macos` iOS PRs that merge cleanly onto main into one
+# Gathers the open `deploy:ios` iOS PRs that merge cleanly onto main into one
 # commit on `ci/ios-batch` and dispatches Native iOS there once for all of them
 # (scripts/ios-batch.mjs). Linux and about a minute; the macOS run is
 # ios-native.yml's. Every 30 minutes too, so a PR left out for a conflict with

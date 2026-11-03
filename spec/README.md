@@ -19,7 +19,7 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 Vision, users, product names, scope boundaries, open questions and policies.
 
 - [Claude policy (2026-10-19)](product/claude-policy.md) (10 KB)
-- [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
+- [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (3 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
 - [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (2 KB)
@@ -112,13 +112,14 @@ Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (40 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (11 KB)
-- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (10 KB)
+- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (12 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
 - [Delegating frontier planning to a local worker](agents/delegating-frontier-planning-to-a-local-worker.md) (2 KB)
 - [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
 - [Routing a Claude Agent chat between a local model and Claude Code](agents/routing-between-local-and-claude-code.md) (13 KB)
+- [Run here or in a subagent](agents/run-here-or-in-a-subagent.md) (2 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Subagents in Claude chats](agents/claude-code-subagents.md) (2 KB)
 - [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)

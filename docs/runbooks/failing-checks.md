@@ -9,18 +9,20 @@ passed. CI runs in three tiers (`scripts/ci-scope.mjs`):
 
 | Tier | When | Runs |
 | --- | --- | --- |
-| PR | every push to a PR | `build`; `daemon` on Linux if Rust or `packages/{host,core,shared}` changed; `capture` on Windows if desktop code or `packages/` changed |
-| Queue | `merge_group` | the PR tier, plus `daemon` on Windows and `perf` when the group changes what it measures |
-| Full | every 6 hours (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included |
+| PR | every push to a PR | `build`; `daemon` and `capture` only on the OSes a `deploy:linux` / `deploy:windows` / `deploy:macos` label names, when the change touches what they test |
+| Queue | `merge_group` | `build`, plus `perf` when the group changes what it measures, and the itests |
+| Full | nightly at 03:17 JST (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included |
 
-The same goes for every other macOS job (native iOS,
-dev identity, nekkod darwin, decision-model CoreML, CodeQL Swift): scheduled, or
-`ci:macos` on the PR. Add `ci:macos` to a PR that changes macOS-specific code (`cfg(target_os =
-"macos")`, the dev bundle, signing, native capture), and `ci:perf` to one that
-changes a hot path the speed contract measures and wants the numbers before
-queueing. Labels are read when a run starts: add the label, then push. A skipped
-job is not a missing check. A failed 6-hourly run opens or updates the
-`ci-scheduled` issue; whoever lands the next fix to that area clears it.
+Every other platform build is nightly too, or on a PR with its label:
+`deploy:ios` (Native iOS, CodeQL Swift), `deploy:android` (Native Android),
+`deploy:macos` (dev identity, nekkod darwin, decision-model CoreML, the macOS
+installer), `deploy:windows` (the Windows installer). Add the label to a PR that
+changes that platform's code (`cfg(target_os = ...)`, ConPTY, the dev bundle,
+signing, native capture, the phone apps), and `ci:perf` to one that changes a hot
+path the speed contract measures and wants the numbers before queueing. Labels
+are read when a run starts: adding one re-runs CI. A skipped job is not a missing
+check. A failed nightly run opens or updates the `ci-scheduled` issue; whoever
+lands the next fix to that area clears it.
 
 When one of them is red:
 
