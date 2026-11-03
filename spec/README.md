@@ -19,7 +19,7 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 Vision, users, product names, scope boundaries, open questions and policies.
 
 - [Claude policy (2026-10-19)](product/claude-policy.md) (10 KB)
-- [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (2 KB)
+- [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (3 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
 - [Products and their names (decided 2026-10-18)](product/products-and-their-names.md) (2 KB)

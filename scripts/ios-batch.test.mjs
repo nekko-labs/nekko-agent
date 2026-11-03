@@ -2,15 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BATCH_CONTEXT, batchCandidates, batchMessage, batchPassed, iosVerdict, largestCompatible, parseBatch } from './ios-batch.mjs';
 
-const pr = (number, { labels = ['ci:macos'], files = ['apps/ios/App/AppModel.swift'], ...rest } = {}) =>
+const pr = (number, { labels = ['deploy:ios'], files = ['apps/ios/App/AppModel.swift'], ...rest } = {}) =>
   ({ number, headRefOid: String(number).padStart(40, 'a'), isDraft: false, isCrossRepository: false, baseRefName: 'main',
     labels: labels.map(name => ({ name })), files: files.map(path => ({ path })), ...rest });
 
-test('a batch takes ready ci:macos iOS PRs into main, oldest first', () => {
+test('a batch takes ready deploy:ios iOS PRs into main, oldest first', () => {
   const prs = [
     pr(1012), pr(980),
-    pr(1001, { labels: [] }), // no ci:macos
-    pr(1002, { labels: ['ci:macos', 'hold'] }),
+    pr(1001, { labels: [] }), // no deploy:ios
+    pr(1002, { labels: ['deploy:ios', 'hold'] }),
     pr(1003, { isDraft: true }),
     pr(1004, { isCrossRepository: true }), // a fork: no write token to report on
     pr(1005, { baseRefName: 'ci/ios-faster' }), // a stacked layer

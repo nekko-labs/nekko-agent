@@ -1,17 +1,19 @@
 // What `gate` checks beyond ci.yml's own jobs. Two holes let #1001 merge with
 // its only Swift compile still queued (#1002):
 //
-// - `ci:macos` opts a PR into macOS runs in other workflows (the list below),
-//   but `gate` needed only ci.yml's jobs, so the queue merged without them.
+// - A `deploy:<platform>` label (`deploy:linux`, `deploy:windows`,
+//   `deploy:macos`, `deploy:ios`, `deploy:android`) opts a PR into that
+//   platform's builds in other workflows (the list below), which otherwise run
+//   nightly. `gate` needed only ci.yml's jobs, so the queue merged without them.
 //   On a labelled PR, `gate` now waits for those runs on the head commit and
 //   fails if any of them fails; auto-merge.yml and queue-sweeper.yml enqueue
-//   only on a green `gate`, so the queue never sees the PR before macOS is green.
+//   only on a green `gate`, so the queue never sees the PR before they are green.
 // - Draft and `hold` keep a PR from being queued, but an entry already in the
 //   queue still merged. In the queue, `gate` now fails when a PR in the group
-//   is a draft or carries `hold`, or carries `ci:macos` without green runs on
-//   its head, and the queue ejects it.
+//   is a draft or carries `hold`, or carries a deploy label without green runs
+//   on its head, and the queue ejects it.
 //
-// Native iOS runs in batches (scripts/ios-batch.mjs): for a `ci:macos` PR that
+// Native iOS runs in batches (scripts/ios-batch.mjs): for a `deploy:ios` PR that
 // touches iOS, a green `Native iOS (batch)` status on its head counts as much
 // as a green Native iOS run on it, and with neither yet, `gate` waits for one.
 //
@@ -25,12 +27,15 @@ import { execFileSync } from 'node:child_process';
 import { BATCH_CONTEXT, iosVerdict, touchesIos } from './ios-batch.mjs';
 import { pathToFileURL } from 'node:url';
 
-export const MACOS_LABEL = 'ci:macos';
+export const DEPLOY_LABELS = ['deploy:linux', 'deploy:windows', 'deploy:macos', 'deploy:ios', 'deploy:android'];
+export const IOS_LABEL = 'deploy:ios';
 export const HOLD_LABEL = 'hold';
 
-/** The workflows `ci:macos` turns macOS work on in, besides ci.yml itself. */
+/** The workflows a deploy label turns platform builds on in, besides ci.yml itself. */
 export const LABEL_WORKFLOWS = [
   '.github/workflows/ios-native.yml',
+  '.github/workflows/android-native.yml',
+  '.github/workflows/installers.yml',
   '.github/workflows/dev-identity.yml',
   '.github/workflows/codeql.yml',
   '.github/workflows/decision-models.yml',
@@ -77,7 +82,8 @@ export function labelRuns(runs, { batch = null, iosRequired = false } = {}) {
 
 
 /** The head's newest `Native iOS (batch)` status, and whether the PR needs Native iOS at all. */
-function iosContext(repo, pr, sha) {
+function iosContext(repo, pr, sha, labels) {
+  if (!labels.includes(IOS_LABEL)) return {};
   const statuses = JSON.parse(gh(['api', `repos/${repo}/commits/${sha}/status`])).statuses ?? [];
   const files = gh(['api', '--paginate', `repos/${repo}/pulls/${pr}/files`, '--jq', '.[].filename']).split('\n').filter(Boolean);
   return { batch: statuses.find(s => s.context === BATCH_CONTEXT) ?? null, iosRequired: touchesIos(files) };
@@ -98,7 +104,7 @@ export function groupPrNumbers(messages) {
 
 const labelsOf = pr => (pr.labels?.nodes ?? pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
 
-/** Why each PR in a queue group must not merge yet, apart from its macOS runs. */
+/** Why each PR in a queue group must not merge yet, apart from its deploy-label runs. */
 export function queueBlockers(prs) {
   const out = [];
   for (const pr of prs) {
@@ -108,8 +114,8 @@ export function queueBlockers(prs) {
   return out;
 }
 
-export function needsMacos(pr) {
-  return labelsOf(pr).includes(MACOS_LABEL);
+export function needsLabelRuns(pr) {
+  return labelsOf(pr).some(label => DEPLOY_LABELS.includes(label));
 }
 
 const describe = run => `${run.name} (${run.status === 'completed' ? run.conclusion : run.status}): ${run.html_url}`;
@@ -126,14 +132,15 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function waitForPr(repo, pr, sha, { timeoutMin, pollSec }) {
   const until = Date.now() + timeoutMin * 60_000;
+  const labels = labelsOf(JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])));
   for (;;) {
-    const state = labelRuns(runsFor(repo, sha), iosContext(repo, pr, sha));
+    const state = labelRuns(runsFor(repo, sha), iosContext(repo, pr, sha, labels));
     if (state.failed.length) {
-      console.error(`\`${MACOS_LABEL}\` runs failed on ${sha}:\n${state.failed.map(describe).join('\n')}`);
+      console.error(`Deploy-label runs failed on ${sha}:\n${state.failed.map(describe).join('\n')}`);
       return 1;
     }
     if (!state.pending.length) {
-      console.log(state.passed.length ? `\`${MACOS_LABEL}\` runs passed:\n${state.passed.map(describe).join('\n')}` : `No \`${MACOS_LABEL}\` runs on ${sha}.`);
+      console.log(state.passed.length ? `Deploy-label runs passed:\n${state.passed.map(describe).join('\n')}` : `No deploy-label runs on ${sha}.`);
       return 0;
     }
     if (Date.now() > until) {
@@ -154,9 +161,9 @@ function checkQueue(repo, base, head) {
     return { number: pr.number, isDraft: pr.draft, labels: pr.labels ?? [], headRefOid: pr.head?.sha };
   });
   const problems = queueBlockers(prs);
-  for (const pr of prs.filter(needsMacos)) {
-    const state = labelRuns(runsFor(repo, pr.headRefOid), iosContext(repo, pr.number, pr.headRefOid));
-    for (const run of [...state.pending, ...state.failed]) problems.push(`#${pr.number} has \`${MACOS_LABEL}\` and ${describe(run)}`);
+  for (const pr of prs.filter(needsLabelRuns)) {
+    const state = labelRuns(runsFor(repo, pr.headRefOid), iosContext(repo, pr.number, pr.headRefOid, labelsOf(pr)));
+    for (const run of [...state.pending, ...state.failed]) problems.push(`#${pr.number} has a deploy label and ${describe(run)}`);
   }
   if (problems.length) {
     console.error(`Not merging this group:\n${problems.join('\n')}`);

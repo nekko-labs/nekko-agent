@@ -64,14 +64,15 @@ queue, mark it draft or label it `hold`. If it is already queued, either one als
 fails the group's `gate`, so the queue ejects it rather than merging it. If you need it
 queued sooner, `gh pr merge --auto <n>` once `gate` is green still works.
 
-With the `ci:macos` label, `gate` on the PR waits for the macOS runs the label turns on
-in other workflows (Native iOS, Dev identity, CodeQL's Swift pass,
-Decision models' CoreML job, nekkod-npm's darwin build) and fails if any of them fails,
-so the PR is not queued until they are green. macOS runners queue, so that can take an
-hour or more. Adding the label re-runs CI.
+Platform builds run nightly, not per change. With a `deploy:linux`, `deploy:windows`,
+`deploy:macos`, `deploy:ios` or `deploy:android` label, `gate` on the PR waits for the
+runs the label turns on (ci.yml's per-OS daemon and capture, Native iOS, Native Android,
+Installers, Dev identity, CodeQL's Swift pass, Decision models' CoreML job, nekkod-npm's
+darwin build) and fails if any of them fails, so the PR is not queued until they are
+green. macOS runners queue, so that can take an hour or more. Adding the label re-runs CI.
 
 Native iOS runs in batches, not on every push: about a minute after a push, one run
-on `ci/ios-batch` takes every open, ready `ci:macos` PR that touches iOS and merges
+on `ci/ios-batch` takes every open, ready `deploy:ios` PR that touches iOS and merges
 cleanly onto main (the largest set that also merges with each other), and reports to
 each PR's head as the `Native iOS (batch)` status, which `gate` accepts
 (`scripts/ios-batch.mjs`). A PR that conflicts with main gets a red status saying so;
@@ -84,7 +85,7 @@ Preview the next batch with `node scripts/ios-batch.mjs --dry-run`.
 
 On a PR, Native iOS checks dark mode only when the change touches colours
 (`scripts/ios-theme-scope.mjs`); add `ci:theme` to force light and dark for theme work
-the script cannot see. The 6-hourly run always checks both.
+the script cannot see. The nightly run always checks both.
 
 ### Ready, not draft
 
