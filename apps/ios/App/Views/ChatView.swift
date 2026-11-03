@@ -879,11 +879,18 @@ struct Composer: View {
                     }
                 }
             }
+            // Voice and dictation say what they heard above the box, with the other notes.
+            if let pending = voice.pending { voicePending(pending) }
+            if let said = voice.notice {
+                Text(said.text).font(.caption2).foregroundStyle(palette.inkSoft).accessibilityIdentifier("composer.voiceNotice")
+            }
+            if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
+            else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
             // The agent's plan, tucked behind the box's top edge (drawn first, so the box covers its foot).
             if !PlanSheet.plan(chat, store).isEmpty {
                 PlanSheet(chat: chat).padding(.bottom, -(PlanSheet.tuck + 6))
             }
-            // One box the width of the screen: the message on top, + and Send inside it below.
+            // One box the width of the screen: the message on top, + and Send below it, then model and context.
             VStack(alignment: .leading, spacing: 0) {
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
                 // "Hide keyboard" action is on the text view itself.
@@ -977,24 +984,19 @@ struct Composer: View {
                         .accessibilityLabel(chat.running ? "Queue" : "Send")
                     }
                 }
-                .padding(.horizontal, 4).padding(.bottom, 2)
+                .padding(.horizontal, 4)
+                // The chat's model and effort, and its context window: the box's bottom row, in Simple and Expert alike.
+                // Nothing sits below the box (#1599).
+                HStack(spacing: 0) {
+                    ModelEffortButton(chat: chat)
+                    Spacer(minLength: 8)
+                    ContextGauge(chat: chat)
+                }
+                .padding(.horizontal, 4).padding(.top, -6)
             }
             .frame(maxWidth: .infinity)
             .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
-            // The chat's model and effort, and its context window: in Simple and Expert alike.
-            HStack(spacing: 0) {
-                ModelEffortButton(chat: chat)
-                Spacer(minLength: 8)
-                ContextGauge(chat: chat)
-            }
-            .padding(.top, -4)
-            if let pending = voice.pending { voicePending(pending) }
-            if let said = voice.notice {
-                Text(said.text).font(.caption2).foregroundStyle(palette.inkSoft).accessibilityIdentifier("composer.voiceNotice")
-            }
-            if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
-            else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
         }
         .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
         // Send waits for the photos (it used to send without them, and they came back later).

@@ -6,6 +6,10 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Nothing below the message box and a denser plan (#1599, added 2026-11-03)
+
+- [x] **BOX-3, iPhone.** The model and effort control and the context ring are the chat composer's bottom row inside the box, under + and Send, in Simple and Expert; voice and dictation lines moved above the box. New chat's model, effort, Run on, folder, tools and cloud rows are the box's bottom rows, its errors above it. The plan sheet's finished steps start folded except the last one with results (a PR or a check's evidence link, `AgentPlan.openByDefault`), each opens or folds on tap, and the loop kind is semibold. PlanTests covers the rule; LiveRelayTests' plan journey taps a step open and folded again.
+
 ## Thinking and replies in chat (#1574, added 2026-11-03)
 
 Spec: [thinking and replies](spec/chat/thinking-and-replies.md).

@@ -79,14 +79,14 @@ struct NewChatView: View {
                         .accessibilityIdentifier("newChat.offlineNote")
                 }
                 if let refusal { note(Label(refusal, systemImage: "exclamationmark.bubble"), color: palette.danger) }
+                // Above the box, as nothing goes below it (#1599).
+                if let cloudError { Text(cloudError).font(.footnote).foregroundStyle(palette.danger) }
+                if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
                 // The desktop's clean start (2026-10-26): a peeking Nekko and a question over a glass message box.
                 NewChatGreeting(paused: !text.isEmpty || !images.isEmpty)
                     .padding(.top, 36)
                     .zIndex(1)
                 composer.padding(.top, -14)
-                options
-                if let cloudError { Text(cloudError).font(.footnote).foregroundStyle(palette.danger) }
-                if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
             }
             .frame(maxWidth: 600)
             .padding(.horizontal, 16)
@@ -131,7 +131,7 @@ struct NewChatView: View {
         .onChange(of: store.defaults) { _, _ in pickDefault() }
     }
 
-    /// The message, its photos, Add and Start, on frosted glass.
+    /// The message, its photos, Add and Start, and below them the chat's options, on frosted glass.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
             TextField("What should your computer do?", text: $text, axis: .vertical).lineLimit(3...10)
@@ -171,6 +171,8 @@ struct NewChatView: View {
                 Spacer(minLength: 0)
                 startButton
             }
+            // The model, effort and where the chat runs: the box's bottom rows, never below it (#1599).
+            options
         }
         .padding(12)
         .background {
