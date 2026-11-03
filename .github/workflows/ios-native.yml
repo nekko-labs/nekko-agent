@@ -1,9 +1,9 @@
 name: Native iOS
 # macOS-only: the Team plan's 5 macOS runners are shared by every workflow (see
-# ci.yml). Runs every 6 hours on main, and for `ci:macos` PRs in batches: one
+# ci.yml). Runs nightly on main, and for `deploy:ios` PRs in batches: one
 # run on `ci/ios-batch` covers every open iOS PR that merges cleanly onto main
 # (scripts/ios-batch.mjs, ios-batch.yml) and reports to each PR's head as the
-# `Native iOS (batch)` status. On a PR itself it runs only when `ci:macos` or
+# `Native iOS (batch)` status. On a PR itself it runs only when `deploy:ios` or
 # `ci:theme` is added, or by `gh workflow run ios-native.yml --ref <branch>`
 # (to tell which PR broke a red batch); pushes do not re-run it.
 # A PR or batch verifies dark mode only when it changes colours or a PR carries
@@ -24,7 +24,8 @@ on:
       - 'packages/shared/src/pairing-link.ts'
       - '.github/workflows/ios-native.yml'
   schedule:
-    - cron: '37 */6 * * *'
+    # 03:37 JST.
+    - cron: '37 18 * * *'
   workflow_dispatch:
     inputs:
       batch:
@@ -69,7 +70,7 @@ jobs:
   protocol-and-build:
     needs: pick
     # !cancelled(): a skipped or failed picker must not skip this job.
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'ci:macos') && contains(fromJSON('["ci:macos","ci:theme"]'), github.event.label.name))) }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
     runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
     # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
     # passing runs off mid-test. A slow runner reaches 75 by itself, and a retried journey adds about 8.

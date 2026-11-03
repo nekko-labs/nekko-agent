@@ -601,8 +601,8 @@ fun ChatScreen(
                     onInterrupt = vm::interruptQueued,
                     onNewAgent = onNewChat,
                     onTerminal = vm::openTerminals,
+                    footer = { ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }) },
                 )
-                ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true })
             }
         }
         ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)

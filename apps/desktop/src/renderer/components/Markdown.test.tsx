@@ -8,6 +8,38 @@ vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openBrowserPane: 
 
 const html = (text: string) => renderToStaticMarkup(<Markdown text={text} />);
 
+describe('topics', () => {
+  const topics = (text: string, askTail = false) => renderToStaticMarkup(<Markdown text={text} topics askTail={askTail} />);
+
+  it('draws a named topic as a header, with the words after the label under it', () => {
+    const out = topics('**Next step**: merge it\nonce CI is green.');
+    expect(out).toContain('data-topic="next"');
+    expect(out).toContain('role="heading"');
+    expect(out).not.toContain('<strong>');
+    expect(out).toMatch(/Next step<\/div><p[^>]*>merge it<br\/>once CI is green\.<\/p>/);
+  });
+
+  it('reads headings and keeps the block after them', () => {
+    const out = topics('## Open questions\n\n- Which one?');
+    expect(out).toContain('data-topic="question"');
+    expect(out).toContain('<li');
+  });
+
+  it('leaves other text, code and untagged Markdown as they were', () => {
+    expect(topics('## Installation\n\n**Important**: read this.')).not.toContain('data-topic');
+    expect(topics('```md\n**Next step**: in a fence\n```')).not.toContain('data-topic');
+    expect(html('**Next step**: a user typed this')).not.toContain('data-topic');
+  });
+
+  it('gives a closing question its header only when asked, and only once', () => {
+    expect(topics('All green.\n\nOpen the PR?')).not.toContain('data-topic');
+    const out = topics('All green.\n\nOpen the PR?', true);
+    expect(out.match(/data-topic="question"/g)).toHaveLength(1);
+    expect(out.indexOf('All green.')).toBeLessThan(out.indexOf('data-topic'));
+    expect(topics('**Question**\n\nOpen the PR?', true).match(/data-topic=/g)).toHaveLength(1);
+  });
+});
+
 describe('file:// links', () => {
   it('open the decoded local path in the file pane, and network shares stay inert', () => {
     expect(html('[Report](file:///C:/My%20Docs/report.md)')).toContain('title="Open C:/My Docs/report.md"');

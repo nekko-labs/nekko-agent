@@ -25,6 +25,27 @@ describe('message actions and completion', () => {
   });
 });
 
+describe('voices', () => {
+  const message = { id: 'a1_said_1', role: 'assistant' as const, content: 'Reading the test.', createdAt: 1 };
+  it('a note is quiet, carries the thought icon and claims nothing is done', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={message} voice="working" chronological />);
+    expect(html).toContain('data-voice="working"');
+    expect(html).toContain('msg-voice-icon');
+    expect(html).not.toContain('Done.');
+  });
+  it('something left for the reader mid-turn is raised and is not done either', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={message} voice="attention" chronological />);
+    expect(html).toContain('data-voice="attention"');
+    expect(html).not.toContain('msg-voice-icon');
+    expect(html).not.toContain('Done.');
+  });
+  it('a reply stands out and finishes the turn', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={message} voice="reply" chronological />);
+    expect(html).toContain('data-voice="reply"');
+    expect(html).toContain('Done.');
+  });
+});
+
 describe('Delete and Restart from here', () => {
   const reply = { id: 'a1', role: 'assistant' as const, content: 'An answer', createdAt: 1 };
   const user = { id: 'u1', role: 'user' as const, content: 'with a picture', images: ['data:image/png;base64,AA'], createdAt: 1 };
