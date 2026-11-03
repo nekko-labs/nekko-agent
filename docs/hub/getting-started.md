@@ -202,7 +202,7 @@ square before its name and as a thin bar on the cards of the agents it holds. Th
 board's right and bottom edges add a zone that fits that row or column; the
 plus at the end of an edge, or Shift-click, spans the full height or width.
 Drag a zone by its name bar to move it (hold Shift at a board edge to span the
-whole side) and right-click the name bar to change its colour or close it. Minimizing or completing
+whole side) and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
 an agent leaves its zone in place, dotted, until you fill it.
 In Dynamic View (including Fixed grid), a window also minimizes automatically
 when its agent finishes a successful reply. Errors and requests for input stay

@@ -36,6 +36,7 @@ import {
   wallAgents,
   wallArrangement,
   nextZoneName,
+  renameZone,
   setZoneTint,
   wallPane,
   zoneTints,
@@ -566,6 +567,9 @@ export function CommandWall({
   // Clicking a zone, or anything in it, makes it the active zone.
   const activate = (paneId: string) => setState((s) => (s.activeZone === paneId ? s : { ...s, activeZone: paneId }));
   const [zoneMenu, setZoneMenu] = useState<{ x: number; y: number; paneId: string } | null>(null);
+  const [renamingZone, setRenamingZone] = useState<string | null>(null);
+  const renameZoneTo = (id: string, name: string) => { setRenamingZone(null); setState((s) => ({ ...s, root: renameZone(s.root, id, name) })); };
+  useEffect(() => { if (renamingZone) wrapRef.current?.querySelector<HTMLInputElement>('.wall-zone-rename')?.select(); }, [renamingZone]);
   const tints = useMemo(() => zoneTints(state.root), [state.root]);
 
   /*
@@ -625,8 +629,8 @@ export function CommandWall({
 
   // What the windows' handlers need, read when they run: a window that skipped
   // a render (WallLeaf) still acts on the current wall.
-  const live = useRef({ state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent });
-  live.current = { state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent };
+  const live = useRef({ state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent, renameZoneTo });
+  live.current = { state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent, renameZoneTo };
   // The Focus heroes seen last keep their composer while parked, so going back
   // to one is a visibility flip; the rest park as transcripts.
   const warm = useRef<readonly string[]>([]);
@@ -806,7 +810,7 @@ export function CommandWall({
     const activeZone = zoned && state.activeZone === pane.id;
     const dropping = dropZone === pane.id;
     const deps = [
-      zoned, activeZone, dropping, zoneMenu?.paneId === pane.id,
+      zoned, activeZone, dropping, zoneMenu?.paneId === pane.id, renamingZone === pane.id,
       entering, leaving,
       pane, title, session, terminal, project?.name, projects.length > 1, status?.label, status?.live, needsYou, agentStatus,
       flashing, selected, n, box?.x, box?.y, box?.width, box?.height, parked, hero, focusedChat, folded, showCompanions,
@@ -843,11 +847,18 @@ export function CommandWall({
         onDragOverCapture={zoned ? (e) => { if (!isAgentDrag(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; setDropZone(pane.id); } : undefined}
         onDropCapture={zoned ? (e) => live.current.dropAgent(e, pane.id) : undefined}
       >
-        {zoned && <div className="wall-zone-header" title="Drag to move this zone. Right-click to close it."
+        {zoned && <div className="wall-zone-header" title="Drag to move this zone. Right-click to rename, recolour or close it."
           onPointerDown={pickable ? (e) => { if (e.button === 0) pickUp(e, pane, title); } : undefined}
           onContextMenu={(e) => { e.preventDefault(); setZoneMenu({ x: e.clientX, y: e.clientY, paneId: pane.id }); }}>
           <span className="wall-zone-swatch" style={{ background: `var(--zone-tint-${tints.get(pane.id) ?? 0})` }} aria-hidden />
-          <span className="wall-zone-name">{pane.zone ?? 'Zone'}</span>
+          {renamingZone === pane.id
+            ? <input className="wall-zone-rename" aria-label="Zone name" defaultValue={pane.zone ?? 'Zone'} maxLength={40}
+              // Keep the name bar's pick-up from starting a drag out of the field.
+              onPointerDown={(e) => e.stopPropagation()}
+              // Escape puts the old name back first, so a blur as the field goes keeps it.
+              onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.value = pane.zone ?? 'Zone'; if (e.key === 'Enter' || e.key === 'Escape') live.current.renameZoneTo(pane.id, e.currentTarget.value); }}
+              onBlur={(e) => live.current.renameZoneTo(pane.id, e.currentTarget.value)} />
+            : <span className="wall-zone-name">{pane.zone ?? 'Zone'}</span>}
         </div>}
         {pane.kind === 'zone' ? <div className="wall-zone-empty" data-zone-empty>
           <ZoneEmptyIllustration />
@@ -1008,6 +1019,7 @@ export function CommandWall({
             className="wall-zone-tint" style={{ background: `var(--zone-tint-${i})` }}
             onClick={() => { const id = zoneMenu.paneId; setZoneMenu(null); setState((s) => ({ ...s, root: setZoneTint(s.root, id, i) })); }} />)}
         </div>
+        <ContextAction onClick={() => { setRenamingZone(zoneMenu.paneId); setZoneMenu(null); }}>Rename zone</ContextAction>
         <ContextAction disabled={allPanes(state.root).length < 2} onClick={() => {
           const id = zoneMenu.paneId;
           setZoneMenu(null);

@@ -79,7 +79,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Customizable UI: customizations, mods and custom layouts](desktop/customizable-ui.md) (6 KB)
 - [Design quality: type scale, readable text, quiet buttons and navigation](desktop/design-quality-type-contrast-and-elevation.md) (4 KB)
 - [Desktop: Simple and Expert modes, what Simple hides, Settings > Simple mode and the composer details panel (2026-10-25, reframed 2026-10-28)](desktop/desktop-simple-and-expert-modes.md) (12 KB)
-- [Dynamic view: zones](desktop/dynamic-zones.md) (7 KB)
+- [Dynamic view: zones](desktop/dynamic-zones.md) (8 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (13 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (8 KB)
 - [Full-pane dot wave and pixel view reveal](desktop/full-pane-dot-wave-and-pixel-view-reveal.md) (3 KB)
