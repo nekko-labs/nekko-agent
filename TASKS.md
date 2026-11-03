@@ -23,6 +23,8 @@ Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#
 - [x] **APL-1, Loop phase on the summary.** `loop_phase` in `crates/nekko-store/src/phase.rs` names a chat's phase from its latest telling tool call and runs the shared tool-purpose fixture; `summarize` adds it as `phase`. (2026-11-03)
 - [x] **APL-2, Every window hears a move.** `forward` in `turns.rs` sends `session_meta` when a checkpoint moves the phase, after the save, because tool calls only reach windows showing the chat. (2026-11-03)
 - [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
+- [x] **APL-5, Wrap-up reads stay put.** `loop_phase` works per reply: a read counts only when nothing since your last message got past Exploring, and a watch's wake-up does not start a new reply. On one machine's 27 open chats, Exploring went from 12 to 2 (#1581). (2026-11-03)
+- [x] **APL-6, Watching and Done.** `statusGroupOf` files a stopped chat under Watching (an armed watch, `activeWatchCount`) or Done, and a working chat in the Shipping phase under Verifying; the Shipping group is gone (#1587). (2026-11-03)
 - [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
 
 ## Third-party licensing and credits (added 2026-11-03)

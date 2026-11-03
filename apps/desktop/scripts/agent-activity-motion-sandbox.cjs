@@ -1,6 +1,6 @@
 // Agents panel evidence for activity grouping: the default view and the
 // Activity view with an agent in each phase of the loop, then frames of one
-// moving from Verifying to Shipping, encoded as a GIF. Hidden,
+// finishing, from Verifying to Done, encoded as a GIF. Hidden,
 // off-screen, non-focusable. Launch through layout-evidence-integration.cjs with
 // NEKKO_LAYOUT_SANDBOX=agent-activity-motion-sandbox.cjs.
 const { app, BrowserWindow, session, screen } = require('electron');
@@ -55,8 +55,8 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(out, 'index.html'));
     await ready();
-    // b waits on a question, c and a are working, d is done; each is at a phase.
-    const phases = { a: { phase: 'building', exchangeCount: 2 }, b: { phase: 'exploring', exchangeCount: 2 }, c: { phase: 'verifying', exchangeCount: 2 }, d: { phase: 'shipping', exchangeCount: 2 } };
+    // b waits on a question, c and a are working, d has stopped with a watch armed.
+    const phases = { a: { phase: 'building', exchangeCount: 2 }, b: { phase: 'exploring', exchangeCount: 2 }, c: { phase: 'verifying', exchangeCount: 2 }, d: { phase: 'shipping', exchangeCount: 2, activeWatchCount: 1 } };
     await run(`localStorage.setItem('fixture.summaries', ${JSON.stringify(JSON.stringify(phases))}); localStorage.removeItem('nekko.agentPanelView'); localStorage.setItem('fixture.pending', JSON.stringify({ b: {} })); localStorage.setItem('fixture.running', JSON.stringify(['a', 'c'])); location.reload()`).catch(() => {});
     await sleep(500); await ready(); await sleep(1200);
     await shot('default-view');
@@ -65,11 +65,10 @@ app.whenReady().then(async () => {
     await sleep(500); await ready(); await sleep(1200);
     await shot('activity-view');
     report.activityGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + e.querySelectorAll('[role=button][title]').length)");
-    // c commits: the engine tells every window, and the card should leave Verifying for Shipping.
+    // c finishes its turn: the card should leave Verifying for Done.
     const frames = [];
     const t0 = Date.now();
-    phases.c.phase = 'shipping';
-    await run(`localStorage.setItem('fixture.summaries', ${JSON.stringify(JSON.stringify(phases))}); layoutFixture.emitAgent({ type: 'session_meta', sessionId: 'c' })`);
+    await run(`layoutFixture.emitAgent({ type: 'done', sessionId: 'c' })`);
     while (Date.now() - t0 < 1500) { const img = await grab(); frames.push(img.toBitmap()); report.frameSize = img.getSize(); if (frames.length % 4 === 0 && frames.length <= 16) fs.writeFileSync(path.join(out, `move-frame-${frames.length}.png`), img.toPNG()); await sleep(15); }
     report.frames = frames.length;
     report.frameMs = Math.round((Date.now() - t0) / frames.length);
