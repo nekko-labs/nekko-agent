@@ -796,7 +796,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
-                    <p className="px-4 py-1 text-2xs text-ink-faint">No active agents</p>
+                    <p className="px-4 py-1 text-2xs text-ink-faint"><span aria-hidden="true">–</span><span className="sr-only">No active agents</span></p>
                   )}
                   {items.map((entry) => {
                     const { w, s } = entry;

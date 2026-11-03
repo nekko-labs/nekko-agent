@@ -3601,8 +3601,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-composer { container-type: inline-size; }
 
 
-/* Pending changes stay readable on a muted surface without an outer glow. */
-.agent-changes-pending { background: var(--surface-2); box-shadow: none; border-radius: 6px; }
+/* Pending changes use the ghost button's unboxed rest state and hover feedback. */
+.agent-changes-pending { box-shadow: none; }
 .agent-change-summary { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; animation: agent-changes-reveal .18s ease-out; }
 @keyframes agent-changes-reveal { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } }
 .agent-action-separator { align-self: center; height: 14px; width: 1px; margin: 0 4px; background: var(--line); }
