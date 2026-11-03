@@ -155,7 +155,7 @@ where Auto routing is not supported, such as a fixed-model workflow step.
 
 ### How the Agents panel groups your agents
 
-By default the panel follows each agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files), **Verifying** (tests, builds and checks) and **Shipping** (commits, pushes and pull requests). An agent can move back: an edit after a failed test puts it in Building again. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. Use the sliders button to group by project, date or computer instead.
+By default the panel puts anything waiting on you first, in **Needs input** (a question or an approval, shown only when there is one), then follows each agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files), **Verifying** (tests, builds and checks) and **Shipping** (commits, pushes and pull requests). An agent can move back: an edit after a failed test puts it in Building again. Once you answer, a waiting agent goes back to where it was. The icon on each card shows what it is doing right now. Use the sliders button to group by project, date or computer instead.
 
 ### Delegated agents in the Agents panel
 
