@@ -12,7 +12,8 @@ import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
+import { BoltIcon, MagnetIcon } from '../icons.js';
+import { FocusIcon } from '../gentleface-icons.js';
 import { HoverTip } from '../components/HoverTip.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -29,7 +30,6 @@ import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '..
 import { allPanes, type PaneKind } from '../layout.js';
 import {
   applySnap,
-  minimizeFinishedReply,
   DEFAULT_ASPECT,
   openWallPane,
   agentZoneTints,
@@ -226,10 +226,11 @@ export function CommandCenterView() {
       if (e.type === 'done' && (!e.stop || e.stop === 'complete')) {
         // Recheck the host: a question can still be pending when a turn ends.
         // Ignore stale answers if another event/turn arrived or the view left.
+        // The pane stays in its zone when the agent finishes; the Agents panel's
+        // "Done" group lists it on the left (additive), as of 2026-11-03.
         void window.nekko.pendingInput().then((inputs) => {
           if (!live || eventVersions.current.get(e.sessionId) !== version) return;
           setPending(inputs);
-          setWall((w) => minimizeFinishedReply(w, e, inputs));
         }).catch(() => {}); // An unavailable input state must not hide a window.
       }
       if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
@@ -244,7 +245,7 @@ export function CommandCenterView() {
       if (!known.has(e.sessionId)) { known.add(e.sessionId); refreshSessions(); }
     });
     return () => { live = false; off(); };
-  }, [refreshSessions, setWall]);
+  }, [refreshSessions]);
 
   // The automation countdowns tick every 30s.
   useEffect(() => {
@@ -614,7 +615,7 @@ function LayoutSegments({ mode, onPick }: { mode: 'focus' | 'grid'; onPick: (mod
       {pill && <span className="wall-layout-pill" aria-hidden="true" style={{ width: pill.width, transform: `translateX(${pill.x}px)` }} />}
       {(['focus', 'grid'] as const).map((m) => (
         <button key={m} ref={(el) => { buttons.current[m] = el; }} type="button" title={`${LAYOUT_LABEL[m]} (${layoutShortcutLabel(m)})`} aria-pressed={mode === m} data-lit={lit === m ? '' : undefined}
-          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
+          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
       ))}
     </div>
   );

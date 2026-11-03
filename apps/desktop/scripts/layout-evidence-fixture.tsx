@@ -33,7 +33,11 @@ const bridge: any = {
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in t) return t[k]; if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
-  bridge.listSessionSummaries = async () => records.map(summarizeSession);
+  // A sandbox can seed what the engine would add to a summary (localStorage 'fixture.summaries', by chat id).
+  bridge.listSessionSummaries = async () => {
+    const seeded = JSON.parse(localStorage.getItem('fixture.summaries') ?? '{}');
+    return records.map(summarizeSession).map((s) => ({ ...s, ...seeded[s.id] }));
+  };
   const [{ createRoot }, React, { App }, { useStore }, { putCachedSession }, { UpdateProvider }] = await Promise.all([import('react-dom/client'), import('react'), import('../src/renderer/App'), import('../src/renderer/store'), import('../src/renderer/sessionCache'), import('../src/renderer/components/UpdateBanner')]);
   await import('@fontsource-variable/inter-tight');
   await import('@fontsource-variable/jetbrains-mono');

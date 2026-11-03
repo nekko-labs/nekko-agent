@@ -65,6 +65,11 @@ nsis:
 msi:
   oneClick: false
 mac:
+  # Windows and Linux builds keep Electron's Chromium notices beside the app; the
+  # .app has none of its own, so copy them in.
+  extraResources:
+    - from: ../../node_modules/electron/dist/LICENSES.chromium.html
+      to: LICENSES.chromium.html
   target:
     - dmg
     - zip

@@ -195,6 +195,12 @@
           "description": "Set up a development checkout, the project layout, and what a pull request needs."
         },
         {
+          "slug": "credits",
+          "title": "Credits",
+          "source": "ASSETS.md",
+          "description": "The projects, assets and runtimes Nekko Agent is built on, and their licenses."
+        },
+        {
           "slug": "architecture",
           "title": "Architecture",
           "source": "docs/hub/architecture.md",

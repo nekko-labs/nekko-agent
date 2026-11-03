@@ -431,6 +431,49 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_chat_moving_along_the_loop_tells_windows_that_do_not_show_it() {
+    let chat = json!({ "id": "s_loop", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("loop", chat);
+    // Two reads: only the first moves the chat, the second is the same phase.
+    let model = scripted_model(vec![
+        call_tool("c_a", "read_file", json!({ "path": "app.ts" })),
+        call_tool("c_b", "read_file", json!({ "path": "app.ts" })),
+        say_text("read it"),
+    ])
+    .await;
+    let port = rig.d.port;
+    let mut elsewhere = ws(port, &format!("/api/ws?sessions=s_none&token={TOKEN}"), None).await.unwrap();
+    let mut everything = ws(port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
+    let spec = turn_spec(&rig, &model, "turn_loop", "s_loop", json!({}));
+    let (status, _) = post(port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (quiet, full) = tokio::join!(
+        collect_until_done(&mut elsewhere, &["s_loop"]),
+        collect_until_done(&mut everything, &["s_loop"]),
+    );
+
+    let types = |frames: &[(String, Value)]| -> Vec<String> {
+        frames
+            .iter()
+            .filter(|(ch, p)| ch == "agent:event" && p["sessionId"] == "s_loop")
+            .map(|(_, p)| p["type"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let (quiet, full) = (types(&quiet), types(&full));
+    let first_step = full.iter().position(|t| t == "step").unwrap();
+    let after = full[first_step..].iter().filter(|t| *t == "session_meta").count();
+    assert_eq!(after, 1, "one move, one telling: {full:?}");
+    // A window not showing the chat gets the turn's first event and no other call.
+    assert_eq!(quiet.iter().filter(|t| *t == "tool_call").count(), 1, "{quiet:?}");
+    assert_eq!(quiet.last().map(String::as_str), Some("done"), "{quiet:?}");
+    assert_eq!(quiet[quiet.len() - 2], "session_meta", "the move still reaches it: {quiet:?}");
+
+    let (_, summaries) = post(port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    let summary = summaries.as_array().unwrap().iter().find(|s| s["id"] == "s_loop").unwrap();
+    assert_eq!(summary["phase"], "exploring");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_parks_approvals_and_answers_them_itself() {
     let session = json!({
         "id": "s_turn_a", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1

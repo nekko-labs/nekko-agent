@@ -1,11 +1,13 @@
 name: Installers
 
-# Builds the real Windows and macOS installers, unsigned, and installs them,
-# whenever a change touches how they are packaged. release.yml only runs on a
+# Builds the real Windows and macOS installers, unsigned, and installs them:
+# nightly, and on a PR that touches how they are packaged and carries
+# `deploy:windows` or `deploy:macos` (that OS only). release.yml only runs on a
 # tag, so without this a broken installer config would first show up as a
 # broken release.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - apps/desktop/electron-builder.yml
       - apps/desktop/build/**
@@ -18,6 +20,9 @@ on:
       - apps/desktop/scripts/gen-dmg-art.mjs
       - .github/workflows/installers.yml
       - .github/workflows/release.yml
+  schedule:
+    # 03:47 JST.
+    - cron: '47 18 * * *'
   workflow_dispatch:
 
 permissions:
@@ -25,10 +30,12 @@ permissions:
 
 jobs:
   installer:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'deploy:windows') || contains(github.event.pull_request.labels.*.name, 'deploy:macos')
     strategy:
       fail-fast: false
+      # On a PR, only the labelled OS. (Each `cond && x || y` branch is non-empty.)
       matrix:
-        os: [windows-latest, xcode-27]
+        os: ${{ fromJSON(github.event_name != 'pull_request' && '["windows-latest","xcode-27"]' || (contains(github.event.pull_request.labels.*.name, 'deploy:windows') && contains(github.event.pull_request.labels.*.name, 'deploy:macos')) && '["windows-latest","xcode-27"]' || contains(github.event.pull_request.labels.*.name, 'deploy:windows') && '["windows-latest"]' || '["xcode-27"]') }}
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'

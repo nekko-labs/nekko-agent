@@ -1,10 +1,58 @@
 ---
 status: active
-last-updated: 2026-10-31
+last-updated: 2026-11-03
 owner:
 ---
 
 # Execution Plan, Nekko Agent
+
+## Nothing below the message box and a denser plan (#1599, added 2026-11-03)
+
+Spec: desktop [message box bottom row](spec/desktop/desktop-simple-and-expert-modes.md#message-box-bottom-row-2026-11-03) and [plan sheet, dense steps](spec/chat/plan-sheet-on-the-composer.md#dense-steps-that-open-on-their-own-implemented-2026-11-03); phones [Simple and Expert modes](spec/phone/iphone-simple-and-expert-modes.md), [native Android app](spec/phone/native-android-app.md).
+
+- [x] **BOX-1, Desktop composer row.** `ChatPane` draws the footer (folder, model and effort, context, usage, Tools, MCP, internet) and the model note as the message box's bottom row, inside `.composer` after its bar; the wall's new chat drops its duplicate model row under the box (the bar already has it); wall windows keep no footer. Tests: `AgentWindowIndicators.test.tsx`, `cleanStart.test.tsx`, `StatusIcon.test.tsx` (`composerBox` helper in `tests/renderChatPane.tsx`); hidden chat-modes and new-chat captures.
+- [x] **BOX-2, Desktop plan.** `PlanSheet` steps lose their cards (dense rows, semibold kind word); each step with details is its own disclosure button with a caret, no hover or focus-within opening. Unfinished steps start open, finished ones closed except the last with PRs or files. Tests: `PlanSheet.test.tsx`; `plan-sheet-sandbox.cjs` (click and Enter toggles, hover opens nothing).
+- [x] **BOX-3, iPhone.** The model and effort control and the context ring are the chat composer's bottom row inside the box, under + and Send, in Simple and Expert; voice and dictation lines moved above the box. New chat's model, effort, Run on, folder, tools and cloud rows are the box's bottom rows, its errors above it. The plan sheet's finished steps start folded except the last one with results (a PR or a check's evidence link, `AgentPlan.openByDefault`), each opens or folds on tap, and the loop kind is semibold. PlanTests covers the rule; LiveRelayTests' plan journey taps a step open and folded again.
+- [x] **BOX-4, Android: the model row inside the message box.** `Composer` takes a `footer` drawn as the box's last row; the chat's model and effort and its context ring moved there from under the box, in Simple and Expert. ChatModesTest screenshots before and after.
+
+## Thinking and replies in chat (#1574, added 2026-11-03)
+
+Spec: [thinking and replies](spec/chat/thinking-and-replies.md).
+
+- [x] **VOICE-1, Who a block of text is for.** `toStreamBlocks` gives each block of agent text a voice: `working` (progress note, quiet, thought icon in the gutter), `attention` (mid-turn text that names a topic or stops on a question, on a panel) or `reply` (closing a turn that did work, on a panel). The live turn settles the same voices as more text arrives. Notes no longer say Done or repeat their step's reasoning. Tests: `transcript.test.ts`, `MessageBubble.test.tsx`, `LiveTurn.test.tsx`.
+- [x] **VOICE-2, Topic headers.** `replyTopics.ts` reads headings and bold labels (questions, next steps, commands, decisions, summaries), `Markdown` draws them as headers, a closing question with no label gets one, and the system prompt asks for the labels in any message of a turn. Tests: `replyTopics.test.ts`, `Markdown.test.tsx`, the prompt goldens.
+- [x] **VOICE-3, Phones.** `ReplyTopics` ports the parser and the voice rule to Kotlin (`apps/android/protocol`) and Swift (`NekkoProtocol`) with the desktop's test cases; `BlockView` on both phones draws the voices and `MarkdownText` the topic headers. Debug fixtures (`ReplyVoicesEvidenceActivity`, `-uiTestReplyVoices`) render a scripted turn for captures. (2026-11-03)
+
+## Watching subagents and choosing where work runs (added 2026-11-03)
+
+Spec: [subagents in Claude chats](spec/agents/claude-code-subagents.md). Decision: [0042](docs/decisions/0042-claude-code-sub-agents-are-child-chats.md).
+
+- [x] **SUB-1, Claude Code sub-agents are child chats.** The mapper hands up `Subagent` start, line and end, and names `Agent` and `Task` `spawn_agent`; `crates/nekkod/src/subagents.rs` writes the child chat through a `Mapper` of its own. `spawnCallId` links both engines' children to their call. Scripted end to end in `crates/nekkod/tests/daemon/claude_code.rs`. (2026-11-03)
+- [x] **SUB-2, Finished subagents stay under their parent.** `subagentRows` keeps them while the chat is working or open; they no longer fall into saved chats, and the card counts them all. (2026-11-03)
+- [x] **SUB-3, Run here or in a subagent.** `canOfferSubagent` and `inSubagent` in shared `orchestration.ts`; the row at the end of the conversation in `ChatPane` (moved out of the composer on review), for typed follow-ups and the suggested next step. Hidden real-App check in `subagent-evidence-sandbox.cjs`. Spec: [run here or in a subagent](spec/agents/run-here-or-in-a-subagent.md). (2026-11-03)
+- [ ] **SUB-4, The same choice on iPhone and Android.**
+- [ ] **SUB-1a, Check a live sub-agent.** Run a real Claude Code `Agent` call, foreground and background, and replace `synthetic/tools-subagent-retry.jsonl` with the recording.
+
+## Agents panel by agent loop (#1560, added 2026-11-03)
+
+Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#activity-follows-the-agent-loop-2026-11-03).
+
+- [x] **APL-1, Loop phase on the summary.** `loop_phase` in `crates/nekko-store/src/phase.rs` names a chat's phase from its latest telling tool call and runs the shared tool-purpose fixture; `summarize` adds it as `phase`. (2026-11-03)
+- [x] **APL-2, Every window hears a move.** `forward` in `turns.rs` sends `session_meta` when a checkpoint moves the phase, after the save, because tool calls only reach windows showing the chat. (2026-11-03)
+- [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
+- [x] **APL-5, Wrap-up reads stay put.** `loop_phase` works per reply: a read counts only when nothing since your last message got past Exploring, and a watch's wake-up does not start a new reply. On one machine's 27 open chats, Exploring went from 12 to 2 (#1581). (2026-11-03)
+- [x] **APL-6, Watching and Done.** `statusGroupOf` files a stopped chat under Watching (an armed watch, `activeWatchCount`) or Done, and a working chat in the Shipping phase under Verifying; the Shipping group is gone (#1587). (2026-11-03)
+- [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
+
+## Third-party licensing and credits (added 2026-11-03)
+
+Spec: [third-party licensing and credits](spec/platform/third-party-licensing-and-credits.md). Runbook: [third-party](docs/runbooks/third-party.md).
+
+- [x] **TP-1, License check.** `scripts/third-party.mjs check` against `scripts/license-policy.json`, as a `licenses` CI job that runs only on dependency or `ASSETS.md` changes, with `gate` waiting for it. (2026-11-03)
+- [x] **TP-2, Notices file.** `dist` and `release` generate `THIRD_PARTY_NOTICES.txt` from what the bundler used, production packages and crates. Settings shows it. macOS also gets Chromium's notices. (2026-11-03)
+- [x] **TP-3, Assets list and credits page.** `ASSETS.md` is both, published at /docs/credits. (2026-11-03)
+- [ ] **TP-4, Notices in the npm packages.** `apps/cli` and the `nekkod` packages bundle third-party code and carry no notices file.
+- [ ] **TP-5, Crates in the Docker notices.** The builder stage has no cargo, so the image's file lists npm packages only.
 
 ## Live Activity language and the bottom of a chat (#1487, added 2026-11-02)
 
@@ -91,6 +139,8 @@ The hosted iOS 27 simulator sometimes shut down or lost its accessibility server
 
 - [x] **T223, Recover the simulator between suites (2026-10-29).** `ios-native.yml`: `ready` (`simctl bootstatus -b` and the status bar override) before every suite, a fresh boot after the first-run suite, and one retry for a failed first-run test (`-retry-tests-on-failure -test-iterations 2`) for XCTest's hang at "Setting up automation session". Verified locally on an iOS 27.0 simulator: `simctl ui` on a shut-down device exits 149 as on CI, and exits 0 after `ready`.
 - [ ] **T224, Watch the next scheduled runs** on main for a simulator loss that `ready` did not recover.
+- [x] **T224a, One retry for the live journey (#1567, 2026-11-03).** The first journey after the fresh boot timed out reading the app at a random step, on unrelated PRs, while later journeys passed; why is not established. `ios-native.yml` gives it one more try on a fresh stack and install, and the job limit goes from 75 to 85 minutes. A stack whose engine misses its start deadline after the boot counts as a failed try too (2026-11-03).
+- [x] **T224b, A green batch stays green (#1575, 2026-11-03).** `ios-batch.mjs` leaves out heads that already passed. A new batch had replaced their green status with pending whenever main moved, which ejected #1312 from the merge queue with nothing failed.
 ## Vercel builds only website changes (#1328)
 
 Vercel serves only the marketing site and docs but built a deployment for every push to every branch. Spec: [spec/platform/distribution-platforms.md](spec/platform/distribution-platforms.md).
@@ -372,6 +422,7 @@ PRs sat in draft waiting on CI. Run history showed the cause: Linux and Windows 
 - [x] ✅ 2026-10-24 Native iOS CI faster (`ios-native.yml`). One `build-for-testing` for the test device's architecture serves the bundle checks and every test run (before, the bundle check built for a generic destination and `test` rebuilt). Booting the simulator in the background was tried and dropped: it slowed whatever ran beside it and saved about 17 s (see docs/perf-history.md). A PR verifies dark mode (the second live journey, about 5 minutes, and the dark halves of `FirstRunTests`/`CloudTests` through `NEKKO_UI_THEMES`) only when it changes colours, per `scripts/ios-theme-scope.mjs` (theme sources, colour sets, or a Swift file whose colour references differ between removed and added lines), or carries `ci:theme`; the schedule and a dispatch run both.
 - [x] ✅ 2026-10-24 Native iOS in batches (`scripts/ios-batch.mjs`, `.github/workflows/ios-batch.yml`). In the 24 hours to 2026-10-24 Native iOS ran 60 times on 18 branches (none green, 22 cancelled by a newer push). Now a push to a `ci:macos` iOS PR (and a 30-minute schedule) composes a batch: the ready same-repo `ci:macos` PRs into main that touch iOS, minus those that conflict with main, then the largest set that merges with each other (oldest first on a tie, from pairwise `git merge-tree`), squashed into one commit on main and force-pushed to `ci/ios-batch`; an unchanged batch is not re-run. Native iOS is dispatched there with the PRs and heads (`batch` input; one batch at a time, the newest waiting one replacing older ones) and posts `Native iOS (batch)` to each head. `ci-label-gate.mjs` accepts a green batch status or a green run on the PR, waits when the PR touches iOS and has neither, and checks the same in the queue. On a PR, Native iOS itself now runs only when `ci:macos` or `ci:theme` is added or by dispatch. The merge queue's settings are unchanged (Philip: keep the 60-minute timeout).
 - [ ] CodeQL Swift covers the SwiftPM protocol package only; the Xcode app targets need a signed-free `xcodebuild` in the analysis job.
+- [x] ✅ 2026-11-03 Platform builds nightly, opt-in per PR with `deploy:<platform>` labels. ci.yml's per-OS `daemon` and `capture` rows (Linux, Windows, macOS) no longer run on a PR or in the queue: the full tier is nightly (03:17 JST) instead of every 6 hours, and `deploy:linux` / `deploy:windows` / `deploy:macos` add an OS's rows to a PR that touches what they test (`scripts/ci-scope.mjs`). The PR keeps `build`; the queue keeps `perf` and the itests. Native iOS, Native Android, Installers and Dev identity run nightly and on a PR only with `deploy:ios`, `deploy:android`, `deploy:windows` / `deploy:macos`, and `deploy:macos`; TestFlight uploads nightly (when the app changed) instead of on every push to main. `ci:macos` is retired: its macOS desktop half is `deploy:macos`, its iOS half (Native iOS, the iOS batch, CodeQL Swift) `deploy:ios`. `ci-label-gate.mjs` makes `gate` wait for the runs any deploy label turns on, Android and Installers included. Cost: a Rust, ConPTY or phone-app break without a label shows up in the next morning's `ci-scheduled` issue, not before merge.
 - [ ] Nightly desktop release from the last commit that passed a scheduled full run (Philip's plan; releases follow version bumps today).
 
 ## Focused mode transitions and layout controls (added 2026-10-17)
@@ -421,6 +472,16 @@ See [SPEC](spec/brand/beta-signups-and-website-analytics.md). Decided: Neon free
 - [ ] Deploy on push: a `fly deploy` job in the `API` workflow, once a `FLY_API_TOKEN` (deploy token scoped to this app) is in the repo secrets.
 - [ ] The signup form on the website: `POST {api}/v1/signups`, call `/healthz` on load, hidden `website` honeypot field, send `source` as the page path and any `utm_*`. Point it at a custom domain (e.g. `api.nekkoagent.com`, `fly certs add`) or `nekko-agent-api.fly.dev`.
 - [ ] Before the form ships: a privacy line on the site saying what the form keeps, and how to unsubscribe.
+
+## GDPR audit fixes: website (added 2026-11-03)
+
+Tracked in [#1610](https://github.com/nekko-labs/nekko-agent/issues/1610). See [SPEC](spec/brand/beta-signups-and-website-analytics.md). The API half (log redaction, account deletion, storing `marketing` and `policyVersion`) has its own tasks.
+
+- [x] ✅ 2026-11-03 GD1 Self-hosted fonts: Inter Tight, JetBrains Mono, Handjet and Space Mono as latin woff2 subsets in `apps/website/fonts/` (Fontsource, OFL-1.1, license texts beside them, rows in ASSETS.md), loaded by `apps/website/fonts.css` from `index.html`, `privacy.html` and every docs page (`scripts/build-docs.mjs`). No Google Fonts links remain.
+- [x] ✅ 2026-11-03 GD2 No third-party calls on page load: `build-docs.mjs` (Vercel's build command) fetches the latest GitHub release into a gitignored `apps/website/release.json` (`releaseInfo`, tested), and `site.js` reads that instead of api.github.com; without the file the buttons link to the releases page. The `/healthz` warm-up fires on the first focus of the signup email field, not on load. Checked in a headless browser: `/`, `/privacy` and docs pages request nothing outside the site.
+- [x] ✅ 2026-11-03 GD3 Separate marketing consent and age: an unticked **Also send me product updates** box; the POST body adds `marketing: true|false` and `policyVersion: "2026-11-03"` (the API ignores unknown fields until its half lands). Button reads **Get beta invites**; the privacy line says product updates only with the tick; **You must be 16 or older to sign up** by the form.
+- [x] ✅ 2026-11-03 GD4 Privacy policy version 2026-11-03: every recipient and region (Vercel, Fly.io `iad` API and `nrt` Relay, Neon `aws-us-east-1`, Resend, Supabase Auth, APNs and FCM), transfers on the vendors' Standard Contractual Clauses, the full rights list, minimum age 16, product updates only with the tick, confirmed signups kept until the beta ends or unsubscribe, Nekko Cloud accounts and their deletion, no IPs or token links in API logs. Homepage and `docs/REMOTE.md` no longer say the relay sees only ciphertext without the Lock Screen status exception.
+- [ ] Owner: confirm each vendor's DPA (with SCCs) is accepted in its console: Vercel, Fly.io, Neon, Resend, Supabase, plus Apple and Google push terms. Confirm the Supabase project's region and add it to the policy.
 
 ## Swoop navigation rail (added 2026-10-17)
 
@@ -576,6 +637,16 @@ port continues behind it and replaces it only once the parity gates below pass.*
 - [ ] **PH3, partly done 2026-10-17: browse and list.** iPhone (`NWBrowser`, `NSBonjourServices`, local network prompt only on a tap) and Android (`NsdManager`, serial resolves) list computers advertising `_nekko-agent._tcp` on the Pair screen's *On this network*, for 30 s per tap, with the computer's own relay host when the phone would accept it. Parsing is `NearbyComputer` in both protocol modules with matching tests (version check, name cleaning, untrusted relay filtered by each platform's relay rule). A listing never pairs; the row says to scan the code on that computer. Still open: tap-to-pair (after the PH2/PH3 decision), browsing over the tailnet, and a run on a real Wi-Fi with a real desktop.
 - [ ] **PH3, phone-side discovery.** Expo app: browse `_nekko-agent._tcp` (Zeroconf module, iOS needs `NSBonjourServiceTypes` + local-network permission prose, Android NSD) and list found computers in Computers → "On this network" with name, relay host and a Pair button; tapping starts pairing against that relay, the desktop shows the approve prompt and the code exchange runs as today. Also browse over the tailnet when Tailscale is active. Native SwiftUI port gets the same via `NWBrowser` (gate 3).
 - [x] **PH4, "Relay on this computer" in Remote access.** Settings → Remote access shows a **Relay on this computer** card. It finds this computer's Tailscale address in `networkInterfaces` (`100.64.0.0/10`), and the MagicDNS name via `tailscale status --json` when the CLI is there. It starts `apps/relay-server` (bundled as `out/main/relay.js`) as a child process bound to that address only, under the app's own runtime; there is no LAN or `0.0.0.0` bind. **Use this relay** pre-fills the URL. The switch is kept in `local-relay.json`, so it comes back at launch. With Tailscale off it waits and starts when Tailscale connects, and it moves when the address changes. It explains a taken port or a relay that never started. The channels are desktop-only `localRelay:*` (not nekkod's `remote:*`, never phone-callable). Verified: unit tests for the service and the card, and the Swift live itest through the bundled `relay.js` under Node (a stranger without a code refused; enroll, a streamed turn, a tool denied from the phone). That itest caught a bundling bug: `ws`'s optional `bufferutil` became an empty stub, and the relay died on the first masked frame. Both helpers are now external, and `relay-bundle.test.ts` runs the real bundle with masked frames. Before/after renderer captures in light, dark and at 420 px. The scripts stay for headless use. · Done: 2026-10-16
+
+## GDPR audit fixes: Nekko Cloud (added 2026-11-03)
+
+Issue: [#1611](https://github.com/nekko-labs/nekko-agent/issues/1611). Spec: [Nekko Cloud data rights](spec/platform/nekko-cloud-data-rights.md). Decision: [0043](docs/decisions/0043-account-deletion-is-a-hard-delete-that-tears-down-cloud-machines-first.md).
+
+- [x] **GD5, No IPs or tokens in logs.** `LOG_SERIALIZERS` in `server.ts`: a request line is method, path without the query string, status and timing; errors drop driver extras; 404s no longer log the URL. Rate limits still count IPs in memory. Test: `privacy.test.ts`. ✅ 2026-11-03
+- [x] **GD6, Delete a Nekko Cloud account.** `DELETE /v1/account` (204, 401, 502 on machine teardown failure): destroys the account's Fly machines first, then one transaction deletes the user and everything that cascades from it, its signups, and suppresses the address; the Supabase Auth user goes through the `pending_auth_deletions` outbox (migration `0012`, hourly retry, `SUPABASE_SERVICE_ROLE_KEY`). Tests on PGlite: cascade, a failed teardown deletes nothing, another account untouched, Supabase retry. ✅ 2026-11-03
+- [x] **GD7, Marketing consent apart from the beta.** Migration `0011`: `signups.marketing_opt_in` (default false, older rows stay false) and `signups.policy_version`; `POST /v1/signups` takes `marketing` and `policyVersion`, validated, and a re-signup replaces both. No product-update mail exists to gate yet. ✅ 2026-11-03
+- [x] **GD8, Error alerting.** `src/alerts.ts`: a 5xx or a failed background job emails `ALERT_EMAIL` through Resend at most once per 15 minutes, with no request data. Off without `ALERT_EMAIL`. ✅ 2026-11-03
+- [x] **GD9, Breach runbook.** [docs/runbooks/privacy-incident.md](docs/runbooks/privacy-incident.md): noticing, who decides, the 72-hour clock, telling users, what to record, vendor contacts. ✅ 2026-11-03
 
 ### Hosted relay: free push, limited free traffic, paid Cloud, analytics (added 2026-10-12)
 

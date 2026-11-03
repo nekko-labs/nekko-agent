@@ -50,3 +50,4 @@ perf-results/
 # Committed, every docs PR conflicted with every other one in the merge queue.
 apps/website/docs/
 apps/website/llms-full.txt
+apps/website/release.json

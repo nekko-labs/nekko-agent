@@ -118,6 +118,14 @@ runner you connected while the build was running gets its mode then.
 updates arrive. The runner keeps working on the old image until the new one passes its test boot,
 and keeps its mode and its on or off state.
 
+Nekko keeps the downloaded macOS image, so a rebuild skips the download while Apple's newest macOS
+is still the one you have. A newer macOS replaces it, and it is deleted first if a build needs the
+space.
+
+**Update scripts**, beside **Rebuild image**, is for an update to Nekko's own scripts inside the
+image. It copies the image, writes the new scripts in and test-boots the copy, in a few minutes. A new
+macOS or Xcode still needs **Rebuild image**.
+
 ## Use an app you already have
 
 To make the app yourself, or if you already have one, choose **Use an app I already have** on the

@@ -210,7 +210,7 @@ describe("the Fly driver", () => {
       calls.push({ url, init });
       if (init.method === "POST" && url.endsWith("/machines")) return new Response(JSON.stringify({ id: "m-1" }), { status: 200 });
       if (init.method === "GET") return new Response(JSON.stringify({ state: "started" }), { status: 200 });
-      if (init.method === "DELETE") return new Response(null, { status: 404 });
+      if (init.method === "DELETE") return new Response(null, { status: url.includes("/m-gone") ? 404 : 500 });
       return new Response("{}", { status: 200 });
     }) as unknown as typeof fetch;
     const fly = new FlyDriver({ token: "fo1_secret", app: "nekko-cloud-machines", api: "https://fly.test", fetch: fetchImpl });
@@ -224,6 +224,8 @@ describe("the Fly driver", () => {
     expect((calls[0].init.headers as Record<string, string>).authorization).toBe("Bearer fo1_secret");
     expect(calls.every((c) => !c.url.includes("fo1_secret"))).toBe(true);
     expect(await fly.state("m-1")).toBe("running");
-    await expect(fly.destroy("m-1")).rejects.toThrow("404");
+    // Already gone counts as destroyed (account deletion relies on it); any other failure surfaces.
+    await expect(fly.destroy("m-gone")).resolves.toBeUndefined();
+    await expect(fly.destroy("m-1")).rejects.toThrow("500");
   });
 });

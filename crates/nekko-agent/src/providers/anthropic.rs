@@ -23,8 +23,9 @@ use std::sync::Arc;
 
 /// The shipped Claude catalog, served when `GET /v1/models` can't be reached.
 /// Newest first within a family, the previous generation included so a chat
-/// pinned to it still has a name for it.
-const CLAUDE_MODELS: &[(&str, &str)] = &[
+/// pinned to it still has a name for it. `pub(crate)` so the Claude Code
+/// provider can reuse the same list rather than copy its own stale shadow.
+pub(crate) const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("claude-opus-5-5", "Claude Opus 5.5"),
     ("claude-opus-5", "Claude Opus 5"),
     ("claude-opus-4-8", "Claude Opus 4.8"),

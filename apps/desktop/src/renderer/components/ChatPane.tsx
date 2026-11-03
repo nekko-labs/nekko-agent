@@ -22,7 +22,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CLAUDE_CODE_PROVIDER_KIND, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, inSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -70,7 +70,6 @@ import { ContextGauge, EffortSlider } from './ChatMetrics.js';
 import { ExpertMonitor, ModeToggle, useExpertMode } from './ModeViews.js';
 import { PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
-import { sheetPlan } from '../claudeAgentPlan.js';
 import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
 import { useWallLogs } from '../wallLogs.js';
@@ -82,7 +81,7 @@ import { ChatControls, InternetToggle, McpMenu, MODE_LABEL, ToolsMenu } from './
 import { useElementCompact } from './agent-console/useElementWidth.js';
 import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
-import { PrCard, PrActionDock } from './PrCard.js';
+import { PrCard } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
 import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
@@ -93,6 +92,7 @@ import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
+import { GfSendIcon } from '../gentleface-icons.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 
@@ -420,7 +420,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
   if (row.kind === 'stats') return <div className="msg-ai"><TurnStatsLine stats={row.stats} /></div>;
   if (row.kind === 'prs') {
     // Historical milestones stay anchored to their original transcript positions.
-    return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} />)}</>;
+    return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} sessionId={sessionId} />)}</>;
   }
   const persisted = !row.displayOnly && row.message.id !== 'tmp' && row.message.id !== 'live';
   const editable = !readOnly && !streaming && row.message.role === 'user' && persisted;
@@ -429,6 +429,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
       <MarkdownSession.Provider value={sessionId}>
       <MessageBubble
         message={row.message}
+        voice={row.voice}
         basePath={basePath}
         onResend={editable ? onEditResend : undefined}
         onReset={editable ? onEditResend : undefined}
@@ -443,7 +444,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
       </MarkdownSession.Provider>
       {row.message.role === 'assistant' && <ChatArtifacts artifacts={chatArtifacts(row.message.content, basePath).filter(artifact => !artifact.inlineImage)} sessionId={sessionId} />}
       {/* A PR card right after the message that first names it. */}
-      {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" />)}
+      {row.prUrls.map((u) => <PrCard key={u} url={u} info={prByUrl.get(u)} event="created" sessionId={sessionId} />)}
     </>
   );
 });
@@ -589,8 +590,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const subagentChildren = useMemo(() => subagentSessions.filter(s => s.parentSessionId === sessionId), [subagentSessions, sessionId]);
   // What a delegation that names no model runs on: the saved route, else this chat's model.
   const delegationDefaultModel = useStore(s => s.settings?.orchestration?.delegationRoute?.modelId);
+  const delegationStrategy = useStore(s => s.settings?.orchestration?.strategy);
   const computer = useComputerOf(sessionId);
-  const remoteBlock = computerBlock(computer);
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
   const { providers: localProviders, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
@@ -606,6 +607,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Painted straight from the session cache when this chat was open recently;
   // the host copy is fetched regardless and replaces it (stale-while-revalidate).
   const [session, setSession] = useState<Session | null>(() => getCachedSession(sessionId) ?? null);
+  // A Claude Code sub-agent's chat is a copy to watch: Claude Code holds the real one.
+  const remoteBlock = session?.claudeCodeSubagent ? 'This subagent runs inside its parent chat. Send your message there.' : computerBlock(computer);
   const [liveConnectivity, setLiveConnectivity] = useState<import('@nekko-agent/shared').ConnectivityNotice[]>(() => rememberedConnectivityNotices(sessionId));
   useEffect(() => { setLiveConnectivity(rememberedConnectivityNotices(sessionId)); }, [sessionId]);
   const claudeBackground = useClaudeBackgroundTasks(sessionId);
@@ -1573,7 +1576,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    * Sends the draft, or `override` instead of it. False when a gate refused it (voice puts the text back then).
    * `admitted` fires once the turn has begun or been queued; the returned promise settles only when the turn ends.
    */
-  const send = async (override?: string, admitted?: () => void): Promise<boolean | undefined> => {
+  const send = async (override?: string, admitted?: () => void, wrap: (text: string) => string = (t) => t): Promise<boolean | undefined> => {
     if (remoteBlock) {
       useStore.getState().pushToast('error', `${remoteBlock}. This message wasn't sent.`);
       return false;
@@ -1587,16 +1590,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const input = override ?? draft;
     if (imageMode) return input.trim() ? sendImage(input.trim(), override === undefined, admitted) : false;
     const skill = activeSkill;
-    const text = [skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n');
+    const text = wrap([skill ? skill.template.trimEnd() : '', input.trim()].filter(Boolean).join('\n\n'));
     const images = pendingImages;
     const videos = pendingVideos;
     if (!text.trim() && images.length === 0 && videos.length === 0 && !skill) return false;
     // A follow-up never interrupts work by accident. Queue the same payload the
     // turn would have sent so attachments and skills run when their turn arrives.
     if (streamingRef.current && !imageMode) {
-      if (override === undefined) await queueDraft();
+      if (override === undefined) await queueDraft(wrap);
       else {
-        const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(input, images, skill, videos));
+        const updated = await window.nekko.queuePrompt(sessionId, queuedPayloadFor(wrap(input), images, skill, videos));
         if (updated) { setSession(updated); refreshSessions(); }
       }
       return;
@@ -1687,8 +1690,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   // Queue the draft to run after the current reply (and any earlier queued
   // items). Useful for lining up follow-ups while an agent is working.
-  const queueDraft = async () => {
-    const text = draft.trim();
+  const queueDraft = async (wrap: (text: string) => string = (t) => t) => {
+    const typed = draft.trim();
+    const text = typed ? wrap(typed) : typed;
     const images = pendingImages;
     const videos = pendingVideos;
     const skill = activeSkill;
@@ -2000,6 +2004,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
   const ghostSuggestion = !draft && !errorNotice && liveSuggestions?.next ? liveSuggestions.next : null;
+
+  // More work for a chat that has replied: run it here, or hand it to a subagent.
+  // A slash command isn't work to place, and Enter still means here.
+  const followUp = draft.trim() ? (draft.trimStart().startsWith('/') ? null : draft) : ghostSuggestion;
+  const offerSubagent = !!followUp && !imageMode && !remoteBlock && hasProvider && !!session
+    && canOfferSubagent(session, delegationStrategy);
+  const runFollowUp = (wrap?: (text: string) => string) => void send(draft.trim() ? undefined : followUp ?? undefined, undefined, wrap);
 
   const onComposerKeyDown = (e: React.KeyboardEvent<MarkdownEditorElement>) => {
     if (e.nativeEvent.isComposing) return;
@@ -2320,7 +2331,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Every PR the transcript mentions, scanned once per transcript: the scan is
   // a regular expression over every message, and it used to run on every
   // render of the pane, including each streaming frame.
-  const sessionPrUrls = useMemo(() => (messages ? collectSessionPrUrls(messages) : []), [messages]);
   const prByUrl = useMemo(() => new Map(prs.map((p) => [p.url, p])), [prs]);
   // Handlers handed to rows go through refs, so a row never re-renders because
   // this pane re-rendered.
@@ -2442,8 +2452,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />
-    {/* On the wall effort is in the Mode panel; the bar keeps just the model. */}
-    {!wallWindow && <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />}
+    {/* Effort rides the composer in every surface now: an icon-sized gauge
+        beside the model picker, matching iOS/Android ModelEffortButton. */}
+    <EffortSlider session={session} onSessionChange={setSession} onChanged={() => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } }} modelId={autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined)} />
     </div>
   );
 
@@ -2590,6 +2601,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
+                {/* Where the next piece of work runs, offered in the conversation like the other next steps. */}
+                {offerSubagent && (
+                  <div className="flex flex-wrap items-center gap-2 py-2 text-xs" role="group" aria-label="Where this work runs" data-work-place>
+                    {!draft.trim() && <span className="min-w-0 text-ink-faint [overflow-wrap:anywhere]">Next: {followUp}</span>}
+                    <button type="button" className="btn btn-outline py-1 text-xs" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
+                    <button type="button" className="btn btn-outline py-1 text-xs" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
+                    <span className="text-2xs text-ink-faint">Here uses more context</span>
+                  </div>
+                )}
                 {errorNotice && !question && !streaming && (() => {
                   // A stop the user asked for is not a failure, so it doesn't wear
                   // the failure colour. Either way the run is resumable whenever it
@@ -2697,7 +2717,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
-        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-4 pt-1`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
+        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined} data-resting={(wallWindow && resting) || undefined}>
           {/* The resize grip rides the composer's top border: a wide invisible
               hit area over a hairline that lights up on hover. */}
           {surface !== 'composer' && !cleanStart && <div
@@ -2713,7 +2733,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
           </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
-          <div className={`composer-column mx-auto ${commandCenter ? 'w-[98%]' : 'w-[90%]'}`} style={cleanStart ? undefined : commandCenter ? { width: '98%' } : undefined}>
+          <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : 'w-[min(90%,calc(100%-8px))]'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
             )}
@@ -3263,8 +3283,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       title={streaming ? 'Add to the queue' : 'Send'}
                       aria-label={streaming ? 'Add to queue' : 'Send'}
                     >
-                      {/* On the wall Nekko wears the window's status in its header, so Send is a plain arrow. */}
-                      {wallWindow ? <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg> : <NekkoAvatar size={24} />}
+                      {/* On the wall Nekko wears the window's status in its header, so Send is the gentleface paper plane. */}
+                      {wallWindow ? <GfSendIcon className="h-[17px] w-[17px]" /> : <NekkoAvatar size={24} />}
                     </button>
                 </div>
               </div>
@@ -3277,12 +3297,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           </div>
         </div>
         )}
-        {/* In the wall composer this strip only carries the PR dock (the model,
-            folder and usage controls live in the agent window), so it draws no
-            chrome of its own: empty, it used to show as a bare band under the
-            composer. */}
-        {/* The PR deck sits between the composer and the footer controls, on the window surface. */}
-        {!cleanStart && <PrActionDock key={sessionId} sessionId={sessionId} prs={prs} urls={sessionPrUrls} floating={surface === 'composer'} checksInPlan={!!sheetPlan(session, providers, streaming)?.length} />}
+        {/* Open PRs show their status and actions on their own PR card in the
+            transcript, and on the plan sheet's PR chip. The composer no longer
+            carries a dedicated strip for them. */}
         {!cleanStart && <div className={surface === 'composer' ? 'shrink-0' : 'shrink-0 px-3 py-1'} aria-label="Chat actions and information">
           {/* Said once, next to the control that fixes it, in the window being driven. */}
           {modelHint && !imageMode && surface !== 'composer' && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}

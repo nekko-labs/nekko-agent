@@ -91,8 +91,13 @@ export class FlyDriver implements MachineDriver {
     await this.call("POST", `/machines/${encodeURIComponent(ref)}/start`, {});
   }
 
+  /** A machine Fly no longer has (404) counts as destroyed. */
   async destroy(ref: string): Promise<void> {
-    await this.call("DELETE", `/machines/${encodeURIComponent(ref)}?force=true`);
+    try {
+      await this.call("DELETE", `/machines/${encodeURIComponent(ref)}?force=true`);
+    } catch (e) {
+      if (!String(e).includes(": 404")) throw e;
+    }
   }
 
   async state(ref: string): Promise<"running" | "stopped" | "gone"> {
