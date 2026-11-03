@@ -8,7 +8,12 @@ owner:
 
 ## Nothing below the message box and a denser plan (#1599, added 2026-11-03)
 
+Spec: desktop [message box bottom row](spec/desktop/desktop-simple-and-expert-modes.md#message-box-bottom-row-2026-11-03) and [plan sheet, dense steps](spec/chat/plan-sheet-on-the-composer.md#dense-steps-that-open-on-their-own-implemented-2026-11-03); phones [Simple and Expert modes](spec/phone/iphone-simple-and-expert-modes.md), [native Android app](spec/phone/native-android-app.md).
+
+- [x] **BOX-1, Desktop composer row.** `ChatPane` draws the footer (folder, model and effort, context, usage, Tools, MCP, internet) and the model note as the message box's bottom row, inside `.composer` after its bar; the wall's new chat drops its duplicate model row under the box (the bar already has it); wall windows keep no footer. Tests: `AgentWindowIndicators.test.tsx`, `cleanStart.test.tsx`, `StatusIcon.test.tsx` (`composerBox` helper in `tests/renderChatPane.tsx`); hidden chat-modes and new-chat captures.
+- [x] **BOX-2, Desktop plan.** `PlanSheet` steps lose their cards (dense rows, semibold kind word); each step with details is its own disclosure button with a caret, no hover or focus-within opening. Unfinished steps start open, finished ones closed except the last with PRs or files. Tests: `PlanSheet.test.tsx`; `plan-sheet-sandbox.cjs` (click and Enter toggles, hover opens nothing).
 - [x] **BOX-3, iPhone.** The model and effort control and the context ring are the chat composer's bottom row inside the box, under + and Send, in Simple and Expert; voice and dictation lines moved above the box. New chat's model, effort, Run on, folder, tools and cloud rows are the box's bottom rows, its errors above it. The plan sheet's finished steps start folded except the last one with results (a PR or a check's evidence link, `AgentPlan.openByDefault`), each opens or folds on tap, and the loop kind is semibold. PlanTests covers the rule; LiveRelayTests' plan journey taps a step open and folded again.
+- [x] **BOX-4, Android: the model row inside the message box.** `Composer` takes a `footer` drawn as the box's last row; the chat's model and effort and its context ring moved there from under the box, in Simple and Expert. ChatModesTest screenshots before and after.
 
 ## Thinking and replies in chat (#1574, added 2026-11-03)
 
