@@ -166,6 +166,12 @@
           "description": "What Nekko's image build does, and how to build the macOS image yourself on macOS 26."
         },
         {
+          "slug": "ci-runner-performance",
+          "title": "CI runner performance",
+          "source": "docs/ci-runner-performance.md",
+          "description": "How fast a job runs on your Mac compared with GitHub's hosted Macs, measured on our own iOS CI."
+        },
+        {
           "slug": "decision-models",
           "title": "Decision models",
           "source": "docs/decision-models.md",
