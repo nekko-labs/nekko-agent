@@ -95,6 +95,7 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 ### Using Nekko Agent
 
 - [Verification and PR progress](https://nekkoagent.com/docs/chat-progress.md): Follow verification checklists, device activity, CI checks and resolved or unresolved review threads in chat.
+- [Simple and Expert](https://nekkoagent.com/docs/simple-and-expert.md): Switch between the everyday app and every control, and choose what Simple shows.
 - [Fonts and text](https://nekkoagent.com/docs/fonts-and-text.md): Text size, the interface and code fonts, and adding your own fonts.
 - [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
 - [Connections](https://nekkoagent.com/docs/connections.md): Switch off every network connection at once or one by one, and see how often each one is used.

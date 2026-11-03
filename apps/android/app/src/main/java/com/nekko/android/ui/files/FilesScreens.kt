@@ -38,6 +38,12 @@ import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.nekko.android.data.Computer
+import com.nekko.android.ui.components.RowDivider
+import com.nekko.android.ui.components.SectionHeader
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -631,61 +637,153 @@ private fun EditPage(edit: FileEditController, onBack: () -> Unit) {
 /** The computer's logs, read only (Settings → Logs, the iPhone's computer menu → Logs). */
 @Composable
 fun LogsScreen(repo: ComputersRepository, onBack: () -> Unit) {
-    val logs = remember { LogsController { r -> repo.caller.call(r.channel, *r.args.toTypedArray()) } }
+    val c by repo.state.collectAsStateWithLifecycle()
+    val online = c.conn == RelayState.ONLINE
+    // A new reader per computer: switching computers never shows the last one's logs under the new name.
+    val logs = remember(c.activeId) { LogsController { r -> repo.caller.call(r.channel, *r.args.toTypedArray()) } }
     // The open log survives folding the phone (a new activity); its lines are read again.
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    var phoneOpen by rememberSaveable { mutableStateOf(false) }
     val s by logs.state.collectAsStateWithLifecycle()
-    LaunchedEffect(logs) { logs.load() }
+    val scope = rememberCoroutineScope()
+    // Read again once the computer answers (after Connect to read its logs, or a reconnect).
+    LaunchedEffect(logs, online) { logs.load() }
     val open = openId?.let { id -> s.logs.firstOrNull { it.id == id } }
-    BackHandler { if (openId != null) openId = null else onBack() }
+    BackHandler {
+        when {
+            openId != null -> openId = null
+            phoneOpen -> phoneOpen = false
+            else -> onBack()
+        }
+    }
     Box(Modifier.fillMaxSize().background(Nekko.palette.paper), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
-            if (open != null) key(open.id) { LogPage(logs, open) { openId = null } }
-            else LogsList(logs, s, onBack) { openId = it.id }
+            when {
+                open != null -> key(open.id) { LogPage(logs, open) { openId = null } }
+                phoneOpen -> PhoneLogPage(repo) { phoneOpen = false }
+                else -> LogsList(
+                    logs, s, logGroups(c.computers, c.activeId, stringResource(R.string.simple_logs_on_phone)), repo.connectionLog.collectAsStateWithLifecycle().value.size, onBack,
+                    openPhone = { phoneOpen = true },
+                    connect = { id -> scope.launch { repo.connect(id) } },
+                ) { openId = it.id }
+            }
         }
     }
 }
 
+/** One section of the Logs screen: this phone's own log ([computerId] null), or a paired computer's. */
+internal data class LogGroup(val title: String, val computerId: String?, val active: Boolean)
+
+/** This phone first, then the computer it is connected to, then the other paired computers in pairing order. */
+internal fun logGroups(computers: List<Computer>, activeId: String?, phone: String = "On this phone"): List<LogGroup> =
+    listOf(LogGroup(phone, null, false)) +
+        computers.sortedByDescending { it.id == activeId }.map { LogGroup(it.name, it.id, it.id == activeId) }
+
 @Composable
-private fun LogsList(logs: LogsController, s: LogsState, onBack: () -> Unit, open: (LogInfo) -> Unit) {
+private fun LogsList(
+    logs: LogsController,
+    s: LogsState,
+    groups: List<LogGroup>,
+    phoneEvents: Int,
+    onBack: () -> Unit,
+    openPhone: () -> Unit,
+    connect: (String) -> Unit,
+    open: (LogInfo) -> Unit,
+) {
     val p = Nekko.palette
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     Page(stringResource(R.string.tools_logs_title), onBack, actions = {
         IconButton(onClick = { scope.launch { logs.load() } }) { Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.tools_refresh)) }
     }) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                !s.loaded -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
-                s.error != null && s.logs.isEmpty() -> Failure(s.error, readOff = false) { scope.launch { logs.load() } }
-                else -> LazyColumn(Modifier.fillMaxSize().testTag("logs.list")) {
-                    if (s.logs.isEmpty()) item { Note(stringResource(R.string.tools_logs_none), Modifier.padding(16.dp)) }
-                    itemsIndexed(s.logs, key = { _, l -> l.id }) { _, l ->
-                        Row(
-                            Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { open(l) }.padding(horizontal = 16.dp, vertical = 8.dp).testTag("logs.row"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Icon(
-                                when (l.kind) {
-                                    LogInfo.Kind.APP -> Icons.Filled.DesktopWindows
-                                    LogInfo.Kind.DAEMON -> Icons.Filled.Settings
-                                    LogInfo.Kind.AGENT -> Icons.AutoMirrored.Filled.Chat
-                                },
-                                contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(22.dp),
-                            )
-                            Column(Modifier.weight(1f)) {
-                                Text(l.title, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                val at = l.updatedAt
-                                Text(
-                                    if (at == null) stringResource(R.string.tools_logs_empty)
-                                    else "${Formatter.formatShortFileSize(context, l.size)} · ${DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}",
-                                    style = MaterialTheme.typography.bodySmall, color = p.inkSoft,
-                                )
-                            }
+        LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("logs.list")) {
+            groups.forEach { g ->
+                item(key = "head:${g.computerId ?: "phone"}") { SectionHeader(g.title) }
+                val id = g.computerId
+                when {
+                    id == null -> item(key = "phone") {
+                        LogRow(
+                            Icons.Filled.PhoneAndroid, stringResource(R.string.simple_logs_connection),
+                            when (phoneEvents) {
+                                0 -> stringResource(R.string.simple_logs_nothing)
+                                1 -> stringResource(R.string.simple_logs_entries_one)
+                                else -> stringResource(R.string.simple_logs_entries_other, phoneEvents)
+                            },
+                            "logs.phone", openPhone,
+                        )
+                    }
+                    !g.active -> item(key = "connect:$id") { LogRow(Icons.Filled.Link, stringResource(R.string.simple_logs_connect), null, "logs.connect") { connect(id) } }
+                    !s.loaded -> item(key = "loading") {
+                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = p.accent) }
+                    }
+                    s.error != null && s.logs.isEmpty() -> item(key = "error") {
+                        Column(Modifier.padding(horizontal = 16.dp)) {
+                            Note(s.error)
+                            TextButton(onClick = { scope.launch { logs.load() } }) { Text(stringResource(R.string.tools_try_again)) }
                         }
                     }
+                    s.logs.isEmpty() -> item(key = "none") { Note(stringResource(R.string.tools_logs_none), Modifier.padding(16.dp)) }
+                    else -> itemsIndexed(s.logs, key = { _, l -> l.id }) { i, l ->
+                        if (i > 0) RowDivider(50.dp)
+                        val at = l.updatedAt
+                        LogRow(
+                            when (l.kind) {
+                                LogInfo.Kind.APP -> Icons.Filled.DesktopWindows
+                                LogInfo.Kind.DAEMON -> Icons.Filled.Settings
+                                LogInfo.Kind.AGENT -> Icons.AutoMirrored.Filled.Chat
+                            },
+                            l.title,
+                            if (at == null) stringResource(R.string.tools_logs_empty)
+                            else "${Formatter.formatShortFileSize(context, l.size)} · ${DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}",
+                            "logs.row",
+                        ) { open(l) }
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogRow(icon: ImageVector, title: String, detail: String?, tag: String, onClick: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp).testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(22.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkSoft) }
+        }
+    }
+}
+
+/**
+ * This phone's own log: how it reached the computer since the app started (memory only).
+ * It holds times, states and the relay's host, never keys or messages, so Share sends it as is.
+ */
+@Composable
+private fun PhoneLogPage(repo: ComputersRepository, onBack: () -> Unit) {
+    val p = Nekko.palette
+    val context = LocalContext.current
+    val entries by repo.connectionLog.collectAsStateWithLifecycle()
+    val text = remember(entries) { repo.connectionLogText() }
+    val subject = stringResource(R.string.simple_logs_subject)
+    Page(stringResource(R.string.simple_logs_connection), onBack, actions = {
+        IconButton(onClick = {
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_SUBJECT, subject)
+                .putExtra(Intent.EXTRA_TEXT, text)
+            context.startActivity(Intent.createChooser(send, null))
+        }, modifier = Modifier.testTag("log.share")) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.simple_share)) }
+    }) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding).background(p.code).testTag("log.view")) {
+            item { Note("Since the app started: times, states and the relay's host, no keys or messages.", Modifier.padding(12.dp)) }
+            itemsIndexed(text.lines()) { _, line ->
+                Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = p.ink,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
             }
         }
     }

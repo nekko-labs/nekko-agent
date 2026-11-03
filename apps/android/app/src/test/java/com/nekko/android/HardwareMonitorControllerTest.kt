@@ -74,6 +74,32 @@ class HardwareMonitorControllerTest {
         assertTrue(readOff.state.value.error!!.startsWith("Reading from this phone is turned off on Mac"))
     }
 
+    @Test fun `the light read asks only the Model Server, every ten seconds`() = runTest {
+        var resident = true
+        val caller = FakeCaller {
+            if (it.channel == Channels.ENGINE_STATUS && !resident) json("""{"installed":true,"running":true,"resident":[]}""")
+            else replies[it.channel] ?: JsonNull
+        }
+        val m = HardwareMonitorController(caller) { "Mac" }
+        val job = launch { m.pollEngine() }
+        runCurrent()
+        assertTrue(m.state.value.localModelLoaded)
+        assertNull(m.state.value.system)
+        resident = false
+        advanceTimeBy(HardwareMonitorController.ENGINE_POLL_MS - 1)
+        runCurrent()
+        assertTrue(m.state.value.localModelLoaded)
+        advanceTimeBy(1)
+        runCurrent()
+        assertFalse(m.state.value.localModelLoaded)
+        assertEquals(listOf(Channels.ENGINE_STATUS, Channels.ENGINE_STATUS), caller.channels())
+        job.cancel()
+
+        val failing = HardwareMonitorController(FakeCaller { throw RelayException("offline") }) { "Mac" }
+        failing.refreshEngine()
+        assertFalse(failing.state.value.localModelLoaded)
+    }
+
     @Test fun `polls every three seconds until cancelled`() = runTest {
         val caller = FakeCaller { replies[it.channel] ?: JsonNull }
         val m = HardwareMonitorController(caller) { "Mac" }
