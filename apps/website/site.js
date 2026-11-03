@@ -41,7 +41,7 @@
       const a = Math.min(0.9, 0.15 + (1 - st.z) * 0.9);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(226, 238, 248, ${a})`;
+      ctx.fillStyle = `rgba(247, 233, 231, ${a})`;
       ctx.fill();
     }
     if (!reduced) requestAnimationFrame(frame);
@@ -456,7 +456,7 @@
   const root = document.documentElement;
   const LOOKS = ['dark', 'white', 'colour'];
   const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
-  const THEME_COLOR = { dark: '#0d0b18', white: '#f3effe', colour: '#9d8ce6' };
+  const THEME_COLOR = { dark: '#0c0c11', white: '#fdf7f6', colour: '#dfb6b2' };
   const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'colour');
   const sync = () => {
     const now = current();
@@ -654,9 +654,9 @@
 // ---- dot-matrix swell background: a fine grid of pixel dots that mostly
 //      sits invisible, with a soft wave of brightness drifting through it.
 //      The grid is fixed to the screen and ignores scrolling, so the wave
-//      keeps one steady pace however the page moves. Brand gradient (indigo to
-//      lavender, left to right) on the white version, white on the colourful
-//      one, and lavender to aqua on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
+//      keeps one steady pace however the page moves. Brand gradient (plum to
+//      light plum, left to right) on the white version, white on the colourful
+//      one, and light plum to rose on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
 //      reduced-motion visitors. ----
 (() => {
   const c = document.getElementById('pixelwave');
@@ -684,11 +684,11 @@
         const s = a > 0.18 ? 3 : 2;
         const k = x / W;
         if (theme === 'dark' || theme === 'colour') {
-          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing on the dark ground, tinted on the lilac one
-          ctx.fillStyle = `rgba(${Math.round(157 - 19 * k)},${Math.round(140 + 88 * k)},${Math.round(230 + 12 * k)},${(a * 1.1).toFixed(3)})`;
+          // 0 = light plum #c084b5, 1 = rose #dfb6b2: glowing on the dark ground, tinted on the coloured one
+          ctx.fillStyle = `rgba(${Math.round(192 + 31 * k)},${Math.round(132 + 50 * k)},${Math.round(181 - 3 * k)},${(a * 1.1).toFixed(3)})`;
         } else {
-          // 0 = indigo #453A92, 1 = lavender #9D8CE6
-          ctx.fillStyle = `rgba(${Math.round(69 + 88 * k)},${Math.round(58 + 82 * k)},${Math.round(146 + 84 * k)},${a.toFixed(3)})`;
+          // 0 = plum #5a2352, 1 = light plum #c084b5
+          ctx.fillStyle = `rgba(${Math.round(90 + 102 * k)},${Math.round(35 + 97 * k)},${Math.round(82 + 99 * k)},${a.toFixed(3)})`;
         }
         ctx.fillRect(Math.round(x + (CELL - s) / 2), Math.round(y + (CELL - s) / 2), s, s);
       }
