@@ -9,6 +9,7 @@ import { ModelPicker } from './agent-console/ModelPicker.js';
 import { EffortSlider } from './ChatMetrics.js';
 import { CheckIcon, ChevronIcon } from '../icons.js';
 import './AgentWindowPicker.css';
+import { shownNow } from '../simpleMode.js';
 
 /** No refId means create; refId means open an existing session or terminal. */
 export type AgentWindowSelection = {
@@ -85,13 +86,13 @@ export function AgentWindowDropdown({ anchorRef, onAdd, onClose }: AgentWindowPi
   }, [anchorRef, onClose]);
   return createPortal(
     <div ref={popup} id="wall-window-picker" className="agent-window-dropdown" role="dialog" aria-label="Add a window" style={position ?? { visibility: 'hidden' }}>
-      <AgentWindowPicker onAdd={onAdd} onClose={onClose} />
+      <AgentWindowPicker onAdd={onAdd} onClose={onClose} terminal={shownNow('terminal')} />
     </div>, document.body,
   );
 }
 
 /** Detailed surface: the host owns data loading and creation. */
-export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
+export function AgentWindowPicker({ onAdd, onClose, terminal = true }: AgentWindowPickerProps & { terminal?: boolean }) {
   const sessions = useStore((s) => s.sessions);
   const terminals = useStore((s) => s.terminals);
   const providers = useStore((s) => s.providers);
@@ -109,6 +110,7 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
   const [modelListOpen, setModelListOpen] = useState(false);
   const [pickedFolders, setPickedFolders] = useState<string[] | null>(null);
   const computers = useStore((s) => s.computers);
+  const showComputers = computers.length > 0 && shownNow('computers', { computers: true });
   const catalogs = useStore((s) => s.computerCatalogs);
   const [runOn, setRunOn] = useState<string | null>(null);
   // That computer's first model, so starting there is still one click.
@@ -206,7 +208,7 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
       {category && <button type="button" className="agent-window-picker__back" disabled={pending} onClick={() => { setCategory(null); setError(null); }}>← All window types</button>}
       {!category && (
         <div className="agent-window-picker__options agent-window-picker__categories" role="group" aria-label="Window types">
-          {(['chat', 'media', 'terminal'] as const).map((kind) => (
+          {(terminal ? ['chat', 'media', 'terminal'] as const : ['chat', 'media'] as const).map((kind) => (
             <button type="button" className="agent-window-picker__option" key={kind} onClick={() => setCategory(kind)}>
               <CatIcon kind={kind} />
               <strong>{{ chat: 'Chat', media: 'Media', terminal: 'Terminal' }[kind]}</strong>
@@ -217,7 +219,7 @@ export function AgentWindowPicker({ onAdd, onClose }: AgentWindowPickerProps) {
       )}
       {category === 'chat' && (
         <div className="agent-window-picker__steps">
-          {computers.length > 0 && (
+          {showComputers && (
             <section className="agent-window-picker__step" aria-labelledby="awp-step-computer">
               <h3 id="awp-step-computer">Run on</h3>
               <div className="agent-window-picker__folders" role="radiogroup" aria-labelledby="awp-step-computer">

@@ -17,6 +17,7 @@ struct PlanSheet: View {
     let chat: ChatModel
     @Environment(ComputersStore.self) private var store
     @Environment(AppModel.self) private var app
+    @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -69,7 +70,7 @@ struct PlanSheet: View {
     private func folded(_ plan: [PlanStep], current: PlanStep, links: [String: PlanStepLinks], paused: Bool) -> some View {
         let own = links[current.id]
         // The current step's PRs, else the newest PR the chat opened, so a finished plan still shows where it landed.
-        let shownPrs = own?.prs.isEmpty == false ? own!.prs : Array(plan.compactMap { links[$0.id]?.prs }.flatMap { $0 }.suffix(1))
+        let shownPrs = !prefs.shows("pr-status", pr: true) ? [] : own?.prs.isEmpty == false ? own!.prs : Array(plan.compactMap { links[$0.id]?.prs }.flatMap { $0 }.suffix(1))
         // The step's own task links, else the chat's (the first step's), which say what this work is for.
         let projects = own?.projects.isEmpty == false ? own!.projects : (plan.first.flatMap { links[$0.id]?.projects } ?? [])
         let position = (plan.firstIndex { $0.id == current.id } ?? 0) + 1
@@ -135,7 +136,8 @@ struct PlanSheet: View {
 
     private func row(_ step: PlanStep, links own: PlanStepLinks?, paused: Bool, opened: String?) -> some View {
         let kids = (own?.subagents ?? []).compactMap { id in chat.children.first { $0.id == id } }
-        let chips = own?.prs.isEmpty == false || own?.projects.isEmpty == false || !kids.isEmpty || step.verification != nil
+        let prs = prefs.shows("pr-status", pr: true) ? own?.prs ?? [] : []
+        let chips = !prs.isEmpty || own?.projects.isEmpty == false || !kids.isEmpty || step.verification != nil
         let more = step.detail != nil || chips
         let shown = !step.squeezed || (tapped[step.id] ?? (step.id == opened))
         return HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -163,7 +165,7 @@ struct PlanSheet: View {
                                 ForEach(own?.projects ?? [], id: \.url) { projectChip($0) }
                                 ForEach(kids) { subagentChip($0) }
                                 if let v = step.verification { verificationChip(v) }
-                                ForEach(own?.prs ?? [], id: \.self) { prChip($0) }
+                                ForEach(prs, id: \.self) { prChip($0) }
                             }
                         }
                     }

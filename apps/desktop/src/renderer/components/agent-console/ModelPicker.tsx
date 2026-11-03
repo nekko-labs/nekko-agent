@@ -47,6 +47,7 @@ export function ModelPicker({
   filterProviders,
   placeholder,
   resolvedModelId,
+  footer,
 }: {
   providers: ProviderConfig[];
   providerId: string | null;
@@ -83,6 +84,8 @@ export function ModelPicker({
    * picker lists both.
    */
   resolvedModelId?: string;
+  /** Under the list, for what belongs with the model (Simple keeps effort here). */
+  footer?: React.ReactNode;
 }) {
   // A provider switched off on the Models page is neither listed nor contacted.
   const providers = useMemo(() => allProviders.filter((p) => p.enabled !== false && (!filterProviders || filterProviders(p))), [allProviders, filterProviders]);
@@ -431,6 +434,7 @@ export function ModelPicker({
               );
             })}
           </div>
+          {footer}
         </div>
   );
 

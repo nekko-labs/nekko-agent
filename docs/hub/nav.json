@@ -28,6 +28,12 @@
           "description": "Follow verification checklists, device activity, CI checks and resolved or unresolved review threads in chat."
         },
         {
+          "slug": "simple-and-expert",
+          "title": "Simple and Expert",
+          "source": "docs/simple-and-expert.md",
+          "description": "Switch between the everyday app and every control, and choose what Simple shows."
+        },
+        {
           "slug": "fonts-and-text",
           "title": "Fonts and text",
           "source": "docs/fonts-and-text.md",
