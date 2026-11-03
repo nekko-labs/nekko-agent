@@ -298,6 +298,16 @@ A waiting runner card lists every reason it is not taking jobs:
 A newer version of the runner may add a reason this app does not know yet; it shows as
 "A condition is not met."
 
+## Recent jobs
+
+The runner card lists the last five jobs, one line each: when it ended, the workflow and job,
+how it ended and how long it ran. **Job** opens the job on GitHub, and **PR #N** opens the pull
+request it ran for (GitHub names no pull request for a run from a fork, so those show none).
+
+Click a line to see the VM step by step (started, online, running the job, stopped, deleted,
+each with its time) and the end of the job's log, read from GitHub when you open it. The log
+only loads for jobs this runner ran.
+
 ## The menu bar dot
 
 While any job VM exists (starting, running or cleaning up) or the runner is keeping the Mac

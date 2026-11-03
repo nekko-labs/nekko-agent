@@ -6,7 +6,7 @@
 //! period), Cleaning (stopped or stopping; its clone is deleted once the
 //! helper is reaped).
 
-use super::audit::{self, AuditLine, AuditResult, Today};
+use super::audit::{self, AuditLine, AuditResult, SlotEvent, Today};
 use super::awake::Awake;
 use super::provider::{JobRef, Provider, ProviderError, RunnerStatus};
 use super::signals::{MacState, Sense, signals_for};
@@ -17,7 +17,7 @@ use nekko_runner::{
     Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SlotLimit, cpus_per_vm, evaluate, hold_awake, keep_idle,
     macos_slots_explained, recommended_runner_memory_mb, runner_memory_mb, vms_wanted, warm_slots,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::os::unix::fs::DirBuilderExt;
@@ -61,7 +61,7 @@ pub enum RunnerState {
     Error,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SlotState {
     Starting,
@@ -163,6 +163,7 @@ struct Slot {
     job: Option<JobRef>,
     drain_ends_at: Option<f64>,
     stop: Option<Stop>,
+    events: Vec<SlotEvent>,
 }
 
 impl Slot {
@@ -170,6 +171,7 @@ impl Slot {
         if self.state != state {
             self.state = state;
             self.since = now;
+            self.events.push(SlotEvent { ts: now as u64, state });
         }
     }
 
@@ -571,6 +573,10 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             result: AuditResult::NotRemoved,
             seconds: 0,
             reason: vec![what],
+            job_id: None,
+            url: None,
+            pr: None,
+            events: vec![],
         };
         self.audit(&line);
     }
@@ -1004,6 +1010,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     job: None,
                     drain_ends_at: None,
                     stop: None,
+                    events: vec![SlotEvent { ts: now as u64, state: SlotState::Starting }],
                 });
             }
             Err(e) => {
@@ -1034,6 +1041,10 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             result: AuditResult::FailedToStart,
             seconds: 0,
             reason: vec![e],
+            job_id: None,
+            url: None,
+            pr: None,
+            events: vec![],
         };
         self.audit(&line);
     }
@@ -1055,12 +1066,13 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
     /// registration, audit the job, and queue a re-run if it was cut short.
     async fn finish(&mut self, ri: usize, mut slot: Slot, stopped: Stopped, now: f64) {
         let record = self.runners[ri].record.clone();
-        // An online VM we stopped may have taken a job since its last status poll.
-        if slot.stop.is_some() && slot.busy_since.is_none() {
+        // An online VM we stopped may have taken a job since its last status poll, and a guest
+        // that powered off by itself may have run one no poll saw (or whose lookup failed).
+        if slot.job.is_none() && (slot.stop.is_some() || stopped == Stopped::Guest) {
             match call(self.provider.job(&record, slot.runner_id, &slot.name)).await {
                 Ok(Some(job)) => {
                     slot.job = Some(job);
-                    slot.busy_since = Some(slot.polled_at);
+                    slot.busy_since.get_or_insert(slot.polled_at);
                 }
                 Ok(None) => {}
                 Err(e) => self.runners[ri].note(e),
@@ -1104,6 +1116,10 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             result,
             seconds: (now - slot.busy_since.unwrap_or(slot.started_at)).max(0.0) as u64,
             reason,
+            job_id: job.map(|j| j.job_id),
+            url: job.map(|j| j.url.clone()).filter(|u| !u.is_empty()),
+            pr: job.and_then(|j| j.pr.clone()),
+            events: std::mem::take(&mut slot.events),
         };
         self.audit(&line);
         if let Some(job) = slot.job

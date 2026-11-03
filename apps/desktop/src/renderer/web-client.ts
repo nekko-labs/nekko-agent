@@ -690,6 +690,7 @@ function makeWebClient(): NekkoApi {
     updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
     removeRunner: (id) => call(IpcChannels.runnerRemove, id),
     setRunnerEnabled: (id, enabled) => call(IpcChannels.runnerSetEnabled, id, enabled),
+    runnerJobLog: (id, jobId) => call(IpcChannels.runnerJobLog, id, jobId),
     githubAccounts: () => call(IpcChannels.runnerGithubAccounts),
     githubStart: (req) => call(IpcChannels.runnerGithubStart, req),
     githubStatus: () => call(IpcChannels.runnerGithubStatus),

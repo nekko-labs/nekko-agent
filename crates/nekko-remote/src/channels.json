@@ -181,6 +181,7 @@
  "runner:imagePlan",
  "runner:imageResume",
  "runner:imageStatus",
+ "runner:jobLog",
  "runner:list",
  "runner:remove",
  "runner:setEnabled",
