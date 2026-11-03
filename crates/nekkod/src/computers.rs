@@ -654,6 +654,16 @@ impl Computers {
         Ok(self.list())
     }
 
+    /// Forget every linked computer (Delete everything): each one's keys
+    /// leave the OS keystore and each is signed out of while it can hear.
+    pub async fn forget_all(self: &Arc<Self>) -> Result<(), String> {
+        let ids: Vec<String> = lock(&self.list).iter().map(|p| p.id.clone()).collect();
+        for id in ids {
+            self.forget(&id).await?;
+        }
+        Ok(())
+    }
+
     pub async fn route(self: &Arc<Self>, channel: &str, args: &[Value]) -> Result<Value, String> {
         let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
         let id = arg(0).as_str().unwrap_or_default();

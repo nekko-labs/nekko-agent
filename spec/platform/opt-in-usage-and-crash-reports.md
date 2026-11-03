@@ -35,13 +35,14 @@ Each event carries:
 | `app_started` | engine, at start | none |
 | `turn_started` | engine, at each turn's admission | provider kind (`openai`, `ollama`…), local or not, offline, chat mode, sandbox |
 | `screen_viewed` | UI, when the main view changes | the view's name (`models`, `settings`…) |
-| `error` | engine panics, uncaught UI errors and Electron main crashes | source, message, stack |
+| `error` | engine panics, uncaught UI errors and Electron main crashes | source, message (class and first line only), stack (frame names only) |
 
 - The engine accepts only these events and properties; anything else is dropped. The UI cannot send `app_started` or `turn_started`.
 - Every string is scrubbed in the engine:
   - secrets (the log redactor);
   - emails, phone and card numbers, IP addresses and the user's name (the Privacy Shield detectors);
   - folder paths, cut to their last part (`…/main.rs:12`).
+- `[updated 2026-11-03, GD12; unit-tested]` **An error never carries free text beyond its first line.** The message is the error's class and the first non-empty line of its message (`TypeError: x is undefined`), scrubbed, then cut to 200 characters; the rest of a message, which could echo a prompt, is dropped. The stack keeps only its frames, each as the function and the file's last part (`Object.send (send.ts:12:5)`), at most 30, with the message lines a JavaScript stack starts with removed. An engine panic sends `panic: <its first line>` and where it happened (`at …/x.rs:4:9`). The engine applies this to every `error` event, whoever sends it, so the UI (`errorReport` in `renderer/telemetry.ts`) and Electron main only add the class in front of the message.
 - Events wait in memory (at most 500) and go to PostHog's batch endpoint once a minute through Settings > Connections (`telemetry`). A failed send is retried at the next minute. Turning reports off forgets anything queued.
 - Nothing is written to disk.
 

@@ -446,6 +446,7 @@ export const IpcChannels = {
   cloudBeginOAuth: 'cloud:beginOAuth',
   cloudCancelOAuth: 'cloud:cancelOAuth',
   cloudSignOut: 'cloud:signOut',
+  cloudDeleteAccount: 'cloud:deleteAccount',
   syncTurnOn: 'sync:turnOn',
   syncConfirmRecoveryKey: 'sync:confirmRecoveryKey',
   syncRestore: 'sync:restore',
@@ -540,6 +541,8 @@ export interface NekkoApi {
   cloudBeginOAuth(provider: import('./cloud.js').CloudOAuthProvider): Promise<{ authUrl: string }>;
   cloudCancelOAuth(): Promise<import('./cloud.js').CloudStatus>;
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
+  /** Erase the Nekko Cloud account (`DELETE /v1/account`), then forget it on this device. */
+  cloudDeleteAccount(): Promise<import('./cloud.js').CloudStatus>;
   /** Settings > Connections: the switch and each connection's counts. */
   connectionsStatus(): Promise<import('./connections.js').ConnectionsStatus>;
   /** A connection's recent events, newest first. */
@@ -912,7 +915,8 @@ export interface NekkoApi {
   /** The fonts folder (created if missing) and the font files in it, base64 (Settings > Style). */
   listFonts(): Promise<{ dir: string; fonts: { family: string; file: string; data: string }[] }>;
   /** Delete everything: chats, settings, memory, and usage. */
-  wipeAllData(): Promise<AppSettings>;
+  /** Delete everything this app keeps on this computer; `models` also deletes downloaded models and runtimes. */
+  wipeAllData(opts?: { models?: boolean }): Promise<AppSettings>;
   listTools(): Promise<Array<{ name: string; description: string }>>;
 
   /** Open a native file picker (desktop) → chosen paths; browser → prompt. */
