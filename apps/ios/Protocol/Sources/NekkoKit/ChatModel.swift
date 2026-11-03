@@ -635,6 +635,14 @@ public final class ChatModel {
     /// The computer is out of reach: Send puts the prompt in the outbox ("Send when online").
     public var sendsLater: Bool { store.conn != .online }
 
+    /// `typed` is more work for this chat to place: here, or in a sub-agent. Never a slash command,
+    /// and only while the computer can say delegation will run.
+    public func offersSubagent(_ typed: String) -> Bool {
+        let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !text.isEmpty && !text.hasPrefix("/") && blocked == nil && !sendsLater
+            && session?.canOfferSubagent(strategy: store.pcSettings.orchestrationStrategy) == true
+    }
+
     /// What the composer says about the connection while it is down, or nil.
     public var offlineNote: String? {
         guard store.conn != .online, store.conn != .denied, store.denied == nil else { return nil }

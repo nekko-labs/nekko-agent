@@ -72,6 +72,8 @@ data class ChatEnv(
     val models: Map<String, List<ModelInfo>> = emptyMap(),
     /** Prompts sent while the computer is out of reach wait in the outbox instead of being refused. */
     val canQueue: Boolean = false,
+    /** How the computer's agents delegate ([PcSettings.orchestrationStrategy]). */
+    val strategy: String? = null,
 )
 
 /** Everything the chat screen renders. Pure projection of [ChatState] + [ChatEnv]. */
@@ -106,6 +108,8 @@ data class ChatUi(
     val savedAt: Long? = null,
     /** The computer is out of reach and what is sent waits on the phone: says so under the box, without blocking it. */
     val sendsLater: String? = null,
+    /** A typed follow-up can run here or in a sub-agent: only while the computer can say delegation will run. */
+    val offersSubagent: Boolean = false,
     val context: ContextUsage? = null,
     /** [context]'s count plus about one token per four characters streamed this turn; null until the computer answers. */
     val contextTokens: Long? = null,
@@ -518,6 +522,7 @@ class ChatController(
                 error = state.loadError ?: turn.error ?: notSaved,
                 blocked = blocked,
                 sendsLater = sendsLater,
+                offersSubagent = blocked == null && sendsLater == null && state.session?.canOfferSubagent(env.strategy) == true,
                 savedAt = state.savedAt,
                 queued = state.session?.queue ?: emptyList(),
                 queuedPrompts = state.session?.queued ?: emptyList(),

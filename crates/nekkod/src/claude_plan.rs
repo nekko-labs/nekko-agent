@@ -8,7 +8,6 @@
 //! start and does nothing once there is nothing left to clean up, so it
 //! happens once in effect; the notice is added only if it is not there yet.
 
-use nekko_oauth::TokenStore;
 use nekko_settings::SettingsStore;
 use serde_json::{Value, json};
 use std::path::Path;
@@ -59,7 +58,7 @@ pub fn notice(now_ms: f64) -> Value {
 pub fn migrate(dir: &Path, settings: &SettingsStore, now_ms: f64) -> Result<Migrated, String> {
     let mut done = Migrated::default();
 
-    let tokens = TokenStore::new(dir);
+    let tokens = crate::keys::tokens(dir);
     if tokens.path().exists()
         && let Value::Object(all) = tokens.load()
     {
@@ -77,22 +76,12 @@ pub fn migrate(dir: &Path, settings: &SettingsStore, now_ms: f64) -> Result<Migr
         Err(_) => Value::Object(nekko_settings::defaults()),
     };
     let mut providers = current.get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
-    for p in providers.iter_mut() {
-        let plan = p.get("kind").and_then(Value::as_str) == Some("anthropic")
-            && p.get("auth").and_then(Value::as_str) == Some("subscription");
-        let Some(obj) = p.as_object_mut().filter(|_| plan) else { continue };
-        let live = obj.get("enabled") != Some(&Value::Bool(false))
-            || obj.contains_key("tokenKey")
-            || obj.contains_key("accountId");
-        if !live {
-            continue;
-        }
-        // Kept, not removed: chats that point at it keep their history, and the
-        // Models page turns the card into an API-key card when the user adds one.
-        obj.insert("enabled".into(), Value::Bool(false));
-        obj.shift_remove("tokenKey");
-        obj.shift_remove("accountId");
-        done.providers.push(obj.get("id").map(nekko_js::display).unwrap_or_default());
+    done.providers = turn_off_plans(&mut providers);
+    if !done.providers.is_empty() {
+        // The file leaves the API keys out (they are in the keystore): save
+        // the store's providers, which carry them, not the file's.
+        providers = settings.get().get("providers").and_then(Value::as_array).cloned().unwrap_or_default();
+        turn_off_plans(&mut providers);
     }
 
     if done.is_empty() {
@@ -108,6 +97,29 @@ pub fn migrate(dir: &Path, settings: &SettingsStore, now_ms: f64) -> Result<Migr
     }
     settings.update(&patch)?;
     Ok(done)
+}
+
+/// Turn off each live Claude plan provider; the ids turned off.
+fn turn_off_plans(providers: &mut [Value]) -> Vec<String> {
+    let mut out = Vec::new();
+    for p in providers.iter_mut() {
+        let plan = p.get("kind").and_then(Value::as_str) == Some("anthropic")
+            && p.get("auth").and_then(Value::as_str) == Some("subscription");
+        let Some(obj) = p.as_object_mut().filter(|_| plan) else { continue };
+        let live = obj.get("enabled") != Some(&Value::Bool(false))
+            || obj.contains_key("tokenKey")
+            || obj.contains_key("accountId");
+        if !live {
+            continue;
+        }
+        // Kept, not removed: chats that point at it keep their history, and the
+        // Models page turns the card into an API-key card when the user adds one.
+        obj.insert("enabled".into(), Value::Bool(false));
+        obj.shift_remove("tokenKey");
+        obj.shift_remove("accountId");
+        out.push(obj.get("id").map(nekko_js::display).unwrap_or_default());
+    }
+    out
 }
 
 #[cfg(test)]

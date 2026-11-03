@@ -479,8 +479,8 @@ export interface ImagePlan {
 
 export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
   check: 'Check this Mac',
-  download: 'Download macOS',
-  install: 'Install macOS',
+  download: 'Download the macOS image',
+  install: 'Install the macOS VM',
   xcode: 'Add Xcode and tools',
   lockdown: 'Lock the VM down',
   scripts: "Update Nekko's scripts",

@@ -375,6 +375,26 @@ public struct Session: Equatable, Sendable {
     public var agentPlan: [PlanStep] = []
     /// The chat's run settings (`RunOption`).
     public var runOptions: [String: JSONValue] = [:]
+    /// The chat that delegated this one; nil for a chat of its own.
+    public var parentSessionId: String?
+    /// `image` for an image chat; nil for an ordinary one.
+    public var chatType: String?
+    public var executionMode: String?
+    public var disabledTools: [String] = []
+
+    /// A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts).
+    public static func inSubagent(_ text: String) -> String { "Do this in a subagent, then report back:\n\n\(text)" }
+
+    /// Whether this chat can hand a follow-up to a sub-agent (`canOfferSubagent` in shared/orchestration.ts).
+    public func canOfferSubagent(strategy: String?) -> Bool {
+        strategy != "solo" && chatType != "image"
+            && messages.contains { $0.role == "assistant" }
+            && parentSessionId == nil
+            && runOptions["incognito"]?.bool != true
+            && runOptions["offline"]?.bool != true
+            && executionMode != "sandbox"
+            && !disabledTools.contains("spawn_agent")
+    }
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -391,7 +411,9 @@ public struct Session: Equatable, Sendable {
             running: v["activeRun"].map { !$0.isNull } ?? false,
             effort: v.str("effort"),
             agentPlan: PlanStep.list(v["agentPlan"]),
-            runOptions: RunOption.values(of: v))
+            runOptions: RunOption.values(of: v),
+            parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), executionMode: v.str("executionMode"),
+            disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [])
     }
 }
 
@@ -538,10 +560,12 @@ public struct PcSettings: Equatable, Sendable {
     public var prompts: [SavedPrompt]
     /// The computer's automations are paused (set on the computer only).
     public var automationsPaused: Bool
+    /// How the computer's agents delegate (`solo`, `balanced`, `swarm`); nil from a computer that doesn't say.
+    public var orchestrationStrategy: String?
 
     public init(effort: Effort? = nil, defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
                 known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false, prompts: [SavedPrompt] = [],
-                automationsPaused: Bool = false) {
+                automationsPaused: Bool = false, orchestrationStrategy: String? = nil) {
         self.effort = effort
         self.defaultChatMode = defaultChatMode
         self.chatPaneAction = chatPaneAction
@@ -551,6 +575,7 @@ public struct PcSettings: Equatable, Sendable {
         self.phoneChanges = phoneChanges
         self.prompts = prompts
         self.automationsPaused = automationsPaused
+        self.orchestrationStrategy = orchestrationStrategy
     }
 
     /// What the computer does when a key is unset (shared/settings.ts defaults).
@@ -565,7 +590,8 @@ public struct PcSettings: Equatable, Sendable {
                           chatPaneAction: v.str("chatPaneAction").flatMap(ChatAction.init(rawValue:)),
                           skipDeleteConfirmation: v["skipDeleteConfirmation"]?.bool, known: true,
                           voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"),
-                          prompts: SavedPrompt.list(v["prompts"]), automationsPaused: v.flag("automationsPaused"))
+                          prompts: SavedPrompt.list(v["prompts"]), automationsPaused: v.flag("automationsPaused"),
+                          orchestrationStrategy: v["orchestration"]?.str("strategy"))
     }
 
     /// The `settings:update` patch for one change: never more than the phone-settable keys.

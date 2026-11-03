@@ -259,7 +259,7 @@ describe('image progress', () => {
   const marks = (v: ImageView) => imageStageRows(v).map((r) => r.mark);
 
   it('lists the six stages a person follows', () => {
-    expect(imageStageRows(image({})).map((r) => r.label)).toEqual(['Check this Mac', 'Download macOS', 'Install macOS', 'Add Xcode and tools', 'Lock the VM down', 'Test a boot']);
+    expect(imageStageRows(image({})).map((r) => r.label)).toEqual(['Check this Mac', 'Download the macOS image', 'Install the macOS VM', 'Add Xcode and tools', 'Lock the VM down', 'Test a boot']);
   });
 
   it('a refresh lists only its own stages', () => {
@@ -283,7 +283,7 @@ describe('image progress', () => {
     expect(marks(v)).toEqual(['done', 'done', 'now', 'todo', 'todo', 'todo']);
     expect(imageStageRows(v)[2].note).toBe('Waiting');
     expect(imageFraction(v)).toBeNull();
-    expect(imageLine(v)).toBe('Install macOS: Waiting for power: plug this Mac in');
+    expect(imageLine(v)).toBe('Install the macOS VM: Waiting for power: plug this Mac in');
   });
 
   it('a failed stage is marked bad', () => {

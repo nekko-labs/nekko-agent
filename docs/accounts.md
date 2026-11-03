@@ -79,6 +79,12 @@ Anthropic's rules for Claude Code ([Legal and compliance](https://code.claude.co
 
 This page describes how Nekko works, not legal advice. If something matters to your business, ask Anthropic.
 
+## Where your keys are kept
+
+API keys, connector and MCP server tokens, and sign-ins (ChatGPT, OpenRouter, Google) are saved in your computer's own keystore: the Keychain on a Mac, the Credential Manager on Windows. Nekko's settings file keeps everything else. On Linux there is no keystore Nekko can rely on, so they stay in the settings files, readable only by you.
+
+**Settings > System > Backup & restore** exports your settings without any key or token. Importing a backup keeps the keys this computer already has; on a new computer, add your keys again. **Delete everything** deletes the saved keys too.
+
 ## Accounts on another computer
 
 Nekko runs Claude Code on the computer it runs on. To use an account that lives on another machine (for example Claude Code inside WSL on a Windows desktop), open a terminal to it from **Terminal → SSH hosts** and run `claude` there: it appears as a terminal tab in the same window, with that machine's login, but not as a Nekko chat. Running a Claude subscription chat on another computer, with its approvals and transcript in this window, is not built yet.

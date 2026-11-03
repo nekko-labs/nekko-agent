@@ -80,6 +80,8 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'connect-step-3': async () => [],
   'github-account': async () => [],
   'github-account-no-gh': async () => [],
+  'github-account-no-gh-org': async () => [],
+  'github-account-checking': async () => [],
   'github-free-org': async () => [],
   'github-waiting': async () => [],
   'github-confirm': async () => [],
@@ -124,7 +126,7 @@ const images: Record<string, ImageView | null> = {
   // A daemon with no builder: the card keeps its error line.
   error: null,
   'first-visit': NONE, 'connect-step-1': NONE, 'connect-step-3': NONE,
-  'github-account': NONE, 'github-account-no-gh': NONE, 'github-free-org': NONE, 'github-waiting': NONE, 'github-confirm': NONE, 'github-confirm-public': NONE,
+  'github-account': NONE, 'github-account-no-gh': NONE, 'github-account-no-gh-org': NONE, 'github-account-checking': NONE, 'github-free-org': NONE, 'github-waiting': NONE, 'github-confirm': NONE, 'github-confirm-public': NONE,
   'github-handoff': READY, 'github-fork': NONE, 'github-fork-on': NONE, 'github-fork-left-off': NONE,
   'first-visit-connected': NONE, 'setup-plan': NONE, 'setup-no-xcode': NONE,
   'setup-download': download, 'setup-cancel': download,
@@ -165,13 +167,23 @@ const github: Record<string, GithubSetupView> = {
 let scene = 'first-visit';
 let imageChanged: (v: ImageView) => void = () => {};
 let runnersChanged: (v: RunnerView[]) => void = () => {};
+let githubChanged: (v: GithubSetupView) => void = () => {};
 let imageRefused = false;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const settings = { providers: [], workspaceFolders: [], workspaces: [], monitors: {}, theme: 'dark', experimental: {}, agent: {}, ui: {}, connectors: [] };
 const bridge: any = {
   listRunners: () => scenes[scene](),
-  githubAccounts: async () => (scene === 'github-account-no-gh' ? { login: null, accounts: [] } : signedIn),
+  // `checking` never answers, so the sheet stays on its first frame.
+  githubAccounts: () => (scene === 'github-account-checking' ? new Promise(() => {}) : Promise.resolve(scene.startsWith('github-account-no-gh') ? { login: null, accounts: [] } : signedIn)),
   githubStatus: async () => github[scene] ?? IDLE_GITHUB_SETUP,
+  // A nameless start makes a pending app for the user's own account, as the daemon does.
+  githubStart: async (req: { owner: string; kind: 'user' | 'org' }) => {
+    githubChanged({ ...IDLE_GITHUB_SETUP, step: 'create', owner: req.owner || null, kind: req.kind });
+    return { url: 'https://github.com/settings/apps/new' };
+  },
+  githubCancel: async () => { githubChanged(IDLE_GITHUB_SETUP); return IDLE_GITHUB_SETUP; },
+  onGithubSetupChanged: (cb: (v: GithubSetupView) => void) => { githubChanged = cb; return () => {}; },
+  openPath: async (url: string) => { (window as any).opened = [...((window as any).opened ?? []), url]; },
   connectRunner: async () => { if (scene === 'connect-busy') await sleep(1500); return off(); },
   setRunnerEnabled: async () => view({}),
   runnerJobLog: async () => JOB_LOG,
@@ -197,6 +209,7 @@ function Fixture() {
   const show = (next: string) => {
     localStorage.clear();
     scene = next;
+    (window as any).opened = [];
     useStore.setState({ view: 'workflows', providers: [], models: [], sessions: [], terminals: [], workspaces: [], settings, settingsLoaded: true, installedSkillDefs: [] } as any);
     setEpoch((e) => e + 1);
   };

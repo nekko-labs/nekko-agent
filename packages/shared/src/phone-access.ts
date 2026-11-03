@@ -595,6 +595,8 @@ export const PHONE_SETTINGS_VIEW = [
   'defaultProviderId',
   'machineIcon',
   'favoriteModels',
+  // Read-only: Solo hides the composer's "In a subagent" (set on the computer only).
+  'orchestration.strategy',
   // Read-only: show the computer's effort before the phone has a saved choice.
   'effort',
   // Whether this computer shows phones the agent's changes (set on the computer only).
