@@ -57,6 +57,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (3 KB)
 - [Plan sheet on the composer (2026-10-25; folded summary, loop kinds and sub-agent chips 2026-10-28)](chat/plan-sheet-on-the-composer.md) (14 KB)
+- [Publishing artifacts (Nekko Artifacts)](chat/publishing-artifacts.md) (5 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
 - [Thinking and replies](chat/thinking-and-replies.md) (4 KB)
 - [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (19 KB)

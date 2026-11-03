@@ -44,6 +44,7 @@ Status: implemented, unit and isolated fixture interaction tested; image/motion 
 | `apps/cli` | The `nekko-agent` CLI and MCP server. |
 | `apps/ios`, `apps/android` | Native SwiftUI iOS and Kotlin/Jetpack Compose Android phone apps. |
 | `apps/relay-server` | The relay that pairs a phone with a computer. It only ever sees encrypted frames. |
+| `apps/artifact-server` | Nekko Artifacts: publishes an artifact at a shareable URL, served from an origin isolated from the app. Self-hostable; Nekko Cloud will run the same server. |
 | `apps/nekko-agent-api` | Nekko Cloud's API: signups, accounts, encrypted sync. The only part of the project that needs a database. |
 | `apps/website` | nekkoagent.com, including these docs. |
 | `crates/nekkod` | The engine daemon. |
@@ -71,6 +72,7 @@ Nekko Agent is local-first. Everything you can run yourself works without a data
 | --- | --- | --- |
 | Desktop app, Local Web UI, Docker | Files in the local data directory (one JSON file per chat, written to a temp name and renamed into place) | No |
 | Relay (`apps/relay-server`) | None: it routes encrypted frames and keeps nothing | No |
+| Artifacts server (`apps/artifact-server`) | Published files and their metadata in a folder (`NEKKO_ARTIFACTS_DATA`) | No |
 | Nekko Cloud API (`apps/nekko-agent-api`) | Postgres via `DATABASE_URL` | Yes |
 
 ### The cloud database

@@ -8,7 +8,7 @@ import { defineConfig } from 'vitest/config';
 // as under `npm test -w <pkg>`, which still works on its own.
 // apps/nekko-agent-api keeps its own runner and is not part of root
 // `npm test`.
-const packages = ['packages/shared', 'packages/profile', 'apps/desktop', 'apps/local-web-ui', 'apps/relay-server', 'apps/cli'];
+const packages = ['packages/shared', 'packages/profile', 'apps/desktop', 'apps/local-web-ui', 'apps/relay-server', 'apps/artifact-server', 'apps/cli'];
 const withConfig = new Set(['packages/shared', 'apps/cli', 'apps/local-web-ui']);
 const cwdSetup = fileURLToPath(new URL('./scripts/vitest-project-cwd.ts', import.meta.url));
 
