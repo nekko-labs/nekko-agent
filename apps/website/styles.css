@@ -696,11 +696,11 @@ body {
    image, so the lightbox clone carries it too. Dark look shows the dark shot;
    White and Colourful show the light one. */
 .media .hero-shot { box-sizing: border-box; padding: 8px; object-fit: contain; }
-.hero-shot-dark, .lightbox-stage > .hero-shot-dark { background: #16161c; }
-.hero-shot-light, .lightbox-stage > .hero-shot-light { background: #dfb6b2; }
+.hero-shot-dark, .lightbox-stage > .hero-shot-dark { background: #241f23; }
+.hero-shot-light, .lightbox-stage > .hero-shot-light { background: #c9a9c4; }
 .media .hero-shot-dark, :root[data-theme='dark'] .media .hero-shot-light { display: none; }
 :root[data-theme='dark'] .media .hero-shot-dark { display: block; }
-:root[data-theme='dark'] .lightbox-stage > .hero-shot-dark { background: #16161c; }
+:root[data-theme='dark'] .lightbox-stage > .hero-shot-dark { background: #241f23; }
 
 /* the enlarged view */
 .lightbox {
