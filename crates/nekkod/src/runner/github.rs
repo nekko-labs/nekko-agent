@@ -5,7 +5,7 @@
 //! only after GitHub accepted it and the installation passed every check.
 
 use super::keychain::key_name;
-use super::provider::{JobRef, Minted, Provider, ProviderError, RunnerStatus};
+use super::provider::{JobRef, Minted, PrRef, Provider, ProviderError, RunnerStatus};
 use super::store::{GithubLink, Link, RunnerRecord, yes};
 use super::vm::GITHUB_SEED;
 use base64::Engine as _;
@@ -238,13 +238,14 @@ impl<H: Http> GitHub<H> {
     }
 
     /// `auth` empty sends no `Authorization` (GitHub's manifest conversion takes none).
-    pub(super) async fn api(
+    /// One API call; the body as text.
+    async fn api_text(
         &self,
         method: &str,
         path: &str,
         auth: &str,
         body: Option<Value>,
-    ) -> Result<(u16, Value), ProviderError> {
+    ) -> Result<(u16, String), ProviderError> {
         let url = format!("{}{path}", self.api);
         let bearer = format!("Bearer {auth}");
         let mut h = vec![
@@ -267,7 +268,28 @@ impl<H: Http> GitHub<H> {
             _ => Request::get(url, &h),
         };
         let res = self.http.send(req).await.map_err(|e| ProviderError::Other(format!("GitHub did not answer: {e}")))?;
-        Ok((res.status, serde_json::from_str(&res.body).unwrap_or(Value::Null)))
+        Ok((res.status, res.body))
+    }
+
+    pub(super) async fn api(
+        &self,
+        method: &str,
+        path: &str,
+        auth: &str,
+        body: Option<Value>,
+    ) -> Result<(u16, Value), ProviderError> {
+        let (status, text) = self.api_text(method, path, auth, body).await?;
+        Ok((status, serde_json::from_str(&text).unwrap_or(Value::Null)))
+    }
+
+    /// A job's whole log as plain text. GitHub answers with a redirect to storage elsewhere,
+    /// which the client follows without the token.
+    pub async fn job_log(&self, r: &RunnerRecord, repo: &str, job_id: u64) -> Result<String, ProviderError> {
+        let token = self.installation_token(link(r)?).await?;
+        match self.api_text("GET", &format!("/repos/{repo}/actions/jobs/{job_id}/logs"), &token, None).await? {
+            (s, text) if ok(s) => Ok(text),
+            (s, text) => Err(other("the job log", s, &serde_json::from_str(&text).unwrap_or(Value::Null))),
+        }
     }
 
     /// A fresh installation token, minted with `pem`, and when it expires.
@@ -571,15 +593,36 @@ impl<H: Http + 'static> Provider for GitHub<H> {
 
     /// `None` for a runner that has not taken a job (never, or not yet).
     async fn job(&self, r: &RunnerRecord, _runner_id: u64, runner_name: &str) -> Result<Option<JobRef>, ProviderError> {
-        Ok(self.jobs(r, "in_progress").await?.into_iter().find_map(|(repo, run, job)| {
-            (job["runner_name"].as_str() == Some(runner_name)).then(|| JobRef {
-                repo,
-                run_id: run["id"].as_u64().unwrap_or_default(),
-                job_id: job["id"].as_u64().unwrap_or_default(),
-                workflow: run["name"].as_str().unwrap_or_default().to_string(),
-                job: job["name"].as_str().unwrap_or_default().to_string(),
-            })
-        }))
+        // A job that ended before anyone asked is only among the completed runs.
+        for status in ["in_progress", "completed"] {
+            let found = self.jobs(r, status).await?.into_iter().find_map(|(repo, run, job)| {
+                (job["runner_name"].as_str() == Some(runner_name)).then(|| {
+                    // shortcut: GitHub lists no pull request for a fork's run, so its jobs show none.
+                    let pr = run["pull_requests"][0]["number"].as_u64().map(|number| PrRef {
+                        number,
+                        url: format!(
+                            "{}/pull/{number}",
+                            run["repository"]["html_url"]
+                                .as_str()
+                                .map_or(format!("https://github.com/{repo}"), String::from)
+                        ),
+                    });
+                    JobRef {
+                        run_id: run["id"].as_u64().unwrap_or_default(),
+                        job_id: job["id"].as_u64().unwrap_or_default(),
+                        workflow: run["name"].as_str().unwrap_or_default().to_string(),
+                        job: job["name"].as_str().unwrap_or_default().to_string(),
+                        url: job["html_url"].as_str().unwrap_or_default().to_string(),
+                        pr,
+                        repo,
+                    }
+                })
+            });
+            if found.is_some() {
+                return Ok(found);
+            }
+        }
+        Ok(None)
     }
 
     async fn queued(&self, r: &RunnerRecord) -> Result<u32, ProviderError> {
