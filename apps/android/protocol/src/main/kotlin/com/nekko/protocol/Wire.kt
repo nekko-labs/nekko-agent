@@ -277,8 +277,27 @@ data class Session(
     val running: Boolean = false,
     /** The chat's run settings ([RunOption]). */
     val runOptions: Map<String, JsonElement> = emptyMap(),
+    /** The chat that delegated this one; null for a chat of its own. */
+    val parentSessionId: String? = null,
+    /** `image` for an image chat; null for an ordinary one. */
+    val chatType: String? = null,
+    val executionMode: String? = null,
+    val disabledTools: List<String> = emptyList(),
 ) {
+    /** Whether this chat can hand a follow-up to a sub-agent (`canOfferSubagent` in shared/orchestration.ts). */
+    fun canOfferSubagent(strategy: String?): Boolean =
+        strategy != "solo" && chatType != "image" &&
+            messages.any { it.role == "assistant" } &&
+            parentSessionId == null &&
+            (runOptions["incognito"] as? JsonPrimitive)?.booleanOrNull != true &&
+            (runOptions["offline"] as? JsonPrimitive)?.booleanOrNull != true &&
+            executionMode != "sandbox" &&
+            "spawn_agent" !in disabledTools
+
     companion object {
+        /** A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts). */
+        fun inSubagent(text: String): String = "Do this in a subagent, then report back:\n\n$text"
+
         fun from(e: JsonElement?): Session? {
             val o = e.obj() ?: return null
             return Session(
@@ -298,6 +317,10 @@ data class Session(
                 clientMessageIds = o["clientMessageIds"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
                 running = o["activeRun"].let { it != null && it !is JsonNull },
                 runOptions = RunOption.values(o),
+                parentSessionId = o.str("parentSessionId"),
+                chatType = o.str("chatType"),
+                executionMode = o.str("executionMode"),
+                disabledTools = o["disabledTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
             )
         }
     }
@@ -454,6 +477,8 @@ data class PcSettings(
     val prompts: List<SavedPrompt> = emptyList(),
     /** The computer's automations are paused (Settings → Automations there). */
     val automationsPaused: Boolean = false,
+    /** How the computer's agents delegate (`solo`, `balanced`, `swarm`); null from a computer that doesn't say. */
+    val orchestrationStrategy: String? = null,
 ) {
     enum class ChatMode(val wire: String) {
         ASK("ask"), GUARDRAILS("guardrails"), YOLO("yolo");
@@ -488,6 +513,7 @@ data class PcSettings(
                 phoneChanges = o.bool("phoneChanges"),
                 prompts = SavedPrompt.list(o["prompts"]),
                 automationsPaused = o.bool("automationsPaused"),
+                orchestrationStrategy = o["orchestration"].obj()?.str("strategy"),
             )
         }
 

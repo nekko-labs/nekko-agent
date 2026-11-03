@@ -11,6 +11,39 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
+/** The same cases as `canOfferSubagent` and `inSubagent` in orchestration.test.ts (the iPhone's ModelEffortTests). */
+class SubagentChoiceTest {
+    private val reply = """{"id":"s","title":"T","messages":[{"id":"a","role":"assistant","content":"Done"}]}"""
+
+    private fun chat(extra: String = "", messages: String? = null): Session {
+        val body = messages?.let { reply.replaceAfter("\"messages\":", "$it}") } ?: reply
+        return Session.from(Json.parseToJsonElement(if (extra.isEmpty()) body else body.dropLast(1) + ",$extra}"))!!
+    }
+
+    @Test fun `offers once the chat has a reply to follow up on`() {
+        assertTrue(chat().canOfferSubagent("balanced"))
+        assertTrue(chat().canOfferSubagent(null))
+        assertFalse(chat(messages = """[{"id":"u","role":"user","content":"Hi"}]""").canOfferSubagent(null))
+    }
+
+    @Test fun `stays away wherever delegation cannot run`() {
+        assertFalse(chat().canOfferSubagent("solo"))
+        for (extra in listOf(""""parentSessionId":"p"""", """"incognito":true""", """"offline":true""", """"executionMode":"sandbox"""",
+            """"disabledTools":["spawn_agent"]""", """"chatType":"image"""")) {
+            assertFalse(extra, chat(extra).canOfferSubagent(null))
+        }
+    }
+
+    @Test fun `reads the computer's strategy`() {
+        assertEquals("solo", PcSettings.from(Json.parseToJsonElement("""{"orchestration":{"strategy":"solo"}}""")).orchestrationStrategy)
+        assertEquals(null, PcSettings.from(Json.parseToJsonElement("{}")).orchestrationStrategy)
+    }
+
+    @Test fun `keeps the message whole and says what was asked`() {
+        assertEquals("Do this in a subagent, then report back:\n\nFix the tests", Session.inSubagent("Fix the tests"))
+    }
+}
+
 /** T201a: the same cases as `modelEffortLevels` in model-capabilities.test.ts (the iPhone's ModelEffortTests), and the levels the computer's gate takes. */
 class ModelEffortTest {
     @Test fun `offers each model its own ladder`() {

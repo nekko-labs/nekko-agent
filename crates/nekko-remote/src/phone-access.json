@@ -302,6 +302,7 @@
   "defaultProviderId",
   "machineIcon",
   "favoriteModels",
+  "orchestration.strategy",
   "effort",
   "phoneChanges",
   "prompts",
