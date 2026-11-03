@@ -5,8 +5,8 @@
    to sit with the pixel mascot. */
 
 :root {
-  /* Brand: the logo's gradient runs #a9659c (deep indigo) to #dfb6b2 (lavender). */
-  --indigo: #a9659c;
+  /* Brand: the logo's gradient runs #8a6cbf (deep indigo) to #dfb6b2 (lavender). */
+  --indigo: #8a6cbf;
   --lavender: #dfb6b2;
   --aqua: #dfb6b2;
   --mint: #a5f9df;
@@ -25,9 +25,9 @@
   --muted: #5d5970;
   --line: rgba(22, 22, 28, 0.1);
   --glass: #ffffff;
-  --accent: #a9659c;
-  --accent-2: #a9659c;
-  --grad-text: linear-gradient(110deg, var(--indigo) 0%, #c084b5 100%);
+  --accent: #8a6cbf;
+  --accent-2: #8a6cbf;
+  --grad-text: linear-gradient(110deg, var(--indigo) 0%, #a68fd0 100%);
   --shadow: 0 1px 2px rgba(22, 22, 28, 0.04), 0 10px 28px rgba(169, 101, 156, 0.07);
   --band-lavender: #fdf7f6;
   --band-peach: #f7e9e7;
@@ -599,7 +599,7 @@ body {
 .hero .scroll-hint { display: none; }
 .display { color: var(--ink); }
 .tagline .grad, .grad {
-  background: linear-gradient(100deg, #a9659c 0%, #c084b5 100%);
+  background: linear-gradient(100deg, #8a6cbf 0%, #a68fd0 100%);
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;
 }
@@ -696,11 +696,11 @@ body {
    image, so the lightbox clone carries it too. Dark look shows the dark shot;
    White and Colourful show the light one. */
 .media .hero-shot { box-sizing: border-box; padding: 8px; object-fit: contain; }
-.hero-shot-dark, .lightbox-stage > .hero-shot-dark { background: #241f23; }
-.hero-shot-light, .lightbox-stage > .hero-shot-light { background: #c9a9c4; }
+.hero-shot-dark, .lightbox-stage > .hero-shot-dark { background: #212023; }
+.hero-shot-light, .lightbox-stage > .hero-shot-light { background: #b6aac9; }
 .media .hero-shot-dark, :root[data-theme='dark'] .media .hero-shot-light { display: none; }
 :root[data-theme='dark'] .media .hero-shot-dark { display: block; }
-:root[data-theme='dark'] .lightbox-stage > .hero-shot-dark { background: #241f23; }
+:root[data-theme='dark'] .lightbox-stage > .hero-shot-dark { background: #212023; }
 
 /* the enlarged view */
 .lightbox {
@@ -791,8 +791,8 @@ body {
    blocks, so the page alternates strong and quiet instead of reading as one
    flat colour. Text stays dark ink; cards are white. ---- */
 :root[data-theme='colour'] {
-  --bg: #fdf7f6; --bg-2: #ffffff; --ink: #16161c; --muted: #5a2352;
-  --line: rgba(22, 22, 28, 0.16); --accent: #8a4a7f; --accent-2: #5a2352;
+  --bg: #fdf7f6; --bg-2: #ffffff; --ink: #16161c; --muted: #4a2a7a;
+  --line: rgba(22, 22, 28, 0.16); --accent: #6e4fa0; --accent-2: #4a2a7a;
   --shadow: 0 1px 2px rgba(22, 22, 28, 0.08), 0 12px 30px rgba(138, 74, 127, 0.18);
   --sticker: #16161c; --peach-soft: #c2fce3;
   --mascot-face: transparent; --mascot-line: #16161c; --mascot-eyes: #16161c; --ok: #0f5f2c;
@@ -819,8 +819,8 @@ body {
 }
 :root[data-theme='colour'] .media { background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(253, 247, 246, 0.75)); border-color: rgba(22, 22, 28, 0.3); }
 :root[data-theme='colour'] .media-hero { background: linear-gradient(135deg, #ffffff, #fdf7f6); }
-:root[data-theme='colour'] .media span, :root[data-theme='colour'] .media::after { color: #8a4a7f; }
-:root[data-theme='colour'] .grad, :root[data-theme='colour'] .tagline .grad { background: linear-gradient(100deg, #5a2352 0%, #8a4a7f 100%); -webkit-background-clip: text; background-clip: text; }
+:root[data-theme='colour'] .media span, :root[data-theme='colour'] .media::after { color: #6e4fa0; }
+:root[data-theme='colour'] .grad, :root[data-theme='colour'] .tagline .grad { background: linear-gradient(100deg, #4a2a7a 0%, #6e4fa0 100%); -webkit-background-clip: text; background-clip: text; }
 :root[data-theme='colour'] code { background: rgba(223, 182, 178, 0.14); border-color: rgba(169, 101, 156, 0.18); }
 :root[data-theme='colour'] .band code { background: rgba(255, 255, 255, 0.55); border-color: rgba(22, 22, 28, 0.15); }
 :root[data-theme='colour'] ::selection { background: rgba(223, 182, 178, 0.35); }
@@ -1073,7 +1073,7 @@ h3 { font-size: 21px; }
   transform-origin: left; animation: bar-grow 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .bar b { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: #fff; }
-.k-nekko { background: #5a2352; }
+.k-nekko { background: #4a2a7a; }
 .k-ollama { background: #177a89; } /* white figures at 5:1 */
 .k-lms { background: #a0601e; }
 .bench .micro { margin-top: 16px; max-width: none; }
@@ -1122,7 +1122,7 @@ footer a.with-gh { gap: 7px; }
   --line: rgba(255, 255, 255, 0.14); --accent: #f2dcd9; --accent-2: #f7e9e7;
   --glass: rgba(255, 255, 255, 0.05);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 34px rgba(0, 0, 0, 0.35);
-  --sticker: #f7e9e7; --peach-soft: #2a0f28;
+  --sticker: #f7e9e7; --peach-soft: #3a1c63;
   --mascot-face: transparent; --mascot-line: #f7e9e7; --mascot-eyes: #f7e9e7; --ok: #5ee08f;
 }
 :root[data-theme='dark'] body {
@@ -1175,15 +1175,15 @@ footer a.with-gh { gap: 7px; }
 :root[data-theme='dark'] .band-blend { background: linear-gradient(120deg, rgba(223, 182, 178, 0.2) 0%, rgba(223, 182, 178, 0.06) 100%); }
 :root[data-theme='dark'] .window-mock { border-color: rgba(255, 255, 255, 0.18); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(223, 182, 178, 0.18); }
 :root[data-theme='dark'] .media { background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(223, 182, 178, 0.12)); border-color: rgba(255, 255, 255, 0.24); }
-:root[data-theme='dark'] .media-hero { background: linear-gradient(135deg, #16161c, #5a2352); }
-:root[data-theme='dark'] .lightbox { background: rgba(25, 0, 25, 0.7); }
+:root[data-theme='dark'] .media-hero { background: linear-gradient(135deg, #16161c, #4a2a7a); }
+:root[data-theme='dark'] .lightbox { background: rgba(43, 18, 76, 0.7); }
 :root[data-theme='dark'] .lightbox-stage > * { background: #16161c; }
-:root[data-theme='dark'] .lightbox-stage .media-placeholder { background: linear-gradient(135deg, #16161c, #5a2352); }
+:root[data-theme='dark'] .lightbox-stage .media-placeholder { background: linear-gradient(135deg, #16161c, #4a2a7a); }
 
 /* buttons, menus, form */
 :root[data-theme='dark'] .btn-ghost { background: #16161c; color: var(--ink); }
 @media (hover: hover) {
-  :root[data-theme='dark'] .btn-ghost:hover { background: #5a2352; color: var(--ink); }
+  :root[data-theme='dark'] .btn-ghost:hover { background: #4a2a7a; color: var(--ink); }
 }
 :root[data-theme='dark'] .dl-menu { background: #16161c; }
 :root[data-theme='dark'] .dl-copy { background: rgba(255, 255, 255, 0.05); }
@@ -1245,29 +1245,29 @@ html { -webkit-tap-highlight-color: transparent; }
   .dl-main { padding-left: 16px; }
 }
 
-/* ---- Plum palette: plum (#190019) as the main colour, rose (#DFB6B2) for
+/* ---- Plum palette: plum (#2b124c) as the main colour, rose (#DFB6B2) for
    the light touches. Dark uses the app's stock Dark surfaces with white
    text; White keeps black text. ---- */
 :root {
-  --indigo: #190019; --lavender: #dfb6b2; --aqua: #dfb6b2; --mint: #f2dcd9; --ice: #f7e9e7;
-  --grad: linear-gradient(115deg, #190019 0%, #4a2a48 100%);
-  --grad-text: linear-gradient(110deg, #190019 0%, #4a2a48 100%);
-  --accent: #190019; --accent-2: #190019;
-  --band-indigo: #190019;
-  --grad-fun: linear-gradient(100deg, #190019 0%, #3a1438 100%); --btn-ink: #dfb6b2;
+  --indigo: #2b124c; --lavender: #dfb6b2; --aqua: #dfb6b2; --mint: #f2dcd9; --ice: #f7e9e7;
+  --grad: linear-gradient(115deg, #2b124c 0%, #45286e 100%);
+  --grad-text: linear-gradient(110deg, #2b124c 0%, #45286e 100%);
+  --accent: #2b124c; --accent-2: #2b124c;
+  --band-indigo: #2b124c;
+  --grad-fun: linear-gradient(100deg, #2b124c 0%, #3c1f66 100%); --btn-ink: #dfb6b2;
 }
 :root[data-theme='white'] { --ink: #000000; }
 :root[data-theme='dark'] {
   --bg: #0c0c11; --bg-2: #16161c; --ink: #ffffff; --muted: #a3a1b0;
   --line: #26262f; --accent: #dfb6b2; --accent-2: #dfb6b2;
-  --sticker: #dfb6b2; --peach-soft: #190019;
+  --sticker: #dfb6b2; --peach-soft: #2b124c;
   --mascot-line: #dfb6b2; --mascot-eyes: #dfb6b2;
   --grad-text: linear-gradient(110deg, #dfb6b2 0%, #f2dcd9 100%);
 }
 :root[data-theme='dark'] body {
   background:
-    radial-gradient(60% 900px at 12% 0%, rgba(25, 0, 25, 0.9), transparent 70%),
-    radial-gradient(60% 800px at 20% 100%, rgba(25, 0, 25, 0.7), transparent 70%),
+    radial-gradient(60% 900px at 12% 0%, rgba(43, 18, 76, 0.9), transparent 70%),
+    radial-gradient(60% 800px at 20% 100%, rgba(43, 18, 76, 0.7), transparent 70%),
     #0c0c11;
 }
 :root[data-theme='dark'] .window-mock { background: #16161c; }

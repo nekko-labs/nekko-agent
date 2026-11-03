@@ -685,11 +685,11 @@ export const THEME_PRESETS: ThemePreset[] = [
     // Plum on the stock Light surfaces: plum fills, rose as the secondary, black text.
     id: 'x-plum-white',
     mode: 'light',
-    // #190019 reads as black on thin strokes, so small accents use lighter
+    // #2b124c reads as black on thin strokes, so small accents use lighter
     // plums; the deep plum stays on the main buttons (styles.css).
-    accent: '#5a2352',
-    accent2: '#8a4a7f',
-    swatch: ['#190019', '#dfb6b2', '#f2f2f7'],
+    accent: '#4a2a7a',
+    accent2: '#6e4fa0',
+    swatch: ['#2b124c', '#dfb6b2', '#f2f2f7'],
     label: 'Light Nekko',
     group: 'experimental',
     family: 'plum',
@@ -697,13 +697,13 @@ export const THEME_PRESETS: ThemePreset[] = [
     ink: '#000000',
   },
   {
-    // Plum on the stock Dark surfaces. #190019 is too dark to read as text on
+    // Plum on the stock Dark surfaces. #2b124c is too dark to read as text on
     // the dark paper, so rose carries the accent and plum fills behind it.
     id: 'x-plum-dark',
     mode: 'dark',
-    accent: '#c084b5',
+    accent: '#a68fd0',
     accent2: '#dfb6b2',
-    swatch: ['#190019', '#dfb6b2', '#16161c'],
+    swatch: ['#2b124c', '#dfb6b2', '#16161c'],
     label: 'Dark Nekko',
     group: 'experimental',
     family: 'plum',

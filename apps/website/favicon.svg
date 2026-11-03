@@ -3,7 +3,7 @@
     <clipPath id="squircle">
       <rect x="0" y="0" width="512" height="512" rx="114" ry="114"/>
     </clipPath>
-    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#190019"/><stop offset="1" stop-color="#5A2352"/></linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2b124c"/><stop offset="1" stop-color="#4A2A7A"/></linearGradient>
   </defs>
 
   <g clip-path="url(#squircle)">

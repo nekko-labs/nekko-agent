@@ -22,8 +22,8 @@ const INK = '#DFB6B2';
  * single flat colour (the phone splash, Android's adaptive-icon background
  * colour); `RIM` is its light end, used for the installer banner's edge stripe.
  */
-const TILE = '#190019';
-const TILE_END = '#5A2352';
+const TILE = '#2b124c';
+const TILE_END = '#4A2A7A';
 const RIM = INK;
 /** A horizontal linear gradient across whatever it fills, as an SVG <defs> entry. */
 const tileGradient = (id) =>

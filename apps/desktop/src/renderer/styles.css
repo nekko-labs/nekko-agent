@@ -1801,21 +1801,21 @@
   [data-theme='light'][data-preset='x-plum-white'] {
     --ink: #000000;
     --on-accent: #ffffff;
-    --accent-soft: color-mix(in srgb, #8a4a7f 16%, transparent);
-    --merged-ink: #190019;
-    --merged-wash: rgba(25, 0, 25, 0.08);
-    --merged-wash-soft: rgba(25, 0, 25, 0.04);
-    --merged-chip: rgba(25, 0, 25, 0.1);
+    --accent-soft: color-mix(in srgb, #6e4fa0 16%, transparent);
+    --merged-ink: #2b124c;
+    --merged-wash: rgba(43, 18, 76, 0.08);
+    --merged-wash-soft: rgba(43, 18, 76, 0.04);
+    --merged-chip: rgba(43, 18, 76, 0.1);
   }
 
   /* The main action keeps the deep plum the lighter accents are drawn from. */
-  [data-preset^='x-plum'] .btn-primary { background: #190019; color: #dfb6b2; }
+  [data-preset^='x-plum'] .btn-primary { background: #2b124c; color: #dfb6b2; }
   [data-theme='dark'][data-preset='x-plum-dark'] .btn-primary { box-shadow: inset 0 0 0 1px #dfb6b2; }
 
   [data-theme='dark'][data-preset='x-plum-dark'] {
     --ink: #ffffff;
-    --on-accent: #190019;
-    --accent-soft: color-mix(in srgb, #5a2352 55%, var(--surface));
+    --on-accent: #2b124c;
+    --accent-soft: color-mix(in srgb, #4a2a7a 55%, var(--surface));
     --merged-ink: #dfb6b2;
     --merged-wash: rgba(223, 182, 178, 0.14);
     --merged-wash-soft: rgba(223, 182, 178, 0.06);

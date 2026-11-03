@@ -684,11 +684,11 @@
         const s = a > 0.18 ? 3 : 2;
         const k = x / W;
         if (theme === 'dark' || theme === 'colour') {
-          // 0 = light plum #c084b5, 1 = rose #dfb6b2: glowing on the dark ground, tinted on the coloured one
-          ctx.fillStyle = `rgba(${Math.round(192 + 31 * k)},${Math.round(132 + 50 * k)},${Math.round(181 - 3 * k)},${(a * 1.1).toFixed(3)})`;
+          // 0 = light plum #a68fd0, 1 = rose #dfb6b2: glowing on the dark ground, tinted on the coloured one
+          ctx.fillStyle = `rgba(${Math.round(166 + 57 * k)},${Math.round(143 + 39 * k)},${Math.round(208 - 30 * k)},${(a * 1.1).toFixed(3)})`;
         } else {
-          // 0 = plum #5a2352, 1 = light plum #c084b5
-          ctx.fillStyle = `rgba(${Math.round(90 + 102 * k)},${Math.round(35 + 97 * k)},${Math.round(82 + 99 * k)},${a.toFixed(3)})`;
+          // 0 = plum #4a2a7a, 1 = light plum #a68fd0
+          ctx.fillStyle = `rgba(${Math.round(74 + 92 * k)},${Math.round(42 + 101 * k)},${Math.round(122 + 86 * k)},${a.toFixed(3)})`;
         }
         ctx.fillRect(Math.round(x + (CELL - s) / 2), Math.round(y + (CELL - s) / 2), s, s);
       }

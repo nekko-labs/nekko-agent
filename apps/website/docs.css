@@ -12,8 +12,8 @@
   --muted: #5d5970;
   --line: rgba(22, 22, 28, 0.1);
   --line-2: rgba(22, 22, 28, 0.18);
-  --accent: #a9659c;
-  --accent-2: #a9659c;
+  --accent: #8a6cbf;
+  --accent-2: #8a6cbf;
   --on-accent: #ffffff;
   --code-bg: #fdf7f6;
   --sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -28,7 +28,7 @@
 :root[data-theme='colour'] {
   --bg: #fdf7f6; --bg-2: #ffffff; --bg-3: #f7e9e7;
   --line: rgba(169, 101, 156, 0.14); --line-2: rgba(169, 101, 156, 0.24);
-  --muted: #8a4a7f; --accent: #a9659c; --accent-2: #8a4a7f;
+  --muted: #6e4fa0; --accent: #8a6cbf; --accent-2: #6e4fa0;
   --code-bg: #fdf7f6; --topbar-bg: rgba(223, 182, 178, 0.94);
 }
 :root[data-theme='colour'] main { background: var(--bg-2); border-inline: 1px solid var(--line); }
