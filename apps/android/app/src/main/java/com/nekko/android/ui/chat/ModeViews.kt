@@ -283,7 +283,7 @@ private fun RunOptionRow(option: RunOption, value: JsonElement?, onSet: (JsonEle
 @Composable
 fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().background(Nekko.palette.paper).padding(horizontal = 8.dp),
+        modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ModelEffortButton(chat, enabled, onOpenModelEffort)
