@@ -141,6 +141,11 @@ impl BuildHost for Fake {
         std::fs::create_dir(to).map_err(|e| e.to_string())?;
         std::fs::copy(from.join("disk.img"), to.join("disk.img")).map_err(|e| e.to_string()).map(drop)
     }
+    async fn write_scripts(&self, bundle: &Path) -> Result<(), String> {
+        self.on("write_scripts")?;
+        assert!(bundle.join("disk.img").is_file(), "scripts go into the copy");
+        Ok(())
+    }
     async fn swap(&self, bundle: &Path, default: &Path) -> Result<(), String> {
         self.log("swap");
         swap_bundle(bundle, default).map_err(|e| e.to_string())
@@ -277,6 +282,110 @@ async fn a_finished_restore_image_is_not_downloaded_again() {
     assert!(!job.host.called("download"));
     assert!(!job.host.called("restore_image"));
     assert!(job.host.called("install"));
+}
+
+#[tokio::test]
+async fn the_restore_image_is_kept_and_used_by_the_next_build() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    let kept = rig.images().join("cache/restore.ipsw");
+    assert_eq!(std::fs::read_to_string(&kept).unwrap(), "ipsw", "kept after the build's own copy went");
+
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    assert!(job.host.called("restore_image"), "it still asks Apple which image is newest");
+    assert!(!job.host.called("download"), "{:?}", job.host.calls());
+    assert!(job.host.called("install"));
+    assert!(kept.is_file(), "the kept image outlives a build that used it");
+    assert_eq!(job.status().state, ImageState::Ready);
+}
+
+#[tokio::test]
+async fn a_newer_restore_image_replaces_the_kept_one() {
+    let rig = Rig::new();
+    let cache = rig.images().join("cache");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("UniversalMac_27.1_26A1_Restore.ipsw"), "old").unwrap();
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    assert!(job.host.called("download"));
+    let names: Vec<_> = std::fs::read_dir(&cache).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(names, vec![std::ffi::OsString::from("restore.ipsw")]);
+}
+
+#[test]
+fn scripts_go_to_the_attached_disks_data_volume_only() {
+    // Trimmed from `diskutil apfs list -plist` on a guest disk, as JSON. The host's own Data
+    // volume (disk3s5) is in the same list and must never be picked.
+    let json = br#"{"Containers":[
+        {"Volumes":[{"DeviceIdentifier":"disk3s5","Name":"Data","Roles":["Data"]}]},
+        {"Volumes":[
+            {"DeviceIdentifier":"disk15s1","Name":"Macintosh HD","Roles":["System"]},
+            {"DeviceIdentifier":"disk15s5","Name":"Data","Roles":["Data"]}]}]}"#;
+    let attached = ["/dev/disk10", "/dev/disk15", "/dev/disk15s1", "/dev/disk15s5"];
+    assert_eq!(data_volume(json, &attached).as_deref(), Some("/dev/disk15s5"));
+    assert_eq!(data_volume(json, &["/dev/disk10"]), None, "no Data volume of this disk");
+    assert_eq!(data_volume(b"not json", &attached), None);
+}
+
+#[test]
+fn only_a_plain_restore_file_name_is_kept_by_name() {
+    assert_eq!(
+        restore_name("https://updates.cdn-apple.com/x/UniversalMac_27.2_26B123_Restore.ipsw"),
+        "UniversalMac_27.2_26B123_Restore.ipsw"
+    );
+    for odd in ["https://a/b/../x.ipsw?y", "https://a/b/.hidden.ipsw", "https://a/b/c.zip", "https://a/b/"] {
+        assert_eq!(restore_name(odd), IPSW, "{odd}");
+    }
+}
+
+#[tokio::test]
+async fn a_refresh_copies_the_image_writes_the_scripts_and_tests_it() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    let info = std::fs::read_to_string(rig.images().join("default/image.json")).unwrap();
+
+    let job = rig.job(Fake::default());
+    let view = job.build(BuildRequest { kind: Kind::Refresh, runner_id: None, priority: Priority::Balanced }).unwrap();
+    assert_eq!(view.kind, Some(Kind::Refresh));
+    finish(&job).await;
+    use Stage::*;
+    assert_eq!(
+        rig.stages_started(),
+        vec![Check, Download, Install, Xcode, Lockdown, Test, Finish, Check, Scripts, Test, Finish]
+    );
+    let calls = job.host.calls();
+    let order = ["preflight", "clone_bundle", "write_scripts", "test_boot", "swap"];
+    let at: Vec<usize> = order.iter().map(|o| calls.iter().position(|c| c == o).unwrap()).collect();
+    assert!(at.windows(2).all(|w| w[0] < w[1]), "{calls:?}");
+    for none in ["restore_image", "download", "install", "send_xcode", "lockdown"] {
+        assert!(!job.host.called(none), "{none}: {calls:?}");
+    }
+    assert!(!calls.iter().any(|c| c.starts_with("enable")), "a refresh keeps the runner as it is");
+    assert_eq!(
+        std::fs::read_to_string(rig.images().join("default/image.json")).unwrap(),
+        info,
+        "the proof carries over"
+    );
+    assert_eq!(job.status().state, ImageState::Ready);
+}
+
+#[tokio::test]
+async fn a_refresh_without_an_image_stops_at_once() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(BuildRequest { kind: Kind::Refresh, runner_id: None, priority: Priority::Balanced }).unwrap();
+    finish(&job).await;
+    let v = job.status();
+    assert_eq!((v.state, v.stage), (ImageState::Failed, Some(Stage::Scripts)));
+    assert_eq!(v.error.as_deref(), Some(NO_IMAGE_TO_UPDATE));
+    assert!(!job.host.called("clone_bundle"));
 }
 
 #[tokio::test]
@@ -749,4 +858,22 @@ fn a_test_boot_passes_only_if_the_runner_ran() {
 #[test]
 fn the_boot_script_logs_what_the_test_boot_looks_for() {
     assert!(include_str!("../../../../scripts/runner-image/nekko-runner-boot.sh").contains(RUNNER_RAN));
+}
+
+/// The real disk path, against a copy of a built image (`cp -c` costs nothing on APFS):
+/// `NEKKO_TEST_BUNDLE=<folder holding disk.img> cargo test -p nekkod --bin nekkod real_disk -- --ignored`.
+#[cfg(target_os = "macos")]
+#[tokio::test]
+#[ignore = "needs a copy of a real runner image in NEKKO_TEST_BUNDLE"]
+async fn real_disk_takes_the_new_scripts_and_keeps_its_seal() {
+    let bundle = PathBuf::from(std::env::var("NEKKO_TEST_BUNDLE").unwrap());
+    let images = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(images.path().join("default.new")).unwrap();
+    let host = RealBuildHost::new(Err("no helper".into()), images.path().to_path_buf(), Arc::default(), Weak::new());
+    let probe = b"#!/bin/bash\n# written by real_disk_takes_the_new_scripts_and_keeps_its_seal\n";
+    let at = SCRIPTS[0].1;
+    host.with_data_volume(&bundle, |root| overwrite_in_place(&root.join(at), probe)).await.unwrap().unwrap();
+    // Read back through a read-only mount, as the test boot does.
+    let back = host.with_disk(&bundle, |m| read_on(m, at)).await.unwrap();
+    assert_eq!(back.as_deref(), Some(std::str::from_utf8(probe).unwrap()));
 }

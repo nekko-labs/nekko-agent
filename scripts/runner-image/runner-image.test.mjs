@@ -29,7 +29,8 @@ function stubs() {
   stub('stat', 'echo "${FAKE_CONSOLE:-runner}"');
   stub('launchctl', 'shift 2; exec "$@"');
   // Exec only commands inside the temp root, so a real /usr/local/bin/gitlab-runner never runs.
-  stub('sudo', `shift 4; case "$1" in '${root}'/*) exec "$@";; esac`);
+  // `env PATH=...` in front of the job runs it as env would.
+  stub('sudo', `shift 4; [ "$1" = /usr/bin/env ] && shift 2; case "$1" in '${root}'/*) exec "$@";; esac`);
   // The fake job records whether the seed copy still exists while it runs, and with FAKE_HOSTILE
   // swaps ~/.nekko for a symlink to a victim directory the root-owned cleanup must not touch.
   const victim = join(root, 'victim');
@@ -106,6 +107,15 @@ test('github_seed_starts_run_sh_as_runner_then_shuts_down', () => {
   assert.ok(!calls.includes('run.sh saw jit-config'), 'the copy is gone before the job starts');
   assert.ok(!out.includes('QUJD'), 'the JIT config is never logged');
   assert.match(out, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ /m);
+});
+
+test('jobs_get_homebrew_on_their_path', () => {
+  // sudo's secure_path drops /opt/homebrew/bin, and `brew install` then fails with 127 (first real ios-native job, 2026-11-03).
+  const path = 'PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+  for (const files of [{ 'jit-config': 'QUJD' }, { 'gitlab-runner.toml': 'concurrent = 1\n' }]) {
+    const { calls } = run({ seed: files });
+    assert.ok(calls.some((c) => c.startsWith('launchctl asuser') && c.includes(`-- /usr/bin/env ${path} `)), calls.join('\n'));
+  }
 });
 
 test('cleanup_never_follows_a_job_controlled_path', () => {

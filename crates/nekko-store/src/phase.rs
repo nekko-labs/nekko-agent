@@ -4,7 +4,9 @@
 //! `exploring`, editing is `building`, tests and builds are `verifying`, and
 //! commits, pushes and pull requests are `shipping`. It is the latest rather
 //! than the furthest because the loop goes round: an edit after a failed test
-//! is `building` again. Anything else (a plan, a sub-agent, an MCP tool, a
+//! is `building` again. Reads only go back to `exploring` from a new message:
+//! within one reply, the reading an agent does while wrapping up keeps the
+//! chat where it got to. Anything else (a plan, a sub-agent, an MCP tool, a
 //! command with no clear purpose) leaves the chat where it was.
 //!
 //! The rules are `toolPurpose` (packages/shared/src/tool-purpose.ts), trimmed
@@ -330,9 +332,30 @@ fn call_phase(call: &Value) -> Option<&'static str> {
     None
 }
 
-/// The chat's phase: its latest tool call that names one. `None` before any does.
+/// The chat's phase: its latest turn that names one. `None` before any does.
 pub fn loop_phase(messages: &[Value]) -> Option<&'static str> {
-    messages.iter().rev().find_map(|m| m.get("toolCalls")?.as_array()?.iter().rev().find_map(call_phase))
+    messages.rsplit(new_work).find_map(turn_phase)
+}
+
+/// A message from the person. A watch's wake-up (`watches.rs`) is the agent
+/// checking on its own work, so the reply it starts carries on the last one.
+fn new_work(m: &Value) -> bool {
+    m.get("role").and_then(Value::as_str) == Some("user")
+        && !m.get("content").and_then(Value::as_str).is_some_and(|c| c.starts_with("[Agent watch "))
+}
+
+/// One reply's phase: its latest call past exploring, else exploring if it read.
+/// The reads an agent does while wrapping up (a runbook, a memory file, a last
+/// screenshot) do not send a chat that built or shipped back to exploring.
+fn turn_phase(turn: &[Value]) -> Option<&'static str> {
+    let mut read = false;
+    for phase in turn.iter().filter_map(|m| m.get("toolCalls")?.as_array()).flatten().rev().filter_map(call_phase) {
+        if phase != "exploring" {
+            return Some(phase);
+        }
+        read = true;
+    }
+    read.then_some("exploring")
 }
 
 #[cfg(test)]
@@ -401,5 +424,28 @@ mod tests {
         assert_eq!(loop_phase(&[turn(vec![read, edit.clone(), test.clone()])]), Some("verifying"));
         assert_eq!(loop_phase(&[turn(vec![test.clone()]), turn(vec![edit])]), Some("building"));
         assert_eq!(loop_phase(&[turn(vec![test]), turn(vec![plan, mcp])]), Some("verifying"));
+    }
+
+    #[test]
+    fn reads_while_wrapping_up_do_not_send_a_chat_back() {
+        let turn = |calls: Vec<Value>| json!({ "role": "assistant", "content": "", "toolCalls": calls });
+        let user = json!({ "role": "user", "content": "next" });
+        let read = call("read_file", json!({ "path": "memory.md" }));
+        let shot = call("browser", json!({ "action": "screenshot" }));
+        let edit = call("edit_file", json!({ "path": "a.ts" }));
+        let ship = call("bash", json!({ "command": "gh pr create --title x" }));
+        assert_eq!(
+            loop_phase(&[turn(vec![edit.clone(), ship.clone()]), turn(vec![read.clone(), shot])]),
+            Some("shipping")
+        );
+        assert_eq!(loop_phase(&[turn(vec![edit.clone()]), turn(vec![read.clone()])]), Some("building"));
+        // A new message that starts with reads is new work.
+        assert_eq!(loop_phase(&[turn(vec![ship.clone()]), user.clone(), turn(vec![read.clone()])]), Some("exploring"));
+        // A watch waking the agent to check on its PR is not new work.
+        let wake = json!({ "role": "user", "content": "[Agent watch w1]\nWatch deadline reached." });
+        assert_eq!(loop_phase(&[turn(vec![ship.clone()]), wake, turn(vec![read.clone()])]), Some("shipping"));
+        // A turn that names no phase leaves the chat where the last one did.
+        let plan = call("update_plan", json!({}));
+        assert_eq!(loop_phase(&[turn(vec![ship, read]), user, turn(vec![plan])]), Some("shipping"));
     }
 }

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-03
 ---
 
-# 0043. Workflows are called Scheduled Tasks, and the chat tasks are the same thing
+# 0045. Workflows are called Scheduled Tasks, and the chat tasks are the same thing
 
 ## Context
 

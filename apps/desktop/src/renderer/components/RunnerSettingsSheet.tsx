@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import {
   KEEP_AWAKE_LABELS,
   MAX_JOB_CHOICES,
+  PRIORITIES,
   PRIORITY_LABELS,
+  READY_VM_CHOICES,
+  readyVms,
   VPN_DIRECT_LABEL,
   formatMinutes,
   settingsPatch,
@@ -11,7 +14,6 @@ import {
   type HostView,
   type ImageView,
   type KeepAwake,
-  type Priority,
   type RunnerSettings,
   type RunnerView,
 } from '@nekko-agent/shared';
@@ -100,11 +102,10 @@ const Unsampled = ({ error }: { error: string | null }) => <span className="text
 
 const Val = ({ children }: { children: React.ReactNode }) => <span className="ml-3 whitespace-nowrap font-mono text-xs text-ink-soft">{children}</span>;
 
-const PRIORITIES: Priority[] = ['doNotDisturb', 'balanced', 'runnerFirst'];
 const KEEP_AWAKE: KeepAwake[] = ['systemDefault', 'whileActive', 'always'];
 
 /** The settings form (mockup 4); pure so tests render it statically. */
-export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, onSave, onRemove, onCancel, onRebuild, saving, toggling = false }: {
+export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, onSave, onRemove, onCancel, onRebuild, onRefresh, saving, toggling = false }: {
   view: RunnerView;
   image?: ImageView | null;
   draft: RunnerSettings;
@@ -114,6 +115,7 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
   onRemove(): void;
   onCancel?(): void;
   onRebuild?(): void;
+  onRefresh?(): void;
   saving: boolean;
   toggling?: boolean;
 }) {
@@ -141,6 +143,14 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
       </Row>
       <Row label="Keep awake" hint="sleep normally, or stay up for jobs">
         <Seg label="Keep awake" value={draft.keepAwake} options={KEEP_AWAKE.map((k) => ({ value: k, label: KEEP_AWAKE_LABELS[k] }))} onChange={(v) => set('keepAwake', v)} />
+      </Row>
+      <Row label="VMs kept ready" hint="booted, so a job starts at once">
+        <Seg
+          label="VMs kept ready"
+          value={readyVms(draft)}
+          options={READY_VM_CHOICES.map((n) => ({ value: n, label: String(n), disabled: n > draft.macosSlots }))}
+          onChange={(v) => set('readyVms', v)}
+        />
       </Row>
       <Row label="macOS slots" hint="Apple allows 2 per Mac">
         <Seg
@@ -260,8 +270,10 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
         <Row label="VM image" hint="how macOS, Xcode and runner updates arrive">
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className="btn btn-outline py-1! text-xs" onClick={onRebuild}>Rebuild image</button>
+            {onRefresh && <button type="button" className="btn btn-outline py-1! text-xs" onClick={onRefresh}>Update scripts</button>}
             {image.info && <span className="text-xs text-ink-faint">{`macOS ${image.info.macos}${image.info.xcode ? ` · Xcode ${image.info.xcode}` : ''}`}</span>}
           </div>
+          {onRefresh && <p className="mt-1 text-xs text-ink-faint">Update scripts puts this version of Nekko's scripts into the image in a few minutes. A new macOS or Xcode needs Rebuild image.</p>}
         </Row>
       )}
 
@@ -287,7 +299,7 @@ export interface Edits { base: RunnerSettings; draft: RunnerSettings }
 export const editDraft = (edits: Edits | null, view: RunnerView, draft: RunnerSettings): Edits => ({ base: edits?.base ?? view.config.settings, draft });
 
 /** Runner settings for one runner. After Save, the form shows what the daemon kept. */
-export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, beginReply }: { view: RunnerView; image?: ImageView | null; onClose(): void; onRebuild?(): void; beginReply(): (v: RunnerView) => void }) {
+export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, onRefresh, beginReply }: { view: RunnerView; image?: ImageView | null; onClose(): void; onRebuild?(): void; onRefresh?(): Promise<void>; beginReply(): (v: RunnerView) => void }) {
   const pushToast = useStore((s) => s.pushToast);
   const [edits, setEdits] = useState<Edits | null>(null);
   const draft = shownSettings(view, edits?.draft ?? null);
@@ -315,6 +327,13 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, be
     setEdits(null); // the view now carries what the daemon kept
     reply(res.view);
   };
+  const refresh = async () => {
+    try {
+      await onRefresh?.();
+    } catch (e) {
+      pushToast('error', `Couldn't update the image's scripts: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
   const remove = async () => {
     if (!(await confirmDeletion('Remove this runner? Its VMs stop and its GitHub registration is removed.'))) return;
     try {
@@ -337,6 +356,7 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, be
         onRemove={() => void remove()}
         onCancel={onClose}
         onRebuild={onRebuild}
+        onRefresh={onRefresh && (() => void refresh())}
         saving={saving}
         toggling={toggling}
       />

@@ -225,6 +225,8 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     const title = chatTitle(i);
     // Setup selects the exact grouped card on Agents; Chat no longer owns this list.
     await waitFor("!!document.querySelector('button[data-sidebar-group]')", 'the Agents sidebar');
+    // The groups draw before the session list reaches them, and a click on no card does nothing.
+    await waitFor(`[...document.querySelectorAll('div[role="button"]')].some((card) => card.getAttribute('title')?.includes(${JSON.stringify(title)}))`, `the card for ${title}`);
     // Cards only select a window in Dynamic/Grid; measure the full-size chat in Focus.
     await cdp.evaluate(`(() => { const b = [...document.querySelectorAll('.wall-layout-segments button')].find(b => b.textContent.trim() === 'Focused'); if (b && b.getAttribute('aria-pressed') !== 'true') b.click(); return true; })()`);
     await showAllCards();
@@ -376,6 +378,10 @@ async function measureLatency({ appUrl, mock, api, bigChat }) {
   log(`browser ${app.browser.version || app.browser.bin}`);
 
   log('opening workspaces');
+  // A chat off the board takes the active zone's place. Start in the last zone,
+  // so chats 6 and up replace that one and chats 0 and 1 stay on the board,
+  // parked: a warm switch flips between them instead of remounting a chat.
+  await app.openChat(CFG.memory.working - 1);
   for (let i = CFG.chats.length - 1; i >= 0; i--) await app.openChat(i);
   await sleep(1000);
   // How long a frame asked for right after an empty one takes to start: a few
@@ -622,11 +628,12 @@ async function measureMemory({ appUrl, mock, api, ids }) {
   const workingAfterMs = Date.now() - t;
   const streamsStarted = mock.state.streamsStarted - before;
   await sleep(500);
-  writeFileSync(join(OUT, 'memory-wall.png'), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   const onBoard = await cdp.evaluate(`[...document.querySelectorAll('.panel')].filter((p) => p.checkVisibility()).map((p) => p.firstElementChild?.querySelector('span.truncate')?.textContent ?? null)`);
   log(`GPU board: ${beams} of ${working.length} windows working after ${workingAfterMs} ms (${streamsStarted} replies started); on the board ${JSON.stringify(onBoard)}`);
   const tiles = await tileMemory(cdp);
   const overdraw = await layerOverdraw(cdp);
+  // After the reads: a capture before them added about 220 MB to the tile figure on this board.
+  writeFileSync(join(OUT, 'memory-wall.png'), Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   for (const id of working) await api('chat:abort', id);
   await app.close();
   return {

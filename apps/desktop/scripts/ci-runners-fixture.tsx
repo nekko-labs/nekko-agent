@@ -66,6 +66,7 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'setup-no-xcode': async () => [offNoImage()],
   'setup-download': async () => noImageYet(),
   'setup-install': async () => noImageYet(),
+  'setup-refresh': async () => [view({})],
   'setup-waiting': async () => noImageYet(),
   'setup-cancel': async () => noImageYet(),
   'setup-failed': async () => noImageYet(),
@@ -86,7 +87,7 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
 };
 
 const image = (over: Partial<ImageView> = {}): ImageView => ({
-  state: 'none', stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+  state: 'none', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
 });
 const READY = image({ state: 'ready', info: { macos: '27.2', xcode: '27.2', actionsRunner: '2.330.0', built: '2026-11-01' } });
 const NONE = image();
@@ -101,6 +102,7 @@ const images: Record<string, ImageView | null> = {
   'first-visit-connected': NONE, 'setup-plan': NONE, 'setup-no-xcode': NONE,
   'setup-download': download, 'setup-cancel': download,
   'setup-install': image({ state: 'building', stage: 'install', doneStages: ['check', 'download'], fraction: 0.48 }),
+  'setup-refresh': image({ kind: 'refresh', state: 'building', stage: 'scripts', doneStages: ['check'], detail: 'Writing the new scripts into the copy', info: READY.info }),
   'setup-waiting': image({ state: 'waiting', stage: 'install', doneStages: ['check'], detail: 'Waiting for a free VM slot' }),
   'setup-failed': image({ state: 'failed', stage: 'xcode', doneStages: toXcode, error: 'This Mac has 18 GB free. Free up 42 GB, then try again.', log: 'runner image: Install took 240 s\nCannot copy Xcode: no space left on device', canResume: true }),
   'setup-refused-macos': image({ state: 'failed', stage: 'check', error: 'Update this Mac to macOS 27 to set it up here.', canResume: true }),
@@ -109,8 +111,8 @@ const images: Record<string, ImageView | null> = {
   'setup-rebuild': READY, ready: download, 'ready-left-off': download, 'ready-second-runner': download, 'card-ready': READY,
   'rebuild-cancelled': image({ ...download, info: READY.info }), 'connect-busy': NONE, 'image-retry': NONE,
 };
-const plans: Record<string, ImagePlan> = { 'setup-no-xcode': { xcode: null, freeGb: 369.4, needsGb: 110 } };
-const PLAN: ImagePlan = { xcode: '27.2', freeGb: 369.4, needsGb: 110 };
+const plans: Record<string, ImagePlan> = { 'setup-no-xcode': { xcode: null, freeGb: 369.4, needsGb: 110, cachedMacos: false } };
+const PLAN: ImagePlan = { xcode: '27.2', freeGb: 369.4, needsGb: 110, cachedMacos: false };
 
 const signedIn: GithubAccounts = { login: 'ermish', accounts: [
   { login: 'nekko-labs', kind: 'org', canGroup: true },

@@ -30,6 +30,7 @@ import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
+import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
 import { StyleSection } from './StyleSection.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
@@ -724,6 +725,7 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
     })),
   );
   const [busy, setBusy] = useState(false);
+  const [wiping, setWiping] = useState(false);
 
   const clear = async (scope: 'today' | 'month' | 'all', label: string) => {
     if (!window.confirm(`Delete ${label}? This can't be undone.`)) return;
@@ -745,17 +747,21 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
     pushToast('success', 'Settings reset to defaults.');
   };
 
-  const wipe = async () => {
-    if (!window.confirm('Delete EVERYTHING, all chats, settings, memory, and usage? This cannot be undone.')) return;
-    if (!window.confirm('Are you absolutely sure? This wipes all Nekko Agent data.')) return;
+  const wipe = async (models: boolean) => {
     setBusy(true);
-    const s = await window.nekko.wipeAllData();
-    onSettings(s);
-    await refreshSessions();
-    await refreshProviders();
-    useStore.setState({ activeSessionId: null });
-    setBusy(false);
-    pushToast('success', 'All data deleted.');
+    try {
+      const s = await wipeEverything(models);
+      onSettings(s);
+      await refreshSessions();
+      await refreshProviders();
+      useStore.setState({ activeSessionId: null });
+      setWiping(false);
+      pushToast('success', 'All data deleted.');
+    } catch (e) {
+      pushToast('error', `Delete everything stopped: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -780,17 +786,19 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
       <div className="mt-2 flex min-h-[36px] items-center justify-between gap-2">
         <div>
           <span className="text-sm">Delete everything</span>
-          <p className="text-2xs text-ink-faint">Chats, settings, memory, and usage analytics.</p>
+          <p className="text-2xs text-ink-faint">Chats, settings, sign-ins, keys, tasks, remote access and logs. Downloaded models only if you choose.</p>
         </div>
         <button
           className="btn py-1 text-xs text-white!"
           style={{ background: 'var(--danger)' }}
           disabled={busy}
-          onClick={wipe}
+          data-wipe
+          onClick={() => setWiping(true)}
         >
           Delete everything
         </button>
       </div>
+      {wiping && <DeleteEverythingDialog busy={busy} onCancel={() => setWiping(false)} onConfirm={(models) => void wipe(models)} />}
     </section>
   );
 }

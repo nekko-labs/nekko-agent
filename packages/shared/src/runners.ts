@@ -20,6 +20,8 @@ export interface RunnerSettings {
   runnerMemoryMb: number | null;
   /** Null: the daemon picks from the Mac's cores. */
   cpusPerVm: number | null;
+  /** VMs kept booted while idle, 0 to 2. Null or missing: the mode's default (`readyVms`). */
+  readyVms?: number | null;
   diskBudgetGb: number;
   diskFloorGb: number;
   maxJobMinutes: number;
@@ -161,13 +163,14 @@ const TICKED_BY_DEFAULT = 5;
 
 export const DEFAULT_RUNNER_SETTINGS: RunnerSettings = {
   enabled: false,
-  priority: 'doNotDisturb',
+  priority: 'balanced',
   keepAwake: 'whileActive',
   macosSlots: 1,
   linuxSlots: 0,
   memoryPerVmMb: 8192,
   runnerMemoryMb: null,
   cpusPerVm: null,
+  readyVms: null,
   diskBudgetGb: 150,
   diskFloorGb: 25,
   maxJobMinutes: 120,
@@ -184,6 +187,18 @@ export const DEFAULT_RUNNER_LABEL = 'nekko-cloud-mac';
 export const MAX_MACOS_SLOTS = 2;
 export const MAX_JOB_CHOICES = [30, 60, 120, 360];
 
+/** Balanced first: it is the default and the one to recommend. */
+export const PRIORITIES: Priority[] = ['balanced', 'doNotDisturb', 'runnerFirst'];
+/** The ready VM counts offered. Apple allows 2 macOS VMs per Mac, so never more. */
+export const READY_VM_CHOICES = [0, 1, 2];
+export const DEFAULT_READY_VMS = 1;
+
+/** VMs kept booted while idle, as nekkod's `warm_slots` reads the settings (before the slot limit). */
+export function readyVms(s: Pick<RunnerSettings, 'priority' | 'readyVms'>): number {
+  if (s.readyVms !== null && s.readyVms !== undefined) return Math.min(s.readyVms, MAX_MACOS_SLOTS);
+  return s.priority === 'doNotDisturb' ? 0 : s.priority === 'balanced' ? 1 : MAX_MACOS_SLOTS;
+}
+
 export const PRIORITY_LABELS: Record<Priority, string> = {
   doNotDisturb: "Do not disturb: Only run when I'm idle",
   balanced: 'Balanced: in the background',
@@ -191,8 +206,8 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 };
 export const PRIORITY_DESCRIPTIONS: Record<Priority, string> = {
   doNotDisturb: "Only when you're away and plugged in. Steps aside the moment you need the Mac.",
-  balanced: "Takes jobs while you work if there's headroom. Keeps one VM ready.",
-  runnerFirst: "For a docked Mac that mostly runs CI. All slots ready, jobs finish even when you're busy.",
+  balanced: "Takes jobs while you work if there's headroom.",
+  runnerFirst: "For a docked Mac that mostly runs CI. Jobs finish even when you're busy.",
 };
 export const KEEP_AWAKE_LABELS: Record<KeepAwake, string> = {
   systemDefault: 'System default',
@@ -361,9 +376,15 @@ export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Part
   ) as Partial<RunnerSettings>;
 }
 
-/** The image build's stages, in order. */
-export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'test', 'finish'] as const;
+/** The image build's stages, in order. A refresh runs only `REFRESH_STAGES`. */
+export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'scripts', 'test', 'finish'] as const;
 export type ImageStage = (typeof IMAGE_STAGES)[number];
+/** A build from Apple's image (with or without Xcode), or the image in use with Nekko's scripts replaced. */
+export type ImageKind = 'xcode' | 'macosOnly' | 'refresh';
+const REFRESH_STAGES: readonly ImageStage[] = ['check', 'scripts', 'test', 'finish'];
+const FULL_STAGES: readonly ImageStage[] = IMAGE_STAGES.filter((s) => s !== 'scripts');
+/** The stages a build of `kind` runs; a view with no build lists a full one. */
+export const imageStages = (kind: ImageKind | null): readonly ImageStage[] => (kind === 'refresh' ? REFRESH_STAGES : FULL_STAGES);
 export type ImageState = 'none' | 'ready' | 'building' | 'waiting' | 'failed';
 
 /** What the image holds, from the proof file `provision.sh` writes. */
@@ -376,6 +397,8 @@ export interface ImageInfo {
 
 export interface ImageView {
   state: ImageState;
+  /** The build under way or stopped, null with none. */
+  kind: ImageKind | null;
   /** The stage running, failed, waiting, or next to resume. */
   stage: ImageStage | null;
   doneStages: ImageStage[];
@@ -395,7 +418,7 @@ export interface ImageView {
 }
 
 export interface ImageBuildRequest {
-  kind: 'xcode' | 'macosOnly';
+  kind: ImageKind;
   /** The runner to turn on when the build finishes. */
   runnerId?: string;
   /** The mode that runner gets. */
@@ -412,6 +435,8 @@ export interface ImagePlan {
   /** Null before the daemon's first reading. */
   freeGb: number | null;
   needsGb: number;
+  /** A macOS image kept from an earlier build, reused while it is still Apple's newest. */
+  cachedMacos: boolean;
 }
 
 export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
@@ -420,6 +445,7 @@ export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
   install: 'Install macOS',
   xcode: 'Add Xcode and tools',
   lockdown: 'Lock the VM down',
+  scripts: "Update Nekko's scripts",
   test: 'Test a boot',
   finish: 'Turn the runner on',
 };
@@ -444,8 +470,9 @@ function stageNote(v: ImageView): string {
  * names the stage it waits for before the last one is listed as done, so order counts too.
  */
 export function imageStageRows(v: ImageView): StageRow[] {
-  const at = v.stage === null ? -1 : IMAGE_STAGES.indexOf(v.stage);
-  return IMAGE_STAGES.filter((s) => s !== 'finish').map((stage, i) => {
+  const stages = imageStages(v.kind);
+  const at = v.stage === null ? -1 : stages.indexOf(v.stage);
+  return stages.filter((s) => s !== 'finish').map((stage, i) => {
     const done = i < at || v.doneStages.includes(stage);
     const mark: StageMark = stage === v.stage && !done ? (v.state === 'failed' ? 'bad' : 'now') : done ? 'done' : 'todo';
     return { stage, label: IMAGE_STAGE_LABELS[stage], mark, note: mark === 'now' || mark === 'bad' ? stageNote(v) : '' };
@@ -502,6 +529,8 @@ export interface ConnectForm {
   allowPublic: boolean;
   label: string;
   priority: Priority;
+  /** VMs kept ready, 0 to 2. */
+  readyVms: number;
 }
 
 const NAME = /^[A-Za-z0-9._-]+$/;

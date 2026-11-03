@@ -24,4 +24,6 @@ area: models
 
 **What Anthropic allows** (as documented 2026-10-23, shown on the docs page as a table and a diagram): your own plan through the unmodified Claude Code, separate accounts for separate people or work, and any number of API keys or cloud accounts are fine; one person holding several Pro or Max plans to add up limits is "ask Anthropic first", since plan limits "assume ordinary, individual usage"; sharing a login, a third-party Claude sign-in or credential handling, and rotating accounts to get around rate limits are not allowed, and Nekko does none of them.
 
+**Nekko Cloud account** `[updated 2026-11-03]`: the one account that is not a provider. It is signed into and deleted in Settings > Sync (**Delete account**, with the account's email typed to confirm); see [End-to-end encrypted sync](../chat/end-to-end-encrypted-sync-for-pro-and-team.md). Provider accounts are removed by removing the provider, and Settings > System > Delete everything removes every sign-in on the computer.
+
 **Not yet:** Claude Agent chats on another computer (today an SSH terminal from Terminal → SSH hosts reaches another machine's Claude Code, as a terminal, not a chat); a live check with two signed-in Claude Code accounts on macOS and Windows.

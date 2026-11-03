@@ -92,6 +92,8 @@ struct NekkoApp: App {
             ChatStatusFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") {
             PurposeGroupsFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") {
+            ReplyVoicesFixture()
         } else { RootView() }
         #else
         RootView()
@@ -109,7 +111,7 @@ struct NekkoApp: App {
                 .onOpenURL { app.handle(url: $0) }
                 .task {
                     #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") { return }
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") || ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") { return }
                     #endif
                     app.start()
                 }

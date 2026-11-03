@@ -1,12 +1,14 @@
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerAccount, type SignInConfig } from "./account.js";
+import type { Alert } from "./alerts.js";
 import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
 import { registerFeedback } from "./feedback.js";
 import { registerMachines, type MachinesOptions } from "./machines.js";
 import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from "./confirmations.js";
 import { parseSignup, recordSignup } from "./signups.js";
+import type { DeleteAuthUser } from "./supabase.js";
 import { registerSync } from "./sync.js";
 
 export interface ServerOptions {
@@ -31,15 +33,33 @@ export interface ServerOptions {
   mailer?: Mailer;
   /** This service's public origin, for the links in emails. */
   publicUrl?: string;
-  logger?: boolean;
+  /** Deletes the Supabase Auth user when an account is deleted; without it the deletion waits for the retry. */
+  deleteAuthUser?: DeleteAuthUser;
+  /** Called on every 5xx answer (ALERT_EMAIL); summaries carry no request data. */
+  alert?: Alert;
+  /** Request logging, redacted (see LOG_SERIALIZERS); an object adds pino options such as a stream (tests). */
+  logger?: boolean | { stream: { write(line: string): void } };
 }
+
+/**
+ * What a request log line may hold: method, path, status and timing. No
+ * client IP or port, no host, and no query string (the confirm and
+ * unsubscribe links carry their tokens there). Errors keep their type,
+ * message and stack only, not a driver's extra fields (pg's `detail` quotes
+ * row values).
+ */
+export const LOG_SERIALIZERS = {
+  req: (req: { method: string; url: string }) => ({ method: req.method, path: req.url.split("?")[0] }),
+  err: (e: Error & { code?: unknown }) => ({ type: e.name, message: e.message, code: e.code, stack: e.stack ?? "" }),
+};
 
 export const DEFAULT_PUBLIC_URL = "https://nekko-agent-api.fly.dev";
 export const DEFAULT_ORIGINS = ["https://nekkoagent.com", "https://www.nekkoagent.com"];
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
   // Fly's proxy is the one hop in front of the service; trust it for the client IP.
-  const app = Fastify({ logger: opts.logger ?? false, trustProxy: (_addr: string, hop: number) => hop === 0, bodyLimit: 8 * 1024 });
+  const logger = opts.logger ? { serializers: LOG_SERIALIZERS, ...(typeof opts.logger === "object" ? opts.logger : {}) } : false;
+  const app = Fastify({ logger, trustProxy: (_addr: string, hop: number) => hop === 0, bodyLimit: 8 * 1024 });
   const origins = new Set(opts.allowedOrigins);
   const { max, windowMs } = opts.rateLimit ?? { max: 5, windowMs: 60 * 60 * 1000 };
   const hits = new Map<string, { count: number; resetAt: number }>();
@@ -51,6 +71,16 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
       reply.header("vary", "Origin");
     }
   });
+
+  // Fastify's own 404 logs the full URL, query string included.
+  app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: "not-found" }));
+
+  if (opts.alert) {
+    const alert = opts.alert;
+    app.addHook("onResponse", async (req, reply) => {
+      if (reply.statusCode >= 500) alert(`${req.method} ${req.routeOptions.url ?? "(no route)"} answered ${reply.statusCode}`);
+    });
+  }
 
   app.options("/v1/signups", async (req, reply) => {
     if (!req.headers.origin || !origins.has(req.headers.origin)) return reply.code(403).send();
@@ -129,7 +159,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   app.register(async (scope) => {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
     registerSync(scope, opts.db);
-    registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs });
+    registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser });
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
   registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 });

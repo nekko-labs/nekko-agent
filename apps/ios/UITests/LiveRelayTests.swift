@@ -620,14 +620,21 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(app.buttons["chat.planOpen"].waitForExistence(timeout: 10), "tapping it opens the whole plan")
         XCTAssertTrue(app.staticTexts["Open a pull request"].exists, "every step shows")
         XCTAssertTrue(app.staticTexts["Tucked behind the composer"].exists, "the step being worked shows its note")
-        // The finished first step is squeezed to its title; a tap opens its note and task link.
-        XCTAssertFalse(app.staticTexts["Found the message box"].exists, "a finished step is squeezed")
-        app.descendants(matching: .any)["chat.planStep.step_1"].firstMatch.tap()
+        // The finished first step has no results for the user (a task link says what the work is for),
+        // so it starts squeezed to its title; a tap opens its note and task link.
+        XCTAssertFalse(app.staticTexts["Found the message box"].exists, "a finished step without results is squeezed")
+        settle()
+        attach(app, "plan-2-open")
+        // Its title, not the row's centre: open, the centre is the task link's chip.
+        let first = app.staticTexts["Read the composer code"].firstMatch
+        first.tap()
         XCTAssertTrue(app.staticTexts["Found the message box"].waitForExistence(timeout: 5), "tapping a finished step opens it")
         XCTAssertTrue(app.staticTexts["NEK-412"].exists, "the task link sits on the first step")
         settle()
-        attach(app, "plan-2-open")
+        attach(app, "plan-3-step-open")
         auditAccessibility(app, "plan-open")
+        first.tap()
+        XCTAssertTrue(waitGone(app.staticTexts["Found the message box"], 5), "a second tap folds it again")
 
         app.buttons["chat.planOpen"].tap()
         XCTAssertTrue(folded.waitForExistence(timeout: 10), "the header folds it again")

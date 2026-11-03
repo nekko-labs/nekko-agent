@@ -1,3 +1,5 @@
+import { retryAuthDeletions } from "./account.js";
+import { type Alert, emailAlerter } from "./alerts.js";
 import { createPgDb } from "./db.js";
 import { expireDonations } from "./donations.js";
 import { migrate } from "./migrate.js";
@@ -6,7 +8,7 @@ import { sweepMachineHours } from "./machines.js";
 import { resendMailer } from "./confirmations.js";
 import { purgeSignups } from "./retention.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
-import { supabaseVerifier } from "./supabase.js";
+import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -15,18 +17,30 @@ if (!url) {
 }
 
 const db = createPgDb(url);
+// Beta signup confirmation emails go through Resend.
+const resendKey = process.env.RESEND_API_KEY;
+if (!resendKey) console.warn("RESEND_API_KEY not set: signups save but no confirmation emails are sent.");
+const mailer = resendKey ? resendMailer(resendKey) : undefined;
+// Error alerting: one email to ALERT_EMAIL per 15 minutes at most, on a 5xx or a failed background job.
+const alertTo = process.env.ALERT_EMAIL;
+if (alertTo && !mailer) console.warn("ALERT_EMAIL is set but RESEND_API_KEY is not: alerts are off.");
+const alert: Alert = alertTo && mailer ? emailAlerter(mailer, alertTo) : () => {};
+const failed = (job: string) => (e: unknown) => {
+  console.error(`${job} failed`, e);
+  alert(`${job} failed`);
+};
 // Migrations run on every start; they are idempotent and take an advisory lock.
 const applied = await migrate(db);
 if (applied.length) console.log(`migrations applied: ${applied.join(", ")}`);
 await expireDonations(db);
-setInterval(() => expireDonations(db).catch((e) => console.error("expiring donations failed", e)), 24 * 60 * 60 * 1000).unref();
+setInterval(() => expireDonations(db).catch(failed("expiring donations")), 24 * 60 * 60 * 1000).unref();
 
 // Signup retention (privacy policy): unconfirmed after 30 days and
 // unsubscribed rows are deleted. A failed run deletes nothing (one
 // transaction) and is retried on the next tick.
 const purge = () => purgeSignups(db)
   .then((n) => { if (n.unconfirmed || n.unsubscribed) console.log(`signups purged: ${n.unconfirmed} unconfirmed, ${n.unsubscribed} unsubscribed`); })
-  .catch((e) => console.error("purging signups failed", e));
+  .catch(failed("purging signups"));
 await purge();
 setInterval(purge, 6 * 60 * 60 * 1000).unref();
 
@@ -52,13 +66,16 @@ const machines = flyToken && flyApp
     }
   : undefined;
 // Machine hours are counted on every state change; this also counts long-running machines and stops the ones past their plan hours.
-if (machines) setInterval(() => sweepMachineHours(db, machines.driver).catch((e) => console.error("machine hours sweep failed", e)), 10 * 60 * 1000).unref();
+if (machines) setInterval(() => sweepMachineHours(db, machines.driver).catch(failed("machine hours sweep")), 10 * 60 * 1000).unref();
 if (!machines) console.warn("FLY_API_TOKEN / FLY_MACHINES_APP not set: Nekko Cloud machines are off (the /v1/machines routes are absent).");
-// Beta signup confirmation emails go through Resend.
-const resendKey = process.env.RESEND_API_KEY;
-if (!resendKey) console.warn("RESEND_API_KEY not set: signups save but no confirmation emails are sent.");
-const mailer = resendKey ? resendMailer(resendKey) : undefined;
-const app = buildServer({ db, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined });
+// Account deletion removes the Supabase Auth user with the project's service-role key (server-side only, never sent to an app).
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const deleteAuthUser = supabaseUrl && serviceRoleKey ? supabaseAdminDeleter(supabaseUrl, serviceRoleKey) : undefined;
+if (!deleteAuthUser) console.warn("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set: deleted accounts' Supabase users wait in pending_auth_deletions.");
+const retryAuth = () => retryAuthDeletions(db, deleteAuthUser).catch(failed("Supabase user deletion retry"));
+await retryAuth();
+setInterval(retryAuth, 60 * 60 * 1000).unref();
+const app = buildServer({ db, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

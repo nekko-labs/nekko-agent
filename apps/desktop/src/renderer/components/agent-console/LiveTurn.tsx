@@ -4,6 +4,7 @@ import { useLiveRun, type LiveRun } from '../../liveRuns.js';
 import { usePaneVisible } from '../../paneVisibility.js';
 import { ActivityGroup } from './ActivityGroup.js';
 import { MessageBubble } from './MessageBubble.js';
+import { midTurnVoice } from './transcript.js';
 
 /**
  * The reply being written right now: its working steps and its text, read
@@ -30,13 +31,16 @@ export const LiveTurn = memo(function LiveTurn({
   const live = useLiveRun(sessionId, !usePaneVisible());
   const run = live ?? held ?? undefined;
   if (!run) return null;
+  // The newest text has no voice yet: it may be a note or the reply. Its look
+  // settles once more follows it or the turn ends, and neither re-wraps it.
+  const last = run.blocks.length - 1;
   return (
     <>
       {run.blocks.map((block, i) => (
         <Fragment key={i}>
           {block.kind === 'activity'
             ? <ActivityGroup items={block.items} streaming={!!live && i === run.blocks.length - 1} turnRunning={!!live} toolActivity={live?.activity} pendingCallId={pendingCallId} />
-            : <MessageBubble message={{ id: `live_${i}`, role: 'assistant', content: block.text, createdAt: 0 }} onImageClick={onImageClick} chronological />}
+            : <MessageBubble message={{ id: `live_${i}`, role: 'assistant', content: block.text, createdAt: 0 }} voice={i < last ? midTurnVoice(block.text) : !live && run.tools.length ? 'reply' : undefined} onImageClick={onImageClick} chronological />}
         </Fragment>
       ))}
     </>
