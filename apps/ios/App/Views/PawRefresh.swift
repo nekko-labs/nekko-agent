@@ -182,40 +182,54 @@ enum PawArt {
     }
 }
 
-/// What the refresh control shows on a screen without a toolbar mascot: a cat of its
-/// own, its paw and the spinner, in a 120 x 44 box at 1.4x. With a toolbar mascot,
-/// nothing: the mascot draws the spinner beside itself.
+/// What the refresh control shows on a screen without a toolbar mascot: the
+/// mascot at the top, with the paw emerging from under its right cheek and
+/// reaching down to the spinner, matching the toolbar mascot's grab. With a
+/// toolbar mascot, nothing: the mascot draws the spinner beside itself.
 struct PawRefreshArt: View {
     var pull: PawPull
+    /// The whole control. Tall enough for the "!" above the cat, the cat itself,
+    /// and the spinner swinging in below it. The refresh control is roughly 60 pt
+    /// tall when refreshing, so the extra ~16 pt we need is let through by the
+    /// probe's clipsToBounds = false.
+    static let size = CGSize(width: 110, height: 76)
+    /// Room above the cat for the "!".
+    static let lift: CGFloat = 8
 
     var body: some View {
         TimelineView(.animation(paused: !pull.animating || pull.reduceMotion)) { timeline in
             let pose = pull.pose(at: timeline.date)
             let turn = pull.turn(at: timeline.date)
-            ZStack(alignment: .leading) {
+            ZStack(alignment: .top) {
+                Canvas { context, size in draw(pose, turn: turn, size: size, in: &context) }
+                    .frame(width: Self.size.width, height: Self.size.height)
                 if !pull.mascot {
-                    Canvas { context, _ in draw(pose, turn: turn, in: &context) }
                     PixelCat(happy: pull.smiling, shocked: pull.shocked,
                              blink: !pull.animating && !pull.smiling && pull.progress < 1)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 36, height: 36)
+                        .offset(y: Self.lift)
                 }
             }
-            .frame(width: 120, height: 44)
-            .scaleEffect(1.4)
-            .frame(width: 168, height: 62)
+            .frame(width: Self.size.width, height: Self.size.height)
             .opacity(pull.animating ? 1 : min(1, Double(pull.progress) * 1.5))
         }
         .accessibilityHidden(true)
     }
 
-    private func draw(_ pose: PawPose, turn: Double, in context: inout GraphicsContext) {
-        // The arm comes out from behind the cat's cheek and arcs up and over the spinner.
-        let shoulder = CGPoint(x: 30, y: 28)
-        let at = pose.scoop(shoulder: shoulder, far: CGPoint(x: 70, y: 27), home: CGPoint(x: 50, y: 27),
-                            side: CGVector(dx: 0, dy: -1), radius: 10)
-        if pose.alarm { PawArt.alarm(x: 38, top: 0, height: 8, in: context) }
+    private func draw(_ pose: PawPose, turn: Double, size: CGSize, in context: inout GraphicsContext) {
+        guard !pull.mascot else { return }
+        // Mascot sits top-center, lifted by `lift`; the arm comes out from behind
+        // its right cheek and the spinner swings in from below and to the right.
+        let (cat, top) = (size.width / 2, Self.lift)
+        let shoulder = CGPoint(x: cat + 7, y: top + 26)
+        let at = pose.scoop(shoulder: shoulder,
+                            far: CGPoint(x: cat + 10, y: top + 48),
+                            home: CGPoint(x: cat + 22, y: top + 30),
+                            side: CGVector(dx: 1, dy: 0), radius: 11)
+        if pose.alarm { PawArt.alarm(x: cat + 14, top: top - 8, height: 10, in: context) }
         var spinner = context
         spinner.translateBy(x: at.center.x, y: at.center.y)
+        spinner.scaleBy(x: 1.2, y: 1.2)
         PawArt.spinner(turn: turn, ink: pull.ink, opacity: pose.spinnerOpacity, in: spinner)
         PawArt.paw(shoulder: shoulder, elbow: at.elbow, tip: at.tip, in: context)
     }
@@ -306,12 +320,17 @@ final class PawProbeView: UIView {
         }
         self.control = control
         control.tintColor = .clear
+        // The vertical layout stacks the cat over the spinner, so the content
+        // can be taller than the control's visible bounds; the control and the
+        // host both let the overflow show instead of cropping the cat's head off.
+        control.clipsToBounds = false
         // Kept so the hosted view keeps updating; the control only holds its view.
         let host = UIHostingController(rootView: PawRefreshArt(pull: pull))
         host.view.tag = Self.tag
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
         host.view.accessibilityElementsHidden = true
+        host.view.clipsToBounds = false
         host.view.frame = control.bounds
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         control.addSubview(host.view)

@@ -54,6 +54,10 @@ final class AppModel {
     var newChatRequested = false
     /// "Nekko, open settings" from a chat's dictation: show Settings once.
     var openSettings = false
+    /// A tap on the banner's *Pair again* when the pairing key no longer
+    /// matches: push PairView once so the user can rescan the code without
+    /// digging through Settings.
+    var openPair = false
     /// First run, step 3 (IO-31): shown right after the first pairing, where
     /// notification permission is asked.
     var showNotificationStep = false
