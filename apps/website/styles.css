@@ -1244,3 +1244,30 @@ html { -webkit-tap-highlight-color: transparent; }
   .dl-main-v { display: none; }
   .dl-main { padding-left: 16px; }
 }
+
+/* ---- Plum palette: plum (#190019) as the main colour, rose (#DFB6B2) for
+   the light touches. Dark uses the app's stock Dark surfaces with white
+   text; White keeps black text. ---- */
+:root {
+  --indigo: #190019; --lavender: #dfb6b2; --aqua: #dfb6b2; --mint: #f2dcd9; --ice: #f7e9e7;
+  --grad: linear-gradient(115deg, #190019 0%, #4a2a48 100%);
+  --grad-text: linear-gradient(110deg, #190019 0%, #4a2a48 100%);
+  --accent: #190019; --accent-2: #190019;
+  --band-indigo: #190019;
+  --grad-fun: linear-gradient(100deg, #190019 0%, #3a1438 100%); --btn-ink: #dfb6b2;
+}
+:root[data-theme='white'] { --ink: #000000; }
+:root[data-theme='dark'] {
+  --bg: #0c0c11; --bg-2: #16161c; --ink: #ffffff; --muted: #a3a1b0;
+  --line: #26262f; --accent: #dfb6b2; --accent-2: #dfb6b2;
+  --sticker: #dfb6b2; --peach-soft: #190019;
+  --mascot-line: #dfb6b2; --mascot-eyes: #dfb6b2;
+  --grad-text: linear-gradient(110deg, #dfb6b2 0%, #f2dcd9 100%);
+}
+:root[data-theme='dark'] body {
+  background:
+    radial-gradient(60% 900px at 12% 0%, rgba(25, 0, 25, 0.9), transparent 70%),
+    radial-gradient(60% 800px at 20% 100%, rgba(25, 0, 25, 0.7), transparent 70%),
+    #0c0c11;
+}
+:root[data-theme='dark'] .window-mock { background: #16161c; }
