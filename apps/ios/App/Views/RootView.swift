@@ -82,6 +82,11 @@ struct RootView: View {
                 app.openSettings = false
                 open(.settings)
             }
+            .onChange(of: app.openPair) { _, on in
+                guard on else { return }
+                app.openPair = false
+                open(.pair)
+            }
             .onChange(of: app.openChat) { _, id in
                 guard let id else { return }
                 // A `?listen=1` for another chat is stale once this one opens.
@@ -400,9 +405,20 @@ struct ConnectionBanner: View {
                             .accessibilityIdentifier("open-tailscale")
                             .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
                     }
+                    // When the pairing key no longer matches, the only fix is
+                    // to scan a fresh code from the computer; push PairView
+                    // direct instead of just pointing the user at Settings.
+                    if offersPairAgain {
+                        Button("Pair again") { app.openPair = true }
+                            .font(.footnote.weight(.semibold))
+                            .accessibilityIdentifier("banner.pair-again")
+                            .accessibilityHint("Opens the pairing screen so you can scan a fresh code from your computer.")
+                    }
                 }
                 Spacer(minLength: 0)
-                if store.conn == .connecting || store.conn == .offline {
+                // Retry won't help when the pair key is bad: hide it so the
+                // Pair again button is the obvious next step.
+                if (store.conn == .connecting || store.conn == .offline), !offersPairAgain {
                     Button("Retry") { store.reconnect() }.font(.footnote.weight(.semibold))
                 } else if store.conn == .denied, store.safetyExit?.computerId == store.activeId, let id = store.activeId {
                     // Remote access turned back on at the computer: dial again.
@@ -429,6 +445,15 @@ struct ConnectionBanner: View {
         let n = store.outbox.count
         if n == 0 { return "" }
         return n == 1 ? " 1 prompt waits on this iPhone and goes when it’s back." : " \(n) prompts wait on this iPhone and go when it’s back."
+    }
+
+    /// The pairing key no longer matches, or the computer refused the key
+    /// outright: pair again is the only fix, so put the button right in the
+    /// banner.
+    private var offersPairAgain: Bool {
+        if store.connDetail == RelayStatus.badPairingKey { return true }
+        if store.conn == .denied, store.denied == .badKey { return true }
+        return false
     }
 
     private var line: (text: String, color: Color, icon: String)? {
