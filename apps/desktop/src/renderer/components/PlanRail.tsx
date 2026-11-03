@@ -3,10 +3,11 @@ import { MonitorArtifacts } from './MonitorArtifacts.js';
 import { MonitorProject } from './MonitorProject.js';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { QueuedPrompt, Session } from '@nekko-agent/shared';
-import { DEFAULT_ORCHESTRATION, getStrategy, queueItemPayload } from '@nekko-agent/shared';
+import { DEFAULT_ORCHESTRATION, agentMonitorRelevant, getStrategy, queueItemPayload } from '@nekko-agent/shared';
 import { useLiveRunsVersion, getLiveRun, runningSessionIds } from '../liveRuns.js';
 import { childActivity, activitySentence } from '../subagentActivity.js';
 import { useStore } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import { ChatIcon, ControlPanelIcon, MinimizeIcon, RobotIcon } from '../icons.js';
 
 /** Artifacts, project, active delegates and queued follow-ups. The plan itself rides the composer (PlanSheet). */
@@ -19,10 +20,38 @@ function queueLabel(item: QueuedPrompt): string {
 }
 
 
+/**
+ * Opens the Agent Monitor. It sits in the chat's header, never over the
+ * transcript. In Simple it shows only while agents work in the background.
+ */
+export function AgentMonitorButton({ sessionId, subAgents, backgroundTasks, planSteps }: {
+  sessionId: string;
+  subAgents: readonly { id: string }[];
+  backgroundTasks: number;
+  planSteps: { done: number; total: number };
+}) {
+  useLiveRunsVersion();
+  const runningSubAgents = subAgents.filter((c) => !!getLiveRun(c.id)).length;
+  if (!useShown('agent-monitor', { agents: agentMonitorRelevant({ runningSubAgents, backgroundTasks }) })) return null;
+  return (
+    <button
+      type="button"
+      className="plan-rail-toggle"
+      data-plan-toggle
+      onClick={() => useStore.getState().setPlanRail(sessionId, true)}
+      title="Show Agent Monitor: plan, sub-agents and queue"
+      aria-label="Show Agent Monitor"
+    >
+      <ControlPanelIcon className="h-4 w-4" /><span>Agent Monitor</span>
+      {planSteps.total > 0 && <span className="plan-rail-toggle-count tabular-nums">{planSteps.done}/{planSteps.total}</span>}
+    </button>
+  );
+}
+
 export function PlanRail({ sessionId, session, onMinimize }: {
   sessionId: string;
   session: Session | null;
-  /** Closes the panel; the floating Agent Monitor button then reopens it. */
+  /** Closes the panel; the header's Agent Monitor button then reopens it. */
   onMinimize?: () => void;
 }) {
   const sessions = useStore((s) => s.sessions);
@@ -55,8 +84,8 @@ export function PlanRail({ sessionId, session, onMinimize }: {
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
         <ControlPanelIcon className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink-soft">Agent Monitor</span>
-        {/* Minimizing hides the panel and brings back the chat area's floating
-            Agent Monitor button, which reopens it. */}
+        {/* Minimizing hides the panel and brings back the header's Agent
+            Monitor button, which reopens it (in Simple, while agents work). */}
         {onMinimize && <button type="button" className="-mr-1 grid h-5 w-5 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink" data-plan-minimize onClick={onMinimize} title="Minimize Agent Monitor" aria-label="Minimize Agent Monitor"><MinimizeIcon className="h-3.5 w-3.5" /></button>}
       </header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">

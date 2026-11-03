@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { PrInfo, PrAction, PrDiff, PrChecks } from '@nekko-agent/shared';
 import { getExecutionMode, parsePrUrl } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import { subscribePrPolling } from '../prPolling.js';
 import { PrProgress } from './WorkProgress.js';
 import { BranchIcon, CheckIcon, CloseIcon } from '../icons.js';
@@ -61,12 +62,14 @@ export const MERGED_CARD_STYLE: React.CSSProperties = {
  */
 export function PrCard({ url, info, event = 'created', sessionId }: { url: string; info?: PrInfo; event?: 'created' | 'open' | 'closed' | 'merged'; sessionId?: string }) {
   const spooky = useStore((s) => s.settings?.themePreset === 'autumn');
+  // Hidden in Settings > Simple mode, an open PR stays a plain milestone in the chat.
+  const showStatus = useShown('pr-status', { pr: true });
   const parsed = parsePrUrl(url);
   const label = info ? info.owner + '/' + info.repo + '#' + info.number : parsed ? parsed.owner + '/' + parsed.repo + '#' + parsed.number : url;
   // The created card goes live only when the poller still reports it open:
   // merged/closed events keep their own historical rows a few lines down, so
   // "created" must stay as a static milestone once resolved.
-  if ((event === 'created' || event === 'open') && info?.state === 'open' && sessionId) {
+  if (showStatus && (event === 'created' || event === 'open') && info?.state === 'open' && sessionId) {
     return <OpenPrCard url={url} info={info} sessionId={sessionId} label={label} />;
   }
   const merged = event === 'merged';

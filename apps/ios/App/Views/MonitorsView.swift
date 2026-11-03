@@ -3,8 +3,8 @@ import NekkoProtocol
 import SwiftUI
 
 /// The computer's Monitors (FD-5), a phone edition of the desktop's Agent
-/// Monitor dock: Hardware, Running, Needs you (Allow / Deny / answer here,
-/// through the chat's own calls) and Automations. A pane on a folding phone
+/// Monitor dock: Hardware, Needs you (Allow / Deny / answer here, through the
+/// chat's own calls) and Running while anything is in them, and Automations. A pane on a folding phone
 /// or iPad, and a row at the bottom of the chat list everywhere else. Reads
 /// `monitor:summary` every 10 s while on screen, never in the background.
 struct MonitorsView: View {
@@ -28,9 +28,10 @@ struct MonitorsView: View {
     var body: some View {
         List {
             ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-            if let model { sections(model) } else { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
+            if let model { sections(model).listRowBackground(Color.clear) } else { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
         }
-        .listStyle(.insetGrouped)
+        // Flat rows on the coloured ground, like the chat list.
+        .listStyle(.plain)
         .appBackground()
         .navigationTitle("Monitors")
         .navigationBarTitleDisplayMode(.inline)
@@ -137,11 +138,9 @@ struct MonitorsView: View {
 
     // MARK: Needs you
 
+    /// Shown only while something needs you, like Running below.
     @ViewBuilder private func needsYou(_ m: MonitorModel) -> some View {
-        Section {
-            if m.needsYou.isEmpty {
-                Text("Nothing needs you.").font(.subheadline).foregroundStyle(palette.inkSoft)
-            }
+        if !m.needsYou.isEmpty { Section {
             ForEach(m.needsYou) { item in
                 VStack(alignment: .leading, spacing: 8) {
                     Button { open(item.sessionId) } label: {
@@ -189,8 +188,8 @@ struct MonitorsView: View {
                 .accessibilityIdentifier("monitors.needsYou")
             }
         } header: {
-            GroupHeading("Needs you", count: m.needsYou.isEmpty ? "" : "\(m.needsYou.count)")
-        }
+            GroupHeading("Needs you", count: "\(m.needsYou.count)")
+        } }
     }
 
     private func riskChip(_ risk: Severity) -> some View {
@@ -210,10 +209,7 @@ struct MonitorsView: View {
     // MARK: Running
 
     @ViewBuilder private func running(_ m: MonitorModel) -> some View {
-        Section {
-            if m.running.isEmpty {
-                Text("Nothing is running.").font(.subheadline).foregroundStyle(palette.inkSoft)
-            }
+        if !m.running.isEmpty { Section {
             ForEach(m.running) { r in
                 Button { open(r.id) } label: {
                     HStack(spacing: 10) {
@@ -232,8 +228,8 @@ struct MonitorsView: View {
                 .accessibilityIdentifier("monitors.running")
             }
         } header: {
-            GroupHeading("Running", count: m.running.isEmpty ? "" : "\(m.running.count)")
-        }
+            GroupHeading("Running", count: "\(m.running.count)")
+        } }
     }
 
     @ViewBuilder private func stepIcon(_ step: MonitorSummary.Step) -> some View {

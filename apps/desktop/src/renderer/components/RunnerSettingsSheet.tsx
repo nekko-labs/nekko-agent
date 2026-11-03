@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import {
   KEEP_AWAKE_LABELS,
   MAX_JOB_CHOICES,
+  PRIORITIES,
   PRIORITY_LABELS,
+  READY_VM_CHOICES,
+  readyVms,
   VPN_DIRECT_LABEL,
   formatMinutes,
   settingsPatch,
@@ -11,7 +14,6 @@ import {
   type HostView,
   type ImageView,
   type KeepAwake,
-  type Priority,
   type RunnerSettings,
   type RunnerView,
 } from '@nekko-agent/shared';
@@ -100,7 +102,6 @@ const Unsampled = ({ error }: { error: string | null }) => <span className="text
 
 const Val = ({ children }: { children: React.ReactNode }) => <span className="ml-3 whitespace-nowrap font-mono text-xs text-ink-soft">{children}</span>;
 
-const PRIORITIES: Priority[] = ['doNotDisturb', 'balanced', 'runnerFirst'];
 const KEEP_AWAKE: KeepAwake[] = ['systemDefault', 'whileActive', 'always'];
 
 /** The settings form (mockup 4); pure so tests render it statically. */
@@ -142,6 +143,14 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
       </Row>
       <Row label="Keep awake" hint="sleep normally, or stay up for jobs">
         <Seg label="Keep awake" value={draft.keepAwake} options={KEEP_AWAKE.map((k) => ({ value: k, label: KEEP_AWAKE_LABELS[k] }))} onChange={(v) => set('keepAwake', v)} />
+      </Row>
+      <Row label="VMs kept ready" hint="booted, so a job starts at once">
+        <Seg
+          label="VMs kept ready"
+          value={readyVms(draft)}
+          options={READY_VM_CHOICES.map((n) => ({ value: n, label: String(n), disabled: n > draft.macosSlots }))}
+          onChange={(v) => set('readyVms', v)}
+        />
       </Row>
       <Row label="macOS slots" hint="Apple allows 2 per Mac">
         <Seg

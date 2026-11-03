@@ -20,6 +20,8 @@ export interface RunnerSettings {
   runnerMemoryMb: number | null;
   /** Null: the daemon picks from the Mac's cores. */
   cpusPerVm: number | null;
+  /** VMs kept booted while idle, 0 to 2. Null or missing: the mode's default (`readyVms`). */
+  readyVms?: number | null;
   diskBudgetGb: number;
   diskFloorGb: number;
   maxJobMinutes: number;
@@ -48,7 +50,13 @@ export type SlotLimit = 'appleCap' | 'otherApps' | 'memory';
 export type RunnerState = 'off' | 'waiting' | 'ready' | 'running' | 'draining' | 'cleaning' | 'error';
 export type SlotState = 'starting' | 'ready' | 'running' | 'draining' | 'cleaning';
 
-export interface JobRef { repo: string; runId: number; jobId: number; workflow: string; job: string }
+export interface PrRef { number: number; url: string }
+export interface JobRef {
+  repo: string; runId: number; jobId: number; workflow: string; job: string;
+  /** The job's page; empty when the provider gave none. Absent from older daemons. */
+  url?: string;
+  pr?: PrRef | null;
+}
 export interface SlotView {
   state: SlotState;
   job: JobRef | null;
@@ -80,6 +88,14 @@ export interface AuditLine {
   seconds: number;
   /** `Reason` names, or the daemon's own (`slept`, `maxJobTime`, ...). */
   reason: string[];
+  /** The provider's id for the job, for `runner:jobLog`. Older daemons send none of these four. */
+  jobId?: number | null;
+  url?: string | null;
+  pr?: PrRef | null;
+  /** When the VM entered each state, oldest first; `ts` is when it was deleted. */
+  events?: { ts: number; state: SlotState }[];
+  /** The VM's name when nekkod kept its console log, for `runner:vmLog`. */
+  vm?: string | null;
 }
 export interface RunnerView {
   config: RunnerConfig;
@@ -161,13 +177,14 @@ const TICKED_BY_DEFAULT = 5;
 
 export const DEFAULT_RUNNER_SETTINGS: RunnerSettings = {
   enabled: false,
-  priority: 'doNotDisturb',
+  priority: 'balanced',
   keepAwake: 'whileActive',
   macosSlots: 1,
   linuxSlots: 0,
   memoryPerVmMb: 8192,
   runnerMemoryMb: null,
   cpusPerVm: null,
+  readyVms: null,
   diskBudgetGb: 150,
   diskFloorGb: 25,
   maxJobMinutes: 120,
@@ -184,6 +201,18 @@ export const DEFAULT_RUNNER_LABEL = 'nekko-cloud-mac';
 export const MAX_MACOS_SLOTS = 2;
 export const MAX_JOB_CHOICES = [30, 60, 120, 360];
 
+/** Balanced first: it is the default and the one to recommend. */
+export const PRIORITIES: Priority[] = ['balanced', 'doNotDisturb', 'runnerFirst'];
+/** The ready VM counts offered. Apple allows 2 macOS VMs per Mac, so never more. */
+export const READY_VM_CHOICES = [0, 1, 2];
+export const DEFAULT_READY_VMS = 1;
+
+/** VMs kept booted while idle, as nekkod's `warm_slots` reads the settings (before the slot limit). */
+export function readyVms(s: Pick<RunnerSettings, 'priority' | 'readyVms'>): number {
+  if (s.readyVms !== null && s.readyVms !== undefined) return Math.min(s.readyVms, MAX_MACOS_SLOTS);
+  return s.priority === 'doNotDisturb' ? 0 : s.priority === 'balanced' ? 1 : MAX_MACOS_SLOTS;
+}
+
 export const PRIORITY_LABELS: Record<Priority, string> = {
   doNotDisturb: "Do not disturb: Only run when I'm idle",
   balanced: 'Balanced: in the background',
@@ -191,8 +220,8 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 };
 export const PRIORITY_DESCRIPTIONS: Record<Priority, string> = {
   doNotDisturb: "Only when you're away and plugged in. Steps aside the moment you need the Mac.",
-  balanced: "Takes jobs while you work if there's headroom. Keeps one VM ready.",
-  runnerFirst: "For a docked Mac that mostly runs CI. All slots ready, jobs finish even when you're busy.",
+  balanced: "Takes jobs while you work if there's headroom.",
+  runnerFirst: "For a docked Mac that mostly runs CI. Jobs finish even when you're busy.",
 };
 export const KEEP_AWAKE_LABELS: Record<KeepAwake, string> = {
   systemDefault: 'System default',
@@ -329,12 +358,36 @@ export function auditText(l: AuditLine, rerun = true): string {
   const why = l.reason.length ? ` (${auditWhy(l.reason)})` : '';
   const took = formatMinutes(l.seconds);
   switch (l.result) {
-    case 'finished': return `${name} · finished · ${took} · VM deleted`;
+    case 'finished': return `${name} · finished · ${took}`;
     case 'lost': return `${name} · lost${why}${rerun ? ' · re-run if allowed' : ''}`;
     default:
-      if (l.reason.includes('maxJobTime')) return `${name} · stopped at the max job time · VM deleted`;
-      return `${name} · stopped after ${took}${why} · VM deleted`;
+      if (l.reason.includes('maxJobTime')) return `${name} · stopped at the max job time`;
+      return `${name} · stopped after ${took}${why}`;
   }
+}
+
+const EVENT_LABELS: Record<SlotState, string> = {
+  starting: 'Starting a VM',
+  ready: 'VM online, waiting for a job',
+  running: 'Running the job',
+  draining: 'Finishing: a condition stopped being met',
+  cleaning: 'Stopping the VM',
+};
+
+/** A recent job's VM, step by step, ending when the VM was deleted. Empty for lines with no VM. */
+export function auditTimeline(l: AuditLine): { ts: number; text: string }[] {
+  if (l.result === 'notRemoved') return [];
+  const why = l.reason.length ? ` (${auditWhy(l.reason)})` : '';
+  const end = {
+    finished: 'The job finished and the VM powered off',
+    stopped: `Stopped${why}`,
+    lost: `Lost${why}`,
+    failedToStart: `The VM failed to start${why}`,
+  }[l.result];
+  return [
+    ...(l.events ?? []).map((e) => ({ ts: e.ts, text: EVENT_LABELS[e.state] ?? 'Working' })),
+    { ts: l.ts, text: `${end}; VM deleted` },
+  ];
 }
 
 /** The network fact: trust plus which network, so "Not trusted" always says which one. */
@@ -426,8 +479,8 @@ export interface ImagePlan {
 
 export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
   check: 'Check this Mac',
-  download: 'Download macOS',
-  install: 'Install macOS',
+  download: 'Download the macOS image',
+  install: 'Install the macOS VM',
   xcode: 'Add Xcode and tools',
   lockdown: 'Lock the VM down',
   scripts: "Update Nekko's scripts",
@@ -514,6 +567,8 @@ export interface ConnectForm {
   allowPublic: boolean;
   label: string;
   priority: Priority;
+  /** VMs kept ready, 0 to 2. */
+  readyVms: number;
 }
 
 const NAME = /^[A-Za-z0-9._-]+$/;

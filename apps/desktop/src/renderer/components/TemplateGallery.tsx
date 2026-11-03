@@ -85,7 +85,7 @@ export function TemplateGallery({
   const examples = WORKFLOW_TEMPLATES.filter((t) => !t.featured && t.id !== 'blank');
   const blank = WORKFLOW_TEMPLATES.find((t) => t.id === 'blank');
   return (
-    <Modal title="New workflow" onClose={onClose} align="top" className="w-full max-w-2xl px-4">
+    <Modal title="New scheduled task" onClose={onClose} align="top" className="w-full max-w-2xl px-4">
       <div className="card max-h-[86vh] overflow-y-auto p-5">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
@@ -102,7 +102,7 @@ export function TemplateGallery({
 
         <h2 className="mt-5 text-base font-semibold">Build your own</h2>
         <p className="mt-0.5 text-xs text-ink-faint">
-          Examples of a pattern to edit, or a blank workflow. These open the editor.
+          Examples of a pattern to edit, or a blank scheduled task. These open the editor.
         </p>
         <div className="mt-3 space-y-2">
           {examples.map((t) => (
@@ -116,7 +116,7 @@ export function TemplateGallery({
           ))}
           {blank && (
             <button className="card w-full border-dashed px-4 py-3 text-left transition hover:bg-(--surface-2)" onClick={() => onCustomize(blank)}>
-              <span className="text-sm font-semibold">Blank workflow</span>
+              <span className="text-sm font-semibold">Blank scheduled task</span>
               <p className="mt-1 text-xs leading-snug text-ink-faint">{blank.description}</p>
             </button>
           )}
@@ -348,7 +348,7 @@ export function TemplateSetup({
         </label>
 
         <div className="mt-5 flex items-center gap-2">
-          <button className="btn btn-ghost" title="Open it in the workflow editor to change the steps" onClick={() => onCustomize(seed())}>
+          <button className="btn btn-ghost" title="Open it in the editor to change the steps" onClick={() => onCustomize(seed())}>
             Customize
           </button>
           <button className="btn btn-ghost ml-auto" onClick={onClose}>Cancel</button>

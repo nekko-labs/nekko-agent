@@ -8,7 +8,6 @@ import { MacSetupSheet } from '../components/MacSetupSheet.js';
 import { connectToWorkflow } from '../components/RunnerReady.js';
 import { GithubStepArt, MacStepArt } from '../components/RunnerStepArt.js';
 import { CheckIcon, PlugIcon } from '../icons.js';
-import { hasAppChrome } from '../chrome.js';
 
 export type RunnersState = { kind: 'loading' } | { kind: 'unavailable'; message: string } | { kind: 'ready'; views: RunnerView[] };
 
@@ -30,7 +29,7 @@ const StepPanel = ({ step, art, title, blurb, next, children }: { step: number; 
  */
 export function CiRunnersFirstVisit({ connected = false, canResume = false, onConnect, onSetup }: { connected?: boolean; canResume?: boolean; onConnect(): void; onSetup?(): void }) {
   return (
-    <div className="mx-auto mt-4 flex max-w-170 flex-col gap-2.5 rounded-[14px] border p-4" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
+    <div className="mt-2 flex max-w-170 flex-col gap-2.5 rounded-[14px] border p-4" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
       <h2 className="text-[15.5px] font-semibold">Use this Mac as a CI runner</h2>
       <p className="text-[13.5px] text-ink-soft">Run your GitHub Actions jobs here, each in a throwaway VM that is deleted afterward. Your own work comes first.</p>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(230px,100%),1fr))] gap-3.5">
@@ -96,8 +95,8 @@ export const retryDelay = (attempt: number) => Math.min(60_000, 2000 * 2 ** atte
 
 const nowSecs = () => Date.now() / 1000;
 
-/** The Workflows tab's CI runners section: this Mac's runners from nekkod. */
-export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.ReactNode; now?: () => number }) {
+/** The CI runners section at the foot of the Scheduled Tasks list: this Mac's runners from nekkod. */
+export function CiRunnersView({ now = nowSecs }: { now?: () => number }) {
   const [state, setState] = useState<RunnersState>({ kind: 'loading' });
   const [clock, setClock] = useState(now);
   const [connecting, setConnecting] = useState(false);
@@ -158,20 +157,20 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
   const settingsView = state.kind === 'ready' ? state.views.find((v) => v.config.id === settingsFor) : undefined;
   const setupView = state.kind === 'ready' ? state.views.find((v) => v.config.id === setup?.id) : undefined;
 
+  // A daemon with no runner channel is not a Mac that can host one: leave the section out rather than explain it in every list.
+  if (state.kind === 'unavailable' && state.message.startsWith('unknown channel')) return null;
+
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto p-4">
-      <div className="mx-auto max-w-5xl">
-        <div className="flex flex-wrap items-center gap-2">
-          {!hasAppChrome && <h1 className="view-title">CI runners</h1>}
-          {segment}
-          {hasRunners && (
-            <button className="btn btn-outline ml-auto py-1!" onClick={() => setConnecting(true)}>
-              <PlugIcon className="h-3.5 w-3.5" /> Connect GitHub
-            </button>
-          )}
-        </div>
-        {runnersBody(state, { now: clock, image, onConnect: () => setConnecting(true), onSettings: setSettingsFor, onSetup: (id) => setSetup({ id, rebuild: false }), beginReply })}
+    <section data-ci-runners>
+      <div className="flex flex-wrap items-baseline gap-2 py-1">
+        <h2 className="text-sm font-semibold">CI runners</h2>
+        {hasRunners && (
+          <button className="btn btn-outline ml-auto py-1!" onClick={() => setConnecting(true)}>
+            <PlugIcon className="h-3.5 w-3.5" /> Connect GitHub
+          </button>
+        )}
       </div>
+      {runnersBody(state, { now: clock, image, onConnect: () => setConnecting(true), onSettings: setSettingsFor, onSetup: (id) => setSetup({ id, rebuild: false }), beginReply })}
       {connecting && (
         // shortcut: views do not carry the GitHub app id yet, so connect always asks for the key; pass a real lookup once they do.
         <ConnectRunnerSheet
@@ -217,6 +216,6 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
           beginReply={beginReply}
         />
       )}
-    </div>
+    </section>
   );
 }

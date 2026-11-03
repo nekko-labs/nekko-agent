@@ -1,6 +1,6 @@
 use super::*;
 use crate::runner::egress::Egress;
-use crate::runner::provider::Minted;
+use crate::runner::provider::{Minted, PrRef};
 use crate::runner::signals::HostState;
 use crate::runner::store::{GithubLink, GitlabLink, Link};
 use crate::runner::vm::GITHUB_SEED;
@@ -186,7 +186,14 @@ struct ProvState {
 struct FakeProvider(Arc<Mutex<ProvState>>, Log);
 
 fn job_ref() -> JobRef {
-    JobRef { repo: "acme/app".into(), run_id: 7, job_id: 70, workflow: "ci".into(), job: "build".into() }
+    JobRef {
+        repo: "acme/app".into(),
+        run_id: 7,
+        job_id: 70,
+        workflow: "ci".into(),
+        job: "build".into(),
+        ..Default::default()
+    }
 }
 
 impl Provider for FakeProvider {
@@ -935,6 +942,11 @@ async fn views_carry_the_last_five_jobs() {
             result: AuditResult::Finished,
             seconds: 1,
             reason: vec![],
+            job_id: None,
+            url: None,
+            pr: None,
+            events: vec![],
+            vm: None,
         };
         h.sup.audit(&line);
     }
@@ -1338,6 +1350,46 @@ async fn job_taken_before_the_first_poll_is_audited() {
     assert_eq!((audit.len(), audit[0].result), (1, AuditResult::Stopped));
     h.tick_for(60).await;
     assert_eq!(h.count("rerun"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn job_that_ended_between_polls_is_named_with_its_links_and_timeline() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.tick_for(5).await;
+    h.status(RunnerStatus::Idle);
+    h.tick_for(15).await;
+    assert_eq!(h.view().slots[0].state, SlotState::Ready);
+    // The job started and ended between two polls: no poll saw it busy.
+    let pr = PrRef { number: 42, url: "https://github.com/acme/app/pull/42".into() };
+    let job =
+        JobRef { url: "https://github.com/acme/app/actions/runs/7/job/70".into(), pr: Some(pr.clone()), ..job_ref() };
+    h.prov.0.lock().unwrap().job = Some(Ok(Some(job)));
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    let a = &h.audit()[0];
+    assert_eq!((a.result, a.job.as_deref(), a.job_id), (AuditResult::Finished, Some("build"), Some(70)));
+    assert_eq!(
+        (a.url.as_deref(), a.pr.as_ref()),
+        (Some("https://github.com/acme/app/actions/runs/7/job/70"), Some(&pr))
+    );
+    assert_eq!(a.events.iter().map(|e| e.state).collect::<Vec<_>>(), [SlotState::Starting, SlotState::Ready]);
+    assert!(a.events.iter().all(|e| e.ts <= a.ts));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_finished_vm_keeps_its_console_log() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.tick_for(5).await;
+    h.status(RunnerStatus::Busy);
+    h.tick_for(15).await;
+    let name = h.vms().pop().unwrap();
+    std::fs::write(h.dir.path().join("vms").join(&name).join("console.log"), "runner exited with 0\n").unwrap();
+    h.status(RunnerStatus::Idle);
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_eq!(h.audit()[0].vm.as_deref(), Some(name.as_str()));
+    assert_eq!(audit::vm_log(h.dir.path(), &name).unwrap(), "runner exited with 0\n");
+    assert!(!h.vms().contains(&name));
 }
 
 #[tokio::test(start_paused = true)]

@@ -44,6 +44,7 @@ mod hub;
 mod hypergate;
 mod image_turns;
 mod installs;
+mod keys;
 mod library;
 mod local_relay;
 mod logs;
@@ -188,7 +189,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         });
     }
     let settings = settings::Settings::new(data_dir.clone(), hub.clone());
-    let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone()));
+    let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone(), settings.store.clone()));
     // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
     match claude_plan::migrate(&data_dir, &settings.store, nekko_oauth::now_ms()) {
         Ok(done) if !done.is_empty() => eprintln!(
@@ -223,7 +224,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let publish_hub = hub.clone();
         let busy = running.clone();
         nekko_cloud::Cloud::new(nekko_cloud::Options {
-            vault: nekko_cloud::vault::default_vault(&dir),
+            // Tests: a test run writes nothing to the login keychain (as computers.rs).
+            vault: if cfg!(debug_assertions) && std::env::var("NEKKO_FILE_VAULT").as_deref() == Ok("1") {
+                Box::new(nekko_cloud::vault::FileVault::new(dir.join("secrets.json")))
+            } else {
+                nekko_cloud::vault::default_vault(&dir)
+            },
             dir,
             api_url: feedback::cloud_url(),
             device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),

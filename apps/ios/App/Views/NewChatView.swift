@@ -79,14 +79,14 @@ struct NewChatView: View {
                         .accessibilityIdentifier("newChat.offlineNote")
                 }
                 if let refusal { note(Label(refusal, systemImage: "exclamationmark.bubble"), color: palette.danger) }
+                // Above the box, as nothing goes below it (#1599).
+                if let cloudError { Text(cloudError).font(.footnote).foregroundStyle(palette.danger) }
+                if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
                 // The desktop's clean start (2026-10-26): a peeking Nekko and a question over a glass message box.
                 NewChatGreeting(paused: !text.isEmpty || !images.isEmpty)
                     .padding(.top, 36)
                     .zIndex(1)
                 composer.padding(.top, -14)
-                options
-                if let cloudError { Text(cloudError).font(.footnote).foregroundStyle(palette.danger) }
-                if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
             }
             .frame(maxWidth: 600)
             .padding(.horizontal, 16)
@@ -131,7 +131,7 @@ struct NewChatView: View {
         .onChange(of: store.defaults) { _, _ in pickDefault() }
     }
 
-    /// The message, its photos, Add and Start, on frosted glass.
+    /// The message, its photos, Add and Start, and below them the chat's options, on frosted glass.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
             TextField("What should your computer do?", text: $text, axis: .vertical).lineLimit(3...10)
@@ -171,6 +171,8 @@ struct NewChatView: View {
                 Spacer(minLength: 0)
                 startButton
             }
+            // The model, effort and where the chat runs: the box's bottom rows, never below it (#1599).
+            options
         }
         .padding(12)
         .background {
@@ -214,12 +216,15 @@ struct NewChatView: View {
     private var options: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Button { showModels = true } label: {
-                    chip(model.map { modelName($0) } ?? String(localized: "Choose a model"), icon: "cpu", faint: model == nil)
+                // Simple mode may hide the model; with none chosen yet the picker stays.
+                if app.prefs.shows("model") || model == nil {
+                    Button { showModels = true } label: {
+                        chip(model.map { modelName($0) } ?? String(localized: "Choose a model"), icon: "cpu", faint: model == nil)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("newChat.model")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("newChat.model")
-                if let model {
+                if let model, app.prefs.shows("effort") {
                     Menu {
                         Picker("Effort", selection: effortChoice) {
                             ForEach(Effort.levels(for: model.1), id: \.self) { e in
@@ -260,17 +265,20 @@ struct NewChatView: View {
                     chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? String(localized: "No folder"), icon: "folder")
                 }
                 .accessibilityIdentifier("newChat.folder")
-                Menu {
-                    Picker("Tools", selection: toolsChoice) {
-                        ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                            Text(m == .guardrails ? String(localized: "\(modeName(m)) (Recommended)") : modeName(m)).tag(m)
+                if app.prefs.shows("asks") {
+                    Menu {
+                        Picker("Tools", selection: toolsChoice) {
+                            ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
+                                let name = app.prefs.expertMode ? modeName(m) : SimpleMode.asksName(m)
+                                Text(m == .guardrails ? String(localized: "\(name) (Recommended)") : name).tag(m)
+                            }
                         }
+                    } label: {
+                        chip(app.prefs.expertMode ? modeName(selectedTools) : SimpleMode.asksName(selectedTools), icon: "checkmark.shield")
                     }
-                } label: {
-                    chip(modeName(selectedTools), icon: "checkmark.shield")
+                    .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
+                    .accessibilityIdentifier("newChat.tools")
                 }
-                .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
-                .accessibilityIdentifier("newChat.tools")
             }
             if cloud.account?.canSync == true {
                 // A chat can run on a Nekko Cloud machine instead of a paired computer (decision 0017).
@@ -304,7 +312,7 @@ struct NewChatView: View {
         }
         .font(.footnote.weight(.medium)).lineLimit(1)
             .foregroundStyle(faint ? palette.inkSoft : palette.ink)
-            .padding(.horizontal, 12).frame(minHeight: 34)
+            .padding(.horizontal, 10).frame(minHeight: 34)
             .background(palette.surface, in: Capsule())
             .overlay(Capsule().stroke(palette.line))
             .frame(minHeight: 44).contentShape(Rectangle())

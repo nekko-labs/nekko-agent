@@ -343,6 +343,10 @@ export const IpcChannels = {
   runnerUpdate: 'runner:update',
   runnerRemove: 'runner:remove',
   runnerSetEnabled: 'runner:setEnabled',
+  /** The end of a recent job's log, from GitHub or GitLab. */
+  runnerJobLog: 'runner:jobLog',
+  /** What a recent job's VM wrote to its console, kept by nekkod. */
+  runnerVmLog: 'runner:vmLog',
   /** The click-through GitHub connect, confirmed through `runner:connect`. */
   runnerGithubAccounts: 'runner:githubAccounts',
   runnerGithubStart: 'runner:githubStart',
@@ -446,6 +450,7 @@ export const IpcChannels = {
   cloudBeginOAuth: 'cloud:beginOAuth',
   cloudCancelOAuth: 'cloud:cancelOAuth',
   cloudSignOut: 'cloud:signOut',
+  cloudDeleteAccount: 'cloud:deleteAccount',
   syncTurnOn: 'sync:turnOn',
   syncConfirmRecoveryKey: 'sync:confirmRecoveryKey',
   syncRestore: 'sync:restore',
@@ -540,6 +545,8 @@ export interface NekkoApi {
   cloudBeginOAuth(provider: import('./cloud.js').CloudOAuthProvider): Promise<{ authUrl: string }>;
   cloudCancelOAuth(): Promise<import('./cloud.js').CloudStatus>;
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
+  /** Erase the Nekko Cloud account (`DELETE /v1/account`), then forget it on this device. */
+  cloudDeleteAccount(): Promise<import('./cloud.js').CloudStatus>;
   /** Settings > Connections: the switch and each connection's counts. */
   connectionsStatus(): Promise<import('./connections.js').ConnectionsStatus>;
   /** A connection's recent events, newest first. */
@@ -912,7 +919,8 @@ export interface NekkoApi {
   /** The fonts folder (created if missing) and the font files in it, base64 (Settings > Style). */
   listFonts(): Promise<{ dir: string; fonts: { family: string; file: string; data: string }[] }>;
   /** Delete everything: chats, settings, memory, and usage. */
-  wipeAllData(): Promise<AppSettings>;
+  /** Delete everything this app keeps on this computer; `models` also deletes downloaded models and runtimes. */
+  wipeAllData(opts?: { models?: boolean }): Promise<AppSettings>;
   listTools(): Promise<Array<{ name: string; description: string }>>;
 
   /** Open a native file picker (desktop) → chosen paths; browser → prompt. */
@@ -1121,6 +1129,10 @@ export interface NekkoApi {
   updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
   removeRunner(id: string): Promise<null>;
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
+  /** The end of a recent job's log; rejects with a sentence when it cannot be read. */
+  runnerJobLog(id: string, jobId: number): Promise<string>;
+  /** A recent job's VM console log, by the line's `vm`; rejects with a sentence. */
+  runnerVmLog(id: string, vm: string): Promise<string>;
   /** Accounts `gh` is signed in to; empty without `gh`. */
   githubAccounts(): Promise<GithubAccounts>;
   /** `url` is the page to open in the browser, or null when GitHub has nothing left to do. */
@@ -1182,6 +1194,8 @@ export interface NekkoApi {
   forgetComputer(id: string): Promise<import('./computers.js').ComputerStatus[]>;
   /** Its live hardware readings, for the Monitors dock. */
   computerStats(id: string): Promise<{ system: import('./monitor.js').SystemStats | null; gpu: import('./models.js').GpuStats | null }>;
+  /** Its Model Server, as the phone view reports it. Null with Read off over there. */
+  computerEngineStatus(id: string): Promise<{ running: boolean; resident: unknown[] } | null>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
   /** Set the icon in that machine's own settings; empty removes it. */

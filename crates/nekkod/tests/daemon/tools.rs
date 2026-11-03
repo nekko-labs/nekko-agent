@@ -203,8 +203,10 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     let (_, connected) = post(d.port, "mcp:hypergate:connect", json!([port]), Some(TOKEN)).await;
     assert_eq!(connected["token"], "agent");
     assert_eq!(connected["agent"], "Nekko Agent");
-    // Saved here, beside the user's own servers.
-    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    // Saved here, beside the user's own servers (the token in the keystore).
+    let (_, saved) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert!(file["mcpServers"][1].get("token").is_none(), "{file}");
     let servers = saved["mcpServers"].as_array().unwrap();
     assert_eq!(servers[0], mine);
     assert_eq!(

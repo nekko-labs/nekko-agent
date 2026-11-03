@@ -4,6 +4,7 @@ import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/sha
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
 import { sheetPlan } from '../claudeAgentPlan.js';
+import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
 import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
@@ -171,8 +172,9 @@ function SubagentSummary({ children }: { children: Child[] }) {
  * sub-agents as one count, then the step's PRs, task links, verification and
  * files. Clicking it opens the whole plan, every step with its own chips
  * underneath: task links, sub-agents (each opens its chat), verification, CI
- * checks, PRs and files. Finished steps squeeze to their title and open while
- * the pointer or keyboard focus is anywhere on the sheet.
+ * checks, PRs and files. Each step with details opens and closes on its own
+ * title: unfinished steps start open, finished ones closed, except the last
+ * step that has results for the user (PRs, files, links), which starts open.
  */
 export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpenChild, initiallyOpen = true }: {
   sessionId: string;
@@ -188,6 +190,10 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   // The whole plan is open by default; the user folds it to one line when they
   // want the chrome out of the way.
   const [collapsed, setCollapsed] = useState(initiallyOpen === false);
+  // The user's own open/close per step; unset steps follow the defaults below.
+  const [stepOpen, setStepOpen] = useState<Record<string, boolean>>({});
+  // These chips are pull requests, so the condition holds wherever they would draw.
+  const prsShown = useShown('pr-status', { pr: true });
   const sessions = useStore((s) => s.sessions);
   const providers = useStore((s) => s.providers);
   const liveVersion = useLiveRunsVersion();
@@ -240,7 +246,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   // for, else the step that opened the PR, else whatever is running now.
   const checker = plan.filter(step => step.verification).pop()?.id;
   const ci = new Map<string, PrInfo[]>();
-  for (const pr of prs) {
+  for (const pr of prsShown ? prs : []) {
     if (pr.state !== 'open' || !pr.checkProgress?.items.length) continue;
     const id = checker ?? [...links].find(([, own]) => own.prs.includes(pr.url))?.[0] ?? current?.id;
     if (id) ci.set(id, [...(ci.get(id) ?? []), pr]);
@@ -258,12 +264,13 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   const artifactChip = (artifact: ChatArtifact) => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? artifact.live.host + artifact.live.route : artifact.filename}</button>;
   const kids = (own?: PlanStepLinks) => (own?.subagents ?? []).map(id => childById.get(id)).filter((c): c is Child => !!c);
   const position = plan.indexOf(current) + 1;
+  const resultStep = plan.filter(step => links.get(step.id)?.prs.length || links.get(step.id)?.artifacts.length).pop()?.id;
 
   if (collapsed) {
     const own = links.get(current.id);
     const allKids = [...childById.values()];
     // The current step's PRs, else the newest PR the chat opened, so a finished plan still shows where it landed.
-    const shownPrs = own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
+    const shownPrs = !prsShown ? [] : own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
     const chips = [
       allKids.length > 0 && <SubagentSummary key="subagents" children={allKids} />,
       current.verification && <VerificationChip key="verify" step={current} />,
@@ -301,28 +308,36 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         const own = links.get(step.id);
         const checks = ci.get(step.id) ?? [];
         const stepKids = kids(own);
-        const chips = !!(own?.prs.length || own?.artifacts.length || own?.projects.length || stepKids.length || step.verification || checks.length);
+        const chips = !!((prsShown && own?.prs.length) || own?.artifacts.length || own?.projects.length || stepKids.length || step.verification || checks.length);
         const detail = step.verification?.detail || step.note;
         const squeezed = step.status === 'done' || step.status === 'skipped';
-        return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id} tabIndex={squeezed && (detail || chips) ? 0 : undefined}>
+        const more = !!(detail || chips);
+        const isOpen = more && (stepOpen[step.id] ?? (!squeezed || step.id === resultStep));
+        const line = <>
+          <Kind kind={step.kind} current={step.status === 'active'} />
+          <span className={`min-w-0 flex-1 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
+          <Pass step={step} />
+        </>;
+        return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id} data-open={isOpen || undefined}>
           <StepMark status={step.status} paused={paused} />
           <div className="min-w-0">
-            <p className="plan-sheet-line">
-              <Kind kind={step.kind} current={step.status === 'active'} />
-              <span className={`min-w-0 flex-1 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
-              <Pass step={step} />
-            </p>
-            {(detail || chips) && <div className="plan-sheet-more" data-plan-more><div>
+            {more
+              ? <button type="button" className="plan-sheet-line plan-sheet-step-toggle" aria-expanded={isOpen} onClick={() => setStepOpen(o => ({ ...o, [step.id]: !isOpen }))}>
+                {line}
+                <svg className="plan-sheet-step-caret" aria-hidden="true" viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 4 4 4-4 4" /></svg>
+              </button>
+              : <p className="plan-sheet-line">{line}</p>}
+            {more && <div className="plan-sheet-more" data-plan-more hidden={!isOpen}>
               {detail && <p className="truncate text-xs text-ink-faint" title={detail}>{detail}</p>}
               {chips && <div className="plan-sheet-chips">
                 {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
                 {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}
                 {step.verification && <VerificationChip step={step} />}
-                {own?.prs.map(prChip)}
+                {prsShown && own?.prs.map(prChip)}
                 {checks.map(pr => <CiChips key={pr.url} info={pr} />)}
                 {own?.artifacts.map(artifactChip)}
               </div>}
-            </div></div>}
+            </div>}
           </div>
         </li>;
       })}

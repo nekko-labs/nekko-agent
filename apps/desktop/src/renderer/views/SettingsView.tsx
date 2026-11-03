@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, promptCachingEnabled, RUN_POLICY_OPTIONS } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
@@ -9,7 +9,7 @@ import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ChatIcon, ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -30,7 +30,10 @@ import { WallLayoutSettings } from './WallLayoutSettings.js';
 import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
+import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
 import { StyleSection } from './StyleSection.js';
+import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
+import { useExpertMode, useShown } from '../simpleMode.js';
 
 const SANDBOX_OPTS: Array<{ value: SandboxMode; label: string; desc: string }> = [
   { value: 'workspace-jail', label: 'Workspace jail', desc: 'File access is confined to your added folders.' },
@@ -53,6 +56,7 @@ export const SETTINGS_GROUPS = [
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
   { id: 'computers', label: 'Computers', icon: ComputerIcon },
   { id: 'style', label: 'Style', icon: SlidersIcon },
+  { id: 'simple', label: 'Simple mode', icon: ChatIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
   { id: 'connections', label: 'Connections', icon: GlobeIcon },
@@ -68,6 +72,22 @@ function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.
       <h2 id={`settings-${id}-title`} className="settings-group-title">{label}</h2>
       {children}
     </div>
+  );
+}
+
+/**
+ * Developer settings in Simple mode: folded behind one row rather than gone,
+ * so they stay one click away (Settings > Simple mode, Advanced settings).
+ */
+function AdvancedFold({ children }: { children: React.ReactNode }) {
+  const shown = useShown('set-tools');
+  const [open, setOpen] = useState(false);
+  if (shown || open) return <>{children}</>;
+  return (
+    <section className="card mt-6 flex flex-wrap items-center gap-3 p-5" data-advanced-fold>
+      <p className="min-w-0 flex-1 text-xs text-ink-soft">Git management, project management, pull requests, the terminal and MCP servers are kept for Expert.</p>
+      <button type="button" className="btn btn-outline px-3 py-1 text-xs" onClick={() => setOpen(true)}>Show advanced settings</button>
+    </section>
   );
 }
 
@@ -88,6 +108,10 @@ export function SettingsView() {
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<SettingsGroupId>('general');
+  // Simple says nothing about computers until one is connected; Expert is where the first one is paired.
+  const [expert] = useExpertMode();
+  const hasComputers = useStore((s) => s.computers.length > 0);
+  const computersPage = expert || hasComputers;
   const jumping = useRef(0);
   // Section spy: it measures the page, so at most once a frame, not per scroll event.
   const spyFrame = useRef(0);
@@ -159,7 +183,7 @@ export function SettingsView() {
         </div>
         <div className="flex flex-col gap-6 md:flex-row md:gap-8">
           <nav aria-label="Settings sections" className="settings-nav" data-settings-search>
-            {SETTINGS_GROUPS.map((g) => (
+            {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
               <button
                 key={g.id}
                 type="button"
@@ -296,11 +320,14 @@ export function SettingsView() {
               {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
               <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
             </SettingsGroup>
-            <SettingsGroup id="computers">
+            {computersPage && <SettingsGroup id="computers">
               <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
-            </SettingsGroup>
+            </SettingsGroup>}
             <SettingsGroup id="style">
               <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="simple">
+              <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="agents">
               {/* Chat modes */}
@@ -420,6 +447,7 @@ export function SettingsView() {
               <ErrorBoundary label="Connections"><ConnectionsSettings settings={settings} update={update} /></ErrorBoundary>
             </SettingsGroup>
             <SettingsGroup id="tools">
+              <AdvancedFold>
               <ErrorBoundary label="Git management"><GitManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Project management"><ProjectManagementSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Pull requests"><PullRequestsSection settings={settings} update={update} /></ErrorBoundary>
@@ -427,6 +455,7 @@ export function SettingsView() {
               <ErrorBoundary label="Terminal"><TerminalSection settings={settings} update={update} /></ErrorBoundary>
               {/* MCP servers */}
               <ErrorBoundary label="MCP servers"><McpSection settings={settings} update={update} reload={reload} /></ErrorBoundary>
+              </AdvancedFold>
             </SettingsGroup>
             <SettingsGroup id="system">
               {/* Updates */}
@@ -672,7 +701,8 @@ function BackupSection({ settings, onSettings }: { settings: AppSettings; onSett
   const { pushToast, refreshProviders } = useStore(useShallow((s) => ({ pushToast: s.pushToast, refreshProviders: s.refreshProviders })));
 
   const exportSettings = () => {
-    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+    // API keys and tokens stay on this computer, in its keystore.
+    const blob = new Blob([JSON.stringify(withoutSecrets(settings), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -692,7 +722,7 @@ function BackupSection({ settings, onSettings }: { settings: AppSettings; onSett
         const parsed = JSON.parse(await file.text());
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Not a settings object');
         if (!window.confirm('Import these settings? This overwrites your current configuration.')) return;
-        const next = await window.nekko.updateSettings(parsed);
+        const next = await window.nekko.updateSettings(keepSecrets(parsed, settings));
         onSettings(next);
         await refreshProviders();
         pushToast('success', 'Settings imported.');
@@ -706,7 +736,7 @@ function BackupSection({ settings, onSettings }: { settings: AppSettings; onSett
   return (
     <section className="card mt-5 p-5">
       <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">Backup &amp; restore</h2></div>
-      <p className="mt-1 text-xs text-ink-faint">Export your configuration (providers, guardrails, prompts, MCP servers…) to a JSON file, or restore it on another machine.</p>
+      <p className="mt-1 text-xs text-ink-faint">Export your configuration (providers, guardrails, prompts, MCP servers…) to a JSON file, or restore it on another machine. The file leaves out API keys and tokens: they stay in this computer's keystore, so add them again on a new machine. Importing here keeps the keys you already have.</p>
       <div className="mt-3 flex gap-2">
         <button className="btn btn-outline py-1 text-xs" onClick={exportSettings}>Export settings</button>
         <button className="btn btn-outline py-1 text-xs" onClick={importSettings}>Import settings…</button>
@@ -724,6 +754,7 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
     })),
   );
   const [busy, setBusy] = useState(false);
+  const [wiping, setWiping] = useState(false);
 
   const clear = async (scope: 'today' | 'month' | 'all', label: string) => {
     if (!window.confirm(`Delete ${label}? This can't be undone.`)) return;
@@ -745,17 +776,21 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
     pushToast('success', 'Settings reset to defaults.');
   };
 
-  const wipe = async () => {
-    if (!window.confirm('Delete EVERYTHING, all chats, settings, memory, and usage? This cannot be undone.')) return;
-    if (!window.confirm('Are you absolutely sure? This wipes all Nekko Agent data.')) return;
+  const wipe = async (models: boolean) => {
     setBusy(true);
-    const s = await window.nekko.wipeAllData();
-    onSettings(s);
-    await refreshSessions();
-    await refreshProviders();
-    useStore.setState({ activeSessionId: null });
-    setBusy(false);
-    pushToast('success', 'All data deleted.');
+    try {
+      const s = await wipeEverything(models);
+      onSettings(s);
+      await refreshSessions();
+      await refreshProviders();
+      useStore.setState({ activeSessionId: null });
+      setWiping(false);
+      pushToast('success', 'All data deleted.');
+    } catch (e) {
+      pushToast('error', `Delete everything stopped: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -780,17 +815,19 @@ function DataSection({ onSettings }: { onSettings: (s: AppSettings) => void }) {
       <div className="mt-2 flex min-h-[36px] items-center justify-between gap-2">
         <div>
           <span className="text-sm">Delete everything</span>
-          <p className="text-2xs text-ink-faint">Chats, settings, memory, and usage analytics.</p>
+          <p className="text-2xs text-ink-faint">Chats, settings, sign-ins, keys, tasks, remote access and logs. Downloaded models only if you choose.</p>
         </div>
         <button
           className="btn py-1 text-xs text-white!"
           style={{ background: 'var(--danger)' }}
           disabled={busy}
-          onClick={wipe}
+          data-wipe
+          onClick={() => setWiping(true)}
         >
           Delete everything
         </button>
       </div>
+      {wiping && <DeleteEverythingDialog busy={busy} onCancel={() => setWiping(false)} onConfirm={(models) => void wipe(models)} />}
     </section>
   );
 }
@@ -1420,7 +1457,7 @@ export function AutomationsSection({ settings, update }: { settings: AppSettings
     <section id="automations" className="card mt-5 p-5" aria-labelledby="automations-heading" data-settings-automations>
       <h2 id="automations-heading" className="font-semibold">Automations</h2>
       <p className="mt-1 text-xs text-ink-faint">
-        Scheduled tasks and workflows on a model that runs on this computer compete with you for its GPU, memory and fans.
+        Scheduled tasks on a model that runs on this computer compete with you for its GPU, memory and fans.
         Choose when they may start. Each automation can override this in its editor.
       </p>
       <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
@@ -1499,7 +1536,7 @@ export function ClaudePlanFeaturesSection({ settings, update }: { settings: AppS
     <section id="claude-plan-features" className="card mt-5 p-5" aria-labelledby="claude-plan-features-heading" data-settings-claude-plan>
       <h2 id="claude-plan-features-heading" className="font-semibold">Claude plan features</h2>
       <p className="mt-1 text-xs text-ink-faint">
-        On a Claude plan (Pro, Max or Team) through Claude Code, Nekko keeps these off: scheduled tasks, workflows and auto-continue,
+        On a Claude plan (Pro, Max or Team) through Claude Code, Nekko keeps these off: scheduled tasks and auto-continue,
         Nekko's own tools inside a Claude chat, and the project note Nekko adds to a chat.
         With an Anthropic API key or a cloud account they are always on.
       </p>

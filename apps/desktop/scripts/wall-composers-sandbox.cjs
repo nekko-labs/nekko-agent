@@ -71,8 +71,9 @@ app.whenReady().then(async () => {
     }
     await check('no shared wall composer', `!document.querySelector('[data-wall-composer].wall-composer, .wall-composer-row')`);
     await check('every agent window has its own composer', `['a','b','c'].every(id => !!document.querySelector('[data-grid-cell="chat:' + id + '"] .composer'))`);
-    await check('only the selected window composer is open', `!document.querySelector('[data-grid-cell="chat:a"] [data-resting]') && !!document.querySelector('[data-grid-cell="chat:b"] [data-resting]') && !!document.querySelector('[data-grid-cell="chat:c"] [data-resting]')`);
-    await check('resting composer is one row', `(() => { const r = document.querySelector('[data-grid-cell="chat:b"] .composer')?.getBoundingClientRect(); return !!r && r.height < 64; })()`);
+    await check('every window keeps the model on its composer bar', `['a','b','c'].every(id => !!document.querySelector('[data-grid-cell="chat:' + id + '"] [data-composer-foot] [aria-haspopup="listbox"]'))`);
+    const heightsBefore = await run(`(() => ['a','b','c'].map(id => Math.round(document.querySelector('[data-grid-cell="chat:' + id + '"] .composer')?.getBoundingClientRect().height ?? 0)))()`);
+    report.composerHeightsBefore = heightsBefore;
     await check('header: window number, then Nekko (the agent icon) with its badge, no robot', `(() => { const icon = document.querySelector('[data-grid-cell="chat:a"] [data-pane-title-strip]'); const n = icon?.querySelector('.wall-number'), m = icon?.querySelector('[data-wall-mascot="working"] .wall-mascot-badge'); return !!n && n.textContent === '1' && !!m && !!(n.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING) && !icon.querySelector('.numbered-agent-icon'); })()`);
     await check('plan folds to the working step with its kind and pass', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet][data-folded]'); return !!s && s.textContent.includes('Build') && s.textContent.includes('Pass 2') && s.textContent.includes('2 of 4'); })()`);
     await check('folded sub-agents read 1 running, 2 done', `document.querySelector('[data-grid-cell="chat:a"] [data-plan-chip="subagents"]')?.getAttribute('title') === 'Sub-agents: 1 running, 2 done'`);
@@ -88,7 +89,9 @@ app.whenReady().then(async () => {
     for (const type of ['mouseDown', 'mouseUp']) win.webContents.sendInputEvent({ type, ...at, button: 'left', clickCount: 1 });
     await sleep(400);
     await shot('wall-select-b');
-    await check('picking another window opens its composer and rests the first', `!document.querySelector('[data-grid-cell="chat:b"] [data-resting]') && !!document.querySelector('[data-grid-cell="chat:a"] [data-resting]')`);
+    const heightsAfter = await run(`(() => ['a','b','c'].map(id => Math.round(document.querySelector('[data-grid-cell="chat:' + id + '"] .composer')?.getBoundingClientRect().height ?? 0)))()`);
+    report.composerHeightsAfter = heightsAfter;
+    await check('picking another window leaves every composer the same height', String(JSON.stringify(heightsBefore) === JSON.stringify(heightsAfter) && heightsBefore.every((h) => h > 0)));
   } catch (e) {
     report.errors.push(String(e && e.stack || e));
     process.exitCode = 1;

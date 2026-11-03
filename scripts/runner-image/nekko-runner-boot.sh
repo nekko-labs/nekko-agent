@@ -11,6 +11,9 @@ NEKKO_SEED_WAIT="${NEKKO_SEED_WAIT:-120}"
 NEKKO_LOGIN_WAIT="${NEKKO_LOGIN_WAIT:-300}"
 NEKKO_POLL="${NEKKO_POLL:-2}"
 MAX_SEED_BYTES=65536
+# sudo swaps the caller's PATH for its secure_path, which leaves out Homebrew. Jobs expect `brew`
+# on the PATH, as on GitHub's hosted Macs.
+RUNNER_PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 conf_dir="$NEKKO_RUNNER_HOME/.nekko"
 stay_up=0
@@ -19,6 +22,15 @@ stay_up=0
 seed_copy=""
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
+
+# Everything below, the runner's output included, also goes to the host's VM log through the
+# virtio console when the helper attached one. Only what this log already holds: never the seed.
+for console in /dev/cu.virtio*; do
+  if [ -c "$console" ] && [ -w "$console" ]; then
+    exec > >(tee -a "$console") 2>&1
+    break
+  fi
+done
 
 finish() {
   if [ -n "$seed_copy" ]; then rm -f "$seed_copy"; fi
@@ -93,14 +105,14 @@ case "$name" in
     seed_copy=""
     log "starting the GitHub Actions runner"
     # The JIT config on argv shows in ps inside this single-tenant guest; it is single-use, so that is intended.
-    launchctl asuser "$uid" sudo -u "$NEKKO_RUNNER_USER" -H -- "$NEKKO_RUNNER_HOME/actions-runner/run.sh" --jitconfig "$jit"
+    launchctl asuser "$uid" sudo -u "$NEKKO_RUNNER_USER" -H -- /usr/bin/env PATH="$RUNNER_PATH" "$NEKKO_RUNNER_HOME/actions-runner/run.sh" --jitconfig "$jit"
     rc=$?
     unset jit
     ;;
   gitlab-runner.toml)
     seed_copy=""
     log "starting the GitLab runner"
-    launchctl asuser "$uid" sudo -u "$NEKKO_RUNNER_USER" -H -- /usr/local/bin/gitlab-runner run-single -c "$conf_dir/gitlab-runner.toml" -r nekko --max-builds 1
+    launchctl asuser "$uid" sudo -u "$NEKKO_RUNNER_USER" -H -- /usr/bin/env PATH="$RUNNER_PATH" /usr/local/bin/gitlab-runner run-single -c "$conf_dir/gitlab-runner.toml" -r nekko --max-builds 1
     rc=$?
     ;;
 esac

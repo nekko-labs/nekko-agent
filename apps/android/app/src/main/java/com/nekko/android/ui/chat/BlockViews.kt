@@ -73,6 +73,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekko.android.R
 import com.nekko.android.ui.previews.PreviewCards
+import com.nekko.android.chat.TurnSteps
+import androidx.compose.material3.TextButton
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.AgentRows
 import com.nekko.protocol.Block
@@ -92,13 +94,14 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 data class ForkAction(val label: String, val run: () -> Unit)
 
+/** [reasoning] false keeps a reply's reasoning folded away (Simple, until its turn's steps are shown). */
 @Composable
-fun BlockView(block: Block, fork: ForkAction? = null, voice: Voice? = null) {
+fun BlockView(block: Block, fork: ForkAction? = null, voice: Voice? = null, reasoning: Boolean = true) {
     when (block) {
         // A watch's wake-up is a step of the run, not something the user typed.
         is Block.User -> AgentRows.parseWake(block.text)?.takeIf { block.thumbs.isEmpty() }?.let { WatchWakeRow(it, block.text, block.at) }
             ?: UserBubble(block, fork)
-        is Block.Assistant -> Reply(block, fork, voice)
+        is Block.Assistant -> Reply(block, fork, voice, reasoning)
         // The agent's work, drawn as the desktop draws it: no fill, no stroke, one line each.
         is Block.Tool -> AgentToolRow(block)
     }
@@ -134,10 +137,11 @@ private fun UserBubble(b: Block.User, fork: ForkAction?) {
 }
 
 @Composable
-private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?) {
+private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?, showReasoning: Boolean) {
     val p = Nekko.palette
     var open by rememberSaveable(b.id) { mutableStateOf(false) }
-    val reasoning = b.reasoning
+    // Folded away, a reply still thinking shows the spinner instead.
+    val reasoning = b.reasoning.takeIf { showReasoning }
     val thinkingOnly = b.streaming && b.text.isEmpty() && !reasoning.isNullOrEmpty()
     val expanded = stringResource(R.string.chat_expanded)
     val collapsed = stringResource(R.string.chat_collapsed)
@@ -203,6 +207,26 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?) {
         if (b.interrupted) {
             Text(stringResource(R.string.chat_stopped_before_finishing), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
         }
+    }
+}
+
+/**
+ * Simple's one line for a turn's reasoning and tool steps ("Took 4 steps · 12s"), with Show steps
+ * to open them in place and Hide steps to fold them back.
+ */
+@Composable
+fun StepsLine(steps: Int, running: Boolean, durationMs: Long?, open: Boolean, onToggle: () -> Unit) {
+    val p = Nekko.palette
+    Row(
+        Modifier.fillMaxWidth().testTag("chat.steps"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (running) CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+        else Icon(Icons.Filled.Check, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
+        val words = TurnSteps.Words(stringResource(R.string.simple_steps_one), stringResource(R.string.simple_steps_other), stringResource(R.string.simple_steps_working), stringResource(R.string.simple_steps_took))
+        Text(TurnSteps.label(steps, running, durationMs, words), style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f))
+        TextButton(onClick = onToggle) { Text(stringResource(if (open) R.string.simple_steps_hide else R.string.simple_steps_show), style = MaterialTheme.typography.labelLarge, color = p.accent) }
     }
 }
 
