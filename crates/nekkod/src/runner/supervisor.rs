@@ -14,8 +14,9 @@ use super::store::{RunnerRecord, overlaps};
 use super::updates::write_atomic;
 use super::vm::{CONSOLE_LOG, RunHandle, RunSpec, Stopped, Vm, reap};
 use nekko_runner::{
-    Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SlotLimit, cpus_per_vm, evaluate, hold_awake, keep_idle,
-    macos_slots_explained, recommended_runner_memory_mb, runner_memory_mb, vms_wanted, warm_slots,
+    Decision, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SizeSuggestion, SlotLimit, Usage, blank_stats_disk,
+    cpus_per_vm, evaluate, hold_awake, keep_idle, macos_slots_explained, parse_stats, recommended_runner_memory_mb,
+    runner_memory_mb, suggest_size, vms_wanted, warm_slots,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -99,6 +100,8 @@ pub struct RunnerView {
     pub fork_approval_open: bool,
     /// This runner's last jobs, newest first.
     pub recent: Vec<AuditLine>,
+    /// The VM size that fits its last jobs; `None` until the Mac has been read.
+    pub suggested_size: Option<SizeSuggestion>,
 }
 
 /// The Mac's facts as one runner sees them, for the settings sheet.
@@ -135,6 +138,8 @@ impl HostView {
 
 /// Lines kept per runner for `RunnerView::recent`.
 const RECENT: usize = 5;
+/// How far back a runner's job usage counts toward its suggested size.
+const USAGE_WINDOW_SECS: u64 = 30 * 24 * 3600;
 
 /// Why we stopped a VM.
 struct Stop {
@@ -151,6 +156,7 @@ struct Slot {
     name: String,
     runner_id: u64,
     handle: RunHandle,
+    cpus: u8,
     memory_mb: u32,
     state: SlotState,
     since: f64,
@@ -221,6 +227,8 @@ struct Runner {
     awake: bool,
     /// Newest first, at most `RECENT`; seeded from the audit log, then pushed to.
     recent: VecDeque<AuditLine>,
+    /// Finished jobs' usage with their times, oldest first; seeded like `recent`.
+    usage: Vec<(u64, Usage)>,
 }
 
 impl Runner {
@@ -244,6 +252,7 @@ impl Runner {
             mint_after: None,
             awake: false,
             recent: VecDeque::new(),
+            usage: Vec::new(),
         }
     }
 
@@ -494,6 +503,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 None => {
                     let mut r = Runner::new(rec);
                     r.recent = audit::recent(&self.runners_dir, &r.record.config.id, RECENT).into();
+                    let since = (self.wall_now() as u64).saturating_sub(USAGE_WINDOW_SECS);
+                    r.usage = audit::usage(&self.runners_dir, &r.record.config.id, since);
                     self.runners.push(r);
                 }
             }
@@ -573,6 +584,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             result: AuditResult::NotRemoved,
             seconds: 0,
             reason: vec![what],
+            usage: None,
             job_id: None,
             url: None,
             pr: None,
@@ -646,6 +658,17 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 repos: r.record.repos().to_vec(),
                 fork_approval_open: r.record.fork_approval_open(),
                 recent: r.recent.iter().cloned().collect(),
+                suggested_size: self.mac.as_ref().map(|m| {
+                    let host = HostFacts {
+                        ram_mb: m.ram_mb,
+                        cores: m.cores,
+                        other_macos_vms: 0,
+                        user_memory_mb: m.user_memory_mb,
+                    };
+                    let since = (self.wall_now() as u64).saturating_sub(USAGE_WINDOW_SECS);
+                    let jobs: Vec<Usage> = r.usage.iter().filter(|(ts, _)| *ts >= since).map(|(_, u)| *u).collect();
+                    suggest_size(&jobs, &r.record.config.settings, &host)
+                }),
             })
             .collect()
     }
@@ -981,7 +1004,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 return;
             }
         };
-        let (seed, bundle) = (dir.join("seed.iso"), dir.join("bundle"));
+        let (seed, bundle, stats) = (dir.join("seed.iso"), dir.join("bundle"), dir.join("stats.img"));
         let made = async {
             std::fs::create_dir_all(self.vms_dir()).map_err(|e| format!("cannot make the VMs folder: {e}"))?;
             // 0700: the seed carries a credential until the runner registers.
@@ -991,7 +1014,15 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 .map_err(|e| format!("cannot make {}: {e}", dir.display()))?;
             vm.write_seed(&seed, minted.seed_file, &minted.jit_config).await?;
             vm.clone_bundle(image, &bundle).await?;
-            vm.start(RunSpec { bundle: bundle.clone(), cpus, memory_mb, seed: seed.clone() }).await
+            std::fs::write(&stats, blank_stats_disk()).map_err(|e| format!("cannot make the stats disk: {e}"))?;
+            vm.start(RunSpec {
+                bundle: bundle.clone(),
+                cpus,
+                memory_mb,
+                seed: seed.clone(),
+                stats: Some(stats.clone()),
+            })
+            .await
         }
         .await;
         match made {
@@ -1000,6 +1031,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     name,
                     runner_id: minted.runner_id,
                     handle,
+                    cpus,
                     memory_mb,
                     state: SlotState::Starting,
                     since: now,
@@ -1042,6 +1074,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             result: AuditResult::FailedToStart,
             seconds: 0,
             reason: vec![e],
+            usage: None,
             job_id: None,
             url: None,
             pr: None,
@@ -1058,6 +1091,9 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         if let Some(r) = self.runners.iter_mut().find(|r| r.record.config.id == line.runner_id) {
             r.recent.push_front(line.clone());
             r.recent.truncate(RECENT);
+            if let Some(u) = line.usage {
+                r.usage.push((line.ts, u));
+            }
         }
         if line.ts >= self.day_start {
             self.today.entry(line.runner_id.clone()).or_default().add(line);
@@ -1088,6 +1124,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             && slot.busy_since.is_none()
             && matches!(call(self.provider.status(&record, slot.runner_id)).await, Ok(RunnerStatus::Offline));
         let dir = self.vms_dir().join(&slot.name);
+        // Read as plain bytes, never mounted: the guest wrote it. Samples before the job are a ready VM waiting.
+        let usage = slot.busy_since.and_then(|from| {
+            let bytes = std::fs::read(dir.join("stats.img")).ok()?;
+            parse_stats(&bytes, slot.cpus, slot.memory_mb, from as u64)
+        });
         // Only a VM that gets an audit line keeps its console log.
         let audited = never_connected || own_stop || slot.busy_since.is_some();
         let vm = match audited.then(|| audit::keep_vm_log(&self.runners_dir, &dir.join(CONSOLE_LOG), &slot.name)) {
@@ -1128,6 +1169,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             result,
             seconds: (now - slot.busy_since.unwrap_or(slot.started_at)).max(0.0) as u64,
             reason,
+            usage: if result == AuditResult::Finished { usage } else { None },
             job_id: job.map(|j| j.job_id),
             url: job.map(|j| j.url.clone()).filter(|u| !u.is_empty()),
             pr: job.and_then(|j| j.pr.clone()),
