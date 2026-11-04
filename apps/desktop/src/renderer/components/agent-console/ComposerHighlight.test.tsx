@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { composerMarkdownNodes } from './ComposerHighlight.js';
 
 const html = (text: string) => renderToStaticMarkup(<div>{composerMarkdownNodes(text)}</div>);
+// The rendered text with the markup removed; split/join drops every tag in one pass.
+const textOf = (markup: string) => markup.split(/<[^>]*>/).join('');
 
 const ACCENT = 'var(--accent)';
 const FAINT = 'var(--ink-faint)';
@@ -54,7 +56,7 @@ describe('composerMarkdownNodes', () => {
     expect(out).not.toContain('<img');
     expect(out).not.toContain('font-weight');
     expect(out).toContain(`color:${ACCENT}">-</span>`);
-    expect(out.replace(/<[^>]*>/g, '')).toBe(renderToStaticMarkup(<>{text}</>));
+    expect(textOf(out)).toBe(renderToStaticMarkup(<>{text}</>));
   });
 
   it('only treats a single backtick alone on a line as a short fence', () => {
@@ -68,11 +70,11 @@ describe('composerMarkdownNodes', () => {
     const out = html(text);
     expect(out).toContain('- code');
     expect((out.match(/class="composer-bullet"/g) ?? []).length).toBe(1);
-    expect(out.replace(/<[^>]*>/g, '')).toBe(text);
+    expect(textOf(out)).toBe(text);
   });
 
   it.each(['  `  \r\nconst n = 1;\r\n  `\r\n', '`\nconst n = 1;\n', '```js\n/* start\nconst n = 1;\nend */\n```'])('preserves raw text, whitespace and incomplete blocks', (text) => {
-    expect(html(text).replace(/<[^>]*>/g, '')).toBe(text);
+    expect(textOf(html(text))).toBe(text);
   });
 
   it('keeps multiline comments in a single syntax token', () => {
