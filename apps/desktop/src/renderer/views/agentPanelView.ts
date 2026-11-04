@@ -24,7 +24,7 @@ export type AgentPanelView = {
   showProvider: boolean;
   /** Chats an automation started (they carry a task id). */
   showAutomations: boolean;
-  /** Groups with nothing in them, shown with their "No active agents" line. */
+  /** Groups with nothing in them, shown with a muted dash placeholder. */
   showEmptyGroups: boolean;
   /** Which computer a card's agent runs on, for a card on another computer. */
   showComputer: boolean;
