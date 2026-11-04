@@ -95,6 +95,20 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### #1663 Empty-agent wave: per-frame swell instead of column steps (2026-11-04)
+Area: renderer
+Result: no effect (within sample noise)
+Conditions: Windows 11 on a Parsec virtual display at 125% scaling (captures 1802 px wide for a 1440 px window), `empty-agent-wave-sandbox.cjs` through the layout-evidence fixture (isolated hidden non-focusable Electron window, 1440×900, Lilac, network blocked), 6 s CPU deltas, two runs per version, run sequentially in the order #1495, #1663, #1495, #1663, #1663 with the follow-up runs before and between them, nothing else deliberately running. "#1495" is the wave as it was before #1663 (`e2a7893e3^`); "#1663" is `main` at `e2a7893e3`, measured with the new-behaviour assertions off because it lacks the step counter they read; "follow-up" is #1663 drawn on whole device pixels with the step counter restored. The wave is paused while unfocused in all three, so the unfocused rows measure the idle app, not the wave.
+
+| Metric (% of a core) | #1495 (run 1 / 2) | #1663 (run 1 / 2) | Follow-up (run 1 / 2) |
+|---|---|---|---|
+| Unfocused: GPU process | 1.98 / 2.20 | 2.43 / 4.56 | 2.26 / 2.26 |
+| Unfocused: renderer | 1.62 / 1.70 | 1.70 / 2.84 | 1.82 / 1.68 |
+| Synthetic focus: GPU process | 1.56 / 1.58 | 1.66 / 1.84 | 1.70 / 1.57 |
+| Synthetic focus: renderer | 0.99 / 0.97 | 1.00 / 0.99 | 1.04 / 0.88 |
+
+Why: #1663 replaced copying a pre-rendered tile one column every ~190 ms with recomputing every dot's brightness about 20 times a second; at this pane size that stayed within the noise of two short samples. #1663's second unfocused sample (4.56 / 2.84) is an outlier with the wave paused, so it is not attributed to the wave. Read as "no large change", not a win or a regression. Source: #1663 and its follow-up PR.
+
 ### Perf harness: warm pair on the board, sample end, tile read before the screenshot (2026-11-03)
 Area: perf harness
 Result: measurement fix
@@ -1192,6 +1206,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Completing a chat from its X (2026-11-04, #1662): the sidebar card's X played its exit animation (260 ms fold, then a 60 ms delay and 220 ms collapse, each awaited with a 50 ms fallback) before asking the engine to complete the chat, and the engine call then ran `chat:abort`, the archive write and the session refresh one after another. The engine call now starts when X is pressed and the animation plays over it, so the total should approach the longer of the two rather than their sum. Not measured: click-to-row-removed time before and after. A hidden fixture timing the X press to the row's unmount against a stubbed engine with fixed IPC latency, on both revisions, would settle it.
 - iPhone chat streaming and outbox confirmation (2026-11-01, #1412): each streamed token used to recount every live block's characters for the context gauge, merge the whole saved transcript with the live turn twice per render (the list and the follow-scroll `onChange`), and regroup every row by purpose. Now `ChatModel` keeps a running character count and a stored merged transcript whose last block a token patches in place; the view keeps its rows and replaces only the last; the scroll follows a revision counter. The outbox re-read the whole chat (`session:get`) every 0.5 s for up to 45 s after each send; it now re-reads on the computer's first event for the chat, on the send's answer, or on a 0.5/1/2/4 s backoff, and `sendWaiting` no longer polls every 50 ms. Not measured: per-token main-actor time on a long transcript and `session:get` calls per send, before and after. An Instruments Time Profiler run of a long reply in a 500-message chat, and a count of `session:get` per outbox send in the itest, would settle it.
 - nekkod router table (2026-10-28, #1335): `routes::route()` looked a channel up by walking a match of about 90 arms, many of them a linear `contains` over a channel list; it is now one `HashMap` lookup in a table built at startup. Done for structure (no `.expect("checked")`, no channel registered twice), not measured: per-call routing time before and after is unknown. A microbenchmark of `route()` for a late channel (`session:get`) on both revisions would settle it.
 - Quiet beside full-screen games (2026-10-28): before, measured 2026-10-18 on a Core Ultra 9 285H / RTX 5070 Ti laptop with the dev build idle and Overwatch running: 93 new processes in 60 s from nekkod (`where.exe` about every 6 s, `nvidia-smi.exe` about every 6-12 s, each with a conhost; `nvidia-smi` about 96 ms wall / 62 ms CPU, `where` about 60 ms / 38 ms), and Overwatch at 60-90 FPS (normally 200-300) after Nekko took the foreground until a game restart. After: the tray's poll no longer runs `engine:status`, PATH lookups no longer spawn, hidden pages stop asking, and windows and notices wait while a full-screen app is in front. Neither the process count nor the game's FPS has been measured after the change. Repeat the 60 s process count with the same idle app and an FPS run with a turn finishing mid-game.

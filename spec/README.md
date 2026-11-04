@@ -39,7 +39,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Chat actions and persistent reply measurements](chat/chat-actions-and-persistent-reply-measurements.md) (25 KB)
 - [Chat artifact cards and session-local documents](chat/chat-artifact-cards-and-session-local-documents.md) (8 KB)
 - [Chat chrome and composer refinement (implemented; desktop verification pending)](chat/chat-chrome-and-composer-refinement.md) (3 KB)
-- [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (2 KB)
+- [Chat completion X icons and idle auto-completion (2026-10-15)](chat/chat-completion-x-icons-and-idle-auto-completion.md) (3 KB)
 - [Chat isolation and prompt customization](chat/chat-isolation-and-prompt-customization.md) (24 KB)
 - [Chat suggestions, progress and code access](chat/chat-suggestions-progress-and-code-access.md) (6 KB)
 - [Chat transcript width (2026-10-19, revised 2026-11-02)](chat/chat-transcript-width.md) (2 KB)

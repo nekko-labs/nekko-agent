@@ -43,7 +43,9 @@ app.whenReady().then(async () => {
       await sleep(900);
       assert(await run(`Number(document.querySelector('.pixel-wave-canvas')?.dataset.step) === ${blurTime}`), 'blur-freezes-clock');
       await run(`Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>true});window.dispatchEvent(new Event('focus'))`);
-      await run(`document.querySelector('.pixel-wave-background').style.transform='translateX(-20000px)'`); await sleep(150);
+      await run(`document.querySelector('.pixel-wave-background').style.transform='translateX(-20000px)'`);
+      // IntersectionObserver reports on a rendered frame, which a hidden window may not produce within a fixed 150ms.
+      for (let i = 0; i < 30 && !await run(`document.querySelector('.pixel-wave-background').hasAttribute('data-wave-paused')`); i++) await sleep(50);
       assert(await run(`document.querySelector('.pixel-wave-background').hasAttribute('data-wave-paused')`), 'offscreen-panel-paused');
       const pausedTime = await run(`Number(document.querySelector('.pixel-wave-canvas')?.dataset.step)`);
       await sleep(900);

@@ -13,8 +13,8 @@ User intent: the wave behind a new, empty agent read as slow and broken. It was 
 
 Supersedes the bounded-texture paragraph of [Quiet empty-agent decoration](../brand/mascot-polish-onboarding.md); everything else there (where the wave appears, first-send removal, the cat) is unchanged.
 
-- The wave covers the whole agent pane at any size. One seamless tile (80×40 dots on a 9px pitch, repeating in both directions) is drawn once per display scale, at whole device pixels, and copied across the pane.
-- It moves like a dot-matrix sign: the pattern advances one dot column at a time, about every 190ms at the default speed (Experimental themes half that), so dots never leave the grid or blur. Each step only copies the tile; nothing is recomputed per dot.
+- The wave covers the whole agent pane at any size, on a 9px dot pitch drawn at whole device pixels so dots stay crisp and evenly sized at fractional display scaling.
+- `[Revised 2026-11-04, #1663 and its follow-up]` It flows like water rather than sliding: every dot's brightness is recomputed each frame (about 20 a second) from Travis's original swell, `sin(x/110 - t*1.4 + sin(y/150 + t*0.5) * 1.6)`, with continuous time. The inner term shifts each row's phase, so neighbouring rows crest at different moments and the field undulates instead of moving as one block. Dots stay on the grid; only their brightness changes. Experimental themes run at half speed. This replaces the 2026-11-02 dot-matrix stepping (one whole column about every 190ms), which read as too slow, uneven and monotone down the whole pane. The wave's clock survives a pause, so it resumes where it stopped.
 - The dot colour runs `from` to `to` across the pane and stays put while the wave moves through it.
 - It still stops while the app is unfocused or hidden, while the pane is hidden or scrolled out of view, and under reduced motion (where it holds one still frame). The Background animation switch still removes it.
 
@@ -26,4 +26,4 @@ User intent: switching rail views (Agents, Artifacts, Models, Settings, ...) sho
 - After a 60ms hold, blocks clear from the centre outwards with per-block jitter (no visible ring). Each block steps down through four shades, like ASCII art's █ ▓ ▒ ░: solid, then a slightly inset block, then smaller accent-tinted blocks, then clear. Everything is clear 300ms after the switch.
 - The cover never takes input: clicks and keys reach the new view at once. Nothing is drawn while idle. Reduced motion skips it, and the first view at launch does not play it.
 
-Acceptance: an empty agent in a 460px-wide pane shows dots top to bottom; dots are crisp at 125% scaling; the wave advances while focused and freezes on blur, hidden pane and reduced motion; a view switch is covered on its first frame and clear within 300ms. No settings, permissions, network access or stored data change.
+Acceptance: an empty agent in a 460px-wide pane shows dots top to bottom; dots are crisp at 125% scaling; the wave flows while focused and freezes on blur, hidden pane and reduced motion; a view switch is covered on its first frame and clear within 300ms. No settings, permissions, network access or stored data change.
