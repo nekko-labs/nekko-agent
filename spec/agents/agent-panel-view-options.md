@@ -54,7 +54,7 @@ Acceptance: the card bottoms meet the horizontal scrollbar, with no unused panel
 
 **User intent:** Philip asked (#1560) for the panel's statuses to follow the agent loop: "draft (only show when drafts exist), exploring, building, verifying, and shipping". He then asked for Needs input back above them, so a chat waiting on him cannot get lost in a phase. Then (#1587): "remove the shipping group and add done for ones that are complete and another group for watching for ones with watchers still active", because finished agents piled up in the phase they stopped in.
 
-- **The groups** are Needs input, Draft, Exploring, Building, Verifying, Watching and Done, in that order, with Completed folded at the bottom as before. The phases hold agents that are working; Watching and Done hold the ones that have stopped. There is no Shipping group (#1587).
+- **The groups** were Needs input, Draft, Exploring, Building, Verifying, Watching and Done, in that order (Exploring folded into Building on 2026-11-04, see below), with Completed folded at the bottom as before. The phases hold agents that are working; Watching and Done hold the ones that have stopped. There is no Shipping group (#1587).
 - **Needs input** holds chats parked on a question or an approval, and a chat whose sub-agent is, since a sub-agent has no card of its own. Answering sends the chat back to its phase. Like Draft it shows only while it has a chat, whatever **Show > Empty groups** says.
 - **Draft** holds chats nothing has been sent in yet. Unlike the others it shows only while it has a chat, whatever **Show > Empty groups** says. A chat with earlier turns and unsent text in its composer stays in its phase.
 - **A chat's phase is its latest tool call that names one.** Reading, searching and web tools are Exploring. Edits are Building. Tests, builds, linters and type checks are Verifying. `git commit`, `git push`, `gh pr create`, `gh pr merge` and `gh release create` are Shipping, which the engine still names but the panel files under Verifying: an agent landing its work is still checking it. It is the latest rather than the furthest, because the loop goes round: an edit after a failed test is Building again. Reading only sends a chat back to Exploring from a new message of yours: within one reply, the reads an agent does while wrapping up (a runbook, a memory file, a last screenshot) leave it where it got to. A watch waking the agent to check on its work is not a new message (#1581).
@@ -64,6 +64,17 @@ Acceptance: the card bottoms meet the horizontal scrollbar, with no unused panel
 - **Every window hears a move.** The engine works the phase out from the saved transcript (`crates/nekko-store/src/phase.rs`, which runs the shared tool-purpose fixture) and adds it to the chat's summary, so it survives a restart and reaches another computer's chats. Tool calls only stream to the windows showing a chat, so when a phase changes the engine sends `session_meta` once the step is saved, and every window re-reads its list. Each move costs one list refresh, not one per call.
 - A working chat summarised by an older computer has no phase and shows in Exploring. Incognito chats are not saved, so they show in Exploring while they work too.
 - Phones keep their own Status grouping (Needs you, Working, Idle). The summary carries the phase if they take it up later. No new storage, permissions or network use.
+
+## Exploring folds into Building (2026-11-04)
+
+`[implemented; unit-tested (agentPanelView, workingAgents, claudeAgentPlan, PlanRail, phase.rs, plan_update.rs); not yet watched in the packaged desktop app]`
+
+**User intent:** Philip: "let's unify the exploring and building phases on the left agent panel and in the agent plan into just building phase", and "starting a fresh chat and kicking it off, I noticed that it went straight to done. Instead, it should be in exploring or building phase."
+
+- **The groups** are Needs input, Draft, Building, Verifying, Watching and Done. Reading, searching and editing are all Building; the engine (`phase.rs`) names reads `building` too, keeping the wrap-up rule: within one reply, reads after a test or a push leave the chat where it got to. A summary from an older engine that still says `exploring` is filed under Building.
+- **A chat just sent is Building at once.** The engine says nothing until the model's first token, which for a Claude Agent chat can take many seconds, and a sent chat with no status used to sit in Done meanwhile. The panel now hears the chat pane's own send (`reportAgentWorking` in `workingAgents.ts`) and marks the chat working the moment it is sent. Sends from another window or a phone still wait for the first event.
+- **The agent plan** drops Explore the same way; see [the plan sheet](../chat/plan-sheet-on-the-composer.md).
+- No storage, permissions or network use change.
 
 ## Subagents under their parent (2026-11-03)
 

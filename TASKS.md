@@ -42,6 +42,8 @@ Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#
 - [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
 - [x] **APL-5, Wrap-up reads stay put.** `loop_phase` works per reply: a read counts only when nothing since your last message got past Exploring, and a watch's wake-up does not start a new reply. On one machine's 27 open chats, Exploring went from 12 to 2 (#1581). (2026-11-03)
 - [x] **APL-6, Watching and Done.** `statusGroupOf` files a stopped chat under Watching (an armed watch, `activeWatchCount`) or Done, and a working chat in the Shipping phase under Verifying; the Shipping group is gone (#1587). (2026-11-03)
+- [x] **APL-7, Exploring folds into Building.** No Exploring group; `phase.rs` names reads `building` (wrap-up rule kept), older summaries' `exploring` files under Building; the plan's `explore` kind folds into `build` (`update_plan`, saved plans). Claude Code's inferred activity plan stays removed by #1673; only its own published plan is shown. A sent chat is marked working from the pane's own send, so it no longer sits in Done until the first token. (2026-11-04)
+- [ ] **APL-8, iPhone plan kinds.** `Plan.swift` still has Explore in the Claude Agent activity plan; fold it into Build like the desktop.
 - [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
 
 ## Third-party licensing and credits (added 2026-11-03)

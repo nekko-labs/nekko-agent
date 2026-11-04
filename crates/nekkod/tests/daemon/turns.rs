@@ -471,7 +471,7 @@ async fn a_chat_moving_along_the_loop_tells_windows_that_do_not_show_it() {
 
     let (_, summaries) = post(port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     let summary = summaries.as_array().unwrap().iter().find(|s| s["id"] == "s_loop").unwrap();
-    assert_eq!(summary["phase"], "exploring");
+    assert_eq!(summary["phase"], "building");
 }
 
 #[tokio::test(flavor = "multi_thread")]
