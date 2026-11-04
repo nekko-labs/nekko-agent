@@ -42,4 +42,4 @@ Focused view, Fixed grid's slots (which now hold zones, empty ones dotted), the 
 
 ## Not done
 
-Reopening the intro and keyboard moves of zones are not built. The header add-control refresh still needs parent verification.
+Reopening the intro and keyboard moves of zones are not built. Hidden isolated Electron verifies header plus alignment, one add control, reflow on hover, and a full-height created column matching its preview; existing drag/drop unit tests pass. Corrected fresh-profile screenshots and hover GIF exist; actual pixel/motion inspection of this refresh remains pending because image tools are intermittent.

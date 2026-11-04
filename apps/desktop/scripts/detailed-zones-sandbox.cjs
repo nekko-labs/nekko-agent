@@ -6,6 +6,7 @@ const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 const profile = path.join(out, 'profile-' + process.pid);
 app.setPath('userData', profile);
+app.disableHardwareAcceleration();
 const baseline = !!process.env.NEKKO_TEST_SOURCE;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
@@ -45,6 +46,11 @@ app.whenReady().then(async () => {
     await sleep(100);
     // Exercise React's pointer path as well as renderer input in hidden Electron.
     await run(`document.querySelector(${js(plus)}).dispatchEvent(new PointerEvent('pointerover',{bubbles:true,pointerType:'mouse'}))`);
+    if (!baseline) {
+      const pngs = [];
+      for (let i = 0; i < 20; i++) { pngs.push((await win.capturePage(undefined, { stayHidden: true })).toPNG()); await sleep(80); }
+      const gif = path.join(out, 'zone-hover.gif'); require('./evidence-gif.cjs')(gif, pngs, 8); report.captures.push(gif);
+    }
     await sleep(450);
     await check('hover has landing preview', '!!document.querySelector(".wall-zone-ghost")');
     await shot('zone-hover');
@@ -73,6 +79,16 @@ app.whenReady().then(async () => {
     // A web-sized narrow view uses this same editor and mode switch.
     win.setContentSize(390,844); await sleep(700); await shot('narrow-composer');
     if (!baseline) await check('Detailed mode accessibility label', `!!document.querySelector('[aria-label="Detailed: every control"]')`);
+    if (!baseline) {
+      await run(`(() => { const e=document.querySelector('[data-chat-surface] [contenteditable]'); e.focus(); e.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true})); })()`);
+      await sleep(500);
+      await check('submission preserves raw single-tick source', `layoutFixture.lastSend?.text === ${js(source)}`);
+    }
+    win.setContentSize(1440,900);
+    await run(`layoutFixture.store.getState().setView('settings')`); await sleep(900);
+    await run(`[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Simple mode').click()`); await sleep(600);
+    await shot('mode-settings');
+    if (!baseline) await check('settings consistently names Detailed', `document.querySelector('[data-settings-group="simple"]')?.textContent.includes('Detailed') || [...document.querySelectorAll('button')].some(e=>e.textContent.trim()==='Detailed')`);
   } catch(e) { report.errors.push(String(e.stack || e)); }
   report.success = report.errors.length===0;
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));

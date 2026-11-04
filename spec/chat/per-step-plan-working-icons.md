@@ -12,7 +12,7 @@ Implemented with focused component coverage: Agent Monitor displays a static spo
 
 Active, non-paused steps in the desktop/Local Web UI PlanSheet now use the supplied concentric-ripple SVG rather than the static spoke mark. Each active step animates independently in the theme accent colour, including tool-only work and concurrent steps. The centre loops every **1.5 seconds**; two outward rings begin at **1.5 seconds** and **3 seconds**, each expanding and fading over a repeating **3-second** cycle. Paused active steps retain their pause bars; resumed live work takes precedence over interruption history. Done, pending and skipped marks, accessible status labels and tooltips stay unchanged. Reduced motion shows static concentric rings instead of the animated SVG.
 
-This refresh changes presentation only, not plan data, permissions or network access. Earlier static-icon verification is historical and does not verify this animation. Focused state checks, reduced-motion checks and inspected matching captures plus a timing recording remain pending with the parent; this refresh is not marked shipped. Native plan indicators are outside this refresh.
+This refresh changes presentation only, not plan data, permissions or network access. Earlier static-icon verification is historical and does not verify this animation. Focused state tests and 21 hidden isolated Electron assertions pass, including changing SMIL animated radii, fixed reduced-motion radii and retained pause bars. Matching settled before/after captures and a 24-frame, 2.4-second GIF exist. Actual pixel/motion inspection remains pending because image tools are intermittent; this refresh is not marked shipped. Native plan indicators are outside this refresh.
 
 ## Explicit verification reports
 

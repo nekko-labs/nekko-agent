@@ -15,7 +15,7 @@ area: desktop
 
 ## Label refresh (verification pending)
 
-Desktop and native UI labels now use **Simple** and **Detailed**, including tooltips, command palette actions, Settings choices (**Detailed only**) and previews. This is a display-label change only: stored `expert` mode and catalogue values, persistence keys, defaults and visibility rules remain unchanged. Existing preferences need no migration. Filenames and links retain their existing paths. Parent functional, visual and native-platform checks for this refresh are pending; earlier verification above does not verify this change.
+Desktop and native UI labels now use **Simple** and **Detailed**, including tooltips, command palette actions, Settings choices (**Detailed only**) and previews. This is a display-label change only: stored `expert` mode and catalogue values, persistence keys, defaults and visibility rules remain unchanged. Existing preferences need no migration. Filenames and links retain their existing paths. Renderer/shared focused tests, desktop accessibility/settings assertions, native resource/catalog checks and Android app/test compilation pass. Matched native CI capture is in progress; visual inspection is pending. Earlier verification above does not verify this label refresh.
 
 ## Behaviour
 
