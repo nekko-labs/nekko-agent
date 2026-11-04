@@ -23,20 +23,20 @@ struct URLSessionPhoneHTTP: PhoneHTTP {
     func lines(_ request: PhoneRequest) async throws -> (status: Int, lines: AsyncThrowingStream<String, Error>) {
         let (bytes, response) = try await Self.session.bytes(for: try Self.urlRequest(request))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        let stream = AsyncThrowingStream<String, Error> { continuation in
-            let task = Task {
-                do {
-                    for try await line in bytes.lines {
-                        try Task.checkCancellation()
-                        continuation.yield(line)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
+        // The task starts here, where `bytes` (not Sendable) is still this function's own.
+        let (stream, continuation) = AsyncThrowingStream<String, Error>.makeStream()
+        let task = Task {
+            do {
+                for try await line in bytes.lines {
+                    try Task.checkCancellation()
+                    continuation.yield(line)
                 }
+                continuation.finish()
+            } catch {
+                continuation.finish(throwing: error)
             }
-            continuation.onTermination = { _ in task.cancel() }
         }
+        continuation.onTermination = { _ in task.cancel() }
         return (status, stream)
     }
 
