@@ -42,6 +42,16 @@ pub fn fake_claude() {
             (server["env"]["NEKKO_BRIDGE_TOKEN"].as_str().unwrap_or_default().to_string(), at("--url"))
         })
         .unwrap_or_default();
+    // The Nekko tools the bridge would list (`--tools a,b` in its args).
+    let offered: Vec<String> = flag("--mcp-config")
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|c| {
+            let a = c["mcpServers"]["nekko_bridge"]["args"].as_array()?.clone();
+            let i = a.iter().position(|x| x == "--tools")?;
+            Some(a.get(i + 1)?.as_str()?.split(',').map(str::to_string).collect())
+        })
+        .unwrap_or_default();
     let down = token.is_empty() || std::env::var("NEKKOD_TEST_BRIDGE_DOWN").is_ok();
     let bridge = if down { "failed" } else { "connected" };
     // libtest has printed "test fake_claude ... " with no newline: end that line first.
@@ -182,6 +192,36 @@ pub fn fake_claude() {
             out(init());
             out(assistant("m_bl2", json!([{ "type": "text", "text": "woke later" }])));
             out(result("woke later", "completed"));
+        } else if text == "watch" || text == "watch anyway" {
+            // Claude Code arms Nekko's watch through the bridge when it was
+            // listed; "watch anyway" calls it even if not, as a misbehaving
+            // client could.
+            let listed = offered.iter().any(|t| t == "agent_watch");
+            let reply = if listed || text == "watch anyway" {
+                let input =
+                    json!({ "action": "create", "kind": "timer", "prompt": "Check the deploy.", "delay_seconds": 60 });
+                let answer: Value = rt.block_on(async {
+                    reqwest::Client::new()
+                        .post(format!("{url}/harness/tool"))
+                        .bearer_auth(&token)
+                        .json(&json!({ "name": "agent_watch", "input": input }))
+                        .send()
+                        .await
+                        .unwrap()
+                        .json()
+                        .await
+                        .unwrap()
+                });
+                if answer["ok"] == true {
+                    format!("armed: {}", answer["text"].as_str().unwrap_or_default())
+                } else {
+                    format!("refused: {}", answer["error"].as_str().unwrap_or_default())
+                }
+            } else {
+                "no watch tool".to_string()
+            };
+            out(assistant("m_w", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
         } else if text == "usage" {
             // Plan usage Claude Code reports on its own while it works.
             out(json!({ "type": "rate_limit_event", "rate_limit_info": {
@@ -509,6 +549,53 @@ async fn plan_usage_claude_code_printed_is_its_limits() {
     assert_eq!((window["id"].clone(), window["status"].clone()), (json!("session"), json!("warning")), "{limits}");
     assert_eq!(window["usedPercent"].as_f64(), Some(62.0));
     assert_eq!(read("cc").await, Value::Null, "an unread sign-in shows no plan usage");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn nekkos_watch_is_offered_to_claude_code_only_where_the_policy_allows() {
+    let rig = rig("watch", "guardrails", true);
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    // `cc` has a sign-in nekkod has not read (`unknown`, treated as a plan); `cc_key` runs on an API key.
+    let plan = provider("cc", json!({}));
+    let key = provider("cc_key", json!({ "authSource": "nekko-anthropic-key" }));
+    write_settings(&rig, json!({ "providers": [plan.clone(), key.clone()] })).await;
+    let reply = |turn: &'static str| {
+        let rig = &rig;
+        async move {
+            let (_, end) = turn_record(rig, turn, "s_cc").await;
+            assert_eq!(end["aborted"], false, "{end}");
+            assistant_texts(&saved(rig)).last().cloned().unwrap_or_default()
+        }
+    };
+
+    // Not offered on a plan, and refused even when called anyway.
+    let (status, body) =
+        post(rig.d.port, "chat:turn", json!([spec_on(&rig, "cw1", "watch", plan.clone())]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(reply("cw1").await, "no watch tool");
+    post(rig.d.port, "chat:turn", json!([spec_on(&rig, "cw2", "watch anyway", plan)]), Some(TOKEN)).await;
+    let refused = reply("cw2").await;
+    assert!(refused.starts_with("refused: Nekko Agent does not offer agent_watch"), "{refused}");
+    assert_eq!(post(rig.d.port, "session:watches", json!(["s_cc"]), Some(TOKEN)).await.1, json!([]));
+
+    // On an API key it is offered, arms a durable watch, and the chat lists it.
+    post(rig.d.port, "chat:turn", json!([spec_on(&rig, "cw3", "watch", key)]), Some(TOKEN)).await;
+    let armed = reply("cw3").await;
+    assert!(armed.starts_with("armed: Watch armed: "), "{armed}");
+    let watches = post(rig.d.port, "session:watches", json!(["s_cc"]), Some(TOKEN)).await.1;
+    assert_eq!(
+        (watches[0]["kind"].clone(), watches[0]["status"].clone()),
+        (json!("timer"), json!("active")),
+        "{watches}"
+    );
+
+    // Only a live bridge token reaches it, never the daemon's own or a browser.
+    let client = reqwest::Client::new();
+    let url = format!("http://127.0.0.1:{}/harness/tool", rig.d.port);
+    let res = client.post(&url).bearer_auth(TOKEN).json(&json!({ "name": "agent_watch" })).send().await.unwrap();
+    assert_eq!(res.status().as_u16(), 401);
+    let res = client.post(&url).bearer_auth("x").header("Origin", "null").json(&json!({})).send().await.unwrap();
+    assert_eq!(res.status().as_u16(), 403);
 }
 
 #[tokio::test(flavor = "multi_thread")]
