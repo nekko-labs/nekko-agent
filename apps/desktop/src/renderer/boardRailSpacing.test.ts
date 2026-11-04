@@ -134,7 +134,11 @@ describe('compact board and navigation spacing', () => {
     expect(cssRule(styles, ".wall-workspace[data-dock-side='right']:has(.command-wall-layout[data-zone-rails])")['column-gap']).toBe('0');
     // Windows stop a gap short of a composer below them, rails or not.
     expect(cssRule(board, '.wall-column:has(> .wall-composer-row:last-child) > .command-wall-layout')['padding-bottom']).toBe(cssValue('var(--pane-gap)'));
-    expect(cssRule(board, '.command-wall-layout[data-zone-rails]')).toMatchObject({ '--zone-rail': '14px', 'padding-right': cssValue('var(--zone-rail)'), 'padding-bottom': cssValue('var(--zone-rail)'), overflow: 'clip' });
+    // The header-aligned plus has a right gutter, with no bottom add rail.
+    const zoneControls = cssRule(board, '.command-wall-layout[data-zone-rails]');
+    expect(zoneControls).toMatchObject({ 'padding-right': '28px', overflow: 'clip' });
+    expect(zoneControls['--zone-rail']).toBeUndefined();
+    expect(zoneControls['padding-bottom']).toBeUndefined();
     // The resize handle lives in the gap, never over the windows' footers.
     expect(cssRule(styles, '.wall-composer-split').height).toBe(cssValue('var(--pane-gap)'));
     expect(cssRule(styles, '.wall-composer[data-dock^="bottom"] > .wall-composer-split').top).toBe(cssValue('calc(-1 * var(--pane-gap))'));
