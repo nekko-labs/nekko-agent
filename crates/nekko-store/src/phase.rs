@@ -1,13 +1,14 @@
 //! Where a chat is in the agent loop, for the Agents panel's Activity groups.
 //!
-//! The latest tool call that says so decides: reading and searching is
-//! `exploring`, editing is `building`, tests and builds are `verifying`, and
-//! commits, pushes and pull requests are `shipping`. It is the latest rather
-//! than the furthest because the loop goes round: an edit after a failed test
-//! is `building` again. Reads only go back to `exploring` from a new message:
-//! within one reply, the reading an agent does while wrapping up keeps the
-//! chat where it got to. Anything else (a plan, a sub-agent, an MCP tool, a
-//! command with no clear purpose) leaves the chat where it was.
+//! The latest tool call that says so decides: reading, searching and editing
+//! are all `building` (one phase since 2026-11-04; reads are told apart below
+//! only for the wrap-up rule), tests and builds are `verifying`, and commits,
+//! pushes and pull requests are `shipping`. It is the latest rather than the
+//! furthest because the loop goes round: an edit after a failed test is
+//! `building` again. Reads only send a chat back to `building` from a new
+//! message: within one reply, the reading an agent does while wrapping up
+//! keeps the chat where it got to. Anything else (a plan, a sub-agent, an MCP
+//! tool, a command with no clear purpose) leaves the chat where it was.
 //!
 //! The rules are `toolPurpose` (packages/shared/src/tool-purpose.ts), trimmed
 //! to what a phase needs, and run its fixture. A list works this out for chats
@@ -60,6 +61,8 @@ const EXPLORE: &[&str] = &[
     "browser",
     "browse",
 ];
+/// A call that only looks: building within a new reply, nothing while wrapping one up.
+const READ: &str = "reading";
 const SHELL: &[&str] = &[
     "bash",
     "shell",
@@ -311,7 +314,7 @@ fn shell_phase(command: &str) -> Option<&'static str> {
     if kinds.iter().any(git) {
         return shipping;
     }
-    kinds.iter().all(|k| *k == Kind::Explore).then_some("exploring")
+    kinds.iter().all(|k| *k == Kind::Explore).then_some(READ)
 }
 
 fn call_phase(call: &Value) -> Option<&'static str> {
@@ -324,7 +327,7 @@ fn call_phase(call: &Value) -> Option<&'static str> {
         return Some("building");
     }
     if EXPLORE.contains(&k.as_str()) {
-        return Some("exploring");
+        return Some(READ);
     }
     if SHELL.contains(&k.as_str()) {
         return shell_phase(&shell_command(call.get("input")));
@@ -344,18 +347,18 @@ fn new_work(m: &Value) -> bool {
         && !m.get("content").and_then(Value::as_str).is_some_and(|c| c.starts_with("[Agent watch "))
 }
 
-/// One reply's phase: its latest call past exploring, else exploring if it read.
+/// One reply's phase: its latest call past reading, else building if it read.
 /// The reads an agent does while wrapping up (a runbook, a memory file, a last
-/// screenshot) do not send a chat that built or shipped back to exploring.
+/// screenshot) do not send a chat that verified or shipped back to building.
 fn turn_phase(turn: &[Value]) -> Option<&'static str> {
     let mut read = false;
     for phase in turn.iter().filter_map(|m| m.get("toolCalls")?.as_array()).flatten().rev().filter_map(call_phase) {
-        if phase != "exploring" {
+        if phase != READ {
             return Some(phase);
         }
         read = true;
     }
-    read.then_some("exploring")
+    read.then_some("building")
 }
 
 #[cfg(test)]
@@ -380,7 +383,7 @@ mod tests {
         for case in cases {
             let got = call_phase(case);
             let want = match case["purpose"].as_str().unwrap() {
-                "guidance" | "explore" | "web" => Some("exploring"),
+                "guidance" | "explore" | "web" => Some(READ),
                 "edit" => Some("building"),
                 "check" => Some("verifying"),
                 // Only some git is shipping; the cases below say which.
@@ -440,7 +443,7 @@ mod tests {
         );
         assert_eq!(loop_phase(&[turn(vec![edit.clone()]), turn(vec![read.clone()])]), Some("building"));
         // A new message that starts with reads is new work.
-        assert_eq!(loop_phase(&[turn(vec![ship.clone()]), user.clone(), turn(vec![read.clone()])]), Some("exploring"));
+        assert_eq!(loop_phase(&[turn(vec![ship.clone()]), user.clone(), turn(vec![read.clone()])]), Some("building"));
         // A watch waking the agent to check on its PR is not new work.
         let wake = json!({ "role": "user", "content": "[Agent watch w1]\nWatch deadline reached." });
         assert_eq!(loop_phase(&[turn(vec![ship.clone()]), wake, turn(vec![read.clone()])]), Some("shipping"));

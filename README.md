@@ -2,7 +2,34 @@
 
 # Nekko Agent
 
-**AI help on your computer. For coding and everyday work.**
+**Local code edits. 5× faster than Ollama.**
+
+Run local models and get real work done in one app. Bring in ChatGPT or Claude
+when you want them, with visible context and changes you can review.
+
+**2.5 seconds vs 13.9 seconds** in our whole-file rename benchmark.
+M5 Max · Qwen3-8B · Ollama 0.40.11 · October 2026.
+One task, not every coding workflow. [Results, limitations and raw runs](docs/benchmarks.md).
+
+[Download Nekko Agent](https://nekkoagent.com/#download) · [See the benchmark](docs/benchmarks.md)
+
+### More than one benchmark win
+
+Earlier NVIDIA results compare decode, code edits and parallel requests on the same
+model file and machine. These are throughput measurements, separate from the M5 Max
+reply timings above.
+
+| Measure | Nekko Agent engine | Ollama 0.23.0 | LM Studio 2.46.0 |
+| --- | --- | --- | --- |
+| Plain decode, tokens/s ↑ | **154** | 115 | 116 |
+| Code edit, tokens/s ↑ | **534** | 106 | 108 |
+| Four requests at once, total tokens/s ↑ | **256** | 113 | 210 |
+| Return to a paused chat, first token ↓ | **790 ms** | 1,290 ms | 1,600 ms |
+
+Gemma 4 12B Q4_K_M · NVIDIA RTX 5090 · Windows 11 · median of 3 runs ·
+30 September 2026. Higher tokens/s and lower first-token time are better.
+Not ahead everywhere: Ollama starts a fresh long chat faster (1.3 s versus 1.7 s).
+[Full comparison, methodology and limitations](docs/benchmarks.md#nvidia-rtx-5090-windows-2026-09-30).
 
 Free and open source · MIT licensed · A fast local model server and AI agent in one app
 
@@ -18,14 +45,11 @@ want them, and decide exactly what Nekko gets to touch. A **model** is the AI
 that does the thinking; **local** means it runs on your computer instead of
 someone else's.
 
-1. **A model server built to be quick.** A Rust core runs llama.cpp tuned for
-   the way agents work. On the same model file and machine it decoded at
-   **154 tokens/s** against Ollama's 115 and LM Studio's 116, ran code edits
-   about **4.5x faster**, and came back to a paused chat about 40% faster than
-   Ollama. It is not ahead everywhere: the first turn of a brand-new long chat
-   is still slower than Ollama's. Measured 30 September 2026 on an RTX 5090;
-   every number, and the harness to rerun them, is in
-   [docs/benchmarks.md](docs/benchmarks.md).
+1. **Less waiting for local code edits.** In our M5 Max/Qwen3-8B benchmark,
+   Nekko returned a 156-line file with a function renamed in **2.5 seconds**,
+   versus **13.9 seconds in Ollama**. Nekko enables llama.cpp’s n-gram
+   speculative decoding by default. The gains depend on the workload;
+   [see the method, raw runs and where it is not ahead](docs/benchmarks.md).
 2. **Run models and build with them in one place.** Search and download models
    from Hugging Face, see which fit your graphics card, and load them, all inside
    Nekko. Already using Ollama, LM Studio or vLLM? Nekko finds them and puts them

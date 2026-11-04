@@ -15,7 +15,7 @@ const report = { checks: [], captures: [], errors: [] };
 const SEED = `(() => {
   const f = layoutFixture, t = Date.now() - 600000, [a, b, c] = f.records;
   const plan = (id, steps) => ({ id, name: 'update_plan', input: { steps } });
-  const steps = [['Find every inline session check', 'explore'], ['Move session checks into one middleware', 'build'], ['Auth tests and e2e login pass', 'verify'], ['Open the PR', 'ship']];
+  const steps = [['Find every inline session check', 'build'], ['Move session checks into one middleware', 'build'], ['Auth tests and e2e login pass', 'verify'], ['Open the PR', 'ship']];
   const call1 = plan('p1', steps.map(([title, kind], i) => ({ title, kind, status: i ? 'pending' : 'active' })));
   const call2 = plan('p2', [{ id: 'step_1', status: 'done', note: '14 routes, all under server/routes' }, { id: 'step_2', status: 'active' }]);
   const call3 = plan('p3', [{ id: 'step_2', status: 'active', note: 'Pass 1 dropped the old sid cookie; adding the fallback' }]);
