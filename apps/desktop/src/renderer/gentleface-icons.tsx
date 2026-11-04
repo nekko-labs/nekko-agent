@@ -93,6 +93,19 @@ const PATHS: Record<GfIconName, Variant> = {
   },
 };
 
+// Locally authored motion for compound glyphs not animated by Gentleface 0.3.0.
+// Keep the licensed upstream line artwork intact; animate it, not a substitute icon.
+const COMPOUND_MOTION: Partial<typeof GENTLEFACE_MOTION> = Object.fromEntries(
+  ['shield-question', 'brain-circuit'].map(name => [name, {
+    svg: '<svg viewBox="0 0 16 16"><g fill="currentColor" stroke="none">' +
+      (name === 'shield-question'
+        ? '<animateTransform attributeName="transform" type="rotate" dur="1s" repeatCount="indefinite" values="0 7.5 8;-7 7.5 8;5 7.5 8;-2 7.5 8;0 7.5 8"/>'
+        : '<animateTransform attributeName="transform" type="translate" dur="1s" repeatCount="indefinite" values="0 0;0 -.65;0 .2;0 -.2;0 0"/>') +
+      PATHS[name as GfIconName].line + '</g></svg>',
+    frames: [0, 1] as [number, number],
+  }]),
+);
+
 type P = { className?: string; title?: string };
 
 /**
@@ -106,7 +119,7 @@ type P = { className?: string; title?: string };
  */
 export const GfIcon = ({ name, className, title }: P & { name: GfIconName }) => {
   const v = PATHS[name];
-  const motion = GENTLEFACE_MOTION[name];
+  const motion = GENTLEFACE_MOTION[name] ?? COMPOUND_MOTION[name];
   const wrapper = useRef<HTMLSpanElement>(null);
   const id = useId().replace(/:/g, '');
   useLayoutEffect(() => {
