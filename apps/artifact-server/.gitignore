@@ -1,0 +1,3 @@
+dist/
+# Published artifacts when run from the repo (NEKKO_ARTIFACTS_DATA defaults to ./data).
+data/

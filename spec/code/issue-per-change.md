@@ -12,7 +12,7 @@ Added 2026-10-23. Every agent chat whose work lands as a PR tracks that work as 
 The user decides, once, whether their own material goes into issues and PR descriptions:
 
 - **Issues** (Settings > Project management): file an issue for each change (on by default), include my prompt, include my screenshots, include other chat context (attachments, pasted logs, a short summary).
-- **Pull requests** (Settings > Pull requests): link each PR to its issue (on by default), include my prompt, include my screenshots.
+- **Pull requests** (Settings > Pull requests): link each PR to its issue (on by default), watch each PR until it is merge-ready (on by default; see [Watch PRs until they are merge-ready](../agents/watch-prs-until-merge-ready.md)), include my prompt, include my screenshots.
 
 The first-run wizard asks these as quick toggles on its **Work tracking** step, with every include off until checked; Next saves explicit answers, so the agent never asks again. A user who skipped the step, or predates it, has the include choices unset: Settings shows them as a dash with "Not set yet: Nekko asks the first time", and the agent asks in the first chat that needs the answer, the same way it already asked about PR images.
 

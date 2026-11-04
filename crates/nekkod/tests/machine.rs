@@ -24,6 +24,7 @@ impl Drop for Daemon {
 fn start(data_dir: &std::path::Path) -> Daemon {
     let config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data_dir });
     let mut child = Command::new(env!("CARGO_BIN_EXE_nekkod"))
+        .env("NEKKO_FILE_VAULT", "1")
         .arg("--config-stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

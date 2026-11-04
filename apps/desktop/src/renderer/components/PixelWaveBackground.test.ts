@@ -1,30 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { THEME_PRESETS } from '@nekko-agent/shared';
-import { pixelWaveFor, waveDot, waveStepMs, WAVE_TILE, showEmptyAgentWave } from './PixelWaveBackground.js';
+import { pixelWaveFor, showEmptyAgentWave, DOT_CELL, dotOpacity, wavePhase, columnColors } from './PixelWaveBackground.js';
 
 describe('pixel wave', () => {
-  it('tiles seamlessly, so copies cover a pane of any size without a band or edge', () => {
-    const { peak } = pixelWaveFor('lilac')!;
-    expect(WAVE_TILE).toEqual({ cols: 80, rows: 40, pitch: 9 });
-    for (let row = 0; row < WAVE_TILE.rows; row++) {
-      expect(waveDot(WAVE_TILE.cols, row, peak)).toBeCloseTo(waveDot(0, row, peak), 9);
-    }
-    for (let col = 0; col < WAVE_TILE.cols; col++) {
-      expect(waveDot(col, WAVE_TILE.rows, peak)).toBeCloseTo(waveDot(col, 0, peak), 9);
-    }
-  });
+  const field = (t: number, cols = 80, rows = 40, peak = 0.26) =>
+    Array.from({ length: rows }, (_, row) => Array.from({ length: cols }, (_, col) => dotOpacity(col, t, wavePhase(row, t), peak)));
 
   it('keeps dots faint and leaves troughs empty', () => {
-    const peak = 0.26;
-    const dots = Array.from({ length: WAVE_TILE.cols * WAVE_TILE.rows }, (_, i) => waveDot(i % WAVE_TILE.cols, Math.floor(i / WAVE_TILE.cols), peak));
-    expect(Math.max(...dots)).toBeLessThanOrEqual(peak);
+    const dots = field(1.3).flat();
+    expect(Math.max(...dots)).toBeLessThanOrEqual(0.26);
     expect(dots.filter((d) => d === 0).length).toBeGreaterThan(dots.length / 3);
     expect(dots.every((d) => d === 0 || d >= 0.02)).toBe(true);
   });
 
-  it('steps one dot column a few times a second, slower for experimental themes', () => {
-    expect(waveStepMs()).toBe(188);
-    expect(waveStepMs(0.4)).toBe(375);
+  it('flows: rows crest at different moments and the field changes over time', () => {
+    const a = field(0), b = field(0.4);
+    expect(a[0].join()).not.toBe(a[10].join());
+    expect(a[5].join()).not.toBe(b[5].join());
+  });
+
+  it('paints each column in its slice of the gradient, whatever form the colours take', () => {
+    const ctx = { _v: '', get fillStyle() { return this._v; }, set fillStyle(v: string) { this._v = v === 'white' ? '#ffffff' : v; } };
+    expect(columnColors(ctx as never, '#453a92', '#9d8ce6', 3, 10, 21)).toEqual(['rgb(69,58,146)', 'rgb(113,99,188)', 'rgb(157,140,230)']);
+    expect(columnColors(ctx as never, 'white', 'rgba(0, 0, 0, 0.5)', 2, 10, 11)).toEqual(['rgb(255,255,255)', 'rgb(0,0,0)']);
+  });
+
+  it('keeps the same 9-pixel grid the marketing site uses', () => {
+    expect(DOT_CELL).toBe(9);
   });
 
   it('only decorates loaded empty agent windows, never running turns or the shared composer', () => {

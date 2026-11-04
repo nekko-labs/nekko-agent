@@ -101,7 +101,9 @@ import com.nekko.android.files.FileEditController
 import com.nekko.android.files.FilesController
 import com.nekko.android.files.LogsController
 import com.nekko.android.files.LogsState
+import com.nekko.android.ui.chat.MarkdownStyle
 import com.nekko.android.ui.chat.MarkdownText
+import com.nekko.android.ui.chat.MermaidBlock
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.FileContent
 import com.nekko.protocol.FileEntry
@@ -111,6 +113,7 @@ import com.nekko.protocol.FileSearch
 import com.nekko.protocol.LogInfo
 import com.nekko.protocol.LogShare
 import com.nekko.protocol.LogText
+import com.nekko.protocol.MermaidRules
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.WorkspaceFolder
 import kotlinx.coroutines.CancellationException
@@ -466,7 +469,7 @@ private fun isImage(name: String) = name.substringAfterLast('.', "").lowercase()
 private const val MAX_LINES = 5000
 
 @Composable
-private fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage) -> Unit) {
+internal fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage) -> Unit) {
     val p = Nekko.palette
     val files = page.files
     val context = LocalContext.current
@@ -489,7 +492,8 @@ private fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage)
     LaunchedEffect(page) { load() }
     val f = file
     Page(page.path.substringAfterLast('/'), onBack, actions = {
-        if (f?.markdown == true) {
+        val diagram = f != null && MermaidRules.isMermaidFile(f.name)
+        if (f?.markdown == true || diagram) {
             IconToggleButton(checked = rendered, onCheckedChange = { rendered = it }) {
                 Icon(Icons.Filled.TextFields, contentDescription = stringResource(R.string.tools_files_formatted), tint = if (rendered) p.accent else p.inkSoft)
             }
@@ -534,8 +538,12 @@ private fun FilePage(page: FilesPage.File, onBack: () -> Unit, open: (FilesPage)
                                 changeOff -> Note(stringResource(R.string.tools_files_change_off), Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                             }
                         }
-                        if (rendered && f.markdown && f.text != null) {
-                            item { MarkdownText(f.text!!, p.ink, Modifier.padding(12.dp)) }
+                        val text = f.text
+                        if (rendered && MermaidRules.isMermaidFile(f.name) && !f.truncated && text != null) {
+                            // A .mmd or .mermaid file draws as its diagram, as a fence in a chat does (MM-4, the iPhone's FilesViews).
+                            item { Box(Modifier.padding(12.dp).testTag("file.diagram")) { MermaidBlock(text, closed = true, style = MarkdownStyle.standard(p.ink)) } }
+                        } else if (rendered && f.markdown && text != null) {
+                            item { MarkdownText(text, p.ink, Modifier.padding(12.dp)) }
                         } else {
                             itemsIndexed(lines.take(MAX_LINES)) { i, line -> CodeLine(i + 1, line) }
                             if (lines.size > MAX_LINES) item { Note(stringResource(R.string.tools_files_first_lines, MAX_LINES), Modifier.padding(16.dp)) }

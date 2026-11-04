@@ -329,6 +329,19 @@ class ChatControllerTest {
     }
 
     @Test
+    fun `offers a subagent only while the computer can say delegation will run`() = runTest {
+        val caller = FakeCaller { c -> if (c.channel == Channels.SESSION_GET) session(listOf(msg("a", "assistant", "Done"))) else JsonNull }
+        val chat = controller(caller)
+        chat.reload()
+        runCurrent()
+        val st = chat.state.value
+        assertTrue(ChatController.project(st, online).offersSubagent)
+        assertFalse(ChatController.project(st, online.copy(strategy = "solo")).offersSubagent)
+        assertFalse("blocked", ChatController.project(st, online.copy(conn = RelayState.OFFLINE)).offersSubagent)
+        assertFalse("waits in the outbox", ChatController.project(st, online.copy(conn = RelayState.OFFLINE, canQueue = true)).offersSubagent)
+    }
+
+    @Test
     fun `blocked messages follow the connection`() = runTest {
         val st = controller(FakeCaller()).state.value
         fun blocked(env: ChatEnv) = ChatController.project(st, env).blocked

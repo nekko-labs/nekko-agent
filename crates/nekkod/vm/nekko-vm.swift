@@ -7,7 +7,7 @@
 // One JSON object per stdout line.
 //   clone --from <bundle> --to <bundle>        {"ok":true} | {"ok":false,"error"} (exit 1)
 //   run --bundle <dir> --cpus N --memory-mb M --net-fd 3 [--seed <img>] [--cache <img>] [--stats <img>]
-//       [--first-boot-user U --first-boot-password-file F]
+//       [--console <file>] [--first-boot-user U --first-boot-password-file F]
 //                                              {"event":"started"}, then
 //                                              {"event":"stopped","reason":"guest|signal|error","detail"}
 //   restore-image                              {"ok":true,"url","build","version"} | {"ok":false,"error"} (exit 1)
@@ -215,7 +215,7 @@ func host() -> Never {
 /// - no keyboard or pointing device, and no VZVirtualMachineView: nobody drives the guest.
 ///
 /// One display device is present (see below) only because a macOS guest does not boot without one.
-func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32?) throws -> VZVirtualMachineConfiguration {
+func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32?, console: String? = nil) throws -> VZVirtualMachineConfiguration {
     let fm = FileManager.default
     for name in ["config.json", "disk.img", "nvram.bin"] where !fm.fileExists(atPath: "\(bundle)/\(name)") {
         throw Failure(description: "\(bundle) is not a VM bundle: no \(name)")
@@ -289,10 +289,39 @@ func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32
     graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: 1024, heightInPixels: 768, pixelsPerInch: 72)]
     config.graphicsDevices = [graphics]
 
+    if let console { config.serialPorts = [try consolePort(console)] }
+
     config.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
     config.memoryBalloonDevices = [VZVirtioTraditionalMemoryBalloonDeviceConfiguration()]
     try config.validate()
     return config
+}
+
+/// The most of the guest's console `--console` keeps.
+let consoleLimit = 1 << 20
+
+/// The guest's serial console, written to a new file at `path`. The guest is not trusted: past
+/// `consoleLimit` its output is still read but dropped, so it can neither fill the host's disk
+/// nor stall on a full pipe. Only text leaves the guest this way; nothing goes in.
+func consolePort(_ path: String) throws -> VZVirtioConsoleDeviceSerialPortConfiguration {
+    let fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+    guard fd >= 0 else { throw Failure(description: "cannot create \(path): \(String(cString: strerror(errno)))") }
+    let out = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    let pipe = Pipe()
+    var written = 0
+    pipe.fileHandleForReading.readabilityHandler = { h in
+        let data = h.availableData
+        if data.isEmpty { h.readabilityHandler = nil; return }
+        guard written < consoleLimit else { return }
+        let part = data.prefix(consoleLimit - written)
+        out.write(part)
+        written += part.count
+        if written >= consoleLimit { out.write(Data("\n[the rest of the console was dropped]\n".utf8)) }
+    }
+    keep.append(pipe)
+    let port = VZVirtioConsoleDeviceSerialPortConfiguration()
+    port.attachment = VZFileHandleSerialPortAttachment(fileHandleForReading: nil, fileHandleForWriting: pipe.fileHandleForWriting)
+    return port
 }
 
 var finished = false
@@ -357,7 +386,7 @@ func run() -> Never {
     }
     let config: VZVirtualMachineConfiguration
     do {
-        config = try makeConfiguration(bundle: bundle, cpus: cpus, memoryMB: memoryMB, netFd: netFd)
+        config = try makeConfiguration(bundle: bundle, cpus: cpus, memoryMB: memoryMB, netFd: netFd, console: flag("--console"))
     } catch {
         finish("error", "\(error)", code: 1)
     }

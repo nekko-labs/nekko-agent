@@ -37,13 +37,11 @@ describe('wall composer layout', () => {
     expect(none).not.toContain('class="composer relative"');
   });
 
-  it('replaces the controls strip with that row, with Automate at its right end', () => {
+  it('replaces the controls strip with the agent row, without a standalone Automate button', () => {
     const html = renderWallComposer();
-    const head = region(html, 'data-composer-head');
-    const buttons = [...head.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
-    expect(buttons.at(-1)).toBe('Automate: schedule, repeat, or run in the background');
-    // The full chat's controls strip (with its own Automate) is not drawn as well.
-    expect(html.match(/Automate: schedule/g)).toHaveLength(2); // aria-label and title of the one button
+    expect(region(html, 'data-composer-head')).toContain('data-composer-title');
+    expect(html).not.toContain('Automate: schedule, repeat, or run in the background');
+    expect(html).not.toContain('data-composer-automate');
   });
 
   it('puts mode and incognito in the bottom bar beside +', () => {

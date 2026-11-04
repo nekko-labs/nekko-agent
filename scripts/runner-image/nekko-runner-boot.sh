@@ -61,6 +61,14 @@ stats_loop() {
     dd if="$2" of="$1" bs=512 seek=1 conv=sync,notrunc 2>/dev/null
   done
 }
+# Everything below, the runner's output included, also goes to the host's VM log through the
+# virtio console when the helper attached one. Only what this log already holds: never the seed.
+for console in /dev/cu.virtio*; do
+  if [ -c "$console" ] && [ -w "$console" ]; then
+    exec > >(tee -a "$console") 2>&1
+    break
+  fi
+done
 
 finish() {
   if [ -n "$seed_copy" ]; then rm -f "$seed_copy"; fi

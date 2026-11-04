@@ -84,8 +84,6 @@ enum SimpleMode {
                    hint: String(localized: "The PR chip. Only while this chat has a pull request"), fallback: .show, needs: .pr),
         SimpleItem(id: "ph-git", area: String(localized: "Chat · conversation"), label: String(localized: "Git"),
                    hint: String(localized: "The Git screen and commits"), fallback: .expert),
-        SimpleItem(id: "terminal", area: String(localized: "Agents wall"), label: String(localized: "Terminal"),
-                   hint: String(localized: "Open a terminal from New or the More menu"), fallback: .expert),
         SimpleItem(id: "ph-monitors", area: String(localized: "Phone · chats list"), label: String(localized: "Monitors row"),
                    hint: String(localized: "Hardware and loaded models at the top of Chats"), fallback: .auto, when: .localModel),
     ]

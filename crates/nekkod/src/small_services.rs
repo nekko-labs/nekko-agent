@@ -232,6 +232,9 @@ pub async fn pick_folder(ctx: &Ctx) -> Result<Option<String>, String> {
 pub const WIPE_OWNED: &[&str] = &[
     // Sign-ins, keys and remote access.
     "tokens.json",
+    // A dev build's stand-ins for the OS keystore (keys.rs).
+    "settings-keystore.json",
+    "tokens-keystore.json",
     "cloud",
     "computers",
     "computers.json",
@@ -287,7 +290,7 @@ pub const DOWNLOADS: &[&str] = &["models", "engine", "voice"];
 /// this computer. Running work stops first so nothing writes back what was
 /// deleted (turns, compactions, image turns, the agent's processes, phone
 /// remote access). Then: every chat with its command log, memory notes,
-/// usage and reply logs, limit snapshots, sign-ins (`tokens.json`), automation
+/// usage and reply logs, limit snapshots, sign-ins (`tokens.json` or the OS keystore), automation
 /// tasks and workflows, remote access and paired phones, linked computers and
 /// their keys, Nekko Cloud's token and keys (the session is ended too), the
 /// keys in the OS keystore, logs, backups, the agent browser's files, and
@@ -310,9 +313,12 @@ async fn wipe(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
         // The model and speech servers run from the files about to go.
         let _ = crate::runtimes::route(ctx, &ctx.runtimes, "runtime:stop", &[json!("nekko-engine"), json!(true)]).await;
     }
-    // Keys in the OS keystore: linked computers', and Nekko Cloud's.
+    // Keys in the OS keystore: linked computers', Nekko Cloud's and the
+    // sign-ins (the settings' own go with the reset below).
     ctx.computers.forget_all().await?;
     ctx.cloud.sign_out_and_forget().await?;
+    let tokens = data_dir.clone();
+    tokio::task::spawn_blocking(move || crate::keys::tokens(&tokens).clear()).await.map_err(|e| e.to_string())??;
     // Chats, each command log first (a failure there keeps that chat).
     let logs = ctx.turns.agent_logs.clone();
     let cleared = tokio::task::spawn_blocking(move || store.clear_with("all", |id| logs.delete_blocking(id)))

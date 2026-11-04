@@ -134,12 +134,15 @@ class ChatModesTest {
         Thread.sleep(4_000)
         assertEquals("Simple without a local model reads no hardware", idle, computer.calls.count { it == Channels.SYSTEM_STATS })
 
-        // Expert (the code icon): the monitor is back and the hardware is read again.
+        // Expert (the code icon) with no local model: the monitors are off in both modes until a
+        // local model runs (spec/phone/iphone-simple-and-expert-modes.md, "Monitors"), so still no
+        // monitor and no hardware reads. Expert with a local model shows them: pillExpandsAndDocks.
         compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst().performClick()
-        compose.waitUntil(5_000) { computer.calls.count { it == Channels.SYSTEM_STATS } > idle }
         settle()
         assertTrue(prefs.get(EXPERT_MODE))
-        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
+        Thread.sleep(4_000)
+        assertEquals("Expert without a local model reads no hardware either", idle, computer.calls.count { it == Channels.SYSTEM_STATS })
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
         shot("4-expert")
 
         // Model and effort: the sheet with the effort slider, then High.
@@ -461,6 +464,8 @@ class ChatModesTest {
         }
 
         val calls = CopyOnWriteArrayList<String>()
+        /** When this computer was made: its chats were last touched just before. */
+        private val now = System.currentTimeMillis()
         /** Each chat's effort, as `session:setOptions` left it. */
         val efforts = java.util.concurrent.ConcurrentHashMap<String, String>()
         val effort: String? get() = efforts["s1"]
@@ -517,7 +522,8 @@ class ChatModesTest {
                     "anthropic" -> json("""[{"id":"claude-opus-4-7","providerId":"anthropic","name":"Claude Opus 4.7"},{"id":"claude-sonnet-4-5","providerId":"anthropic","name":"Claude Sonnet 4.5"}]""")
                     else -> json("""[{"id":"google/gemma-4-e4b","providerId":"nekko-engine","name":"Gemma 4 E4B","loaded":true}]""")
                 }
-                Channels.SESSIONS_SUMMARIES -> json("""[{"id":"s1","title":"Tidy the release notes","updatedAt":2},{"id":"s2","title":"Profile the image cache","updatedAt":1}]""")
+                // Touched a minute ago: a group lists only recent chats before Show more (ChatSections.split).
+                Channels.SESSIONS_SUMMARIES -> json("""[{"id":"s1","title":"Tidy the release notes","updatedAt":${now - 60_000}},{"id":"s2","title":"Profile the image cache","updatedAt":${now - 120_000}}]""")
                 Channels.SESSION_GET -> session(args.first().jsonPrimitive.content)
                 Channels.SESSION_SET_OPTIONS -> {
                     args.getOrNull(1)?.jsonObject?.get("effort")?.let { efforts[args.first().jsonPrimitive.content] = it.jsonPrimitive.content }

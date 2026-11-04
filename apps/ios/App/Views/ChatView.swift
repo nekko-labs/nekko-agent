@@ -62,6 +62,9 @@ struct ChatView: View {
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
+            // A chat on another computer makes that computer active first, over the
+            // link the phone already holds to it, so the model talks to the right one.
+            store.focus(chat: sessionId)
             if chat?.sessionId != sessionId {
                 chat?.stop()
                 chat = ChatModel(sessionId: sessionId, store: store)
@@ -950,6 +953,8 @@ struct Composer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
+            if skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
             if let blocked = chat.blocked {
                 Text(blocked).font(.caption).foregroundStyle(palette.warning)
             } else if let note = chat.offlineNote {
@@ -1223,6 +1228,32 @@ struct Composer: View {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || prompt != nil || !images.isEmpty
     }
 
+    /// More work for a chat that has replied: run it here, or hand it to a subagent.
+    private var workPlace: some View {
+        let here = Button { send() } label: { outlined("Do it here") }.accessibilityIdentifier("composer.doItHere")
+        let subagent = Button { send(wrap: Session.inSubagent) } label: { outlined("In a subagent") }.accessibilityIdentifier("composer.inSubagent")
+        let cost = Text("Here uses more context").font(.caption).foregroundStyle(palette.ink)
+        // Side by side when it fits; a large text size or a long translation puts the note below.
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { here; subagent; cost }
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) { here; subagent }
+                cost
+            }
+        }
+        .buttonStyle(.plain).disabled(!canSend)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// An outlined action, as the desktop's: accent words on the surface, a 44 pt target.
+    private func outlined(_ title: LocalizedStringKey) -> some View {
+        Text(title).font(.footnote.weight(.semibold)).foregroundStyle(canSend ? palette.accent : palette.inkFaint)
+            .padding(.horizontal, 12).frame(minHeight: 34)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.line))
+            .frame(minHeight: 44).contentShape(Rectangle())
+    }
+
     private func slashChip(_ name: String, _ detail: String, saved: Bool) -> some View {
         VStack(alignment: .leading) {
             Label(name, systemImage: saved ? "text.badge.star" : "wand.and.stars").font(.caption.weight(.semibold))
@@ -1401,9 +1432,9 @@ struct Composer: View {
         app.newChatRequested = true
     }
 
-    /// Sends what is in the box; the task says whether the computer took it (a refusal puts the text back).
+    /// Sends what is in the box, through `wrap`; the task says whether the computer took it (a refusal puts the text back).
     @discardableResult
-    private func send() -> Task<Bool, Never> {
+    private func send(wrap: (String) -> String = { $0 }) -> Task<Bool, Never> {
         var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var s = skill
         // "/name rest" typed out in full runs that skill.
@@ -1420,7 +1451,7 @@ struct Composer: View {
         if s == nil, let prompt { body = prompt.text(input: body) }
         let sentPrompt = prompt
         let sentImages = images
-        let sentBody = body
+        let sentBody = wrap(body)
         let sentSkill = s
         let saved = text
         text = ""

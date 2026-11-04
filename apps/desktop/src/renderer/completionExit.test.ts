@@ -45,13 +45,13 @@ describe('completion exit', () => {
     expect(append).not.toHaveBeenCalled();
   });
 
-  it('closes the row to the left, leaves stardust, collapses its height, then completes', async () => {
+  it('starts completion straight away, then closes the row to the left and collapses its height', async () => {
     const { append } = stubPage(false);
     const { row, animations } = makeRow();
     const complete = vi.fn(async () => {
-      // Completion only runs once the row has closed and its space collapsed.
-      expect(animations).toHaveLength(2);
-      expect(append).toHaveBeenCalledOnce();
+      // Engine work starts in parallel with the exit so the close feels snappy.
+      expect(animations).toHaveLength(0);
+      expect(append).not.toHaveBeenCalled();
       return true;
     });
     await completeWithExit(row as unknown as HTMLElement, complete);
@@ -60,6 +60,7 @@ describe('completion exit', () => {
     expect(animations[1].keyframes[0].height).toBe('40px');
     expect(animations[1].keyframes.at(-1)?.height).toBe('0px');
     expect(animations[0].cancel).not.toHaveBeenCalled();
+    expect(append).toHaveBeenCalledOnce();
   });
 
   it('puts the row back when completion fails', async () => {

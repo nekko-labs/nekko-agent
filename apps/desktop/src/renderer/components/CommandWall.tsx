@@ -36,6 +36,7 @@ import {
   wallAgents,
   wallArrangement,
   nextZoneName,
+  renameZone,
   setZoneTint,
   wallPane,
   zoneTints,
@@ -153,7 +154,7 @@ import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, PlusIcon, Term
 import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
-import { Shown, useShown } from './ModeViews.js';
+import { Shown } from './ModeViews.js';
 
 /** Length of the span button at the end of each add-zone rail. */
 const RAIL_SPAN = 24;
@@ -328,7 +329,6 @@ export function CommandWall({
   onAddWindow: () => void;
   addContent?: React.ReactNode;
 }) {
-  const terminalShown = useShown('terminal');
   const workspaces = useStore((s) => s.workspaces);
   const computers = useStore((s) => s.computers);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -453,20 +453,51 @@ export function CommandWall({
   const held = useRef<{ paneId: string; rects: Map<string, Rect>; grab: { x: number; y: number }; target: WallDropTarget; grid: boolean; stage: { width: number; height: number }; at?: { x: number; y: number } } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [heldCard, setHeldCard] = useState<{ title: string; kind: PaneKind; from: DOMRect; card: { width: number; height: number }; at: { x: number; y: number } } | null>(null);
+  // A press only arms pickup. Clicks must not lift the zone or flash its landing preview.
+  const pendingPickup = useRef<{ pointerId: number; x: number; y: number; start: (x: number, y: number) => void } | null>(null);
+  useEffect(() => {
+    const cancel = () => { pendingPickup.current = null; };
+    const release = (e: PointerEvent) => { if (pendingPickup.current?.pointerId === e.pointerId) cancel(); };
+    const move = (e: PointerEvent) => {
+      const p = pendingPickup.current;
+      if (!p || e.pointerId !== p.pointerId || (e.clientX === p.x && e.clientY === p.y)) return;
+      cancel();
+      if (!(e.buttons & 1)) return;
+      p.start(e.clientX, e.clientY);
+    };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') cancel(); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    window.addEventListener('blur', cancel);
+    window.addEventListener('keydown', key, true);
+    return () => {
+      cancel();
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+      window.removeEventListener('blur', cancel);
+      window.removeEventListener('keydown', key, true);
+    };
+  }, []);
   const pickUp = (e: React.PointerEvent, pane: WbPane, title: string) => {
     const win = (e.currentTarget as HTMLElement).closest<HTMLElement>('[data-wall-pane]');
     if (!win || held.current) return;
     const from = win.getBoundingClientRect();
     const card = heldSize(from.width, from.height);
     const k = card.width / (from.width || 1);
-    held.current = {
-      paneId: pane.id, rects: new Map(shownPanes), grab: { x: (e.clientX - from.left) * k, y: (e.clientY - from.top) * k }, target: HOME,
-      // A one-column wall is a list, not a tree: it swaps like the fixed grid.
-      grid: wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH,
-      stage: { width: size.width, height: geometry.stageHeight },
-    };
-    setHeldCard({ title, kind: pane.kind, from, card, at: { x: e.clientX, y: e.clientY } });
-    setLift({ paneId: pane.id, target: HOME });
+    const grab = { x: (e.clientX - from.left) * k, y: (e.clientY - from.top) * k };
+    pendingPickup.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, start: (x, y) => {
+      if (!win.isConnected) return;
+      held.current = {
+        paneId: pane.id, rects: new Map(shownPanes), grab, target: HOME,
+        // A one-column wall is a list, not a tree: it swaps like the fixed grid.
+        grid: wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH,
+        stage: { width: size.width, height: geometry.stageHeight },
+      };
+      setHeldCard({ title, kind: pane.kind, from, card, at: { x, y } });
+      setLift({ paneId: pane.id, target: HOME });
+    } };
   };
   // The card leaves from the window's own rectangle and settles, smaller, under the pointer.
   useLayoutEffect(() => {
@@ -566,6 +597,9 @@ export function CommandWall({
   // Clicking a zone, or anything in it, makes it the active zone.
   const activate = (paneId: string) => setState((s) => (s.activeZone === paneId ? s : { ...s, activeZone: paneId }));
   const [zoneMenu, setZoneMenu] = useState<{ x: number; y: number; paneId: string } | null>(null);
+  const [renamingZone, setRenamingZone] = useState<string | null>(null);
+  const renameZoneTo = (id: string, name: string) => { setRenamingZone(null); setState((s) => ({ ...s, root: renameZone(s.root, id, name) })); };
+  useEffect(() => { if (renamingZone) wrapRef.current?.querySelector<HTMLInputElement>('.wall-zone-rename')?.select(); }, [renamingZone]);
   const tints = useMemo(() => zoneTints(state.root), [state.root]);
 
   /*
@@ -625,8 +659,8 @@ export function CommandWall({
 
   // What the windows' handlers need, read when they run: a window that skipped
   // a render (WallLeaf) still acts on the current wall.
-  const live = useRef({ state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent });
-  live.current = { state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent };
+  const live = useRef({ state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent, renameZoneTo });
+  live.current = { state, aspect, setState, update, onSelect, onOpenChat, onOpenTerminal, focusWindow, addWindow, activate, dropAgent, renameZoneTo };
   // The Focus heroes seen last keep their composer while parked, so going back
   // to one is a visibility flip; the rest park as transcripts.
   const warm = useRef<readonly string[]>([]);
@@ -806,7 +840,7 @@ export function CommandWall({
     const activeZone = zoned && state.activeZone === pane.id;
     const dropping = dropZone === pane.id;
     const deps = [
-      zoned, activeZone, dropping, zoneMenu?.paneId === pane.id,
+      zoned, activeZone, dropping, zoneMenu?.paneId === pane.id, renamingZone === pane.id,
       entering, leaving,
       pane, title, session, terminal, project?.name, projects.length > 1, status?.label, status?.live, needsYou, agentStatus,
       flashing, selected, n, box?.x, box?.y, box?.width, box?.height, parked, hero, focusedChat, folded, showCompanions,
@@ -843,18 +877,25 @@ export function CommandWall({
         onDragOverCapture={zoned ? (e) => { if (!isAgentDrag(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; setDropZone(pane.id); } : undefined}
         onDropCapture={zoned ? (e) => live.current.dropAgent(e, pane.id) : undefined}
       >
-        {zoned && <div className="wall-zone-header" title="Drag to move this zone. Right-click to close it."
+        {zoned && <div className="wall-zone-header" title="Drag to move this zone. Right-click to rename, recolour or close it."
           onPointerDown={pickable ? (e) => { if (e.button === 0) pickUp(e, pane, title); } : undefined}
           onContextMenu={(e) => { e.preventDefault(); setZoneMenu({ x: e.clientX, y: e.clientY, paneId: pane.id }); }}>
           <span className="wall-zone-swatch" style={{ background: `var(--zone-tint-${tints.get(pane.id) ?? 0})` }} aria-hidden />
-          <span className="wall-zone-name">{pane.zone ?? 'Zone'}</span>
+          {renamingZone === pane.id
+            ? <input className="wall-zone-rename" aria-label="Zone name" defaultValue={pane.zone ?? 'Zone'} maxLength={40}
+              // Keep the name bar's pick-up from starting a drag out of the field.
+              onPointerDown={(e) => e.stopPropagation()}
+              // Escape puts the old name back first, so a blur as the field goes keeps it.
+              onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.value = pane.zone ?? 'Zone'; if (e.key === 'Enter' || e.key === 'Escape') live.current.renameZoneTo(pane.id, e.currentTarget.value); }}
+              onBlur={(e) => live.current.renameZoneTo(pane.id, e.currentTarget.value)} />
+            : <span className="wall-zone-name">{pane.zone ?? 'Zone'}</span>}
         </div>}
         {pane.kind === 'zone' ? <div className="wall-zone-empty" data-zone-empty>
           <ZoneEmptyIllustration />
           <p className="wall-zone-empty-title">Empty zone</p>
           <p>Drag in an agent chat or start a new one below.</p>
           <div className="wall-zone-create">
-            {CREATE_OPTIONS.filter(([kind]) => kind !== 'terminal' || terminalShown).map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind} aria-label={label} title={`${label} (${shortcut.label})`}
+            {CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind} aria-label={label} title={`${label} (${shortcut.label})`}
               onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image'); }}><PlusIcon className="wall-zone-plus h-3.5 w-3.5" />{icon}<span className="wall-zone-label">{label}</span><kbd className="kbd wall-zone-kbd">{shortcut.label}</kbd></button>)}
           </div>
         </div> : <>
@@ -894,7 +935,7 @@ export function CommandWall({
           <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 
             <div className="command-wall-primary">
-           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat || tiled} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} resting={tiled && !selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
+           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat || tiled} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : null}
            </div>
@@ -1008,6 +1049,7 @@ export function CommandWall({
             className="wall-zone-tint" style={{ background: `var(--zone-tint-${i})` }}
             onClick={() => { const id = zoneMenu.paneId; setZoneMenu(null); setState((s) => ({ ...s, root: setZoneTint(s.root, id, i) })); }} />)}
         </div>
+        <ContextAction onClick={() => { setRenamingZone(zoneMenu.paneId); setZoneMenu(null); }}>Rename zone</ContextAction>
         <ContextAction disabled={allPanes(state.root).length < 2} onClick={() => {
           const id = zoneMenu.paneId;
           setZoneMenu(null);

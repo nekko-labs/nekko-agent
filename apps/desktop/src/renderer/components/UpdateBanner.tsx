@@ -207,7 +207,7 @@ export function useUpdater(): UpdaterState {
   return value;
 }
 
-function Spinner() {
+export function Spinner() {
   return (
     <svg className="update-spinner" viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">
       <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity=".25" strokeWidth="2.5" />

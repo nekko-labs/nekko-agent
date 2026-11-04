@@ -46,7 +46,7 @@ app.whenReady().then(async () => {
     await run(`integration.show(${js(scene)})`); await sleep(400);
     await click(byText('[role=dialog] button', 'Cancel')); // the confirmation a cancel scene left open
     await run(`document.documentElement.dataset.theme=${js(theme)}`);
-    await click(byText('[aria-label=Section] button', 'CI runners')); await sleep(700);
+    await run(`document.querySelector('[data-ci-runners]')?.scrollIntoView()`); await sleep(700);
   };
   const connect = async () => { await click(byText('button', 'Connect GitHub')); await sleep(400); };
   const toSetup = async () => { await click(byText('[role=dialog] button', 'Continue to Mac setup')); await sleep(400); };
@@ -62,8 +62,10 @@ app.whenReady().then(async () => {
   const scenes = {
     'first-visit': async () => {},
     running: async () => {},
+    'recent-job-open': async () => { await click(`document.querySelector('[data-recent-job] button')`); await sleep(400); },
     waiting: async () => {},
     error: async () => {},
+    'with-tasks': async () => {},
     'off-no-vm-support': async () => {},
     'settings-no-vm-support': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     unavailable: async () => {},
@@ -80,6 +82,8 @@ app.whenReady().then(async () => {
     },
     'github-account': async () => { await connect(); },
     'github-account-no-gh': async () => { await connect(); },
+    'github-account-no-gh-org': async () => { await connect(); await click(byText('[role=dialog] button', 'Cancel')); await sleep(200); await click(byText('[role=dialog] button', 'For an org, type its name')); await sleep(200); },
+    'github-account-checking': async () => { await connect(); },
     'github-free-org': async () => { await connect(); await click(`[...document.querySelectorAll('[role=dialog] label')].find(l=>l.textContent.includes('free-org'))`); await sleep(200); },
     'github-waiting': async () => { await connect(); },
     'github-confirm': async () => { await connect(); },
@@ -131,16 +135,22 @@ app.whenReady().then(async () => {
     'first-visit-connected': [['step 1 checked, step 2 lit, the card below', "(()=>{const t=document.body.innerText;return t.includes('Connected')&&!t.includes('After step 1')&&!!document.querySelector('[data-runner-card]')&&[...document.querySelectorAll('.runner-step button')].some(e=>e.textContent==='Set up this Mac')})()"],
       ['the off runner reads Off, with no error line', "(()=>{const c=document.querySelector('[data-runner-card]');const leaf=t=>[...c.querySelectorAll('*')].some(e=>!e.children.length&&e.textContent===t);return leaf('Off')&&!leaf('Waiting')&&!c.innerText.includes('No VM image yet.')})()"]],
     running: [['running job and waiting slot', "document.body.innerText.includes('ios-native · PR #904') && document.body.innerText.includes('Waiting: you\\'re using the Mac') && document.body.innerText.includes('14 jobs')"]],
+    'recent-job-open': [['the summary links the job and its PR', "(()=>{const r=document.querySelector('[data-recent-job]');const a=[...r.querySelectorAll('a')].map(e=>e.textContent);return r.innerText.includes('ios-native · iOS build · finished · 14 min')&&a.includes('PR #903')&&a.includes('Job')})()"],
+      ['expanded: the VM steps and the end of the job log', "(()=>{const r=document.querySelector('[data-recent-job]');return r.innerText.includes('VM online, waiting for a job')&&r.innerText.includes('VM deleted')&&r.querySelector('[data-log=job]')?.textContent.includes('##[error]Process completed with exit code 65.')})()"],
+      ['expanded: the VM log from the guest console', "document.querySelector('[data-recent-job] [data-log=vm]')?.textContent.includes('Job iOS build completed with result: Failed')"]],
     waiting: [['every reason as a sentence', "['This Mac is on battery, below what this mode allows.','This network is not one you trust. Add it in runner settings.','You\\'re using the Mac.'].every(s=>document.body.innerText.includes(s))"],
       ['memory-bound slot greyed with its sentence', "document.body.innerText.includes('Not available: Not enough runner memory for another VM.')"]],
     error: [['missing image error', "document.body.innerText.includes('No VM image yet.')"]],
     'off-no-vm-support': [['off runner shows the daemon error', "document.querySelector('[role=alert]')?.textContent.includes('VM support unavailable') && document.body.innerText.includes('Unavailable')"]],
     'settings-no-vm-support': [['the sheet says why instead of waiting', "document.querySelector('[role=dialog]').innerText.includes('VM support unavailable') && !document.body.innerText.includes('first reading')"]],
-    unavailable: [['one plain sentence', "document.body.innerText.includes('They need a Mac with Apple silicon') && !document.body.innerText.includes('unknown channel') && !document.querySelector('[data-runner-card]')"]],
+    unavailable: [['no runners section where the daemon has none', "!document.querySelector('[data-ci-runners]') && !document.body.innerText.includes('unknown channel')"]],
+    'with-tasks': [['the runners are a section below the tasks, with no switcher', "(()=>{const r=document.querySelector('[data-ci-runners]');const rows=document.querySelectorAll('[data-workflow-row]');return r&&rows.length===2&&!!(rows[1].compareDocumentPosition(r)&Node.DOCUMENT_POSITION_FOLLOWING)&&!document.querySelector('[aria-label=Section]')})()"]],
     'connect-step-1': [['manual step 1 fields', "document.querySelector('[role=dialog]').innerText.includes('Installation ID')"]],
-    'connect-step-3': [['connect step 3 with public callout', "document.querySelector('[aria-current=step]')?.textContent.includes('How this Mac helps') && document.body.innerText.includes('may be public')"]],
+    'connect-step-3': [['connect step 3 with public callout', "document.querySelector('[role=dialog] [aria-current=step]')?.textContent.includes('How this Mac helps') && document.body.innerText.includes('may be public')"]],
     'github-account': [['accounts from gh', "['nekko-labs','Organization','Your account','Another account','Continue on GitHub','Use an app I already have'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"]],
-    'github-account-no-gh': [['one text box', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('GitHub account or org')&&!d.includes('Another account')})()"]],
+    'github-account-no-gh': [['straight to GitHub, no chooser', "(()=>{const d=document.querySelector('[role=dialog]');return d.innerText.includes('Finish on GitHub')&&!d.innerText.includes('Where do your repos live?')&&(window.opened||[]).length===1})()"]],
+    'github-account-no-gh-org': [['one box for the org', "(()=>{const d=document.querySelector('[role=dialog]');return d.innerText.includes('Org name')&&d.querySelectorAll('input').length===1&&d.innerText.includes('Use my own account instead')})()"]],
+    'github-account-checking': [['checking first, no fields', "(()=>{const d=document.querySelector('[role=dialog]');return d.querySelector('[role=status]')?.textContent.includes('Checking GitHub')&&!d.querySelector('input')&&!d.innerText.includes('Continue on GitHub')})()"]],
     'github-free-org': [['single repo offer', "document.querySelector('[role=dialog]').innerText.includes('Connect one repo on GitHub')"]],
     'github-waiting': [['waiting on GitHub', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('Finish on GitHub')&&d.includes('Open GitHub again')&&d.includes('Done')&&d.includes('Waiting')})()"]],
     'github-confirm': [['repos ticked', "document.querySelectorAll('[role=dialog] input[type=checkbox]:checked').length===3"]],
@@ -149,11 +159,12 @@ app.whenReady().then(async () => {
     'github-fork': [['fork step keeps the runner off', "document.querySelector('[role=dialog]').innerText.includes('the runner stays off')"]],
     'github-fork-on': [['It is on goes to Mac setup', "document.querySelector('[role=dialog]').innerText.includes('Download and set up')"]],
     'github-fork-left-off': [['Leave it off closes, with step 2 still lit', "!document.querySelector('[role=dialog]')&&document.body.innerText.includes('Connected')&&!document.body.innerText.includes('This Mac is ready')"]],
-    'setup-plan': [['frame 5', "['macOS from Apple','iOS simulator from Apple','Xcode 27.2 from this Mac','110 GB of 369 GB free','Do not disturb','Balanced','Runner first','Download and set up'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"]],
+    'setup-plan': [['frame 5', "['macOS image from Apple','iOS simulator from Apple','Xcode 27.2 from this Mac','110 GB of 369 GB free','about 55 GB with Xcode and the simulator inside','The macOS image is deleted once it is installed','Do not disturb','Balanced','Runner first','Download and set up'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"]],
     'setup-no-xcode': [['macOS only offered', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('macOS only')&&!d.includes('Copied in')})()"]],
-    'setup-download': [['the card shows the stage and bar', "document.querySelector('[data-runner-card]').innerText.includes('Download macOS: 12.4 of 25.6 GB')&&!document.body.innerText.includes('No VM image yet.')"]],
+    'setup-download': [['the card shows the stage and bar', "document.querySelector('[data-runner-card]').innerText.includes('Download the macOS image: 12.4 of 25.6 GB')&&!document.body.innerText.includes('No VM image yet.')"]],
     'setup-refresh': [['a refresh lists only its stages', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('Updating the image')&&d.includes(\"Update Nekko's scripts\")&&d.includes('Test a boot')&&d.includes('keeps taking jobs')&&!d.includes('Add Xcode')&&!d.includes('Lock the VM down')})()"]],
-    'setup-install': [['install percentage', "document.querySelector('[role=dialog]').innerText.includes('48%')&&!!document.querySelector('.runner-bar')"]],
+    'setup-install': [['install percentage', "document.querySelector('[role=dialog]').innerText.includes('48%')&&!!document.querySelector('.runner-bar')"],
+      ['leaving is the primary button', "(()=>{const b=[...document.querySelectorAll('[role=dialog] button')];const bg=b.find(e=>e.textContent==='Continue in the background');const c=b.find(e=>e.textContent==='Cancel setup');return bg&&bg.classList.contains('btn-primary')&&c&&c.classList.contains('btn-outline')})()"]],
     'setup-waiting': [['the waiting reason shows', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('Waiting for a free VM slot')&&!document.querySelector('.runner-bar')})()"]],
     'setup-cancel': [['cancel asks first', "[...document.querySelectorAll('[role=dialog]')].some(d=>d.innerText.includes('What it has built so far is gone'))"]],
     'setup-failed': [['the sentence and Try again', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('Free up 42 GB')&&d.includes('Try again')&&d.includes('Show log')})()"]],

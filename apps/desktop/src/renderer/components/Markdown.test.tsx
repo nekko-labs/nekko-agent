@@ -117,6 +117,21 @@ describe('Markdown', () => {
     expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/pull/309"');
     expect(out).not.toContain('[PR #309]');
   });
+  it('draws PR links as status chips, without a site preview', () => {
+    const out = html('Merged in [#1663](https://github.com/nekko-labs/nekko-agent/pull/1663) and https://github.com/nekko-labs/nekko-agent/pull/1662');
+    expect(out.match(/class="pr-link-chip /g)).toHaveLength(2);
+    expect(out).toContain('data-pr-status="unknown"');
+    expect(out).toContain('>#1663</span>');
+    expect(out).toContain('>nekko-agent#1662</span>');
+    expect(out).not.toContain('>Preview</button>');
+    expect(html('[issue](https://github.com/nekko-labs/nekko-agent/issues/12)')).toContain('>Preview</button>');
+  });
+  it('shows a pointer over every chat link, file links included', () => {
+    const out = html('[site](https://example.com) and [#1](https://github.com/a/b/pull/1)');
+    expect(out.match(/cursor-pointer/g)).toHaveLength(2);
+    const file = renderToStaticMarkup(<Markdown text="[completionExit.ts](C:\\repo\\completionExit.ts)" />);
+    expect(file).toMatch(/<button type="button" class="[^"]*cursor-pointer/);
+  });
   it('renders links nested inside emphasis without losing surrounding links', () => {
     const out = html('**[PR #309](https://github.com/nekko-labs/nekko-agent/pull/309)** and *[docs](https://example.com/docs)* then [next](https://example.com/next)');
     expect(out.match(/href=/g)).toHaveLength(3);

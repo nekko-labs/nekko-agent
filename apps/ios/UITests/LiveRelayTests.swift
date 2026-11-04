@@ -693,6 +693,59 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(folded.waitForExistence(timeout: 10), "the header folds it again")
     }
 
+    func testFollowUpInASubagent() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-uiTestReset", "YES"]
+        app.launch()
+        allowSystemAlerts()
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait), "the first reply")
+
+        let inSubagent = app.buttons["composer.inSubagent"]
+        let box = app.input("Message")
+        XCTAssertTrue(box.waitForExistence(timeout: busyWait))
+        XCTAssertFalse(inSubagent.exists, "nothing to place in an empty box")
+        box.tap()
+        box.typeText("/review")
+        XCTAssertFalse(inSubagent.exists, "a slash command is not work to place")
+        box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 7))
+        box.typeText("Fix the tests")
+        settle()
+        attach(app, "subagent-1-typed")
+        XCTAssertTrue(inSubagent.waitForExistence(timeout: 5), "a typed follow-up can go to a subagent")
+        XCTAssertTrue(app.buttons["composer.doItHere"].exists)
+        XCTAssertTrue(app.staticTexts["Here uses more context"].exists)
+        auditAccessibility(app, "subagent-typed")
+
+        inSubagent.tap()
+        // A plain message, shown as sent, and the box is empty again.
+        let sent = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Do this in a subagent, then report back:")).firstMatch
+        XCTAssertTrue(sent.waitForExistence(timeout: computerWait), "the message says what was asked")
+        XCTAssertTrue(sent.label.hasSuffix("Fix the tests"), sent.label)
+        XCTAssertTrue(waitGone(inSubagent, busyWait))
+        settle()
+        attach(app, "subagent-2-sent")
+    }
+
     func testPairFromADeepLink() throws {
         guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
             throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")

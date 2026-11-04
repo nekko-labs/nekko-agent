@@ -54,15 +54,18 @@ struct ChatsView: View {
         // Room for the floating pill under the large title, while it sits there.
         .contentMargins(.top, prefs.pillPlacement.isStandard && !searching ? AgentPillLayer.topMargin : 0, for: .scrollContent)
         .hidesPillOnScroll($pillHidden)
-        .pawRefreshable(pull) { await store.refresh() }
+        .pawRefreshable(pull) {
+            await store.refresh()
+            await store.refreshFleet()
+        }
         .navigationTitle("Chats")
         .toolbar {
-            RootMascot(working: store.activity.values.contains(.running), pull: pull)
+            RootMascot(working: listActivity.values.contains(.running), pull: pull)
             ToolbarItem(placement: .topBarLeading) { ComputerMenu(path: $path, feedback: $sendingFeedback, search: { searching = true }) }
             ToolbarItem(placement: .topBarTrailing) { viewMenu }
             ToolbarItem(placement: .topBarTrailing) {
                 // Offline too: a chat started now begins when the computer is back.
-                Button { open(.newChat) } label: { Image(systemName: "square.and.pencil") }
+                Button { newChat() } label: { Image(systemName: "square.and.pencil") }
                     .accessibilityLabel("New chat")
             }
         }
@@ -74,7 +77,7 @@ struct ChatsView: View {
         .agentPill(gauges: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
                    monitor: monitor, hidden: searching || pillHidden, expanded: $showPanel)
         .modifier(MonitorFollow(monitor: $monitor, ids: ["hardware", "ph-monitors"], panelOpen: showPanel))
-        .overlay(alignment: .top) { if store.summariesLoading && store.summaries.isEmpty { ProgressView().padding(.top, 80) } }
+        .overlay(alignment: .top) { if store.summariesLoading && listSummaries.isEmpty { ProgressView().padding(.top, 80) } }
         .modifier(dialogs)
         .sheet(isPresented: $reorderingGroups) {
             ReorderGroupsSheet(groups: sections.filter { $0.key != ChatGroup.general }.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
@@ -88,21 +91,25 @@ struct ChatsView: View {
 
     private var dialogs: ChatDialogs {
         ChatDialogs(renaming: $renaming, renameText: $renameText, confirmDelete: $confirmDelete, actionError: $actionError,
-                    rename: { s in act { try await store.renameChat(s.id, to: renameText) } },
-                    delete: { s in act { try await store.deleteChat(s.id) } },
-                    computer: store.active?.name ?? "your computer")
+                    rename: { s in act { try await store.renameChat(s.id, to: renameText, on: owner(s)) } },
+                    delete: { s in act { try await store.deleteChat(s.id, on: owner(s)) } },
+                    computer: confirmDelete.flatMap { s in computerName(owner(s)) } ?? store.active?.name ?? "your computer")
     }
 
     @ViewBuilder private var rows: some View {
-            ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-            ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
-            if let at = store.savedListAt {
+            if filter == nil || filter == store.activeId {
+                ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
+                ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
+            }
+            // The other computers in view that can't be reached now, each with Reconnect.
+            FleetBanner(computer: filter).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            if filter == nil || filter == store.activeId, let at = store.savedListAt {
                 Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
                     .font(.footnote).foregroundStyle(palette.inkSoft)
                     .listRowSeparator(.hidden).listRowBackground(Color.clear)
                     .accessibilityIdentifier("chats.savedList")
             }
-            if store.summariesLoaded && store.summaries.isEmpty && !store.summariesLoading, let e = store.lastError {
+            if listSummaries.isEmpty && store.summariesLoaded && !store.summariesLoading, filter == nil || filter == store.activeId, let e = store.lastError {
                 // A list that failed to load is not an empty one.
                 VStack(spacing: 10) {
                     Label("Couldn’t load the chats", systemImage: "exclamationmark.triangle")
@@ -115,15 +122,15 @@ struct ChatsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
                 .listRowBackground(Color.clear)
-            } else if store.conn == .online && store.summariesLoaded && store.summaries.isEmpty && !store.summariesLoading {
+            } else if listSummaries.isEmpty && scopeLoaded && !store.summariesLoading {
                 // Not ContentUnavailableView: its fixed layout clips at large text sizes.
                 VStack(spacing: 10) {
                     Image(systemName: "bubble.left.and.bubble.right").font(.largeTitle).foregroundStyle(palette.inkSoft)
                         .accessibilityHidden(true)
                     Text("No chats yet").font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
-                    Text("Start one here, or on \(store.active?.name ?? "your computer").")
+                    Text("Start one here, or on \(emptyListPlace).")
                         .font(.subheadline).foregroundStyle(palette.inkSoft)
-                    Button { open(.newChat) } label: { Text("New chat").foregroundStyle(palette.onAccent) }
+                    Button { newChat() } label: { Text("New chat").foregroundStyle(palette.onAccent) }
                         .buttonStyle(.borderedProminent).padding(.top, 4)
                 }
                 .multilineTextAlignment(.center)
@@ -168,7 +175,7 @@ struct ChatsView: View {
 
     /// A group's chats: the recent few unless it was expanded or a search is on, then Show more / Show fewer.
     @ViewBuilder private func sectionRows(_ g: ChatSection) -> some View {
-        let split = ChatSections.split(g, activity: store.activity, now: nowMs)
+        let split = ChatSections.split(g, activity: listActivity, now: nowMs)
         let all = !query.isEmpty || expanded.contains(g.key)
         if g.chats.isEmpty {
             Text("No active agents").font(.footnote).foregroundStyle(palette.inkFaint).listRowBackground(Color.clear)
@@ -199,7 +206,7 @@ struct ChatsView: View {
                     .rotationEffect(.degrees(open ? 90 : 0))
                 VStack(alignment: .leading, spacing: 3) {
                     GroupHeading(groupTitle(g), count: counts(g))
-                    if let path = store.workspaces.first(where: { $0.id == g.key })?.path {
+                    if let path = listFolders.first(where: { $0.id == g.key })?.path {
                         Text(path).font(.caption).foregroundStyle(palette.inkSoft).textCase(nil)
                     }
                 }
@@ -290,14 +297,14 @@ struct ChatsView: View {
 
     /// A folder's own name, or the list's built-in group names in the phone's language.
     private func groupTitle(_ g: ChatSection) -> String {
-        store.workspaces.contains { $0.id == g.key } ? g.name : String(localized: String.LocalizationValue(g.name))
+        listFolders.contains { $0.id == g.key } ? g.name : String(localized: String.LocalizationValue(g.name))
     }
 
     private var nowMs: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     private var sections: [ChatSection] {
-        ChatSections.make(filtered, folders: store.workspaces, view: view, activity: store.activity,
-                          groupOrder: app.prefs.groupOrder[store.activeId ?? ""] ?? [], now: nowMs)
+        ChatSections.make(filtered, folders: listFolders, view: view, activity: listActivity,
+                          groupOrder: app.prefs.groupOrder[groupOrderKey] ?? [], now: nowMs)
     }
 
     private func flip(_ set: inout Set<String>, _ key: String) {
@@ -305,13 +312,57 @@ struct ChatsView: View {
     }
 
     private func setGroupOrder(_ keys: [String]) {
-        guard let id = store.activeId else { return }
-        withAnimation { app.prefs.groupOrder[id] = keys }
+        withAnimation { app.prefs.groupOrder[groupOrderKey] = keys }
         dropTarget = nil
     }
 
     /// Every word of the search, in the title, first prompt or last reply; completed chats too.
-    private var filtered: [SessionSummary] { ChatSearch.matches(store.summaries, query) }
+    private var filtered: [SessionSummary] { ChatSearch.matches(listSummaries, query) }
+
+    // MARK: The computers in view (2026-11-04)
+
+    /// Whose chats the list shows: one computer, or every paired computer (nil).
+    /// A forgotten computer's filter falls back to every computer.
+    private var filter: String? {
+        prefs.chatsFilter.flatMap { id in store.computers.contains { $0.id == id } ? id : nil }
+    }
+
+    private var listSummaries: [SessionSummary] { store.chats(on: filter) }
+    private var listActivity: [String: Activity] { store.activity(on: filter) }
+    private var listFolders: [WorkspaceFolder] { store.folders(on: filter) }
+
+    /// Rows say which computer a chat is on when they come from more than one.
+    private var showsComputer: Bool { filter == nil && store.computers.count > 1 }
+
+    /// A computer in view has answered with its list, so an empty list is really empty.
+    private var scopeLoaded: Bool {
+        (filter.map { [$0] } ?? store.computers.map(\.id)).contains { id in
+            id == store.activeId
+                ? store.conn == .online && store.summariesLoaded && store.savedListAt == nil
+                : store.peers[id]?.loaded == true && store.peers[id]?.conn == .online
+        }
+    }
+
+    /// Where an empty list suggests starting a chat.
+    private var emptyListPlace: String {
+        if let name = computerName(filter) { return name }
+        return store.computers.count > 1 ? String(localized: "your computers") : store.active?.name ?? String(localized: "your computer")
+    }
+
+    /// The group order kept for this view: each computer's own, and one for every computer together.
+    private var groupOrderKey: String { filter ?? (store.computers.count > 1 ? Self.allComputersKey : store.activeId ?? "") }
+    static let allComputersKey = "*"
+
+    /// The computer a chat is on, from the lists the phone holds (nil: none holds it, so the active one).
+    private func owner(_ s: SessionSummary) -> String? { store.computerId(ofChat: s.id) }
+
+    private func computerName(_ id: String?) -> String? { id.flatMap { id in store.computers.first { $0.id == id }?.name } }
+
+    /// New chat runs on the computer in view; with every computer in view, on the one used last.
+    private func newChat() {
+        if let filter, filter != store.activeId { store.connect(filter) }
+        open(.newChat)
+    }
 
     /// "3 active · 12 done", as the desktop's group headings count.
     private func counts(_ g: ChatSection) -> String {
@@ -321,46 +372,50 @@ struct ChatsView: View {
         return parts.joined(separator: " · ")
     }
 
-    private var needsYou: [SessionSummary] { store.summaries.filter { store.activity[$0.id] == .needsYou } }
+    private var needsYou: [SessionSummary] { listSummaries.filter { listActivity[$0.id] == .needsYou } }
 
+    /// A chat on any computer in view. Opening one on another computer makes that
+    /// computer active (`ChatView`), over the link the phone already holds to it.
     private func row(_ s: SessionSummary) -> some View {
-        NavigationLink(value: Route.chat(s.id)) {
-            ChatRow(summary: s, activity: store.activity[s.id], waiting: store.outbox.count(for: s.id), showPreview: view.showPreviews)
+        let on = owner(s)
+        return NavigationLink(value: Route.chat(s.id)) {
+            ChatRow(summary: s, activity: listActivity[s.id], waiting: on == store.activeId ? store.outbox.count(for: s.id) : 0,
+                    showPreview: view.showPreviews, computer: showsComputer ? computerName(on) : nil)
         }
         // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
-        .listRowBackground(RowBackground(needsYou: store.activity[s.id] == .needsYou,
+        .listRowBackground(RowBackground(needsYou: listActivity[s.id] == .needsYou,
                                          selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
-                Button { act { try await store.restoreChat(s.id) } } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
+                Button { act { try await store.restoreChat(s.id, on: on) } } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
                     .tint(palette.running)
             } else if store.pcSettings.effectiveAction == .delete {
                 Button(role: .destructive) { askDelete(s) } label: { Label("Delete", systemImage: "trash") }
             } else {
-                Button { act { try await store.completeChat(s.id) } } label: { Label("Complete", systemImage: "checkmark.circle") }
+                Button { act { try await store.completeChat(s.id, on: on) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     .tint(palette.success)
             }
         }
         .swipeActions(edge: .leading) {
-            Button { act { try await store.setPinned(s.id, !s.pinned) } } label: {
+            Button { act { try await store.setPinned(s.id, !s.pinned, on: on) } } label: {
                 Label(s.pinned ? "Unpin" : "Pin", systemImage: s.pinned ? "pin.slash" : "pin")
             }.tint(palette.warning)
         }
         .contextMenu {
             Button { renameText = s.title; renaming = s } label: { Label("Rename", systemImage: "pencil") }
-            Button { act { try await store.setPinned(s.id, !s.pinned) } } label: { Label(s.pinned ? "Unpin" : "Pin", systemImage: "pin") }
+            Button { act { try await store.setPinned(s.id, !s.pinned, on: on) } } label: { Label(s.pinned ? "Unpin" : "Pin", systemImage: "pin") }
             if s.archived {
-                Button { act { try await store.restoreChat(s.id) } } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
+                Button { act { try await store.restoreChat(s.id, on: on) } } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
             } else {
-                Button { act { try await store.completeChat(s.id) } } label: { Label("Complete", systemImage: "checkmark.circle") }
+                Button { act { try await store.completeChat(s.id, on: on) } } label: { Label("Complete", systemImage: "checkmark.circle") }
             }
             Button(role: .destructive) { askDelete(s) } label: { Label("Delete", systemImage: "trash") }
         }
     }
 
     private func askDelete(_ s: SessionSummary) {
-        if store.pcSettings.confirmDelete { confirmDelete = s } else { act { try await store.deleteChat(s.id) } }
+        if store.pcSettings.confirmDelete { confirmDelete = s } else { act { try await store.deleteChat(s.id, on: owner(s)) } }
     }
 
     private func act(_ body: @escaping () async throws -> Void) {
@@ -376,6 +431,8 @@ struct ChatRow: View {
     /// Prompts for this chat waiting on the phone (the outbox).
     var waiting = 0
     var showPreview = true
+    /// The computer it is on, named when the list shows several.
+    var computer: String? = nil
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -390,9 +447,10 @@ struct ChatRow: View {
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                 }
                 if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
-                if activity != nil || waiting > 0 {
+                if activity != nil || waiting > 0 || computer != nil {
                     HStack(spacing: 6) {
                         badge
+                        if let computer { RowChip(text: computer, tone: .quiet) }
                         if waiting > 0 {
                             Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
                                 .font(.caption2).foregroundStyle(palette.inkSoft)
@@ -537,8 +595,10 @@ struct PendingChatRow: View {
     }
 }
 
-/// Switch computers, search the chats, open settings, send feedback. Pairing
-/// another computer is on the Computers page.
+/// Whose chats the list shows (every computer, or one), search the chats, open
+/// settings, send feedback. Every paired computer stays connected on its own,
+/// so there is nothing to connect here (2026-11-04); pairing another computer,
+/// and forgetting one, are on the Computers page.
 struct ComputerMenu: View {
     @Binding var path: [Route]
     /// Presents *Send feedback*; the sheet hangs on the chat list, not on the toolbar item.
@@ -548,29 +608,25 @@ struct ComputerMenu: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
-    @State private var forgetting: Computer?
 
     var body: some View {
         Menu {
-            // Each computer opens its own actions: switch to it, or forget it here.
-            ForEach(store.computers) { c in
-                Menu {
-                    if c.id != store.activeId {
-                        Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") }
-                    }
-                    Button(role: .destructive) { forgetting = c } label: { Label("Forget…", systemImage: "trash") }
-                } label: {
-                    if c.id != store.activeId {
-                        ComputerLabel(c: c)
-                    } else if let icon = c.icon {
-                        // A menu reads these as title, subtitle and image: its state marks the one in use.
-                        Text(c.name)
-                        Text(stateName(store.conn))
-                        Image("computer-\(icon)")
-                    } else {
-                        Label(c.name, systemImage: "checkmark")
+            if store.computers.count > 1 {
+                Picker("Show chats from", selection: Binding(get: { filter }, set: show)) {
+                    Label("All computers", systemImage: "square.stack.3d.up").tag(String?.none)
+                    ForEach(store.computers) { c in
+                        // A menu reads the two texts as title and subtitle: the subtitle is its connection.
+                        Label {
+                            Text(c.name)
+                            Text(stateName(store.state(of: c.id)))
+                        } icon: {
+                            if let icon = c.icon { Image("computer-\(icon)") } else { Image(systemName: "desktopcomputer") }
+                        }
+                        .tag(Optional(c.id))
                     }
                 }
+                .pickerStyle(.inline)
+                .accessibilityIdentifier("chats.menu.filter")
             }
             Button { path.append(.computers) } label: { Label("Computers", systemImage: "desktopcomputer") }
             Divider()
@@ -596,14 +652,14 @@ struct ComputerMenu: View {
                     .accessibilityIdentifier("chats.menu.safety")
             }
         } label: {
-            // The computer is the title's companion: its state, its name, and a chevron into the menu.
+            // The computers in view are the title's companion: their state, the name, and a chevron into the menu.
             HStack(spacing: 6) {
                 Circle().fill(dot).frame(width: 8, height: 8)
-                ComputerGlyph(icon: store.active?.icon, size: 14).foregroundStyle(palette.inkSoft)
+                ComputerGlyph(icon: shown?.icon, size: 14).foregroundStyle(palette.inkSoft)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(store.active?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                    if let paired = Self.paired(store.computers.count) {
-                        Text(paired).font(.caption2).foregroundStyle(palette.inkSoft).lineLimit(1)
+                    Text(shown?.name ?? String(localized: "All computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                    if shown == nil, let online = Self.online(states.filter { $0 == .online }.count, of: states.count) {
+                        Text(online).font(.caption2).foregroundStyle(palette.inkSoft).lineLimit(1)
                     }
                 }
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
@@ -616,22 +672,53 @@ struct ComputerMenu: View {
         }
         .accessibilityLabel(label)
         .accessibilityIdentifier("chats.menu")
-        .forgetDialog($forgetting)
     }
 
+    /// The filter as the list applies it: a forgotten computer's falls back to every computer.
+    private var filter: String? {
+        app.prefs.chatsFilter.flatMap { id in store.computers.contains { $0.id == id } ? id : nil }
+    }
+
+    /// Show one computer's chats (it becomes the active one, for the menu's other
+    /// items and New chat), or every computer's (nil).
+    private func show(_ id: String?) {
+        app.prefs.chatsFilter = id
+        if let id, id != store.activeId { store.connect(id) }
+    }
+
+    /// The one computer the pill names: the filtered one, or the only one paired; nil for every computer.
+    private var shown: Computer? {
+        if let filter { return store.computers.first { $0.id == filter } }
+        return store.computers.count == 1 ? store.computers.first : nil
+    }
+
+    /// The connection of every computer the pill stands for.
+    private var states: [RelayState] {
+        shown.map { [store.state(of: $0.id)] } ?? store.computers.map { store.state(of: $0.id) }
+    }
+
+    /// Ends with the state the pill shows, as the UI tests read it: one computer's,
+    /// or for every computer how many are online.
     private var label: String {
-        [String(localized: "Computers and settings, \(stateName(store.conn))"), Self.paired(store.computers.count)]
-            .compactMap { $0 }.joined(separator: ", ")
+        if shown == nil, let online = Self.online(states.filter { $0 == .online }.count, of: states.count) {
+            return String(localized: "Computers and settings, all computers, \(online)")
+        }
+        return String(localized: "Computers and settings, \(stateName(states.first ?? .idle))")
     }
 
-    /// The pill's second line once there is more than one computer. Paired, not
-    /// connected: the phone is connected to one computer at a time.
-    static func paired(_ count: Int) -> String? {
-        count >= 2 ? String(localized: "\(count) paired") : nil
+    /// The pill's second line for every computer together: how many are reachable now.
+    static func online(_ online: Int, of count: Int) -> String? {
+        count >= 2 ? String(localized: "\(online) of \(count) online") : nil
+    }
+
+    /// The pill's dot: the worst state among the computers it stands for.
+    private var state: RelayState {
+        for s in [RelayState.denied, .offline, .connecting, .idle] where states.contains(s) { return s }
+        return .online
     }
 
     private var dot: Color {
-        switch store.conn {
+        switch state {
         case .online: return palette.success
         case .connecting: return palette.running
         case .offline: return palette.warning

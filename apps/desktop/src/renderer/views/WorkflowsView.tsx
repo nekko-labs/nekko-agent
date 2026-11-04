@@ -39,7 +39,7 @@ import { CiRunnersView } from './CiRunnersView.js';
 import { useShown } from '../simpleMode.js';
 
 /**
- * The Workflows tab: automation modelled on GitHub Actions, where a step can be
+ * The Scheduled Tasks tab (code name: workflows): automation modelled on GitHub Actions, where a step can be
  * an agent prompt, a skill, another workflow, or a shell command.
  *
  * Built for an install that accumulates hundreds of these. The left rail filters
@@ -92,7 +92,6 @@ export function WorkflowsView() {
   const [snapshot, setSnapshot] = useState<WorkflowsSnapshot>({ workflows: [], runs: [] });
   const [filter, setFilter] = useState<WorkflowFilter>({});
   const [grouping, setGrouping] = useState<WorkflowGrouping>('category');
-  const [section, setSection] = useState<'workflows' | 'ciRunners'>('workflows');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<Workflow | null>(null);
   const [creating, setCreating] = useState<{ seed?: WorkflowSeed } | null>(null);
@@ -198,12 +197,11 @@ export function WorkflowsView() {
   const ciShown = useShown('ci');
   return (
     <div className="flex h-full min-h-0">
-      {section === 'ciRunners' && ciShown ? <CiRunnersView segment={<SectionSegment value={section} onChange={setSection} />} /> : <>
       {/* Filters */}
       {workflows.length > 0 && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
         <input
           className="input w-full text-xs"
-          placeholder="Search workflows…"
+          placeholder="Search scheduled tasks…"
           value={filter.query ?? ''}
           onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value || undefined }))}
         />
@@ -215,8 +213,8 @@ export function WorkflowsView() {
                 key={g}
                 title={
                   g === 'category'
-                    ? 'Group by what each workflow is for (Code review, Maintenance…)'
-                    : 'Group by what starts it — "what runs when a PR opens"'
+                    ? 'Group by what each task is for (Code review, Maintenance…)'
+                    : 'Group by what starts it: "what runs when a PR opens"'
                 }
                 className={`flex-1 rounded-lg border px-2 py-1 text-xs transition ${grouping === g ? 'border-transparent' : 'border-line text-ink-faint'}`}
                 style={grouping === g ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
@@ -286,14 +284,13 @@ export function WorkflowsView() {
 
       {/* List */}
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
-        {!loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load workflows. Reopen this tab to try again.' : 'Loading workflows…'}</p> : workflows.length === 0 ? (<>
-          {/* The wizard replaces the list header, so keep the switcher: CI runners must stay reachable with no workflows. */}
-          <div className="mx-auto max-w-4xl px-4 sm:px-8"><SectionSegment value={section} onChange={setSection} /></div>
+        {!loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load scheduled tasks. Reopen this tab to try again.' : 'Loading scheduled tasks…'}</p> : workflows.length === 0 ? (<>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
+          {/* The wizard replaces the list, so the runners follow it: they must stay reachable with no tasks. */}
+          {ciShown && <div className="mx-auto mt-6 max-w-4xl px-4 sm:px-8"><CiRunnersView /></div>}
         </>) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
-            {!hasAppChrome && <h1 className="view-title">Workflows</h1>}
-            <SectionSegment value={section} onChange={setSection} />
+            {!hasAppChrome && <h1 className="view-title">Scheduled Tasks</h1>}
             <span className="text-xs text-ink-faint">
               {visible.length === workflows.length
                 ? `${workflows.length} total`
@@ -307,11 +304,11 @@ export function WorkflowsView() {
               <Toggle value={paused} onChange={(v) => void togglePaused(v)} label="Pause all automations" />
             </label>
             <button className="btn btn-primary py-1!" onClick={() => setPicking(true)}>
-              <PlusIcon className="h-3.5 w-3.5" /> New workflow
+              <PlusIcon className="h-3.5 w-3.5" /> New scheduled task
             </button>
           </div>
           <p className="mt-1 text-xs text-ink-soft">
-            A workflow is a small automation: named steps run in order and can loop back. A trigger is what starts it —
+            A scheduled task is a small automation: named steps run in order and can loop back. A trigger is what starts it:
             by hand, on a schedule, or when something happens.
           </p>
 
@@ -323,32 +320,32 @@ export function WorkflowsView() {
               data-automations-paused
             >
               <span className="min-w-0 flex-1">
-                <strong className="font-semibold">Automations are paused.</strong> Schedules, events and polls won't start runs, and
-                scheduled tasks wait. Run still works.
+                <strong className="font-semibold">Automations are paused.</strong> Schedules, events and polls won't start
+                any task. Run still works.
               </span>
               <button className="btn btn-outline py-1! text-xs" onClick={() => void togglePaused(false)}>Resume</button>
             </div>
           )}
 
           <details className="mt-2 rounded-xl border px-3 py-2 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }} open={workflows.length === 0}>
-            <summary className="cursor-pointer font-medium text-ink-faint">How workflows work</summary>
+            <summary className="cursor-pointer font-medium text-ink-faint">How scheduled tasks work</summary>
             <dl className="mt-2 space-y-1">
               <div className="flex gap-2">
                 <dt className="w-32 shrink-0 font-medium">Automation</dt>
                 <dd className="text-ink-faint">
-                  The whole thing: steps (an agent prompt, a shell command, a skill, another workflow) plus the triggers
+                  The whole thing: steps (an agent prompt, a shell command, a skill, another scheduled task) plus the triggers
                   that set them off. A verify step that finds problems can send the run back to build and try again.
                 </dd>
               </div>
               <div className="flex gap-2">
                 <dt className="w-32 shrink-0 font-medium">Manual trigger</dt>
                 <dd className="text-ink-faint">
-                  Started by you: the <strong>Run</strong> button, or <code className="font-mono text-2xs">nekko-agent workflow run</code> in a
-                  terminal. Every workflow can run by hand, even one whose other triggers are off.
+                  Started by you: the <strong>Run</strong> button, or <code className="font-mono text-2xs">nekko-agent scheduled-task run</code> in a
+                  terminal. Every scheduled task can run by hand, even one whose other triggers are off.
                 </dd>
               </div>
               <div className="flex gap-2">
-                <dt className="w-32 shrink-0 font-medium">Scheduled job</dt>
+                <dt className="w-32 shrink-0 font-medium">Schedule trigger</dt>
                 <dd className="text-ink-faint">
                   A schedule trigger: a cron expression or a plain interval ("every night", "every 15 minutes"). This
                   machine must be awake when it fires.
@@ -364,7 +361,7 @@ export function WorkflowsView() {
               <div className="flex gap-2">
                 <dt className="w-32 shrink-0 font-medium">Groupings</dt>
                 <dd className="text-ink-faint">
-                  The sidebar sorts the list two ways: <strong>Category</strong> is what a workflow is for
+                  The sidebar sorts the list two ways: <strong>Category</strong> is what a task is for
                   ("Code review"); <strong>Trigger</strong> is what starts it ("GitHub · pull request"), so one heading
                   answers "what runs when a PR opens".
                 </dd>
@@ -398,10 +395,10 @@ export function WorkflowsView() {
                 focusRun={focusRun}
               />
             ))}
+            {ciShown && <CiRunnersView />}
           </div>
         </div>}
       </div>
-      </>}
 
       {picking && (
         <TemplateGallery
@@ -447,28 +444,6 @@ export function WorkflowsView() {
           }}
         />
       )}
-    </div>
-  );
-}
-
-/** Switches the tab between workflows and this Mac's CI runners. */
-export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRunners'; onChange(v: 'workflows' | 'ciRunners'): void }) {
-  // Workflows alone needs no switch: CI runners is kept for Expert by default.
-  if (!useShown('ci')) return null;
-  return (
-    <div role="group" aria-label="Section" className="flex gap-1">
-      {(['workflows', 'ciRunners'] as const).map((v) => (
-        <button
-          key={v}
-          type="button"
-          aria-pressed={value === v}
-          className={`rounded-lg border px-2 py-1 text-xs transition ${value === v ? 'border-transparent' : 'border-line text-ink-faint'}`}
-          style={value === v ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
-          onClick={() => onChange(v)}
-        >
-          {v === 'workflows' ? 'Workflows' : 'CI runners'}
-        </button>
-      ))}
     </div>
   );
 }
@@ -626,7 +601,7 @@ function WorkflowRow({
             <button
               className="btn btn-outline py-1! text-xs"
               disabled={busy || wf.steps.length === 0}
-              title="Run it now — a manual trigger; works even when the workflow's other triggers are off"
+              title="Run it now, a manual trigger; works even when the task's other triggers are off"
               onClick={onRun}
             >
               {busy ? 'Running…' : 'Run'}
@@ -676,7 +651,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
             tone={t.enabled === false ? 'neutral' : 'info'}
             title={
               t.enabled === false
-                ? 'Not armed — this trigger never starts the workflow. The Run button still does.'
+                ? 'Not armed: this trigger never starts the task. The Run button still does.'
                 : (WORKFLOW_TRIGGER_KINDS.find((k) => k.kind === t.kind)?.hint ?? undefined)
             }
           >
@@ -684,7 +659,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
           </Badge>
         ))}
         {wf.triggers.some((t) => t.kind === 'cli') && (
-          <span className="font-mono text-2xs text-ink-faint">nekko-agent workflow run {cliCommand(wf)}</span>
+          <span className="font-mono text-2xs text-ink-faint">nekko-agent scheduled-task run {cliCommand(wf)}</span>
         )}
       </div>
 

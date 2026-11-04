@@ -50,7 +50,13 @@ export type SlotLimit = 'appleCap' | 'otherApps' | 'memory';
 export type RunnerState = 'off' | 'waiting' | 'ready' | 'running' | 'draining' | 'cleaning' | 'error';
 export type SlotState = 'starting' | 'ready' | 'running' | 'draining' | 'cleaning';
 
-export interface JobRef { repo: string; runId: number; jobId: number; workflow: string; job: string }
+export interface PrRef { number: number; url: string }
+export interface JobRef {
+  repo: string; runId: number; jobId: number; workflow: string; job: string;
+  /** The job's page; empty when the provider gave none. Absent from older daemons. */
+  url?: string;
+  pr?: PrRef | null;
+}
 export interface SlotView {
   state: SlotState;
   job: JobRef | null;
@@ -82,6 +88,14 @@ export interface AuditLine {
   seconds: number;
   /** `Reason` names, or the daemon's own (`slept`, `maxJobTime`, ...). */
   reason: string[];
+  /** The provider's id for the job, for `runner:jobLog`. Older daemons send none of these four. */
+  jobId?: number | null;
+  url?: string | null;
+  pr?: PrRef | null;
+  /** When the VM entered each state, oldest first; `ts` is when it was deleted. */
+  events?: { ts: number; state: SlotState }[];
+  /** The VM's name when nekkod kept its console log, for `runner:vmLog`. */
+  vm?: string | null;
   /** What a finished job used inside its VM, when its stats disk was readable. */
   usage?: Usage;
 }
@@ -366,12 +380,36 @@ export function auditText(l: AuditLine, rerun = true): string {
   const why = l.reason.length ? ` (${auditWhy(l.reason)})` : '';
   const took = formatMinutes(l.seconds);
   switch (l.result) {
-    case 'finished': return `${name} · finished · ${took} · VM deleted`;
+    case 'finished': return `${name} · finished · ${took}`;
     case 'lost': return `${name} · lost${why}${rerun ? ' · re-run if allowed' : ''}`;
     default:
-      if (l.reason.includes('maxJobTime')) return `${name} · stopped at the max job time · VM deleted`;
-      return `${name} · stopped after ${took}${why} · VM deleted`;
+      if (l.reason.includes('maxJobTime')) return `${name} · stopped at the max job time`;
+      return `${name} · stopped after ${took}${why}`;
   }
+}
+
+const EVENT_LABELS: Record<SlotState, string> = {
+  starting: 'Starting a VM',
+  ready: 'VM online, waiting for a job',
+  running: 'Running the job',
+  draining: 'Finishing: a condition stopped being met',
+  cleaning: 'Stopping the VM',
+};
+
+/** A recent job's VM, step by step, ending when the VM was deleted. Empty for lines with no VM. */
+export function auditTimeline(l: AuditLine): { ts: number; text: string }[] {
+  if (l.result === 'notRemoved') return [];
+  const why = l.reason.length ? ` (${auditWhy(l.reason)})` : '';
+  const end = {
+    finished: 'The job finished and the VM powered off',
+    stopped: `Stopped${why}`,
+    lost: `Lost${why}`,
+    failedToStart: `The VM failed to start${why}`,
+  }[l.result];
+  return [
+    ...(l.events ?? []).map((e) => ({ ts: e.ts, text: EVENT_LABELS[e.state] ?? 'Working' })),
+    { ts: l.ts, text: `${end}; VM deleted` },
+  ];
 }
 
 /** The network fact: trust plus which network, so "Not trusted" always says which one. */
@@ -489,8 +527,8 @@ export interface ImagePlan {
 
 export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
   check: 'Check this Mac',
-  download: 'Download macOS',
-  install: 'Install macOS',
+  download: 'Download the macOS image',
+  install: 'Install the macOS VM',
   xcode: 'Add Xcode and tools',
   lockdown: 'Lock the VM down',
   scripts: "Update Nekko's scripts",

@@ -283,11 +283,11 @@ export function WorkflowEditor({
     });
 
   return (
-    <Modal title={workflow ? `Edit ${workflow.name}` : 'New workflow'} onClose={onClose} align="top" className="w-full max-w-4xl px-4">
+    <Modal title={workflow ? `Edit ${workflow.name}` : 'New scheduled task'} onClose={onClose} align="top" className="w-full max-w-4xl px-4">
       <div className="card max-h-[86vh] overflow-y-auto p-5">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold">{workflow ? 'Edit workflow' : 'New workflow'}</h2>
+            <h2 className="text-base font-semibold">{workflow ? 'Edit scheduled task' : 'New scheduled task'}</h2>
             <p className="mt-0.5 text-xs text-ink-faint">
               Steps run in order unless a step routes elsewhere. Point a failure back at an earlier step to build a
               retry loop.
@@ -478,7 +478,7 @@ export function WorkflowEditor({
           <div className="mt-2 space-y-2">
             {draft.steps.length === 0 && (
               <p className="rounded-xl border border-dashed border-line px-4 py-3 text-xs text-ink-faint">
-                A workflow needs at least one step.
+                A scheduled task needs at least one step.
               </p>
             )}
             {draft.steps.map((step, i) => (
@@ -540,7 +540,7 @@ export function WorkflowEditor({
 
         <div className="mt-5 flex items-center gap-2 border-t border-line pt-4">
           <button className="btn btn-primary" disabled={!canSave} onClick={() => void save()}>
-            {workflow ? 'Save changes' : 'Create workflow'}
+            {workflow ? 'Save changes' : 'Create scheduled task'}
           </button>
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           {!draft.name.trim() && <span className="text-xs text-ink-faint">A name is required.</span>}
@@ -719,7 +719,7 @@ function StepEditor({
         {step.kind === 'skill' && <SkillStepFields step={step} skills={skills} onPatch={onPatch} />}
         {step.kind === 'workflow' && (
           <select className="input w-full text-xs" value={step.run} onChange={(e) => onPatch({ run: e.target.value })}>
-            <option value="">Pick a workflow…</option>
+            <option value="">Pick a scheduled task…</option>
             {workflows.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
         )}
@@ -747,7 +747,7 @@ function StepEditor({
                 providers={providers}
                 providerId={step.providerId}
                 modelId={step.modelId}
-                unsetLabel="Use workflow model"
+                unsetLabel="Use the task's model"
                 localOnly={localOnly}
                 onChange={(providerId, modelId) => onPatch({ providerId, modelId })}
               />
@@ -1266,12 +1266,12 @@ function TriggerEditor({
           <span className="mb-1 block text-xs font-medium text-ink-soft">Command</span>
           <input
             className="input w-full font-mono text-xs"
-            placeholder={slugSource ? cliCommand({ name: slugSource } as Workflow, undefined) : 'workflow-name'}
+            placeholder={slugSource ? cliCommand({ name: slugSource } as Workflow, undefined) : 'task-name'}
             value={trigger.command ?? ''}
             onChange={(e) => onPatch({ command: e.target.value || undefined })}
           />
           <span className="mt-1 block text-2xs text-ink-faint">
-            Run it with <code className="font-mono">nekko-agent workflow trigger {trigger.command?.trim() || (slugSource ? cliCommand({ name: slugSource } as Workflow, undefined) : '<command>')}</code>
+            Run it with <code className="font-mono">nekko-agent scheduled-task trigger {trigger.command?.trim() || (slugSource ? cliCommand({ name: slugSource } as Workflow, undefined) : '<command>')}</code>
           </span>
         </label>
       )}

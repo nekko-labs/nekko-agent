@@ -260,7 +260,14 @@ async fn job_maps_the_running_job() {
     let j = t.gl.job(&project_rec(), 77, "n").await.unwrap();
     assert_eq!(
         j,
-        Some(JobRef { repo: "a/b/c".into(), run_id: 900, job_id: 501, workflow: "main".into(), job: "build".into() })
+        Some(JobRef {
+            repo: "a/b/c".into(),
+            run_id: 900,
+            job_id: 501,
+            workflow: "main".into(),
+            job: "build".into(),
+            ..Default::default()
+        })
     );
     assert_eq!(t.http.urls()[0], "GET https://gitlab.com/api/v4/runners/77/jobs?status=running&per_page=1");
 }
@@ -462,7 +469,14 @@ async fn group_stale_sweep_spares_an_ancestor_groups_runner() {
 #[tokio::test]
 async fn rerun_retries_the_job() {
     let t = rig(vec![(201, json!({"id": 502}))]);
-    let job = JobRef { repo: "a/b/c".into(), run_id: 900, job_id: 501, workflow: "main".into(), job: "build".into() };
+    let job = JobRef {
+        repo: "a/b/c".into(),
+        run_id: 900,
+        job_id: 501,
+        workflow: "main".into(),
+        job: "build".into(),
+        ..Default::default()
+    };
     t.gl.rerun(&project_rec(), &job).await.unwrap();
     assert_eq!(t.http.urls(), vec!["POST https://gitlab.com/api/v4/projects/a%2Fb%2Fc/jobs/501/retry"]);
 }

@@ -59,9 +59,10 @@ async fn helper_vm_runs_the_documented_command_line() {
     let handle = vm(h, true).start(s.clone()).await.unwrap();
     let args = std::fs::read_to_string(dir.path().join("args")).unwrap();
     let want = format!(
-        "run\n--bundle\n{}\n--cpus\n4\n--memory-mb\n8192\n--net-fd\n3\n--seed\n{}\n",
+        "run\n--bundle\n{}\n--cpus\n4\n--memory-mb\n8192\n--net-fd\n3\n--seed\n{}\n--console\n{}\n",
         s.bundle.display(),
-        s.seed.display()
+        s.seed.display(),
+        s.bundle.with_file_name("console.log").display()
     );
     assert_eq!(args, want);
     assert!(dir.path().join("fd3").exists(), "the NAT socket is fd 3");
