@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { ChatMessage, PlanStep, PlanStepKind, PrInfo, Session } from '@nekko-agent/shared';
+import { planStepKind, type ChatMessage, type PlanStep, type PlanStepKind, type PrInfo, type Session } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
@@ -110,7 +110,7 @@ function CiChips({ info }: { info: PrInfo }) {
   </>;
 }
 
-const KIND_LABEL: Record<PlanStepKind, string> = { explore: 'Explore', build: 'Build', verify: 'Verify', ship: 'Ship' };
+const KIND_LABEL: Record<PlanStepKind, string> = { build: 'Build', verify: 'Verify', ship: 'Ship' };
 
 /** The step's place in the loop, a small caps word before its title. */
 /**
@@ -126,7 +126,9 @@ function PlanCaret({ direction, label }: { direction: 'up' | 'down'; label: stri
   </span>;
 }
 
-function Kind({ kind, current }: { kind?: PlanStepKind; current?: boolean }) {
+function Kind({ kind: saved, current }: { kind?: PlanStepKind; current?: boolean }) {
+  // A plan saved before looking became part of Build still says `explore`.
+  const kind = planStepKind(saved);
   if (!kind) return null;
   return <span className="plan-sheet-kind" data-plan-kind={kind} data-current={current || undefined}>{KIND_LABEL[kind]}</span>;
 }

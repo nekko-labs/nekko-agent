@@ -12,22 +12,37 @@ const SHIP_COMMAND = /\b(gh\s+pr\s+(create|merge|ready)|git\s+push)\b/;
 const VERIFY_COMMAND = /\b(test|tests|vitest|jest|pytest|tsc|typecheck|lint|eslint|clippy|cargo\s+(test|check|build|clippy|fmt)|npm\s+(run\s+)?(test|build|lint|typecheck|check)|go\s+(test|build|vet)|gh\s+pr\s+checks)\b/;
 const BUILD_COMMAND = /\bgit\s+(add|commit|mv|rm)\b/;
 
-/** The phase of one of Claude Code's tool calls, by tool, and for `Bash` by its command. */
-export function claudeCodePhase(call: Pick<ToolCall, 'name' | 'input'>): ClaudeCodePhase | null {
-  if (EXPLORE_TOOLS.has(call.name)) return 'explore';
+/** A call's phase, with the reads told apart from the edits so Build's note can count both. */
+function callPhase(call: Pick<ToolCall, 'name' | 'input'>): ClaudeCodePhase | 'look' | null {
+  if (EXPLORE_TOOLS.has(call.name)) return 'look';
   if (BUILD_TOOLS.has(call.name)) return 'build';
   if (call.name !== 'Bash') return null;
   const command = String((call.input as Record<string, unknown> | undefined)?.command ?? '');
   if (SHIP_COMMAND.test(command)) return 'ship';
   if (VERIFY_COMMAND.test(command)) return 'verify';
   if (BUILD_COMMAND.test(command)) return 'build';
-  return 'explore';
+  return 'look';
 }
 
-const PHASES: Array<{ kind: PlanStepKind; title: string; note: (n: number) => string }> = [
-  { kind: 'explore', title: 'Look through the code', note: n => `${n} read${n === 1 ? '' : 's'} and searches` },
-  { kind: 'build', title: 'Make the changes', note: n => `${n} edit${n === 1 ? '' : 's'}` },
-  { kind: 'verify', title: 'Check the work', note: n => `${n} check${n === 1 ? '' : 's'} run` },
+/**
+ * The phase of one of Claude Code's tool calls, by tool, and for `Bash` by its
+ * command. Reading and searching are part of Build: working out the change is
+ * making it.
+ */
+export function claudeCodePhase(call: Pick<ToolCall, 'name' | 'input'>): ClaudeCodePhase | null {
+  const phase = callPhase(call);
+  return phase === 'look' ? 'build' : phase;
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+const PHASES: Array<{ kind: PlanStepKind; title: string; note: (n: number, looks: number) => string }> = [
+  {
+    kind: 'build',
+    title: 'Work out and make the changes',
+    note: (n, looks) => [looks && plural(looks, 'read or search', 'reads and searches'), n - looks && plural(n - looks, 'edit', 'edits')].filter(Boolean).join(', '),
+  },
+  { kind: 'verify', title: 'Check the work', note: n => plural(n, 'check run', 'checks run') },
   { kind: 'ship', title: 'Open a pull request', note: () => '' },
 ];
 const SENT = PHASE_STEP_PREFIX + 'sent';
@@ -78,7 +93,7 @@ export function claudeCodeOwnPlan(messages: ChatMessage[]): PlanStep[] | undefin
 /**
  * A Claude Agent chat's plan when Claude Code wrote none: the work loop of
  * the latest request, read from what Claude Code is doing. The request goes
- * to Claude Code, then each phase (explore, build, verify, ship) is done once
+ * to Claude Code, then each phase (build, verify, ship) is done once
  * it has calls and the work moved on, active while it is the latest, pending
  * ahead of it while Claude Code works. A finished turn keeps only the phases
  * it touched, and a turn that only answered shows no plan.
@@ -91,10 +106,13 @@ export function claudeCodeActivityPlan(messages: ChatMessage[], working: boolean
   const after = messages.slice(start + 1);
   const counts = new Map<PlanStepKind, number>();
   let latest: PlanStepKind | undefined;
+  let looks = 0;
   let updatedAt = request.createdAt;
   for (const m of after) for (const call of m.toolCalls ?? []) {
+    const looked = callPhase(call) === 'look';
     const phase = claudeCodePhase(call);
     if (!phase) continue;
+    if (looked) looks++;
     counts.set(phase, (counts.get(phase) ?? 0) + 1);
     latest = phase;
     updatedAt = m.createdAt;
@@ -120,7 +138,7 @@ export function claudeCodeActivityPlan(messages: ChatMessage[], working: boolean
     else if (working && !latest && heard && i === 0) status = 'active';
     else if (working && i > at) status = 'pending';
     if (!status) return;
-    const note = n > 0 ? phase.note(n) : '';
+    const note = n > 0 ? phase.note(n, looks) : '';
     steps.push({ id: PHASE_STEP_PREFIX + phase.kind, title: phase.title, kind: phase.kind, status, ...(note ? { note } : {}), createdAt: request.createdAt, updatedAt });
   });
   return steps;

@@ -89,7 +89,7 @@ describe('planStepLinks on a Claude Agent chat', () => {
       msg({ role: 'tool', toolResult: { toolCallId: 'gh', output: ccPr } }),
     ];
     const plan = claudeCodeActivityPlan(messages, false)!;
-    expect(plan.map(s => s.id)).toEqual(['phase:sent', 'phase:explore', 'phase:build', 'phase:ship']);
+    expect(plan.map(s => s.id)).toEqual(['phase:sent', 'phase:build', 'phase:ship']);
     const links = planStepLinks(messages, plan);
     expect(links.get('phase:ship')?.prs).toEqual([ccPr]);
     expect(links.has('phase:build')).toBe(false);

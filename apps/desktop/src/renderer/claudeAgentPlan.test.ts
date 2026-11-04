@@ -12,9 +12,9 @@ const rows = (plan?: PlanStep[]) => plan?.map(s => [s.id, s.status]);
 
 describe('claudeCodePhase', () => {
   it('reads the phase from the tool, and for Bash from its command', () => {
-    expect(claudeCodePhase(call('Grep'))).toBe('explore');
+    expect(claudeCodePhase(call('Grep'))).toBe('build');
     expect(claudeCodePhase(call('Edit'))).toBe('build');
-    expect(claudeCodePhase(bash('git log --oneline -5'))).toBe('explore');
+    expect(claudeCodePhase(bash('git log --oneline -5'))).toBe('build');
     expect(claudeCodePhase(bash('npx vitest run src/a.test.ts'))).toBe('verify');
     expect(claudeCodePhase(bash('cargo clippy -p nekkod'))).toBe('verify');
     expect(claudeCodePhase(bash('git add -A && git commit -m x'))).toBe('build');
@@ -29,25 +29,24 @@ describe('claudeCodeActivityPlan', () => {
     const grep = call('Grep'), read = call('Read'), edit = call('Edit');
     const messages = [user('Old ask'), said([call('Edit')]), user('nekko agent\n- fix the composer text'), said([grep, read]), said([edit])];
     expect(rows(claudeCodeActivityPlan(messages, true))).toEqual([
-      ['phase:sent', 'done'], ['phase:explore', 'done'], ['phase:build', 'active'], ['phase:verify', 'pending'], ['phase:ship', 'pending'],
+      ['phase:sent', 'done'], ['phase:build', 'active'], ['phase:verify', 'pending'], ['phase:ship', 'pending'],
     ]);
     const plan = claudeCodeActivityPlan(messages, true)!;
     expect(plan[0].note).toBe('nekko agent');
-    expect(plan[1]).toMatchObject({ kind: 'explore', note: '2 reads and searches' });
-    expect(plan[2]).toMatchObject({ kind: 'build', note: '1 edit' });
+    expect(plan[1]).toMatchObject({ kind: 'build', note: '2 reads and searches, 1 edit' });
   });
 
   it('starts with the request on its way, and keeps only the phases a finished turn touched', () => {
     expect(rows(claudeCodeActivityPlan([user('Fix it')], true))).toEqual([
-      ['phase:sent', 'active'], ['phase:explore', 'pending'], ['phase:build', 'pending'], ['phase:verify', 'pending'], ['phase:ship', 'pending'],
+      ['phase:sent', 'active'], ['phase:build', 'pending'], ['phase:verify', 'pending'], ['phase:ship', 'pending'],
     ]);
-    expect(rows(claudeCodeActivityPlan([user('Fix it'), said([], 'Looking.')], true))?.[1]).toEqual(['phase:explore', 'active']);
+    expect(rows(claudeCodeActivityPlan([user('Fix it'), said([], 'Looking.')], true))?.[1]).toEqual(['phase:build', 'active']);
     const done = [user('Fix it'), said([call('Read'), call('Edit'), bash('npm test'), bash('gh pr create --fill')])];
     expect(rows(claudeCodeActivityPlan(done, false))).toEqual([
-      ['phase:sent', 'done'], ['phase:explore', 'done'], ['phase:build', 'done'], ['phase:verify', 'done'], ['phase:ship', 'done'],
+      ['phase:sent', 'done'], ['phase:build', 'done'], ['phase:verify', 'done'], ['phase:ship', 'done'],
     ]);
     expect(rows(claudeCodeActivityPlan([user('Fix it'), said([call('Read'), call('Edit')])], false))).toEqual([
-      ['phase:sent', 'done'], ['phase:explore', 'done'], ['phase:build', 'done'],
+      ['phase:sent', 'done'], ['phase:build', 'done'],
     ]);
   });
 
@@ -92,7 +91,7 @@ describe('sheetPlan', () => {
     expect(sheetPlan(session({ agentPlan: own }), providers, false)).toBe(own);
     const todo = call('TodoWrite', { todos: [{ content: 'Trace', status: 'in_progress' }] });
     expect(sheetPlan(session({ messages: [user('go'), said([todo]), result(todo.id, 'ok')] }), providers, false)?.[0].id).toBe('todo_1');
-    expect(sheetPlan(session({}), providers, false)?.map(s => s.id)).toEqual(['phase:sent', 'phase:explore']);
+    expect(sheetPlan(session({}), providers, false)?.map(s => s.id)).toEqual(['phase:sent', 'phase:build']);
     expect(sheetPlan(session({ providerId: 'oa' }), providers, true)).toBeUndefined();
   });
 });

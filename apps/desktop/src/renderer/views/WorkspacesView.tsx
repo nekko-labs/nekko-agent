@@ -10,6 +10,7 @@ import { ComputerGlyph } from '../components/ComputerChip.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
+import { localAgentStarts, onLocalAgentWorking } from '../workingAgents.js';
 import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
@@ -258,7 +259,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   // Seeded from the app-wide fold of agent events, so a chat already working
   // is marked so on the first frame; the host confirms on mount for runs that
   // began before this window did.
-  const [statuses, setStatuses] = useState<Map<string, AgentStatus>>(() => new Map(runningSessionIds().map((id) => [id, 'working' as AgentStatus])));
+  // A send from a chat pane counts too: the engine says nothing until the
+  // model's first token, which for Claude Code can be many seconds, and a sent
+  // chat with no status would sit in Done meanwhile.
+  const [statuses, setStatuses] = useState<Map<string, AgentStatus>>(() => new Map([...runningSessionIds(), ...localAgentStarts()].map((id) => [id, 'working' as AgentStatus])));
+  useEffect(() => onLocalAgentWorking((id, working) => setStatuses((prev) => {
+    if (working ? prev.has(id) : prev.get(id) !== 'working') return prev;
+    const m = new Map(prev);
+    if (working) m.set(id, 'working'); else m.delete(id);
+    return m;
+  })), []);
   useEffect(() => {
     window.nekko.runningSessions().then((ids) => setStatuses((prev) => {
       const missing = ids.filter((id) => !prev.has(id));
@@ -547,7 +557,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     ];
   })()];
 
-  // When a card changes group (Exploring to Building), note where every card was
+  // When a card changes group (Building to Verifying), note where every card was
   // before this render commits, then fly the movers from there. Not when the
   // grouping itself changed: then every card moves and none of them is news.
   const listRef = useRef<HTMLDivElement>(null);

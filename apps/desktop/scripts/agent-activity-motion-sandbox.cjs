@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     await ready();
     // b waits on a question, c and a are working, d has stopped with a watch armed.
-    const phases = { a: { phase: 'building', exchangeCount: 2 }, b: { phase: 'exploring', exchangeCount: 2 }, c: { phase: 'verifying', exchangeCount: 2 }, d: { phase: 'shipping', exchangeCount: 2, activeWatchCount: 1 } };
+    const phases = { a: { phase: 'building', exchangeCount: 2 }, b: { phase: 'building', exchangeCount: 2 }, c: { phase: 'verifying', exchangeCount: 2 }, d: { phase: 'shipping', exchangeCount: 2, activeWatchCount: 1 } };
     await run(`localStorage.setItem('fixture.summaries', ${JSON.stringify(JSON.stringify(phases))}); localStorage.removeItem('nekko.agentPanelView'); localStorage.setItem('fixture.pending', JSON.stringify({ b: {} })); localStorage.setItem('fixture.running', JSON.stringify(['a', 'c'])); location.reload()`).catch(() => {});
     await sleep(500); await ready(); await sleep(1200);
     await shot('default-view');
