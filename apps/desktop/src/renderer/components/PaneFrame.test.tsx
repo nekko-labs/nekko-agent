@@ -4,6 +4,7 @@ import { PaneFrame, targetAt } from './PaneFrame.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { confirmDeletion } from './DeleteConfirmation.js';
 import { CloseIcon, TrashIcon } from '../icons.js';
+import { WINDOW_HOTKEYS } from '../window-shortcuts.js';
 
 const state = vi.hoisted(() => ({
   settings: null as { chatPaneAction?: 'complete' | 'delete' } | null,
@@ -83,7 +84,8 @@ describe('pane lifecycle controls', () => {
   it('defaults chats to Complete using existing archive semantics, not Close', () => {
     const { button, onClose } = frame();
     expect(button.props['aria-label']).toBe('Complete My chat');
-    expect(button.props.title).toBe('Complete this chat (Ctrl+Shift+E)');
+    // The label follows the platform (Cmd on a Mac, Ctrl elsewhere); window-shortcuts.test.ts covers both.
+    expect(button.props.title).toBe(`Complete this chat (${WINDOW_HOTKEYS.complete})`);
     // The completion control wears an X now (#533); it still archives, never deletes.
     expect(React.Children.toArray(button.props.children).some((c) => React.isValidElement(c) && c.type === CloseIcon)).toBe(true);
     button.props.onClick();

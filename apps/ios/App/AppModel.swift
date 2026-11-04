@@ -54,6 +54,10 @@ final class AppModel {
     var newChatRequested = false
     /// "Nekko, open settings" from a chat's dictation: show Settings once.
     var openSettings = false
+    /// A tap on the banner's *Pair again* when the pairing key no longer
+    /// matches: push PairView once so the user can rescan the code without
+    /// digging through Settings.
+    var openPair = false
     /// First run, step 3 (IO-31): shown right after the first pairing, where
     /// notification permission is asked.
     var showNotificationStep = false
@@ -91,7 +95,9 @@ final class AppModel {
             makeConnection: { RelayClient(config: $0, transport: URLSessionTransport(), prober: HealthProber()) },
             deviceName: { deviceName },
             app: Bundle.main.bundleIdentifier,
-            offlineFiles: offlineFiles)
+            offlineFiles: offlineFiles,
+            // Every paired computer stays connected, for the chat list across all of them (2026-11-04).
+            stayConnected: true)
         // Change actions (IO-33) are signed in the Secure Enclave behind Face ID or the passcode.
         computers.changeSigner = SecureEnclaveChangeSigner(store: keychain)
         // Every relay HELLO is signed with this iPhone's device key (decision 0036), without asking.
@@ -567,6 +573,7 @@ final class AppModel {
     /// The app's own state for a computer that is gone from the list.
     private func forgotten(_ id: String) {
         if prefs.defaultComputer == id { prefs.defaultComputer = store.activeId }
+        if prefs.chatsFilter == id { prefs.chatsFilter = nil }
         prefs.lastModel[id] = nil
         prefs.lastEffort[id] = nil
         prefs.lastTools[id] = nil
@@ -601,6 +608,7 @@ final class AppModel {
         keychain.wipe()
         activities.endAll()
         prefs.defaultComputer = nil
+        prefs.chatsFilter = nil
         prefs.lastModel = [:]
         prefs.lastEffort = [:]
         prefs.lastTools = [:]

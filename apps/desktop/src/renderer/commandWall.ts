@@ -493,6 +493,12 @@ export function setZoneTint(root: WbNode | null, paneId: string, tint: number): 
   return mapLeaf(root, paneId, (p) => (p.tint === tint ? p : { ...p, tint }));
 }
 
+/** Rename a zone from its header's menu; a blank name keeps the old one. */
+export function renameZone(root: WbNode | null, paneId: string, name: string): WbNode | null {
+  const zone = name.trim();
+  return zone ? mapLeaf(root, paneId, (p) => (p.zone === zone ? p : { ...p, zone })) : root;
+}
+
 /** A zone with nothing in it, named and coloured after the ones already on `root`. */
 export function emptyZone(root: WbNode | null): WbPane {
   return { id: newPaneId(), kind: 'zone', refId: '', zone: nextZoneName(root), tint: nextZoneTint(root) };

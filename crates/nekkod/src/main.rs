@@ -44,6 +44,7 @@ mod hub;
 mod hypergate;
 mod image_turns;
 mod installs;
+mod keys;
 mod library;
 mod local_relay;
 mod logs;
@@ -55,6 +56,7 @@ mod model_server;
 mod model_tunnel;
 mod native;
 mod oauth;
+mod pr_autowatch;
 mod pr_checkouts;
 mod privacy;
 mod procgroup;
@@ -188,7 +190,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         });
     }
     let settings = settings::Settings::new(data_dir.clone(), hub.clone());
-    let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone()));
+    let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone(), settings.store.clone()));
     // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
     match claude_plan::migrate(&data_dir, &settings.store, nekko_oauth::now_ms()) {
         Ok(done) if !done.is_empty() => eprintln!(

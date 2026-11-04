@@ -14,9 +14,37 @@ const host: HostView = {
   onBattery: false, batteryPct: 100, networkId: 'gw:a4:83:e7:1c:22:9f', networkTrusted: true,
 };
 const unsampled: HostView = { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false };
-const audit = (ago: number, job: string, result: AuditLine['result'], seconds: number, reason: string[] = []): AuditLine => ({
-  ts: NOW - ago, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'ios-native', job, result, seconds, reason,
-});
+const audit = (ago: number, job: string, result: AuditLine['result'], seconds: number, reason: string[] = [], pr?: number): AuditLine => {
+  const end = NOW - ago;
+  const jobId = 9000 + ago;
+  return {
+    ts: end, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'ios-native', job, result, seconds, reason,
+    jobId, url: `https://github.com/nekko-labs/nekko-agent/actions/runs/${jobId}/job/${jobId}`,
+    pr: pr ? { number: pr, url: `https://github.com/nekko-labs/nekko-agent/pull/${pr}` } : null,
+    vm: `nekko-macbookpro-77cce2cf-${end}-1`,
+    events: [
+      { ts: end - seconds - 95, state: 'starting' }, { ts: end - seconds - 41, state: 'ready' }, { ts: end - seconds, state: 'running' },
+      ...(result === 'finished' ? [] : [{ ts: end - 12, state: 'cleaning' as const }]),
+    ],
+  };
+};
+// A job log as GitHub returns it: timestamped lines, the failure at the end.
+const JOB_LOG = Array.from({ length: 60 }, (_, i) => `2026-11-03T07:${String(10 + Math.floor(i / 6)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}.1234567Z ${
+  i === 0 ? 'Current runner version: \'2.329.0\'' : i < 55 ? `[command]/usr/bin/xcodebuild -scheme NekkoAgent -destination 'platform=iOS Simulator' build (step ${i})` : i === 58 ? '##[error]Process completed with exit code 65.' : 'Testing failed: NekkoKitTests.CloudSyncTests'
+}`).join('\n');
+// The guest's console, as nekko-runner-boot.sh and the runner print it.
+const VM_LOG = [
+  '2026-11-03T07:04:12Z starting the GitHub Actions runner',
+  '',
+  '√ Connected to GitHub',
+  '',
+  'Current runner version: \'2.329.0\'',
+  '2026-11-03 07:04:15Z: Listening for Jobs',
+  '2026-11-03 07:04:17Z: Running job: iOS build',
+  '2026-11-03 07:19:51Z: Job iOS build completed with result: Failed',
+  '2026-11-03T07:19:52Z runner exited with 0',
+  '2026-11-03T07:19:52Z shutting down',
+].join('\n');
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['config']['settings']> = {}): RunnerView => ({
   config: {
     id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac',
@@ -36,14 +64,17 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
     state: 'running', awake: true, reasons: ['userActive'],
     slots: [{ state: 'running', job: { repo: 'nekko-labs/nekko-agent', runId: 904, jobId: 9041, workflow: 'ios-native', job: 'PR #904' }, since: NOW - 11 * 60, drainEndsAt: null }],
     today: { jobs: 14, seconds: 2 * 3600 + 38 * 60 },
-    recent: [audit(25 * 60, 'PR #903', 'finished', 14 * 60), audit(70 * 60, 'main', 'finished', 17 * 60), audit(3 * 3600, 'PR #899', 'lost', 6 * 60, ['slept'])],
+    recent: [audit(25 * 60, 'iOS build', 'finished', 14 * 60, [], 903), audit(70 * 60, 'iOS build', 'finished', 17 * 60), audit(3 * 3600, 'iOS build', 'lost', 6 * 60, ['slept'], 899)],
   }, { priority: 'balanced' })],
+  'recent-job-open': async () => scenes.running(),
   waiting: async () => [view({
     state: 'waiting', reasons: ['onBattery', 'network', 'userActive'], available: 1, limit: 'memory',
     host: { ...host, onBattery: true, batteryPct: 62, networkId: 'gw:10:0c:6e:5b:01:aa', networkTrusted: false },
     today: { jobs: 3, seconds: 41 * 60 },
   })],
   error: async () => [view({ state: 'error', error: 'No VM image yet.', today: { jobs: 0, seconds: 0 } }, { macosSlots: 1 })],
+  // The runner below a list of scheduled tasks, as the tab shows it once tasks exist.
+  'with-tasks': async () => [view({ state: 'waiting', reasons: ['userActive'], available: 0, limit: 'memory', today: { jobs: 0, seconds: 0 } }, { macosSlots: 1 })],
   'off-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   'settings-no-vm-support': async () => [view({ state: 'off', error: 'VM support unavailable: the nekko-vm helper is not installed.', host: unsampled, reasons: ['off'] }, { enabled: false, macosSlots: 1 })],
   unavailable: async () => { throw new Error('unknown channel runner:list'); },
@@ -51,6 +82,8 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'connect-step-3': async () => [],
   'github-account': async () => [],
   'github-account-no-gh': async () => [],
+  'github-account-no-gh-org': async () => [],
+  'github-account-checking': async () => [],
   'github-free-org': async () => [],
   'github-waiting': async () => [],
   'github-confirm': async () => [],
@@ -95,7 +128,7 @@ const images: Record<string, ImageView | null> = {
   // A daemon with no builder: the card keeps its error line.
   error: null,
   'first-visit': NONE, 'connect-step-1': NONE, 'connect-step-3': NONE,
-  'github-account': NONE, 'github-account-no-gh': NONE, 'github-free-org': NONE, 'github-waiting': NONE, 'github-confirm': NONE, 'github-confirm-public': NONE,
+  'github-account': NONE, 'github-account-no-gh': NONE, 'github-account-no-gh-org': NONE, 'github-account-checking': NONE, 'github-free-org': NONE, 'github-waiting': NONE, 'github-confirm': NONE, 'github-confirm-public': NONE,
   'github-handoff': READY, 'github-fork': NONE, 'github-fork-on': NONE, 'github-fork-left-off': NONE,
   'first-visit-connected': NONE, 'setup-plan': NONE, 'setup-no-xcode': NONE,
   'setup-download': download, 'setup-cancel': download,
@@ -136,15 +169,32 @@ const github: Record<string, GithubSetupView> = {
 let scene = 'first-visit';
 let imageChanged: (v: ImageView) => void = () => {};
 let runnersChanged: (v: RunnerView[]) => void = () => {};
+let githubChanged: (v: GithubSetupView) => void = () => {};
 let imageRefused = false;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const settings = { providers: [], workspaceFolders: [], workspaces: [], monitors: {}, theme: 'dark', experimental: {}, agent: {}, ui: {}, connectors: [] };
+const TASKS = [
+  { id: 'w1', name: 'Summarize my GitHub notifications', category: 'Reporting', enabled: true, steps: [{ id: 's1', name: 'Summarize', kind: 'prompt', run: 'x' }], triggers: [{ id: 't1', kind: 'manual' }] },
+  { id: 'w2', name: 'Nightly dependency check', category: 'Maintenance', enabled: true, steps: [{ id: 's1', name: 'Check', kind: 'shell', run: 'npm outdated' }], triggers: [{ id: 't1', kind: 'manual' }] },
+] as any[];
 const bridge: any = {
   listRunners: () => scenes[scene](),
-  githubAccounts: async () => (scene === 'github-account-no-gh' ? { login: null, accounts: [] } : signedIn),
+  // `checking` never answers, so the sheet stays on its first frame.
+  githubAccounts: () => (scene === 'github-account-checking' ? new Promise(() => {}) : Promise.resolve(scene.startsWith('github-account-no-gh') ? { login: null, accounts: [] } : signedIn)),
   githubStatus: async () => github[scene] ?? IDLE_GITHUB_SETUP,
+  // A nameless start makes a pending app for the user's own account, as the daemon does.
+  githubStart: async (req: { owner: string; kind: 'user' | 'org' }) => {
+    githubChanged({ ...IDLE_GITHUB_SETUP, step: 'create', owner: req.owner || null, kind: req.kind });
+    return { url: 'https://github.com/settings/apps/new' };
+  },
+  githubCancel: async () => { githubChanged(IDLE_GITHUB_SETUP); return IDLE_GITHUB_SETUP; },
+  onGithubSetupChanged: (cb: (v: GithubSetupView) => void) => { githubChanged = cb; return () => {}; },
+  openPath: async (url: string) => { (window as any).opened = [...((window as any).opened ?? []), url]; },
   connectRunner: async () => { if (scene === 'connect-busy') await sleep(1500); return off(); },
   setRunnerEnabled: async () => view({}),
+  runnerJobLog: async () => JOB_LOG,
+  runnerVmLog: async () => VM_LOG,
+  openPath: async () => {},
   imageStatus: async () => {
     // A daemon that is not ready for the first call, as at launch.
     if (scene === 'image-retry' && !imageRefused) { imageRefused = true; throw new Error('not yet'); }
@@ -155,7 +205,7 @@ const bridge: any = {
   onImageChanged: (cb: (v: ImageView) => void) => { imageChanged = cb; return () => {}; },
   onRunnersChanged: (cb: (v: RunnerView[]) => void) => { runnersChanged = cb; return () => {}; },
   setForkApproval: async () => ({ done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions' }),
-  listWorkflows: async () => ({ workflows: [], runs: [] }),
+  listWorkflows: async () => ({ workflows: scene === 'with-tasks' ? TASKS : [], runs: [] }),
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if (key in target) return target[key]; if (key.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
@@ -165,6 +215,7 @@ function Fixture() {
   const show = (next: string) => {
     localStorage.clear();
     scene = next;
+    (window as any).opened = [];
     useStore.setState({ view: 'workflows', providers: [], models: [], sessions: [], terminals: [], workspaces: [], settings, settingsLoaded: true, installedSkillDefs: [] } as any);
     setEpoch((e) => e + 1);
   };

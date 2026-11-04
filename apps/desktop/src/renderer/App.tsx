@@ -30,7 +30,6 @@ import { UpdateBanner } from './components/UpdateBanner.js';
 import { AppNotices } from './components/AppNotices.js';
 import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
-import { ViewReveal } from './components/ViewReveal.js';
 import { DesignBoardView } from './views/DesignBoardView.js';
 import { ArtifactsView } from './views/ArtifactsView.js';
 import { SkillsView } from './views/SkillsView.js';
@@ -358,7 +357,6 @@ export function App() {
           {view === 'memory' && <MemoryView />}
           {view === 'settings' && <SettingsView />}
           </ErrorBoundary>
-          <ViewReveal view={view} />
         </main>
 
         {/* First-run setup wizard: covers nav + main but leaves the window's

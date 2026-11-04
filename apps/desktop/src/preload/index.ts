@@ -294,6 +294,7 @@ const api: NekkoApi = {
   linkPrStack: (sessionId, url) => inv(IpcChannels.prLinkStack, sessionId, url),
   createPr: (workspaceId, opts) => inv(IpcChannels.prCreate, workspaceId, opts),
   getPrChecks: (url) => inv(IpcChannels.prChecks, url),
+  getPrInfo: (url) => inv(IpcChannels.prInfo, url),
 
   gitDiff: (workspaceId, opts) => inv(IpcChannels.gitDiff, workspaceId, opts),
   gitLog: (workspaceId, opts) => inv(IpcChannels.gitLog, workspaceId, opts),
@@ -367,6 +368,8 @@ const api: NekkoApi = {
   updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
   removeRunner: (id) => inv(IpcChannels.runnerRemove, id),
   setRunnerEnabled: (id, enabled) => inv(IpcChannels.runnerSetEnabled, id, enabled),
+  runnerJobLog: (id, jobId) => inv(IpcChannels.runnerJobLog, id, jobId),
+  runnerVmLog: (id, vm) => inv(IpcChannels.runnerVmLog, id, vm),
   githubAccounts: () => inv(IpcChannels.runnerGithubAccounts),
   githubStart: (req) => inv(IpcChannels.runnerGithubStart, req),
   githubStatus: () => inv(IpcChannels.runnerGithubStatus),

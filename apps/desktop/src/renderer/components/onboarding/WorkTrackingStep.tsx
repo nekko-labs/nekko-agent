@@ -26,6 +26,7 @@ export function WorkTrackingStep({
   }));
   const [prs, setPrs] = useState<NonNullable<AppSettings['pullRequests']>>(() => ({
     linkIssue: true,
+    watchUntilMergeReady: true,
     includePrompt: false,
     includeScreenshots: false,
     ...settings?.pullRequests,

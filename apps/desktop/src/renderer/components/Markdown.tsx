@@ -7,6 +7,7 @@ import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
 
 import { ContextAction, ContextMenu } from './ContextMenu.js';
+import { isPrUrl, PrLinkChip } from './PrLinkChip.js';
 import { useStore } from '../store.js';
 import { BranchIcon, CompassIcon, ListIcon, QuestionIcon, TerminalIcon } from '../icons.js';
 import { endsOnUnlabelledQuestion, topicLine, type Topic } from '../replyTopics.js';
@@ -562,7 +563,8 @@ function Ref({ href: raw, basePath, doc, children }: { href: string; basePath?: 
   const target = basePath ? resolveRef(basePath, href) : href;
   return (
     <button
-      className="wrap-break-word underline"
+      type="button"
+      className="wrap-break-word cursor-pointer underline"
       style={{ color: 'var(--accent)' }}
       title={`Open ${target}`}
       onClick={() => { useStore.getState().openFilePane(target, sessionId); }}
@@ -639,13 +641,19 @@ function Link({ href, doc, children }: { href: string; doc?: boolean; children: 
   const safe = safeHref(href);
   if (!safe) return <span className="wrap-break-word text-ink-soft" title={href}>{children}</span>;
   const web = /^https?:\/\//i.test(safe);
+  const openMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+  const menuNode = menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+    {linkContextActions(safe).map((action) => <ContextAction key={action.label} onClick={() => { setMenu(null); action.run(); }}>{action.label}</ContextAction>)}
+  </ContextMenu>;
+  // A PR reads as its live state, so it needs no site preview.
+  if (web && !doc && isPrUrl(safe)) return <><PrLinkChip href={safe} label={children === href ? undefined : children} onContextMenu={openMenu} />{menuNode}</>;
   return (
     <>
-      <a href={safe} target="_blank" rel="noreferrer" className="wrap-break-word underline" style={{ color: 'var(--accent)' }} onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setMenu({ x: e.clientX, y: e.clientY });
-      }}>
+      <a href={safe} target="_blank" rel="noreferrer" className="wrap-break-word cursor-pointer underline" style={{ color: 'var(--accent)' }} onContextMenu={openMenu}>
         {children}
       </a>
       {web && !doc && <button type="button" className="ml-1 rounded border border-line px-1.5 py-0.5 text-2xs text-ink-soft hover:text-ink focus-visible:outline focus-visible:outline-accent" aria-expanded={preview} onClick={() => setPreview(!preview)}>{preview ? 'Close preview' : 'Preview'}</button>}
@@ -657,9 +665,7 @@ function Link({ href, doc, children }: { href: string; doc?: boolean; children: 
         <iframe src={safe} title={`Preview of ${safe}`} className="block h-64 w-full bg-white" sandbox="allow-scripts allow-forms" referrerPolicy="no-referrer" />
         <span className="block px-2 py-1 text-2xs text-ink-faint">Some sites block embedded previews. Open in browser pane if this stays blank.</span>
       </span>}
-      {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-        {linkContextActions(safe).map((action) => <ContextAction key={action.label} onClick={() => { setMenu(null); action.run(); }}>{action.label}</ContextAction>)}
-      </ContextMenu>}
+      {menuNode}
     </>
   );
 }

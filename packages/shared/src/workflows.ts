@@ -23,7 +23,7 @@ export type WorkflowStepKind = 'prompt' | 'skill' | 'workflow' | 'shell' | 'acti
 export const WORKFLOW_STEP_KINDS: Array<{ kind: WorkflowStepKind; label: string; hint: string }> = [
   { kind: 'prompt', label: 'Prompt', hint: 'Give the agent an instruction and let it work.' },
   { kind: 'skill', label: 'Skill', hint: 'Run an installed skill by name.' },
-  { kind: 'workflow', label: 'Workflow', hint: 'Trigger another workflow and wait for it.' },
+  { kind: 'workflow', label: 'Scheduled task', hint: 'Run another scheduled task and wait for it.' },
   { kind: 'shell', label: 'Shell', hint: 'Run a command in the workspace.' },
   { kind: 'action', label: 'Action', hint: 'Call an integration: post a message, comment on a PR, set a commit status.' },
 ];
@@ -247,7 +247,7 @@ export const WORKFLOW_ACTIONS: WorkflowActionSpec[] = [
     connector: 'github',
     group: 'GitHub',
     label: 'Keep one PR comment up to date',
-    hint: 'Updates the comment this workflow left on the PR, or adds it. With no PR number it skips. @mentions are posted as plain text, and a very long body is cut.',
+    hint: 'Updates the comment this task left on the PR, or adds it. With no PR number it skips. @mentions are posted as plain text, and a very long body is cut.',
     params: [
       { key: 'repo', label: 'Repo', placeholder: 'owner/name (defaults to the trigger)' },
       { key: 'number', label: 'PR number', placeholder: '{{trigger.number}}' },
@@ -328,7 +328,7 @@ export type WorkflowTriggerKind = 'manual' | 'schedule' | 'cli' | 'slack' | 'git
 export const WORKFLOW_TRIGGER_KINDS: Array<{ kind: WorkflowTriggerKind; label: string; hint: string }> = [
   { kind: 'manual', label: 'Manual', hint: 'Only when you press Run.' },
   { kind: 'schedule', label: 'Schedule', hint: 'On a cron expression or a fixed interval.' },
-  { kind: 'cli', label: 'CLI', hint: 'From the terminal: nekko-agent workflow run <command>.' },
+  { kind: 'cli', label: 'CLI', hint: 'From the terminal: nekko-agent scheduled-task run <command>.' },
   { kind: 'slack', label: 'Slack', hint: 'When a message matches in a channel.' },
   { kind: 'git', label: 'Git provider', hint: 'On a pull request, push, or comment event.' },
   { kind: 'connector', label: 'Connector', hint: 'Poll an integration (Slack, Linear, Jira, GitHub, GitLab) for new events.' },
@@ -593,7 +593,7 @@ export function triggerLabel(t: WorkflowTrigger, wf?: Workflow): string {
       if (t.cron) return `Cron ${t.cron}`;
       return t.intervalMs ? `Every ${formatEvery(t.intervalMs)}` : 'Schedule (unset)';
     case 'cli':
-      return `CLI: ${wf ? cliCommand(wf, t) : t.command || '(workflow slug)'}`;
+      return `CLI: ${wf ? cliCommand(wf, t) : t.command || '(task slug)'}`;
     case 'slack':
       return `Slack ${t.channel ? `#${t.channel.replace(/^#/, '')}` : '(any channel)'}${t.keyword ? ` · "${t.keyword}"` : ''}`;
     case 'git': {
@@ -807,7 +807,7 @@ export function stepSummary(step: WorkflowStep): string {
     case 'shell':
       return short || 'no command';
     case 'workflow':
-      return 'runs another workflow';
+      return 'runs another scheduled task';
     case 'action':
       return findWorkflowAction(step.run)?.label ?? (short || 'no action chosen');
     case 'skill':
@@ -1637,7 +1637,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: 'blank',
-    name: 'Empty workflow',
+    name: 'Empty scheduled task',
     description: 'One prompt step, run by hand. Build it up from there.',
     category: UNCATEGORIZED,
     build: () => ({

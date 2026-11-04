@@ -118,7 +118,7 @@ describe('RunnerCard', () => {
 
   it('a_build_shows_its_stage_and_bar', () => {
     const html = render(noImage, image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] }));
-    expect(html).toContain('Download macOS: 12.4 of 25.6 GB');
+    expect(html).toContain('Download the macOS image: 12.4 of 25.6 GB');
     expect(html).toContain('width:48.4375%');
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('Details');
@@ -126,7 +126,7 @@ describe('RunnerCard', () => {
   });
 
   it('a_waiting_build_gives_its_reason', () => {
-    expect(render(noImage, image({ state: 'waiting', stage: 'install', detail: 'Waiting for power: plug this Mac in' }))).toContain('Install macOS: Waiting for power: plug this Mac in');
+    expect(render(noImage, image({ state: 'waiting', stage: 'install', detail: 'Waiting for power: plug this Mac in' }))).toContain('Install the macOS VM: Waiting for power: plug this Mac in');
   });
 
   it('a_failed_build_says_why_and_a_paused_one_resumes', () => {

@@ -406,9 +406,11 @@ fn the_sudoers_file_for_homebrew_is_removed_after_it() {
     let steps = xcode_steps(Kind::MacosOnly);
     let add = steps.iter().position(|s| s.command.contains("/etc/sudoers.d/build") && s.command.contains("NOPASSWD"));
     let brew = steps.iter().position(|s| s.command.contains("NONINTERACTIVE=1"));
+    let tools = steps.iter().position(|s| s.command.contains("brew install zstd gnu-tar"));
     let rm = steps.iter().position(|s| s.command.contains("rm -f /etc/sudoers.d/build"));
-    assert!(add < brew && brew < rm && add.is_some(), "{steps:?}");
+    assert!(add < brew && brew < tools && tools < rm && add.is_some(), "{steps:?}");
     assert!(!steps[brew.unwrap()].root, "Homebrew refuses to run as root");
+    assert!(!steps[tools.unwrap()].root, "Homebrew refuses to run as root");
 }
 
 #[test]
@@ -419,6 +421,7 @@ fn every_guest_step_has_its_limit() {
     assert_eq!(limit("-runFirstLaunch"), Duration::from_secs(20 * 60));
     assert_eq!(limit("-downloadPlatform iOS"), Duration::from_secs(60 * 60));
     assert_eq!(limit("NONINTERACTIVE=1"), Duration::from_secs(20 * 60));
+    assert_eq!(limit("brew install zstd gnu-tar"), Duration::from_secs(10 * 60));
     let sim = steps.iter().find(|s| s.command.contains("-downloadPlatform iOS")).unwrap();
     assert!(sim.command.contains("launchctl asuser") && sim.command.contains("sudo -u nekko-build -H"));
 }

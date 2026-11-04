@@ -446,7 +446,7 @@ function CliTab({ running }: { running: boolean }) {
       </Step>
       <p className="text-2xs text-ink-faint">
         <span className="font-mono">{command} --help</span> lists every command: sessions, workspaces, tasks, skills,
-        workflows and training runs.
+        scheduled tasks and training runs.
       </p>
     </div>
   );

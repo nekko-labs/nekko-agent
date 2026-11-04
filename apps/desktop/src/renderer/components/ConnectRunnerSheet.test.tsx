@@ -8,7 +8,7 @@ vi.mock('./primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { AccountStep, ConfirmStep, ConnectBody, ForkStep, WaitingStep, confirmFork, emptyConnectForm, sheetScreen, stepError, submitConnect, submitSetup, type AccountChoice } from './ConnectRunnerSheet.js';
+import { AccountStep, OWN_ACCOUNT, ConfirmStep, ConnectBody, ForkStep, WaitingStep, confirmFork, emptyConnectForm, sheetScreen, stepError, submitConnect, submitSetup, type AccountChoice } from './ConnectRunnerSheet.js';
 
 const PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----';
 const form = (over: Partial<ConnectForm> = {}): ConnectForm => ({
@@ -143,12 +143,26 @@ describe('ConnectRunnerSheet GitHub steps', () => {
     for (const s of ['Where do your repos live?', 'nekko-labs', 'Organization', 'ermish', 'Your account', 'Another account', 'Type its name', 'Continue on GitHub', 'Use an app I already have']) expect(html).toContain(s);
   });
 
-  it('account_step_is_one_text_box_without_gh', () => {
-    const html = account({ login: null, accounts: [] }, { login: '', kind: 'org', canGroup: null, typed: true });
-    expect(html).not.toContain('Another account');
-    expect(html).toContain('GitHub account or org');
-    expect(button(html, 'Continue on GitHub')).toContain('disabled=""');
-    expect(button(account({ login: null, accounts: [] }, { login: 'acme', kind: 'org', canGroup: null, typed: true }), 'Continue on GitHub')).not.toContain('disabled=""');
+  it('account_step_says_it_is_checking_until_gh_answers', () => {
+    const html = renderToStaticMarkup(<AccountStep accounts={undefined} choice={OWN_ACCOUNT} error={null} busy={false} onChoice={() => {}} onContinue={() => {}} onManual={() => {}} />);
+    expect(html).toMatch(/role="status"[^>]*>.*Checking GitHub…/);
+    // Nothing to fill in yet: the fields would jump away as soon as gh answers.
+    for (const s of ['<input', 'Continue on GitHub', 'Another account']) expect(html).not.toContain(s);
+  });
+
+  it('without_gh_it_goes_straight_to_github_for_the_users_own_account', () => {
+    const none = { login: null, accounts: [] };
+    const html = account(none, OWN_ACCOUNT);
+    for (const s of ['<input', 'Another account', 'Org name']) expect(html).not.toContain(s);
+    expect(button(html, 'Continue on GitHub')).not.toContain('disabled=""');
+    expect(html).toContain('For an org, type its name');
+    // An org needs its name, because GitHub puts it in the address.
+    const org = account(none, { login: '', kind: 'org', canGroup: null, typed: true });
+    expect(org).toContain('Org name');
+    expect(org).not.toContain('My account');
+    expect(button(org, 'Continue on GitHub')).toContain('disabled=""');
+    expect(org).toContain('Use my own account instead');
+    expect(button(account(none, { login: 'acme', kind: 'org', canGroup: null, typed: true }), 'Continue on GitHub')).not.toContain('disabled=""');
   });
 
   it('a_free_org_gets_the_single_repo_offer_before_anything_is_created', () => {

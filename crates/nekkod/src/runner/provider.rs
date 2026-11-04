@@ -26,7 +26,7 @@ pub enum RunnerStatus {
 }
 
 /// The job a runner took.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobRef {
     pub repo: String,
@@ -34,6 +34,18 @@ pub struct JobRef {
     pub job_id: u64,
     pub workflow: String,
     pub job: String,
+    /// The job's page; empty when the provider gave none.
+    #[serde(default)]
+    pub url: String,
+    /// The pull request the job ran for.
+    #[serde(default)]
+    pub pr: Option<PrRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PrRef {
+    pub number: u64,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -218,7 +230,14 @@ mod tests {
             allow_public: false,
             protected_only: true,
         }));
-        let job = JobRef { repo: "a/b".into(), run_id: 1, job_id: 9, workflow: "w".into(), job: "j".into() };
+        let job = JobRef {
+            repo: "a/b".into(),
+            run_id: 1,
+            job_id: 9,
+            workflow: "w".into(),
+            job: "j".into(),
+            ..Default::default()
+        };
         for (r, tag) in [(&gh, "gh"), (&gl, "gl")] {
             log.lock().unwrap().clear();
             assert_eq!(p.mint(r, "n").await.unwrap().seed_file, tag);

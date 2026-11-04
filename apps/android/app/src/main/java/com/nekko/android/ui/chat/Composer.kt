@@ -68,10 +68,16 @@ import com.nekko.android.chat.SkillMenu
 import com.nekko.protocol.SkillSummary
 import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import com.nekko.protocol.QueuedPrompt
+import com.nekko.protocol.Session
 import com.nekko.protocol.SavedPrompt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
@@ -137,6 +143,8 @@ fun Composer(
     onRestored: () -> Unit = {},
     /** The computer is out of reach: what is sent waits on the phone (offline mode); said under the box. */
     sendsLater: String? = null,
+    /** This chat can hand a typed follow-up to a sub-agent (`ChatUi.offersSubagent`). */
+    offerSubagent: Boolean = false,
     /** The box's bottom row (the chat's model and context), inside the box. */
     footer: (@Composable () -> Unit)? = null,
 ) {
@@ -192,7 +200,7 @@ fun Composer(
         error = null
     }
 
-    val send = {
+    fun send(wrap: (String) -> String = { it }) {
         if (canSend) {
             // `/name rest` typed out in full runs that skill too, as on the desktop.
             val typedText = text
@@ -208,7 +216,7 @@ fun Composer(
             error = null
             scope.launch {
                 try {
-                    onSend(value, armed, sentPhotos.map { it.dataUrl })
+                    onSend(wrap(value), armed, sentPhotos.map { it.dataUrl })
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -229,6 +237,10 @@ fun Composer(
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (queued.isNotEmpty()) {
                 QueueList(queued, queuedPrompts, onEditQueued, if (running) onInterrupt else null) { error = it }
+            }
+            // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
+            if (offerSubagent && armedNone && text.isNotBlank() && !text.trimStart().startsWith("/")) {
+                WorkPlace(canSend, onHere = { send() }, onSubagent = { send(Session.Companion::inSubagent) })
             }
             mic?.let { m ->
                 when (val st = m.state) {
@@ -389,6 +401,23 @@ fun Composer(
                 footer?.invoke()
             }
         }
+    }
+}
+
+/** Where a typed follow-up runs: in this chat, or in a subagent that reports back. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WorkPlace(enabled: Boolean, onHere: () -> Unit, onSubagent: () -> Unit) {
+    val p = Nekko.palette
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        val colors = ButtonDefaults.outlinedButtonColors(contentColor = p.accent, disabledContentColor = p.inkFaint)
+        val border = BorderStroke(1.dp, p.line)
+        OutlinedButton(onClick = onHere, enabled = enabled, colors = colors, border = border, modifier = Modifier.testTag("composer.doItHere")) { Text(stringResource(R.string.chat_do_it_here)) }
+        OutlinedButton(onClick = onSubagent, enabled = enabled, colors = colors, border = border, modifier = Modifier.testTag("composer.inSubagent")) { Text(stringResource(R.string.chat_in_a_subagent)) }
+        Text(stringResource(R.string.chat_here_uses_more_context), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
     }
 }
 

@@ -1,7 +1,8 @@
-// Plan sheet evidence for a Claude Agent chat whose Claude Code wrote no plan:
-// the activity plan of its latest request (send, explore, build, verify, ship)
-// and the PR it opened on the Ship step. Captured hidden and off-screen on a
-// throwaway profile.
+// Plan sheet evidence for a Claude Agent chat: while Claude Code has written
+// no plan there is no sheet (no made-up placeholder steps), and the PR it
+// opened still shows on the PR row; once it calls TodoWrite, its own steps
+// are the sheet, with the PR on the step it had in progress. Captured hidden
+// and off-screen on a throwaway profile.
 const { app, BrowserWindow, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -65,16 +66,23 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 30 && !await run(`!!document.querySelector('[data-chat-surface]')?.textContent.includes('Opening the PR')`); i++) await sleep(100);
     // A hidden window can hand back its last painted frame: capture once to flush it.
     await sleep(2500); await win.capturePage(undefined, { stayHidden: true }); await sleep(800);
-    await shot('plan-folded');
+    await shot('no-plan');
     report.anims = await run(`document.getAnimations().map(a => [a.animationName || a.transitionProperty, a.playState, Math.round(a.currentTime), a.effect?.target?.className?.slice?.(0, 40)])`);
     report.sheet = await run(`(() => { const e = document.querySelector('[data-plan-sheet]'); return e && { t: getComputedStyle(e).transform, r: e.getBoundingClientRect().toJSON(), o: getComputedStyle(e.closest('[data-chat-surface]') || e).opacity }; })()`);
-    await check('a Claude Agent chat shows the sheet', `!!document.querySelector('[data-plan-sheet]')`);
-    await check('the phase Claude Code is in is the folded line', `document.querySelector('[data-plan-sheet]')?.textContent.includes('Open a pull request')`);
-    await check('the PR Claude Code opened shows', `!!document.querySelector('[data-plan-sheet] [data-plan-chip="pr"]')`);
+    await check('no plan written, no sheet', `!document.querySelector('[data-plan-sheet]')`);
+    await check('the PR still shows below the chat', `document.querySelector('[data-chat-surface]')?.textContent.includes('#1150') || document.querySelector('[data-chat-surface]')?.textContent.includes('1 pull request')`);
+    // Claude Code writes its own plan: the sheet shows its steps.
+    await run(`(() => { const f = layoutFixture, s = f.records[0], t = s.messages[0].createdAt;
+      const todo = { id: "tw", name: "TodoWrite", input: { todos: [{ content: "Find the menu styles", status: "completed" }, { content: "Fix the menus and the gradient", status: "completed" }, { content: "Open the PR", status: "in_progress" }] } };
+      s.messages.splice(6, 0, { id: "m6b", role: "assistant", content: "", toolCalls: [todo], createdAt: t + 5500 }, { id: "m6c", role: "tool", content: "", toolResult: { toolCallId: "tw", output: "Todos have been modified successfully." }, createdAt: t + 5600 });
+      // A new record, so the chat sees a changed session rather than the same object.
+      const next = f.records[0] = { ...s, messages: [...s.messages] }; f.putCachedSession(next); f.emitAgent({ type: "session_meta", sessionId: next.id }); })()`);
+    for (let i = 0; i < 30 && !await run(`!!document.querySelector('[data-plan-sheet]')`); i++) await sleep(100);
+    await check("Claude Code's own plan is the sheet", `!!document.querySelector('[data-plan-sheet]')?.textContent.includes('Open the PR')`);
     await run(`document.querySelector('.plan-sheet-fold')?.click()`);
     await sleep(1500);
-    await check('the PR sits on the Ship step', `!!document.querySelector('[data-plan-step-id="phase:ship"] [data-plan-chip="pr"]')`);
-    await check('one step per phase, not per prompt', `document.querySelectorAll('[data-plan-step-id]').length === 5 && !document.querySelector('[data-plan-sheet]').textContent.includes('Ask Claude Code')`);
+    await check('its three steps, nothing invented', `document.querySelectorAll('[data-plan-step-id]').length === 3 && !document.querySelector('[data-plan-step-id^="phase:"]')`);
+    await check('the PR sits on the step in progress', `!!document.querySelector('[data-plan-step-id="todo_3"] [data-plan-chip="pr"]')`);
     await win.capturePage(undefined, { stayHidden: true }); await sleep(800);
     await shot('plan-open');
     report.hidden = !win.isVisible(); report.focused = win.isFocused(); report.bounds = win.getBounds();

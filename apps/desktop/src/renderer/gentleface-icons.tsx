@@ -1,9 +1,10 @@
 /*
  * Gentleface icons (https://www.gentleface.com, MIT license).
  * Icon paths are embedded from the gentleface iconify JSON.
- * Each icon has a line (static) and a solid (hover/active) variant.
+ * Motion assets play once on interaction; icons without motion use line/solid variants.
  */
-import React from 'react';
+import React, { useId, useLayoutEffect, useRef } from 'react';
+import { GENTLEFACE_MOTION } from './gentleface-motion-assets.js';
 
 export type GfIconName =
   | 'sidebar-collapse'
@@ -12,6 +13,7 @@ export type GfIconName =
   | 'check-circle'
   | 'log-out'
   | 'send'
+  | 'stop'
   | 'folder-open'
   | 'terminal'
   | 'workflow'
@@ -26,6 +28,7 @@ export type GfIconName =
 type Variant = { line: string; solid: string };
 
 const PATHS: Record<GfIconName, Variant> = {
+  stop: { line: "<path fill=\"currentColor\" d=\"M12.86 11.736C12.758 11.993 12.609 12.219 12.414 12.414C12.219 12.609 11.993 12.758 11.736 12.86C11.5 12.953 11.254 13 11 13L4 13C3.746 13 3.5 12.953 3.264 12.86C3.007 12.758 2.781 12.609 2.586 12.414C2.391 12.219 2.242 11.993 2.14 11.736C2.047 11.5 2 11.254 2 11L2 4C2 3.746 2.047 3.5 2.14 3.264C2.242 3.007 2.391 2.781 2.586 2.586C2.781 2.391 3.007 2.242 3.264 2.14C3.5 2.047 3.746 2 4 2L11 2C11.254 2 11.5 2.047 11.736 2.14C11.993 2.242 12.219 2.391 12.414 2.586C12.609 2.781 12.758 3.007 12.86 3.264C12.953 3.5 13 3.746 13 4L13 11C13 11.254 12.953 11.5 12.86 11.736ZM3.293 11.707C3.488 11.902 3.724 12 4 12L11 12C11.276 12 11.512 11.902 11.707 11.707C11.902 11.512 12 11.276 12 11L12 4C12 3.724 11.902 3.488 11.707 3.293C11.512 3.098 11.276 3 11 3L4 3C3.724 3 3.488 3.098 3.293 3.293C3.098 3.488 3 3.724 3 4L3 11C3 11.276 3.098 11.512 3.293 11.707Z\"/>", solid: "<path fill=\"currentColor\" d=\"M11 2C11.254 2 11.5 2.047 11.736 2.14C11.993 2.242 12.219 2.391 12.414 2.586C12.609 2.781 12.758 3.007 12.86 3.264C12.953 3.5 13 3.746 13 4L13 11C13 11.254 12.953 11.5 12.86 11.736C12.758 11.993 12.609 12.219 12.414 12.414C12.219 12.609 11.993 12.758 11.736 12.86C11.5 12.953 11.254 13 11 13L4 13C3.746 13 3.5 12.953 3.264 12.86C3.007 12.758 2.781 12.609 2.586 12.414C2.391 12.219 2.242 11.993 2.14 11.736C2.047 11.5 2 11.254 2 11L2 4C2 3.746 2.047 3.5 2.14 3.264C2.242 3.007 2.391 2.781 2.586 2.586C2.781 2.391 3.007 2.242 3.264 2.14C3.5 2.047 3.746 2 4 2L11 2Z\"/>" },
   "sidebar-collapse": {
     line: "<path d=\"M13.86 12.736C13.758 12.993 13.609 13.219 13.414 13.414C13.219 13.609 12.993 13.758 12.736 13.86C12.5 13.953 12.254 14 12 14L4 14C3.746 14 3.5 13.953 3.264 13.86C3.007 13.758 2.781 13.609 2.586 13.414C2.391 13.219 2.242 12.993 2.14 12.736C2.047 12.5 2 12.254 2 12L2 4C2 3.746 2.047 3.5 2.14 3.264C2.242 3.007 2.391 2.781 2.586 2.586C2.781 2.391 3.007 2.242 3.264 2.14C3.5 2.047 3.746 2 4 2L12 2C12.254 2 12.5 2.047 12.736 2.14C12.993 2.242 13.219 2.391 13.414 2.586C13.609 2.781 13.758 3.007 13.86 3.264C13.953 3.5 14 3.746 14 4L14 12C14 12.254 13.953 12.5 13.86 12.736ZM3.293 12.707C3.488 12.902 3.724 13 4 13L6 13L6 3L4 3C3.724 3 3.488 3.098 3.293 3.293C3.098 3.488 3 3.724 3 4L3 12C3 12.276 3.098 12.512 3.293 12.707ZM12 13C12.276 13 12.512 12.902 12.707 12.707C12.902 12.512 13 12.276 13 12L13 4C13 3.724 12.902 3.488 12.707 3.293C12.512 3.098 12.276 3 12 3L7 3L7 13L12 13ZM10.854 9.146C10.953 9.246 11.003 9.364 11.003 9.5C11.003 9.636 10.953 9.754 10.854 9.854C10.754 9.953 10.636 10.003 10.5 10.003C10.364 10.003 10.246 9.953 10.146 9.854L8.146 7.854C8.047 7.754 7.997 7.636 7.997 7.5C7.997 7.364 8.047 7.246 8.146 7.146L10.146 5.146C10.246 5.047 10.364 4.997 10.5 4.997C10.636 4.997 10.754 5.047 10.854 5.146C10.951 5.244 11 5.362 11 5.5C11 5.638 10.951 5.756 10.854 5.854L9.207 7.5L10.854 9.146Z\"/>",
     solid: "<path d=\"M14 12C14 12.254 13.953 12.5 13.86 12.736C13.758 12.993 13.609 13.219 13.414 13.414C13.219 13.609 12.993 13.758 12.736 13.86C12.5 13.953 12.254 14 12 14L4 14C3.746 14 3.5 13.953 3.264 13.86C3.007 13.758 2.781 13.609 2.586 13.414C2.391 13.219 2.242 12.993 2.14 12.736C2.047 12.5 2 12.254 2 12L2 4C2 3.746 2.047 3.5 2.14 3.264C2.242 3.007 2.391 2.781 2.586 2.586C2.781 2.391 3.007 2.242 3.264 2.14C3.5 2.047 3.746 2 4 2L12 2C12.254 2 12.5 2.047 12.736 2.14C12.993 2.242 13.219 2.391 13.414 2.586C13.609 2.781 13.758 3.007 13.86 3.264C13.953 3.5 14 3.746 14 4L14 12ZM7 13L12 13C12.276 13 12.512 12.902 12.707 12.707C12.902 12.512 13 12.276 13 12L13 4C13 3.724 12.902 3.488 12.707 3.293C12.512 3.098 12.276 3 12 3L7 3L7 13ZM9.207 7.5L10.854 9.146C10.953 9.246 11.003 9.364 11.003 9.5C11.003 9.636 10.953 9.754 10.854 9.854C10.754 9.953 10.636 10.003 10.5 10.003C10.364 10.003 10.246 9.953 10.146 9.854L8.146 7.854C8.047 7.754 7.997 7.636 7.997 7.5C7.997 7.364 8.047 7.246 8.146 7.146L10.146 5.146C10.246 5.047 10.364 4.997 10.5 4.997C10.636 4.997 10.754 5.047 10.854 5.146C10.951 5.244 11 5.362 11 5.5C11 5.638 10.951 5.756 10.854 5.854L9.207 7.5Z\"/>",
@@ -95,21 +98,68 @@ const PATHS: Record<GfIconName, Variant> = {
 type P = { className?: string; title?: string };
 
 /**
- * A gentleface icon. By default the line variant renders, and the solid variant
- * swaps in on hover and keyboard focus of the nearest parent that carries
+ * A Gentleface icon. Motion plays once on hover, focus and activation of the
+ * nearest control. Static-only icons swap line/solid variants. Supports
  * `data-icon-hover` (and inside `button`, `a`, `[role="button"]`,
  * `summary` and `label` without needing the attribute).
  *
  * Size and color follow `className` and the inherited `color`. Icons use
- * `fill="currentColor"` on a 16x16 viewBox.
+ * the inherited currentColor on a 16x16 viewBox.
  */
 export const GfIcon = ({ name, className, title }: P & { name: GfIconName }) => {
   const v = PATHS[name];
+  const motion = GENTLEFACE_MOTION[name];
+  const wrapper = useRef<HTMLSpanElement>(null);
+  const id = useId().replace(/:/g, '');
+  useLayoutEffect(() => {
+    if (!motion) return;
+    const el = wrapper.current!;
+    const svg = el.querySelector<SVGSVGElement>('.gf-icon-motion')!;
+    const control = el.closest<HTMLElement>('button, a, [role="button"], summary, label, [data-icon-hover]');
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      clearTimeout(timer);
+      svg.pauseAnimations();
+      svg.setCurrentTime(0);
+    };
+    const play = () => {
+      if (media.matches || control?.matches(':disabled, [aria-disabled="true"]')) return;
+      stop();
+      svg.setCurrentTime(motion.frames[0]);
+      svg.unpauseAnimations();
+      timer = setTimeout(stop, (motion.frames[1] - motion.frames[0]) * 1000);
+    };
+    const hover = (event: Event) => {
+      if ((event as PointerEvent).pointerType !== 'touch') play();
+    };
+    stop();
+    control?.addEventListener('pointerenter', hover);
+    control?.addEventListener('focus', play);
+    control?.addEventListener('click', play);
+    media.addEventListener('change', stop);
+    return () => {
+      stop();
+      control?.removeEventListener('pointerenter', hover);
+      control?.removeEventListener('focus', play);
+      control?.removeEventListener('click', play);
+      media.removeEventListener('change', stop);
+    };
+  }, [motion]);
+  // Some upstream motion assets use clip paths. Scope references per instance.
+  const motionBody = motion?.svg.replace(/^<svg[^>]*>|<\/svg>$/g, '')
+    .replace(/\bid="([^"]+)"/g, `id="${id}-$1"`)
+    .replace(/url\(#([^)]+)\)/g, `url(#${id}-$1)`)
+    .replace(/href="#([^"]+)"/g, `href="#${id}-$1"`);
   return (
-    <span className={'gf-icon ' + (className ?? '')} aria-hidden={title ? undefined : true} role={title ? 'img' : undefined}>
+    <span ref={wrapper} data-gf-icon={name} className={'gf-icon ' + (className ?? '')} aria-hidden={title ? undefined : true} role={title ? 'img' : undefined}>
       {title ? <span className="sr-only">{title}</span> : null}
-      <svg className="gf-icon-line" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.line }} />
-      <svg className="gf-icon-solid" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.solid }} />
+      {motionBody ? (
+        <svg className="gf-icon-motion" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.001" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: motionBody }} />
+      ) : <>
+        <svg className="gf-icon-line" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.line }} />
+        <svg className="gf-icon-solid" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.solid }} />
+      </>}
     </span>
   );
 };
@@ -131,3 +181,5 @@ export const GfLockIcon = (p: P) => <GfIcon {...p} name="lock" />;
 export const RouterIcon = (p: P) => <GfIcon {...p} name="router" />;
 export const BrainCircuitIcon = (p: P) => <GfIcon {...p} name="brain-circuit" />;
 export const ShieldQuestionIcon = (p: P) => <GfIcon {...p} name="shield-question" />;
+
+export const GfStopIcon = (p: P) => <GfIcon {...p} name="stop" />;

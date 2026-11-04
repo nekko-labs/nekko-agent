@@ -97,7 +97,7 @@ impl OAuth {
         #[cfg(test)]
         let http = http.https_only(false);
         Arc::new(OAuth {
-            tokens: o::TokenStore::new(dir),
+            tokens: crate::keys::tokens(&dir),
             settings,
             accounts,
             hub,
@@ -528,8 +528,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let hub = Hub::new();
-        let accounts = Arc::new(crate::accounts::Accounts::new(dir.clone(), hub.clone()));
         let settings = Arc::new(nekko_settings::SettingsStore::new(&dir));
+        let accounts = Arc::new(crate::accounts::Accounts::new(dir.clone(), hub.clone(), settings.clone()));
         (OAuth::new(dir.clone(), settings, accounts, hub, true, endpoints), dir)
     }
 

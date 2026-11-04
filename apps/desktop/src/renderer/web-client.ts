@@ -617,6 +617,7 @@ function makeWebClient(): NekkoApi {
     linkPrStack: (sessionId, url) => call(IpcChannels.prLinkStack, sessionId, url),
     createPr: (workspaceId, opts) => call(IpcChannels.prCreate, workspaceId, opts),
     getPrChecks: (url) => call(IpcChannels.prChecks, url),
+    getPrInfo: (url) => call(IpcChannels.prInfo, url),
 
     gitDiff: (workspaceId, opts) => call(IpcChannels.gitDiff, workspaceId, opts),
     gitLog: (workspaceId, opts) => call(IpcChannels.gitLog, workspaceId, opts),
@@ -690,6 +691,8 @@ function makeWebClient(): NekkoApi {
     updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
     removeRunner: (id) => call(IpcChannels.runnerRemove, id),
     setRunnerEnabled: (id, enabled) => call(IpcChannels.runnerSetEnabled, id, enabled),
+    runnerJobLog: (id, jobId) => call(IpcChannels.runnerJobLog, id, jobId),
+    runnerVmLog: (id, vm) => call(IpcChannels.runnerVmLog, id, vm),
     githubAccounts: () => call(IpcChannels.runnerGithubAccounts),
     githubStart: (req) => call(IpcChannels.runnerGithubStart, req),
     githubStatus: () => call(IpcChannels.runnerGithubStatus),

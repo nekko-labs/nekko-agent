@@ -44,10 +44,20 @@ use supervisor::{RunnerState, RunnerView, Supervisor, TICK};
 use vm::HelperVm;
 use vm::Vm;
 
-pub const CHANNELS: &[&str] = &["runner:list", "runner:connect", "runner:update", "runner:remove", "runner:setEnabled"];
+pub const CHANNELS: &[&str] = &[
+    "runner:list",
+    "runner:connect",
+    "runner:update",
+    "runner:remove",
+    "runner:setEnabled",
+    "runner:jobLog",
+    "runner:vmLog",
+];
 /// Pushed with `RunnerView[]` whenever the views change.
 pub const EVENT: &str = "runner:changed";
 const NO_RUNNER: &str = "No runner with that id.";
+/// The most of a job's log `runner:jobLog` returns: its end, where a failure is.
+const JOB_LOG_TAIL: usize = 256 * 1024;
 const FORK_APPROVAL_OPEN: &str = "This public repo doesn't hold outside contributors for approval yet. Turn that on in its Actions settings on GitHub, then choose Connect GitHub to finish.";
 /// How often the router is asked for its public address, and how often the gateway is checked for a change.
 const WAN_EVERY: Duration = Duration::from_secs(300);
@@ -70,6 +80,8 @@ fn secret_key(r: &RunnerRecord) -> String {
 }
 
 pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<GitHub<Net>, GitLab<Net>>> {
+    /// `<data>/runners`.
+    dir: PathBuf,
     store: Store,
     /// Connects new runners; `None` in tests.
     connectors: Option<Connectors>,
@@ -99,6 +111,16 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     image: OnceLock<Arc<image::ImageJob<image::RealBuildHost>>>,
     /// The Mac as of the last tick, for the image builder's gates.
     mac: Arc<std::sync::Mutex<Option<signals::MacState>>>,
+}
+
+/// The last `max` bytes of `text`, from the start of a line.
+fn tail(text: &str, max: usize) -> &str {
+    if text.len() <= max {
+        return text;
+    }
+    let cut = (text.len() - max..text.len()).find(|&i| text.is_char_boundary(i)).unwrap_or(text.len());
+    let rest = &text[cut..];
+    rest.find('\n').map_or(rest, |n| &rest[n + 1..])
 }
 
 fn now_secs() -> u64 {
@@ -256,6 +278,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         sup.set_records(store.load());
         let views = sup.views();
         Arc::new(Runners {
+            dir: runners_dir.to_path_buf(),
             store,
             connectors,
             prefix: sup.prefix(),
@@ -466,6 +489,12 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         if channel == "runner:connect" {
             return self.connect(arg(0)).await;
         }
+        if channel == "runner:jobLog" {
+            return self.job_log(&id, arg(1).as_u64()).await;
+        }
+        if channel == "runner:vmLog" {
+            return self.vm_log(&id, arg(1).as_str().unwrap_or_default());
+        }
         if github_setup::CHANNELS.contains(&channel) {
             return self.github_setup(channel, arg(0)).await;
         }
@@ -499,6 +528,47 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             }
             _ => Err(format!("unknown channel {channel}")),
         }
+    }
+
+    /// The end of the log of a job in the runner's recent list; no other job's, so the
+    /// channel never reads the log of a job this Mac did not run.
+    async fn job_log(&self, id: &str, job_id: Option<u64>) -> Result<Value, String> {
+        const UNKNOWN: &str = "That job is not one of this runner's recent jobs.";
+        let job_id = job_id.ok_or(UNKNOWN)?;
+        let repo = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.recent)
+            .find(|l| l.job_id == Some(job_id))
+            .and_then(|l| l.repo.clone())
+            .ok_or(UNKNOWN)?;
+        let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+        let c = self.connectors.as_ref().ok_or("Job logs are not available here.")?;
+        let text = match rec.link {
+            Link::Github(_) => c.github.job_log(&rec, &repo, job_id).await,
+            Link::Gitlab(_) => c.gitlab.job_log(&rec, &repo, job_id).await,
+        }
+        .map_err(|e| e.to_string())?;
+        Ok(json!(tail(&text, JOB_LOG_TAIL)))
+    }
+
+    /// The console log of a VM in the runner's recent list, as the guest wrote it.
+    fn vm_log(&self, id: &str, name: &str) -> Result<Value, String> {
+        let known = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.recent)
+            .any(|l| l.vm.as_deref() == Some(name));
+        if !known {
+            return Err("That VM is not one of this runner's recent jobs.".into());
+        }
+        audit::vm_log(&self.dir, name).map(|t| json!(t)).map_err(|e| format!("Couldn't read the VM log: {e}"))
     }
 
     /// A finished image build turns its runner on, with the mode chosen for it.
@@ -721,5 +791,18 @@ impl Drop for ConnectGuard<'_> {
                 c.remove(&self.key);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tail;
+
+    #[test]
+    fn tail_keeps_whole_lines_from_the_end() {
+        assert_eq!(tail("a\nb\n", 10), "a\nb\n");
+        assert_eq!(tail("first\nsecond\nthird\n", 9), "third\n");
+        // A cut inside a multi-byte character moves to the next boundary.
+        assert_eq!(tail("ééé\nok\n", 5), "ok\n");
     }
 }
