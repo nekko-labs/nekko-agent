@@ -226,12 +226,11 @@ export function mergeMain({ repo, head, mainRef = 'origin/main', workdir, branch
   }
   git(['worktree', 'add', '-q', '--detach', workdir, head], { cwd: repo });
   const cwd = workdir;
-  if (author) {
-    git(['config', 'user.name', author.name], { cwd });
-    git(['config', 'user.email', author.email], { cwd });
-  }
+  // Per command, never `git config`: a worktree's config is the repository's,
+  // so that would change the identity of every checkout of it.
+  const as = author ? ['-c', `user.name=${author.name}`, '-c', `user.email=${author.email}`] : [];
   const message = `Merge main into ${branch}`;
-  if (git(['merge', '--no-ff', '--no-edit', '-m', message, mainRef], { cwd, allowFail: true }) !== null) {
+  if (git([...as, 'merge', '--no-ff', '--no-edit', '-m', message, mainRef], { cwd, allowFail: true }) !== null) {
     return { status: 'clean', resolved: [], unresolved: [], additions: {}, sha: git(['rev-parse', 'HEAD'], { cwd }) };
   }
 
@@ -267,7 +266,7 @@ export function mergeMain({ repo, head, mainRef = 'origin/main', workdir, branch
     }
     resolved.push({ file, rule });
   }
-  git(['commit', '-q', '--no-edit'], { cwd });
+  git([...as, 'commit', '-q', '--no-edit'], { cwd });
   return { status: 'resolved', resolved, unresolved: [], additions, sha: git(['rev-parse', 'HEAD'], { cwd }) };
 }
 

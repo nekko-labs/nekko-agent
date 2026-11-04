@@ -140,8 +140,10 @@ test('hot-file conflicts are resolved and committed as a merge', () => {
   const { dir, git, head } = hotFileRepo({ mainDropsTaskLog: true });
   const workdir = path.join(os.tmpdir(), `queue-repair-wt-${process.pid}-1`);
   try {
-    const r = mergeMain({ repo: dir, head, mainRef: 'main', workdir, branch: 'feature' });
+    const r = mergeMain({ repo: dir, head, mainRef: 'main', workdir, branch: 'feature', author: { name: 'repair-bot', email: 'bot@example.com' } });
     assert.equal(r.status, 'resolved');
+    assert.equal(git('log', '-1', '--format=%an <%ae>', r.sha), 'repair-bot <bot@example.com>');
+    assert.equal(git('config', '--local', 'user.name'), 'test', "the repository's own identity is untouched");
     assert.deepEqual(r.resolved.map((x) => `${x.file}:${x.rule}`).sort(), ['TASKS.md:take-main-keep-additions', 'spec/README.md:take-main-and-reindex']);
     const at = (f) => execFileSync('git', ['show', `${r.sha}:${f}`], { cwd: dir, encoding: 'utf8' });
     assert.equal(at('spec/README.md'), '# Spec\n\n- a (3 KB)\n');
