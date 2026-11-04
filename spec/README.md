@@ -121,7 +121,7 @@ Agents panel, monitors, subagents and delegation.
 - [Delegating frontier planning to a local worker](agents/delegating-frontier-planning-to-a-local-worker.md) (2 KB)
 - [Monitors dock naming and header polish (2026-10-16)](agents/monitors-dock-naming-and-header-polish.md) (6 KB)
 - [Routing a Claude Agent chat between a local model and Claude Code](agents/routing-between-local-and-claude-code.md) (13 KB)
-- [Run here or in a subagent](agents/run-here-or-in-a-subagent.md) (3 KB)
+- [Run here or in a subagent](agents/run-here-or-in-a-subagent.md) (5 KB)
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Subagents in Claude chats](agents/claude-code-subagents.md) (2 KB)
 - [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
