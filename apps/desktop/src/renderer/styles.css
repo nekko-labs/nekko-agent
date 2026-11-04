@@ -4091,3 +4091,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) {
   .gf-icon > svg { transition: none; }
 }
+
+/* Plan ripple follows the supplied SVG timing; no motion in reduced-motion mode. */
+.plan-working { display: grid; place-items: center; color: var(--accent); }
+.plan-working-still { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .plan-working-motion { display: none; }
+  .plan-working-still { display: block; }
+}

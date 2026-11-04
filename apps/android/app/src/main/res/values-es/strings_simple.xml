@@ -38,14 +38,14 @@
     <string name="simple_logs_connect">Conéctate para leer sus registros</string>
     <string name="simple_logs_subject">Registro de conexión de Nekko Agent</string>
     <string name="simple_mode_title">Modo Simple</string>
-    <string name="simple_mode_detail">Qué muestran Simple y Experto</string>
-    <string name="simple_mode_detail_changed">Qué muestran Simple y Experto · %1$d cambiados</string>
+    <string name="simple_mode_detail">Qué muestran Simple y Detallado</string>
+    <string name="simple_mode_detail_changed">Qué muestran Simple y Detallado · %1$d cambiados</string>
     <string name="simple_intro">Simple es una vista más limpia y centrada, y los detalles aparecen solo cuando importan. Todo sigue funcionando.</string>
     <string name="simple_preview">Vista previa</string>
     <string name="simple_preview_mode">Vista previa: %1$s</string>
     <string name="simple_reset">Restablecer valores predeterminados</string>
     <string name="simple_choice_show">Mostrar</string>
-    <string name="simple_choice_expert">Solo Experto</string>
+    <string name="simple_choice_expert">Solo Detallado</string>
     <string name="simple_choice_hide">Ocultar</string>
     <string name="simple_choice_auto">Mientras se ejecuta</string>
     <string name="simple_choice_always">Siempre</string>
@@ -53,7 +53,7 @@
     <string name="simple_part_hidden">%1$s, oculto</string>
     <string name="simple_one_model">1 modelo</string>
     <string name="simple_switch_simple">Simple: controles cotidianos</string>
-    <string name="simple_switch_expert">Experto: todos los controles</string>
+    <string name="simple_switch_expert">Detallado: todos los controles</string>
     <string name="simple_area_header">Chat · encabezado</string>
     <string name="simple_area_box">Chat · cuadro de mensaje</string>
     <string name="simple_area_conversation">Chat · conversación</string>

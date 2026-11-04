@@ -9,6 +9,10 @@ area: phone
 
 **Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux and macOS; the hardware store is named HardwareMonitorModel to coexist with the folding-phone Monitors pane; the views driven in the simulator by LiveRelayTests/testSimpleAndExpertModes against a live stack (2026-10-25); Android implemented 2026-10-25 (T217b), see *Android* below]`**
 
+## Current native naming
+
+The native iOS and Android apps call the modes **Simple** and **Detailed**, including localized labels, settings previews, visibility choices and accessibility descriptions. The historical **Expert** wording below records the original implementation. Stored `expertMode` preferences, `expert` visibility values and existing APIs remain unchanged; this does not rename model MoE expert terminology. Naming and selector consistency can be checked statically on Windows; native builds, UI tests and visual verification of this wording still need the respective SDKs and devices or simulators (no apps launched for this naming change).
+
 ## Behaviour
 
 - **The switch.** A menu at the top left of every chat (next to Back) reads *Simple* or *Expert* with a gauge icon. The choice is the iPhone's (`Prefs.expertMode`, off by default) and holds for every chat and computer.

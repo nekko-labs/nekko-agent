@@ -81,7 +81,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 private const val SIMPLE_DESCRIPTION = "Simple: everyday controls"
-private const val EXPERT_DESCRIPTION = "Expert: every control"
+private const val EXPERT_DESCRIPTION = "Detailed: every control"
 
 /**
  * Simple and Expert modes in the real chat screen (spec/phone/iphone-simple-and-expert-modes.md):
@@ -96,6 +96,13 @@ class ChatModesTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val computer = FakeComputer()
+
+    // Only the manual evidence workflow reads the selected app revision's label. Normal
+    // test runs keep the explicit current-label selector above, including rename regressions.
+    private val expertDescription: String
+        get() = if (InstrumentationRegistry.getArguments().getString("nekkoModeEvidence") == "true") {
+            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.simple_switch_expert)
+        } else EXPERT_DESCRIPTION
 
     /** What Start fresh asked New chat to open on. */
     @Volatile private var fresh: com.nekko.android.data.ModelPick? = null
@@ -135,7 +142,7 @@ class ChatModesTest {
         assertEquals("Simple without a local model reads no hardware", idle, computer.calls.count { it == Channels.SYSTEM_STATS })
 
         // Expert (the code icon): the monitor is back and the hardware is read again.
-        compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst().performClick()
+        compose.onAllNodesWithContentDescription(expertDescription).onFirst().performClick()
         compose.waitUntil(5_000) { computer.calls.count { it == Channels.SYSTEM_STATS } > idle }
         settle()
         assertTrue(prefs.get(EXPERT_MODE))
@@ -230,7 +237,7 @@ class ChatModesTest {
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().size)
 
         // A tap 2 px from the top of the Expert segment's 48 dp touch area still switches.
-        val expertSegment = compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst()
+        val expertSegment = compose.onAllNodesWithContentDescription(expertDescription).onFirst()
         assertTrue(expertSegment.fetchSemanticsNode().boundsInRoot.height >= min)
         expertSegment.performTouchInput { click(Offset(centerX, 2f)) }
         settle()

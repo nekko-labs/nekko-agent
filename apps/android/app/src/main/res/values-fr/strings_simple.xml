@@ -38,14 +38,14 @@
     <string name="simple_logs_connect">Connectez-vous pour lire ses journaux</string>
     <string name="simple_logs_subject">Journal de connexion de Nekko Agent</string>
     <string name="simple_mode_title">Mode Simple</string>
-    <string name="simple_mode_detail">Ce que montrent Simple et Expert</string>
-    <string name="simple_mode_detail_changed">Ce que montrent Simple et Expert · %1$d modifiés</string>
+    <string name="simple_mode_detail">Ce que montrent Simple et Détaillé</string>
+    <string name="simple_mode_detail_changed">Ce que montrent Simple et Détaillé · %1$d modifiés</string>
     <string name="simple_intro">Simple est une vue plus claire et plus concentrée, et les détails n’apparaissent que lorsqu’ils comptent. Tout fonctionne toujours.</string>
     <string name="simple_preview">Aperçu</string>
     <string name="simple_preview_mode">Aperçu : %1$s</string>
     <string name="simple_reset">Rétablir les valeurs par défaut</string>
     <string name="simple_choice_show">Afficher</string>
-    <string name="simple_choice_expert">Expert uniquement</string>
+    <string name="simple_choice_expert">Détaillé uniquement</string>
     <string name="simple_choice_hide">Masquer</string>
     <string name="simple_choice_auto">Pendant l’exécution</string>
     <string name="simple_choice_always">Toujours</string>
@@ -53,7 +53,7 @@
     <string name="simple_part_hidden">%1$s, masqué</string>
     <string name="simple_one_model">1 modèle</string>
     <string name="simple_switch_simple">Simple : commandes du quotidien</string>
-    <string name="simple_switch_expert">Expert : toutes les commandes</string>
+    <string name="simple_switch_expert">Détaillé : toutes les commandes</string>
     <string name="simple_area_header">Discussion · en-tête</string>
     <string name="simple_area_box">Discussion · zone de message</string>
     <string name="simple_area_conversation">Discussion · conversation</string>
