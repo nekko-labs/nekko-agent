@@ -167,6 +167,10 @@ A turn's working steps fold into one work group whose header says what the agent
 
 When an agent needs a choice, its question opens at the bottom of the conversation. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Choose an option or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. The pixel question-mark icon identifies the question.
 
+### Links and files in replies
+
+A pull request link in a reply shows as a small chip with GitHub's state icon: open (green), draft (grey), merged (purple) or closed (red). Click it to open the pull request in your browser. Other web links have a **Preview** button that loads the page inside the message.
+
 ### Agent panel shortcuts
 
 Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.

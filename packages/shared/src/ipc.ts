@@ -259,6 +259,7 @@ export const IpcChannels = {
   prLinkStack: 'pr:linkStack',
   prCreate: 'pr:create',
   prChecks: 'pr:checks',
+  prInfo: 'pr:info',
 
   gitDiff: 'git:diff',
   gitLog: 'git:log',
@@ -1019,6 +1020,8 @@ export interface NekkoApi {
   createPr(workspaceId: string, opts: import('./pr.js').PrCreateOptions): Promise<import('./pr.js').PrCreateResult>;
   /** Each check on a PR's head commit, and their rollup. */
   getPrChecks(url: string): Promise<import('./pr.js').PrCheckList>;
+  /** Live state of any GitHub PR by URL (cached for a minute), or null when unreadable. */
+  getPrInfo(url: string): Promise<import('./pr.js').PrInfo | null>;
 
   /**
    * Git in a workspace's folder (IO-33 FA-2). `workspaceId` is a saved folder's
