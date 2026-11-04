@@ -13,6 +13,9 @@ jobs:
       BASE: 13b802a04f49f453fb6ea6f4a6c1a5ed5c450aa5
       HEAD: 2ee7676b657bd5ccf89daafdf27626e30ce7d6fe
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      # Bounded retries for registry transport failures, never performance reruns.
+      CARGO_NET_RETRY: '3'
+      CARGO_HTTP_MULTIPLEXING: 'false'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -60,6 +63,9 @@ jobs:
       - name: Build and measure base-before, head, base-after once each
         shell: bash
         run: |
+          # GitHub's bash starts with -e; let the explicit phase exit-code
+          # accounting record failures and continue to the remaining phases.
+          set +e
           set -uo pipefail
           report="$GITHUB_WORKSPACE/comparison"
           # Shared compilation cache, but cargo builds each actual revision and
