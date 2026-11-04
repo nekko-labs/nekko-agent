@@ -802,7 +802,8 @@ final class LiveRelayTests: XCTestCase {
         let models = app.buttons["settings.phoneModels"].firstMatch
         XCTAssertTrue(reveal(models, in: app), "Settings → Models on this iPhone")
         models.tap()
-        XCTAssertTrue(app.staticTexts["Fixture Claude"].firstMatch.waitForExistence(timeout: 10), "the fixture provider")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Fixture Claude")).firstMatch
+            .waitForExistence(timeout: 10), "the fixture provider")
         attach(app, "fleet-1-phone-models")
         auditAccessibility(app, "fleet-phone-models")
         app.buttons["phoneModels.add"].firstMatch.tap()
@@ -816,7 +817,7 @@ final class LiveRelayTests: XCTestCase {
         // Pair a computer from Settings → Paired computers, as a second place.
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.buttons["Computers"].firstMatch.tap()
-        let pair = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Pair")).firstMatch
+        let pair = app.buttons["Pair another computer"].firstMatch
         XCTAssertTrue(pair.waitForExistence(timeout: 5), "Pair another computer")
         pair.tap()
         let field = app.input("nekko-agent-pair:?relay=…")

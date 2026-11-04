@@ -131,7 +131,7 @@ struct ChatsView: View {
                     Image(systemName: "bubble.left.and.bubble.right").font(.largeTitle).foregroundStyle(palette.inkSoft)
                         .accessibilityHidden(true)
                     Text("No chats yet").font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
-                    Text("Start one here, or on \(emptyListPlace).")
+                    Text(placesInView.allSatisfy(\.phone) ? String(localized: "Start one here.") : String(localized: "Start one here, or on \(emptyListPlace)."))
                         .font(.subheadline).foregroundStyle(palette.inkSoft)
                     Button { newChat() } label: { Text("New chat").foregroundStyle(palette.onAccent) }
                         .buttonStyle(.borderedProminent).padding(.top, 4)
@@ -252,7 +252,6 @@ struct ChatsView: View {
                     Text(Self.groupName($0)).tag($0)
                 }
             }
-            .accessibilityIdentifier("chats.view.groupBy")
             .pickerStyle(.menu)
             Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
                 ForEach(ChatListView.SortBy.allCases, id: \.self) { Text(Self.sortName($0)).tag($0) }
