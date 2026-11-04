@@ -1071,9 +1071,9 @@ h3 { font-size: 21px; }
 .speed-proof strong { display: block; font-family: var(--mono); font-size: clamp(32px, 5vw, 58px); line-height: 1.2; }
 .speed-proof span { display: block; margin-top: 4px; }
 /* Completion-time bars share a zero baseline; lower is better. */
-.bench { grid-column: 1 / -1; margin-top: 10px; padding-top: 26px; border-top: 1px solid var(--line); }
+.bench { grid-column: 1 / -1; min-width: 0; margin-top: 10px; padding-top: 26px; border-top: 1px solid var(--line); }
 .bench-title { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
-.bench-legend { display: inline-flex; gap: 14px; letter-spacing: 0.06em; text-transform: none; font-size: 12px; }
+.bench-legend { display: inline-flex; flex-wrap: wrap; gap: 8px 14px; letter-spacing: 0.06em; text-transform: none; font-size: 12px; }
 .bench-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .bench-row { display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: center; padding: 8px 0; }
 .bench-row + .bench-row { border-top: 1px solid var(--line); }
@@ -1095,6 +1095,8 @@ h3 { font-size: 21px; }
   .panel, .panel-fast { grid-template-columns: 1fr; padding: 24px; gap: 20px; }
   .panel .panel-media { order: 1; }
   .panel .panel-copy { order: 2; }
+  .panel-fast .panel-copy { order: 0; min-width: 0; }
+  .panel-fast .speed-proof { order: 1; min-width: 0; }
   .panel .bench { order: 3; }
   .panel h3 { font-size: 24px; }
   .bench-row { grid-template-columns: 1fr; gap: 6px; }

@@ -47,6 +47,11 @@ test('marketing preview serves only static website files and read requests', asy
   assert.match(page.headers['content-type'], /text\/html/);
   assert.equal(page.headers['cache-control'], 'no-store');
   assert.match((await get('/styles.css?v=5')).headers['content-type'], /text\/css/);
+  const styles = (await get('/styles.css')).body;
+  assert.ok(styles.includes('.bench { grid-column: 1 / -1; min-width: 0;'));
+  assert.ok(styles.includes('.bench-legend { display: inline-flex; flex-wrap: wrap;'));
+  assert.ok(styles.includes('.panel-fast .panel-copy { order: 0; min-width: 0; }'));
+  assert.ok(styles.includes('.panel-fast .speed-proof { order: 1; min-width: 0; }'));
   assert.equal((await get('/site.js')).status, 200);
   // Clean URLs, as vercel.json serves them.
   assert.match((await get('/docs')).body, /<html/i);
