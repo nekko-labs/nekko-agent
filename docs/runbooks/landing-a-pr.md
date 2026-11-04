@@ -19,6 +19,12 @@ fast-forward the primary checkout and remove the task worktree and merged branch
 Inspect dirty files and preserve any unmerged work before cleanup; never force
 remove a worktree just because its PR was squash-merged.
 
+A worktree without its own `node_modules` resolves the workspace packages
+(`@nekko-agent/shared` and the rest) through the primary checkout's, so builds and
+tests there can run against the primary checkout's code. Run `npm ci` in the worktree
+before building or testing it. The desktop typecheck reads `shared` from source either
+way (`customConditions: ["source"]`, #1153).
+
 ## Start from an issue
 
 Every feature or change is tracked as a GitHub issue in `nekko-labs/nekko-agent`, and its PR links to it. Search first (`gh issue list --search "<words>"`); file one only when none fits:
