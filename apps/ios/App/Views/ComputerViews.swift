@@ -4,7 +4,9 @@ import SwiftUI
 
 /// One paired computer, opened: what the phone knows about it in one page
 /// (2026-10-24). The round trip is measured here; the rest is the computer's
-/// own `machine:summary`, its models, providers and usage. Connect, rename,
+/// own `machine:summary`, its models, providers and usage. Opening the page
+/// makes the computer active over the link the phone keeps to it (2026-11-04),
+/// so there is no Connect; Reconnect shows while it can't be reached. Rename,
 /// open-at-launch and forget live in the Edit menu.
 struct ComputerDetailView: View {
     let computerId: String
@@ -34,6 +36,8 @@ struct ComputerDetailView: View {
         .navigationTitle("Computer")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: computerId) {
+            // Its details come over the active connection: take its link over (no wait, no Connect).
+            if store.activeId != computerId, store.computers.contains(where: { $0.id == computerId }) { store.connect(computerId) }
             if model?.computerId != computerId { model?.stop(); model = MachineModel(computerId: computerId, store: store) }
             model?.start()
         }
@@ -71,11 +75,12 @@ struct ComputerDetailView: View {
                     .listRowSeparator(.hidden).listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
             }
-            if !m.isActive {
+            if canReconnect {
                 Section {
-                    Button { store.connect(c.id) } label: { Label("Connect to \(c.name)", systemImage: "bolt.horizontal") }
+                    Button { store.reconnect(computer: c.id) } label: { Label("Reconnect to \(c.name)", systemImage: "arrow.clockwise") }
+                        .accessibilityIdentifier("computer.reconnect")
                 } footer: {
-                    Text("The phone talks to one computer at a time. Its details show once it is connected.").foregroundStyle(palette.inkSoft)
+                    Text("This phone keeps trying on its own; this tries again now. Its details show once it answers.").foregroundStyle(palette.inkSoft)
                 }
             } else if let why = m.summaryError, m.loadedOnce {
                 Section { Label(why, systemImage: "info.circle").font(.footnote).foregroundStyle(palette.inkSoft) }
@@ -135,7 +140,7 @@ struct ComputerDetailView: View {
                 NavigationLink(value: Route.connection) {
                     LabeledContent("Route", value: "\(routeName(c.route)) · \(c.relayHost)")
                 }
-                LabeledContent("Status", value: m.isActive ? stateName(store.conn) : String(localized: "Not connected"))
+                LabeledContent("Status", value: stateName(store.state(of: c.id)))
                 LabeledContent("Paired") { Text(Date(timeIntervalSince1970: Double(c.pairedAt) / 1000), format: .relative(presentation: .named)) }
                 if let v = s?.version ?? (m.isActive ? store.hostVersion : nil) {
                     LabeledContent("Nekko Agent", value: [v, s?.edition].compactMap { $0 }.joined(separator: " · "))
@@ -151,7 +156,7 @@ struct ComputerDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    if !m.isActive { Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") } }
+                    if canReconnect { Button { store.reconnect(computer: c.id) } label: { Label("Reconnect", systemImage: "arrow.clockwise") } }
                     Button { name = c.name; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                     if c.id != app.prefs.defaultComputer { Button { app.prefs.defaultComputer = c.id } label: { Label("Open at launch", systemImage: "star") } }
                     Button { Task { await m.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
@@ -193,8 +198,13 @@ struct ComputerDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Not reachable now (the links retry by themselves): offer to dial at once.
+    private var canReconnect: Bool {
+        ([.offline, .denied, .idle] as [RelayState]).contains(store.state(of: computerId))
+    }
+
     private func subtitle(_ c: Computer, _ s: MachineSummary?) -> String {
-        var parts = [store.activeId == c.id ? stateName(store.conn) : String(localized: "Not connected")]
+        var parts = [stateName(store.state(of: c.id))]
         if let os = osName(s?.platform ?? c.platform, release: s?.release) { parts.append(os) }
         if let v = s?.version { parts.append("Nekko Agent \(v)") }
         return parts.joined(separator: " · ")
@@ -282,8 +292,7 @@ struct ComputerDetailView: View {
     }
 
     private var dot: Color {
-        guard store.activeId == computerId else { return palette.inkFaint.opacity(0.5) }
-        switch store.conn {
+        switch store.state(of: computerId) {
         case .online: return palette.success
         case .connecting: return palette.running
         case .offline: return palette.warning
