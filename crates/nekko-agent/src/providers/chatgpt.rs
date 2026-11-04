@@ -92,19 +92,12 @@ impl ChatGptProvider {
         // whole request with a 400 ("Unsupported parameter"), so the effort
         // setting goes out as `reasoning.effort` instead and this provider
         // sends no output cap. `normal` means the model's own default, so no
-        // rung is sent for it; the rungs above Codex's ladder clamp to high.
+        // rung is sent for it. Explicit API values must not be clamped by model-id guesses.
         let mut reasoning = Map::new();
-        match crate::claude::effective_effort(req.effort, &req.model) {
-            EffortLevel::Low => {
-                reasoning.insert("effort".into(), json!("low"));
-            }
-            EffortLevel::Medium => {
-                reasoning.insert("effort".into(), json!("medium"));
-            }
-            EffortLevel::High | EffortLevel::Xhigh | EffortLevel::Max => {
-                reasoning.insert("effort".into(), json!("high"));
-            }
-            EffortLevel::Normal => {}
+        if let Some(effort) =
+            req.effort.as_ref().filter(|e| **e != EffortLevel::Normal && !e.as_str().trim().is_empty())
+        {
+            reasoning.insert("effort".into(), json!(effort.as_str()));
         }
         // Cloud reasoning stays on, including for callers carrying a legacy off flag.
         reasoning.insert("summary".into(), json!("auto"));
@@ -293,6 +286,7 @@ impl ChatGptProvider {
                         provider_id: self.config.id.clone(),
                         name,
                         context_length: ctx,
+                        effort: super::effort::codex(m),
                         ..Default::default()
                     },
                 ))
@@ -409,6 +403,30 @@ fn uuid_v4() -> String {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+
+    #[test]
+    fn resolved_catalog_default_and_future_rung_reach_the_wire_exactly() {
+        use crate::types::{ChatRequest, EffortLevel, ModelEffort};
+        let config = serde_json::from_value(json!({
+            "id":"p", "kind":"chatgpt", "baseUrl":"https://example.test", "accountId":"account"
+        }))
+        .unwrap();
+        let provider = super::ChatGptProvider::new(config, super::Io::default());
+        let metadata: ModelEffort = serde_json::from_value(json!({
+            "levels":[{"effort":"medium"}, {"effort":"ultra"}], "default":"medium"
+        }))
+        .unwrap();
+        for (saved, expected) in [("unsupported", "medium"), ("normal", "medium"), ("ultra", "ultra")] {
+            let saved = serde_json::from_value(json!(saved)).unwrap();
+            let effort = crate::claude::effective_effort_with_metadata(Some(saved), "gpt-5", Some(&metadata));
+            let req = ChatRequest { model: "gpt-5".into(), effort: Some(effort), ..Default::default() };
+            let body = provider.chat_request(&req).unwrap().body.unwrap();
+            assert_eq!(body["reasoning"]["effort"], expected);
+        }
+        let req = ChatRequest { model: "gpt-5".into(), effort: Some(EffortLevel::Normal), ..Default::default() };
+        let body = provider.chat_request(&req).unwrap().body.unwrap();
+        assert!(body.pointer("/reasoning/effort").is_none());
+    }
 
     fn items(model: &str) -> Vec<serde_json::Value> {
         let req: crate::types::ChatRequest = serde_json::from_value(json!({

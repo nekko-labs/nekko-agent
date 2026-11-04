@@ -62,6 +62,14 @@ export interface ProviderConfig {
   enabled: boolean;
 }
 
+/** Native effort options reported by this model's live provider catalog. */
+export interface ModelEffort {
+  /** API wire values, in provider order. Empty means explicitly unsupported. */
+  levels: { effort: string; description?: string }[];
+  /** Only present when the API publishes a default that is in levels. */
+  default?: string;
+}
+
 /** A model exposed by a provider. */
 export interface ModelInfo {
   id: string;
@@ -70,6 +78,8 @@ export interface ModelInfo {
   name: string;
   /** Context window in tokens, if known. */
   contextLength?: number;
+  /** API-derived native effort options. Absent means unknown, not unsupported. */
+  effort?: ModelEffort;
   /** Whether this model is currently loaded into memory (ollama/lmstudio/vllm). */
   loaded?: boolean;
   /** Approximate size on disk in bytes, if known. */
