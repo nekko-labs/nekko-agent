@@ -1,3 +1,4 @@
+import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
@@ -723,7 +724,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // What the model thinks the user will say next: the composer's ghost text.
   // Pinned to the reply it was written for (forId) so
   // a newer turn can't inherit stale suggestions.
-  const [suggestions, setSuggestions] = useState<{ forId: string; next: string | null } | null>(null);
+  const [suggestions, setSuggestions] = useState<{ forId: string; next: string | null; options: string[] } | null>(null);
   // A failed reply stays in the transcript with a retry, instead of vanishing
   // with the toast.
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -1255,14 +1256,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    */
   const requestSuggestions = async () => {
     try {
+      const before = await window.nekko.getSession(sessionId);
+      const reply = before?.messages[before.messages.length - 1];
+      if (!reply || reply.role !== 'assistant') return;
       const res = await window.nekko.suggestReplies(sessionId);
-      if (!res?.next) return;
+      if (!res) return;
+      const options = followUpOptions(res.options, res.next);
+      if (!options.length) return;
       const fresh = await window.nekko.getSession(sessionId);
       const last = fresh?.messages[fresh.messages.length - 1];
       // A turn that started while the call was in flight (a queued prompt, a
       // send from another pane) makes the suggestions stale; drop them.
-      if (!last || last.role !== 'assistant') return;
-      setSuggestions({ forId: last.id, next: res.next });
+      if (!last || last.role !== 'assistant' || last.id !== reply.id) return;
+      setSuggestions({ forId: last.id, next: res.next, options });
     } catch {
       /* suggestions are nice-to-have */
     }
@@ -2032,13 +2038,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   // More work for a chat that has replied: run it here, or hand it to a subagent.
   // A slash command isn't work to place, and Enter still means here.
-  const followUp = draft.trim() ? (draft.trimStart().startsWith('/') ? null : draft) : ghostSuggestion;
+  const followUp = draft.trim() && !draft.trimStart().startsWith('/') ? draft : null;
   // When the agent has asked a question, the choice of where to run the answer
   // is also part of the answer, so the chips stay visible even when the
-  // composer is empty. Outside of a question, the chips still wait for a draft
-  // or a ghost suggestion so they don't advertise an action with nothing to do.
-  const offerSubagent = (!!followUp || !!question) && !imageMode && !remoteBlock && hasProvider && !!session
+  // composer is empty. Outside of a question, placement chips wait for a draft;
+  // generated suggestions have their own contextual buttons and location selector.
+  const canDelegateFollowUp = !imageMode && !remoteBlock && hasProvider && !!session
     && canOfferSubagent(session, delegationStrategy);
+  const offerSubagent = (!!followUp || !!question) && canDelegateFollowUp;
+  const showFollowUpChoices = !readOnly && !session?.archivedAt && !draft.trim() && !streaming && !held && !errorNotice && !question && !approval
+    && !imageMode && !remoteBlock && hasProvider && !!liveSuggestions?.options.length;
   const runFollowUp = (wrap?: (text: string) => string) => void send(draft.trim() ? undefined : followUp ?? undefined, undefined, wrap);
 
   const onComposerKeyDown = (e: React.KeyboardEvent<MarkdownEditorElement>) => {
@@ -2686,6 +2695,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
                 </div>}
+                {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {/* Where the next piece of work runs, offered in the conversation like the other next steps.
                     When the agent has asked a question, the chips sit directly under the question card:
                     the choice of where to run the answer reads as part of the answer. */}

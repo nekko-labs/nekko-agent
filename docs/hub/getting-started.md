@@ -250,3 +250,9 @@ it shows a percentage once all file sizes are known, and stays indeterminate
 until then. **Verifying…** means the files are still being checked or installed.
 Use **Downloads** to cancel a transfer. A failure or cancellation lets you retry;
 other models and runtimes remain available while one downloads.
+
+### Suggested follow-ups
+
+After a reply, **Suggested follow-ups** can offer relevant next messages such as **Inspect the saved PNGs directly** or **Try another image viewer**. Each button sends the words it displays; nothing is sent until you choose one. These suggestions are not questions from you or approval requests from the agent.
+
+When delegation is available, use the separate **Run in** selector to choose **This chat** (the default) or **A subagent** before choosing a response. If you type your own message instead, the existing **Do it here** and **In a subagent** actions apply to your draft. Suggestions are optional and may not appear after every reply.
