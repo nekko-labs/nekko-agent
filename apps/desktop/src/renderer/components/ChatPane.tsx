@@ -1365,12 +1365,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   }, [hasDraft, composerH, surface]);
 
   /**
-   * Drag the line between the conversation and the composer to trade one for
-   * the other: up gives the message box more room for a long prompt, down gives
-   * it back to the transcript. Everything else in the composer (the controls,
-   * the attach row) keeps its size, so only the text box grows, and the
-   * transcript is never squeezed below TRANSCRIPT_MIN_H. Double-click the line
-   * to go back to growing with the draft.
+   * Drag the message box's top edge to trade room with the conversation: up
+   * gives the box more room for a long prompt, down gives it back to the
+   * transcript. Everything else in the composer (the controls, the attach row)
+   * keeps its size, so only the text box grows, and the transcript is never
+   * squeezed below TRANSCRIPT_MIN_H. Double-click the edge to go back to
+   * growing with the draft.
    */
   const startComposerResize = (e: React.PointerEvent) => {
     const ta = composerRef.current;
@@ -2801,20 +2801,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
         <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
-          {/* The resize grip rides the composer's top border: a wide invisible
-              hit area over a hairline that lights up on hover. */}
-          {surface !== 'composer' && !cleanStart && <div
-            className="group absolute inset-x-0 -top-1.5 z-10 h-3 cursor-row-resize"
-            onPointerDown={startComposerResize}
-            onDoubleClick={resetComposerHeight}
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="Resize the message box"
-            title="Drag to resize the message box · double-click to reset"
-          >
-            <span className="absolute inset-x-0 top-[5px] h-0.5 opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
-            <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
-          </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : 'w-[min(90%,calc(100%-8px))]'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
@@ -2829,6 +2815,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </div>
             )}
             <div className="composer relative">
+            {/* The resize grip is part of the box: a wide invisible hit area on
+                its top border, with a pill that lights up there on hover. */}
+            {surface !== 'composer' && !cleanStart && <div
+              className="group absolute inset-x-0 -top-2 z-10 h-3 cursor-row-resize"
+              onPointerDown={startComposerResize}
+              onDoubleClick={resetComposerHeight}
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize the message box"
+              title="Drag to resize the message box · double-click to reset"
+            >
+              <span className="absolute left-1/2 top-[5px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
+            </div>}
             {/* The per-chat Nekko peeks over the composer's left end and watches
                 its caret; wall windows and the lone composer surface already
                 carry their own picker, and a new chat has the greeting cat. */}
