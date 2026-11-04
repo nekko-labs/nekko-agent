@@ -263,14 +263,23 @@
             <h3>Local code edits. 5× faster than Ollama.</h3>
             <p>Same model file. Same machine. Less waiting. Nekko returned a 156-line file with a function renamed in <strong>2.5 seconds</strong>. Ollama took <strong>13.9 seconds</strong>. Both made the correct edit.</p>
             <p>Nekko enables llama.cpp’s n-gram speculative decoding by default: propose repeated text, then let the model verify it. That helps when an edited file repeats much of the input—not on every task.</p>
+            <figure class="speed-proof" aria-label="Published benchmark medians, not a live demonstration">
+              <figcaption class="mf-num">Whole-file rename benchmark</figcaption>
+              <div class="speed-row"><span>Nekko Agent</span><div class="speed-track"><div class="bar k-nekko" style="--v: 18%" title="Nekko Agent: 2.5 seconds"><b>2.5 s</b></div></div></div>
+              <div class="speed-row"><span>Ollama</span><div class="speed-track"><div class="bar k-ollama" style="--v: 100%" title="Ollama: 13.9 seconds"><b>13.9 s</b></div></div></div>
+              <p class="micro">Published benchmark medians, not a live demonstration.</p>
+            </figure>
             <a class="card-link" href="/docs/benchmarks">Method, raw runs and limitations <span aria-hidden="true">→</span></a>
           </div>
-          <aside class="speed-proof" aria-label="Published benchmark medians, not a live demonstration">
-            <p class="mf-num">WHOLE-FILE RENAME BENCHMARK</p>
-            <p><strong>2.5 s</strong><span>Nekko Agent</span></p>
-            <p><strong>13.9 s</strong><span>Ollama</span></p>
-            <p class="micro">Published benchmark medians, not a live demonstration.</p>
-          </aside>
+          <!-- Why it's faster: one file per look (dark for Dark, light for White and Colourful); the hidden one never loads. -->
+          <button class="media panel-media" type="button" aria-label="Why is Nekko faster: model passes counted side by side for one code edit, 15 seconds, no sound. Opens larger.">
+            <video class="panel-video why-video why-video-dark" muted loop playsinline preload="none" width="1920" height="1080" poster="media/why-faster-dark-poster.webp" data-autoplay>
+              <source src="media/why-faster-dark.mp4" type="video/mp4">
+            </video>
+            <video class="panel-video why-video why-video-light" muted loop playsinline preload="none" width="1920" height="1080" poster="media/why-faster-light-poster.webp" data-autoplay>
+              <source src="media/why-faster-light.mp4" type="video/mp4">
+            </video>
+          </button>
 
           <!-- Complete-reply latency from docs/benchmarks.md (2026-10-30). -->
           <figure class="bench" aria-describedby="bench-note">
