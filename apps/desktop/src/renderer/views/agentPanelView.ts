@@ -24,7 +24,7 @@ export type AgentPanelView = {
   showProvider: boolean;
   /** Chats an automation started (they carry a task id). */
   showAutomations: boolean;
-  /** Groups with nothing in them, shown with their "No active agents" line. */
+  /** Groups with nothing in them, shown with a muted dash placeholder. */
   showEmptyGroups: boolean;
   /** Which computer a card's agent runs on, for a card on another computer. */
   showComputer: boolean;
@@ -171,6 +171,22 @@ export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phas
   }
   const phase: string | undefined = chat?.phase;
   return phase === 'verifying' || phase === 'shipping' ? 'status:verifying' : 'status:building';
+}
+
+export type GroupActivityKind = 'building' | 'verifying' | 'watching';
+
+/**
+ * What a status group's heading shows as live, given the status of each chat in
+ * it. A phase group is live only while a chat in it works, since a chat stopped
+ * on an error stays in its phase. Watching is live while it holds a chat: the
+ * armed watch is the activity.
+ */
+export function groupActivityOf(key: string, statuses: ReadonlyArray<string | undefined>): GroupActivityKind | null {
+  if (key === 'status:watching') return statuses.length > 0 ? 'watching' : null;
+  if (!statuses.includes('working')) return null;
+  if (key === 'status:building') return 'building';
+  if (key === 'status:verifying') return 'verifying';
+  return null;
 }
 
 /** The date groups, newest first. */

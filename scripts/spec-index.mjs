@@ -9,7 +9,7 @@
  * index lists every file by area, with its size so an agent can tell a short
  * read from a long one before opening it. spec/INDEX.md is gitignored: a
  * committed index changed in half of all PRs and made them conflict in the
- * merge queue (docs/decisions/0048-keep-the-spec-index-and-task-log-out-of-prs.md).
+ * merge queue (docs/decisions/0049-keep-the-spec-index-and-task-log-out-of-prs.md).
  */
 import fs from 'node:fs';
 import path from 'node:path';

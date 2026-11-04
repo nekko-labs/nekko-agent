@@ -393,6 +393,27 @@ async fn takes_a_job_when_gates_pass_and_deletes_vm_after() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_finished_job_keeps_what_its_guest_used() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    h.running().await;
+    let name = h.vms().remove(0);
+    let stats = h.dir.path().join("vms").join(&name).join("stats.img");
+    let mut disk = std::fs::read(&stats).expect("the supervisor makes a stats disk per VM");
+    assert!(disk.starts_with(nekko_runner::usage::STATS_HEADER));
+    // Samples after the job started; the guest's clock is the Mac's.
+    let samples = b"1800000000 50 4000 0 0\n1800000005 0 6000 0 0\n";
+    disk[512..512 + samples.len()].copy_from_slice(samples);
+    std::fs::write(&stats, disk).unwrap();
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    let usage = h.audit()[0].usage.expect("a finished job carries its usage");
+    assert_eq!((usage.cpus, usage.memory_mb, usage.mem_peak_mb), (10, 8192, 6000));
+    let size = h.view().suggested_size.expect("the Mac has been read");
+    assert_eq!((size.jobs, size.cpus, size.memory_mb), (1, 10, 8192));
+}
+
+#[tokio::test(start_paused = true)]
 async fn holds_without_a_vm_when_gates_fail() {
     let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
     h.mac(|m| m.idle_seconds = Some(30.0));
@@ -942,6 +963,7 @@ async fn views_carry_the_last_five_jobs() {
             result: AuditResult::Finished,
             seconds: 1,
             reason: vec![],
+            usage: None,
             job_id: None,
             url: None,
             pr: None,

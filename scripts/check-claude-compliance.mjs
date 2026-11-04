@@ -55,7 +55,7 @@ export const ALLOW = [
   { path: 'scripts/check-claude-compliance.test.mjs', rules: '*', why: 'seeds violations on purpose' },
   { path: 'docs/superpowers/plans/', rules: '*', why: 'docs history: the plans the removed sign-in shipped from' },
   { path: 'TASKS.md', rules: '*', why: 'task history (T138 and the CL group record what was removed)' },
-  { path: 'docs/history/tasks-archive.md', rules: '*', why: 'the task log moved out of TASKS.md on 2026-11-04 (decision 0048), the same history' },
+  { path: 'docs/history/tasks-archive.md', rules: '*', why: 'the task log moved out of TASKS.md on 2026-11-04 (decision 0049), the same history' },
   {
     path: 'scripts/claude-code-probe.test.mjs',
     rules: ['sets-claude-code-oauth-token'],

@@ -5,7 +5,10 @@
     "jsx": "react-jsx",
     "types": ["node", "vite/client"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    // Type-check against @nekko-agent/shared's source in this tree, not a built dist
+    // that may be stale or, in a worktree, the primary checkout's (#1153).
+    "customConditions": ["source"]
   },
   "include": ["src/**/*"]
 }

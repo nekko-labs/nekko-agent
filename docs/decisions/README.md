@@ -55,4 +55,5 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0045](0045-workflows-are-scheduled-tasks.md) | Workflows are called Scheduled Tasks, one concept with the chat ⚡ Automate tasks; code, channels and stored files keep the old name, and the CLI keeps `workflow` as an alias | accepted |
 | [0046](0046-secrets-live-in-the-os-keystore.md) | Provider API keys, connector tokens and sign-in tokens live in the OS keystore, moved there on first read; backups carry no keys | accepted |
 | [0047](0047-the-iphone-stays-connected-to-every-paired-computer.md) | The iPhone stays connected to every paired computer: a light link per computer beside the active connection, handed over on a switch; the chat list shows every computer | accepted |
-| [0048](0048-keep-the-spec-index-and-task-log-out-of-prs.md) | Generate the spec index on demand and keep tasks in GitHub issues, so no file changes in most PRs; TASKS.md holds only the plan | accepted |
+| [0048](0048-agent-activity-animation-answers-to-its-own-setting.md) | The agent activity animation answers to its own setting, not the system reduced-motion preference | accepted |
+| [0049](0049-keep-the-spec-index-and-task-log-out-of-prs.md) | Generate the spec index on demand and keep tasks in GitHub issues, so no file changes in most PRs; TASKS.md holds only the plan | accepted |

@@ -24,7 +24,7 @@ fn vm(helper: PathBuf, physical: bool) -> HelperVm {
 }
 
 fn spec(dir: &Path) -> RunSpec {
-    RunSpec { bundle: dir.join("vm.bundle"), cpus: 4, memory_mb: 8192, seed: dir.join("seed.iso") }
+    RunSpec { bundle: dir.join("vm.bundle"), cpus: 4, memory_mb: 8192, seed: dir.join("seed.iso"), stats: None }
 }
 
 /// The pid the fake helper wrote to `dir/pid`.

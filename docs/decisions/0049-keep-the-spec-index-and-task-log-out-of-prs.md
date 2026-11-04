@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-04
 ---
 
-# 0048. Keep the spec index and the task log out of PRs
+# 0049. Keep the spec index and the task log out of PRs
 
 ## Context
 

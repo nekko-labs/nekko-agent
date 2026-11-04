@@ -26,7 +26,7 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
           <div className="break-all text-ink-faint">Watch {w.id}</div>
           {w.url && /^https:\/\/github\.com\//i.test(w.url) && <a href={w.url} target="_blank" rel="noreferrer" className="underline">Open pull request</a>}
           <p>{clock?.title}</p>
-          {w.auto && <p className="text-ink-faint">Nekko armed this because the agent opened the PR. Cancelling stops it for this PR; turn it off for every PR in Settings › Pull requests.</p>}
+          {w.auto && <p className="text-ink-faint">Nekko started this watcher because the agent opened the PR. Cancel watcher stops it for this PR only. To stop watching every PR, go to Settings › Tools, click Show advanced settings if it's there, then turn off Watch each PR until it is merge-ready under Pull requests.</p>}
           <button type="button" className="btn btn-outline text-xs" disabled={busy !== null} onClick={async () => {
             setBusy(w.id); setError(null);
             try { await window.nekko.cancelAgentWatch(sessionId, w.id); refreshAgentWatches(sessionId); }

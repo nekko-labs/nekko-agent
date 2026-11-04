@@ -10,4 +10,4 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 - **Record** user intent, acceptance criteria, privacy and security boundaries, and status (implemented, planned, unverified) inside the feature file. A product decision that closes off alternatives also gets a record in [docs/decisions](../docs/decisions/README.md).
 - **Status words** stay in the text (`[shipped]`, `[implemented 2026-10-17; not yet ...]`); never mark a feature shipped only because code exists.
 
-The index used to live here and was committed. Every line carried its file's size, so about half of all PRs rewrote this file and collided in the merge queue; see [decision 0048](../docs/decisions/0048-keep-the-spec-index-and-task-log-out-of-prs.md).
+The index used to live here and was committed. Every line carried its file's size, so about half of all PRs rewrote this file and collided in the merge queue; see [decision 0049](../docs/decisions/0049-keep-the-spec-index-and-task-log-out-of-prs.md).

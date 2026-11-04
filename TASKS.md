@@ -10,7 +10,7 @@ owner:
 >
 > **Tasks live in GitHub issues** (since 2026-11-04). Every change already has an issue ([AGENTS.md](AGENTS.md), "Landing work"): plan notes and the checklist for a change go in its issue, and how it was built goes in the PR description. [Floop](https://floop-nekko.fly.dev) mirrors the issues (two-way sync is planned). Do not add task groups here.
 >
-> **History.** Every task group and the Part 2 checklist up to the move are frozen, verbatim, in [docs/history/tasks-archive.md](docs/history/tasks-archive.md). Task IDs cited in code comments and the spec (IO-20, AN-32, T185, ...) are there. Why: [decision 0048](docs/decisions/0048-keep-the-spec-index-and-task-log-out-of-prs.md).
+> **History.** Every task group and the Part 2 checklist up to the move are frozen, verbatim, in [docs/history/tasks-archive.md](docs/history/tasks-archive.md). Task IDs cited in code comments and the spec (IO-20, AN-32, T185, ...) are there. Why: [decision 0049](docs/decisions/0049-keep-the-spec-index-and-task-log-out-of-prs.md).
 
 
 ## Part 1, Plan (how we build it)

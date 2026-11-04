@@ -1007,9 +1007,13 @@ h3 { font-size: 21px; }
 .panels-foot { margin-top: 30px; max-width: 760px; margin-left: auto; margin-right: auto; }
 
 /* The launch proof uses published completion times, not a simulated live race. */
-.hero-proof { margin-top: 24px; font-size: 15px; line-height: 1.6; }
-.hero-proof strong { font-size: 18px; }
-.hero-proof span { font-size: 13px; }
+/* The hero's proof: the speed replay under the headline, kept inside its
+   panel at any width (min-width: 0 and max-width: 100% stop a 1920px video
+   from widening the column). */
+.hero-replay { width: min(100%, 880px); min-width: 0; margin: 30px auto 0; padding: 10px; border-radius: 18px; box-sizing: border-box; }
+.hero-replay-video { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 10px; background: var(--line); }
+.hero-replay-caption { margin-top: 10px; padding: 0 6px 2px; font-size: 14px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.hero-replay-caption strong { color: var(--ink); }
 .speed-proof { align-self: center; padding: 28px; border: 1px solid var(--line); border-radius: 16px; }
 .speed-proof > p + p { margin-top: 18px; }
 .speed-proof strong { display: block; font-family: var(--mono); font-size: clamp(32px, 5vw, 58px); line-height: 1.2; }
