@@ -52,6 +52,14 @@ EOF`,
     `#!/bin/bash
 echo "run.sh $*" >> '${log}'
 sleep "\${FAKE_SLEEP:-0}"
+# FAKE_STATS_DISK (a name under dev/): the job lasts until a usage sample lands past that disk's
+# header block (at most 20 s), so a slow CI machine cannot end it before the sampler's first write.
+if [ -n "\${FAKE_STATS_DISK:-}" ]; then
+  for _ in $(seq 200); do
+    [ -n "$(tail -c +513 '${root}/dev/'"$FAKE_STATS_DISK" | tr -d '\\0')" ] && break
+    sleep 0.1
+  done
+fi
 if [ -e '${home}/.nekko/jit-config' ]; then echo "run.sh saw jit-config" >> '${log}'; fi
 if [ -n "\${FAKE_HOSTILE:-}" ]; then
   mkdir -p '${victim}' && echo keep > '${victim}/jit-config' && echo keep > '${victim}/gitlab-runner.toml'
@@ -131,7 +139,7 @@ test('usage_is_sampled_onto_the_stats_disk_only', () => {
   const disk = (name, head) => writeFileSync(join(root, 'dev', name), Buffer.concat([head, Buffer.alloc(4096)]));
   const { calls } = run({
     seed: { 'jit-config': 'QUJD' },
-    env: { FAKE_SLEEP: '1' },
+    env: { FAKE_STATS_DISK: 'disk9' },
     prepare: () => {
       disk('disk1', Buffer.alloc(512)); // the guest's own disk: no header
       disk('disk1s1', header); // a partition is never the stats disk
