@@ -125,6 +125,7 @@ Agents panel, monitors, subagents and delegation.
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Subagents in Claude chats](agents/claude-code-subagents.md) (2 KB)
 - [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
+- [Watch PRs until they are merge-ready, by default](agents/watch-prs-until-merge-ready.md) (3 KB)
 - [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (5 KB)
 
 ### context
@@ -170,7 +171,7 @@ Working in a codebase: files, editor, diffs, pull requests, design workspace.
 - [Editing, reviewing & previewing, without leaving the app](code/editing-reviewing-previewing-without-leaving-the-app.md) (2 KB)
 - [Files, editor & visual surfaces (IDE-like, "stay in the app")](code/files-editor-visual-surfaces-ide-like-stay-in-the-app.md) (7 KB)
 - [In-chat pull requests](code/in-chat-pull-requests.md) (2 KB)
-- [Issue per change and work tracking preferences](code/issue-per-change.md) (2 KB)
+- [Issue per change and work tracking preferences](code/issue-per-change.md) (3 KB)
 - [Repository review integration](code/repository-review-integration.md) (1 KB)
 - [Rich responses, reports, and design workspace](code/rich-responses-reports-and-design-workspace.md) (22 KB)
 - [Working in a codebase](code/working-in-a-codebase.md) (5 KB)

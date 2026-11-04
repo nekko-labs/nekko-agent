@@ -221,7 +221,19 @@ when safe, never silently switch provider or model.
 
 Active watches appear above the chat draft as expandable chips. Open one to see
 its wake condition, follow the PR, or cancel that watcher without stopping the
-chat. Child-agent watchers show their owner. Suggested response buttons are gone;
+chat. Child-agent watchers show their owner.
+
+When an agent opens a pull request, Nekko watches it for you: at the end of the
+turn it arms a watcher on every open PR the chat opened, whichever model or
+harness the chat runs on (Claude Code included). The agent wakes when checks
+finish, a review arrives or a few hours pass, fixes what it can, and lands the
+PR if you or the repository allow it; otherwise it tells you the PR is
+merge-ready or what is blocking it. The chip reads **Watching until
+merge-ready**. Nekko keeps re-arming it until the PR is merged or closed.
+Cancelling the chip stops it for that PR; turn it off for every PR with
+**Watch each PR until it is merge-ready** in Settings › Pull requests.
+
+Suggested response buttons are gone;
 the gray draft placeholder and Right Arrow acceptance remain.
 
 ### Reading expanded tool details

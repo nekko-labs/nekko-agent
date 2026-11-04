@@ -19,13 +19,14 @@ export function ActiveWatchChips({ sessionId, owner }: { sessionId: string; owne
       const clock = watchClock({ action: 'create', kind: w.kind, prompt: '' }, w, now);
       return <details key={w.id} className="min-w-0 max-w-full rounded-lg border border-line px-2 py-1">
         <summary className="flex cursor-pointer flex-wrap items-center gap-2" title={clock?.title}>
-          <WatchIcon />{owner && <span className="max-w-40 truncate" title={owner}>{owner} ·</span>}<span>{w.kind === 'pr' ? 'PR watcher' : 'Timer watcher'}</span>
+          <WatchIcon />{owner && <span className="max-w-40 truncate" title={owner}>{owner} ·</span>}<span>{w.kind === 'pr' ? (w.auto ? 'Watching until merge-ready' : 'PR watcher') : 'Timer watcher'}</span>
           <span>{clock?.text ?? 'Status unavailable'}</span>
         </summary>
         <div className="space-y-1 py-2">
           <div className="break-all text-ink-faint">Watch {w.id}</div>
           {w.url && /^https:\/\/github\.com\//i.test(w.url) && <a href={w.url} target="_blank" rel="noreferrer" className="underline">Open pull request</a>}
           <p>{clock?.title}</p>
+          {w.auto && <p className="text-ink-faint">Nekko armed this because the agent opened the PR. Cancelling stops it for this PR; turn it off for every PR in Settings › Pull requests.</p>}
           <button type="button" className="btn btn-outline text-xs" disabled={busy !== null} onClick={async () => {
             setBusy(w.id); setError(null);
             try { await window.nekko.cancelAgentWatch(sessionId, w.id); refreshAgentWatches(sessionId); }

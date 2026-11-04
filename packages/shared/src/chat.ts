@@ -41,6 +41,8 @@ export interface AgentWatchView {
   pending: boolean;
   failures: number;
   lastError?: string;
+  /** Armed by Nekko itself on a PR the chat opened (Settings > Pull requests), not by the agent. */
+  auto?: boolean;
 }
 
 export interface ChatMessage {
