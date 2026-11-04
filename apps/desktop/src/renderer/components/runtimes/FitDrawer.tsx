@@ -10,6 +10,7 @@ import {
 import { FitBar } from './FitBar.js';
 import { AdvancedControls } from './AdvancedControls.js';
 import { formatTokens, verdictColor, verdictLabel, verdictNotes, verdictSentence } from './verdict.js';
+import { PixelSkeleton } from '../PixelSkeleton.js';
 
 /**
  * One model's fit, with the simple control on top and the expert ones behind a
@@ -129,7 +130,7 @@ export function FitDrawer({
         />
       </div>
 
-      {plan ? <FitBar plan={plan} /> : <div className="mt-2 h-6 animate-pulse rounded-md bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)]" />}
+      {plan ? <FitBar plan={plan} /> : <PixelSkeleton className="mt-2 h-6 rounded-md" label="Working out what this needs" />}
 
       <p className="mt-2 text-xs" style={{ opacity: planning ? 0.6 : 1 }}>
         {plan ? verdictSentence(plan) : 'Working out what this needs…'}

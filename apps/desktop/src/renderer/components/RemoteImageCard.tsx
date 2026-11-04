@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChatImages, imageHost, useNearViewport, useRemoteImage, type ChatImageItem } from '../remoteImages.js';
+import { PixelSkeleton } from './PixelSkeleton.js';
 
 /**
  * A photo from the web in a chat reply. It loads through the host
@@ -71,7 +72,7 @@ export function RemoteImageCard({ url, alt, items, index = 0, tile = false }: {
       </span>
     );
   } else {
-    body = <span className={`remote-image-skeleton block ${frame}`} role="status" aria-label={`Loading ${label}`} />;
+    body = <PixelSkeleton className={frame} label={`Loading ${label}`} />;
   }
 
   return (
