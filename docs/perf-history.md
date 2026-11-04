@@ -95,6 +95,22 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### #1663 / #1686 Empty-agent wave: per-frame swell, then per-column colour (2026-11-04)
+Area: renderer
+Result: mixed (#1663 costs more raster per second than #1495; #1686 brings it below #1495), microbenchmark only
+Conditions: hidden, non-focusable Electron 45 window on a Ryzen 9 9950X3D (Windows 11), one 1800×1100 canvas at 1.25 scale, Lilac colours, 200 frames per case after 10 warm-up frames, two rounds. "Main thread" times the draw call alone; "with raster" adds a 1×1 `getImageData` so the GPU work finishes inside the timing.
+
+| Renderer, per frame (median, round 1 / 2) | Main thread | With raster | Frames/s | Raster per second |
+|---|---|---|---|---|
+| #1495 tile copy | 0 / 0 ms | 9.4 / 10.0 ms | ~5.3 | ~53 ms |
+| #1663 one `fillRect` per dot, full-canvas tint | 0.9 / 0.9 ms | 4.9 / 4.9 ms | 20 | ~98 ms |
+| Upscaled per-dot image, masked (rejected) | 0.4 / 0.4 ms | 9.6 / 10.8 ms | 20 | ~200 ms |
+| #1686 per-column colour, no tint pass | 0.8 / 0.8 ms | 1.6 / 1.6 ms | 15 | ~24 ms |
+
+Why: #1663 redrew every dot 20 times a second and finished each frame with a full-canvas gradient tint; #1686 paints each column in its slice of the gradient (no tint pass) and returns to Travis's original 15 frames a second. The masked variant halved main-thread time but doubled raster and was dropped.
+
+Not caused by the wave: the merge-queue failures of "Switch to a cold chat, frame painted" on 2026-11-04 (45 queue runs at 33.8-51.2 ms against the 33 ms gate). The speed contract's seed uses the dark theme with no preset and only chats with messages, so no wave renders there, and two CI runs dispatched back to back at 2026-11-04 ~04:00 UTC both passed: `58983c0d5` (before #1662 and #1663) at p95 32.4 ms, and `main` at `2d2bf4117` (with them) at 33.1 then 32.0 ms. Splitting the queue runs by whether they contained #1663 had looked decisive, but every run without it was from the previous day: the split followed time, not code. The empty-agent wave script's CPU samples showed no difference between #1495 and #1663; they evidently did not exercise the per-frame drawing in a hidden window. Source: #1663, #1686, CI runs 41769575641 and 41769578921.
+
 ### Perf harness: warm pair on the board, sample end, tile read before the screenshot (2026-11-03)
 Area: perf harness
 Result: measurement fix
@@ -1192,6 +1208,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Completing a chat from its X (2026-11-04, #1662): the sidebar card's X played its exit animation (260 ms fold, then a 60 ms delay and 220 ms collapse, each awaited with a 50 ms fallback) before asking the engine to complete the chat, and the engine call then ran `chat:abort`, the archive write and the session refresh one after another. The engine call now starts when X is pressed and the animation plays over it, so the total should approach the longer of the two rather than their sum. Not measured: click-to-row-removed time before and after. A hidden fixture timing the X press to the row's unmount against a stubbed engine with fixed IPC latency, on both revisions, would settle it.
 - iPhone chat streaming and outbox confirmation (2026-11-01, #1412): each streamed token used to recount every live block's characters for the context gauge, merge the whole saved transcript with the live turn twice per render (the list and the follow-scroll `onChange`), and regroup every row by purpose. Now `ChatModel` keeps a running character count and a stored merged transcript whose last block a token patches in place; the view keeps its rows and replaces only the last; the scroll follows a revision counter. The outbox re-read the whole chat (`session:get`) every 0.5 s for up to 45 s after each send; it now re-reads on the computer's first event for the chat, on the send's answer, or on a 0.5/1/2/4 s backoff, and `sendWaiting` no longer polls every 50 ms. Not measured: per-token main-actor time on a long transcript and `session:get` calls per send, before and after. An Instruments Time Profiler run of a long reply in a 500-message chat, and a count of `session:get` per outbox send in the itest, would settle it.
 - nekkod router table (2026-10-28, #1335): `routes::route()` looked a channel up by walking a match of about 90 arms, many of them a linear `contains` over a channel list; it is now one `HashMap` lookup in a table built at startup. Done for structure (no `.expect("checked")`, no channel registered twice), not measured: per-call routing time before and after is unknown. A microbenchmark of `route()` for a late channel (`session:get`) on both revisions would settle it.
 - Quiet beside full-screen games (2026-10-28): before, measured 2026-10-18 on a Core Ultra 9 285H / RTX 5070 Ti laptop with the dev build idle and Overwatch running: 93 new processes in 60 s from nekkod (`where.exe` about every 6 s, `nvidia-smi.exe` about every 6-12 s, each with a conhost; `nvidia-smi` about 96 ms wall / 62 ms CPU, `where` about 60 ms / 38 ms), and Overwatch at 60-90 FPS (normally 200-300) after Nekko took the foreground until a game restart. After: the tray's poll no longer runs `engine:status`, PATH lookups no longer spawn, hidden pages stop asking, and windows and notices wait while a full-screen app is in front. Neither the process count nor the game's FPS has been measured after the change. Repeat the 60 s process count with the same idle app and an FPS run with a turn finishing mid-game.
