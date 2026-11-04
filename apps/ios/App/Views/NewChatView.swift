@@ -34,7 +34,7 @@ struct NewChatView: View {
     @State private var refusal: String?
     @Environment(CloudSync.self) private var cloud
     @Environment(PhoneChats.self) private var phone
-    /// The chat runs on this iPhone, on one of its own providers (decision 0048).
+    /// The chat runs on this iPhone, on one of its own providers (decision 0050).
     @State private var onPhone = false
     @State private var phoneModel: (String, String)?
     @State private var pickingPhoneModel = false

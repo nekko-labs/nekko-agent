@@ -268,7 +268,7 @@ jobs:
             -only-testing:NekkoNativeUITests/LiveRelayTests/testFollowUpInASubagent || { failed=1; stack_logs subagent; }
           kill $NEKKO_ITEST_PIDS 2>/dev/null || true
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
-          # One list across a paired computer and this iPhone's own provider (decision 0048).
+          # One list across a paired computer and this iPhone's own provider (decision 0050).
           ready
           ../../apps/ios/scripts/itest-stack.sh /tmp/stack-fleet.env
           . /tmp/stack-fleet.env

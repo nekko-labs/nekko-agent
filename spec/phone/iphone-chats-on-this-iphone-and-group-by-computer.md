@@ -5,7 +5,7 @@ area: phone
 
 # iPhone: chats on this iPhone, where each chat runs, and group by computer (2026-11-04)
 
-`[implemented 2026-11-04, iPhone only: the providers, requests, streaming and chat store are tested in NekkoKit (Linux Swift container), the list's Group by → Computer in NekkoProtocol; the screens build on macOS CI and are driven by the live UI test testChatsOnTheComputerAndOnThisIPhoneInOneList with a fixture provider. Not yet tried against a real provider from a device. Android has none of it yet]` Decision: [0048](../../docs/decisions/0048-the-iphone-runs-chats-on-its-own-cloud-providers.md). Builds on [every computer at once](iphone-every-computer-at-once.md).
+`[implemented 2026-11-04, iPhone only: the providers, requests, streaming and chat store are tested in NekkoKit (Linux Swift container), the list's Group by → Computer in NekkoProtocol; the screens build on macOS CI and are driven by the live UI test testChatsOnTheComputerAndOnThisIPhoneInOneList with a fixture provider. Not yet tried against a real provider from a device. Android has none of it yet]` Decision: [0048](../../docs/decisions/0050-the-iphone-runs-chats-on-its-own-cloud-providers.md). Builds on [every computer at once](iphone-every-computer-at-once.md).
 
 ## User intent
 

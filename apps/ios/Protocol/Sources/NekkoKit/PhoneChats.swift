@@ -63,7 +63,7 @@ public struct PhoneChat: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-/// This iPhone as a place chats run (decision 0048): its providers (keys in the
+/// This iPhone as a place chats run (decision 0050): its providers (keys in the
 /// Keychain), their models, and its chats, kept in a file of their own under
 /// Application Support beside the drafts, out of backups. Nothing here is sent
 /// anywhere but to the provider a chat runs on.

@@ -27,7 +27,7 @@ struct WelcomeView: View {
                     }
                     .accessibilityIdentifier("welcome.cloud")
                 }
-                // No computer needed: chats can run on this iPhone, on a cloud provider (decision 0048).
+                // No computer needed: chats can run on this iPhone, on a cloud provider (decision 0050).
                 NavigationLink(value: Route.phoneModels) {
                     Label("Or use a model provider on this iPhone", systemImage: "iphone")
                 }

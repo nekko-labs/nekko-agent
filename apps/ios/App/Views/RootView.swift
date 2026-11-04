@@ -26,7 +26,7 @@ enum Route: Hashable {
     case liveActivities
     /// Settings → Simple mode: what Simple and Expert show, with a preview.
     case simpleMode
-    /// Settings → Models on this iPhone: the providers chats here run on (decision 0048).
+    /// Settings → Models on this iPhone: the providers chats here run on (decision 0050).
     case phoneModels
 }
 

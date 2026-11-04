@@ -1,7 +1,7 @@
 import Foundation
 import NekkoKit
 
-/// How chats on this iPhone reach their provider (decision 0048): an ephemeral
+/// How chats on this iPhone reach their provider (decision 0050): an ephemeral
 /// session (no cookies, no cache), so a key never lands in a URL cache. The
 /// request goes straight to the provider; nothing passes through a computer,
 /// the relay or Nekko Cloud.

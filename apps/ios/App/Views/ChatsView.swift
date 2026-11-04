@@ -350,7 +350,7 @@ struct ChatsView: View {
         prefs.chatsFilter.flatMap { id in places.contains { $0.id == id } ? id : nil }
     }
 
-    /// Every place chats run: the paired computers, and this iPhone when it runs chats (decision 0048).
+    /// Every place chats run: the paired computers, and this iPhone when it runs chats (decision 0050).
     private var places: [ChatPlace] { ChatPlace.all(store: store, phone: phone) }
     /// The places the list shows now: every one, or the one it is filtered to.
     private var placesInView: [ChatPlace] { filter.map { f in places.filter { $0.id == f } } ?? places }

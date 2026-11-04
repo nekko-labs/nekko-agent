@@ -84,7 +84,7 @@ struct PlaceMark: View {
 
 // MARK: A chat on this iPhone
 
-/// A chat that runs on this iPhone (decision 0048): the conversation, a composer,
+/// A chat that runs on this iPhone (decision 0050): the conversation, a composer,
 /// and its model. No tools and no computer: a straight conversation with the model.
 struct PhoneChatView: View {
     let chatId: String

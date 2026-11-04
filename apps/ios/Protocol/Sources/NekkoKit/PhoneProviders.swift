@@ -1,7 +1,7 @@
 import Foundation
 import NekkoProtocol
 
-/// This iPhone as a place chats run (decision 0048): a cloud model API called
+/// This iPhone as a place chats run (decision 0050): a cloud model API called
 /// straight from the phone, on the user's own key, kept in this iPhone's
 /// Keychain and never sent to a computer, the relay or Nekko Cloud. The same
 /// cloud providers the desktop connects to, less the ones that need a computer

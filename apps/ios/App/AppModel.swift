@@ -21,7 +21,7 @@ final class AppModel {
     let previews: PreviewLoader
     /// Nekko Cloud sign-in and end-to-end encrypted sync (its own Keychain service).
     let cloud: CloudSync
-    /// This iPhone as a place chats run, on its own cloud providers (decision 0048).
+    /// This iPhone as a place chats run, on its own cloud providers (decision 0050).
     let phone: PhoneChats
     private let cloudKeychain: KeychainStore
     private let cloudKey: CloudDeviceKey

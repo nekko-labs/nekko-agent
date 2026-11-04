@@ -238,7 +238,7 @@ struct SettingsView: View {
                 NavigationLink(value: Route.cloud) { Label("Nekko Cloud sync", systemImage: "lock.icloud") }
                     .accessibilityIdentifier("settings.cloud")
                 NavigationLink(value: Route.computers) { Label("Paired computers", systemImage: "desktopcomputer") }
-                // Chats that run on this iPhone, on its own cloud providers (decision 0048).
+                // Chats that run on this iPhone, on its own cloud providers (decision 0050).
                 NavigationLink(value: Route.phoneModels) { Label("Models on \(ChatPlace.phoneName)", systemImage: "iphone") }
                     .accessibilityIdentifier("settings.phoneModels")
                 NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right") }

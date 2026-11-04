@@ -776,7 +776,7 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "deeplink-2-connected")
     }
 
-    /// One list across every place chats run (decision 0048): a paired computer
+    /// One list across every place chats run (decision 0050): a paired computer
     /// and this iPhone's own provider (the fixture, which answers in the simulator).
     /// A chat on each, both in the list with where they run, Group by → Computer,
     /// the iPhone's chat itself, and Settings → Models on this iPhone.
