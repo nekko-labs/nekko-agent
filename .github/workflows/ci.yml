@@ -1,5 +1,5 @@
 name: CI
-run-name: 'Diagnostic #712: base vs lifecycle icon-seek patch'
+run-name: 'Diagnostic #712: exact-base switch readiness marks'
 # Temporary experiment only. Never merge this replacement into main.
 on:
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           mkdir -p comparison
           git rev-parse HEAD > comparison/diagnostic-sha.txt
-          printf 'failed_run=41760079850\nbase=%s\nhead=%s\norder=base-before,icon-seek-patch,base-after; purpose=remove lifecycle icon seeks\n' "$BASE" "$HEAD" > comparison/experiment.txt
+          printf 'failed_run=41760079850\nbase=%s\nhead=%s\norder=switch-marks; purpose=correlate contract readiness and paint\n' "$BASE" "$HEAD" > comparison/experiment.txt
           lscpu > comparison/lscpu.txt
           uname -a > comparison/uname.txt
           printf 'os=%s\narch=%s\nrunner=%s\nimage=%s\nimage_version=%s\n' "$RUNNER_OS" "$RUNNER_ARCH" "$RUNNER_NAME" "${ImageOS:-unknown}" "${ImageVersion:-unknown}" > comparison/runner.txt
@@ -35,7 +35,7 @@ jobs:
           test "$(git rev-parse "$HEAD^")" = "$BASE"
           git diff --binary "$BASE" "$HEAD" > comparison/base-to-head.patch
           git diff --stat "$BASE" "$HEAD" > comparison/base-to-head.stat
-          for phase in base-before icon-seek-patch base-after; do
+          for phase in switch-marks; do
             sha="$BASE"
             if [ "$phase" = head ]; then sha="$HEAD"; fi
             git worktree add --detach "$RUNNER_TEMP/queue-cold/$phase" "$sha"
@@ -60,7 +60,7 @@ jobs:
           printf '%s\n' "$browser" > comparison/browser.txt
           "$browser" --version >> comparison/browser.txt
           sha256sum "$browser" >> comparison/browser.txt
-      - name: Build and compare exact base with lifecycle-seek patch
+      - name: Build and instrument exact base switch readiness
         shell: bash
         run: |
           # GitHub's bash starts with -e; let the explicit phase exit-code
@@ -72,7 +72,7 @@ jobs:
           # copies its binary before measuring. No daemon is borrowed from head.
           export CARGO_TARGET_DIR="$RUNNER_TEMP/queue-cold-target"
           failed=0
-          for phase in base-before icon-seek-patch base-after; do
+          for phase in switch-marks; do
             out="$report/$phase"
             (
               set -euo pipefail
@@ -81,7 +81,7 @@ jobs:
               if [ "$phase" = head ]; then expected="$HEAD"; fi
               test "$(git rev-parse HEAD)" = "$expected"
               test -z "$(git status --porcelain --untracked-files=no)"
-              if [ "$phase" = icon-seek-patch ]; then node "$GITHUB_WORKSPACE/scripts/perf/diagnose-icon-seek.cjs"; fi
+              node "$GITHUB_WORKSPACE/scripts/perf/diagnose-switch-marks.cjs"
               git diff --binary HEAD > "$out/experiment.patch"
               npm ci
               npm run build:web
@@ -92,7 +92,7 @@ jobs:
               sha256sum "$NEKKOD_PATH" > "$out/daemon-sha256.txt"
               git diff --binary HEAD > "$out/measured.patch"
               git status --porcelain --untracked-files=no > "$out/measured-status.txt"
-              if [ "$phase" != icon-seek-patch ]; then test ! -s "$out/measured-status.txt"; fi
+              test -s "$out/measured.patch"
               "$PERF_BROWSER" --version > "$out/browser-version.txt"
               printf '%s\n' 'node scripts/perf/run.mjs --out <phase> --only latency --attempts 1 --timeline --dump-trace --no-gpu --report-only' > "$out/command.txt"
               node scripts/perf/run.mjs --out "$out" --only latency --attempts 1 --timeline --dump-trace --no-gpu --report-only
@@ -110,7 +110,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: queue-cold-icon-seek-comparison
+          name: queue-cold-switch-readiness-marks
           path: comparison/
           if-no-files-found: error
           retention-days: 14
