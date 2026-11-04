@@ -11,7 +11,7 @@ area: phone
 
 ## Current native naming
 
-The native iOS and Android apps call the modes **Simple** and **Detailed**, including localized labels, settings previews, visibility choices and accessibility descriptions. The historical **Expert** wording below records the original implementation. Stored `expertMode` preferences, `expert` visibility values and existing APIs remain unchanged; this does not rename model MoE expert terminology. Naming and selector consistency can be checked statically on Windows; native builds, UI tests and visual verification of this wording still need the respective SDKs and devices or simulators (no apps launched for this naming change).
+The native iOS and Android apps call the modes **Simple** and **Detailed**, including localized labels, settings previews, visibility choices and accessibility descriptions. The historical **Expert** wording below records the original implementation. Stored `expertMode` preferences, `expert` visibility values and existing APIs remain unchanged; this does not rename model MoE expert terminology. Static naming, localization/catalog and selector checks pass on Windows. Matched disposable-CI before/head builds and screenshot capture completed: iPhone 18 Pro / iOS 27.0 evidence tests pass; Android 14 / API 34 captures completed with the same three pre-existing polling/list-state failures on base and head, tracked in #1707. Matching native settings and preview screenshots with revision/runtime metadata are published on PR #1705. Actual pixel inspection is still blocked by image-tool timeouts; no physical device or user-owned app/profile was used.
 
 ## Behaviour
 
