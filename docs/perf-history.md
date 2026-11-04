@@ -95,19 +95,24 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
-### #1663 Empty-agent wave: per-frame swell instead of column steps (2026-11-04)
+### #1663 regression and fix: empty-agent wave raster cost (2026-11-04)
 Area: renderer
-Result: no effect (within sample noise)
-Conditions: Windows 11 on a Parsec virtual display at 125% scaling (captures 1802 px wide for a 1440 px window), `empty-agent-wave-sandbox.cjs` through the layout-evidence fixture (isolated hidden non-focusable Electron window, 1440×900, Lilac, network blocked), 6 s CPU deltas, two runs per version, run sequentially in the order #1495, #1663, #1495, #1663, #1663 with the follow-up runs before and between them, nothing else deliberately running. "#1495" is the wave as it was before #1663 (`e2a7893e3^`); "#1663" is `main` at `e2a7893e3`, measured with the new-behaviour assertions off because it lacks the step counter they read; "follow-up" is #1663 drawn on whole device pixels with the step counter restored. The wave is paused while unfocused in all three, so the unfocused rows measure the idle app, not the wave.
+Result: regression (#1663), then fixed in its follow-up (#1686), merge-queue confirmation pending
+Conditions: CI numbers are the `perf` job's speed contract (Local Web UI, headless Chromium, CI regression gate 33 ms for "Switch to a cold chat, frame painted") across every merge-queue and `main` CI run between 2026-11-03 15:28 and 2026-11-04 03:01 UTC, split by whether the run contained #1663 (`e2a7893e3`). The renderer microbenchmark ran in a hidden, non-focusable Electron 45 window on a Ryzen 9 9950X3D (Windows 11), one 1800×1100 canvas at 1.25 scale, Lilac colours, 200 frames per case after 10 warm-up frames, two rounds; "main thread" times the draw call alone, "with raster" adds a 1×1 `getImageData` to force the GPU work to finish.
 
-| Metric (% of a core) | #1495 (run 1 / 2) | #1663 (run 1 / 2) | Follow-up (run 1 / 2) |
-|---|---|---|---|
-| Unfocused: GPU process | 1.98 / 2.20 | 2.43 / 4.56 | 2.26 / 2.26 |
-| Unfocused: renderer | 1.62 / 1.70 | 1.70 / 2.84 | 1.82 / 1.68 |
-| Synthetic focus: GPU process | 1.56 / 1.58 | 1.66 / 1.84 | 1.70 / 1.57 |
-| Synthetic focus: renderer | 0.99 / 0.97 | 1.00 / 0.99 | 1.04 / 0.88 |
+| CI: cold switch, frame painted (p95) | Without #1663 | With #1663 |
+|---|---|---|
+| Passing runs | 28.4-32.7 ms (12 runs) | 26.2-33.0 ms (17 runs) |
+| Runs failing this budget | 0 | 45, at 33.8-51.2 ms |
 
-Why: #1663 replaced copying a pre-rendered tile one column every ~190 ms with recomputing every dot's brightness about 20 times a second; at this pane size that stayed within the noise of two short samples. #1663's second unfocused sample (4.56 / 2.84) is an outlier with the wave paused, so it is not attributed to the wave. Read as "no large change", not a win or a regression. Source: #1663 and its follow-up PR.
+| Renderer, per frame (median, round 1 / 2) | Main thread | With raster | Frames/s | Raster per second |
+|---|---|---|---|---|
+| #1495 tile copy | 0 / 0 ms | 9.4 / 10.0 ms | ~5.3 | ~53 ms |
+| #1663 one `fillRect` per dot, full-canvas tint | 0.9 / 0.9 ms | 4.9 / 4.9 ms | 20 | ~98 ms |
+| Upscaled per-dot image, masked (rejected) | 0.4 / 0.4 ms | 9.6 / 10.8 ms | 20 | ~200 ms |
+| Follow-up: per-column colour, no tint pass | 0.8 / 0.8 ms | 1.6 / 1.6 ms | 15 | ~24 ms |
+
+Why: #1663 redrew every dot about 20 times a second and finished each frame with a full-canvas gradient tint; on CI's CPU-rasterised runners that work competed with the frame the cold-switch budget times, and the queue ejected #1680, #1686, #1695 and others on it. The follow-up paints each column in its slice of the gradient (no tint pass) and returns to Travis's original 15 frames a second, for about a quarter of #1663's raster work per second and less than #1495's. The masked variant halved main-thread time but doubled raster and was dropped. The empty-agent wave script's CPU samples showed no difference between #1495 and #1663 (an earlier version of this entry reported that as "no effect"); they evidently did not exercise the per-frame drawing in a hidden window, so that measurement could not see this regression. Still open: the follow-up's own CI `perf` result in the merge queue. Source: CI runs above, #1663, #1686.
 
 ### Perf harness: warm pair on the board, sample end, tile read before the screenshot (2026-11-03)
 Area: perf harness
