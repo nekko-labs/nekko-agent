@@ -3098,7 +3098,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   </div>
                 )}
                 {activeSkill && (
-                  <div className="flex shrink-0 items-center gap-2 px-4 pt-2" data-composer-skill>
+                  <div className="flex shrink-0 items-center gap-2 px-5 pt-2" data-composer-skill>
                     <span className="skill-pill text-xs" title={activeSkill.description}>
                       <span className="skill-pill-slash">/</span>{activeSkill.name}
                       <button
@@ -3123,7 +3123,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       textarea's padding so it never overlaps the text. */}
                   {ghostSuggestion && (
                     <span
-                      className="pointer-events-none absolute right-3 top-3 z-10 select-none rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-2xs leading-none text-ink-faint"
+                      className="pointer-events-none absolute right-3 top-5 z-10 select-none rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-2xs leading-none text-ink-faint"
                       aria-hidden
                     >
                       →
@@ -3131,7 +3131,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   )}
                   <MarkdownEditor
                     ref={composerRef}
-                    className={`relative ${compact ? 'min-h-[36px] py-2' : 'min-h-[52px] py-2'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
+                    className={`relative ${compact ? 'min-h-[44px]' : 'min-h-[64px]'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-5 pb-2 pt-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
                     placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
