@@ -110,3 +110,7 @@ Verification: `planVerifyGroup.test.ts` (one Verify step left alone, several fol
 ## On the iPhone (implemented 2026-11-01)
 
 Issue: [#1474](https://github.com/nekko-labs/nekko-agent/issues/1474). The native iPhone app draws the same sheet behind its message box: the shape, folded line, open plan, loop kinds, passes, sub-agent, verification, PR and task-link chips, and the Claude Agent plans above. See [native iOS app](../phone/native-ios-app.md) for what differs on the phone (squeezed steps open on tap, PR chips show the CI rollup only, no file chips). Unit-tested on Linux (`PlanTests`); not yet run on a simulator or device.
+
+## Exploring folds into Building (2026-11-04)
+
+Implemented: published and saved plan steps with the legacy `explore` kind render as Build, and `update_plan` offers build, verify and ship. This does not restore the inferred Claude Code activity plan removed by #1673: when Claude Code has published no plan, the sheet stays absent. Verification grouping from #1673 is unchanged.

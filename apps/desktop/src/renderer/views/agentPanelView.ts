@@ -24,7 +24,7 @@ export type AgentPanelView = {
   showProvider: boolean;
   /** Chats an automation started (they carry a task id). */
   showAutomations: boolean;
-  /** Groups with nothing in them, shown with their "No active agents" line. */
+  /** Groups with nothing in them, shown with a muted dash placeholder. */
   showEmptyGroups: boolean;
   /** Which computer a card's agent runs on, for a card on another computer. */
   showComputer: boolean;
@@ -147,7 +147,6 @@ export const DRAFT_GROUP = 'status:draft';
 export const STATUS_GROUPS = [
   { key: NEEDS_INPUT_GROUP, name: 'Needs input' },
   { key: DRAFT_GROUP, name: 'Draft' },
-  { key: 'status:exploring', name: 'Exploring' },
   { key: 'status:building', name: 'Building' },
   { key: 'status:verifying', name: 'Verifying' },
   { key: 'status:watching', name: 'Watching' },
@@ -158,8 +157,11 @@ export const STATUS_GROUPS = [
  * A chat's activity group. Any `status` covers a first message on its way, which
  * no summary shows yet. A chat waiting on you leaves its phase until answered.
  * A working chat is in its phase, landing work (Shipping) included under
- * Verifying; one stopped on an error stays there, its glyph saying so. A chat
- * that has stopped is Watching while a watch is armed, otherwise Done.
+ * Verifying; one stopped on an error stays there, its glyph saying so. Reading
+ * and changing are one phase, Building, so a chat that has only just been
+ * sent, or only reads, is Building too (an older engine still says
+ * `exploring`). A chat that has stopped is Watching while a watch is armed,
+ * otherwise Done.
  */
 export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase' | 'activeWatchCount'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
   if (status === 'input') return NEEDS_INPUT_GROUP;
@@ -167,8 +169,24 @@ export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phas
     if (chat?.exchangeCount === 0) return DRAFT_GROUP;
     return (chat?.activeWatchCount ?? 0) > 0 ? 'status:watching' : 'status:done';
   }
-  const phase = chat?.phase ?? 'exploring';
-  return `status:${phase === 'shipping' ? 'verifying' : phase}`;
+  const phase: string | undefined = chat?.phase;
+  return phase === 'verifying' || phase === 'shipping' ? 'status:verifying' : 'status:building';
+}
+
+export type GroupActivityKind = 'building' | 'verifying' | 'watching';
+
+/**
+ * What a status group's heading shows as live, given the status of each chat in
+ * it. A phase group is live only while a chat in it works, since a chat stopped
+ * on an error stays in its phase. Watching is live while it holds a chat: the
+ * armed watch is the activity.
+ */
+export function groupActivityOf(key: string, statuses: ReadonlyArray<string | undefined>): GroupActivityKind | null {
+  if (key === 'status:watching') return statuses.length > 0 ? 'watching' : null;
+  if (!statuses.includes('working')) return null;
+  if (key === 'status:building') return 'building';
+  if (key === 'status:verifying') return 'verifying';
+  return null;
 }
 
 /** The date groups, newest first. */

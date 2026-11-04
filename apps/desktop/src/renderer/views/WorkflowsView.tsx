@@ -1,3 +1,4 @@
+import { WorkflowIcon } from '../gentleface-icons.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import type {
   SkillDef,
@@ -304,7 +305,7 @@ export function WorkflowsView() {
               <Toggle value={paused} onChange={(v) => void togglePaused(v)} label="Pause all automations" />
             </label>
             <button className="btn btn-primary py-1!" onClick={() => setPicking(true)}>
-              <PlusIcon className="h-3.5 w-3.5" /> New scheduled task
+              <WorkflowIcon className="h-3.5 w-3.5" /> New scheduled task
             </button>
           </div>
           <p className="mt-1 text-xs text-ink-soft">

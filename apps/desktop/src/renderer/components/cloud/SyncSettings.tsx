@@ -5,6 +5,7 @@ import { CloudSignIn } from './CloudSignIn.js';
 import { RecoveryKeyDialog } from './RecoveryKeyDialog.js';
 import { DeleteAccountDialog } from './DeleteAccountDialog.js';
 import { SyncVisual } from './SyncVisual.js';
+import { LogOutIcon } from '../../gentleface-icons.js';
 import './cloud.css';
 
 const PLANS_URL = 'https://nekkoagent.com/pricing';
@@ -77,7 +78,7 @@ export function SyncSettings() {
             <div className="text-xs text-ink-faint">{planLabel(status.account?.plan)}</div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <button className="btn btn-ghost py-1! text-xs!" disabled={!!busy} onClick={() => void act('out', () => window.nekko.cloudSignOut())}>Sign out</button>
+            <button className="btn btn-ghost py-1! text-xs!" disabled={!!busy} onClick={() => void act('out', () => window.nekko.cloudSignOut())}><LogOutIcon className="mr-1 h-3.5 w-3.5" />Sign out</button>
             <button className="btn btn-ghost py-1! text-xs! text-(--danger)!" disabled={!!busy} data-cloud-delete-account onClick={() => setDeleting(true)}>Delete account</button>
           </div>
         </div>

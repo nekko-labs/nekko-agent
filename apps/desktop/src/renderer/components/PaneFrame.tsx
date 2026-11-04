@@ -1,3 +1,4 @@
+import { CheckCircleIcon } from '../gentleface-icons.js';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Direction, DropTarget, PaneKind, WbPane } from '../layout.js';
@@ -299,7 +300,7 @@ export function PaneFrame({
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}>Complete ({WINDOW_HOTKEYS.complete})</ContextAction>}
+          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}><CheckCircleIcon className="mr-1 h-3.5 w-3.5" />Complete ({WINDOW_HOTKEYS.complete})</ContextAction>}
           {isChat && <ContextAction onClick={() => { setMenu(null); void deleteWindow(); }}>Delete ({WINDOW_HOTKEYS.delete})</ContextAction>}
           {onMinimize && <ContextAction onClick={() => { setMenu(null); onMinimize(); }}>Minimize ({WINDOW_HOTKEYS.minimize})</ContextAction>}
           <ContextAction onClick={() => { setMenu(null); if (pane.kind === 'terminal') void deleteWindow(); else onClose(); }}>{pane.kind === 'terminal' ? `Close (${WINDOW_HOTKEYS.delete})` : 'Close'}</ContextAction>

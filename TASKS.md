@@ -6,6 +6,17 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Suggested VM size for CI runners (#1644, added 2026-11-03)
+
+Runner settings suggest vCPUs and memory per VM from what the runner's jobs used, with one-click Apply. Spec: [suggested VM size](spec/automation/ci-runners.md#suggested-vm-size-planned-design-awaiting-philips-check-in-t233-to-t236). Measured basis: [docs/ci-runner-performance.md](docs/ci-runner-performance.md). Design check-in with Philip before T233 starts.
+
+- [ ] **T233, Guest sampler and stats disk.** Added: 2026-11-03. `nekko-vm run` takes `--stats <img>`, a read-write raw disk; nekkod creates a 1 MiB image with a header block per VM, passes it, and reads it after the VM process exits and before the clone is deleted (never mounted). `nekko-runner-boot.sh` finds the disk by its header and, as root, writes one sample every 5 s from job start to end (busy vCPUs from the idle share and `hw.ncpu`, wired + app + compressed memory from `vm_stat`, compressor size, swap-outs) to the raw device, with a final write before power-off. `provision.sh` fails unless `runner` is not in `operator`. Tests: `test-nekko-vm.sh` (flag accepted, disk read-write), a boot-script test with a file standing in for the device, `vm_tests.rs` (stats image made, read, deleted with the clone).
+- [ ] **T234, Usage on the audit line.** Added: 2026-11-03. `depends-on: T233`. A strict parser for the stats bytes (1 MiB cap, numbers only, anything else gives `None`) and a summary in `nekko-runner` (`cpus`, `memoryMb`, `cpuP95`, `cpuFullShare`, `memPeakMb`, `compressedPeakMb`, `swapOutMb`) written as `AuditLine.usage` for `finished` jobs. Older lines without it keep loading. Tests: parser fuzz-ish cases (garbage, truncation, oversize), summary maths.
+- [ ] **T235, The rules.** Added: 2026-11-03. `depends-on: T234`. `slots::suggest_size(jobs, settings, host)` in `nekko-runner` per the spec: 3 jobs minimum over 30 days, CPU and memory up and down rules, floor 3 vCPUs / 7 GB, ceilings from `cpus_per_vm` and runner memory over slots, with the reason and any limit that held it. `RunnerView.suggestedSize` (`{ cpus, memoryMb, reason, jobs, limitedBy }` or null) and the shared TypeScript type. Tests: each rule, each limit, the 2026-11-03 Native iOS figures keep 6 vCPUs.
+- [ ] **T236, Settings row and Apply.** Added: 2026-11-03. `depends-on: T235`. `RunnerSettingsSheet` shows the suggestion above CPU and memory per VM, the quiet "Fits your last N jobs" and the "after 3 jobs" states; **Apply** sends `runner:update` with both fields. Docs page `docs/ci-runners.md` updated. Tests: `RunnerSettingsSheet.test.tsx`; before and after captures from `ci-runners-sandbox.cjs`.
+- [ ] **T237, A real job records usage.** Added: 2026-11-03. `depends-on: T233, T234`. Dispatch Native iOS on the pilot runner, confirm the audit line's `usage` and that the suggestion row reads sensibly; record the guest memory figure in `docs/ci-runner-performance.md` and `docs/perf-history.md`.
+- Later, not planned: a floor from each job's hosted history through the Actions API (raises it for `*-xlarge` and `*-large` jobs); per-step breakdowns; resizing a ready VM when the size changes.
+
 ## Nothing below the message box and a denser plan (#1599, added 2026-11-03)
 
 Spec: desktop [message box bottom row](spec/desktop/desktop-simple-and-expert-modes.md#message-box-bottom-row-2026-11-03) and [plan sheet, dense steps](spec/chat/plan-sheet-on-the-composer.md#dense-steps-that-open-on-their-own-implemented-2026-11-03); phones [Simple and Expert modes](spec/phone/iphone-simple-and-expert-modes.md), [native Android app](spec/phone/native-android-app.md).
@@ -42,6 +53,8 @@ Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#
 - [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
 - [x] **APL-5, Wrap-up reads stay put.** `loop_phase` works per reply: a read counts only when nothing since your last message got past Exploring, and a watch's wake-up does not start a new reply. On one machine's 27 open chats, Exploring went from 12 to 2 (#1581). (2026-11-03)
 - [x] **APL-6, Watching and Done.** `statusGroupOf` files a stopped chat under Watching (an armed watch, `activeWatchCount`) or Done, and a working chat in the Shipping phase under Verifying; the Shipping group is gone (#1587). (2026-11-03)
+- [x] **APL-7, Exploring folds into Building.** No Exploring group; `phase.rs` names reads `building` (wrap-up rule kept), older summaries' `exploring` files under Building; the plan's `explore` kind folds into `build` (`update_plan`, saved plans). Claude Code's inferred activity plan stays removed by #1673; only its own published plan is shown. A sent chat is marked working from the pane's own send, so it no longer sits in Done until the first token. (2026-11-04)
+- [ ] **APL-8, iPhone plan kinds.** `Plan.swift` still has Explore in the Claude Agent activity plan; fold it into Build like the desktop.
 - [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
 
 ## Third-party licensing and credits (added 2026-11-03)
@@ -432,7 +445,7 @@ See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17
 See [apps/desktop/e2e/README.md](apps/desktop/e2e/README.md) and [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).
 
 - [x] ✅ 2026-10-17 `apps/desktop/e2e/`: `@playwright/test` `_electron` over one fixture bundle (`fixture-app.tsx`, `?scenario=`) built once per run, a hidden non-focusable off-screen window with a scratch profile and non-local requests cancelled (`electron-main.cjs`), and `scenarioTest()` (one Electron per spec, `resize`, `shot`, a never-took-focus assertion, process-tree and profile cleanup). Journeys: `sidebar.e2e.ts` (4 theme × width runs, ported from `agent-sidebar-sandbox.cjs`) and `chat-finder.e2e.ts` (ported from the chat-finder triad, which is deleted). `npm run test:e2e -w @nekko-agent/desktop`; the CI `capture` job runs it in place of `agent-sidebar-integration.cjs`, which now only launches the repo-actions sandbox (`test:repo-actions`).
-- [ ] Port the remaining harnesses into journeys: wall (wall-controls, grid-bugs, pane-motion, panel-grips, focus-transitions, rail-swoop), composer, transcript (transcript-scroll, chat-search, chat-switch), plan and mode, pages (fresh-pages), agents and PRs (subagent, command-center, pr-divider, watch-rows), native (capture-smoke, notifications, tray).
+- [ ] Port the remaining harnesses into journeys: wall (wall-controls, grid-bugs, pane-motion, panel-grips, focus-transitions, rail-swoop), composer, transcript (transcript-scroll, chat-search, chat-switch), plan and mode, pages (fresh-pages), agents and PRs (subagent, command-center, composer-polish, watch-rows), native (capture-smoke, notifications, tray).
 - [ ] Before/after against a base revision (the old `NEKKO_TEST_REVISION`) for PR evidence; `toHaveScreenshot` baselines per OS and theme.
 
 ## Per-step plan working icons (2026-10-17)

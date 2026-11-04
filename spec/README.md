@@ -88,11 +88,11 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (6 KB)
 - [Minimize agent windows](desktop/minimize-agent-windows.md) (2 KB)
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
-- [Motion, phone and edge cases: interruptible motion, frame budget, worst-case data](desktop/motion-phone-and-edge-cases.md) (9 KB)
+- [Motion, phone and edge cases: interruptible motion, frame budget, worst-case data](desktop/motion-phone-and-edge-cases.md) (10 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
 - [Nekko Dark and the branded System theme (desktop)](desktop/nekko-dark-and-branded-system-theme.md) (3 KB)
-- [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
+- [New agent window defaults](desktop/new-agent-window-defaults.md) (6 KB)
 - [Presenter mode for screen recordings](desktop/presenter-mode.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings in the command palette (desktop)](desktop/command-palette-settings-search.md) (3 KB)
@@ -114,7 +114,7 @@ Agents panel, monitors, subagents and delegation.
 
 - [Agent activity and panel polish](agents/agent-activity-and-panel-polish.md) (40 KB)
 - [Agent Monitor Project group, hardware temperatures and multi-monitor Dynamic mode (2026-10-18)](agents/agent-monitor-project-group-hardware-temperatures-and-multi-moni.md) (11 KB)
-- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (12 KB)
+- [Agent panel view options (2026-10-17)](agents/agent-panel-view-options.md) (14 KB)
 - [Agents dashboard simplification (2026-10-06)](agents/agents-dashboard-simplification.md) (3 KB)
 - [Approval retention and delegation navigation](agents/approval-retention-and-delegation-navigation.md) (1 KB)
 - [Chat finder in the Agents panel (2026-10-16)](agents/chat-finder-in-the-agents-panel.md) (6 KB)
@@ -182,7 +182,7 @@ Workflows, goals, integrations and tools.
 
 - [Automating repeatable work (Scheduled Tasks tab)](automation/automating-repeatable-work-workflows-tab.md) (6 KB)
 - [Background automations yield to the user](automation/background-automations-yield-to-the-user.md) (13 KB)
-- [CI runners](automation/ci-runners.md) (56 KB)
+- [CI runners](automation/ci-runners.md) (61 KB)
 - [Experimental outbound resource queue](automation/experimental-outbound-resource-queue.md) (3 KB)
 - [Handing the agent a long-running goal](automation/handing-the-agent-a-long-running-goal.md) (2 KB)
 - [One-click setup for safe offline PC control (planned)](automation/one-click-setup-for-safe-offline-pc-control.md) (6 KB)
@@ -236,7 +236,7 @@ Architecture, speed contract, distribution, builds and startup.
 Brand, website, onboarding and the mascot.
 
 - [Beta signups and website analytics (2026-10-17)](brand/beta-signups-and-website-analytics.md) (6 KB)
-- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (12 KB)
+- [Brand refresh and website redesign (2026-10-18)](brand/brand-refresh-and-website-redesign.md) (15 KB)
 - [Colour palette: Nekko and Indigo themes, app icon and website (2026-11-03)](brand/colour-palette.md) (6 KB)
 - [First-run setup (planned onboarding wizard)](brand/first-run-setup.md) (2 KB)
 - [Local marketing website preview (2026-10-17)](brand/local-marketing-website-preview.md) (1 KB)

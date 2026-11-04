@@ -2248,6 +2248,19 @@
 @media (prefers-reduced-motion: reduce) {
   .reply-activity-icon, .reply-activity-icon * { animation: none !important; }
 }
+/* A live status group's heading: a strip of pixel frames stepping past a one-frame window. */
+.group-activity { display: block; flex-shrink: 0; width: 24px; height: 16px; margin-inline-start: 4px; overflow: hidden; line-height: 0; }
+.group-activity svg { display: block; max-width: none; fill: var(--success); animation: group-activity-strip var(--group-activity-duration) steps(var(--group-activity-frames), end) infinite; }
+/* Settings > Accessibility decides this one, so it stands against the app-wide reduced-motion rule. */
+.group-activity svg { animation-duration: var(--group-activity-duration) !important; animation-iteration-count: infinite !important; }
+.group-activity-soft { fill: color-mix(in srgb, var(--success) 45%, transparent); }
+/* The frames set Nekko's eyes themselves, so the mascot's blink stays out of the strip. */
+.group-activity svg * { animation: none; }
+.group-activity-count { color: var(--success); }
+/* --success alone is too faint for small text on the pale pill. */
+[data-theme='light'] .group-activity-count { color: color-mix(in srgb, var(--success) 55%, var(--ink)); }
+@keyframes group-activity-strip { to { transform: translateX(calc(var(--group-activity-frames) * -24px)); } }
+.group-activity-still svg { animation: none; transform: translateX(calc(var(--group-activity-still) * -24px)); }
 @keyframes dots {
   0% { content: ''; }
   25% { content: '.'; }
@@ -3458,10 +3471,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-composer [data-chat-surface="composer"] > section { flex: 0 0 auto; min-height: 0; overflow: visible; }
 .wall-composer [data-chat-surface="composer"] .composer-section { display: flex; flex: 0 0 auto; min-height: 0; padding: 0; }
 .wall-composer .composer-column, .wall-composer .composer { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; }
-/* COMPOSER_TWO_LINES: two 20px lines of text-sm plus py-2. */
-.wall-composer .composer-editor-wrap > [contenteditable] { flex: 0 0 auto; min-height: 52px; max-height: none; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; }
+/* COMPOSER_TWO_LINES: two 20px lines of text-sm plus pt-4 and pb-2. */
+.wall-composer .composer-editor-wrap > [contenteditable] { flex: 0 0 auto; min-height: 64px; max-height: none; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; }
 .wall-composer .composer-editing-body { display: flex; flex: 0 0 auto; flex-direction: column; min-height: 0; }
-.wall-composer .composer-editor-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 52px; }
+.wall-composer .composer-editor-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 64px; }
 .wall-composer .composer > :not(.composer-editing-body), .wall-composer .composer-editing-body > :not(.composer-editor-wrap) { flex-shrink: 0; }
 .wall-layout-segments button { display: inline-flex; align-items: center; gap: 8px; }
 
@@ -3589,8 +3602,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-composer { container-type: inline-size; }
 
 
-/* Pending changes stay readable on a muted surface without an outer glow. */
-.agent-changes-pending { background: var(--surface-2); box-shadow: none; border-radius: 6px; }
+/* Pending changes use the ghost button's unboxed rest state and hover feedback. */
+.agent-changes-pending { box-shadow: none; }
 .agent-change-summary { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; animation: agent-changes-reveal .18s ease-out; }
 @keyframes agent-changes-reveal { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } }
 .agent-action-separator { align-self: center; height: 14px; width: 1px; margin: 0 4px; background: var(--line); }
