@@ -4,6 +4,7 @@ import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
 import { Shown } from '../ModeViews.js';
+import { PixelSkeleton } from '../PixelSkeleton.js';
 import {
   KEEP_LABELS,
   PRECISIONS,
@@ -542,7 +543,7 @@ const SEG = {
  * from the SSD.
  */
 function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
-  if (!plan) return <div className="mt-3 h-24 animate-pulse rounded-lg bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)]" />;
+  if (!plan) return <PixelSkeleton className="mt-3 h-24 rounded-lg" label="Loading placement plan" />;
   if (plan.verdict === 'unknown') {
     return (
       <p className="mt-3 rounded-lg border px-3 py-2 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>

@@ -51,7 +51,6 @@ object SimpleMode {
     const val HEADER = "Chat · header"
     const val BOX = "Chat · message box"
     const val CONVERSATION = "Chat · conversation"
-    const val WALL = "Agents wall"
     const val CHATS = "Phone · chats list"
 
     val ITEMS: List<SimpleItem> = listOf(
@@ -66,7 +65,6 @@ object SimpleMode {
         SimpleItem("thinking", CONVERSATION, E),
         SimpleItem("pr-status", CONVERSATION, S, needs = SimpleCondition.PR),
         SimpleItem("ph-git", CONVERSATION, E),
-        SimpleItem("terminal", WALL, E),
         SimpleItem("ph-monitors", CHATS, A, whenever = SimpleCondition.LOCAL_MODEL),
     )
 

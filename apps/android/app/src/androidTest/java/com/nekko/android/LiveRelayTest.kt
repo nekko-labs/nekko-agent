@@ -68,7 +68,7 @@ class LiveRelayTest {
             // A test device has no enrolled biometrics; the lock is covered by unit tests.
             app.appLock.setEnabled(false)
             app.themePrefs.set(if (theme == "dark") ThemeChoice.DARK else ThemeChoice.LIGHT)
-            // The + menu's Terminal is Expert only, and a fresh install starts in Simple.
+            // A fresh install starts in Simple; the shots want every Expert-only control on screen.
             app.phonePrefs.set(EXPERT_MODE, true)
         }
 
