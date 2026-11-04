@@ -39,6 +39,20 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Zone drag and composer actions (#1703, 2026-11-04)
+
+Area: renderer. Result: regression under investigation; no budget changes.
+Conditions: same Linux runner, AMD EPYC 9V45 (4 threads), Chrome/156.0.8078.47, 1440x1000, scripted local model, 33 cold switches per run, same release daemon and latency harness. Order base/head/head/base. Base `32d731ffe`, merge-group head `810950289` (PR head `e4ef92e59`).
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-paint p95 | 31.9 / 31.9 ms | 34.6 / 33.3 ms |
+| Cold-chat first-paint p50 | 25.9 / 25.1 ms | 28.7 / 28.6 ms |
+
+The 33 ms gate passed on both base measurements and failed on both head measurements. This does not support a runner-noise exemption. Original queue run on AMD EPYC 7763 / same Chrome version missed all three attempts (44.3 / 42.7 / 40.2 ms p95); all other measured speed and memory metrics passed. Automatic frame-only diagnostics did not measure the failing metric. A separate Windows Ryzen 9950X3D / Chrome153 ordered pair measured base/head 36.0/71.7 ms p95, 33 samples each; it cannot establish Linux causality.
+
+Source: [matched Linux reports and provenance](https://github.com/nekko-labs/nekko-agent/actions/runs/41777070231), [queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/41774611241). Remaining experiment: [latency timelines and base-composer ablation](https://github.com/nekko-labs/nekko-agent/actions/runs/41778374470). PR remains blocked until the regression is fixed or relevant matched evidence establishes another cause.
+
 ## Native browser migration baseline (#752, 2026-10-17)
 
 Area: perf harness / browser driver. Result: regression in initial sequential driver comparison, not yet an alternated causal measurement.
