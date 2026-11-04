@@ -48,9 +48,10 @@ until the user came back. Every user and project now gets the watch by default.
 - The composer chip reads **Watching until merge-ready** for a host-armed
   watch, and its details say why it exists and how to stop it. The sidebar's
   **Watching** group and the idle (Zz) glyph count it like any active watch.
-- Settings › Pull requests (and the first-run Work tracking step):
+- Settings › Tools › Pull requests, behind **Show advanced settings** below
+  Expert (and the first-run Work tracking step):
   **Watch each PR until it is merge-ready**, on unless turned off
-  (`pullRequests.watchUntilMergeReady`).
+  (`pullRequests.watchUntilMergeReady`). The chip's details spell out that path.
 - `session:watches` views carry `auto: true` for these watches.
 
 ## Implementation
