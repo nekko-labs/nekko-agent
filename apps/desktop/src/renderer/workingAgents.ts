@@ -42,6 +42,17 @@ export function reportAgentWorking(id: string, working: boolean): void {
   for (const listener of localListeners) listener(id, working);
 }
 
+/** Chats this window has sent to whose first event has not arrived yet, or is still running. */
+export function localAgentStarts(): string[] {
+  return [...localStarts];
+}
+
+/** Hear this window's sends as they start and end, before the host says anything. */
+export function onLocalAgentWorking(listener: (id: string, working: boolean) => void): () => void {
+  localListeners.add(listener);
+  return () => { localListeners.delete(listener); };
+}
+
 /** App-lifetime subscription includes background agents, not just mounted panes. */
 export function useAnyAgentWorking(): boolean {
   const [working, setWorking] = useState(false);

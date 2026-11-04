@@ -6,11 +6,21 @@ import { emptyLiveActivity } from '@nekko-agent/shared';
 import { replyIconState, ReplyStatus } from './ReplyStatus.js';
 
 describe('reply measurements', () => {
-  it('keeps zero output and elapsed time visible while waiting for generation', () => {
-    const html = renderToStaticMarkup(<ReplyStatus streaming status="Working" elapsed={0} tps={0} out={0} last={null} />);
-    expect(html).toContain('tok/s');
-    expect(html).toContain('0 total tokens');
-    expect(html).toContain('0s');
+  it('shows only elapsed time while a run has no token counts', () => {
+    const html = renderToStaticMarkup(<ReplyStatus streaming status="Thinking" elapsed={45} tps={0} out={0} last={null} />);
+    expect(html).not.toContain('tok/s');
+    expect(html).not.toContain('total tokens');
+    expect(html).toContain('>· 45s<');
+  });
+  it('adds each number once it has a value', () => {
+    const live = { streaming: true, status: 'Working', elapsed: 5, last: null };
+    const counted = renderToStaticMarkup(<ReplyStatus {...live} tps={0} out={120} />);
+    expect(counted).not.toContain('tok/s');
+    expect(counted).toContain('>· 120 total tokens<');
+    expect(counted).toContain('>· 5s<');
+    const rated = renderToStaticMarkup(<ReplyStatus {...live} tps={24} out={0} estimatedRate />);
+    expect(rated).toContain('>· ~24 tok/s<');
+    expect(rated).not.toContain('total tokens');
   });
   it('keeps measurements alongside the completion label', () => {
     const html = renderToStaticMarkup(<ReplyStatus streaming={false} status="" elapsed={0} tps={0} out={0} last={{ out: 120, tps: 24, secs: 9 }} done="Finished work" />);
@@ -29,11 +39,10 @@ describe('reply measurements', () => {
   });
   it('puts the measurements on the line after the sleeping label', () => {
     const html = renderToStaticMarkup(<ReplyStatus streaming={false} status="" elapsed={0} tps={0} out={1300} last={{ out: 1300, tps: 0, secs: 61 }} nextWakeAt={100000 + 13 * 60_000} now={100000} />);
-    expect(html).toMatch(/<span class="basis-full" data-reply-sleeping="true">Sleeping · will check in 13 mins<\/span><span[^>]*>— tok\/s<\/span>/);
-    expect(html).toContain('· 1.3k total tokens');
+    expect(html).toMatch(/<span class="basis-full" data-reply-sleeping="true">Sleeping · will check in 13 mins<\/span><span[^>]*>1.3k total tokens<\/span>/);
     expect(html).toContain('· 61s');
     const done = renderToStaticMarkup(<ReplyStatus streaming={false} status="" elapsed={0} tps={0} out={0} last={{ out: 1, tps: 0, secs: 1 }} done="Done" />);
-    expect(done).toContain('>· — tok/s');
+    expect(done).toContain('>· 1 total tokens');
     expect(done).not.toContain('basis-full');
   });
   it('keeps active and blocked states ahead of sleeping', () => {

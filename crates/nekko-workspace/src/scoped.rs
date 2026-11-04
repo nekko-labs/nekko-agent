@@ -227,6 +227,18 @@ pub fn hash_bytes(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
 
+/// Times [`Scope::contain`] resolves a path that is mid-replacement before
+/// giving up (waits of 20, 40, 80 and 160 ms between them).
+const REPLACED_TRIES: u32 = 5;
+
+/// Whether a canonical path is in NTFS's `\$Extend\$Deleted` folder, where
+/// Windows keeps a file that was deleted or renamed over while still open
+/// until its last handle closes. Checked on the text so it is testable on
+/// every platform; no other system produces such a path.
+fn replaced_while_open(real: &Path) -> bool {
+    real.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/$extend/$deleted/")
+}
+
 fn io_err(e: &std::io::Error) -> String {
     if e.kind() == std::io::ErrorKind::NotFound {
         fail(codes::NOT_FOUND, "no such file or folder")
@@ -296,11 +308,26 @@ impl Scope {
 
     /// Resolve symlinks and require the result inside the root: the
     /// canonical path and its `/`-separated path relative to the root.
+    ///
+    /// On Windows a file replaced by a rename while someone still has it open
+    /// (two quick saves of one file) resolves for a moment to NTFS's
+    /// `\$Extend\$Deleted` folder. That is not a link leaving the root, so it
+    /// is resolved again after a short wait; if it never settles, the answer
+    /// is a retryable `io` error, never `outside-root`.
     fn contain(&self, path: &Path) -> Result<(PathBuf, String), String> {
-        let real = std::fs::canonicalize(path).map_err(|e| io_err(&e))?;
-        let rel =
-            self.relative(&real).ok_or_else(|| fail(codes::OUTSIDE_ROOT, "a link leads outside the chat's folder"))?;
-        Ok((real, rel))
+        for attempt in 1..=REPLACED_TRIES {
+            let real = std::fs::canonicalize(path).map_err(|e| io_err(&e))?;
+            if !replaced_while_open(&real) {
+                let rel = self
+                    .relative(&real)
+                    .ok_or_else(|| fail(codes::OUTSIDE_ROOT, "a link leads outside the chat's folder"))?;
+                return Ok((real, rel));
+            }
+            if attempt < REPLACED_TRIES {
+                std::thread::sleep(std::time::Duration::from_millis(10 << attempt));
+            }
+        }
+        Err(fail(codes::IO, "the file was being replaced; try again"))
     }
 
     fn relative(&self, real: &Path) -> Option<String> {
@@ -945,6 +972,16 @@ mod tests {
         assert!(std::fs::symlink_metadata(root.join("link.sh")).unwrap().file_type().is_symlink());
         assert_eq!(std::fs::read_to_string(root.join("run.sh")).unwrap(), "echo 2");
         assert_eq!(std::fs::metadata(root.join("run.sh")).unwrap().permissions().mode() & 0o777, 0o750);
+    }
+
+    #[test]
+    fn a_file_replaced_while_open_is_not_a_link_outside() {
+        // What canonicalize returns on Windows for a file renamed over while open.
+        assert!(replaced_while_open(Path::new(r"\\?\C:\$Extend\$Deleted\0003000000017B1A6A6C3A1C")));
+        assert!(replaced_while_open(Path::new(r"\\?\D:\$EXTEND\$DELETED\x")));
+        assert!(!replaced_while_open(Path::new(r"\\?\C:\Users\me\chat\a.txt")));
+        assert!(!replaced_while_open(Path::new("/home/me/chat/$Extend/notes.txt")));
+        assert!(!replaced_while_open(Path::new("/etc/passwd")));
     }
 
     #[test]

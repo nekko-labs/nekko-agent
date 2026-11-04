@@ -53,6 +53,8 @@ Spec: [activity follows the agent loop](spec/agents/agent-panel-view-options.md#
 - [x] **APL-3, Panel groups.** Activity groups are Draft, Exploring, Building, Verifying and Shipping; Draft shows only with a chat in it; the card glyph keeps the live status. (2026-11-03)
 - [x] **APL-5, Wrap-up reads stay put.** `loop_phase` works per reply: a read counts only when nothing since your last message got past Exploring, and a watch's wake-up does not start a new reply. On one machine's 27 open chats, Exploring went from 12 to 2 (#1581). (2026-11-03)
 - [x] **APL-6, Watching and Done.** `statusGroupOf` files a stopped chat under Watching (an armed watch, `activeWatchCount`) or Done, and a working chat in the Shipping phase under Verifying; the Shipping group is gone (#1587). (2026-11-03)
+- [x] **APL-7, Exploring folds into Building.** No Exploring group; `phase.rs` names reads `building` (wrap-up rule kept), older summaries' `exploring` files under Building; the plan's `explore` kind folds into `build` (`update_plan`, saved plans). Claude Code's inferred activity plan stays removed by #1673; only its own published plan is shown. A sent chat is marked working from the pane's own send, so it no longer sits in Done until the first token. (2026-11-04)
+- [ ] **APL-8, iPhone plan kinds.** `Plan.swift` still has Explore in the Claude Agent activity plan; fold it into Build like the desktop.
 - [ ] **APL-4, Phones.** The iPhone and Android chat lists still group by Needs you, Working and Idle.
 
 ## Third-party licensing and credits (added 2026-11-03)
@@ -443,7 +445,7 @@ See [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17
 See [apps/desktop/e2e/README.md](apps/desktop/e2e/README.md) and [reports/test-suite-audit-2026-10-17.md](reports/test-suite-audit-2026-10-17.md).
 
 - [x] ✅ 2026-10-17 `apps/desktop/e2e/`: `@playwright/test` `_electron` over one fixture bundle (`fixture-app.tsx`, `?scenario=`) built once per run, a hidden non-focusable off-screen window with a scratch profile and non-local requests cancelled (`electron-main.cjs`), and `scenarioTest()` (one Electron per spec, `resize`, `shot`, a never-took-focus assertion, process-tree and profile cleanup). Journeys: `sidebar.e2e.ts` (4 theme × width runs, ported from `agent-sidebar-sandbox.cjs`) and `chat-finder.e2e.ts` (ported from the chat-finder triad, which is deleted). `npm run test:e2e -w @nekko-agent/desktop`; the CI `capture` job runs it in place of `agent-sidebar-integration.cjs`, which now only launches the repo-actions sandbox (`test:repo-actions`).
-- [ ] Port the remaining harnesses into journeys: wall (wall-controls, grid-bugs, pane-motion, panel-grips, focus-transitions, rail-swoop), composer, transcript (transcript-scroll, chat-search, chat-switch), plan and mode, pages (fresh-pages), agents and PRs (subagent, command-center, pr-divider, watch-rows), native (capture-smoke, notifications, tray).
+- [ ] Port the remaining harnesses into journeys: wall (wall-controls, grid-bugs, pane-motion, panel-grips, focus-transitions, rail-swoop), composer, transcript (transcript-scroll, chat-search, chat-switch), plan and mode, pages (fresh-pages), agents and PRs (subagent, command-center, composer-polish, watch-rows), native (capture-smoke, notifications, tray).
 - [ ] Before/after against a base revision (the old `NEKKO_TEST_REVISION`) for PR evidence; `toHaveScreenshot` baselines per OS and theme.
 
 ## Per-step plan working icons (2026-10-17)

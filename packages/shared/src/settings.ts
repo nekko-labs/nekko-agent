@@ -258,6 +258,8 @@ export interface AppSettings {
   mascotEnabled: boolean;
   /** Draw the moving pixel-dot wave behind themes that have one (Lilac, Lavender, Experimental). On unless set to false. */
   backgroundAnimation?: boolean;
+  /** Move Nekko beside the Agent panel's live groups. On unless set to false; this setting decides, not the system's reduced-motion preference. */
+  agentActivityAnimation?: boolean;
   /** Desktop close button defaults to keeping work alive in the tray. */
   desktopCloseBehavior?: 'tray' | 'shutdown';
   trayCloseHintSeen?: boolean;

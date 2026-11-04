@@ -56,7 +56,10 @@ describe('plan sheet, folded and open (#1317)', () => {
       expect(folded).toMatch(/data-plan-chip="subagents" title="Sub-agents: 1 running, 1 done">Sub-agents<b>1<\/b>[^]*?aria-label="running"[^]*?<b>1<\/b>[^]*?aria-label="done"/);
       const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
       expect(open).toContain('1 of 4 done');
-      for (const kind of ['Explore', 'Build', 'Verify', 'Ship']) expect(open).toContain(`>${kind}</span>`);
+      for (const kind of ['Build', 'Verify', 'Ship']) expect(open).toContain(`>${kind}</span>`);
+      // A step saved as `explore` reads as Build: looking is part of building.
+      expect(open).not.toContain('>Explore</span>');
+      expect(open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('data-plan-step-id="b"'))).toContain('data-plan-kind="build"');
       // No plan update in the transcript yet: sub-agents land on the first step.
       const first = open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('data-plan-step-id="b"'));
       expect(first.match(/data-plan-chip="subagent"/g)).toHaveLength(2);

@@ -28,7 +28,7 @@ export interface SettingEntry {
   id: string;
   label: string;
   /** The Settings group (`settings-<group>` on the page) it lives in. */
-  group: 'general' | 'style' | 'agents' | 'tools' | 'system';
+  group: 'general' | 'style' | 'accessibility' | 'agents' | 'tools' | 'system';
   /** Extra words people search for that the label does not say. */
   keywords?: string;
   control: SettingControl;
@@ -54,6 +54,7 @@ export const SETTINGS_INDEX: SettingEntry[] = [
   { id: 'confirm-deletions', label: 'Confirm deletions', group: 'general', keywords: 'delete prompt', control: toggle((s) => s.skipDeleteConfirmation !== true, (v) => ({ skipDeleteConfirmation: !v })) },
   { id: 'close-behavior', label: 'When I close the window', group: 'general', keywords: 'tray quit shut down desktop behavior', control: { kind: 'select', options: [{ value: 'tray', label: 'Keep running in tray' }, { value: 'shutdown', label: 'Shut down Nekko' }], get: (s) => s.desktopCloseBehavior ?? 'tray', set: (v) => ({ desktopCloseBehavior: v === 'shutdown' ? 'shutdown' : 'tray' }) } },
   { id: 'low-memory', label: 'When memory runs low', group: 'general', keywords: 'ram memory tray close app free unload shut down local models', control: { kind: 'select', options: [{ value: 'ask', label: 'Ask me' }, { value: 'release', label: 'Shut down local models' }, { value: 'ignore', label: 'Do nothing' }], get: (s) => s.lowMemoryAction ?? 'ask', set: (v) => ({ lowMemoryAction: v === 'release' || v === 'ignore' ? v : undefined }) } },
+  { id: 'agent-activity-animation', label: 'Agent activity animation', group: 'accessibility', keywords: 'accessibility motion reduce nekko moving panel', control: toggle((s) => s.agentActivityAnimation !== false, (v) => ({ agentActivityAnimation: v })) },
   { id: 'mascot', label: 'Show Nekko mascot', group: 'general', keywords: 'fun cat', control: toggle((s) => s.mascotEnabled === true, (v) => ({ mascotEnabled: v })) },
   { id: 'tray-farewell', label: 'Tray farewell', group: 'general', keywords: 'fun goodbye', control: toggle((s) => s.trayFarewellEnabled !== false, (v) => ({ trayFarewellEnabled: v })) },
   { id: 'desktop-notifications', label: 'Desktop notifications', group: 'general', keywords: 'alerts system', control: toggle((s) => s.desktopNotifications !== false, (v) => ({ desktopNotifications: v })) },
@@ -74,6 +75,7 @@ export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: str
   { group: 'general', label: 'General', keywords: 'usage reports view appearance theme agents wall customization voice notifications chat history desktop behavior fun' },
   { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
   { group: 'style', label: 'Style', keywords: 'fonts text size' },
+  { group: 'accessibility', label: 'Accessibility', keywords: 'motion animation reduce' },
   { group: 'simple', label: 'Simple mode', keywords: 'expert controls hide show developer' },
   { group: 'agents', label: 'Agents', keywords: 'chat modes agent loop hooks spec-driven development orchestration delegation routes automations' },
   { group: 'safety', label: 'Safety', keywords: 'security sandbox guardrails permissions' },
