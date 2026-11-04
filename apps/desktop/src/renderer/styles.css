@@ -4091,3 +4091,33 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) {
   .gf-icon > svg { transition: none; }
 }
+
+/* File editor syntax colours. Each hue is mixed with the theme's ink, so the
+   same rule reads on light, dark and every preset without a per-theme table. */
+.code-paint { color: var(--ink); }
+.code-paint-input { color: transparent; caret-color: var(--ink); }
+.code-paint-input::selection { background: color-mix(in oklab, var(--accent) 30%, transparent); color: transparent; }
+.code-paint .hljs-comment, .code-paint .hljs-quote { color: color-mix(in oklab, var(--ink) 48%, transparent); font-style: italic; }
+.code-paint .hljs-keyword, .code-paint .hljs-selector-tag, .code-paint .hljs-meta .hljs-keyword, .code-paint .hljs-doctag { color: color-mix(in oklab, #b03fd6 72%, var(--ink)); }
+.code-paint .hljs-string, .code-paint .hljs-regexp, .code-paint .hljs-addition, .code-paint .hljs-meta .hljs-string { color: color-mix(in oklab, #2f9a52 75%, var(--ink)); }
+.code-paint .hljs-number, .code-paint .hljs-literal, .code-paint .hljs-symbol, .code-paint .hljs-bullet { color: color-mix(in oklab, #d4741b 75%, var(--ink)); }
+.code-paint .hljs-title, .code-paint .hljs-title.function_, .code-paint .hljs-section { color: color-mix(in oklab, #2b78d0 75%, var(--ink)); }
+.code-paint .hljs-title.class_, .code-paint .hljs-type, .code-paint .hljs-built_in { color: color-mix(in oklab, #c2930f 72%, var(--ink)); }
+.code-paint .hljs-attr, .code-paint .hljs-attribute, .code-paint .hljs-variable, .code-paint .hljs-template-variable, .code-paint .hljs-property { color: color-mix(in oklab, #d24a63 65%, var(--ink)); }
+.code-paint .hljs-name, .code-paint .hljs-tag, .code-paint .hljs-selector-class, .code-paint .hljs-selector-id { color: color-mix(in oklab, #1f9aa8 72%, var(--ink)); }
+.code-paint .hljs-meta, .code-paint .hljs-params, .code-paint .hljs-subst, .code-paint .hljs-punctuation { color: color-mix(in oklab, var(--ink) 82%, transparent); }
+.code-paint .hljs-deletion { color: var(--danger); }
+.code-paint .hljs-emphasis { font-style: italic; }
+.code-paint .hljs-strong { font-weight: 600; }
+
+/* The file editor's save status: a quiet spinner while writing, then one flash. */
+.save-spinner { animation: save-spin 700ms linear infinite; }
+@keyframes save-spin { to { transform: rotate(360deg); } }
+.save-flash { animation: save-flash 1200ms var(--ease-out, ease-out); }
+@keyframes save-flash {
+  0% { background: color-mix(in oklab, var(--success) 22%, transparent); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .save-spinner, .save-flash { animation: none; }
+}
