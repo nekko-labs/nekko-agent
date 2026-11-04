@@ -21,6 +21,15 @@ test('marketing preview serves only static website files and read requests', asy
   const page = await get('/');
   assert.equal(page.status, 200);
   assert.match(page.body, /Nekko Agent/);
+  // The launch claim must retain its workload, timing direction and method link.
+  assert.match(page.body, /Local code edits\. 5× faster than Ollama\./);
+  assert.match(page.body, /2\.5 s vs 13\.9 s in our whole-file rename benchmark/);
+  assert.match(page.body, /Time to complete reply · lower is better/);
+  assert.match(page.body, /Ollama 0\.40\.11/);
+  assert.match(page.body, /cool-chip medians, 8 requests per server/);
+  assert.match(page.body, /inference replies, not a complete agent workflow/);
+  assert.match(page.body, /href="\/docs\/benchmarks"/);
+  assert.doesNotMatch(page.body, /Maybe the fastest|data-demo="fast"/);
   assert.match(page.headers['content-type'], /text\/html/);
   assert.equal(page.headers['cache-control'], 'no-store');
   assert.match((await get('/styles.css?v=5')).headers['content-type'], /text\/css/);

@@ -1062,9 +1062,15 @@ h3 { font-size: 21px; }
 .panel-fast { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
 .panels-foot { margin-top: 30px; max-width: 760px; margin-left: auto; margin-right: auto; }
 
-/* the benchmark: three measures, three servers, bars anchored to a baseline
-   at the left; the numbers sit on the bars, the servers are named by a legend
-   and a colour key that also passes a colour-blindness check. */
+/* The launch proof uses published completion times, not a simulated live race. */
+.hero-proof { margin-top: 24px; font-size: 15px; line-height: 1.6; }
+.hero-proof strong { font-size: 18px; }
+.hero-proof span { font-size: 13px; }
+.speed-proof { align-self: center; padding: 28px; border: 1px solid var(--line); border-radius: 16px; }
+.speed-proof > p + p { margin-top: 18px; }
+.speed-proof strong { display: block; font-family: var(--mono); font-size: clamp(32px, 5vw, 58px); line-height: 1.2; }
+.speed-proof span { display: block; margin-top: 4px; }
+/* Completion-time bars share a zero baseline; lower is better. */
 .bench { grid-column: 1 / -1; margin-top: 10px; padding-top: 26px; border-top: 1px solid var(--line); }
 .bench-title { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
 .bench-legend { display: inline-flex; gap: 14px; letter-spacing: 0.06em; text-transform: none; font-size: 12px; }

@@ -28,6 +28,15 @@ split-from: SPEC.md (2026-10-22)
 
 The demo slots are the existing `.media` lightbox placeholders with a `data-demo` key per panel; Travis is producing the videos, and each drops in as a `<video>` inside its slot. **Demo videos (2026-10-30).** `[implemented, not live]` Panel 01 (control) has its video: a real take recorded unattended with the scripted demo runner (`spec/desktop/presenter-mode.md`), the long wait sped up 4x, about 59 s, 1280x720 H.264 MP4 (about 2 MB, no audio, fast start) with a WebP poster from its last frame. A slot holding a video is 16:9 so nothing is cropped. Panel videos are silent loops that load nothing until they are on screen (`preload="none"`), play only while at least 40% visible, pause when scrolled away, and stay on their poster under reduced motion; the lightbox plays them with controls. One file serves every look for now (a dark-mode take); light takes may follow. The other four slots keep their placeholder until their takes exist. The page title, meta descriptions and Open Graph text carry the slogan; the structured data is unchanged. Everything below the panels (beta, model server, privacy manifest, editions, roadmap, download) is as before.
 
+## Benchmark-led launch copy
+
+`[implemented in source; focused test passes and responsive captures saved at 1440/390/320px; visual inspection blocked by image-tool errors; not deployed]` The README opening and homepage hero proof lead with **“Local code edits. 5× faster than Ollama.”** The adjacent explanation scopes this to the whole-file rename benchmark: 2.5 seconds versus 13.9 seconds, M5 Max and Qwen3-8B. The rounded-down multiplier is a workload-specific comparison, not a claim about all coding, every machine or a complete agent workflow.
+
+- The trust-first homepage slogan remains. A proof block beside the hero actions links to the speed section.
+- The Fast panel replaces its speculative fastest wording and September NVIDIA throughput chart with the October Apple Silicon complete-reply timings, a zero-baseline lower-is-better chart, version/hardware/run details and a link to methods and limitations. Earlier NVIDIA results remain in the benchmark docs.
+- The empty speed-video button becomes a static result card explicitly labeled published benchmark medians, not a live demonstration. A real benchmark video and promotional recordings are **planned, not produced** in this change.
+- Acceptance: claim and workload stay together on desktop and mobile; the method link works; the chart states lower is better; no inference timing is presented as whole-agent completion time. No new telemetry, external integrations or data collection is introduced.
+
 ## Dark by default, a tertiary primary button, GitHub marks (2026-10-22)
 
 `[implemented; before/after screenshots in the PR; saved-theme migration and docs pages deliberately unchanged, see below]`
