@@ -23,7 +23,7 @@ app.whenReady().then(async () => {
   const shot = async name => { await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))'); await sleep(100); const file = path.join(out, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
   const check = async (name, expression) => { const passed = !!await run(expression); report.assertions.push({ name, passed }); if (!passed) throw Error(name); };
   const pointer = (type, x, y, extra = {}) => win.webContents.sendInputEvent({ type, x, y, ...(type === 'mouseMove' && extra.button === 'left' ? { modifiers: ['leftButtonDown'] } : {}), ...extra });
-  const frame = async frames => { frames.push((await win.capturePage({ x: 210, y: 120, width: 960, height: 620 }, { stayHidden: true })).toPNG()); await sleep(70); };
+  const frame = async frames => { await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))'); await sleep(100); frames.push((await win.capturePage({ x: 120, y: 0, width: 1100, height: 750 }, { stayHidden: true })).toPNG()); };
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 60 && !await run('!!window.layoutFixture && !!document.querySelector("[data-command-wall]")'); i++) await sleep(200);
@@ -58,7 +58,7 @@ app.whenReady().then(async () => {
         await check(cancel + ' disarms pending pickup', `!document.querySelector('.wall-held-card')`);
       }
     }
-    for (const surface of ['composer', 'window', 'full']) {
+    for (const surface of (process.env.NEKKO_TEST_DRAG_ONLY === '1' ? [] : ['composer', 'window', 'full'])) {
       await run(`layoutFixture.showComposer(${js(surface)})`); await sleep(800);
       await run(`layoutFixture.emitAgent({sessionId:'a',type:'text',text:'Working'})`); await sleep(350);
       for (const width of [1440, 390]) {
