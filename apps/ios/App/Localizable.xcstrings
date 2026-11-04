@@ -10215,162 +10215,162 @@
         }
       }
     },
-    "Expert": {
+    "Détaillé": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experte"
+            "value": "Detailliert"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experto"
+            "value": "Detallado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expert"
+            "value": "Détaillé"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エキスパート"
+            "value": "詳細"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Especialista"
+            "value": "Detalhado"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "专家"
+            "value": "详细"
           }
         }
       }
     },
-    "Expert adds your computer’s hardware and loaded models": {
+    "Detailed adds your computer’s hardware and loaded models": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experte zeigt zusätzlich die Hardware deines Computers und die geladenen Modelle"
+            "value": "Detailliert zeigt zusätzlich die Hardware deines Computers und die geladenen Modelle"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experto añade el hardware de tu computadora y los modelos cargados"
+            "value": "Detallado añade el hardware de tu computadora y los modelos cargados"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expert ajoute le matériel de votre ordinateur et les modèles chargés"
+            "value": "Détaillé ajoute le matériel de votre ordinateur et les modèles chargés"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エキスパートではコンピュータのハードウェアと読み込み済みモデルも表示します"
+            "value": "詳細ではコンピュータのハードウェアと読み込み済みモデルも表示します"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Especialista mostra também o hardware do seu computador e os modelos carregados"
+            "value": "Detalhado mostra também o hardware do seu computador e os modelos carregados"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "专家模式会显示电脑的硬件和已加载的模型"
+            "value": "详细模式会显示电脑的硬件和已加载的模型"
           }
         }
       }
     },
-    "Expert only": {
+    "Detailed only": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur Experte"
+            "value": "Nur Detailliert"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo Experto"
+            "value": "Solo Detallado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expert uniquement"
+            "value": "Détaillé uniquement"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エキスパートのみ"
+            "value": "詳細のみ"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Só Especialista"
+            "value": "Só Detalhado"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "仅专家"
+            "value": "仅详细"
           }
         }
       }
     },
-    "Expert: every control": {
+    "Detailed: every control": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experte: alle Bedienelemente"
+            "value": "Detailliert: alle Bedienelemente"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experto: todos los controles"
+            "value": "Detallado: todos los controles"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expert : toutes les commandes"
+            "value": "Détaillé : toutes les commandes"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エキスパート：すべての操作"
+            "value": "詳細：すべての操作"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Especialista: todos os controles"
+            "value": "Detalhado: todos os controles"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "专家：所有控件"
+            "value": "详细：所有控件"
           }
         }
       }

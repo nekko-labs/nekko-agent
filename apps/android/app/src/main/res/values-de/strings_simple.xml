@@ -38,14 +38,14 @@
     <string name="simple_logs_connect">Verbinden, um die Protokolle zu lesen</string>
     <string name="simple_logs_subject">Nekko Agent-Verbindungsprotokoll</string>
     <string name="simple_mode_title">Einfacher Modus</string>
-    <string name="simple_mode_detail">Was Einfach und Experte zeigen</string>
-    <string name="simple_mode_detail_changed">Was Einfach und Experte zeigen · %1$d geändert</string>
+    <string name="simple_mode_detail">Was Einfach und Detailliert zeigen</string>
+    <string name="simple_mode_detail_changed">Was Einfach und Detailliert zeigen · %1$d geändert</string>
     <string name="simple_intro">Einfach ist eine klarere, fokussierte Ansicht, und Details erscheinen nur, wenn sie wichtig sind. Alles funktioniert weiterhin.</string>
     <string name="simple_preview">Vorschau</string>
     <string name="simple_preview_mode">Vorschau: %1$s</string>
     <string name="simple_reset">Auf Standard zurücksetzen</string>
     <string name="simple_choice_show">Zeigen</string>
-    <string name="simple_choice_expert">Nur Experte</string>
+    <string name="simple_choice_expert">Nur Detailliert</string>
     <string name="simple_choice_hide">Ausblenden</string>
     <string name="simple_choice_auto">Während der Ausführung</string>
     <string name="simple_choice_always">Immer</string>
@@ -53,7 +53,7 @@
     <string name="simple_part_hidden">%1$s, ausgeblendet</string>
     <string name="simple_one_model">1 Modell</string>
     <string name="simple_switch_simple">Einfach: alltägliche Steuerung</string>
-    <string name="simple_switch_expert">Experte: alle Steuerelemente</string>
+    <string name="simple_switch_expert">Detailliert: alle Steuerelemente</string>
     <string name="simple_area_header">Chat · Kopfzeile</string>
     <string name="simple_area_box">Chat · Nachrichtenfeld</string>
     <string name="simple_area_conversation">Chat · Unterhaltung</string>

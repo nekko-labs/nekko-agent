@@ -566,12 +566,12 @@ final class LiveRelayTests: XCTestCase {
         auditAccessibility(app, "modes-simple")
 
         // Expert: the context gauge. The hardware stays away here too until a local model runs.
-        let expert = app.buttons["Expert: every control"]
+        let expert = app.buttons["Detailed: every control"]
         XCTAssertTrue(expert.waitForExistence(timeout: 5))
         expert.tap()
         let panel = app.buttons["chat.monitor"]
-        XCTAssertFalse(panel.waitForExistence(timeout: 5), "Expert has no monitor without a local model")
-        XCTAssertTrue(app.buttons["chat.context"].exists, "Expert shows the context gauge")
+        XCTAssertFalse(panel.waitForExistence(timeout: 5), "Detailed has no monitor without a local model")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "Detailed shows the context gauge")
 
         // The effort dropdown: pick High on the slider, and it says so.
         modelEffort.tap()

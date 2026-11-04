@@ -101,7 +101,7 @@ struct SettingsView: View {
             Section {
                 ThemePicker(selection: $prefs.theme)
                 NavigationLink(value: Route.simpleMode) {
-                    LabeledContent("Simple mode", value: prefs.expertMode ? String(localized: "Expert") : String(localized: "Simple"))
+                    LabeledContent("Simple mode", value: prefs.expertMode ? String(localized: "Detailed") : String(localized: "Simple"))
                 }
                 .accessibilityIdentifier("settings.simpleMode")
                 Button {
