@@ -157,6 +157,8 @@ where Auto routing is not supported, such as a fixed-model workflow step.
 
 By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. Use the sliders button to group by project, date or computer instead.
 
+While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Accessibility > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
+
 ### Delegated agents in the Agents panel
 
 Delegated subagents appear as compact rows beneath their parent, in Claude chats too, where a subagent's chat is a live copy you can read but not write to. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
@@ -228,8 +230,9 @@ finish, a review arrives or a few hours pass, fixes what it can, and lands the
 PR if you or the repository allow it; otherwise it tells you the PR is
 merge-ready or what is blocking it. The chip reads **Watching until
 merge-ready**. Nekko keeps re-arming it until the PR is merged or closed.
-Cancelling the chip stops it for that PR; turn it off for every PR with
-**Watch each PR until it is merge-ready** in Settings › Pull requests.
+Cancelling the chip stops it for that PR. To turn it off for every PR, go to
+Settings › Tools, click **Show advanced settings** if it's there, then turn off
+**Watch each PR until it is merge-ready** under Pull requests.
 
 Suggested response buttons are gone;
 the gray draft placeholder and Right Arrow acceptance remain.

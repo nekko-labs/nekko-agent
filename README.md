@@ -11,25 +11,9 @@ when you want them, with visible context and changes you can review.
 M5 Max · Qwen3-8B · Ollama 0.40.11 · October 2026.
 One task, not every coding workflow. [Results, limitations and raw runs](docs/benchmarks.md).
 
+<a href="docs/benchmarks.md"><img src="docs/media/nekko-vs-ollama.gif" width="960" alt="Replay of published median reply times: Nekko Agent 2.5 s vs Ollama 13.9 s on a whole-file rename, M5 Max, Qwen3-8B"></a>
+
 [Download Nekko Agent](https://nekkoagent.com/#download) · [See the benchmark](docs/benchmarks.md)
-
-### More than one benchmark win
-
-Earlier NVIDIA results compare decode, code edits and parallel requests on the same
-model file and machine. These are throughput measurements, separate from the M5 Max
-reply timings above.
-
-| Measure | Nekko Agent engine | Ollama 0.23.0 | LM Studio 2.46.0 |
-| --- | --- | --- | --- |
-| Plain decode, tokens/s ↑ | **154** | 115 | 116 |
-| Code edit, tokens/s ↑ | **534** | 106 | 108 |
-| Four requests at once, total tokens/s ↑ | **256** | 113 | 210 |
-| Return to a paused chat, first token ↓ | **790 ms** | 1,290 ms | 1,600 ms |
-
-Gemma 4 12B Q4_K_M · NVIDIA RTX 5090 · Windows 11 · median of 3 runs ·
-30 September 2026. Higher tokens/s and lower first-token time are better.
-Not ahead everywhere: Ollama starts a fresh long chat faster (1.3 s versus 1.7 s).
-[Full comparison, methodology and limitations](docs/benchmarks.md#nvidia-rtx-5090-windows-2026-09-30).
 
 Free and open source · MIT licensed · A fast local model server and AI agent in one app
 
@@ -115,6 +99,34 @@ open. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 </table>
 
 > A full picture-by-picture tour is in the **[walkthrough guide](docs/WALKTHROUGH.md)**.
+
+## Benchmarks
+
+### Apple Silicon: local code edits (October 2026)
+
+On an M5 Max with Qwen3-8B, Nekko returned a 156-line file with a function
+renamed in **2.5 seconds**, versus **13.9 seconds in Ollama 0.40.11**. This is
+one task, not every coding workflow; the [full results, limitations and raw
+runs](docs/benchmarks.md) show where Nekko is and is not ahead.
+
+### Earlier results: NVIDIA RTX 5090 (September 2026)
+
+These earlier results, measured against the Ollama and LM Studio versions
+current at the time, compare decode, code edits and parallel requests on the same
+model file and machine. These are throughput measurements, separate from the M5 Max
+reply timings above.
+
+| Measure | Nekko Agent engine | Ollama 0.23.0 | LM Studio 2.46.0 |
+| --- | --- | --- | --- |
+| Plain decode, tokens/s ↑ | **154** | 115 | 116 |
+| Code edit, tokens/s ↑ | **534** | 106 | 108 |
+| Four requests at once, total tokens/s ↑ | **256** | 113 | 210 |
+| Return to a paused chat, first token ↓ | **790 ms** | 1,290 ms | 1,600 ms |
+
+Gemma 4 12B Q4_K_M · NVIDIA RTX 5090 · Windows 11 · median of 3 runs ·
+30 September 2026. Higher tokens/s and lower first-token time are better.
+Not ahead everywhere: Ollama starts a fresh long chat faster (1.3 s versus 1.7 s).
+[Full comparison, methodology and limitations](docs/benchmarks.md#nvidia-rtx-5090-windows-2026-09-30).
 
 ## How to run Nekko Agent
 

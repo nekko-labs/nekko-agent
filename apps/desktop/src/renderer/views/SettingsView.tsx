@@ -9,7 +9,7 @@ import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ChatIcon, ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ChatIcon, ComputerIcon, GearIcon, GlobeIcon, HandIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -27,7 +27,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
-import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
+import { AccessibilitySection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
 import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
@@ -56,6 +56,7 @@ export const SETTINGS_GROUPS = [
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
   { id: 'computers', label: 'Computers', icon: ComputerIcon },
   { id: 'style', label: 'Style', icon: SlidersIcon },
+  { id: 'accessibility', label: 'Accessibility', icon: HandIcon },
   { id: 'simple', label: 'Simple mode', icon: ChatIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
@@ -325,6 +326,9 @@ export function SettingsView() {
             </SettingsGroup>}
             <SettingsGroup id="style">
               <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="accessibility">
+              <AccessibilitySection settings={settings} update={update} />
             </SettingsGroup>
             <SettingsGroup id="simple">
               <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>

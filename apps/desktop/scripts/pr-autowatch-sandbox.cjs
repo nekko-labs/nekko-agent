@@ -37,7 +37,7 @@ app.whenReady().then(async () => {
     const chip = await run('document.querySelector("[data-active-watch-chips]")?.textContent || ""');
     const settings = await run('document.querySelector("[data-pr-settings]")?.textContent || ""');
     check('chip says it watches until merge-ready', /Watching until merge-ready/.test(chip));
-    check('chip explains why and how to stop it', /Nekko armed this/.test(chip) && /Settings › Pull requests/.test(chip));
+    check('chip explains why and how to stop it', /Nekko started this watcher/.test(chip) && /Settings › Tools, click Show advanced settings/.test(chip));
     check('Settings has the toggle, on by default', /Watch each PR until it is merge-ready/.test(settings)
       && await run('document.querySelector("input[aria-label=\\"Watch each PR until it is merge-ready\\"]")?.checked === true'));
     fs.writeFileSync(path.join(dir, 'pr-autowatch.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());

@@ -12,6 +12,7 @@ import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { localAgentStarts, onLocalAgentWorking } from '../workingAgents.js';
 import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
+import { GroupActivity } from '../components/GroupActivity.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
@@ -28,7 +29,7 @@ import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
-  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
+  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
   type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -734,6 +735,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           const completedGroup = b.key === COMPLETED_GROUP;
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
           const completedOpen = completedGroup || showCompleted.has(b.key);
+          const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? statuses.get(e.s.id) : undefined))) : null;
           const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
           // A page of completed rows at a time; the selected or just-completed
           // chat is always in it.
@@ -781,8 +783,11 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   {view.groupBy === 'computer' && view.showComputerIcons && <ComputerGlyph icon={b.computer ? b.computer.icon : b.key === 'computer:here' ? settings?.machineIcon : undefined} />}
                   <span className="agent-panel-group-label truncate font-medium" title={b.name} dir="auto">{b.name}</span>
                   {b.computer && b.computer.state !== 'online' && <span className="shrink-0 text-2xs text-ink-faint">{COMPUTER_STATE_WORD[b.computer.state]}</span>}
-                  {isCollapsed && (items.length > 0 || completedGroup) && (
-                    <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
+                  {activity && <GroupActivity kind={activity} animated={settings?.agentActivityAnimation !== false} />}
+                  {activity ? (
+                    <span className="group-activity-count ms-auto shrink-0 rounded-full bg-success-soft px-2 text-2xs font-semibold tabular-nums">{items.length}</span>
+                  ) : isCollapsed && (items.length > 0 || completedGroup) && (
+                    <span className="ms-auto shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
                     </span>
                   )}
@@ -805,7 +810,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
-                    <p className="px-4 py-1 text-2xs text-ink-faint">No active agents</p>
+                    <p className="px-4 py-1 text-2xs text-ink-faint"><span aria-hidden="true">–</span><span className="sr-only">No active agents</span></p>
                   )}
                   {items.map((entry) => {
                     const { w, s } = entry;

@@ -19,6 +19,12 @@ fast-forward the primary checkout and remove the task worktree and merged branch
 Inspect dirty files and preserve any unmerged work before cleanup; never force
 remove a worktree just because its PR was squash-merged.
 
+A worktree without its own `node_modules` resolves the workspace packages
+(`@nekko-agent/shared` and the rest) through the primary checkout's, so builds and
+tests there can run against the primary checkout's code. Run `npm ci` in the worktree
+before building or testing it. The desktop typecheck reads `shared` from source either
+way (`customConditions: ["source"]`, #1153).
+
 ## Start from an issue
 
 Every feature or change is tracked as a GitHub issue in `nekko-labs/nekko-agent`, and its PR links to it. Search first (`gh issue list --search "<words>"`); file one only when none fits:
@@ -37,7 +43,7 @@ in-flight batches share the tree (parallel agents), land them together in one PR
 rather than letting the tree drift further from `main`.
 
 When you fan work out to parallel agents, hand each one its ids up front: the
-next `docs/decisions/` number, any new TASKS.md task ids. Each agent reads the
+next `docs/decisions/` number and its GitHub issue. Each agent reads the
 same `main`, picks the same "next free" number, and the collision only shows
 when the second PR lands.
 
@@ -144,8 +150,7 @@ short (2-4 layers) and finish lower layers first.
 
 The auto-merge workflow and the sweeper only queue PRs based on `main`, so a
 layer whose base is another branch is never queued. Once its parent merges,
-retarget the layer to `main`, merge `main` in, and rerun
-`node scripts/spec-index.mjs` if `spec/` changed. A squash-merged parent leaves
+retarget the layer to `main` and merge `main` in. A squash-merged parent leaves
 its original commits in the child's history, so git's merge conflicts wherever
 both layers touched the same lines; a three-way `git merge-file` per file, using
 the parent commit the child was built on as the base (not git's merge-base),

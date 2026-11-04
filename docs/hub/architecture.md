@@ -1,6 +1,6 @@
 # Architecture
 
-Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted Local Web UI, Docker and the phone. This page is a map of the code for contributors. The full technical plan, with every decision and task, is in [`TASKS.md`](../../TASKS.md); what the product does and why is in [`spec/`](../../spec/README.md), one file per feature.
+Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted Local Web UI, Docker and the phone. This page is a map of the code for contributors. The full technical plan is in [`TASKS.md`](../../TASKS.md), and the task list is the GitHub issues; what the product does and why is in [`spec/`](../../spec/README.md), one file per feature.
 
 ## The big picture
 
@@ -92,4 +92,4 @@ Nekko Agent is local-first. Everything you can run yourself works without a data
 
 - Engine behaviour goes in a Rust crate under `crates/`, so it can be tested without Electron.
 - The desktop app only wires the engine to the window, the file system and the shell.
-- A change to what the product does also updates its file under `spec/` (and `node scripts/spec-index.mjs` for a new one); a change to how it is built updates `TASKS.md`.
+- A change to what the product does also updates its file under `spec/`; a change to the technical plan (stack, architecture, conventions, constraints) updates `TASKS.md`. Task notes go in the change's GitHub issue.
