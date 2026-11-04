@@ -18,6 +18,14 @@ app.setPath('sessionData', path.join(runDir, 'profile'));
 const base = !!process.env.NEKKO_TEST_REVISION;
 const report = { revision: process.env.NEKKO_TEST_REVISION || 'working-tree', checks: [], captures: [], errors: [] };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const jsLiteralCharMap = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029'
+};
+const toSafeJsLiteral = value => JSON.stringify(value).replace(/[<>/\u2028\u2029]/g, ch => jsLiteralCharMap[ch]);
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));
@@ -39,7 +47,7 @@ app.whenReady().then(async () => {
     const gif = path.join(runDir, name + '.gif');
     try { require('./evidence-gif.cjs')(gif, buffers, 8); report.captures.push(gif); } catch (e) { report.gifLimitation = String(e).slice(0, 400); }
   };
-  const wall = mode => run(`(() => { const w = integration.state().settings.commandWall; __setWall({ ...w, layout: { ...w.layout, mode: ${JSON.stringify(mode)} } }); })()`);
+  const wall = mode => run(`(() => { const w = integration.state().settings.commandWall; __setWall({ ...w, layout: { ...w.layout, mode: ${toSafeJsLiteral(mode)} } }); })()`);
   try {
     await win.loadFile(path.join(out, 'index.html'));
     if (!await until('!!window.integration && !!document.querySelector(".command-wall-window")', 15000)) throw Error('Fixture did not mount');
