@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           mkdir -p comparison
           git rev-parse HEAD > comparison/diagnostic-sha.txt
-          printf 'failed_run=41760079850\nbase=%s\nhead=%s\norder=switch-marks; purpose=correlate contract readiness and paint\n' "$BASE" "$HEAD" > comparison/experiment.txt
+          printf 'failed_run=41760079850\nbase=%s\nhead=%s\norder=native-base,native-seek-patch; purpose=attribute forced rendering calls\n' "$BASE" "$HEAD" > comparison/experiment.txt
           lscpu > comparison/lscpu.txt
           uname -a > comparison/uname.txt
           printf 'os=%s\narch=%s\nrunner=%s\nimage=%s\nimage_version=%s\n' "$RUNNER_OS" "$RUNNER_ARCH" "$RUNNER_NAME" "${ImageOS:-unknown}" "${ImageVersion:-unknown}" > comparison/runner.txt
@@ -35,7 +35,7 @@ jobs:
           test "$(git rev-parse "$HEAD^")" = "$BASE"
           git diff --binary "$BASE" "$HEAD" > comparison/base-to-head.patch
           git diff --stat "$BASE" "$HEAD" > comparison/base-to-head.stat
-          for phase in switch-marks; do
+          for phase in native-base native-seek-patch; do
             sha="$BASE"
             if [ "$phase" = head ]; then sha="$HEAD"; fi
             git worktree add --detach "$RUNNER_TEMP/queue-cold/$phase" "$sha"
@@ -72,7 +72,7 @@ jobs:
           # copies its binary before measuring. No daemon is borrowed from head.
           export CARGO_TARGET_DIR="$RUNNER_TEMP/queue-cold-target"
           failed=0
-          for phase in switch-marks; do
+          for phase in native-base native-seek-patch; do
             out="$report/$phase"
             (
               set -euo pipefail
@@ -81,7 +81,8 @@ jobs:
               if [ "$phase" = head ]; then expected="$HEAD"; fi
               test "$(git rev-parse HEAD)" = "$expected"
               test -z "$(git status --porcelain --untracked-files=no)"
-              node "$GITHUB_WORKSPACE/scripts/perf/diagnose-switch-marks.cjs"
+              node "$GITHUB_WORKSPACE/scripts/perf/diagnose-native-layout.cjs"
+              if [ "$phase" = native-seek-patch ]; then node "$GITHUB_WORKSPACE/scripts/perf/diagnose-icon-seek.cjs"; fi
               git diff --binary HEAD > "$out/experiment.patch"
               npm ci
               npm run build:web
@@ -110,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: queue-cold-switch-readiness-marks
+          name: queue-cold-native-layout-attribution
           path: comparison/
           if-no-files-found: error
           retention-days: 14
