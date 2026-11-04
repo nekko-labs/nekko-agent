@@ -1891,6 +1891,10 @@ Observation: the fixed per-reply step budget (`DEFAULT_MAX_STEPS`, was 80) was h
 - [ ] Real APNs/FCM delivery (needs creds + a device); Cloud hosted deploy target. See [provisioning.md](../../obsurdian/projects/nekko-agent/provisioning.md).
 - [ ] Stripe billing keys to enable live charges (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, `CLOUD_PUBLIC_URL`); integration is built + tested, just unconfigured.
 
+## Compaction card follow-up
+
+- [ ] [Collapsed compaction event card](spec/chat/chat-cowork-unified-surface.md) (added 2026-11-04, #1696): implementation and focused tests pass; hidden desktop/mobile expand-collapse captures collected. Finish actual image inspection and keyboard verification before landing.
+
 ## Shipped
 
 - [x] **SN1220: Settings and Models navigation polish** (implemented 2026-10-26). [Settings spec](spec/desktop/settings-section-nav.md), [Models spec](spec/models/models-providers.md). Added catalog return buttons, responsive 80% Settings panel, matching panel surfaces and underlined subnavs, and toggle/outside/Escape provider-setup dismissal. Hidden network-blocked Electron assertions and matching desktop/narrow screenshots cover navigation, width, alignment, overflow, and dismissal. Packaged apps and live authentication remain unverified.
