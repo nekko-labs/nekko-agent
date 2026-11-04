@@ -2831,6 +2831,9 @@
 .plan-sheet-step-caret { flex-shrink: 0; color: var(--ink-faint); transition: transform 120ms ease; }
 .plan-sheet-step[data-open] .plan-sheet-step-caret { transform: rotate(90deg); }
 .plan-sheet-steps .plan-sheet-more { padding: 1px 0 2px 58px; }
+/* The one Verify step's checks: sub-bullets with their own mark and report. */
+.plan-sheet-substeps { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
+.plan-sheet-substep { display: flex; gap: 6px; font-size: var(--text-xs); }
 .plan-sheet-chips { display: flex; gap: 8px; overflow: hidden; padding: 4px 0 1px; }
 .plan-sheet-steps .plan-sheet-chips { flex-wrap: wrap; }
 .plan-sheet-chip { display: inline-flex; flex-shrink: 0; max-width: 100%; align-items: center; gap: 4px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 0 8px; font-size: var(--text-2xs); line-height: 18px; color: var(--ink-soft); white-space: nowrap; }

@@ -1,6 +1,5 @@
 import { applyPlanUpdate, collectSessionPrUrls, extractPrUrls, type ChatMessage, type PlanStep, type PlanUpdateInput } from '@nekko-agent/shared';
 import { chatArtifacts, type ChatArtifact } from './chatArtifacts.js';
-import { PHASE_STEP_PREFIX, claudeCodePhase } from './claudeAgentPlan.js';
 
 /** A task in a project-management tool that the chat linked to. */
 export interface ProjectLink {
@@ -52,8 +51,7 @@ export function projectLinks(text: string): ProjectLink[] {
  * the chat was started from, belong to the first step.
  *
  * A Claude Agent chat's clock is Claude Code's own plan calls (`TodoWrite`,
- * `TaskCreate`/`TaskUpdate`), and on its activity plan (claudeAgentPlan.ts)
- * the phase of each call it makes in the latest request.
+ * `TaskCreate`/`TaskUpdate`).
  */
 export function planStepLinks(messages: ChatMessage[], plan: PlanStep[] | undefined, basePath?: string, children: Array<{ id: string; createdAt: number }> = []): Map<string, PlanStepLinks> {
   const links = new Map<string, PlanStepLinks>();
@@ -70,7 +68,6 @@ export function planStepLinks(messages: ChatMessage[], plan: PlanStep[] | undefi
     return e;
   };
   const add = (item: (entry: PlanStepLinks) => void) => { if (active) item(entry(active)); };
-  const ids = new Set(plan.map(step => step.id));
   const work = (title: string | undefined, at: number) => {
     active = title ? byTitle.get(title.trim().toLowerCase()) : undefined;
     timeline.push({ at, step: active });
@@ -78,11 +75,7 @@ export function planStepLinks(messages: ChatMessage[], plan: PlanStep[] | undefi
   // Claude Code's tasks by id, from each TaskCreate's input and its result.
   const creating = new Map<string, string>();
   const tasks = new Map<string, string>();
-  // An activity plan covers the latest request only.
-  const phased = ids.has(PHASE_STEP_PREFIX + 'sent');
-  const lastAsk = phased ? messages.map(m => m.role).lastIndexOf('user') : -1;
-  for (const [index, message] of messages.entries()) {
-    if (phased && index === lastAsk) { active = PHASE_STEP_PREFIX + 'sent'; timeline.push({ at: message.createdAt, step: active }); }
+  for (const message of messages) {
     const subject = message.toolResult && !message.toolResult.isError ? creating.get(message.toolResult.toolCallId) : undefined;
     const taskId = subject && /Task #(\S+) created/.exec(message.toolResult?.output ?? '')?.[1];
     if (subject && taskId) tasks.set(taskId, subject);
@@ -95,8 +88,6 @@ export function planStepLinks(messages: ChatMessage[], plan: PlanStep[] | undefi
     }
     for (const call of message.toolCalls ?? []) {
       const input = (call.input ?? {}) as Record<string, unknown>;
-      const phase = phased && index > lastAsk ? claudeCodePhase(call) : null;
-      if (phase && ids.has(PHASE_STEP_PREFIX + phase)) { active = PHASE_STEP_PREFIX + phase; timeline.push({ at: message.createdAt, step: active }); continue; }
       if (call.name === 'TodoWrite') {
         const todos = Array.isArray(input.todos) ? input.todos as Array<{ content?: unknown; status?: unknown }> : [];
         work(todos.find(t => t.status === 'in_progress')?.content as string | undefined, message.createdAt);
