@@ -11,6 +11,8 @@ when you want them, with visible context and changes you can review.
 M5 Max · Qwen3-8B · Ollama 0.40.11 · October 2026.
 One task, not every coding workflow. [Results, limitations and raw runs](docs/benchmarks.md).
 
+<a href="docs/benchmarks.md"><img src="docs/media/nekko-vs-ollama.gif" width="960" alt="Replay of published median reply times: Nekko Agent 2.5 s vs Ollama 13.9 s on a whole-file rename, M5 Max, Qwen3-8B"></a>
+
 [Download Nekko Agent](https://nekkoagent.com/#download) · [See the benchmark](docs/benchmarks.md)
 
 Free and open source · MIT licensed · A fast local model server and AI agent in one app
