@@ -96,6 +96,18 @@ cannot connect to an older computer.
 > reconnects to each by itself, so there is no Connect button: opening a chat on any computer
 > works straight away. A computer that can't be reached gets a line above the list with
 > **Reconnect**, which tries again at once (Computers and the computer's page offer it too).
+> Each row shows where its chat runs: the computer's icon in its colour (as on the desktop) and
+> its name. **View → Group by → Computer** puts a heading over each computer's chats, and
+> **View → Show** turns the computer's name and icon off.
+>
+> **Chats on this iPhone** (iPhone): the phone can run chats itself, with no computer, on a cloud
+> model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
+> OpenRouter, Claude in Amazon Bedrock, Claude in Microsoft Foundry, Claude on Vertex AI, or any
+> OpenAI-compatible server over https, with your own key. The key stays in this iPhone's Keychain
+> and goes only to that provider; it is never sent to your computer, the relay or Nekko Cloud.
+> Then pick **This iPhone** under **New chat → Run on**. These chats sit in the same list as your
+> computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
+> and ChatGPT subscriptions and local model servers still need a computer.
 >
 > **Simple and Expert** (iPhone and Android): the switch at the top left of a chat picks the mode, and the
 > phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model

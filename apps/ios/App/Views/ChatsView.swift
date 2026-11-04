@@ -13,6 +13,7 @@ struct ChatsView: View {
     var highlighted: String? = nil
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
+    @Environment(PhoneChats.self) private var phone
     @Environment(\.palette) private var palette
     @State private var query = ""
     /// Groups folded shut by a tap on their heading; every group starts open.
@@ -91,18 +92,20 @@ struct ChatsView: View {
 
     private var dialogs: ChatDialogs {
         ChatDialogs(renaming: $renaming, renameText: $renameText, confirmDelete: $confirmDelete, actionError: $actionError,
-                    rename: { s in act { try await store.renameChat(s.id, to: renameText, on: owner(s)) } },
-                    delete: { s in act { try await store.deleteChat(s.id, on: owner(s)) } },
-                    computer: confirmDelete.flatMap { s in computerName(owner(s)) } ?? store.active?.name ?? "your computer")
+                    rename: { s in rename(s, to: renameText) },
+                    delete: { s in delete(s) },
+                    computer: confirmDelete.flatMap { s in place(of: s)?.name } ?? store.active?.name ?? "your computer")
     }
 
     @ViewBuilder private var rows: some View {
-            if filter == nil || filter == store.activeId {
+            if !store.computers.isEmpty && (filter == nil || filter == store.activeId) {
                 ConnectionBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
                 ProtocolBanner().listRowSeparator(.hidden).listRowBackground(Color.clear)
             }
             // The other computers in view that can't be reached now, each with Reconnect.
-            FleetBanner(computer: filter).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            if filter != PhoneProviders.computerId {
+                FleetBanner(computer: filter).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            }
             if filter == nil || filter == store.activeId, let at = store.savedListAt {
                 Label(SavedListNote.text(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
                     .font(.footnote).foregroundStyle(palette.inkSoft)
@@ -204,6 +207,10 @@ struct ChatsView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkFaint)
                     .rotationEffect(.degrees(open ? 90 : 0))
+                // By computer: the place's mark in its colour, as on its rows.
+                if let id = sourceId(g), let place = ChatPlace.of(id, store: store) {
+                    PlaceMark(place: place, showIcon: view.showComputerIcons, size: 14)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     GroupHeading(groupTitle(g), count: counts(g))
                     if let path = listFolders.first(where: { $0.id == g.key })?.path {
@@ -240,8 +247,12 @@ struct ChatsView: View {
     private var viewMenu: some View {
         Menu {
             Picker("Group by", selection: bind(\.groupBy)) {
-                ForEach(ChatListView.GroupBy.allCases, id: \.self) { Text(Self.groupName($0)).tag($0) }
+                // By computer, as the desktop offers it, once chats come from more than one place.
+                ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: \.self) {
+                    Text(Self.groupName($0)).tag($0)
+                }
             }
+            .accessibilityIdentifier("chats.view.groupBy")
             .pickerStyle(.menu)
             Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
                 ForEach(ChatListView.SortBy.allCases, id: \.self) { Text(Self.sortName($0)).tag($0) }
@@ -259,6 +270,10 @@ struct ChatsView: View {
                 Toggle("Previews", isOn: bind(\.showPreviews))
                 Toggle("Completed chats", isOn: bind(\.showCompleted))
                 Toggle("Empty groups", isOn: bind(\.showEmptyGroups))
+                if places.count > 1 {
+                    Toggle("Computer", isOn: bind(\.showComputer))
+                    Toggle("Computer icons", isOn: bind(\.showComputerIcons))
+                }
             }
             if view.canReorderGroups {
                 Button { reorderingGroups = true } label: { Label("Reorder groups…", systemImage: "arrow.up.arrow.down") }
@@ -283,6 +298,7 @@ struct ChatsView: View {
         case .project: String(localized: "Project")
         case .status: String(localized: "Status")
         case .date: String(localized: "Date")
+        case .computer: String(localized: "Computer")
         case .none: String(localized: "None")
         }
     }
@@ -297,14 +313,22 @@ struct ChatsView: View {
 
     /// A folder's own name, or the list's built-in group names in the phone's language.
     private func groupTitle(_ g: ChatSection) -> String {
-        listFolders.contains { $0.id == g.key } ? g.name : String(localized: String.LocalizationValue(g.name))
+        if listFolders.contains(where: { $0.id == g.key }) || sourceId(g) != nil { return g.name }
+        return String(localized: String.LocalizationValue(g.name))
+    }
+
+    /// The place a Group by → Computer heading stands for.
+    private func sourceId(_ g: ChatSection) -> String? {
+        g.key.hasPrefix("computer:") ? String(g.key.dropFirst("computer:".count)) : nil
     }
 
     private var nowMs: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     private var sections: [ChatSection] {
         ChatSections.make(filtered, folders: listFolders, view: view, activity: listActivity,
-                          groupOrder: app.prefs.groupOrder[groupOrderKey] ?? [], now: nowMs)
+                          groupOrder: app.prefs.groupOrder[groupOrderKey] ?? [],
+                          sources: placesInView.map { ChatSource(id: $0.id, name: $0.name) },
+                          sourceOf: { placeId(of: $0) }, now: nowMs)
     }
 
     private func flip(_ set: inout Set<String>, _ key: String) {
@@ -324,19 +348,34 @@ struct ChatsView: View {
     /// Whose chats the list shows: one computer, or every paired computer (nil).
     /// A forgotten computer's filter falls back to every computer.
     private var filter: String? {
-        prefs.chatsFilter.flatMap { id in store.computers.contains { $0.id == id } ? id : nil }
+        prefs.chatsFilter.flatMap { id in places.contains { $0.id == id } ? id : nil }
     }
 
-    private var listSummaries: [SessionSummary] { store.chats(on: filter) }
-    private var listActivity: [String: Activity] { store.activity(on: filter) }
-    private var listFolders: [WorkspaceFolder] { store.folders(on: filter) }
+    /// Every place chats run: the paired computers, and this iPhone when it runs chats (decision 0048).
+    private var places: [ChatPlace] { ChatPlace.all(store: store, phone: phone) }
+    /// The places the list shows now: every one, or the one it is filtered to.
+    private var placesInView: [ChatPlace] { filter.map { f in places.filter { $0.id == f } } ?? places }
+    /// This iPhone's own chats are in the list.
+    private var phoneInView: Bool { placesInView.contains(where: \.phone) }
+    /// The one computer filtered to, or every computer (nil).
+    private var computerFilter: String? { filter == PhoneProviders.computerId ? nil : filter }
+    private var computersInView: Bool { filter != PhoneProviders.computerId && !store.computers.isEmpty }
 
-    /// Rows say which computer a chat is on when they come from more than one.
-    private var showsComputer: Bool { filter == nil && store.computers.count > 1 }
+    private var listSummaries: [SessionSummary] {
+        (computersInView ? store.chats(on: computerFilter) : []) + (phoneInView ? phone.summaries : [])
+    }
+    private var listActivity: [String: Activity] {
+        (computersInView ? store.activity(on: computerFilter) : [:]).merging(phoneInView ? phone.activity : [:]) { a, _ in a }
+    }
+    private var listFolders: [WorkspaceFolder] { computersInView ? store.folders(on: computerFilter) : [] }
+
+    /// Rows say where a chat runs when they come from more than one place, unless the headings say it.
+    private var showsComputer: Bool { placesInView.count > 1 && view.showComputer && view.groupBy != .computer }
 
     /// A computer in view has answered with its list, so an empty list is really empty.
     private var scopeLoaded: Bool {
-        (filter.map { [$0] } ?? store.computers.map(\.id)).contains { id in
+        if phoneInView { return true }
+        return (filter.map { [$0] } ?? store.computers.map(\.id)).contains { id in
             id == store.activeId
                 ? store.conn == .online && store.summariesLoaded && store.savedListAt == nil
                 : store.peers[id]?.loaded == true && store.peers[id]?.conn == .online
@@ -345,23 +384,50 @@ struct ChatsView: View {
 
     /// Where an empty list suggests starting a chat.
     private var emptyListPlace: String {
-        if let name = computerName(filter) { return name }
+        if placesInView.count == 1, let name = placesInView.first?.name { return name }
         return store.computers.count > 1 ? String(localized: "your computers") : store.active?.name ?? String(localized: "your computer")
     }
 
     /// The group order kept for this view: each computer's own, and one for every computer together.
-    private var groupOrderKey: String { filter ?? (store.computers.count > 1 ? Self.allComputersKey : store.activeId ?? "") }
+    private var groupOrderKey: String { filter ?? (places.count > 1 ? Self.allComputersKey : store.activeId ?? "") }
     static let allComputersKey = "*"
 
     /// The computer a chat is on, from the lists the phone holds (nil: none holds it, so the active one).
     private func owner(_ s: SessionSummary) -> String? { store.computerId(ofChat: s.id) }
 
-    private func computerName(_ id: String?) -> String? { id.flatMap { id in store.computers.first { $0.id == id }?.name } }
+    /// Where a chat runs: this iPhone, the computer that listed it, else the active one.
+    private func placeId(of s: SessionSummary) -> String? {
+        PhoneProviders.isPhoneChat(s.id) ? PhoneProviders.computerId : owner(s) ?? store.activeId
+    }
 
-    /// New chat runs on the computer in view; with every computer in view, on the one used last.
+    private func place(of s: SessionSummary) -> ChatPlace? { ChatPlace.of(placeId(of: s), store: store) }
+
+    /// New chat runs on the place in view; with every place in view, on the computer used last.
     private func newChat() {
-        if let filter, filter != store.activeId { store.connect(filter) }
+        if let filter, filter != store.activeId, filter != PhoneProviders.computerId { store.connect(filter) }
         open(.newChat)
+    }
+
+    // A chat's actions, on the computer it runs on or on this iPhone.
+
+    private func rename(_ s: SessionSummary, to title: String) {
+        if PhoneProviders.isPhoneChat(s.id) { phone.rename(s.id, to: title) } else { act { try await store.renameChat(s.id, to: title, on: owner(s)) } }
+    }
+
+    private func delete(_ s: SessionSummary) {
+        if PhoneProviders.isPhoneChat(s.id) { phone.delete(s.id) } else { act { try await store.deleteChat(s.id, on: owner(s)) } }
+    }
+
+    private func complete(_ s: SessionSummary) {
+        if PhoneProviders.isPhoneChat(s.id) { phone.complete(s.id) } else { act { try await store.completeChat(s.id, on: owner(s)) } }
+    }
+
+    private func restore(_ s: SessionSummary) {
+        if PhoneProviders.isPhoneChat(s.id) { phone.restore(s.id) } else { act { try await store.restoreChat(s.id, on: owner(s)) } }
+    }
+
+    private func pin(_ s: SessionSummary) {
+        if PhoneProviders.isPhoneChat(s.id) { phone.setPinned(s.id, !s.pinned) } else { act { try await store.setPinned(s.id, !s.pinned, on: owner(s)) } }
     }
 
     /// "3 active · 12 done", as the desktop's group headings count.
@@ -380,7 +446,7 @@ struct ChatsView: View {
         let on = owner(s)
         return NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: listActivity[s.id], waiting: on == store.activeId ? store.outbox.count(for: s.id) : 0,
-                    showPreview: view.showPreviews, computer: showsComputer ? computerName(on) : nil)
+                    showPreview: view.showPreviews, place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons)
         }
         // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
         .listRowBackground(RowBackground(needsYou: listActivity[s.id] == .needsYou,
@@ -388,34 +454,34 @@ struct ChatsView: View {
         .accessibilityIdentifier("chats.row")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if s.archived {
-                Button { act { try await store.restoreChat(s.id, on: on) } } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
+                Button { restore(s) } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
                     .tint(palette.running)
-            } else if store.pcSettings.effectiveAction == .delete {
+            } else if store.pcSettings.effectiveAction == .delete && !PhoneProviders.isPhoneChat(s.id) {
                 Button(role: .destructive) { askDelete(s) } label: { Label("Delete", systemImage: "trash") }
             } else {
-                Button { act { try await store.completeChat(s.id, on: on) } } label: { Label("Complete", systemImage: "checkmark.circle") }
+                Button { complete(s) } label: { Label("Complete", systemImage: "checkmark.circle") }
                     .tint(palette.success)
             }
         }
         .swipeActions(edge: .leading) {
-            Button { act { try await store.setPinned(s.id, !s.pinned, on: on) } } label: {
+            Button { pin(s) } label: {
                 Label(s.pinned ? "Unpin" : "Pin", systemImage: s.pinned ? "pin.slash" : "pin")
             }.tint(palette.warning)
         }
         .contextMenu {
             Button { renameText = s.title; renaming = s } label: { Label("Rename", systemImage: "pencil") }
-            Button { act { try await store.setPinned(s.id, !s.pinned, on: on) } } label: { Label(s.pinned ? "Unpin" : "Pin", systemImage: "pin") }
+            Button { pin(s) } label: { Label(s.pinned ? "Unpin" : "Pin", systemImage: "pin") }
             if s.archived {
-                Button { act { try await store.restoreChat(s.id, on: on) } } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
+                Button { restore(s) } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
             } else {
-                Button { act { try await store.completeChat(s.id, on: on) } } label: { Label("Complete", systemImage: "checkmark.circle") }
+                Button { complete(s) } label: { Label("Complete", systemImage: "checkmark.circle") }
             }
             Button(role: .destructive) { askDelete(s) } label: { Label("Delete", systemImage: "trash") }
         }
     }
 
     private func askDelete(_ s: SessionSummary) {
-        if store.pcSettings.confirmDelete { confirmDelete = s } else { act { try await store.deleteChat(s.id, on: owner(s)) } }
+        if store.pcSettings.confirmDelete || PhoneProviders.isPhoneChat(s.id) { confirmDelete = s } else { delete(s) }
     }
 
     private func act(_ body: @escaping () async throws -> Void) {
@@ -431,8 +497,10 @@ struct ChatRow: View {
     /// Prompts for this chat waiting on the phone (the outbox).
     var waiting = 0
     var showPreview = true
-    /// The computer it is on, named when the list shows several.
-    var computer: String? = nil
+    /// Where it runs, named when the list shows several places (a computer, or this iPhone).
+    var place: ChatPlace? = nil
+    /// ...with its icon (Show → Computer icons).
+    var showPlaceIcon = true
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -447,10 +515,10 @@ struct ChatRow: View {
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                 }
                 if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
-                if activity != nil || waiting > 0 || computer != nil {
+                if activity != nil || waiting > 0 || place != nil {
                     HStack(spacing: 6) {
                         badge
-                        if let computer { RowChip(text: computer, tone: .quiet) }
+                        if let place { PlaceChip(place: place, showIcon: showPlaceIcon) }
                         if waiting > 0 {
                             Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
                                 .font(.caption2).foregroundStyle(palette.inkSoft)
@@ -607,11 +675,12 @@ struct ComputerMenu: View {
     var search: (() -> Void)?
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
+    @Environment(PhoneChats.self) private var phone
     @Environment(\.palette) private var palette
 
     var body: some View {
         Menu {
-            if store.computers.count > 1 {
+            if places.count > 1 {
                 Picker("Show chats from", selection: Binding(get: { filter }, set: show)) {
                     Label("All computers", systemImage: "square.stack.3d.up").tag(String?.none)
                     ForEach(store.computers) { c in
@@ -623,6 +692,13 @@ struct ComputerMenu: View {
                             if let icon = c.icon { Image("computer-\(icon)") } else { Image(systemName: "desktopcomputer") }
                         }
                         .tag(Optional(c.id))
+                    }
+                    if places.contains(where: \.phone) {
+                        Label {
+                            Text(ChatPlace.phoneName)
+                            Text("Its own models")
+                        } icon: { Image(systemName: "iphone") }
+                        .tag(Optional(PhoneProviders.computerId))
                     }
                 }
                 .pickerStyle(.inline)
@@ -655,10 +731,14 @@ struct ComputerMenu: View {
             // The computers in view are the title's companion: their state, the name, and a chevron into the menu.
             HStack(spacing: 6) {
                 Circle().fill(dot).frame(width: 8, height: 8)
-                ComputerGlyph(icon: shown?.icon, size: 14).foregroundStyle(palette.inkSoft)
+                if showsPhone {
+                    Image(systemName: "iphone").font(.footnote).foregroundStyle(palette.inkSoft).accessibilityHidden(true)
+                } else {
+                    ComputerGlyph(icon: shown?.icon, size: 14).foregroundStyle(palette.inkSoft)
+                }
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(shown?.name ?? String(localized: "All computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                    if shown == nil, let online = Self.online(states.filter { $0 == .online }.count, of: states.count) {
+                    Text(showsPhone ? ChatPlace.phoneName : shown?.name ?? String(localized: "All computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                    if shown == nil, !showsPhone, let online = Self.online(states.filter { $0 == .online }.count, of: states.count) {
                         Text(online).font(.caption2).foregroundStyle(palette.inkSoft).lineLimit(1)
                     }
                 }
@@ -676,30 +756,42 @@ struct ComputerMenu: View {
 
     /// The filter as the list applies it: a forgotten computer's falls back to every computer.
     private var filter: String? {
-        app.prefs.chatsFilter.flatMap { id in store.computers.contains { $0.id == id } ? id : nil }
+        app.prefs.chatsFilter.flatMap { id in places.contains { $0.id == id } ? id : nil }
+    }
+
+    /// The paired computers, and this iPhone when it runs chats.
+    private var places: [ChatPlace] { ChatPlace.all(store: store, phone: phone) }
+
+    /// The pill names this iPhone: the list is filtered to it, or it is the only place.
+    private var showsPhone: Bool {
+        filter == PhoneProviders.computerId || (filter == nil && store.computers.isEmpty && places.contains(where: \.phone))
     }
 
     /// Show one computer's chats (it becomes the active one, for the menu's other
-    /// items and New chat), or every computer's (nil).
+    /// items and New chat), this iPhone's, or every place's (nil).
     private func show(_ id: String?) {
         app.prefs.chatsFilter = id
-        if let id, id != store.activeId { store.connect(id) }
+        if let id, id != store.activeId, id != PhoneProviders.computerId { store.connect(id) }
     }
 
     /// The one computer the pill names: the filtered one, or the only one paired; nil for every computer.
     private var shown: Computer? {
         if let filter { return store.computers.first { $0.id == filter } }
-        return store.computers.count == 1 ? store.computers.first : nil
+        // With this iPhone in the list too, the pill stands for every place.
+        return store.computers.count == 1 && places.count == 1 ? store.computers.first : nil
     }
 
     /// The connection of every computer the pill stands for.
     private var states: [RelayState] {
-        shown.map { [store.state(of: $0.id)] } ?? store.computers.map { store.state(of: $0.id) }
+        // This iPhone is always there: it counts as online.
+        if showsPhone { return [.online] }
+        return shown.map { [store.state(of: $0.id)] } ?? store.computers.map { store.state(of: $0.id) }
     }
 
     /// Ends with the state the pill shows, as the UI tests read it: one computer's,
     /// or for every computer how many are online.
     private var label: String {
+        if showsPhone { return String(localized: "Computers and settings, \(ChatPlace.phoneName)") }
         if shown == nil, let online = Self.online(states.filter { $0 == .online }.count, of: states.count) {
             return String(localized: "Computers and settings, all computers, \(online)")
         }

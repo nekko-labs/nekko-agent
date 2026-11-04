@@ -776,6 +776,122 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "deeplink-2-connected")
     }
 
+    /// One list across every place chats run (decision 0048): a paired computer
+    /// and this iPhone's own provider (the fixture, which answers in the simulator).
+    /// A chat on each, both in the list with where they run, Group by → Computer,
+    /// the iPhone's chat itself, and Settings → Models on this iPhone.
+    func testChatsOnTheComputerAndOnThisIPhoneInOneList() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES",
+                               "-uiTestPhoneProvider", "-AppleLanguages", "(en)"]
+        app.launch()
+        allowSystemAlerts()
+
+        // This iPhone runs chats of its own, so the list shows before any computer is paired.
+        let menu = app.buttons["chats.menu"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "the chat list, with no computer paired")
+        attach(app, "fleet-0-phone-only")
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let settings = app.buttons["Settings"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let models = app.buttons["settings.phoneModels"].firstMatch
+        XCTAssertTrue(reveal(models, in: app), "Settings → Models on this iPhone")
+        models.tap()
+        XCTAssertTrue(app.staticTexts["Fixture Claude"].firstMatch.waitForExistence(timeout: 10), "the fixture provider")
+        attach(app, "fleet-1-phone-models")
+        auditAccessibility(app, "fleet-phone-models")
+        app.buttons["phoneModels.add"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["addPhoneProvider.save"].firstMatch.waitForExistence(timeout: 5), "the Add sheet")
+        attach(app, "fleet-1b-add-provider")
+        auditAccessibility(app, "fleet-add-provider")
+        app.buttons["Cancel"].firstMatch.tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // Pair a computer from Settings → Paired computers, as a second place.
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["Computers"].firstMatch.tap()
+        let pair = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Pair")).firstMatch
+        XCTAssertTrue(pair.waitForExistence(timeout: 5), "Pair another computer")
+        pair.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        // A chat on the computer.
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the computer's reply")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // A chat on this iPhone: New chat → Run on → This iPhone.
+        app.navigationBars.buttons["New chat"].tap()
+        let runOn = app.buttons["newChat.computer"].firstMatch
+        XCTAssertTrue(runOn.waitForExistence(timeout: 5), "Run on, with this iPhone as a choice")
+        runOn.tap()
+        let here = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
+        XCTAssertTrue(here.waitForExistence(timeout: 5), "This iPhone in Run on")
+        here.tap()
+        let ask = app.input("Ask anything")
+        XCTAssertTrue(ask.waitForExistence(timeout: 5), "New chat on this iPhone")
+        XCTAssertTrue(app.descendants(matching: .any)["newChat.phoneNote"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Claude Opus 5.5")).firstMatch.waitForExistence(timeout: 10),
+                      "the iPhone's model is chosen")
+        attach(app, "fleet-2-new-chat-on-phone")
+        ask.tap()
+        ask.typeText("Plan a weekend in Kyoto")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from this iPhone."].waitForExistence(timeout: 20), "the reply streamed from the iPhone's provider")
+        XCTAssertTrue(app.descendants(matching: .any)["phoneChat.place"].exists, "the chat says where it runs")
+        attach(app, "fleet-3-phone-chat")
+        auditAccessibility(app, "fleet-phone-chat")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // Both chats in one list, each naming where it runs.
+        let rows = app.descendants(matching: .any).matching(identifier: "chats.row")
+        XCTAssertTrue(rows.element(boundBy: 1).waitForExistence(timeout: 15), "both chats in the list")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "On This iPhone")).firstMatch.exists,
+                      "the iPhone's chat names its place")
+        attach(app, "fleet-4-one-list")
+        auditAccessibility(app, "fleet-one-list")
+
+        // Group by → Computer: a heading per place.
+        let viewMenu = app.buttons["chats.view"].firstMatch
+        XCTAssertTrue(waitForFrame(viewMenu, in: app, 10))
+        viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let groupBy = app.buttons["Group by"].firstMatch
+        XCTAssertTrue(groupBy.waitForExistence(timeout: 5), "Group by")
+        groupBy.tap()
+        let byComputer = app.buttons["Computer"].firstMatch
+        XCTAssertTrue(byComputer.waitForExistence(timeout: 5), "Group by → Computer")
+        byComputer.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
+            .waitForExistence(timeout: 5), "a heading for this iPhone")
+        attach(app, "fleet-5-by-computer")
+        auditAccessibility(app, "fleet-by-computer")
+
+        // Show chats from → This iPhone: only its chat.
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let onlyHere = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
+        XCTAssertTrue(onlyHere.waitForExistence(timeout: 5), "This iPhone in Show chats from")
+        onlyHere.tap()
+        XCTAssertTrue(waitGone(rows.element(boundBy: 1), 10), "only the iPhone's chat")
+        attach(app, "fleet-6-only-this-iphone")
+    }
+
     private func allowSystemAlerts() {
         addUIInterruptionMonitor(withDescription: "system alerts") { alert in
             // firstMatch: on some simulators the camera alert lists its Allow button twice.
