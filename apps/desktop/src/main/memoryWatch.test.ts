@@ -43,7 +43,7 @@ describe('deciding what to do about low memory', () => {
 
 describe('the prompt', () => {
   it('says what is left by the tighter measure and names the app, escaped', () => {
-    expect(leftLine(low)).toBe('4.0 GB of 63.0 GB left to allocate');
+    expect(leftLine(low)).toBe('4.0 GB of 63.0 GB virtual memory left');
     expect(leftLine({ ...low, commitLimitBytes: null, availableBytes: 3 * GB })).toBe('3.0 GB of 64.0 GB free');
     const html = memoryPromptHtml({ ...low, topApp: { name: '<b>x', bytes: 2 * GB, processes: 1 } });
     expect(html).toContain('&#60;b&#62;x'); expect(html).not.toContain('<b><b>x');
