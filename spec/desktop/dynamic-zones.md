@@ -9,12 +9,16 @@ area: desktop
 
 User intent: "there are too many at once right now. that's not how people realistically use them." The board stops opening every new agent as a window. Instead it is laid out in **zones**: places on the board that each hold one agent, which people add, move, resize and close themselves, and fill from the agents panel.
 
+## Header add control (verification pending)
+
+The add-control refresh below is implemented in the current worktree, not marked shipped. Functional checks and matching before/after visual and interaction evidence remain pending with the parent. Earlier zone verification above does not cover this refresh.
+
 ## How it works
 
 - **Two zones to start.** A fresh board is two zones side by side. Each zone has a thin name bar ("Zone 1", "Zone 2", ...) above its window. A new zone takes the first free number.
 - **No automatic windows.** New agents (including spawned sub-agents and agents created by automations) no longer open on the board by themselves; they wait in the agents panel.
 - **Moving to zones from an older board.** A board saved before zones keeps only its two most recently active agents, in two side-by-side zones. Every other window is minimized: taken off the board only, never completed, stopped or deleted. A board that was never used starts with the two most recently active chats overall (an empty zone for each one missing).
-- **Adding a zone.** Add-zone strips run along the board's right and bottom edges in a 14px gutter, one beside each zone touching that edge and as long as that zone's side, so the whole stretch is clickable. At rest each shows only a faint hairline; hovering fills it in the accent tint and shows its plus. Hovering one also shows a dotted preview of the new zone. Clicking adds an empty zone that fits that zone's row (right edge) or column (bottom edge), and the row or column is evened out. A short strip at the end of the edge, with a span icon and shown only when it would come out differently, adds a zone spanning the board's full height or width; Shift-clicking a row plus does the same. The 8×8 ceiling still applies.
+- **Adding a zone.** One plus sits on the right, in line with the zone headers. Hovering it (or focusing it by keyboard) reflows existing zones to preview a new full-height column on the right. Leaving or blurring cancels the preview without saving a layout change. Clicking commits that same layout and adds an empty, active zone; drag its header to place it elsewhere. There are no bottom plus strips, per-zone edge strips, end-span buttons or Shift-click add variants. The existing 8×8 layout ceiling still applies. Existing drag placement and Shift-to-span behaviour are unchanged.
 - **The active zone.** Clicking a zone, or anything in it, makes it the active zone: the selection colour plus a heavier (2px) outline; an empty active zone gets a heavier dotted border. Selecting an agent (clicking its window, Ctrl+Tab, Ctrl+1…9) makes its zone active.
 - **Changing a zone's agent.** Clicking an agent (or terminal) in the agents panel that is not on the board puts it in the active zone. Clicking one already on the board only switches to it: its zone becomes the active one and nothing on the board moves (changed 2026-11-01; before, it traded places with what the active zone held). Opening an agent any other way (the toolbar, a new agent, a sub-agent from its parent's rail, another tab asking to show it) follows the same rule. Dragging an agent onto a zone still puts it there, and one already in another zone trades places, so an agent is never on the board twice.
 - **Dragging an agent in.** An agent row dragged out of the panel becomes a chip that looks like the row and follows the pointer. The zone under it lights up. Dropped on a zone, the chip flies into it and grows to the window's size, then the zone takes the agent and the chip fades as the window appears. Dropped anywhere else, nothing changes. With reduced motion the zone simply takes the agent.
@@ -38,4 +42,4 @@ Focused view, Fixed grid's slots (which now hold zones, empty ones dotted), the 
 
 ## Not done
 
-Renaming zones, reopening the intro, and keyboard moves of zones are not built.
+Reopening the intro and keyboard moves of zones are not built. Hidden isolated Electron verifies header plus alignment, one add control, reflow on hover, and a full-height created column matching its preview; existing drag/drop unit tests pass. Corrected fresh-profile screenshots and hover GIF exist; actual pixel/motion inspection of this refresh remains pending because image tools are intermittent.

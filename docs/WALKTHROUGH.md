@@ -275,6 +275,10 @@ archives, or a photo for a text-only model) still appear in the strip above the
 message box, marked **name only**, so nothing disappears silently. Videos are
 capped at 40 MB in the message; larger ones can still be attached as files.
 
+### Code in your draft
+
+In the desktop and Local Web UI message box, multiline code can use a single backtick on a line of its own before and after the code, or the usual triple-backtick fences. The editor highlights code without changing its source: delimiters, whitespace and line endings stay in your draft and the message you send. Inline backticks still work as before. Highlighting never runs code or treats it as HTML. This does not change Markdown rendering in replies.
+
 ### Diagrams, tables and code in replies
 
 Replies render Markdown: tables, code blocks with a copy button, images, and
@@ -314,7 +318,7 @@ The context-window gauge is a ring beside the count (`125k / 200k`): green below
 
 The chat's **effort** sits beside the model as a small dial, one notch per level the model takes. Click it for a larger dial and a button per level, or step it with the arrow keys.
 
-**Simple and Expert.** The switch at the top left of a chat, beside its title, picks between them, as on the phone. Simple shows the model, effort and context. Expert adds a strip of dials under the title for CPU, memory, each GPU and VRAM (with temperatures where the machine reports them, and only the monitors switched on in Settings) and how many models the Model Server holds. Click the strip for larger dials and the loaded models, each with where it runs, its context and memory, and a jump to its settings. The choice is kept on this computer for every chat.
+**Simple and Detailed.** The switch at the top left of a chat, beside its title, picks between them, as on the phone. Simple shows the model, effort and context. Detailed adds a strip of dials under the title for CPU, memory, each GPU and VRAM (with temperatures where the machine reports them, and only the monitors switched on in Settings) and how many models the Model Server holds. Click the strip for larger dials and the loaded models, each with where it runs, its context and memory, and a jump to its settings. The choice is kept on this computer for every chat.
 
 In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices. Where your machine reports them, CPU, Memory and each GPU row also show a temperature at the right of the label, orange from 80°C and red from 90°C. NVIDIA cards report theirs through their driver; Linux reads its hardware sensors; on Windows the CPU reading comes from the ACPI thermal zone, which many desktops do not publish, so it can be missing there.
 

@@ -5,7 +5,7 @@ import { ChatIcon, CodeIcon, FolderIcon, GlobeIcon, PlusIcon } from '../icons.js
 
 /*
  * Settings > Simple mode: per control, Show (both modes, when it applies),
- * Expert only, or Hide; a monitor offers When running (its default), Always or
+ * Detailed only, or Hide; a monitor offers When running (its default), Always or
  * Hide. Each area is drawn beside its switches, and a control the previewed
  * mode leaves out keeps a dashed outline where it would be.
  */
@@ -14,7 +14,7 @@ import { ChatIcon, CodeIcon, FolderIcon, GlobeIcon, PlusIcon } from '../icons.js
 function choiceLabel(item: SimpleItem, v: SimpleVisibility): string {
   if (v === 'auto') return 'When running';
   if (v === 'show') return item.default === 'auto' ? 'Always' : 'Show';
-  return v === 'expert' ? 'Expert only' : 'Hide';
+  return v === 'expert' ? 'Detailed only' : 'Hide';
 }
 
 /** The drawings show a chat that has changes and a pull request, with no local model running. */
@@ -74,7 +74,7 @@ const PREVIEWS: Record<string, () => React.JSX.Element> = {
     <div className="sm-frame"><div className="sm-row"><M>Workflows</M><M id="ci">CI runners</M></div><div className="sm-lines"><i /><i style={{ width: '70%' }} /></div></div>
   ),
   Models: () => (
-    <div className="sm-frame"><div className="sm-row"><M>Qwen3 8B · Load</M><M id="engine">Expert load flags</M></div><div className="sm-row"><M id="engine" wide>Model server settings</M></div></div>
+    <div className="sm-frame"><div className="sm-row"><M>Qwen3 8B · Load</M><M id="engine">Detailed load flags</M></div><div className="sm-row"><M id="engine" wide>Model server settings</M></div></div>
   ),
   Settings: () => (
     <div className="sm-frame"><div className="sm-row"><M>General</M><M>Style</M><M>Agents</M><M>Safety</M><M id="set-tools">Tools</M></div></div>
@@ -98,7 +98,7 @@ export function SimpleModeSettings() {
           <h3 className="font-semibold">What Simple shows</h3>
           <p className="mt-1 max-w-prose text-xs text-ink-soft">
             Simple is a cleaner, more focused view, and details show only when they matter. Everything still works.{' '}
-            <b>Show</b> puts a control in both modes whenever it applies, <b>Expert only</b> keeps it for Expert, and <b>Hide</b> puts it away in both.{' '}
+            <b>Show</b> puts a control in both modes whenever it applies, <b>Detailed only</b> keeps it for Detailed, and <b>Hide</b> puts it away in both.{' '}
             Monitors wait for a local model to run: choose <b>Always</b> to pin them on.
           </p>
           <p className="mt-1 text-xs text-ink-faint">{hiddenInSimple} of {desktop.length} controls are out of sight in Simple. Kept on this computer.</p>
@@ -107,7 +107,7 @@ export function SimpleModeSettings() {
           <span className="text-2xs text-ink-faint">Preview</span>
           <div className="mode-seg" role="radiogroup" aria-label="Preview mode">
             {([false, true] as const).map((on) => (
-              <button key={String(on)} type="button" role="radio" aria-checked={previewExpert === on} className={previewExpert === on ? 'on' : ''} onClick={() => setPreviewExpert(on)} aria-label={on ? 'Preview Expert' : 'Preview Simple'} title={on ? 'Preview Expert' : 'Preview Simple'}>
+              <button key={String(on)} type="button" role="radio" aria-checked={previewExpert === on} className={previewExpert === on ? 'on' : ''} onClick={() => setPreviewExpert(on)} aria-label={on ? 'Preview Detailed' : 'Preview Simple'} title={on ? 'Preview Detailed' : 'Preview Simple'}>
                 {on ? <CodeIcon className="h-3.5 w-3.5" /> : <ChatIcon className="h-3.5 w-3.5" />}
               </button>
             ))}
@@ -123,7 +123,7 @@ export function SimpleModeSettings() {
               <div className="min-w-0">
                 <h4 className="sm-area-title">{area}</h4>
                 {Preview && <Preview />}
-                <p className="mt-1.5 text-2xs text-ink-faint">{previewExpert ? 'In Expert.' : 'In Simple.'} Dashed controls are out of sight.</p>
+                <p className="mt-1.5 text-2xs text-ink-faint">{previewExpert ? 'In Detailed.' : 'In Simple.'} Dashed controls are out of sight.</p>
               </div>
               <ul className="min-w-0" onMouseLeave={() => setHot(null)}>
                 {items.map((item) => {

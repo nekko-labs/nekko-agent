@@ -60,15 +60,15 @@ export function CommandPalette() {
       go('settings', 'Go to Settings'),
       { id: 'toggle-context', label: 'Toggle context panel', run: () => toggleContextPanel() },
       { id: 'feedback', label: 'Send feedback', hint: 'Help', run: openFeedback },
-      { id: 'mode', label: expert ? 'Switch to Simple' : 'Switch to Expert', hint: expert ? 'Everyday controls' : 'Every control', run: () => setExpert(!expert) },
+      { id: 'mode', label: expert ? 'Switch to Simple' : 'Switch to Detailed', hint: expert ? 'Everyday controls' : 'Every control', run: () => setExpert(!expert) },
       { id: 'simple-settings', label: 'Choose what Simple shows', hint: 'Settings', run: () => openSettingsGroup('simple') },
-      // Controls out of sight in this mode stay findable: Expert-only ones
-      // switch to Expert, the rest open the setting that decides. One that
+      // Controls out of sight in this mode stay findable: Detailed-only ones
+      // switch to Detailed, the rest open the setting that decides. One that
       // only waits for something to show (a change, a PR) is not out of sight.
       ...SIMPLE_ITEMS.filter((i) => i.platforms.includes('desktop') && !simpleShown(i.id, expert, choices, { localModel: localLoaded, changes: true, pr: true })).map((i): Command => {
         const v = simpleVisibility(i.id, choices);
         return v === 'expert'
-          ? { id: `simple-${i.id}`, label: i.label, hint: 'Shown in Expert', run: () => setExpert(true) }
+          ? { id: `simple-${i.id}`, label: i.label, hint: 'Shown in Detailed', run: () => setExpert(true) }
           : { id: `simple-${i.id}`, label: i.label, hint: v === 'hide' ? 'Hidden in Settings' : 'Shows when relevant', run: () => openSettingsGroup('simple') };
       }),
       // Only when there is a daemon to reach: an entry that can only fail is

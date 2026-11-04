@@ -4118,6 +4118,14 @@ main:has(> .settings-panel), main:has(> .settings-destination), main:has(> .mode
   .gf-icon > svg { transition: none; }
 }
 
+/* Plan ripple follows the supplied SVG timing; no motion in reduced-motion mode. */
+.plan-working { display: grid; place-items: center; color: var(--accent); }
+.plan-working-still { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .plan-working-motion { display: none; }
+  .plan-working-still { display: block; }
+}
+
 /* File editor syntax colours. Each hue is mixed with the theme's ink, so the
    same rule reads on light, dark and every preset without a per-theme table. */
 .code-paint { color: var(--ink); }
