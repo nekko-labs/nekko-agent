@@ -513,7 +513,7 @@ struct PaneColumn: View {
         case .chats:
             ChatsView(path: pathBinding, highlighted: host.layout.other(id).content.chatId)
         case .chat(let chatId):
-            ChatView(sessionId: chatId)
+            ChatScreen(sessionId: chatId)
         case .newChat:
             NewChatView(path: pathBinding, opened: { chatId in openChat(chatId) })
         case .monitors:
