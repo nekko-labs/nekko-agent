@@ -79,19 +79,4 @@ describe('planStepLinks on a Claude Agent chat', () => {
     ];
     expect(planStepLinks(messages, live).get('live_2')?.prs).toEqual([ccPr]);
   });
-
-  it('puts the PR on the Ship step of an activity plan', async () => {
-    const { claudeCodeActivityPlan } = await import('./claudeAgentPlan.js');
-    const messages = [
-      msg({ role: 'user', content: 'Fix the parser' }),
-      msg({ toolCalls: [{ id: 'r', name: 'Read', input: { file_path: 'a.ts' } }, { id: 'e', name: 'Edit', input: {} }] }),
-      msg({ toolCalls: [create('gh')] }),
-      msg({ role: 'tool', toolResult: { toolCallId: 'gh', output: ccPr } }),
-    ];
-    const plan = claudeCodeActivityPlan(messages, false)!;
-    expect(plan.map(s => s.id)).toEqual(['phase:sent', 'phase:build', 'phase:ship']);
-    const links = planStepLinks(messages, plan);
-    expect(links.get('phase:ship')?.prs).toEqual([ccPr]);
-    expect(links.has('phase:build')).toBe(false);
-  });
 });

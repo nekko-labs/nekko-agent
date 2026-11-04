@@ -65,13 +65,13 @@ app.whenReady().then(async () => {
     const opened = id => `(document.querySelector('[data-plan-step-id="${id}"] [data-plan-more]')?.getBoundingClientRect().height ?? 0) > 10`;
     await check('finished step 1 starts closed', `!(${opened('step_1')})`);
     await check('step 2, the last with a PR, starts open', opened('step_2'));
-    await check('the active step starts open', opened('step_3'));
+    await check('the active step starts open', opened('verify:all'));
     await check('no card border on a step', `[...document.querySelectorAll('.plan-sheet-step')].every(e => getComputedStyle(e).borderTopWidth === '0px')`);
     await check('the kind word is bold', `document.querySelectorAll('.plan-sheet-steps .plan-sheet-kind').length === 4 && [...document.querySelectorAll('.plan-sheet-steps .plan-sheet-kind')].every(e => +getComputedStyle(e).fontWeight >= 600)`);
     await check('PR chip on step 2', `!!document.querySelector('[data-plan-step-id="step_2"] [data-plan-chip="pr"]')`);
     await check('verification panel is gone', `!document.querySelector('[data-verification-checklist]')`);
-    await check('verification chips on steps 1 and 3', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="verify"]') && !!document.querySelector('[data-plan-step-id="step_3"] [data-plan-chip="verify"]')`);
-    await check('CI chips on the last verification step', `document.querySelectorAll('[data-plan-step-id="step_3"] [data-plan-chip="ci"]').length === 3 && document.querySelectorAll('[data-plan-chip="ci"]').length === 3`);
+    await check('one Verify step holds every check as a sub-bullet', `document.querySelectorAll('[data-plan-step-id="verify:all"] [data-plan-substep] [data-plan-chip="verify"]').length === 2 && document.querySelectorAll('[data-plan-chip="verify"]').length === 2 && !document.querySelector('[data-plan-step-id="step_3"]')`);
+    await check('CI chips on the Verify step', `document.querySelectorAll('[data-plan-step-id="verify:all"] [data-plan-chip="ci"]').length === 3 && document.querySelectorAll('[data-plan-chip="ci"]').length === 3`);
     await check('design link on step 1', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="link"]')`);
     const hover = await run(`(() => { const r = document.querySelector('[data-plan-step-id="step_3"]')?.getBoundingClientRect(); return r ? { x: Math.round(r.x + 40), y: Math.round(r.y + 8) } : { x: 1, y: 1 }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...hover });

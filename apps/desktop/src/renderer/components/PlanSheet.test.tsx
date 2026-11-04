@@ -26,6 +26,21 @@ describe('verification chips', () => {
     expect(html).toContain('Waiting for pairing');
     expect(html).toContain('not inferred from tool results');
   });
+  it('gathers every Verify step and report under one Verify step, as sub-bullets', () => {
+    const kinded = (id: string, kind: PlanStep['kind'], extra = {}) => ({ id, title: id, kind, status: 'done', createdAt: now, updatedAt: now, ...extra }) as PlanStep;
+    const html = render([
+      kinded('Fix the parser', 'build', { verification: { status: 'passed', device: 'Windows' } }),
+      kinded('Run the tests', 'verify'),
+      kinded('Screenshot it', 'verify', { status: 'active' }),
+      kinded('Open the PR', 'ship', { status: 'pending' }),
+    ]);
+    expect(html.match(/data-plan-kind="verify"/g)).toHaveLength(1);
+    expect(html.match(/data-plan-substep=/g)).toHaveLength(3);
+    // The build step's report moved under Verify: its own row has no chip.
+    const build = html.slice(html.indexOf('data-plan-step-id="Fix the parser"'), html.indexOf('data-plan-step-id="verify:all"'));
+    expect(chips(build, 'verify')).toBe(0);
+    expect(html).toContain('Verified on Windows');
+  });
   it('marks waiting reports stale and leaves finished ones unstale', () => {
     vi.spyOn(Date, 'now').mockReturnValue(now + 180_000);
     for (const status of ['passed', 'failed', 'blocked', 'unknown']) expect(render([step('t', status)])).not.toContain(' · Stale');
@@ -41,9 +56,9 @@ describe('CI chips', () => {
   const pr = { url: 'https://github.com/o/r/pull/9', number: 9, state: 'open', checks: 'failing', checkProgress: { total: 4, completed: 2, pending: 1, failing: 1, unknown: 0, items: [
     { name: 'build', state: 'completed', link: null }, { name: 'gate', state: 'pending', link: null }, { name: 'lint', state: 'completed', link: null }, { name: 'e2e', state: 'failing', link: null },
   ] } } as unknown as PrInfo;
-  it('go under the last verification step in one row: failing first, passing folded into a count', () => {
+  it('go under the Verify step in one row: failing first, passing folded into a count', () => {
     const html = render([step('first', 'passed'), { id: 'work', title: 'work', status: 'active', createdAt: now, updatedAt: now }, step('check', 'active')], [pr]);
-    const row = html.slice(html.indexOf('data-plan-step-id="check"'));
+    const row = html.slice(html.indexOf('data-plan-step-id="verify:all"'));
     expect(chips(row, 'ci')).toBe(3);
     expect(row.indexOf('e2e')).toBeLessThan(row.indexOf('gate'));
     expect(row).toContain('2 passed');

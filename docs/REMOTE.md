@@ -84,9 +84,18 @@ cannot connect to an older computer.
 > their own folder choice. Forgetting a computer removes its remembered folder.
 >
 > On the iPhone, **New chat** also picks the **Effort** (the levels the chosen model takes, or the
-> computer's default) and, when the model is a local one (llama.cpp, Ollama, LM Studio, vLLM),
-> **Run on**: which paired computer the chat and its model run on. Choosing another computer
-> connects to it and shows its models and folders; what you typed stays.
+> computer's default) and **Run on**: which paired computer (or Nekko Cloud machine) the chat
+> runs on, offered whenever there is more than one, each with its connection state. It starts on
+> the computer the chat list was showing, or the one used last when the list shows every
+> computer. Choosing another computer shows its models and folders at once, since every paired
+> computer is already connected; what you typed stays.
+>
+> **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
+> together, each row naming its computer, and the pill above the list filters it to one
+> computer (**Show chats from**). The phone stays connected to every paired computer and
+> reconnects to each by itself, so there is no Connect button: opening a chat on any computer
+> works straight away. A computer that can't be reached gets a line above the list with
+> **Reconnect**, which tries again at once (Computers and the computer's page offer it too).
 >
 > **Simple and Expert** (iPhone and Android): the switch at the top left of a chat picks the mode, and the
 > phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
@@ -114,8 +123,8 @@ cannot connect to an older computer.
 > it and a live countdown (*≤ 42 min left*, *overdue*, *triggered*); the wake-up itself is a
 > *Watch triggered* row, not a message from you. Only your own bubbles and an approval or question
 > card keep an outline. The chat list is flat too: project groups with their active and done
-> counts, a glyph beside each chat for what it is doing, and the computer as a pill above the
-> list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
+> counts, a glyph beside each chat for what it is doing, and the computers in view as a pill above
+> the list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
 > and the raised hand.
 >
 > Replies and your own messages on the iPhone render Markdown as the desktop does: nested lists

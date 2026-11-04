@@ -98,13 +98,13 @@ app.whenReady().then(async () => {
     const { width, height } = report.frameSize;
     if (width === crop.width) writeGif(path.join(out, 'activity-move.gif'), frames, width, height, Math.max(2, Math.round(report.frameMs / 10)));
     else {
-      // A HiDPI capture is 2x: downsample to the crop so the GIF stays small.
-      const half = frames.map(f => { const o = Buffer.alloc(crop.width * crop.height * 4); for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) f.copy(o, (y * crop.width + x) * 4, ((y * 2) * width + x * 2) * 4, ((y * 2) * width + x * 2) * 4 + 4); return o; });
+      // Downsample at the actual display scale, including fractional Windows scaling.
+      const half = frames.map(f => { const o = Buffer.alloc(crop.width * crop.height * 4); for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) { const source = (Math.floor(y * height / crop.height) * width + Math.floor(x * width / crop.width)) * 4; f.copy(o, (y * crop.width + x) * 4, source, source + 4); } return o; });
       writeGif(path.join(out, 'activity-move.gif'), half, crop.width, crop.height, Math.max(2, Math.round(report.frameMs / 10)));
     }
     report.hidden = !win.isVisible();
   } catch (e) { report.errors.push(String(e && e.stack || e)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
-  app.exit(report.captures.length ? 0 : 1);
+  app.exit(report.hidden && report.captures.length && !report.errors.length ? 0 : 1);
 });
