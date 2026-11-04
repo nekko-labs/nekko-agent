@@ -205,9 +205,10 @@ the board just switches to its zone. Each zone has a colour, shown as a small
 square before its name and as a thin bar on the cards of the agents it holds. The thin plus buttons along the
 board's right and bottom edges add a zone that fits that row or column; the
 plus at the end of an edge, or Shift-click, spans the full height or width.
-Drag a zone by its name bar to move it (hold Shift at a board edge to span the
-whole side) and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
+Press a zone's name bar and move the pointer to start dragging it; a click without movement only selects the zone and does not lift it. Hold Shift at a board edge to span the
+whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
 an agent leaves its zone in place, dotted, until you fill it.
+The composer's borderless action switches from Send to a Stop icon while the agent runs with an empty draft. Type a follow-up and it becomes Send again, queuing the message without interrupting the agent. Clear the draft to get Stop back. To schedule work, open **+ > Automate**; Automate no longer takes up a separate place on the composer.
 In Dynamic View (including Fixed grid), a window also minimizes automatically
 when its agent finishes a successful reply. Errors and requests for input stay
 visible, and Focused View keeps finished replies open. Select the chat in the

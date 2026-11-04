@@ -61,6 +61,12 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'a' })));
     const { applyEvent } = await import('../src/renderer/liveRuns');
     (window as any).layoutFixture.emit = (event: any) => { applyEvent({ ...event, sessionId: 'a' }); emitAgent({ ...event, sessionId: 'a' }); };
+  }, showComposer: async (surface: 'full' | 'composer' | 'window' = 'composer') => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'a', running: new Set(['a']) } as any);
+    bridge.abortChat = async (id: string) => { (window as any).layoutFixture.lastAbort = id; };
+    bridge.queuePrompt = async (id: string, prompt: any) => { (window as any).layoutFixture.lastQueue = { sessionId: id, prompt }; return records.find(s => s.id === id); };
+    root.render(React.createElement('div', { style: { height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 24 } }, React.createElement(ChatPane, { key: surface, sessionId: 'a', surface: surface === 'window' ? 'full' : surface, commandCenter: surface === 'window', header: surface === 'composer' ? React.createElement('span', null, 'Persist quota history') : undefined })));
   }, showGreeting: async () => {
 
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
