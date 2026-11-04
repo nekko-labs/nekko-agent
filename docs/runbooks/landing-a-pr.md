@@ -59,7 +59,12 @@ The queue's own setting squashes. The auto-merge workflow also runs on every pus
 so a fix to a red PR re-queues itself. Every 15 minutes `queue-sweeper.yml`
 re-queues a ready PR whose `gate` is green but which is not in the queue (once per
 head commit, so a queue ejection by a flake heals and a real one waits for your
-fix), and re-runs a red `gate`'s failed jobs once. To keep a ready PR out of the
+fix), and re-runs a red `gate`'s failed jobs once. `queue-repair.yml` picks up
+what is left: it merges `main` into a conflicting PR (settling conflicts in the
+append-only files by rule), and hands a code conflict, a `gate` still red after
+the re-run, or a second ejection to Codex with a `@codex` comment. If Codex is not
+set up or does not push a fix within an hour, the PR gets the `needs-human` label;
+your next push clears it. To keep a ready PR out of the
 queue, mark it draft or label it `hold`. If it is already queued, either one also
 fails the group's `gate`, so the queue ejects it rather than merging it. If you need it
 queued sooner, `gh pr merge --auto <n>` once `gate` is green still works.
@@ -118,7 +123,10 @@ it like any red check below, push the fix, and it re-queues.
   merge"). Once its `gate` is green, run `gh stack merge <pr> --yes` yourself. Auto-merge armed with a merge method also sits
   here forever; re-arm with plain `gh pr merge --auto`.
 - **No PR CI after a push** means a conflict with `main` (`mergeable_state:
-  dirty`): GitHub computes no merge ref and triggers nothing. Merge `main` in.
+  dirty`): GitHub computes no merge ref and triggers nothing. Merge `main` in,
+  or let `queue-repair.yml` do it within 15 minutes.
+- **A `@codex` comment you did not write** is `queue-repair.yml` asking Codex to
+  fix the PR. Pushing your own fix first is fine: a new commit supersedes it.
 - **Typecheck fails on a new import after merging `main`**: your worktree's
   `node_modules` is stale. Run `npm ci --ignore-scripts` before believing it.
 
