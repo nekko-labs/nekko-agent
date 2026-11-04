@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_AGENT_PANEL_VIEW, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, isDefaultView,
+  DEFAULT_AGENT_PANEL_VIEW, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, isDefaultView,
   parseAgentPanelView, statusGroupOf, withSort, type SortableCard,
 } from './agentPanelView.js';
 
@@ -89,6 +89,19 @@ describe('agent panel view', () => {
     expect(statusGroupOf({ exchangeCount: 2 }, 'working')).toBe('status:building');
     expect(statusGroupOf(null, 'working')).toBe('status:building');
     expect(statusGroupOf({ exchangeCount: 2, phase: 'exploring' as never }, 'working')).toBe('status:building');
+  });
+
+  it('shows a phase group as live only while a chat in it works', () => {
+    expect(groupActivityOf('status:building', ['error', 'working'])).toBe('building');
+    expect(groupActivityOf('status:verifying', ['working'])).toBe('verifying');
+    expect(groupActivityOf('status:building', ['error'])).toBeNull();
+    expect(groupActivityOf('status:verifying', [])).toBeNull();
+  });
+
+  it('shows Watching as live while it holds a chat, and no other group at all', () => {
+    expect(groupActivityOf('status:watching', [undefined])).toBe('watching');
+    expect(groupActivityOf('status:watching', [])).toBeNull();
+    for (const key of ['status:input', 'status:draft', 'status:done', 'date:today']) expect(groupActivityOf(key, ['working'])).toBeNull();
   });
 
   it('files a time under calendar-day date groups', () => {
