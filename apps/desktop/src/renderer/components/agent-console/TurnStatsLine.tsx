@@ -3,7 +3,7 @@ import { formatRate, turnTokensPerSecond } from '@nekko-agent/shared';
 import { fmtTok } from './transcript.js';
 import { useShown } from '../../simpleMode.js';
 import { CheckIcon } from '../../icons.js';
-import { ClaudeCodeResponseMark, useClaudeCodeReply } from './ClaudeCodeResponse.js';
+
 
 const EFFORT_LABEL: Record<NonNullable<TurnStats['effort']>, string> = {
   low: 'Low', medium: 'Medium', normal: 'Normal', high: 'High', xhigh: 'Extra high', max: 'Max',
@@ -70,32 +70,20 @@ export function turnStatsTitle(stats: TurnStats): string {
  * right-aligned). Without a Done the stats keep their own line.
  */
 export function DoneRow({ done, stats, names }: { done: boolean; stats?: TurnStats; names?: TurnStatsNames }) {
-  // A Claude Agent reply ends with "Claude Code's response" (ClaudeCodeResponse.tsx).
-  const claudeCode = useClaudeCodeReply(stats);
   if (!done) return stats ? <ReplyStatsRow stats={stats} names={names} /> : null;
   return (
     <div className="mt-1 flex flex-wrap items-center gap-x-8 gap-y-0.5 text-2xs text-ink-faint" data-done-row>
       <span className="flex shrink-0 items-center gap-2">
         <span className="flex items-center gap-1"><CheckIcon className="h-3 w-3" />Done.</span>
-        {claudeCode && <ClaudeCodeResponseMark />}
       </span>
       {stats && <TurnStatsLine stats={stats} names={names} inline />}
     </div>
   );
 }
 
-/**
- * A reply's stats on their own line (a reply that ended on tool calls, or was
- * stopped), led by the Claude Code mark when Claude Code wrote it.
- */
+/** Measurements only: speaker identity belongs above the reply, never in its footer. */
 export function ReplyStatsRow({ stats, names }: { stats: TurnStats; names?: TurnStatsNames }) {
-  if (!useClaudeCodeReply(stats)) return <TurnStatsLine stats={stats} names={names} />;
-  return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-8 gap-y-0.5 text-2xs text-ink-faint">
-      <ClaudeCodeResponseMark />
-      <TurnStatsLine stats={stats} names={names} inline />
-    </div>
-  );
+  return <TurnStatsLine stats={stats} names={names} />;
 }
 
 /**

@@ -24,20 +24,16 @@ export function useClaudeCodeReply(stats: TurnStats | undefined): boolean {
   return useStore((s) => isClaudeCodeReply(stats, s.providers, s.computerCatalogs));
 }
 
-export const CLAUDE_CODE_RESPONSE_LABEL = "Claude Code's response";
-
-/**
- * The quiet mark at the end of a Claude Agent reply: the text above is Claude
- * Code's own output, which Nekko ran on the user's computer and shows as it came.
- */
-export function ClaudeCodeResponseMark() {
+/** Speaker identity above Claude Code's own output, independent of the stats footer. */
+export function ClaudeCodeSpeaker() {
   return (
-    <span
-      className="inline-flex shrink-0 items-center rounded-full border border-line px-1.5 py-px text-2xs text-ink-faint"
+    <div
+      className="mb-2 flex items-center gap-2 text-xs font-medium text-ink-muted"
       title="Written by your own Claude Code, which Nekko Agent runs on your computer. The reply is shown as Claude Code wrote it."
       data-claude-code-response
     >
-      {CLAUDE_CODE_RESPONSE_LABEL}
-    </span>
+      <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-2xs font-semibold text-ink-muted">CC</span>
+      <span>Claude Code</span>
+    </div>
   );
 }

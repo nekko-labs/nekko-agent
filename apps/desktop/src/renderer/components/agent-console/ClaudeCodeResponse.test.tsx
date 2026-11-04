@@ -25,7 +25,7 @@ const MARK = 'data-claude-code-response';
 
 beforeEach(() => { useStore.setState({ providers, computerCatalogs: {} }); });
 
-describe("Claude Code's response mark", () => {
+describe('Claude Code speaker header', () => {
   it('reads the provider kind of the turn that wrote the reply', () => {
     expect(isClaudeCodeReply(stats('cc'), providers)).toBe(true);
     expect(isClaudeCodeReply(stats('claude-api'), providers)).toBe(false);
@@ -38,12 +38,12 @@ describe("Claude Code's response mark", () => {
     expect(isClaudeCodeReply(stats('cc2'), providers, catalogs)).toBe(true);
   });
 
-  it('ends a settled Claude Code reply, beside Done', () => {
+  it('names the speaker above a settled reply, outside the Done footer', () => {
     for (const chronological of [true, false]) {
       const html = renderToStaticMarkup(<MessageBubble message={reply('cc')} voice="reply" chronological={chronological} />);
-      expect(html).toContain("Claude Code&#x27;s response");
-      const row = html.slice(html.indexOf('data-done-row'));
-      expect(row.indexOf('Done.')).toBeLessThan(row.indexOf(MARK));
+      expect(html).toContain('Claude Code</span>');
+      expect(html.indexOf(MARK)).toBeLessThan(html.indexOf('Fixed the build.'));
+      expect(html.slice(html.indexOf('data-done-row'))).not.toContain(MARK);
       expect(html.match(new RegExp(MARK, 'g'))).toHaveLength(1);
     }
   });
@@ -57,8 +57,8 @@ describe("Claude Code's response mark", () => {
     expect(renderToStaticMarkup(<MessageBubble message={{ id: 'e1', role: 'assistant', content: 'Claude Code stopped.', createdAt: 1 }} chronological />)).not.toContain(MARK);
   });
 
-  it('leads the stats row of a reply that ended on tool calls', () => {
-    expect(renderToStaticMarkup(<ReplyStatsRow stats={stats('cc')} />)).toContain(MARK);
+  it('does not misidentify a stats-only row as a speaker', () => {
+    expect(renderToStaticMarkup(<ReplyStatsRow stats={stats('cc')} />)).not.toContain(MARK);
     expect(renderToStaticMarkup(<ReplyStatsRow stats={stats('claude-api')} />)).not.toContain(MARK);
   });
 });

@@ -1,5 +1,5 @@
 // Synthetic bridge only. No host, provider requests, credentials or external I/O.
-// A Claude Agent chat: Claude Code's replies end with "Claude Code's response";
+// A Claude Agent chat: Claude Code's replies have a speaker header;
 // a turn routed to a local model in the same chat does not.
 // Run: NEKKO_FIXTURE=claude-code-response-fixture.tsx NEKKO_SANDBOX=claude-code-response-sandbox.cjs node chat-search-integration.cjs
 import React from 'react';
@@ -30,7 +30,7 @@ const messages: ChatMessage[] = [
 ];
 
 createRoot(document.getElementById('root')!).render(
-  <div className="flex min-h-screen flex-col gap-5 bg-surface p-6 text-ink" style={{ width: 680 }} data-transcript>
+  <div className="flex min-h-screen flex-col gap-5 bg-surface p-6 text-ink" style={{ width: '100%', maxWidth: 680 }} data-transcript>
     {messages.map((m) => <MessageBubble key={m.id} message={m} voice={m.role === 'assistant' ? 'reply' : undefined} chronological />)}
   </div>,
 );
