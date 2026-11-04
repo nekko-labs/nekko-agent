@@ -154,7 +154,7 @@ import { BoltIcon, ChatIcon, CloseIcon, ExternalIcon, LayoutIcon, PlusIcon, Term
 import { readCompanionWidth, saveCompanionWidth, shareFromPointer } from './companionWidth.js';
 import './commandWallLayouts.css';
 import { PaneVisibleContext } from '../paneVisibility.js';
-import { Shown, useShown } from './ModeViews.js';
+import { Shown } from './ModeViews.js';
 
 /** Length of the span button at the end of each add-zone rail. */
 const RAIL_SPAN = 24;
@@ -329,7 +329,6 @@ export function CommandWall({
   onAddWindow: () => void;
   addContent?: React.ReactNode;
 }) {
-  const terminalShown = useShown('terminal');
   const workspaces = useStore((s) => s.workspaces);
   const computers = useStore((s) => s.computers);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -865,7 +864,7 @@ export function CommandWall({
           <p className="wall-zone-empty-title">Empty zone</p>
           <p>Drag in an agent chat or start a new one below.</p>
           <div className="wall-zone-create">
-            {CREATE_OPTIONS.filter(([kind]) => kind !== 'terminal' || terminalShown).map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind} aria-label={label} title={`${label} (${shortcut.label})`}
+            {CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind} aria-label={label} title={`${label} (${shortcut.label})`}
               onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image'); }}><PlusIcon className="wall-zone-plus h-3.5 w-3.5" />{icon}<span className="wall-zone-label">{label}</span><kbd className="kbd wall-zone-kbd">{shortcut.label}</kbd></button>)}
           </div>
         </div> : <>

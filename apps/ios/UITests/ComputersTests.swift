@@ -3,8 +3,8 @@ import XCTest
 @MainActor
 final class ComputersTests: XCTestCase {
     /// A paired computer can be renamed and forgotten from its page (a tap on
-    /// its row in Computers opens it, Edit holds both), and forgotten from the
-    /// computer menu on the chats screen.
+    /// its row in Computers opens it, Edit holds both). The computer menu on the
+    /// chats screen has nothing to connect: every paired computer stays connected.
     func testRenameAndForgetAComputer() {
         let app = XCUIApplication()
         app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
@@ -36,18 +36,15 @@ final class ComputersTests: XCTestCase {
             || app.staticTexts["This computer was forgotten"].exists
         XCTAssertTrue(gone, "Forget from the computer page removed the only computer")
 
-        // From the computer menu on the chats screen.
+        // The computer menu on the chats screen: no Connect, and forgetting stays on the Computers page.
         app.terminate()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES"]
         app.launch()
         pair(app)
         openMenu(app)
-        let computer = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "computer")).element(boundBy: 0)
-        XCTAssertTrue(computer.waitForExistence(timeout: 5))
-        XCTAssertTrue(computer.tapUntil { app.buttons["Forget…"].exists }, "the computer opens its submenu")
-        XCTAssertTrue(app.buttons["Forget…"].tapUntil { app.buttons.matching(NSPredicate(format: "label == %@", "Forget")).firstMatch.exists }, "the computer's submenu offers Forget")
-        confirmForget(app)
-        XCTAssertTrue(app.buttons["Pair with your computer"].waitForExistence(timeout: 10), "Forget from the menu removed the only computer")
+        XCTAssertTrue(app.buttons["Computers"].waitForExistence(timeout: 5), "the menu is open")
+        XCTAssertFalse(app.buttons["Connect"].exists, "nothing to connect: every paired computer stays connected")
+        XCTAssertFalse(app.buttons["Forget…"].exists, "forgetting is on the computer's page")
     }
 
     private func pair(_ app: XCUIApplication) {

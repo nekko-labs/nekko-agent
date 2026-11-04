@@ -1,11 +1,11 @@
 ---
-title: "Full-pane dot wave and pixel view reveal"
+title: "Full-pane dot wave and pixel skeletons"
 area: desktop
 ---
 
-# Full-pane dot wave and pixel view reveal
+# Full-pane dot wave and pixel skeletons
 
-[Implemented 2026-11-02; verified in the isolated hidden Electron fixture on Windows at 125% scaling. Packaged builds, macOS and Linux unverified.]
+[Dot wave implemented 2026-11-02; pixel skeletons implemented 2026-11-04. Verified in the isolated hidden Electron fixture on Windows at 125% scaling. Packaged builds, macOS and Linux unverified.]
 
 ## Empty-agent dot wave
 
@@ -18,12 +18,14 @@ Supersedes the bounded-texture paragraph of [Quiet empty-agent decoration](../br
 - The dot colour runs `from` to `to` across the pane and stays put while the wave moves through it.
 - It still stops while the app is unfocused or hidden, while the pane is hidden or scrolled out of view, and under reduced motion (where it holds one still frame). The Background animation switch still removes it.
 
-## Pixel view reveal
+## Pixel skeletons
 
-User intent: switching rail views (Agents, Artifacts, Models, Settings, ...) showed the new view's layout shifting as it settled. Cover that with a fast skeleton transition: a subtle colour aura, ASCII-art-style chunky pixels resolving into view.
+User intent: a loading placeholder should read as part of the same house style as the empty-agent wave (chunky ASCII-art pixels), not as a shimmering gradient row. The earlier page-level cover on rail-view switches was wrong on two counts: it treated a tab change as a page transition when the destinations load quickly, and it covered the whole main area when only specific panels are actually waiting for data.
 
-- On every rail view change, the main area is covered in the same frame the new view mounts, in 16px blocks of the page's paper colour with a faint radial glow of the theme accent.
-- After a 60ms hold, blocks clear from the centre outwards with per-block jitter (no visible ring). Each block steps down through four shades, like ASCII art's █ ▓ ▒ ░: solid, then a slightly inset block, then smaller accent-tinted blocks, then clear. Everything is clear 300ms after the switch.
-- The cover never takes input: clicks and keys reach the new view at once. Nothing is drawn while idle. Reduced motion skips it, and the first view at launch does not play it.
+- A rail-view switch no longer plays any full-pane cover. Each view mounts directly, and any panel that is still waiting for its data shows its own skeleton where that data will go.
+- The skeleton uses the same block language as the wave: 16px cells, four ASCII-art shades (█ ▓ ▒ ░), the fuller two in the page's paper colour and the lighter two tinted with the theme accent over a faint radial glow. Cells are weighted toward the fuller shades so the card reads as a filled surface.
+- On mount, the blocks dissolve in from clear over about 320ms, then stay still. Nothing animates while the skeleton is idle, so a wall of them stays cheap. When the data arrives, the caller swaps the skeleton for the real content.
+- Reduced motion skips the dissolve-in and paints the resting pattern at once. The skeleton fills its container (devicePixelRatio and resizes handled), so the caller controls the frame.
+- Used anywhere a shimmering gradient card used to sit: a remote photo that is loading, a model-placement plan being computed, a runtime-fit bar being measured.
 
-Acceptance: an empty agent in a 460px-wide pane shows dots top to bottom; dots are crisp at 125% scaling; the wave flows while focused and freezes on blur, hidden pane and reduced motion; a view switch is covered on its first frame and clear within 300ms. No settings, permissions, network access or stored data change.
+Acceptance: an empty agent in a 460px-wide pane shows dots top to bottom; dots are crisp at 125% scaling; the wave flows while focused and freezes on blur, hidden pane and reduced motion; a rail-view switch mounts the new view directly with no page cover; a panel that is still loading shows a pixel skeleton in its place that dissolves in under 320ms. No settings, permissions, network access or stored data change.

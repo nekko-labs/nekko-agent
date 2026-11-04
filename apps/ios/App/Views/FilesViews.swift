@@ -505,8 +505,9 @@ struct LogsView: View {
             ForEach(store.computers) { c in
                 Section {
                     if c.id == store.activeId { computerLogs } else {
+                        // Already connected: this makes it the active computer, whose logs are read.
                         Button { store.connect(c.id) } label: {
-                            Label("Connect to read its logs", systemImage: "bolt.horizontal").foregroundStyle(palette.accent)
+                            Label("Read its logs", systemImage: "doc.text.magnifyingglass").foregroundStyle(palette.accent)
                         }
                         .accessibilityIdentifier("logs.connect")
                     }

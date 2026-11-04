@@ -66,5 +66,25 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'd' } as any);
     root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'd', cleanStart: true })));
+  }, showSkeletons: async () => {
+    const { PixelSkeleton } = await import('../src/renderer/components/PixelSkeleton');
+    const cards = [
+      { label: 'Wide card', style: { width: 480, height: 180 } },
+      { label: 'Square card', style: { width: 180, height: 180 } },
+      { label: 'Row card', style: { width: 480, height: 60 } },
+      { label: 'Tall card', style: { width: 240, height: 320 } },
+    ];
+    root.render(React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 24, padding: 32, background: 'var(--paper)', minHeight: '100vh', color: 'var(--ink)' } },
+      cards.map(({ label, style }) => React.createElement('div', { key: label, style: { display: 'grid', gap: 8 } },
+        React.createElement('span', { style: { fontSize: 11, opacity: 0.6 } }, label),
+        React.createElement(PixelSkeleton, { style: { ...style, borderRadius: 12 }, label })))));
+  }, showPlusMenu: async () => {
+    const { CreateMenuRows } = await import('../src/renderer/components/CreateMenu');
+    // On the base branch CreateMenuRows read `terminal` to gate the Terminal row (Simple mode hid it);
+    // on this branch there is no such prop and all three rows always show. Passing `terminal: false` to
+    // whichever version loads keeps the comparison honest.
+    root.render(React.createElement('div', { style: { padding: 32, background: 'var(--paper)', minHeight: '100vh', color: 'var(--ink)' } },
+      React.createElement('div', { className: 'create-menu card p-1 shadow-(--shadow-float)', style: { width: 'max-content' } },
+        React.createElement(CreateMenuRows as any, { onCreate: () => {}, terminal: false }))));
   } };
 });
