@@ -95,24 +95,21 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
-### #1663 regression and fix: empty-agent wave raster cost (2026-11-04)
+### #1663 / #1686 Empty-agent wave: per-frame swell, then per-column colour (2026-11-04)
 Area: renderer
-Result: regression (#1663), then fixed in its follow-up (#1686), merge-queue confirmation pending
-Conditions: CI numbers are the `perf` job's speed contract (Local Web UI, headless Chromium, CI regression gate 33 ms for "Switch to a cold chat, frame painted") across every merge-queue and `main` CI run between 2026-11-03 15:28 and 2026-11-04 03:01 UTC, split by whether the run contained #1663 (`e2a7893e3`). The renderer microbenchmark ran in a hidden, non-focusable Electron 45 window on a Ryzen 9 9950X3D (Windows 11), one 1800×1100 canvas at 1.25 scale, Lilac colours, 200 frames per case after 10 warm-up frames, two rounds; "main thread" times the draw call alone, "with raster" adds a 1×1 `getImageData` to force the GPU work to finish.
-
-| CI: cold switch, frame painted (p95) | Without #1663 | With #1663 |
-|---|---|---|
-| Passing runs | 28.4-32.7 ms (12 runs) | 26.2-33.0 ms (17 runs) |
-| Runs failing this budget | 0 | 45, at 33.8-51.2 ms |
+Result: mixed (#1663 costs more raster per second than #1495; #1686 brings it below #1495), microbenchmark only
+Conditions: hidden, non-focusable Electron 45 window on a Ryzen 9 9950X3D (Windows 11), one 1800×1100 canvas at 1.25 scale, Lilac colours, 200 frames per case after 10 warm-up frames, two rounds. "Main thread" times the draw call alone; "with raster" adds a 1×1 `getImageData` so the GPU work finishes inside the timing.
 
 | Renderer, per frame (median, round 1 / 2) | Main thread | With raster | Frames/s | Raster per second |
 |---|---|---|---|---|
 | #1495 tile copy | 0 / 0 ms | 9.4 / 10.0 ms | ~5.3 | ~53 ms |
 | #1663 one `fillRect` per dot, full-canvas tint | 0.9 / 0.9 ms | 4.9 / 4.9 ms | 20 | ~98 ms |
 | Upscaled per-dot image, masked (rejected) | 0.4 / 0.4 ms | 9.6 / 10.8 ms | 20 | ~200 ms |
-| Follow-up: per-column colour, no tint pass | 0.8 / 0.8 ms | 1.6 / 1.6 ms | 15 | ~24 ms |
+| #1686 per-column colour, no tint pass | 0.8 / 0.8 ms | 1.6 / 1.6 ms | 15 | ~24 ms |
 
-Why: #1663 redrew every dot about 20 times a second and finished each frame with a full-canvas gradient tint; on CI's CPU-rasterised runners that work competed with the frame the cold-switch budget times, and the queue ejected #1680, #1686, #1695 and others on it. The follow-up paints each column in its slice of the gradient (no tint pass) and returns to Travis's original 15 frames a second, for about a quarter of #1663's raster work per second and less than #1495's. The masked variant halved main-thread time but doubled raster and was dropped. The empty-agent wave script's CPU samples showed no difference between #1495 and #1663 (an earlier version of this entry reported that as "no effect"); they evidently did not exercise the per-frame drawing in a hidden window, so that measurement could not see this regression. Still open: the follow-up's own CI `perf` result in the merge queue. Source: CI runs above, #1663, #1686.
+Why: #1663 redrew every dot 20 times a second and finished each frame with a full-canvas gradient tint; #1686 paints each column in its slice of the gradient (no tint pass) and returns to Travis's original 15 frames a second. The masked variant halved main-thread time but doubled raster and was dropped.
+
+Not caused by the wave: the merge-queue failures of "Switch to a cold chat, frame painted" on 2026-11-04 (45 queue runs at 33.8-51.2 ms against the 33 ms gate). The speed contract's seed uses the dark theme with no preset and only chats with messages, so no wave renders there, and two CI runs dispatched back to back at 2026-11-04 ~04:00 UTC both passed: `58983c0d5` (before #1662 and #1663) at p95 32.4 ms, and `main` at `2d2bf4117` (with them) at 33.1 then 32.0 ms. Splitting the queue runs by whether they contained #1663 had looked decisive, but every run without it was from the previous day: the split followed time, not code. The empty-agent wave script's CPU samples showed no difference between #1495 and #1663; they evidently did not exercise the per-frame drawing in a hidden window. Source: #1663, #1686, CI runs 41769575641 and 41769578921.
 
 ### Perf harness: warm pair on the board, sample end, tile read before the screenshot (2026-11-03)
 Area: perf harness
