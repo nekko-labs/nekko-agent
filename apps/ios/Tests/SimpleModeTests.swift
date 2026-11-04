@@ -194,6 +194,6 @@ final class SimpleModeTests: XCTestCase {
 
     func testIdsMatchThePhoneItemsOfTheDesktopList() {
         XCTAssertEqual(SimpleMode.items.map(\.id),
-                       ["changes", "hardware", "ph-subtitle", "model", "effort", "asks", "context", "run-settings", "thinking", "pr-status", "ph-git", "terminal", "ph-monitors"])
+                       ["changes", "hardware", "ph-subtitle", "model", "effort", "asks", "context", "run-settings", "thinking", "pr-status", "ph-git", "ph-monitors"])
     }
 }

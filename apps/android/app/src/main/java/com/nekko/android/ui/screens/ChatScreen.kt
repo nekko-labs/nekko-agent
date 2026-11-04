@@ -206,7 +206,6 @@ private fun ChatScreenContent(
     val showHardware = simple.shown("hardware")
     val showSteps = simple.shown("thinking")
     val showGit = simple.shown("ph-git")
-    val showTerminal = simple.shown("terminal")
     val chat by vm.ui.collectAsStateWithLifecycle()
     val watches by vm.watches.collectAsStateWithLifecycle()
     val subagents by vm.subagents.collectAsStateWithLifecycle()
@@ -447,7 +446,7 @@ private fun ChatScreenContent(
                                         enabled = chat.savedAt == null,
                                         modifier = Modifier.testTag("chat.files"),
                                     )
-                                    if (showTerminal) DropdownMenuItem(
+                                    DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chats_terminals)) },
                                         leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
                                         onClick = { showMenu = false; vm.openTerminals() },
@@ -669,7 +668,7 @@ private fun ChatScreenContent(
                         onEditQueued = vm::editQueued,
                         onInterrupt = vm::interruptQueued,
                         onNewAgent = onNewChat,
-                        onTerminal = if (showTerminal) vm::openTerminals else null,
+                        onTerminal = vm::openTerminals,
                         footer = { ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }, asks = chat.mode ?: vm.defaultMode, onOpenAsks = { showMode = true }) },
                     )
                 }
