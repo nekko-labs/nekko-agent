@@ -230,8 +230,9 @@ finish, a review arrives or a few hours pass, fixes what it can, and lands the
 PR if you or the repository allow it; otherwise it tells you the PR is
 merge-ready or what is blocking it. The chip reads **Watching until
 merge-ready**. Nekko keeps re-arming it until the PR is merged or closed.
-Cancelling the chip stops it for that PR; turn it off for every PR with
-**Watch each PR until it is merge-ready** in Settings › Pull requests.
+Cancelling the chip stops it for that PR. To turn it off for every PR, go to
+Settings › Tools, click **Show advanced settings** if it's there, then turn off
+**Watch each PR until it is merge-ready** under Pull requests.
 
 Suggested response buttons are gone;
 the gray draft placeholder and Right Arrow acceptance remain.
