@@ -43,3 +43,19 @@ describe('aggregate working indicator', () => {
     expect(s.working).toBe(false);
   });
 });
+
+describe('local sends', () => {
+  it('tells a listener the moment a pane sends, before the host says anything, and when it ends', async () => {
+    const { localAgentStarts, onLocalAgentWorking, reportAgentWorking } = await import('./workingAgents.js');
+    const heard: Array<[string, boolean]> = [];
+    const off = onLocalAgentWorking((id, working) => heard.push([id, working]));
+    reportAgentWorking('fresh', true);
+    expect(localAgentStarts()).toContain('fresh');
+    reportAgentWorking('fresh', false);
+    off();
+    reportAgentWorking('later', true);
+    expect(heard).toEqual([['fresh', true], ['fresh', false]]);
+    expect(localAgentStarts()).not.toContain('fresh');
+    reportAgentWorking('later', false);
+  });
+});

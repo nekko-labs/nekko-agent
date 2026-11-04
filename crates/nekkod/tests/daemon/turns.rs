@@ -168,6 +168,7 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     assert_eq!(messages.first().unwrap()["content"], "Explain the pineapple");
     assert_eq!(messages.last().unwrap()["content"], "the answer");
     // The disabled provider's turn was refused; this one ran and ended.
+    until_turn_end_heard(&rig.events, "s_admit").await;
     let events = rig.events.lock().unwrap().clone();
     assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "error"), "{events:?}");
     assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "done"), "{events:?}");
@@ -470,7 +471,7 @@ async fn a_chat_moving_along_the_loop_tells_windows_that_do_not_show_it() {
 
     let (_, summaries) = post(port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     let summary = summaries.as_array().unwrap().iter().find(|s| s["id"] == "s_loop").unwrap();
-    assert_eq!(summary["phase"], "exploring");
+    assert_eq!(summary["phase"], "building");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -580,6 +581,7 @@ async fn a_chain_the_daemon_admitted_admits_its_queued_prompts_too() {
     assert_eq!(contents, ["first", "first answer", "and then this", "second answer"]);
     assert_eq!(saved["queue"], json!([]));
     // Two turns of one chain, each told to the UI as it ended.
+    until_turn_end_heard(&rig.events, "s_chain").await;
     let dones =
         rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_chain" && e["type"] == "done").count();
     assert_eq!(dones, 2);

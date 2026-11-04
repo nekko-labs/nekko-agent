@@ -411,6 +411,30 @@
   videos.forEach((v) => io.observe(v));
 })();
 
+// ---- the hero's speed replay: its file and end-frame poster follow the look
+//      (dark files for Dark, light for White), switching with the theme. It
+//      autoplays muted and loops; with reduced motion only the poster loads. ----
+(() => {
+  const video = document.querySelector('video[data-replay]');
+  if (!video) return;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const key = () => (document.documentElement.dataset.theme === 'dark' ? 'Dark' : 'Light');
+  let loaded = null;
+  const load = () => {
+    const k = key();
+    if (k === loaded) return;
+    loaded = k;
+    video.poster = video.dataset[`poster${k}`];
+    if (reduced) return; // poster only
+    video.autoplay = true;
+    video.preload = 'auto';
+    video.src = video.dataset[`src${k}`];
+    video.play().catch(() => { /* autoplay blocked: the poster stays */ });
+  };
+  load();
+  new MutationObserver(load).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+
 // ---- media slots: click a feature GIF or product image to see it large ----
 (() => {
   const box = document.getElementById('lightbox');

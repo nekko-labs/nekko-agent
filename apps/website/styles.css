@@ -1006,12 +1006,22 @@ h3 { font-size: 21px; }
 .panel-fast { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
 .panels-foot { margin-top: 30px; max-width: 760px; margin-left: auto; margin-right: auto; }
 
-/* the benchmark: three measures, three servers, bars anchored to a baseline
-   at the left; the numbers sit on the bars, the servers are named by a legend
-   and a colour key that also passes a colour-blindness check. */
-.bench { grid-column: 1 / -1; margin-top: 10px; padding-top: 26px; border-top: 1px solid var(--line); }
+/* The launch proof uses published completion times, not a simulated live race. */
+/* The hero's proof: the speed replay under the headline, kept inside its
+   panel at any width (min-width: 0 and max-width: 100% stop a 1920px video
+   from widening the column). */
+.hero-replay { width: min(100%, 880px); min-width: 0; margin: 30px auto 0; padding: 10px; border-radius: 18px; box-sizing: border-box; }
+.hero-replay-video { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 10px; background: var(--line); }
+.hero-replay-caption { margin-top: 10px; padding: 0 6px 2px; font-size: 14px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.hero-replay-caption strong { color: var(--ink); }
+.speed-proof { align-self: center; padding: 28px; border: 1px solid var(--line); border-radius: 16px; }
+.speed-proof > p + p { margin-top: 18px; }
+.speed-proof strong { display: block; font-family: var(--mono); font-size: clamp(32px, 5vw, 58px); line-height: 1.2; }
+.speed-proof span { display: block; margin-top: 4px; }
+/* Completion-time bars share a zero baseline; lower is better. */
+.bench { grid-column: 1 / -1; min-width: 0; margin-top: 10px; padding-top: 26px; border-top: 1px solid var(--line); }
 .bench-title { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
-.bench-legend { display: inline-flex; gap: 14px; letter-spacing: 0.06em; text-transform: none; font-size: 12px; }
+.bench-legend { display: inline-flex; flex-wrap: wrap; gap: 8px 14px; letter-spacing: 0.06em; text-transform: none; font-size: 12px; }
 .bench-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .bench-row { display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: center; padding: 8px 0; }
 .bench-row + .bench-row { border-top: 1px solid var(--line); }
@@ -1033,6 +1043,8 @@ h3 { font-size: 21px; }
   .panel, .panel-fast { grid-template-columns: 1fr; padding: 24px; gap: 20px; }
   .panel .panel-media { order: 1; }
   .panel .panel-copy { order: 2; }
+  .panel-fast .panel-copy { order: 0; min-width: 0; }
+  .panel-fast .speed-proof { order: 1; min-width: 0; }
   .panel .bench { order: 3; }
   .panel h3 { font-size: 24px; }
   .bench-row { grid-template-columns: 1fr; gap: 6px; }
