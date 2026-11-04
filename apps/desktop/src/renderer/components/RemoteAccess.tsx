@@ -4,6 +4,7 @@ import { pairingLink, phoneDeviceAccess, PHONE_KEY_CHANNEL, PROTECT_COMPUTER_DOC
 import { Badge } from './primitives/index.js';
 import { Toggle } from './primitives/Toggle.js';
 import { useStore } from '../store.js';
+import { RouterIcon, LogOutIcon } from '../gentleface-icons.js';
 import { PhoneIcon } from '../icons.js';
 import { SECURITY_SECTION_ID } from './security/SecuritySettings.js';
 
@@ -339,7 +340,7 @@ export function RemoteAccess() {
               Disable remote access
             </button>
             <button className="btn btn-ghost py-1 text-xs" title="Re-keys the room with a new secret; every phone must pair again" onClick={rotate}>
-              Sign out all phones…
+              <LogOutIcon className="mr-1 h-3.5 w-3.5" />Sign out all phones…
             </button>
           </div>
         </div>
@@ -436,6 +437,7 @@ export function PairingChoiceView({
         <div className="mt-2 flex gap-2">
           <input className="input py-1 text-sm" placeholder="wss://relay.example.com" value={relayUrl} onChange={(e) => onRelayUrl(e.target.value)} />
           <button className="btn btn-outline py-1" onClick={onOwnRelay} disabled={busy || !relayUrl.trim()}>
+            <RouterIcon className="mr-1 h-4 w-4" />
             Connect
           </button>
         </div>

@@ -808,6 +808,25 @@ impl Turns {
                 nekko_tools::hooks::run_hook(&rule, "TurnEnd", &sid, None, &cwd, &payload).await;
             });
         }
+        // Every harness: the chat's open PRs are watched until merge-ready
+        // (pr_autowatch.rs). A turn the user stopped arms nothing.
+        if summary.get("aborted") != Some(&Value::Bool(true)) && crate::pr_autowatch::enabled(&settings) {
+            let (store, watches, id) = (store.clone(), self.watches.clone(), session_id.clone());
+            tokio::spawn(async move {
+                let read = id.clone();
+                let Some(session) = tokio::task::spawn_blocking(move || store.get(&read)).await.ok().flatten() else {
+                    return;
+                };
+                if !crate::pr_autowatch::eligible(&session) {
+                    return;
+                }
+                let messages = session.get("messages").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+                let urls = crate::pr_autowatch::opened_prs(messages);
+                if !urls.is_empty() {
+                    watches.watch_opened_prs(&id, &urls).await;
+                }
+            });
+        }
         let Some(d) = self.dispatch.get().cloned() else { return };
         let store = store.clone();
         tokio::spawn(async move {

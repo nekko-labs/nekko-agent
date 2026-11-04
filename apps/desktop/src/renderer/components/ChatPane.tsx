@@ -1,3 +1,4 @@
+import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
@@ -94,7 +95,7 @@ import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
-import { GfSendIcon } from '../gentleface-icons.js';
+import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
 
@@ -561,7 +562,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   /**
    * The wall composer's own top row (which agent it speaks for, its status and
    * dock controls). Given, it replaces the controls strip: mode and incognito
-   * move to the bottom bar beside +, Automate to this row's right end.
+   * move to the bottom bar beside +. Automation lives in the + menu.
    */
   header?: React.ReactNode;
   /**
@@ -723,7 +724,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // What the model thinks the user will say next: the composer's ghost text.
   // Pinned to the reply it was written for (forId) so
   // a newer turn can't inherit stale suggestions.
-  const [suggestions, setSuggestions] = useState<{ forId: string; next: string | null } | null>(null);
+  const [suggestions, setSuggestions] = useState<{ forId: string; next: string | null; options: string[] } | null>(null);
   // A failed reply stays in the transcript with a retry, instead of vanishing
   // with the toast.
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -1255,14 +1256,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
    */
   const requestSuggestions = async () => {
     try {
+      const before = await window.nekko.getSession(sessionId);
+      const reply = before?.messages[before.messages.length - 1];
+      if (!reply || reply.role !== 'assistant') return;
       const res = await window.nekko.suggestReplies(sessionId);
-      if (!res?.next) return;
+      if (!res) return;
+      const options = followUpOptions(res.options, res.next);
+      if (!options.length) return;
       const fresh = await window.nekko.getSession(sessionId);
       const last = fresh?.messages[fresh.messages.length - 1];
       // A turn that started while the call was in flight (a queued prompt, a
       // send from another pane) makes the suggestions stale; drop them.
-      if (!last || last.role !== 'assistant') return;
-      setSuggestions({ forId: last.id, next: res.next });
+      if (!last || last.role !== 'assistant' || last.id !== reply.id) return;
+      setSuggestions({ forId: last.id, next: res.next, options });
     } catch {
       /* suggestions are nice-to-have */
     }
@@ -2032,13 +2038,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   // More work for a chat that has replied: run it here, or hand it to a subagent.
   // A slash command isn't work to place, and Enter still means here.
-  const followUp = draft.trim() ? (draft.trimStart().startsWith('/') ? null : draft) : ghostSuggestion;
+  const followUp = draft.trim() && !draft.trimStart().startsWith('/') ? draft : null;
   // When the agent has asked a question, the choice of where to run the answer
   // is also part of the answer, so the chips stay visible even when the
-  // composer is empty. Outside of a question, the chips still wait for a draft
-  // or a ghost suggestion so they don't advertise an action with nothing to do.
-  const offerSubagent = (!!followUp || !!question) && !imageMode && !remoteBlock && hasProvider && !!session
+  // composer is empty. Outside of a question, placement chips wait for a draft;
+  // generated suggestions have their own contextual buttons and location selector.
+  const canDelegateFollowUp = !imageMode && !remoteBlock && hasProvider && !!session
     && canOfferSubagent(session, delegationStrategy);
+  const offerSubagent = (!!followUp || !!question) && canDelegateFollowUp;
+  const showFollowUpChoices = !readOnly && !session?.archivedAt && !draft.trim() && !streaming && !held && !errorNotice && !question && !approval
+    && !imageMode && !remoteBlock && hasProvider && !!liveSuggestions?.options.length;
   const runFollowUp = (wrap?: (text: string) => string) => void send(draft.trim() ? undefined : followUp ?? undefined, undefined, wrap);
 
   const onComposerKeyDown = (e: React.KeyboardEvent<MarkdownEditorElement>) => {
@@ -2303,6 +2312,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Auto mode: the model the next message will actually run on. Shown whether or
   // not anything is typed yet - "Auto" alone tells you nothing, and the pick
   // moves as you type, which is exactly what's worth watching.
+  const hasComposerPayload = !!draft.trim() || pendingImages.length > 0 || pendingVideos.length > 0 || !!activeSkill;
+  const composerStops = streaming && !hasComposerPayload;
+
   // Read from the deferred draft, like the analyzer and the plan rail below:
   // the characters you type paint first, and what they imply follows a moment
   // later without holding the keystroke up.
@@ -2683,6 +2695,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {question && <div className="conversation-question" data-agent-question>
                   <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
                 </div>}
+                {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {/* Where the next piece of work runs, offered in the conversation like the other next steps.
                     When the agent has asked a question, the chips sit directly under the question card:
                     the choice of where to run the answer reads as part of the answer. */}
@@ -2840,31 +2853,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   </span>
                   <span className="ctl-caret">{controlsOpen ? '\u25b4' : '\u25be'}</span>
                 </button>
-                {!imageMode && (
-                  <button
-                    className="ctl-toggle ml-auto shrink-0 whitespace-nowrap"
-                    onClick={() => setScheduleOpen(true)}
-                    aria-label="Automate: schedule, repeat, or run in the background"
-                    title="Automate: schedule, repeat, or run in the background"
-                  >
-                    <span style={{ color: 'var(--warning)' }}><BoltIcon className="h-3 w-3" /></span> Automate
-                  </button>
-                )}
               </div>
             )}
             {header && (
               <div className="composer-head flex min-w-0 items-center gap-2 border-b border-line px-2 py-1 text-xs" data-composer-head>
                 {header}
-                {!imageMode && (
-                  <button
-                    className="ctl-toggle shrink-0 whitespace-nowrap"
-                    onClick={() => setScheduleOpen(true)}
-                    aria-label="Automate: schedule, repeat, or run in the background"
-                    title="Automate: schedule, repeat, or run in the background"
-                  >
-                    <span style={{ color: 'var(--warning)' }}><BoltIcon className="h-3 w-3" /></span> Automate
-                  </button>
-                )}
               </div>
             )}
             {showControls && !header && !wallWindow && stripShown && (<>
@@ -2905,16 +2898,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </span>
               ) : null}
               </>)}
-              {!imageMode && (
-                <button
-                  className="ctl-toggle ml-auto shrink-0 whitespace-nowrap"
-                  onClick={() => setScheduleOpen(true)}
-                  aria-label="Automate: schedule, repeat, or run in the background"
-                  title="Automate: schedule, repeat, or run in the background"
-                >
-                  <span style={{ color: 'var(--warning)' }}><BoltIcon className="h-3 w-3" /></span> Automate
-                </button>
-              )}
             </div>
             </>)}
             {showControls && imageMode && session && (
@@ -3247,18 +3230,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                             <span className="flex-1">Incognito</span>
                             {session.incognito && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-accent" />}
                           </button>
-                          <button
-                            role="menuitem"
-                            className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
-                            onClick={() => { closeAttachMenu(); setScheduleOpen(true); }}
-                            onMouseEnter={closeSkillsFly}
-                            title="Automate: schedule, repeat, or run in the background"
-                            data-plus-automate
-                          >
-                            <span className="shrink-0" style={{ color: 'var(--warning)' }}><BoltIcon className="h-3.5 w-3.5" /></span>
-                            <span className="flex-1">Automate</span>
-                          </button>
                         </>}
+                        <button
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
+                          onClick={() => { closeAttachMenu(); setScheduleOpen(true); }}
+                          onMouseEnter={closeSkillsFly}
+                          title="Automate: schedule, repeat, or run in the background"
+                          data-plus-automate
+                        >
+                          <span className="shrink-0" style={{ color: 'var(--warning)' }}><BoltIcon className="h-3.5 w-3.5" /></span>
+                          <span className="flex-1">Automate</span>
+                        </button>
                         {/* Skills expand as a side flyout on hover, so someone new
                             finds them without knowing to type `/` or to click. */}
                         <div className="my-1 border-t border-line" />
@@ -3341,11 +3324,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       {wallWindow && !imageMode && asksFirst}
                       <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" hideMode={!showMode} />
                       {!wallWindow && <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" hidePrivacy={!showPrivacy} />}
-                      {wallWindow && !imageMode && !plusCarries && <button type="button" className="ctl-toggle shrink-0" data-composer-automate onClick={() => setScheduleOpen(true)} aria-label="Automate: schedule, repeat, or run in the background" title="Automate: schedule, repeat, or run in the background"><BoltIcon className="h-3.5 w-3.5" /></button>}
                     </div>
                   )}
                   <div className="flex-1" />
-                  {streaming && <button className="btn btn-outline h-8 px-3 py-0 text-xs" onClick={() => window.nekko.abortChat(sessionId)}>Stop</button>}
                   {/* Prompt suggestions: one chip beside the microphone; its
                       details open above it rather than pushing the editor. */}
                   {!imageMode && showSuggest && (
@@ -3368,14 +3349,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
-                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[background-color,border-color,color,opacity,transform] duration-150 disabled:opacity-40`}
-                      onClick={() => void send()}
-                      disabled={imageMode ? streaming || !draft.trim() : (!draft.trim() && pendingImages.length === 0 && pendingVideos.length === 0 && !activeSkill) || !hasProvider}
-                      title={streaming ? 'Add to the queue' : 'Send'}
-                      aria-label={streaming ? 'Add to queue' : 'Send'}
+                      data-composer-action={composerStops ? 'stop' : 'send'}
+                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} composer-action grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[color,opacity,transform] duration-150 disabled:opacity-40`}
+                      onClick={() => composerStops ? void window.nekko.abortChat(sessionId) : void send()}
+                      disabled={!composerStops && (imageMode ? streaming || !draft.trim() : !hasComposerPayload || !hasProvider)}
+                      title={composerStops ? 'Stop' : streaming ? 'Add to the queue' : 'Send'}
+                      aria-label={composerStops ? 'Stop' : streaming ? 'Add to queue' : 'Send'}
                     >
                       {/* On the wall Nekko wears the window's status in its header, so Send is the gentleface paper plane. */}
-                      {wallWindow ? <GfSendIcon className="h-[17px] w-[17px]" /> : <NekkoAvatar size={24} />}
+                      {composerStops ? <GfStopIcon className="h-[17px] w-[17px]" /> : wallWindow ? <GfSendIcon className="h-[17px] w-[17px]" /> : <NekkoAvatar size={24} />}
                     </button>
                 </div>
               </div>

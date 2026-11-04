@@ -26,7 +26,7 @@ const SEED = `(() => {
     { id: 'm4', role: 'tool', content: '', toolResult: { toolCallId: 'gh', output: 'https://github.com/nekko-labs/nekko-agent/pull/1150' }, createdAt: t + 3000 },
     { id: 'm5', role: 'assistant', content: 'The changes are in place and the desktop TypeScript check passes. Next I will verify menu contrast.', toolCalls: [call4], turnStats: { stop: 'complete' }, createdAt: t + 4000 },
   ];
-  s.agentPlan = steps.map((title, i) => ({ id: 'step_' + (i + 1), title, kind: ['explore', 'build', 'verify', 'ship'][i], status: i < 2 ? 'done' : i === 2 ? 'active' : 'pending', note: [call2.input.steps[0].note, call4.input.steps[0].note, call4.input.steps[1].note, undefined][i], createdAt: t, updatedAt: t + 4000 }));
+  s.agentPlan = steps.map((title, i) => ({ id: 'step_' + (i + 1), title, kind: ['build', 'build', 'verify', 'ship'][i], status: i < 2 ? 'done' : i === 2 ? 'active' : 'pending', note: [call2.input.steps[0].note, call4.input.steps[0].note, call4.input.steps[1].note, undefined][i], createdAt: t, updatedAt: t + 4000 }));
   s.agentPlan[0].verification = { status: 'passed', device: 'macOS', detail: 'Traced both menus against the merged PR.', evidenceUrl: 'https://example.test/evidence/trace' };
   s.agentPlan[2].verification = { status: 'active', device: 'macOS', detail: 'Comparing base and head gradient captures.' };
   f.putCachedSession(s);

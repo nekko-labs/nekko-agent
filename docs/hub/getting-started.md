@@ -171,6 +171,8 @@ When an agent needs a choice, its question opens at the bottom of the conversati
 
 A pull request link in a reply shows as a small chip with GitHub's state icon: open (green), draft (grey), merged (purple) or closed (red). Click it to open the pull request in your browser. Other web links have a **Preview** button that loads the page inside the message.
 
+Click a file link to open the file in a window beside the chat. Code is coloured by language, and the toolbar shows which language was detected. You can edit the file there: it saves itself a moment after you stop typing (turn **Auto-save** off in the toolbar if you prefer), and **Ctrl+S** (**Cmd+S** on macOS) saves at once. The toolbar tells you when a save happens: *Auto-saved at 9:41* or *Saved at 9:41*.
+
 ### Agent panel shortcuts
 
 Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
@@ -203,9 +205,10 @@ outline), then click an agent in the Agents list to show it there, or drag the
 agent from the list straight into a zone. Clicking an agent that is already on
 the board just switches to its zone. Each zone has a colour, shown as a small
 square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips.
-Drag a zone by its name bar to move it (hold Shift at a board edge to span the
-whole side) and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
+Press a zone's name bar and move the pointer to start dragging it; a click without movement only selects the zone and does not lift it. Hold Shift at a board edge to span the
+whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
 an agent leaves its zone in place, dotted, until you fill it.
+The composer's borderless action switches from Send to a Stop icon while the agent runs with an empty draft. Type a follow-up and it becomes Send again, queuing the message without interrupting the agent. Clear the draft to get Stop back. To schedule work, open **+ > Automate**; Automate no longer takes up a separate place on the composer.
 In Dynamic View (including Fixed grid), a window also minimizes automatically
 when its agent finishes a successful reply. Errors and requests for input stay
 visible, and Focused View keeps finished replies open. Select the chat in the
@@ -216,7 +219,19 @@ when safe, never silently switch provider or model.
 
 Active watches appear above the chat draft as expandable chips. Open one to see
 its wake condition, follow the PR, or cancel that watcher without stopping the
-chat. Child-agent watchers show their owner. Suggested response buttons are gone;
+chat. Child-agent watchers show their owner.
+
+When an agent opens a pull request, Nekko watches it for you: at the end of the
+turn it arms a watcher on every open PR the chat opened, whichever model or
+harness the chat runs on (Claude Code included). The agent wakes when checks
+finish, a review arrives or a few hours pass, fixes what it can, and lands the
+PR if you or the repository allow it; otherwise it tells you the PR is
+merge-ready or what is blocking it. The chip reads **Watching until
+merge-ready**. Nekko keeps re-arming it until the PR is merged or closed.
+Cancelling the chip stops it for that PR; turn it off for every PR with
+**Watch each PR until it is merge-ready** in Settings › Pull requests.
+
+Suggested response buttons are gone;
 the gray draft placeholder and Right Arrow acceptance remain.
 
 ### Reading expanded tool details
@@ -245,3 +260,9 @@ it shows a percentage once all file sizes are known, and stays indeterminate
 until then. **Verifying…** means the files are still being checked or installed.
 Use **Downloads** to cancel a transfer. A failure or cancellation lets you retry;
 other models and runtimes remain available while one downloads.
+
+### Suggested follow-ups
+
+After a reply, **Suggested follow-ups** can offer relevant next messages such as **Inspect the saved PNGs directly** or **Try another image viewer**. Each button sends the words it displays; nothing is sent until you choose one. These suggestions are not questions from you or approval requests from the agent.
+
+When delegation is available, use the separate **Run in** selector to choose **This chat** (the default) or **A subagent** before choosing a response. If you type your own message instead, the existing **Do it here** and **In a subagent** actions apply to your draft. Suggestions are optional and may not appear after every reply.
