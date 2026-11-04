@@ -96,7 +96,6 @@ private val ITEM_TEXT: Map<String, Pair<Int, Int>> = mapOf(
     "thinking" to (R.string.simple_item_thinking to R.string.simple_hint_thinking),
     "pr-status" to (R.string.simple_item_pr to R.string.simple_hint_pr),
     "ph-git" to (R.string.simple_item_git to R.string.simple_hint_git),
-    "terminal" to (R.string.simple_item_terminal to R.string.simple_hint_terminal),
     "ph-monitors" to (R.string.simple_item_monitors to R.string.simple_hint_monitors),
 )
 
@@ -104,7 +103,6 @@ private val AREA_TEXT = mapOf(
     SimpleMode.HEADER to R.string.simple_area_header,
     SimpleMode.BOX to R.string.simple_area_box,
     SimpleMode.CONVERSATION to R.string.simple_area_conversation,
-    SimpleMode.WALL to R.string.simple_area_wall,
     SimpleMode.CHATS to R.string.simple_area_chats,
 )
 
@@ -140,9 +138,6 @@ private val PREVIEWS: Map<String, List<Line>> = mapOf(
         line(Part(R.string.simple_part_reasoning, "thinking"), Part(R.string.simple_part_ran, "thinking")),
         line(Part(R.string.simple_part_passed)),
         line(Part(R.string.simple_part_pr, "pr-status"), Part(R.string.simple_item_git, "ph-git")),
-    ),
-    SimpleMode.WALL to listOf(
-        line(Part(R.string.simple_part_new), Part(R.string.simple_item_terminal, "terminal"), Part(R.string.simple_part_dictate), Part(R.string.simple_part_image)),
     ),
     SimpleMode.CHATS to listOf(
         line(Part(R.string.simple_part_chats), Part(R.string.chats_computers), Part(R.string.simple_part_settings), spread = true),

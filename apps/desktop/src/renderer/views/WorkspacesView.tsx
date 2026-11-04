@@ -348,7 +348,6 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   // The panel clips its overflow and the wall's windows stack above it, so a
   // menu drawn inside the panel was cut off or hidden behind them.
   const [newMenuPos, setNewMenuPos] = useState<{ top: number; left: number } | null>(null);
-  const terminalShown = useShown('terminal');
   useLayoutEffect(() => {
     if (!newMenuOpen) return;
     const place = () => {
@@ -707,7 +706,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               onMouseEnter={openNewMenu}
               onMouseLeave={closeNewMenuSoon}
             >
-              <CreateMenuRows terminal={terminalShown} onCreate={(kind) => {
+              <CreateMenuRows onCreate={(kind) => {
                 closeNewMenu();
                 const action = kind === 'chat' ? newChat() : kind === 'image' ? newImageChat() : newTerminalWorkspace();
                 void Promise.resolve(action).catch((e: Error) => useStore.getState().pushToast('error', e.message));
