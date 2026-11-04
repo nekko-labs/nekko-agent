@@ -453,20 +453,51 @@ export function CommandWall({
   const held = useRef<{ paneId: string; rects: Map<string, Rect>; grab: { x: number; y: number }; target: WallDropTarget; grid: boolean; stage: { width: number; height: number }; at?: { x: number; y: number } } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [heldCard, setHeldCard] = useState<{ title: string; kind: PaneKind; from: DOMRect; card: { width: number; height: number }; at: { x: number; y: number } } | null>(null);
+  // A press only arms pickup. Clicks must not lift the zone or flash its landing preview.
+  const pendingPickup = useRef<{ pointerId: number; x: number; y: number; start: (x: number, y: number) => void } | null>(null);
+  useEffect(() => {
+    const cancel = () => { pendingPickup.current = null; };
+    const release = (e: PointerEvent) => { if (pendingPickup.current?.pointerId === e.pointerId) cancel(); };
+    const move = (e: PointerEvent) => {
+      const p = pendingPickup.current;
+      if (!p || e.pointerId !== p.pointerId || (e.clientX === p.x && e.clientY === p.y)) return;
+      cancel();
+      if (!(e.buttons & 1)) return;
+      p.start(e.clientX, e.clientY);
+    };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') cancel(); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    window.addEventListener('blur', cancel);
+    window.addEventListener('keydown', key, true);
+    return () => {
+      cancel();
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+      window.removeEventListener('blur', cancel);
+      window.removeEventListener('keydown', key, true);
+    };
+  }, []);
   const pickUp = (e: React.PointerEvent, pane: WbPane, title: string) => {
     const win = (e.currentTarget as HTMLElement).closest<HTMLElement>('[data-wall-pane]');
     if (!win || held.current) return;
     const from = win.getBoundingClientRect();
     const card = heldSize(from.width, from.height);
     const k = card.width / (from.width || 1);
-    held.current = {
-      paneId: pane.id, rects: new Map(shownPanes), grab: { x: (e.clientX - from.left) * k, y: (e.clientY - from.top) * k }, target: HOME,
-      // A one-column wall is a list, not a tree: it swaps like the fixed grid.
-      grid: wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH,
-      stage: { width: size.width, height: geometry.stageHeight },
-    };
-    setHeldCard({ title, kind: pane.kind, from, card, at: { x: e.clientX, y: e.clientY } });
-    setLift({ paneId: pane.id, target: HOME });
+    const grab = { x: (e.clientX - from.left) * k, y: (e.clientY - from.top) * k };
+    pendingPickup.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, start: (x, y) => {
+      if (!win.isConnected) return;
+      held.current = {
+        paneId: pane.id, rects: new Map(shownPanes), grab, target: HOME,
+        // A one-column wall is a list, not a tree: it swaps like the fixed grid.
+        grid: wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH,
+        stage: { width: size.width, height: geometry.stageHeight },
+      };
+      setHeldCard({ title, kind: pane.kind, from, card, at: { x, y } });
+      setLift({ paneId: pane.id, target: HOME });
+    } };
   };
   // The card leaves from the window's own rectangle and settles, smaller, under the pointer.
   useLayoutEffect(() => {

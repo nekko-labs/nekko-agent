@@ -3468,8 +3468,9 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Keep the send cat clear of the composer edge. */
 .send-avatar { margin-right: 4px; }
 /* Wall windows: Send is a plain arrow (Nekko is in the header). */
-.wall-send { margin-right: 4px; background: var(--accent); color: #fff; }
-.wall-send:disabled { background: transparent; color: var(--ink-faint); }
+.wall-send { margin-right: 4px; color: var(--accent); }
+.wall-send:disabled { color: var(--ink-faint); }
+.composer-action { background: transparent; border: 0; box-shadow: none; }
 /* The wall composer's bar stays one line: the model and Mode buttons keep their labels and truncate, never wrap. */
 .composer-section[data-wall-composer] .composer-bar { min-width: 0; }
 .composer-section[data-wall-composer] [data-composer-foot] { flex: 0 1 auto; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }

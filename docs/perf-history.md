@@ -39,6 +39,24 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Zone drag and composer actions (#1703, 2026-11-04)
+
+Area: renderer. Result: regression under investigation; no budget changes.
+Conditions: same Linux runner, AMD EPYC 9V45 (4 threads), Chrome/156.0.8078.47, 1440x1000, scripted local model, 33 cold switches per run, same release daemon and latency harness. Order base/head/head/base. Base `32d731ffe`, merge-group head `810950289` (PR head `e4ef92e59`).
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-paint p95 | 31.9 / 31.9 ms | 34.6 / 33.3 ms |
+| Cold-chat first-paint p50 | 25.9 / 25.1 ms | 28.7 / 28.6 ms |
+
+The 33 ms gate passed on both base measurements and failed on both head measurements. This does not support a runner-noise exemption. Original queue run on AMD EPYC 7763 / same Chrome version missed all three attempts (44.3 / 42.7 / 40.2 ms p95); all other measured speed and memory metrics passed. Automatic frame-only diagnostics did not measure the failing metric. A separate Windows Ryzen 9950X3D / Chrome153 ordered pair measured base/head 36.0/71.7 ms p95, 33 samples each; it cannot establish Linux causality.
+
+Source: [matched Linux reports and provenance](https://github.com/nekko-labs/nekko-agent/actions/runs/41777070231), [queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/41774611241).
+
+Follow-up [matched measurements, latency timelines and composer ablation](https://github.com/nekko-labs/nekko-agent/actions/runs/41778374470) ran on EPYC 7763 (4 threads), same Chrome version, daemon, workload and 33 samples per phase. Unprofiled base/head/head/base p95 was **41.7 / 42.2 / 45.7 / 45.1 ms**; p50 was **32.5 / 31.5 / 32.4 / 33.0 ms**. Both unchanged-base runs failed the same 33 ms gate. Restoring only the base ChatPane on head measured **42.1 / 99.9 ms p95**, so that ablation did not remove the failure. These results establish a baseline failure on this runner, not that the earlier small head-only misses were imaginary.
+
+Separate timeline-instrumented runs measured base/head p95 **40.9 / 47.7 ms**. Cold-switch phase event totals (nested events overlap): main-thread RunTask **6655.212 / 6653.737 ms**, style UpdateLayoutTree **657.081 / 723.850 ms**, Layout **167.854 / 188.410 ms**, Paint **2379.755 / 2364.222 ms**. Whole-phase totals are not per-interaction causal attribution and profiling has overhead. No product optimization or budget change is claimed. Baseline tracking: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). Two matched baseline failures support one evidence-backed requeue; a recurring failure requires a distinct baseline repair, not repeated retries.
+
 ## Native browser migration baseline (#752, 2026-10-17)
 
 Area: perf harness / browser driver. Result: regression in initial sequential driver comparison, not yet an alternated causal measurement.
