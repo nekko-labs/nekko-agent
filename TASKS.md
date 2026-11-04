@@ -6,6 +6,12 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Provider effort and composer picker (#1687)
+
+- [x] **CEP-1, Provider capability metadata.** Live ChatGPT/Anthropic catalog choices, open-ended wire values, exact-config cached resolution, request/stats consistency. Provider and daemon regressions cover switching models and unspecified defaults.
+- [x] **CEP-2, Desktop controls.** Borderless effort slider beside the model in both modes; Expert-only bottom suggestions row; title-only model chip; Cloud/Local columns and inline default. Focused renderer tests and isolated interaction checks pass.
+- [ ] **CEP-3, Visual signoff and landing.** Matched baseline/head screenshots and scroll GIF captured in `.shots/layout-evidence`; visual inspection blocked by browser screenshot timeouts and native capture `UnknownVizError`. Inspect evidence, publish verification, and queue the stack. Live inference and packaged/native-phone checks remain outside synthetic verification. Baseline privacy-preview test issue: #1419.
+
 ## Nothing below the message box and a denser plan (#1599, added 2026-11-03)
 
 Spec: desktop [message box bottom row](spec/desktop/desktop-simple-and-expert-modes.md#message-box-bottom-row-2026-11-03) and [plan sheet, dense steps](spec/chat/plan-sheet-on-the-composer.md#dense-steps-that-open-on-their-own-implemented-2026-11-03); phones [Simple and Expert modes](spec/phone/iphone-simple-and-expert-modes.md), [native Android app](spec/phone/native-android-app.md).

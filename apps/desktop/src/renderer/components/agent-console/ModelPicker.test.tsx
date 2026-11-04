@@ -19,13 +19,14 @@ describe('default model in the picker', () => {
     expect(out).not.toContain('Star Model');
     expect(out).toContain('role="option"');
   });
-  it('pins a missing default as disabled above other models', () => {
+  it('shows a missing default as disabled inside its real provider group', () => {
     const prev = useStore.getState().settings;
     useStore.setState({ settings: { ...prev, defaultProviderId: 'p', defaultModelId: 'missing' } as NonNullable<typeof prev> });
     try {
       const out = renderToStaticMarkup(<ModelPicker expanded open providers={[{id:'p',kind:'openai',label:'Provider',enabled:true,baseUrl:'http://localhost'}]} providerId="p" modelId="other" models={[{id:'other',providerId:'p',name:'Other model'}]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
       expect(out).toContain('Default · unavailable');
       expect(out).toContain('disabled="" aria-disabled="true"');
+      expect(out.indexOf('data-provider-heading="true">Provider')).toBeLessThan(out.indexOf('missing'));
       expect(out.indexOf('missing')).toBeLessThan(out.indexOf('Other model'));
     } finally { useStore.setState({settings:prev}); }
   });
@@ -45,7 +46,31 @@ describe('default model in the picker', () => {
       const out = renderToStaticMarkup(<ModelPicker expanded open providers={[{id:'p',kind:'openai',label:'Provider',enabled:true,baseUrl:'http://localhost'}]} providerId="p" modelId="other" models={[{id:'other',providerId:'p',name:'Other model'}]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} recent={['p::other']} />);
       expect(out).toContain('>Default<');
       expect(out.match(/role="option"/g)).toHaveLength(1);
+      expect(out.indexOf('data-provider-heading="true">Provider')).toBeLessThan(out.indexOf('>Default<'));
+      expect(out).not.toContain('>Recent<');
     } finally { useStore.setState({settings:prev}); }
+  });
+});
+
+describe('cloud and local columns', () => {
+  const providers = [
+    { id: 'local', kind: 'llamacpp' as const, label: 'Local engine', enabled: true, baseUrl: '' },
+    { id: 'cloud', kind: 'openai' as const, label: 'Cloud API', enabled: true, baseUrl: '' },
+  ];
+  const props = { expanded: true, open: true, providers, providerId: 'local', modelId: 'm', models: [{ id: 'm', providerId: 'local', name: 'Local model' }], onOpenChange: () => {}, onProvider: () => {}, onModel: () => {} };
+  it('puts cloud first regardless of provider order, with separate scroll containers', () => {
+    const out = renderToStaticMarkup(<ModelPicker {...props} />);
+    expect(out).toContain('data-model-columns="2"');
+    expect(out.indexOf('data-model-column="cloud"')).toBeLessThan(out.indexOf('data-model-column="local"'));
+    expect(out).toMatch(/overflow-y-auto overscroll-contain" data-model-scroll="cloud"/);
+    expect(out).toMatch(/overflow-y-auto overscroll-contain" data-model-scroll="local"/);
+    expect(out).toContain('>Cloud</h3>');
+    expect(out).toContain('>Local</h3>');
+  });
+  it('uses one column after provider filtering', () => {
+    const out = renderToStaticMarkup(<ModelPicker {...props} filterProviders={(p) => p.id === 'local'} />);
+    expect(out).toContain('data-model-columns="1"');
+    expect(out).not.toContain('data-model-column="cloud"');
   });
 });
 
@@ -100,6 +125,7 @@ describe('model chip name priority', () => {
     expect(out).toContain('whitespace-normal break-words text-left');
     expect(out).toContain('data-model-chip-name="true">Claude Opus 4.6</span>');
     expect(out).toContain('ctl-caret shrink-0');
+    expect(out).not.toContain('ctl-menu-label');
   });
 });
 

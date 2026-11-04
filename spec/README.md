@@ -63,7 +63,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [Thinking and replies](chat/thinking-and-replies.md) (4 KB)
 - [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (19 KB)
 - [Verification checklists and PR progress in chat](chat/verification-and-pr-progress.md) (5 KB)
-- [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
+- [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (5 KB)
 
 ### desktop
 
@@ -79,7 +79,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Connected computers (link and host class implemented 2026-11-02)](desktop/connected-computers.md) (10 KB)
 - [Customizable UI: customizations, mods and custom layouts](desktop/customizable-ui.md) (6 KB)
 - [Design quality: type scale, readable text, quiet buttons and navigation](desktop/design-quality-type-contrast-and-elevation.md) (4 KB)
-- [Desktop: Simple and Expert modes, what Simple hides, Settings > Simple mode and the composer details panel (2026-10-25, reframed 2026-10-28)](desktop/desktop-simple-and-expert-modes.md) (12 KB)
+- [Desktop: Simple and Expert modes, what Simple hides, Settings > Simple mode and the composer details panel (2026-10-25, reframed 2026-10-28)](desktop/desktop-simple-and-expert-modes.md) (13 KB)
 - [Dynamic view: zones](desktop/dynamic-zones.md) (8 KB)
 - [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (13 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (8 KB)
@@ -150,7 +150,7 @@ Providers, local models, the Model Server, training.
 - [First-agent provider setup](models/first-agent-provider-setup.md) (2 KB)
 - [Hardware-aware model recommendations](models/hardware-aware-model-recommendations.md) (11 KB)
 - [Model training & goals (the data-scientist agent)](models/model-training-goals-the-data-scientist-agent.md) (5 KB)
-- [Models & providers](models/models-providers.md) (49 KB)
+- [Models & providers](models/models-providers.md) (51 KB)
 - [Prompt caching across providers (2026-10-07)](models/prompt-caching-across-providers.md) (7 KB)
 - [Running a model with nothing else installed](models/running-a-model-with-nothing-else-installed.md) (28 KB)
 - [Server, model browser and desktop tray](models/server-model-browser-and-desktop-tray.md) (5 KB)

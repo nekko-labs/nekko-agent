@@ -20,7 +20,7 @@ export function turnStatsParts(stats: TurnStats, names: TurnStatsNames = {}): st
   const provider = names.provider?.(stats.providerId);
   const tps = turnTokensPerSecond(stats);
   const parts = [provider ? `${model} · ${provider}` : model];
-  if (stats.effort) parts.push(`${EFFORT_LABEL[stats.effort]} effort`);
+  if (stats.effort) parts.push(`${EFFORT_LABEL[stats.effort] ?? stats.effort} effort`);
   parts.push(`${fmtTok(stats.inputTokens + (stats.cacheReadTokens ?? 0) + (stats.cacheWriteTokens ?? 0))} in`);
   parts.push(`${fmtTok(stats.outputTokens)} out`);
   if (tps > 0) parts.push(`${formatRate(tps)} tok/s`);
