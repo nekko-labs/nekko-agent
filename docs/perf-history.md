@@ -39,6 +39,22 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Inline PR lifecycle model queue diagnosis (#1820/#1821, 2026-11-05)
+
+Area: renderer / shared projection. Result: unchanged-base cold-paint failure reproduced; no product optimization or zero-regression claim.
+Conditions: exact queue parent `edcdeb9c7da0ef7d5e4f4cf1af26cc5f1fe91861` and model group `4920a6924fa21ad04600f5f0c3e4cacb532c21ce`, one AMD EPYC 9V45 Linux runner (4 threads, 16 GB), Chrome156.0.8078.79, Node22.23.4, 1440x1000, 33 cold switches per phase. Clean snapshots, identical perf harness/daemon sources and independently built release daemons with identical SHA256 `cded2594759104dad5a059fe91e7cb9a612b4f2959c9d72432bedabecfda54e6`.
+
+| Unprofiled metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold first-frame p95 | 30.7 / 37.2 ms | 30.2 / 31.7 ms |
+| Cold first-frame p50 | 25.6 / 25.9 ms | 24.0 / 23.7 ms |
+
+Order was base/head/head/base. Both head runs pass the unchanged 33 ms gate; only the second unprofiled base fails. This establishes a baseline failure in this comparison, not two unprofiled baseline failures, a measured speedup, or proof the feature has no effect. Separate timeline-instrumented base/head p95 was 38.9 / 36.2 ms, p50 31.0 / 31.8 ms; both fail, but profiling overhead prevents treating these as additional unprofiled controls. Cold-phase trace event counts were 207832 / 202330. Renderer-main nested totals (overlap, not per-click attribution): style 750.609 / 734.030 ms, Layout 185.460 / 183.592 ms, Paint 2010.819 / 2068.347 ms, Layerize 1347.518 / 1310.612 ms. No causal repair is inferred from whole-phase totals.
+
+Original queue [42014517917](https://github.com/nekko-labs/nekko-agent/actions/runs/42014517917) on EPYC7763 / Chrome156.0.8078.79 failed cold p95 40.3 / 39.0 / 37.4 ms (33 samples each); other measured speed/memory budgets passed, terminal typing skipped. Its automatic unchanged-base profile measured streaming frames only, not cold latency. An already-started replacement [42016971870](https://github.com/nekko-labs/nekko-agent/actions/runs/42016971870), different parent `31c3505ce` and EPYC9V45 / Chrome156.0.8078.47, passed cold p95 31.3 ms / p50 22.3 ms (33 samples); its gate refused the subsequently held/draft PR as intended. Different-runner results are not a repair.
+
+Source: [matched reports, raw samples, exact provenance and latency timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42017796367). Tracking: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). No budget change.
+
 ## Follow-up slider and text toolbar (#1760, 2026-11-05)
 
 Area: renderer. Result: baseline cold-paint gate failure reproduced; no performance win or zero-regression claim.
@@ -128,6 +144,19 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-11
+
+### #1862 Desktop reload: same wait, no wrong screens (2026-11-05)
+Area: renderer
+Result: no effect
+Conditions: Windows 11, real renderer entry against a stub bridge in a hidden Electron window, warm reload, 3 runs each of `main` and the PR. Simulated delays: providers 10ms, model list 1500ms, transcript 150ms, 1,500-message chat. Reduced-motion path. Times are from the new page's first script.
+
+| Metric | Before | After |
+|---|---|---|
+| Overlay gone | 589, 652, 427ms | 604, 650, 647ms |
+| Chat on screen | 323, 368, 361ms | 320, 447, 367ms |
+| Samples showing a wrong screen | 7, 6, 7 | 0, 0, 0 |
+
+Why: the overlay now waits for the provider list and transcripts, but not the model list, a live provider call once its catalog is 5 minutes old. An earlier version of the PR did wait for it and took 1943ms in one run with the same delays. Source: this PR.
 
 ### #1833 iPhone: cat from the first frame, straight to the zoom after Face ID (2026-11-05)
 Area: renderer
