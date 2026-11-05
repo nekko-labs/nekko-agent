@@ -86,4 +86,44 @@ describe('startup default restoration', () => {
     expect(useStore.getState().activeModelId).toBe(sol.id);
     expect(window.nekko.updateSettings).not.toHaveBeenCalled();
   });
+
+  describe('knowing whether a provider is set up', () => {
+    /** Starts a provider load with the model list held open, so the state in between can be read. */
+    const loadWithModelsPending = async (providers: unknown[], activeModelId: string | null) => {
+      let finish = (_: ModelInfo[]) => {};
+      useStore.setState({ providersLoaded: false, activeProviderId: null, activeModelId, models: [] });
+      window.nekko.listProviders = vi.fn().mockResolvedValue(providers);
+      vi.mocked(window.nekko.listModels).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+      const done = useStore.getState().refreshProviders();
+      await vi.waitFor(() => expect(window.nekko.listModels).toHaveBeenCalled());
+      return { done, finish };
+    };
+
+    it('does not wait for the model list, which can be a network call', async () => {
+      const { done, finish } = await loadWithModelsPending([{ id: 'chatgpt', kind: 'openai', enabled: true }], null);
+      expect(useStore.getState().providersLoaded).toBe(true);
+      finish([sol]);
+      await done;
+    });
+
+    it('waits for it when only a local model can tell', async () => {
+      const { done, finish } = await loadWithModelsPending([{ id: 'local', kind: 'llamacpp', enabled: true }], null);
+      expect(useStore.getState().providersLoaded).toBe(false);
+      finish([sol]);
+      await done;
+      expect(useStore.getState().providersLoaded).toBe(true);
+    });
+
+    it('settles with no providers, and when the list cannot be read', async () => {
+      useStore.setState({ providersLoaded: false, activeProviderId: null, activeModelId: null });
+      window.nekko.listProviders = vi.fn().mockResolvedValue([]);
+      await useStore.getState().refreshProviders();
+      expect(useStore.getState().providersLoaded).toBe(true);
+
+      useStore.setState({ providersLoaded: false });
+      window.nekko.listProviders = vi.fn().mockRejectedValue(new Error('down'));
+      await expect(useStore.getState().refreshProviders()).rejects.toThrow('down');
+      expect(useStore.getState().providersLoaded).toBe(true);
+    });
+  });
 });
