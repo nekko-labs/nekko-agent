@@ -1,30 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A simple cat head inside the 66dp adaptive-icon safe zone. -->
+<!-- The Nekko Agent mark (apps/desktop/scripts/icon-art.cjs HEAD), centred in the
+     66dp adaptive-icon safe zone. Also used as the themed (monochrome) icon. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Ears -->
-    <path
-        android:fillColor="@color/ic_launcher_mark"
-        android:pathData="M35,52 L37,31 L52,42 Z" />
-    <path
-        android:fillColor="@color/ic_launcher_mark"
-        android:pathData="M73,52 L71,31 L56,42 Z" />
-    <!-- Head -->
-    <path
-        android:fillColor="@color/ic_launcher_mark"
-        android:pathData="M33,59 A21,20 0 1,0 75,59 A21,20 0 1,0 33,59 Z" />
-    <!-- Eyes -->
-    <path
-        android:fillColor="@color/ic_launcher_background"
-        android:pathData="M43,57 A3,3.5 0 1,0 49,57 A3,3.5 0 1,0 43,57 Z" />
-    <path
-        android:fillColor="@color/ic_launcher_background"
-        android:pathData="M59,57 A3,3.5 0 1,0 65,57 A3,3.5 0 1,0 59,57 Z" />
-    <!-- Nose -->
-    <path
-        android:fillColor="@color/ic_launcher_background"
-        android:pathData="M51.5,65 L56.5,65 L54,68 Z" />
+    <group
+        android:translateX="21.918"
+        android:translateY="29.909"
+        android:scaleX="2.6735"
+        android:scaleY="2.6735">
+        <path
+            android:fillColor="@color/ic_launcher_mark"
+            android:fillType="evenOdd"
+            android:pathData="M4.059,10.357C4.034,10.285 4.015,10.212 4.003,10.138L3.007,4.165L2.649,2.016L9.117,5.897C11.039,5.29 12.961,5.29 14.883,5.897L21.351,2.016L20.005,10.088C19.987,10.199 19.959,10.308 19.921,10.415L19.921,10.416C18.733,13.756 15.551,16.006 12,16.006C8.428,16.006 5.23,13.729 4.059,10.357L4.059,10.357ZM5.009,10.027C6.04,12.996 8.856,15 12,15C15.126,15 17.927,13.019 18.973,10.079C18.991,10.028 19.004,9.976 19.013,9.923L20,4L15,7C13,6.267 11,6.267 9,7L4,4L4.995,9.972C4.999,9.991 5.003,10.009 5.009,10.027Z" />
+    </group>
 </vector>

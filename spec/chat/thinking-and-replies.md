@@ -14,6 +14,7 @@ User intent: in a long agent turn, tell the agent thinking apart from the agent 
 - `[implemented; focused tests and hidden desktop captures]` **What is left for you stands out wherever it is.** A mid-turn message that names a topic, or that stops on a question, sits on an attention panel instead of reading as a note. A note that only asks itself something in passing stays quiet.
 - `[implemented; focused tests and hidden desktop captures]` **A note is not the end of anything.** Notes between steps no longer say Done, and no longer repeat the reasoning their step already shows.
 - `[implemented; column positions measured in the hidden captures, voice settling covered by focused tests]` **Text does not move.** While a turn runs, its newest text has no voice yet, because it may be a note or the reply. It settles when more follows it or the turn ends. The icon and the panel live in the gutter, so settling changes the look without re-wrapping the text.
+- `[implemented; panel and message edges measured in hidden captures at 1500px and 700px; not yet checked in the packaged app]` **Panels stop where your messages stop.** A panel's right edge lines up with your own messages, so it keeps the same space from the swipe-left times. All agent text stops 14px short of that edge, so a panel has room for its padding and a block that settles does not re-wrap.
 
 ## Topic headers
 
