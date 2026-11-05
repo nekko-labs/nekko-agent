@@ -3339,25 +3339,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
-                  {/* Prompt suggestions: one chip beside the microphone; its
-                      details open above it rather than pushing the editor. */}
-                  {!imageMode && showSuggest && (
-                    <PromptAnalyzer
-                      variant="chip"
-                      text={deferredDraft}
-                      sessionId={sessionId}
-                      canModelFill={hasProvider}
-                      workspaces={settings?.workspaces ?? []}
-                      contextItems={ctx?.items ?? []}
-                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
-                      onFill={({ snippet, placement }) => {
-                        setDraft((d) =>
-                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
-                        );
-                        composerRef.current?.focus();
-                      }}
-                    />
-                  )}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3373,6 +3354,24 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
+                {/* Suggestions get their own row, clear of the model and send controls. */}
+                {!imageMode && showSuggest && <div className="composer-suggestions-row" data-composer-suggestions-row>
+                    <PromptAnalyzer
+                      variant="chip"
+                      text={deferredDraft}
+                      sessionId={sessionId}
+                      canModelFill={hasProvider}
+                      workspaces={settings?.workspaces ?? []}
+                      contextItems={ctx?.items ?? []}
+                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
+                      onFill={({ snippet, placement }) => {
+                        setDraft((d) =>
+                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
+                        );
+                        composerRef.current?.focus();
+                      }}
+                    />
+                </div>}
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}
