@@ -7,8 +7,31 @@
 /** The issue forms (bug report, feature request). */
 export const FEEDBACK_ISSUES_URL = 'https://github.com/nekko-labs/nekko-agent/issues/new/choose';
 
+/** How to join in, linked from the foot of the sheet. */
+export const FEEDBACK_CONTRIBUTING_URL = 'https://github.com/nekko-labs/nekko-agent/blob/main/CONTRIBUTING.md';
+
 /** Nekko Cloud's limit for a quick note, in characters. */
 export const FEEDBACK_MAX_CHARS = 4000;
+
+/** The sheet's limit for the one-line summary, in characters. */
+export const FEEDBACK_SUMMARY_MAX_CHARS = 120;
+
+export type FeedbackKind = 'good' | 'improve';
+
+const KIND_LABELS: Record<FeedbackKind, string> = { good: 'Good', improve: 'Needs improvement' };
+
+/**
+ * The quick note as Nekko Cloud stores it. The wire has one `message`, so the
+ * choice, summary and description travel inside it and share its limit.
+ */
+export function feedbackNote(kind: FeedbackKind, summary: string, description: string): string {
+  return `${KIND_LABELS[kind]}: ${summary.trim()}\n\n${description.trim()}`.trim();
+}
+
+/** Characters the note will use, counted as the server counts them: 0 until something is typed. */
+export function feedbackNoteLength(kind: FeedbackKind, summary: string, description: string): number {
+  return summary.trim() || description.trim() ? [...feedbackNote(kind, summary, description)].length : 0;
+}
 
 /**
  * The app facts a person may share: nothing that identifies them or the

@@ -741,7 +741,7 @@ class ComputersRepository(
         }
     }
 
-    // ---- New chat's Automatic (2026-11-05, decision 0051) ----
+    // ---- New chat's Automatic (2026-11-05, decision 0052) ----
 
     /** The live connection to a computer: the active one's, or its fleet link. */
     private fun connectionTo(id: String): Remote? = if (id == _state.value.activeId) client else links[id]?.client

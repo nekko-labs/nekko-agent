@@ -114,8 +114,13 @@ extension ComputersStore {
             lists[p] = got
             return got
         }
-        for (p, m) in prefer where providers.contains(where: { $0.id == p }) {
-            if await models(p).contains(where: { $0.id == m }) { return (p, m) }
+        for (p, m) in prefer {
+            // Provider ids belong to each computer, not the fleet. The same
+            // model may be available there under a different server id.
+            let ordered = providers.filter { $0.id == p } + providers.filter { $0.id != p }
+            for provider in ordered {
+                if await models(provider.id).contains(where: { $0.id == m }) { return (provider.id, m) }
+            }
         }
         var first: (String, String)?
         for p in providers {

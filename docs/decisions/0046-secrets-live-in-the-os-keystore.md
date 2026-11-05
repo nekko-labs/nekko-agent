@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted; macOS item layout and test policy amended by 0051
 date: 2026-11-03
 ---
 

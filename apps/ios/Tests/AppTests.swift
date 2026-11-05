@@ -475,8 +475,8 @@ final class ChatStatusIconTests: XCTestCase {
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true).label, "Waiting to send")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true).label, "Done")
         XCTAssertEqual(ChatStatusIcon(activity: nil).label, "Done")
-        XCTAssertEqual(ChatStatusIcon(activity: nil, activeWatchCount: 1).label, "Idle")
-        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, activeWatchCount: 1).label, "Idle")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, activeWatchCount: 1).label, "Watching")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, activeWatchCount: 1).label, "Watching")
         XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, activeWatchCount: 1).label, "Working")
         XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, activeWatchCount: 1).label, "Needs you")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
@@ -486,14 +486,22 @@ final class ChatStatusIconTests: XCTestCase {
 @MainActor
 final class LiveCardViewTests: XCTestCase {
     static let chats = [
-        LiveChat(id: "a", short: "Billing", state: .needsYou, step: "Needs your approval: Run npm test", reply: "Want me to run the tests?", closeWord: "Nice", finishedAt: nil, callId: "c1", severity: "low", startedAt: .now.addingTimeInterval(-75)),
-        LiveChat(id: "b", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.", closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil, startedAt: .now.addingTimeInterval(-754)),
-        LiveChat(id: "c", short: "iOS LA", state: .watching, step: "Watching PR #1211…", reply: "PR is up. Watching CI.", closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil),
-        LiveChat(id: "d", short: "Docs", state: .done, step: "Done 12 min ago", reply: "Docs page added.", closeWord: "Looks good", finishedAt: .now, callId: nil, severity: nil),
-        LiveChat(id: "e", short: "Relay", state: .failed, step: "Stopped with an error", reply: "The build broke.", closeWord: "Got it", finishedAt: .now, callId: nil, severity: nil),
+        LiveChat(id: "a", short: "Billing", state: .needsYou, step: "Needs your approval: Run npm test", reply: "Want me to run the tests?", closeWord: "Nice", finishedAt: nil, callId: "c1", severity: "low", startedAt: .now.addingTimeInterval(-75), title: "Billing page redesign"),
+        LiveChat(id: "b", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.", closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil, startedAt: .now.addingTimeInterval(-754), title: "Fix the login redirect loop on Safari"),
+        LiveChat(id: "c", short: "iOS LA", state: .watching, step: "Watching PR #1211…", reply: "PR is up. Watching CI.", closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil, title: "iOS Live Activity rows"),
+        LiveChat(id: "d", short: "Docs", state: .done, step: "Done 12 min ago", reply: "Docs page added.", closeWord: "Looks good", finishedAt: .now, callId: nil, severity: nil, title: "Docs for the relay"),
+        LiveChat(id: "e", short: "Relay", state: .failed, step: "Stopped with an error", reply: "The build broke.", closeWord: "Got it", finishedAt: .now, callId: nil, severity: nil, title: "Relay reconnect backoff"),
     ]
 
-    static func card(_ level: LiveLevel, focus: String? = nil, listening: Bool = false, sent: String? = nil) -> LiveCardState {
+    /// Twelve chats: two needing you, then a crowd the count line has to sum up.
+    static let crowd: [LiveChat] = chats + (0..<6).map { (i: Int) -> LiveChat in
+        LiveChat(id: "x\(i)", short: "Task \(i)", state: i < 3 ? .working : .done, step: "Running the tests", reply: "",
+                 closeWord: "Cool", finishedAt: i < 3 ? nil : .now, callId: nil, severity: nil,
+                 startedAt: i < 3 ? .now.addingTimeInterval(-60) : nil, title: "A long running task number \(i) with a long title")
+    } + [LiveChat(id: "q", short: "Pricing", state: .needsYou, step: "Asks: monthly or yearly first?", reply: "", closeWord: "Nice",
+                  finishedAt: nil, callId: nil, severity: nil, startedAt: .now.addingTimeInterval(-30), title: "Pricing page copy")]
+
+    static func card(_ level: LiveLevel, focus: String? = nil, listening: Bool = false, sent: String? = nil, chats: [LiveChat] = chats) -> LiveCardState {
         var card = buildCard(chats: chats, previous: nil, pinnedFocus: focus, level: level, now: .now)!
         if listening { card.listening = true; card.heard = "Go ahead and auto merge the PR" }
         if let sent { card.heard = "Sent: \(sent)" }
@@ -510,6 +518,10 @@ final class LiveCardViewTests: XCTestCase {
         ("listening", .detailed, card(.detailed, listening: true)),
         ("sent", .detailed, card(.detailed, focus: "b", sent: "Go ahead and auto merge the PR")),
         ("done-focused", .detailed, card(.detailed, focus: "d")),
+        ("crowd-minimal", .minimal, card(.minimal, chats: crowd)),
+        ("crowd", .standard, card(.standard, chats: crowd)),
+        ("crowd-detailed", .detailed, card(.detailed, chats: crowd)),
+        ("one-chat", .standard, card(.standard, chats: [chats[1]])),
     ]
 
     func framed(_ state: LiveCardState, _ level: LiveLevel) -> some View {
@@ -526,8 +538,14 @@ final class LiveCardViewTests: XCTestCase {
     func testFitsTheLockScreenAtEveryLevel() throws {
         for (name, level, state) in Self.cases {
             let renderer = ImageRenderer(content: framed(state, level))
-            let size = try XCTUnwrap(renderer.uiImage).size
-            XCTAssertLessThanOrEqual(size.height, 160, "\(name) is \(size.height) pt tall")
+            renderer.scale = 3
+            let image = try XCTUnwrap(renderer.uiImage)
+            XCTAssertLessThanOrEqual(image.size.height, 160, "\(name) is \(image.size.height) pt tall")
+            // Kept in the result bundle, which CI exports as the PR's screenshots.
+            let shot = XCTAttachment(image: image)
+            shot.name = "live-card-\(name)"
+            shot.lifetime = .keepAlways
+            add(shot)
         }
     }
 
@@ -542,6 +560,7 @@ final class LiveCardViewTests: XCTestCase {
         var other = real
         for i in other.chats.indices {
             other.chats[i].short = "Zebra"
+            other.chats[i].title = "Zebra crossing at noon"
             other.chats[i].step = "Something else entirely"
             other.chats[i].reply = "A different reply"
         }
@@ -554,16 +573,13 @@ final class LiveCardViewTests: XCTestCase {
         XCTAssertEqual(LiveChatState.needsYou.phaseLine, "Needs you")
     }
 
-    func testTheStripShowsThePageWithTheFocusedChat() {
-        let first = LiveCardView.page(Self.chats, focus: "b", size: 3)
-        XCTAssertEqual(first.shown.map(\.id), ["a", "b", "c"])
-        XCTAssertEqual(first.next?.id, "d")
-        let last = LiveCardView.page(Self.chats, focus: "d", size: 3)
-        XCTAssertEqual(last.shown.map(\.id), ["d", "e"])
-        XCTAssertEqual(last.next?.id, "a", "the last page steps back to the first")
-        // Every chat fits: "+N" (chats past the eight) opens the app instead.
-        XCTAssertNil(LiveCardView.page(Self.chats, focus: "d", size: 5).next)
-        XCTAssertNil(LiveCardView.page([], focus: nil, size: 3).next)
+    /// The two that need you are the rows (sorted to the top from the end of
+    /// the list); the rest are counted, and the chats past the eight the card
+    /// carries are a bare "+N".
+    func testTheCrowdShowsWhatNeedsYouAsRows() {
+        let card = Self.card(.standard, chats: Self.crowd)
+        XCTAssertEqual(cardRows(card).map(\.id), ["a", "q"])
+        XCTAssertEqual(cardTally(card).more, 4)
     }
 
     /// Evidence for review: apps/ios/.shots/live-card/ (git-ignored). Runs only

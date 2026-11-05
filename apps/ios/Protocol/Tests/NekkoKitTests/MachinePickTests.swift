@@ -149,6 +149,18 @@ final class MachinePickTests: XCTestCase {
         let loaded = await s.localModel(on: b, prefer: [("ollama", "gone")])
         XCTAssertEqual(loaded.map { [$0.0, $0.1] }, ["ollama", "small"])
 
+        // Provider ids belong to each computer. Keep the same model even
+        // when the target's model server has a different id.
+        let target = try XCTUnwrap(connections.first { $0.config.room == "bbbb" })
+        target.replies[Channels.providersList] = { _ in
+            [["id": "studio-ollama", "kind": "ollama", "label": "Ollama", "enabled": true]]
+        }
+        target.replies[Channels.modelsList] = { _ in
+            [["id": "big", "name": "Big"], ["id": "small", "name": "Small", "loaded": true]]
+        }
+        let renamed = await s.localModel(on: b, prefer: [("mac-ollama", "big"), ("studio-ollama", "small")])
+        XCTAssertEqual(renamed.map { [$0.0, $0.1] }, ["studio-ollama", "big"])
+
         // Offline, it isn't asked and isn't picked.
         try XCTUnwrap(connections.first { $0.config.room == "bbbb" }).status(RelayStatus(.offline))
         await settle()

@@ -5,7 +5,7 @@ area: phone
 
 # iPhone: New chat picks a free computer for a local model (2026-11-05)
 
-`[implemented 2026-11-05, iPhone only: the ranking, the probe over the fleet links and the activity:state phone view are unit-tested (NekkoKit MachinePickTests in a Linux Swift container, nekko-remote, packages/shared); the New chat screen builds only on macOS CI and was not run on a device or in the simulator yet. Android picks the same way since 2026-11-05 (native-android-app.md); the desktop doesn't pick]` Decision: [0051](../../docs/decisions/0051-new-chat-picks-a-free-computer-on-the-phone.md). Builds on [every computer at once](iphone-every-computer-at-once.md).
+`[implemented 2026-11-05, iPhone only: ranking, fleet probes and the activity:state phone view have unit coverage (NekkoKit MachinePickTests on native macOS CI, nekko-remote, packages/shared). The SwiftUI screen builds and the isolated simulator Automatic/manual/all-busy/pending-probe tests pass in run 42025582777 at 408528bef. Captured screenshots and timing video still require visual inspection; the full native suite is pending. Two real computers remain unverified. Android picks the same way since 2026-11-05 (native-android-app.md); the desktop doesn't pick]` Decision: [0052](../../docs/decisions/0052-new-chat-picks-a-free-computer-on-the-phone.md). Builds on [every computer at once](iphone-every-computer-at-once.md).
 
 ## User intent
 
@@ -33,7 +33,8 @@ Settled with Davide (2026-11-05):
 - `activity:state` (nekkod, the B1 idle signals) is a phone **Read** channel (`PHONE_ACTIVITY_READ_CHANNELS`). The computer projects it to `PHONE_ACTIVITY_VIEW`: `userActive`, `chatActive`, `headless` and `strain` (on battery, low, hot). Never `idleSeconds`, `power`, `cpuC` or `gpuC`. The phone's arguments are dropped, so the computer's own idle threshold (`automationIdleMinutes`) applies. Read off refuses it like every read.
 - `ComputersStore.pickMachine(lastUsed:)` (NekkoKit `MachinePick.swift`) asks every online computer `activity:state` and `providers:list` in parallel (4 s each), over the active connection or the computer's fleet link, and counts the chats replying there from the fleet's event streams.
 - `MachinePicker.pick` ranks the online computers with an enabled model server (Ollama, LM Studio, llama.cpp, vLLM): nobody using it, then didn't say (an older computer, or the read failed), then someone at it, then a chat replying. Ties go to the computer used last, then to one not on battery or hot, then to pairing order. If the best is busy, the one used last.
-- `ComputersStore.localModel(on:prefer:)` reads the target's providers and models over its link before it becomes active. Then New chat makes it active (the link is handed over, no new connection).
+- `ComputersStore.localModel(on:prefer:)` reads the target's providers and models over its link before it becomes active. Provider IDs belong to each computer: the selected model is matched across the target's enabled local providers before falling back to its last or loaded model. Then New chat makes it active (the link is handed over, no new connection).
+- Starting is disabled while Automatic probes. Superseded or cancelled probes cannot switch the computer, and an earlier probe cannot clear a newer probe's loading state. A server with no installed model keeps the current computer with the unavailable explanation, not the all-busy explanation.
 
 ## Privacy and security
 
@@ -50,5 +51,5 @@ Settled with Davide (2026-11-05):
 
 ## Not verified yet
 
-- The New chat screen on a phone or in the simulator (no screenshots yet; macOS CI builds it).
+- Actual visual inspection of the matched simulator screenshots and timing video; capture artifacts exist in [run 42025582777](https://github.com/nekko-labs/nekko-agent/actions/runs/42025582777), but local screenshot-inspection tools failed. Full native-suite completion is pending; the focused simulator tests passed.
 - Two real computers end to end.

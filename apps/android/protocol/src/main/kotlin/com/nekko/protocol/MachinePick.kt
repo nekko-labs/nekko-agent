@@ -4,7 +4,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 
-// New chat's Automatic (2026-11-05, decision 0051): a chat on a local model
+// New chat's Automatic (2026-11-05, decision 0052): a chat on a local model
 // starts on a paired computer that is free, so nobody has to know which one is.
 // The user can still pick one. The iPhone's MachinePick.swift, same rules.
 

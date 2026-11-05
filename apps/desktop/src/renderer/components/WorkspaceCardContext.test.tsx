@@ -100,11 +100,15 @@ describe('workspace card model line and attention', () => {
     state.providers = [];
   });
 
-  it('highlights a card waiting on you like the active one', () => {
-    expect(render()).not.toContain('bg-accent-soft');
-    expect(render({ status: 'input' })).toContain('bg-accent-soft');
-    expect(render({ status: 'error' })).toContain('bg-accent-soft');
+  it('keeps chat rows flat while status and title carry attention and selection', () => {
+    for (const patch of [{}, { status: 'input' as const }, { status: 'error' as const }, { isActive: true }]) {
+      const html = render(patch);
+      expect(html).toContain('agent-chip-chat');
+      expect(html).not.toContain('bg-accent-soft');
+      expect(html).not.toContain('border-color:');
+    }
     expect(render({ status: 'input' })).toContain('var(--attention)');
+    expect(render({ isActive: true })).toContain('font-medium text-ink');
   });
 });
 

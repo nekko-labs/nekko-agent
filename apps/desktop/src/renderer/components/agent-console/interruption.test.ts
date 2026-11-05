@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, PERSISTED_INTERRUPTION } from './interruption.js';
+import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, savedTurnFailure, PERSISTED_INTERRUPTION } from './interruption.js';
 
 describe('describeInterruption', () => {
   it('treats an intentional stop as a pause, not an error', () => {
@@ -71,5 +71,23 @@ describe('question waits', () => {
     const history = [{ id: 'ask', role: 'assistant' as const, content: '', toolCalls: [{ id: 'q', name: 'ask_user', input: {} }], createdAt: 1 }];
     expect(shouldShowPersistedInterruption(history, false, false, true)).toBe(false);
     expect(shouldShowPersistedInterruption(history, false, false, false)).toBe(true);
+  });
+});
+
+describe('savedTurnFailure', () => {
+  const tool = { id: 't', role: 'tool', content: '', createdAt: 1 } as const;
+  const failure = { message: 'You hit your usage limit.', afterMessageId: 't' };
+
+  it('brings back a failure that left no mark on the transcript', () => {
+    expect(shouldShowPersistedInterruption([tool], false, false)).toBe(false);
+    expect(savedTurnFailure({ messages: [tool], turnFailure: failure })).toBe(failure.message);
+  });
+
+  it('retires once the transcript has moved on or the failure was dismissed', () => {
+    const later = { id: 'u', role: 'user', content: 'again', createdAt: 2 } as const;
+    expect(savedTurnFailure({ messages: [tool, later], turnFailure: failure })).toBeNull();
+    expect(savedTurnFailure({ messages: [], turnFailure: failure })).toBeNull();
+    expect(savedTurnFailure({ messages: [tool], turnFailure: null })).toBeNull();
+    expect(savedTurnFailure({ messages: [tool] })).toBeNull();
   });
 });

@@ -812,6 +812,7 @@ impl Turns {
         // (pr_autowatch.rs). A turn the user stopped arms nothing.
         if summary.get("aborted") != Some(&Value::Bool(true)) && crate::pr_autowatch::enabled(&settings) {
             let (store, watches, id) = (store.clone(), self.watches.clone(), session_id.clone());
+            let dispatch = self.dispatch.get().cloned();
             tokio::spawn(async move {
                 let read = id.clone();
                 let Some(session) = tokio::task::spawn_blocking(move || store.get(&read)).await.ok().flatten() else {
@@ -819,6 +820,15 @@ impl Turns {
                 };
                 if !crate::pr_autowatch::eligible(&session) {
                     return;
+                }
+                // A chat the host may not wake (Claude Code on a Claude plan) is not watched:
+                // its wake-up would only be refused (pr_autowatch::wakes_allowed).
+                if let (Some(d), Some(provider)) = (dispatch, session.get("providerId").and_then(Value::as_str)) {
+                    let args = vec![json!(provider), json!("unattended_runs")];
+                    let capability = d("claude:capability".into(), args).await.ok();
+                    if !crate::pr_autowatch::wakes_allowed(capability.as_ref()) {
+                        return;
+                    }
                 }
                 let messages = session.get("messages").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
                 let urls = crate::pr_autowatch::opened_prs(messages);
@@ -1092,6 +1102,7 @@ impl Turns {
         // On disk while the turn runs, so a restart knows it was cut off.
         if let Some(obj) = lock(&session).as_object_mut() {
             obj.insert("activeRun".into(), json!({ "startedAt": nekko_js::now_ms() }));
+            obj.remove("turnFailure");
         }
         persist(&store, &session, incognito).await;
 
@@ -1462,9 +1473,9 @@ impl Turns {
                     let harness = Arc::downgrade(&self.harness);
                     let hub = lock(&self.wakes).get(&session_id).map(|(_, hub)| hub.clone());
                     let id = session_id.clone();
-                    child.on_background_change(move |n| {
+                    child.on_background_change(move |n, watchers| {
                         if let Some(h) = harness.upgrade() {
-                            h.note_background(&id, n);
+                            h.note_background(&id, n, watchers);
                         }
                         if let Some(hub) = &hub {
                             let event = json!({ "type": "claude_code_background", "sessionId": id, "tasks": n });
@@ -1599,8 +1610,16 @@ impl Turns {
 
         // The turn is over: nothing it waited on can still be answered.
         self.pending.release(&session_id);
+        // The `error` event only reaches windows open now. Saved, a chat reopened
+        // later can still offer Retry. A Stop is the user's, not a failure.
+        let failure = lock(&shared.last_error).clone().filter(|_| last_stop.is_none() && !shared.cancel.is_cancelled());
         if let Some(obj) = lock(session).as_object_mut() {
             obj.remove("activeRun");
+            if let Some(message) = failure {
+                let after =
+                    obj.get("messages").and_then(Value::as_array).and_then(|m| m.last()).map(|m| m["id"].clone());
+                obj.insert("turnFailure".into(), json!({ "message": message, "afterMessageId": after }));
+            }
         }
         persist(store, session, incognito).await;
 

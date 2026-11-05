@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-05
 ---
 
-# 0051. New chat picks a free computer on the phone, for local models
+# 0052. New chat picks a free computer on the phone, for local models
 
 ## Context
 
