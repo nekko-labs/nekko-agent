@@ -211,12 +211,22 @@ jobs:
           # A failed live run prints its stack's own logs (fake model, relay, agent): the phone's
           # screenshots alone can't say why the computer stopped answering.
           stack_logs() { for f in "$NEKKO_ITEST_LOGDIR"/*.log; do echo "::group::$1 $(basename "$f")"; tail -n 120 "$f"; echo "::endgroup::"; done; }
+          # The first-run suite is the only one split across simulator clones: its tests set all state by
+          # launch argument, open no host ports and leave evidence only in the one xcresult. One worker per
+          # 2 vCPUs and 4 GB of the VM, at most 4; a hosted 3-vCPU Mac gets 1, so it stays serial.
+          WORKERS=$(( $(sysctl -n hw.ncpu) / 2 )); MEM=$(( $(sysctl -n hw.memsize) / 4294967296 ))
+          [ "$MEM" -lt "$WORKERS" ] && WORKERS=$MEM; [ "$WORKERS" -gt 4 ] && WORKERS=4
+          PARALLEL=(-parallel-testing-enabled NO)
+          [ "$WORKERS" -lt 2 ] || PARALLEL=(-parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS")
+          echo "First-run suite: ${PARALLEL[*]}"
           TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests \
-            -retry-tests-on-failure -test-iterations 2 || failed=1
+            "${PARALLEL[@]}" -retry-tests-on-failure -test-iterations 2 || failed=1
           # A failing test gets one retry above: XCTest can hang minutes at "Setting up automation session"
           # before the app launches. Then a fresh boot, since every simulator loss so far followed this long suite.
           xcrun simctl shutdown "$DEVICE" || true
+          # The live runs below stay serial: each is one test against its own stack (the shell's single
+          # NEKKO_ITEST_PIDS and log dir), and the appearance and reinstalls are set on $DEVICE, which clones don't share.
           # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
           # The first-run suite already asked for notifications; a fresh install gets the prompt again.
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
