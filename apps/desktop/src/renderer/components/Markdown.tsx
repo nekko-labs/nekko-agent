@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { verificationPairs, type EvidencePair } from '../verificationEvidence.js';
+import { VerificationEvidence } from './VerificationEvidence.js';
 import { LocalImageCard } from './LocalImageCard.js';
 import { localImagePath } from '../localImages.js';
 import { fileUrlPath } from '../chatArtifacts.js';
@@ -55,7 +57,7 @@ function DocMarkdown({ text, basePath }: { text: string; basePath?: string }) {
 }
 
 function ChatMarkdown({ text, basePath, topics, askTail }: { text: string; basePath?: string; topics?: boolean; askTail?: boolean }) {
-  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics }), [basePath, topics]);
+  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, evidence: topics ? verificationPairs(text, basePath) : [] }), [basePath, topics, text]);
   const segments = markdownSegments(text);
   // A closing question gets the header the model did not write.
   const question = askTail && endsOnUnlabelledQuestion(text) ? segments.filter((s) => s.kind === 'text').at(-1) : undefined;
@@ -176,6 +178,7 @@ export interface Ctx {
   doc: boolean;
   basePath?: string;
   topics?: boolean;
+  evidence?: EvidencePair[];
 }
 
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
@@ -338,6 +341,7 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
     const topic = ctx.topics ? topicLine(line) : null;
     if (topic) {
       out.push(<TopicHeader key={`${key}-topic${i}`} topic={topic.topic} label={topic.label} />);
+      if (topic.topic === 'next' && ctx.evidence?.length) out.push(<VerificationEvidence key={`${key}-evidence${i}`} pairs={ctx.evidence} basePath={ctx.basePath} panel />);
       // The words after a label are the section's first line.
       if (topic.rest) lines[i] = topic.rest;
       else i += 1;
@@ -447,6 +451,12 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
     const para: string[] = [line];
     let j = i + 1;
     while (j < lines.length && !startsBlock(lines[j])) { para.push(lines[j]); j += 1; }
+    const paired = ctx.topics && para.every(l => IMAGE_ONLY_RE.test(l)) ? verificationPairs(para.join('\n'), ctx.basePath) : [];
+    if (paired.length && para.join('').match(/!\[/g)?.length === paired.length * 2) {
+      out.push(<VerificationEvidence key={key + '-comparison' + i} pairs={paired} basePath={ctx.basePath} />);
+      i = j;
+      continue;
+    }
     const gallery = remoteGallery(para);
     if (gallery) {
       out.push(<div key={`${key}-g${i}`}><RemoteImageGallery images={gallery} /></div>);
