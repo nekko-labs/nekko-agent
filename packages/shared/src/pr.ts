@@ -321,12 +321,12 @@ function outputPrData(output: string): { urls: string[]; state?: string; number?
       const direct = canonicalPrUrl(trimmed);
       if (direct) return [direct];
       const labelled = trimmed.match(/^(?:url:|View this pull request on GitHub:)\s*(https?:\/\/\S+)$/i);
-      const status = trimmed.match(/^(?:[✓✔!]\s*)?(?:Added|Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)\s+(https?:\/\/\S+)(?:\s|$)/i);
+      const status = trimmed.match(/^(?:[✓✔!]\s*)?(?:Added|(?:Successfully )?Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)\s+(https?:\/\/\S+)(?:\s|$)/i);
       const url = canonicalPrUrl(labelled?.[1] ?? status?.[1] ?? '');
       if (url) return [url];
       // gh's own status lines identify numeric commands in the current repo,
       // even when they print no URL. Never mine arbitrary body/diff references.
-      const reference = trimmed.match(/^[✓✔!]?\s*(?:(?:Added|Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request|Auto-merge enabled for pull request)\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#([1-9]\d*)\b/i);
+      const reference = trimmed.match(/^[✓✔!]?\s*(?:(?:Added|(?:Successfully )?Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request|Auto-merge enabled for pull request)\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#([1-9]\d*)\b/i);
       return reference ? [`https://github.com/${reference[1]}/pull/${reference[2]}`] : [];
     });
     return { urls: uniquePrUrls(urls) };
@@ -399,7 +399,7 @@ function interactionFor(command: PrCommand, output: string, known: readonly stri
   // short references validate provenance; they never supply a missing repo.
   if (command.outputEvidence) {
     for (const line of output.split(/\r?\n/)) {
-      const reference = line.match(/^\s*[✓✔!]?\s*(?:(?:Added|Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request|Auto-merge enabled for pull request)\s+(?:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+))?#([1-9]\d*)\b/i);
+      const reference = line.match(/^\s*[✓✔!]?\s*(?:(?:Added|(?:Successfully )?Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request|Auto-merge enabled for pull request)\s+(?:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+))?#([1-9]\d*)\b/i);
       if (reference && (Number(reference[2]) !== identity.number
         || (reference[1] && reference[1].toLowerCase() !== `${identity.owner}/${identity.repo}`.toLowerCase()))) return undefined;
     }
