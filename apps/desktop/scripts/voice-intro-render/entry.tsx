@@ -13,7 +13,7 @@ const VARS = {
   light: {
     '--surface-2': '#f2f2f7', '--win': '#fcfcfe', '--line': '#e8e8ef',
     '--ink': '#17171d', '--ink-soft': '#52525e', '--ink-faint': '#8a8a97',
-    '--accent': '#6d5efc', '--accent-soft': 'color-mix(in srgb, #6d5efc 13%, transparent)',
+    '--accent': '#5a2352', '--accent-soft': 'color-mix(in srgb, #5a2352 13%, transparent)',
     '--danger': '#d24738', '--danger-soft': 'color-mix(in srgb, #d24738 14%, transparent)',
   },
   dark: {
