@@ -696,6 +696,7 @@ impl Table {
                     ctx.sessions.clone(),
                     Some(ctx.turns.agent_logs.clone()),
                     Some(ctx.turns.watches.clone()),
+                    Some(ctx.turns.harness.clone()),
                     protected,
                     channel,
                     args,
@@ -1144,6 +1145,7 @@ async fn session_op(
     store: Arc<nekko_store::SessionStore>,
     logs: Option<Arc<crate::agent_logs::AgentLogs>>,
     watches: Option<Arc<crate::watches::Watches>>,
+    harness: Option<Arc<crate::harness::Harness>>,
     protected: Option<ProtectedSession>,
     channel: &str,
     args: Vec<Value>,
@@ -1166,11 +1168,14 @@ async fn session_op(
                         *counts.entry(id.to_string()).or_default() += 1;
                     }
                 }
+                let watchers = harness.as_ref().map(|h| h.background_watchers()).unwrap_or_default();
                 for session in &mut sessions {
-                    let count =
-                        session.get("id").and_then(Value::as_str).and_then(|id| counts.get(id)).copied().unwrap_or(0);
+                    let id = session.get("id").and_then(Value::as_str);
+                    let count = id.and_then(|id| counts.get(id)).copied().unwrap_or(0);
+                    let watching = id.and_then(|id| watchers.get(id)).copied().unwrap_or(0);
                     if let Some(obj) = session.as_object_mut() {
                         obj.insert("activeWatchCount".into(), json!(count));
+                        obj.insert("backgroundWatchCount".into(), json!(watching));
                     }
                 }
                 Ok(Value::Array(sessions))
@@ -1243,14 +1248,21 @@ mod tests {
             { "sessionId": "s1" }
         ]).to_string()).unwrap();
         let watches = crate::watches::Watches::new(tmp.path().to_path_buf(), store.clone(), Hub::new());
+        let harness = crate::harness::Harness::new();
+        harness.note_background("s3", 3, 2);
         for channel in ["sessions:list", "sessions:summaries"] {
-            let got = session_op(store.clone(), None, Some(watches.clone()), None, channel, vec![]).await.unwrap();
+            let got =
+                session_op(store.clone(), None, Some(watches.clone()), Some(harness.clone()), None, channel, vec![])
+                    .await
+                    .unwrap();
             let rows = got.as_array().unwrap();
             assert_eq!(rows.iter().map(|s| s["id"].as_str().unwrap()).collect::<Vec<_>>(), ["s3", "s2", "s1"]);
             assert_eq!(rows.iter().map(|s| s["activeWatchCount"].as_u64().unwrap()).collect::<Vec<_>>(), [0, 1, 3]);
+            assert_eq!(rows.iter().map(|s| s["backgroundWatchCount"].as_u64().unwrap()).collect::<Vec<_>>(), [2, 0, 0]);
             let mut expected = if channel == "sessions:list" { store.list() } else { store.summaries() };
-            for (session, count) in expected.iter_mut().zip([0, 1, 3]) {
+            for ((session, count), tasks) in expected.iter_mut().zip([0, 1, 3]).zip([2, 0, 0]) {
                 session["activeWatchCount"] = json!(count);
+                session["backgroundWatchCount"] = json!(tasks);
             }
             assert_eq!(got, json!(expected), "all other metadata and transcript behavior stays unchanged");
             if channel == "sessions:summaries" {
@@ -1267,8 +1279,10 @@ mod tests {
         }
         // Counts are live even when the session summaries came from the cache.
         std::fs::write(path, "[]").unwrap();
-        let got = session_op(store, None, Some(watches), None, "sessions:summaries", vec![]).await.unwrap();
-        assert!(got.as_array().unwrap().iter().all(|s| s["activeWatchCount"] == 0));
+        harness.note_background("s3", 0, 0);
+        let got =
+            session_op(store, None, Some(watches), Some(harness), None, "sessions:summaries", vec![]).await.unwrap();
+        assert!(got.as_array().unwrap().iter().all(|s| s["activeWatchCount"] == 0 && s["backgroundWatchCount"] == 0));
     }
 
     #[tokio::test]
@@ -1283,8 +1297,9 @@ mod tests {
             }
             for channel in ["sessions:list", "sessions:summaries"] {
                 for watches in [None, Some(watches.clone())] {
-                    let got = session_op(store.clone(), None, watches, None, channel, vec![]).await.unwrap();
+                    let got = session_op(store.clone(), None, watches, None, None, channel, vec![]).await.unwrap();
                     assert_eq!(got[0]["activeWatchCount"], 0);
+                    assert_eq!(got[0]["backgroundWatchCount"], 0);
                 }
             }
         }
@@ -1302,6 +1317,7 @@ mod tests {
         let protected: ProtectedSession = Arc::new(|id| id == "s_busy");
         let removed = session_op(
             store.clone(),
+            None,
             None,
             None,
             Some(protected),

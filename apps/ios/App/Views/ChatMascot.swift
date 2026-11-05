@@ -22,14 +22,16 @@ struct ChatMascot: View {
     var working = false
     private var pull: PawPull
     private let grabs: Bool
+    private let refresh: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var greeting = false
     @State private var greetingID = 0
 
-    init(working: Bool = false, pull: PawPull? = nil) {
+    init(working: Bool = false, pull: PawPull? = nil, refresh: (() -> Void)? = nil) {
         self.working = working
         self.pull = pull ?? PawPull()
+        self.refresh = refresh
         grabs = pull != nil
     }
 
@@ -49,8 +51,13 @@ struct ChatMascot: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Say hello to Nekko")
-        .accessibilityValue(greeting ? String(localized: "Hello!") : working ? String(localized: "Working") : String(localized: "Idle"))
+        .accessibilityValue(pull.animating ? String(localized: "Refreshing") : greeting ? String(localized: "Hello!") : working ? String(localized: "Working") : String(localized: "Idle"))
         .accessibilityIdentifier("chats.mascot")
+        // Keep Refresh on the button, before the decorative paw layer widens the view.
+        // On the transcript it would be inherited by static captions as hit targets.
+        .accessibilityActions {
+            if let refresh { Button("Refresh", action: refresh) }
+        }
         .task(id: greetingID) {
             guard greeting else { return }
             do {
