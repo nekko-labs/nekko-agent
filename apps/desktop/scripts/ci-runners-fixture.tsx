@@ -113,6 +113,15 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'image-retry': async () => [offNoImage()],
   'card-ready': async () => [view({ today: { jobs: 3, seconds: 41 * 60 } })],
   settings: async () => [view({ limit: 'memory', available: 1 })],
+  'linux-slots': async () => [view({
+    state: 'running', available: 2, linuxAvailable: 2,
+    slots: [
+      { guest: 'macos', state: 'running', job: { repo: 'nekko-labs/nekko-agent', runId: 904, jobId: 9041, workflow: 'ios-native', job: 'PR #904' }, since: NOW - 11 * 60, drainEndsAt: null },
+      { guest: 'linux', state: 'running', job: { repo: 'nekko-labs/nekko-agent', runId: 905, jobId: 9051, workflow: 'ci', job: 'server tests' }, since: NOW - 3 * 60, drainEndsAt: null },
+    ],
+  }, { macosSlots: 2, linuxSlots: 3 })],
+  'settings-linux': async () => [view({ available: 2, linuxAvailable: 2 }, { linuxSlots: 2 })],
+  'settings-linux-building': async () => [view({ available: 2, linuxAvailable: 0, linuxError: 'No Linux image yet.' }, { linuxSlots: 2 })],
   'settings-bottom': async () => [view({ limit: 'memory', available: 1 })],
   'settings-unsampled': async () => [view({ host: unsampled, state: 'waiting', reasons: ['hostStateUnknown'] })],
 };
@@ -202,6 +211,9 @@ const bridge: any = {
   },
   cancelImage: async () => { imageChanged(READY); return READY; },
   imagePlan: async () => plans[scene] ?? PLAN,
+  linuxImageStatus: async () => (scene === 'settings-linux-building'
+    ? { state: 'building', stage: 'download', progress: 0.42, message: 'Downloading Ubuntu 24.04 (1 of 3)', proof: null }
+    : { state: 'ready', stage: null, progress: null, message: null, proof: { distro: 'ubuntu-24.04', runner: '2.338.1', docker: '29.1.3-0ubuntu3~24.04.2' } }),
   onImageChanged: (cb: (v: ImageView) => void) => { imageChanged = cb; return () => {}; },
   onRunnersChanged: (cb: (v: RunnerView[]) => void) => { runnersChanged = cb; return () => {}; },
   setForkApproval: async () => ({ done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions' }),
@@ -214,6 +226,8 @@ function Fixture() {
   const [epoch, setEpoch] = useState(0);
   const show = (next: string) => {
     localStorage.clear();
+    // Simple mode hides the CI runners section; the fixture shows it as Expert mode does.
+    localStorage.setItem('nekko.chatMode', 'expert');
     scene = next;
     (window as any).opened = [];
     useStore.setState({ view: 'workflows', providers: [], models: [], sessions: [], terminals: [], workspaces: [], settings, settingsLoaded: true, installedSkillDefs: [] } as any);

@@ -552,6 +552,11 @@ impl Table {
             crate::runner::image::CHANNELS,
             handler!(|ctx, channel, args| ctx.runners.image_route(channel, &args).await),
         );
+        #[cfg(unix)]
+        t.add(
+            crate::runner::linux_image::CHANNELS,
+            handler!(|ctx, channel, _args| ctx.runners.linux_image_route(channel).await),
+        );
         t.add(crate::telemetry::CHANNELS, handler!(|ctx, channel, args| crate::telemetry::route(channel, &args).await));
         t.add(
             crate::connections::CHANNELS,

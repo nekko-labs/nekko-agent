@@ -121,6 +121,26 @@ describe('runner helpers', () => {
     expect(slotLines(view({ slots: [slot('running', { job, since: now - 99_999 })] }), now)[0].progress).toBe(1);
   });
 
+  it('linux_slots_follow_the_macos_ones_and_say_why_they_wait', () => {
+    const job = { repo: 'o/r', runId: 1, jobId: 2, workflow: 'ci', job: 'server tests' };
+    const v = view(
+      { available: 1, linuxAvailable: 1, slots: [slot('ready'), slot('running', { guest: 'linux', job, since: now - 60 })] },
+      { macosSlots: 1, linuxSlots: 2 },
+    );
+    expect(slotLines(v, now).map((l) => [l.title, l.text, l.dim])).toEqual([
+      ['Slot 1 · macOS', 'Ready for a job', false],
+      ['Slot 2 · Linux', 'ci · server tests · 1 min', false],
+      ['Slot 3 · Linux', 'Not available: the memory macOS slots leave is used up.', true],
+    ]);
+    // A Linux VM never fills a macOS tile, whatever order the daemon lists them in.
+    const first = view({ available: 1, linuxAvailable: 1, slots: [slot('starting', { guest: 'linux' })] }, { macosSlots: 1, linuxSlots: 1 });
+    expect(slotLines(first, now).map((l) => l.text)).toEqual(['Starts a VM when a job is queued', 'Starting a VM']);
+    const none = view({ linuxAvailable: 0, linuxError: 'No Linux image yet.' }, { macosSlots: 0, linuxSlots: 1 });
+    expect(slotLines(none, now)).toEqual([{ title: 'Slot 1 · Linux', text: 'Not available: No Linux image yet.', progress: 0, dim: true }]);
+    // An older daemon sends neither field: no Linux tiles beyond the setting, all unavailable.
+    expect(slotLines(view({}, { linuxSlots: 0 }), now)).toHaveLength(1);
+  });
+
   it('describes recent jobs', () => {
     const line = (over: Partial<AuditLine>): AuditLine => ({ ts: now, runnerId: 'r', repo: 'o/r', workflow: 'ci', job: 'darwin daemon', result: 'finished', seconds: 120, reason: [], ...over });
     expect(auditText(line({ workflow: 'mobile', job: 'iOS build', seconds: 660 }))).toBe('mobile · iOS build · finished · 11 min');

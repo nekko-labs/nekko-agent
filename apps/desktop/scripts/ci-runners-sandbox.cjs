@@ -128,6 +128,15 @@ app.whenReady().then(async () => {
       await run("[...document.querySelectorAll('[role=dialog], [role=dialog] *')].forEach(e=>{e.scrollTop=e.scrollHeight})"); await sleep(200);
     },
     'settings-unsampled': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
+    'linux-slots': async () => { await run("document.querySelector('[data-runner-card]')?.scrollIntoView({block:'start'})"); await sleep(200); },
+    'settings-linux': async () => {
+      await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500);
+      await run("(()=>{const r=[...document.querySelectorAll('[role=dialog] p')].find(e=>e.textContent.startsWith('Linux slots'));r&&r.scrollIntoView({block:'center'})})()"); await sleep(200);
+    },
+    'settings-linux-building': async () => {
+      await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500);
+      await run("(()=>{const r=[...document.querySelectorAll('[role=dialog] p')].find(e=>e.textContent.startsWith('Linux slots'));r&&r.scrollIntoView({block:'center'})})()"); await sleep(200);
+    },
   };
   const checks = {
     'first-visit': [['both steps, step 2 waits', "(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent==='After step 1');return document.body.innerText.includes('Use this Mac as a CI runner')&&document.querySelectorAll('.runner-step svg').length===2&&b&&b.disabled})()"]],
@@ -182,12 +191,17 @@ app.whenReady().then(async () => {
       ['exact mode labels present', "[\"Do not disturb: Only run when I'm idle\",'Balanced: in the background','Runner first','System default','While a runner is active','Always','Let jobs use the internet directly while a VPN is on'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"],
       ['recommendation shown', "document.body.innerText.includes('Recommended: 20 GB for this Mac')"]],
     'settings-bottom': [['Max job time and Save in view', "(()=>{const v=e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight};const m=[...document.querySelectorAll('[role=dialog] p')].find(e=>e.textContent==='Max job time');const s=[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Save');return !!m&&!!s&&v(m)&&v(s)})()"]],
+    'linux-slots': [['Linux tiles follow the macOS ones', "(()=>{const t=document.body.innerText;return t.includes('Slot 3 · Linux')&&t.includes('ci · server tests')&&t.includes('Slot 5 · Linux')&&t.includes('Not available: the memory macOS slots leave is used up.')})()"]],
+    'settings-linux': [['Linux slots and the ready image', "(()=>{const t=document.querySelector('[role=dialog]').innerText;return t.includes('nekko-cloud-mac-linux')&&t.includes('Rebuild Linux image')&&t.includes('ubuntu-24.04 · runner 2.338.1')})()"]],
+    'settings-linux-building': [['the build in progress', "(()=>{const t=document.querySelector('[role=dialog]').innerText;return t.includes('Downloading: Downloading Ubuntu 24.04 (1 of 3) 42%')&&[...document.querySelectorAll('[role=dialog] button')].some(b=>b.textContent==='Cancel')})()"]],
     'settings-unsampled': [['waits for the first reading', "document.body.innerText.includes('Waiting for this Mac\\'s first reading.') && !document.body.innerText.includes('Recommended:')"]],
   };
   try {
-    await win.loadFile(path.join(out, 'index.html')); await sleep(1000);
+    await win.loadFile(path.join(out, 'index.html')); await sleep(1000); 
     for (const theme of ['light', 'dark']) {
-      for (const [scene, act] of Object.entries(scenes)) {
+      // NEKKO_CI_SCENES=a,b captures only those scenes (a PR's before and after).
+      const only = (process.env.NEKKO_CI_SCENES || '').split(',').filter(Boolean);
+      for (const [scene, act] of Object.entries(scenes).filter(([s]) => !only.length || only.includes(s))) {
         await open(scene, theme); await act(); await sleep(300);
         await capture(`ci-runners-${scene}-${theme}`);
         await check(`${theme} ${scene}: no em dash in document text`, "!document.body.innerText.includes('\\u2014')");

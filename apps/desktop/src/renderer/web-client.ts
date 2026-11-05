@@ -55,6 +55,7 @@ function makeWebClient(): NekkoApi {
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
   const imageCbs = new Set<(view: import('@nekko-agent/shared').ImageView) => void>();
+  const linuxImageCbs = new Set<(view: import('@nekko-agent/shared').LinuxImageView) => void>();
   const runnerCbs = new Set<(views: import('@nekko-agent/shared').RunnerView[]) => void>();
   const githubSetupCbs = new Set<(view: import('@nekko-agent/shared').GithubSetupView) => void>();
   const oauthStatusCbs = new Set<(s: OAuthStatus) => void>();
@@ -79,6 +80,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerImageChanged) imageCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerLinuxImageChanged) linuxImageCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerChanged) runnerCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerGithubChanged) githubSetupCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.oauthStatus) oauthStatusCbs.forEach((cb) => cb(payload));
@@ -686,6 +688,9 @@ function makeWebClient(): NekkoApi {
     buildImage: (req) => call(IpcChannels.runnerImageBuild, req),
     resumeImage: () => call(IpcChannels.runnerImageResume),
     cancelImage: () => call(IpcChannels.runnerImageCancel),
+    linuxImageStatus: () => call(IpcChannels.runnerLinuxImageStatus),
+    buildLinuxImage: () => call(IpcChannels.runnerLinuxImageBuild),
+    cancelLinuxImage: () => call(IpcChannels.runnerLinuxImageCancel),
     listRunners: () => call(IpcChannels.runnerList),
     connectRunner: (req) => call(IpcChannels.runnerConnect, req),
     updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
@@ -861,6 +866,10 @@ function makeWebClient(): NekkoApi {
     onImageChanged: (cb) => {
       imageCbs.add(cb);
       return () => imageCbs.delete(cb);
+    },
+    onLinuxImageChanged: (cb) => {
+      linuxImageCbs.add(cb);
+      return () => linuxImageCbs.delete(cb);
     },
     onRunnersChanged: (cb) => {
       runnerCbs.add(cb);
