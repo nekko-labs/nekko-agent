@@ -1128,13 +1128,13 @@
     --ink-soft: #52525e;
     --ink-faint: #6c6c77;
     --line: #e8e8ef;
-    --accent: #6d5efc;
+    --accent: #5a2352;
     /* Text on the accent fill (primary buttons). Themes with a light accent switch it to dark ink. */
     --on-accent: #ffffff;
     /* One brand hue. --accent-2 is a second data colour (charts, the code
      highlight, a celebration); it never fills a button, a title or the nav.
      Derived soft tokens track --accent, which the user can recolour. */
-    --accent-2: #06b6d4;
+    --accent-2: #8a4a7f;
     --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
     /* Shadows: tinted, never pure black, blur twice the offset, and only on
      what floats (menus, popovers, toasts, a dragged card). Resting cards get a
@@ -1213,8 +1213,8 @@
     --ink-soft: #a3a1b0;
     --ink-faint: #898894;
     --line: #26262f;
-    --accent: #8b7dff;
-    --accent-2: #22d3ee;
+    --accent: #c084b5;
+    --accent-2: #c99bb3;
     --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
     --shadow-ink: color-mix(in srgb, var(--paper) 40%, #000);
     --shadow-sm: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 40%, transparent);
@@ -3715,6 +3715,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
     0 18px 50px -22px color-mix(in srgb, var(--accent) 45%, transparent),
     0 2px 4px color-mix(in srgb, var(--shadow-ink) 30%, transparent);
 }
+/* The frost's backdrop-filter makes the composer its own stacking context, so
+   its menus' z-index cannot beat the greeting cat (z 3-4) from inside. Lift the
+   whole composer while one is open (+ menu, slash/@ menus, model picker); when
+   closed it stays below so the cat's paws keep straddling its top edge. */
+[data-clean-start] .clean-start .composer:has([aria-expanded='true']) { z-index: 5; }
 /* Frost has no prism outline, including while typing. */
 [data-clean-start] .clean-start .composer::after { display: none; }
 /* Light themes use a whiter glass with the same soft, borderless depth. */

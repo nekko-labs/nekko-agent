@@ -9,7 +9,7 @@ import SwiftUI
 /// Reduce Motion fades the ground and the cat instead.
 ///
 /// Coming back to the app plays only the end of it (`.resume`): the cat on the
-/// lavender dissolves and the app fades in, in under half a second.
+/// plum dissolves and the app fades in, in under half a second.
 struct SplashView: View {
     enum Kind { case launch, resume }
     var kind: Kind = .launch
@@ -21,7 +21,8 @@ struct SplashView: View {
     @State private var start: Date?
     @State private var faded = false
 
-    static let ground = Color(red: 0x9d / 255, green: 0x8c / 255, blue: 0xe6 / 255)
+    /// The brand plum, the app icon's tile (spec/brand/colour-palette.md).
+    static let ground = Color(red: 0x19 / 255, green: 0x00 / 255, blue: 0x19 / 255)
     private static let ink = Color.white
     /// The zoom, in seconds: the desktop's 1.05 beats at 120 BPM.
     private static let zoomFor = 0.525

@@ -52,6 +52,21 @@ Conditions: exact queue parent `2475c3b3e50f27a33c0271e417b587cfae522651` and he
 All four fail the unchanged 33 ms gate. This establishes an exact-parent baseline failure on this runner, not zero impact or a speedup. The original queue on Intel Xeon 6973P-C (same browser, Linux 4 threads) measured 34.6 / 33.9 / 33.8 ms; all other measured speed/memory rows, build, integration tests and CodeQL passed. Do not treat the original frame-only automatic profiles as cold-switch evidence.
 
 Separate timeline-instrumented base/head p95 was 39.9 / 41.3 ms. Inspected cold-switch traces contain 179441 / 162435 events; renderer-thread nested event totals: UpdateLayoutTree 701.503 / 692.301 ms, Layout 172.874 / 165.797 ms, Paint 2167.981 / 2058.461 ms. These whole-phase totals overlap and have instrumentation overhead; they are not per-click causal attribution. Raw source revisions, cleanliness, hashes, reports, samples and traces are in [matched diagnostic 41992014521](https://github.com/nekko-labs/nekko-agent/actions/runs/41992014521) and retained locally in `.shots/pr1814-archive`. The temporary diagnostic workflow must never merge. Baseline tracker: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). Later queue attempts [42005371375](https://github.com/nekko-labs/nekko-agent/actions/runs/42005371375) and [42007380317](https://github.com/nekko-labs/nekko-agent/actions/runs/42007380317) failed only cold first-paint (p95 41.1 to 44.2 ms, EPYC 7763); build, integration tests, CodeQL and every other measured speed/memory row passed.
+## Inline PR lifecycle model queue diagnosis (#1820/#1821, 2026-11-05)
+
+Area: renderer / shared projection. Result: unchanged-base cold-paint failure reproduced; no product optimization or zero-regression claim.
+Conditions: exact queue parent `edcdeb9c7da0ef7d5e4f4cf1af26cc5f1fe91861` and model group `4920a6924fa21ad04600f5f0c3e4cacb532c21ce`, one AMD EPYC 9V45 Linux runner (4 threads, 16 GB), Chrome156.0.8078.79, Node22.23.4, 1440x1000, 33 cold switches per phase. Clean snapshots, identical perf harness/daemon sources and independently built release daemons with identical SHA256 `cded2594759104dad5a059fe91e7cb9a612b4f2959c9d72432bedabecfda54e6`.
+
+| Unprofiled metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold first-frame p95 | 30.7 / 37.2 ms | 30.2 / 31.7 ms |
+| Cold first-frame p50 | 25.6 / 25.9 ms | 24.0 / 23.7 ms |
+
+Order was base/head/head/base. Both head runs pass the unchanged 33 ms gate; only the second unprofiled base fails. This establishes a baseline failure in this comparison, not two unprofiled baseline failures, a measured speedup, or proof the feature has no effect. Separate timeline-instrumented base/head p95 was 38.9 / 36.2 ms, p50 31.0 / 31.8 ms; both fail, but profiling overhead prevents treating these as additional unprofiled controls. Cold-phase trace event counts were 207832 / 202330. Renderer-main nested totals (overlap, not per-click attribution): style 750.609 / 734.030 ms, Layout 185.460 / 183.592 ms, Paint 2010.819 / 2068.347 ms, Layerize 1347.518 / 1310.612 ms. No causal repair is inferred from whole-phase totals.
+
+Original queue [42014517917](https://github.com/nekko-labs/nekko-agent/actions/runs/42014517917) on EPYC7763 / Chrome156.0.8078.79 failed cold p95 40.3 / 39.0 / 37.4 ms (33 samples each); other measured speed/memory budgets passed, terminal typing skipped. Its automatic unchanged-base profile measured streaming frames only, not cold latency. An already-started replacement [42016971870](https://github.com/nekko-labs/nekko-agent/actions/runs/42016971870), different parent `31c3505ce` and EPYC9V45 / Chrome156.0.8078.47, passed cold p95 31.3 ms / p50 22.3 ms (33 samples); its gate refused the subsequently held/draft PR as intended. Different-runner results are not a repair.
+
+Source: [matched reports, raw samples, exact provenance and latency timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42017796367). Tracking: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). No budget change.
 
 ## Follow-up slider and text toolbar (#1760, 2026-11-05)
 
