@@ -34,12 +34,6 @@ describe('agent status from events', () => {
     expect(statusFromEvent('session_meta')).toBeUndefined();
     expect(statusFromEvent('session_meta', 'input')).toBeUndefined();
   });
-  it('leaves a finished chat finished when an event about the chat lands after done', () => {
-    for (const type of ['session_meta', 'compaction', 'claude_code_background'] as const) {
-      expect(statusFromEvent(type), type).toBeUndefined();
-      expect(statusFromEvent(type, 'working'), type).toBeUndefined();
-    }
-  });
   // Source pin, pending an agents-panel e2e journey: the seeding is a mount effect
   // waiting on a host promise, which a server render never runs.
   it('seeds waiting chats from the host on mount (source pin)', () => {

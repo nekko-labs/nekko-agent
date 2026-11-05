@@ -124,14 +124,11 @@ function projectOfWorkspace(w: Workspace, sessions: SessionSummary[], terminals:
  * input" until it is answered. While parked the run keeps streaming nothing, but
  * a stray token or step must not quietly flip the card back to "working" and
  * hide the ?, so only the events that end the wait (an answer, a tool result,
- * done, error) move it on. `undefined` keeps whatever the card showed, as do
- * the events about the chat rather than its turn, which can land after `done`.
+ * done, error) move it on. `undefined` keeps whatever the card showed.
  */
 export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): AgentStatus | null | undefined {
   switch (type) {
-    case 'session_meta':
-    case 'compaction':
-    case 'claude_code_background': return undefined;
+    case 'session_meta': return undefined;
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':
