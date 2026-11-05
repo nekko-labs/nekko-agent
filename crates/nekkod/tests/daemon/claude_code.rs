@@ -260,6 +260,8 @@ pub fn fake_claude() {
             }
             out(assistant("m_d3", json!([{ "type": "text", "text": "They say hello." }])));
             out(result("They say hello.", "completed"));
+        } else if text == "out of tokens" {
+            out(result("You've hit your usage limit.", "model_error"));
         } else if text == "hang" {
             out(
                 json!({ "type": "stream_event", "event": { "type": "message_start", "message": { "id": "m_h" } }, "parent_tool_use_id": null }),
@@ -657,6 +659,24 @@ async fn a_background_sub_agent_outlives_the_turn_that_started_it() {
     assert_eq!(done["stop"], "complete");
     let child = children(&rig).remove(0);
     assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "The notes say hello.");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_turn_is_saved_until_the_next_turn_starts() {
+    let rig = rig("failed", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccF", "out of tokens")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, _) = turn_record(&rig, "ccF", "s_cc").await;
+    assert!(events.iter().any(|e| e["type"] == "error"), "{events:?}");
+
+    let session = saved(&rig);
+    assert_eq!(session["turnFailure"]["message"], "You've hit your usage limit.", "{session}");
+    assert_eq!(session["turnFailure"]["afterMessageId"], session["messages"].as_array().unwrap().last().unwrap()["id"]);
+
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccF2", "usage")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccF2", "s_cc").await;
+    assert!(saved(&rig).get("turnFailure").is_none());
 }
 
 #[tokio::test(flavor = "multi_thread")]

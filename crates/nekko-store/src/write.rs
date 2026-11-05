@@ -19,6 +19,7 @@ use std::sync::Mutex;
 /// The fields `setSessionOptions` takes (its `Pick<Session, ...>`).
 const OPTION_KEYS: &[&str] = &[
     "title",
+    "turnFailure",
     "pinned",
     "tags",
     "order",
