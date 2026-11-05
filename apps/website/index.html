@@ -352,7 +352,15 @@
             </ul>
             <a class="card-link" href="#beta">Get early access <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video coming soon: the phone app approving a command. Opens larger."><span>Demo · On the go</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
+          <!-- dark and light files; CSS shows the one for the current look -->
+          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video, an illustration of the beta phone app: a long run on your computer at home pauses on a risky command, your phone buzzes asking for approval, you tap Approve, and the run finishes. Opens larger.">
+            <video class="panel-video panel-look-dark" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-convenient-poster.webp" data-autoplay>
+              <source src="media/demo-convenient.mp4" type="video/mp4">
+            </video>
+            <video class="panel-video panel-look-light" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-convenient-light-poster.webp" data-autoplay>
+              <source src="media/demo-convenient-light.mp4" type="video/mp4">
+            </video>
+          </button>
         </article>
 
         <p class="micro center reveal panels-foot">Also in the box: scheduled agents and triggers, Whisper dictation on your computer, cost tracking for cloud models, skills and sub-agents, and connectors for GitHub, Linear, Slack, Discord, Gmail and Drive.</p>
