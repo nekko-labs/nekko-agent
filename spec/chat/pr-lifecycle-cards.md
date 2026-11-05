@@ -11,14 +11,16 @@ PR work should remain visible in the conversation at the point it happened, not 
 
 ## Implemented
 
-- Confirmed, attributable `bash` / `Bash` calls to `gh pr` project inline cards for creation, draft, ready for review, queue entry, merge request, actual merge, close, reopen, update, review and view/check/diff interactions. Existing direct API creation support is retained.
+- Confirmed, attributable `bash` / `Bash` calls to `gh pr` project inline cards for creation, draft creation, draft, ready for review, auto-merge enabled, queue entry, merge request, actual merge, close, reopen, update, review and view/check/diff interactions. Existing direct API creation support is retained.
 - Events are derived from stored tool calls/results, not assistant prose, pasted URLs, read files, arbitrary output or a guessed branch/repository. A direct PR URL, explicit repo/number, gh's own full repo/number status line, or an unambiguous previously known identity supplies the link. Failed, pending, orphaned, contradictory and replayed results do not establish success.
-- A successful merge command alone means **Merge requested**. **PR queued** needs queue-entry confirmation; **PR merged** needs terminal confirmation. Enabling auto-merge is not a merge. Quoted bodies/titles and formatting expressions do not supply identity or terminal-state evidence.
-- A single leading `cd … &&` and established create-body heredocs/output trims remain supported. Ambiguous shell batches, scripts, unrecognized flags and branch-only targets are deliberately not interpreted as lifecycle evidence.
+- A successful merge command alone means **Merge requested**. **PR queued** needs queue-entry confirmation; **PR merged** needs terminal confirmation. Explicit auto-merge confirmation means **Auto-merge enabled**, not merged. No-op/already-state warnings, multiple or contradictory confirmations and unknown merge output do not invent transitions. Quoted bodies/titles and formatting expressions do not supply identity or terminal-state evidence.
+- A single leading `cd … &&` and established create-body heredocs/output trims remain supported. Ambiguous shell batches, scripts, unrecognized flags are deliberately not interpreted as lifecycle evidence. Branch selectors require gh’s identifying success confirmation, never inferred repository context.
 - Saved transcript cards follow their originating tool result and split collapsed working groups at that point. Repeated events have distinct stable call-based keys. Fresh live status never rewrites an old event label. Timestamped terminal polling remains a fallback for a PR closed or merged outside the chat, without duplicating a confirmed milestone.
 - Live turns retain only attributable PR calls and bounded results, render a card when each result arrives, and carry the same sequence through replay, the held completion and saved history. Outputs above the existing 40,000-character live cap wait for saved history rather than parsing a truncated result. Other tools' outputs are not retained for this purpose.
 - When live metadata is already available, the first card for an open PR retains existing live status, checks/review progress and actions; subsequent historical cards do not duplicate its action buttons. Creating or viewing a PR does not automatically run any PR mutation. Existing polling/subscriptions are reused; the creation-only session summary and plan-output attribution remain unchanged. New interactions without live metadata still get a canonical linked milestone rather than fabricated current status.
 - Desktop and the Local Web UI share this renderer. Cards use existing theme tokens and link to the canonical GitHub PR, with responsive title truncation and readable lifecycle labels.
+
+The consolidated projection incorporates the confirmation semantics and regression cases from #1816/#1817 without a second parser or renderer.
 
 ## Verification
 

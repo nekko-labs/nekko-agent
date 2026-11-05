@@ -151,7 +151,7 @@ const LEADING_CD_RE = /^cd\s+(?:"[^"`$]*"|'[^']*'|[^\s;&|`$"']+)\s*&&\s*/;
 const TRAILING_TRIM_RE = /(?:\s+2>&1)?(?:\s*\|\s*(?:tail|head)\s+(?:-n\s*)?-?\d+)?\s*$/;
 
 /** Transcript events, independent of the card's subsequently fetched live state. */
-export type PrEvent = 'created' | 'open' | 'closed' | 'merged' | 'draft' | 'ready' | 'queued'
+export type PrEvent = 'created' | 'created-draft' | 'auto-merge' | 'open' | 'closed' | 'merged' | 'draft' | 'ready' | 'queued'
   | 'merge-requested' | 'reopened' | 'updated' | 'reviewed' | 'viewed';
 
 type PrMessages = Array<{
@@ -277,8 +277,8 @@ function parsePrCommand(words: string[]): PrCommand | undefined {
   }
   if (!action || positional.length > 1 || (action === 'create' && positional.length)) return undefined;
   const target = positional[0];
-  // A branch argument is not a PR identity, even if output mentions a PR.
-  if (target && !/^[1-9]\d*$/.test(target) && !canonicalPrUrl(target)) return undefined;
+  // Branch selectors require an identifying gh confirmation, never a guessed identity.
+  if (target && !/^#?[1-9]\d*$/.test(target) && !canonicalPrUrl(target) && !/^[A-Za-z0-9_./-]+$/.test(target)) return undefined;
   return { action, target, repo, switches, outputEvidence };
 }
 
@@ -326,7 +326,7 @@ function outputPrData(output: string): { urls: string[]; state?: string; number?
       if (url) return [url];
       // gh's own status lines identify numeric commands in the current repo,
       // even when they print no URL. Never mine arbitrary body/diff references.
-      const reference = trimmed.match(/^[✓✔!]?\s*(?:(?:Added|Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request)\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#([1-9]\d*)\b/i);
+      const reference = trimmed.match(/^[✓✔!]?\s*(?:(?:Added|Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request|Auto-merge enabled for pull request)\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#([1-9]\d*)\b/i);
       return reference ? [`https://github.com/${reference[1]}/pull/${reference[2]}`] : [];
     });
     return { urls: uniquePrUrls(urls) };
@@ -341,8 +341,33 @@ function unsuccessfulPrOutput(output: string): boolean {
     || /(?:command timed out|process (?:is still )?running|session (?:is still )?running|command (?:was )?cancelled)/i.test(output);
 }
 
+/** gh warnings report no transition, even when the command exits successfully. */
+const PR_NOOP_RE = /(?:^|\n)\s*!?\s*(?:Pull request|PR)\b[^\n]*\b(?:already|was already)\b/i;
+const SILENT_MERGE_LINE_RE = /^(?:\(no output\)|\(Bash completed with no output\)|\[stderr\]|Shell cwd was reset to .*|! The merge strategy for \S+ is set by the merge queue)$/;
+
+/** The earlier lifecycle stack's real gh confirmation strings, plus existing CLI variants. */
+function confirmedPrEvent(output: string): { action: string; event: PrEvent } | false | undefined {
+  const ref = '(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[1-9]\\d*';
+  const confirmations: Array<[string, PrEvent, string]> = [
+    ['ready', 'draft', `Pull request ${ref} is (?:converted to "draft"|now marked as draft)$`],
+    ['ready', 'ready', `Pull request ${ref} is marked as "?ready for review"?$`],
+    ['merge', 'queued', `Pull request ${ref} will be added to the merge queue for \\S+ when ready$`],
+    ['merge', 'auto-merge', `(?:Pull request ${ref} will be automatically merged(?: via \\w+)? when all requirements are met|Auto-merge enabled for pull request ${ref})$`],
+    ['merge', 'merged', `(?:Squashed and merged|Rebased and merged|Merged) pull request ${ref}(?: \\(|$)`],
+    ['close', 'closed', `Closed pull request ${ref}(?: \\(|$)`],
+    ['reopen', 'reopened', `Reopened pull request ${ref}(?: \\(|$)`],
+  ];
+  const hits = output.split(/\r?\n/).flatMap(line => confirmations.flatMap(([action, event, pattern]) =>
+    new RegExp('^[✓✔]\\s*' + pattern, 'i').test(line.trim()) ? [{ action, event }] : []));
+  return hits.length > 1 ? false : hits[0];
+}
+
 function interactionFor(command: PrCommand, output: string, known: readonly string[]): { url: string; event: PrEvent } | undefined {
-  if (unsuccessfulPrOutput(output)) return undefined;
+  if (unsuccessfulPrOutput(output) || PR_NOOP_RE.test(output)) return undefined;
+  const confirmed = command.outputEvidence ? confirmedPrEvent(output) : undefined;
+  if (confirmed === false || (confirmed && command.switches.has('--disable-auto'))) return undefined;
+  if (confirmed && (confirmed.action !== command.action
+    || (command.action === 'ready' && (confirmed.event === 'draft') !== command.switches.has('--undo')))) return undefined;
   const data: ReturnType<typeof outputPrData> = command.outputEvidence ? outputPrData(output) : { urls: [] };
   if (data.invalid) return undefined;
   const create = command.action === 'create' || command.action === 'create-api';
@@ -354,7 +379,8 @@ function interactionFor(command: PrCommand, output: string, known: readonly stri
     candidates = last ? [last] : [];
   }
   const explicit = command.target && canonicalPrUrl(command.target);
-  const number = command.target && /^[1-9]\d*$/.test(command.target) ? command.target : undefined;
+  const number = command.target && /^#?[1-9]\d*$/.test(command.target) ? command.target.replace(/^#/, '') : undefined;
+  if (command.target && !explicit && !number && !confirmed) return undefined;
   let url: string | undefined;
   if (explicit) {
     url = explicit;
@@ -373,7 +399,7 @@ function interactionFor(command: PrCommand, output: string, known: readonly stri
   // short references validate provenance; they never supply a missing repo.
   if (command.outputEvidence) {
     for (const line of output.split(/\r?\n/)) {
-      const reference = line.match(/^\s*[✓✔!]?\s*(?:(?:Added|Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request)\s+(?:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+))?#([1-9]\d*)\b/i);
+      const reference = line.match(/^\s*[✓✔!]?\s*(?:(?:Added|Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request|Auto-merge enabled for pull request)\s+(?:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+))?#([1-9]\d*)\b/i);
       if (reference && (Number(reference[2]) !== identity.number
         || (reference[1] && reference[1].toLowerCase() !== `${identity.owner}/${identity.repo}`.toLowerCase()))) return undefined;
     }
@@ -381,14 +407,23 @@ function interactionFor(command: PrCommand, output: string, known: readonly stri
   if (command.repo && `${identity.owner}/${identity.repo}`.toLowerCase() !== command.repo.toLowerCase()) return undefined;
   // Conflicting identities are not confirmation of the requested interaction.
   if (candidates.some(candidate => candidate.toLowerCase() !== url.toLowerCase())) return undefined;
-  if (create) return { url, event: 'created' };
+  // References on other lines are not part of a success-line title. Reject
+  // ambiguous multi-PR output while leaving links in that title alone.
+  if (command.outputEvidence && output.split(/\r?\n/).some(line =>
+    !/^[✓✔]?\s*(?:(?:Added|(?:Successfully )?Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request|Auto-merge enabled for pull request)\b/i.test(line.trim())
+    && /\b[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#[1-9]\d*\b/.test(line))) return undefined;
+  // Prefer the spelling already used by the chat, not a differently cased confirmation.
+  url = known.find(value => value.toLowerCase() === url!.toLowerCase()) ?? url;
+  if (create) return { url, event: command.switches.has('--draft') || command.switches.has('-d') ? 'created-draft' : 'created' };
+  if (confirmed) return { url, event: confirmed.event };
   let event: PrEvent;
   switch (command.action) {
     case 'merge':
       if (command.switches.has('--disable-auto')) event = 'updated';
-      else if (command.outputEvidence && (data.state === 'merged' || /(?:^|\n)\s*(?:[✓✔]\s*)?(?:(?:successfully\s+)?(?:squashed and |rebased and )?merged (?:pull request|PR)\b|[!]?\s*pull request .+ was already merged\b)/i.test(output))) event = 'merged';
+      else if (command.outputEvidence && (data.state === 'merged' || /(?:^|\n)\s*(?:[✓✔]\s*)?(?:(?:successfully\s+)?(?:squashed and |rebased and )?merged (?:pull request|PR)\b)/i.test(output))) event = 'merged';
       else if (command.outputEvidence && /(?:^|\n)\s*(?:[✓✔]\s*)?Added\b[^\n]*\b(?:to (?:the )?)merge queue\b/i.test(output)) event = 'queued';
-      else event = 'merge-requested';
+      else if (!output || data.urls.length || /^\s*\{/.test(output) || output.split(/\r?\n/).every(line => SILENT_MERGE_LINE_RE.test(line.trim()))) event = 'merge-requested';
+      else return undefined;
       break;
     case 'ready': event = command.switches.has('--undo') ? 'draft' : 'ready'; break;
     case 'close': event = 'closed'; break;
