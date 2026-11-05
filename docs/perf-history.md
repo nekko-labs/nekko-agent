@@ -53,7 +53,8 @@ Order was base/head/head/base. Both head runs pass the unchanged 33 ms gate; onl
 
 Original queue [42014517917](https://github.com/nekko-labs/nekko-agent/actions/runs/42014517917) on EPYC7763 / Chrome156.0.8078.79 failed cold p95 40.3 / 39.0 / 37.4 ms (33 samples each); other measured speed/memory budgets passed, terminal typing skipped. Its automatic unchanged-base profile measured streaming frames only, not cold latency. An already-started replacement [42016971870](https://github.com/nekko-labs/nekko-agent/actions/runs/42016971870), different parent `31c3505ce` and EPYC9V45 / Chrome156.0.8078.47, passed cold p95 31.3 ms / p50 22.3 ms (33 samples); its gate refused the subsequently held/draft PR as intended. Different-runner results are not a repair.
 
-Source: [matched reports, raw samples, exact provenance and latency timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42017796367). Tracking: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). Both lifecycle PRs remain held/draft, unmerged, with no manual requeue or budget change. Landing depends on a separate verified cold-first-paint baseline repair or revert, followed by integration and protected validation. Do not broaden the lifecycle feature into speculative performance work. The diagnostic-only workflow must never merge. The renderer also needs its documented squash-parent spec integration after the model actually lands.
+Source: [matched reports, raw samples, exact provenance and latency timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42017796367). Tracking: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). No budget change.
+
 ## Follow-up slider and text toolbar (#1760, 2026-11-05)
 
 Area: renderer. Result: baseline cold-paint gate failure reproduced; no performance win or zero-regression claim.
