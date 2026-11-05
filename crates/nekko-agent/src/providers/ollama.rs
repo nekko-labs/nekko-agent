@@ -3,13 +3,18 @@
 //! It streams newline-delimited JSON, not SSE. A port of `ollama.ts`'s
 //! `listModels` and `chat` (model pulls and loads stay in TS for now).
 
-use super::{CATALOG_TIMEOUT, Io};
+use super::Io;
 use crate::http::HttpRequest;
 use crate::js;
 use crate::sse::LineParser;
 use crate::stream::{ChunkStream, DecodeClock, Sink, Stop, spawn};
 use crate::types::*;
 use serde_json::{Map, Value, json};
+use std::time::Duration;
+
+/// How long `/api/show` may take before a chat goes on without `think`. Every
+/// request that wants thinking waits on it, so a stall must stay short.
+const SHOW_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 pub struct OllamaProvider {
@@ -47,8 +52,8 @@ impl OllamaProvider {
         body.insert("model".into(), json!(req.model));
         body.insert("stream".into(), json!(true));
         body.insert("options".into(), Value::Object(options));
-        // The native reasoning toggle. `run` clears it for a model that can't
-        // think: Ollama answers `think: true` for one with a 400.
+        // The native reasoning toggle. `run` clears `true` for a model that
+        // can't think, which Ollama answers with a 400. Any model takes `false`.
         if let Some(think) = req.think {
             body.insert("think".into(), json!(think));
         }
@@ -74,7 +79,7 @@ impl OllamaProvider {
     }
 
     async fn run(self, mut req: ChatRequest, sink: Sink) -> Result<(), Stop> {
-        if req.think.is_some() && !self.can_think(&req.model, &sink).await? {
+        if req.think == Some(true) && !self.can_think(&req.model, &sink).await? {
             req.think = None;
         }
 
@@ -146,7 +151,7 @@ impl OllamaProvider {
             }
         };
 
-        let Ok(body) = tokio::time::timeout(CATALOG_TIMEOUT, fetch).await else { return Ok(false) };
+        let Ok(body) = tokio::time::timeout(SHOW_TIMEOUT, fetch).await else { return Ok(false) };
 
         let capabilities = js::safe_parse(&body?);
         let capabilities = capabilities.get("capabilities").and_then(Value::as_array);

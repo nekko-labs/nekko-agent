@@ -3699,14 +3699,6 @@
     "requests": [
       {
         "method": "POST",
-        "url": "http://localhost:11434/api/show",
-        "headers": {},
-        "body": {
-          "model": "qwen3-8b"
-        }
-      },
-      {
-        "method": "POST",
         "url": "http://localhost:11434/api/chat",
         "headers": {},
         "body": {

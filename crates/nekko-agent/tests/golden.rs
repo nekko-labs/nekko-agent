@@ -242,9 +242,9 @@ async fn every_request_is_built_exactly_as_the_ts_provider_builds_it() {
         for (name, req) in cases["requests"].as_object().unwrap() {
             let mut answers = vec![json!({ "chunks": [] })];
 
-            // Ollama asks `/api/show` before it sends `think`: these pin the
-            // chat to a model that can think (stream-cases covers the rest).
-            if p == "ollama" && req.get("think").is_some() {
+            // Ollama asks `/api/show` before it sends `think: true`: these pin
+            // the chat to a model that can think (stream-cases covers the rest).
+            if p == "ollama" && req.get("think") == Some(&json!(true)) {
                 answers.insert(0, json!({ "body": r#"{"capabilities":["thinking"]}"# }));
             }
 

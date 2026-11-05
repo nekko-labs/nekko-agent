@@ -10,6 +10,7 @@ use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::Notify;
 
 /// Sends `first`, then never another byte, like a model that stalls.
 struct StallingBody {
@@ -199,11 +200,13 @@ async fn a_stalled_chatgpt_catalog_reports_an_error_after_five_seconds() {
 /// Ollama's `/api/show` never answers; the chat after it does.
 struct StalledShow {
     chats: Mutex<Vec<HttpRequest>>,
+    show_arrived: Notify,
 }
 
 impl Transport for StalledShow {
     fn send<'a>(&'a self, req: &'a HttpRequest) -> BoxFuture<'a, Result<HttpResponse, TransportError>> {
         if req.url.ends_with("/api/show") {
+            self.show_arrived.notify_one();
             return Box::pin(std::future::pending());
         }
         self.chats.lock().unwrap().push(req.clone());
@@ -214,7 +217,7 @@ impl Transport for StalledShow {
 }
 
 fn ollama_on_stalled_show() -> (AnyProvider, Arc<StalledShow>) {
-    let transport = Arc::new(StalledShow { chats: Mutex::default() });
+    let transport = Arc::new(StalledShow { chats: Mutex::default(), show_arrived: Notify::new() });
     let config: ProviderConfig = serde_json::from_value(json!({
         "id": "p", "kind": "ollama", "baseUrl": "http://127.0.0.1:1", "enabled": true,
     }))
@@ -226,7 +229,9 @@ fn ollama_on_stalled_show() -> (AnyProvider, Arc<StalledShow>) {
 #[tokio::test(start_paused = true)]
 async fn a_stalled_ollama_show_costs_the_chat_its_think_field_not_the_reply() {
     let (p, t) = ollama_on_stalled_show();
+    let asked = tokio::time::Instant::now();
     let (chunks, err) = p.chat(ChatRequest { think: Some(true), ..request(None) }).collect().await;
+    assert_eq!(asked.elapsed(), Duration::from_secs(2));
     assert_eq!(err, None);
     assert_eq!(
         chunks,
@@ -253,11 +258,22 @@ async fn an_abort_during_the_ollama_show_ends_the_chat() {
     let ctl = AbortController::new();
     let mut s = p.chat(ChatRequest { think: Some(true), ..request(Some(ctl.signal())) });
 
-    // Lets the chat reach the stalled `/api/show`.
-    tokio::task::yield_now().await;
-
+    t.show_arrived.notified().await;
     ctl.abort();
     let end = tokio::time::timeout(Duration::from_secs(5), s.next()).await.expect("abort was not noticed");
     assert_eq!(end, Some(Err(ProviderError::new("This operation was aborted"))));
     assert!(t.chats.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn think_off_reaches_ollama_when_the_show_would_have_stalled() {
+    let (p, t) = ollama_on_stalled_show();
+    let asked = tokio::time::Instant::now();
+    let (_, err) = p.chat(ChatRequest { think: Some(false), ..request(None) }).collect().await;
+    assert_eq!(asked.elapsed(), Duration::ZERO);
+    assert_eq!(err, None);
+
+    let chats = t.chats.lock().unwrap();
+    assert_eq!(chats.len(), 1);
+    assert_eq!(chats[0].body.as_ref().unwrap().get("think"), Some(&json!(false)));
 }
