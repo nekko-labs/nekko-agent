@@ -27,6 +27,12 @@ export const TITLEBAR_HEIGHT = 38;
 /** Renderer → main, fire-and-forget: repaint the native buttons for a theme. */
 export const TITLEBAR_OVERLAY_CHANNEL = 'chrome:titlebar-overlay';
 
+/** Main → renderer: Ctrl+R was pressed and the page reloads after this many ms. */
+export const PAGE_RELOADING_EVENT = 'chrome:page-reloading';
+
+/** How long the page gets to fade its cover in before a reload. */
+export const RELOAD_FADE_MS = 120;
+
 export interface TitleBarOverlayTheme {
   /** Background behind the native minimise/maximise/close buttons. */
   color: string;
@@ -42,6 +48,7 @@ export interface WindowChromeBridge {
   platform: string;
   titleBarHeight: number;
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => void;
+  onPageReloading: (listener: (fadeMs: number) => void) => void;
   /** Multi-monitor screen windows (see `displayWindows.ts`). */
   displays: import('./displayWindows.js').DisplaysBridge;
 }

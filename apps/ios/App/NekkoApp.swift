@@ -84,7 +84,9 @@ struct NekkoApp: App {
     /// The app, or (Debug builds) a fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {
+            PhotoPreviewFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
             ChatRefreshFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
             NewChatFixture()
@@ -116,7 +118,7 @@ struct NekkoApp: App {
                 .onOpenURL { app.handle(url: $0) }
                 .task {
                     #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") || ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") || ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") || ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") { return }
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") || ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") || ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") || ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") || ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") { return }
                     #endif
                     app.start()
                 }
