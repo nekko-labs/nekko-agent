@@ -11,17 +11,16 @@ test('slugs headings the way GitHub anchors them', () => {
   assert.equal(slug('Mode panel and saved modes (2026-10-17)'), 'mode-panel-and-saved-modes-2026-10-17');
 });
 
-test('writes the index between its markers and reports a stale one', () => {
+test('writes the index to spec/INDEX.md and returns it, leaving README.md alone', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-index-'));
   fs.mkdirSync(path.join(root, 'spec', 'chat'), { recursive: true });
   fs.writeFileSync(path.join(root, 'spec', 'chat', 'find.md'), '---\ntitle: "Find in this chat"\narea: chat\n---\n\n# Find in this chat\n');
-  fs.writeFileSync(path.join(root, 'spec', 'README.md'), '# Spec\n\nIntro stays.\n\n<!-- index:start -->\n<!-- index:end -->\n');
-  assert.equal(writeIndex(root, { check: true }), false);
-  writeIndex(root);
-  const out = fs.readFileSync(path.join(root, 'spec', 'README.md'), 'utf8');
-  assert.match(out, /Intro stays\./);
+  fs.writeFileSync(path.join(root, 'spec', 'README.md'), '# Spec\n\nIntro stays.\n');
+  const out = writeIndex(root);
+  assert.match(out, /### chat\n\nThe chat surface/);
   assert.match(out, /- \[Find in this chat\]\(chat\/find\.md\) \(1 KB\)/);
-  assert.equal(writeIndex(root, { check: true }), true);
+  assert.equal(fs.readFileSync(path.join(root, 'spec', 'INDEX.md'), 'utf8'), out);
+  assert.equal(fs.readFileSync(path.join(root, 'spec', 'README.md'), 'utf8'), '# Spec\n\nIntro stays.\n');
   fs.rmSync(root, { recursive: true });
 });
 
@@ -30,37 +29,29 @@ test('reads a CRLF checkout the same as LF', () => {
   fs.mkdirSync(path.join(root, 'spec', 'chat'), { recursive: true });
   const body = `---\ntitle: "Find in this chat"\narea: chat\n---\n\n${'x'.repeat(1700)}\n`;
   fs.writeFileSync(path.join(root, 'spec', 'chat', 'find.md'), body.replace(/\n/g, '\r\n'));
-  fs.writeFileSync(path.join(root, 'spec', 'README.md'), '# Spec\r\n\r\n<!-- index:start -->\r\n<!-- index:end -->\r\n');
-  writeIndex(root);
-  const out = fs.readFileSync(path.join(root, 'spec', 'README.md'), 'utf8');
-  assert.match(out, /- \[Find in this chat\]\(chat\/find\.md\) \(2 KB\)/);
-  assert.equal(writeIndex(root, { check: true }), true);
+  assert.match(writeIndex(root), /- \[Find in this chat\]\(chat\/find\.md\) \(2 KB\)/);
   fs.rmSync(root, { recursive: true });
 });
 
-test('refuses a spec file without its area', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-index-'));
-  fs.mkdirSync(path.join(root, 'spec', 'chat'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'spec', 'chat', 'x.md'), '# No frontmatter\n');
-  fs.writeFileSync(path.join(root, 'spec', 'README.md'), '<!-- index:start -->\n<!-- index:end -->\n');
-  assert.throws(() => writeIndex(root), /frontmatter needs title and area/);
-  fs.rmSync(root, { recursive: true });
-});
-
-test('the check ignores a stale size but not a missing file', () => {
+test('the check validates frontmatter and writes nothing', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-index-'));
   fs.mkdirSync(path.join(root, 'spec', 'chat'), { recursive: true });
   fs.writeFileSync(path.join(root, 'spec', 'chat', 'find.md'), '---\ntitle: Find in this chat\narea: chat\n---\n');
-  fs.writeFileSync(path.join(root, 'spec', 'README.md'), '<!-- index:start -->\n<!-- index:end -->\n');
-  writeIndex(root);
-  const readme = path.join(root, 'spec', 'README.md');
-  fs.writeFileSync(readme, fs.readFileSync(readme, 'utf8').replace('(1 KB)', '(7 KB)'));
   assert.equal(writeIndex(root, { check: true }), true);
-  fs.writeFileSync(path.join(root, 'spec', 'chat', 'other.md'), '---\ntitle: Other\narea: chat\n---\n');
-  assert.equal(writeIndex(root, { check: true }), false);
+  assert.equal(fs.existsSync(path.join(root, 'spec', 'INDEX.md')), false);
+  fs.writeFileSync(path.join(root, 'spec', 'chat', 'x.md'), '# No frontmatter\n');
+  assert.throws(() => writeIndex(root, { check: true }), /frontmatter needs title and area/);
   fs.rmSync(root, { recursive: true });
 });
 
-test('the repository index is current', () => {
-  assert.equal(writeIndex(path.resolve(import.meta.dirname, '..'), { check: true }), true, 'run node scripts/spec-index.mjs');
+test('refuses an area without a description', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-index-'));
+  fs.mkdirSync(path.join(root, 'spec', 'nowhere'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'spec', 'nowhere', 'x.md'), '---\ntitle: X\narea: nowhere\n---\n');
+  assert.throws(() => writeIndex(root, { check: true }), /unknown area/);
+  fs.rmSync(root, { recursive: true });
+});
+
+test('every spec file in the repository has valid frontmatter', () => {
+  assert.equal(writeIndex(path.resolve(import.meta.dirname, '..'), { check: true }), true);
 });

@@ -142,11 +142,11 @@ final class SimpleModeTests: XCTestCase {
         XCTAssertFalse(again.shows("model"))
     }
 
-    func testThePillCountsPairedComputersFromTwo() {
-        XCTAssertNil(ComputerMenu.paired(0))
-        XCTAssertNil(ComputerMenu.paired(1))
-        XCTAssertEqual(ComputerMenu.paired(2), "2 paired")
-        XCTAssertEqual(ComputerMenu.paired(5), "5 paired")
+    func testThePillCountsOnlineComputersFromTwo() {
+        XCTAssertNil(ComputerMenu.online(0, of: 0))
+        XCTAssertNil(ComputerMenu.online(1, of: 1))
+        XCTAssertEqual(ComputerMenu.online(2, of: 2), "2 of 2 online")
+        XCTAssertEqual(ComputerMenu.online(1, of: 5), "1 of 5 online")
     }
 
     func testTheEffortSliderSnapsToTheNearestLevel() {
@@ -194,6 +194,6 @@ final class SimpleModeTests: XCTestCase {
 
     func testIdsMatchThePhoneItemsOfTheDesktopList() {
         XCTAssertEqual(SimpleMode.items.map(\.id),
-                       ["changes", "hardware", "ph-subtitle", "model", "effort", "asks", "context", "run-settings", "thinking", "pr-status", "ph-git", "terminal", "ph-monitors"])
+                       ["changes", "hardware", "ph-subtitle", "model", "effort", "asks", "context", "run-settings", "thinking", "pr-status", "ph-git", "ph-monitors"])
     }
 }

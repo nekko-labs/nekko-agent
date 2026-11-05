@@ -129,8 +129,9 @@ public func osName(_ platform: String?) -> String {
 /// Computers this phone is paired with, and the live connection to the active
 /// one. A port of Android's `ComputersRepository` (itself a port of the Expo
 /// app's `services/computers.ts`). Pairing material lives in `SecureStore`
-/// only; views read the non-secret parts. One relay connection at a time: the
-/// computer you're looking at.
+/// only; views read the non-secret parts. The active computer (the one you're
+/// looking at) has the full connection; with `stayConnected` every other paired
+/// computer keeps a link of its own beside it (the fleet, `Fleet.swift`).
 @MainActor
 @Observable
 public final class ComputersStore {
@@ -207,6 +208,12 @@ public final class ComputersStore {
     public private(set) var safetyExit: SafetyExit?
     /// Computers this phone signed out of that haven't heard yet (SK-8), by name.
     public private(set) var pendingSignOuts: [String] = []
+    /// Every paired computer other than the active one, kept connected beside it
+    /// (2026-11-04): its state, its chats and which of them run or need you.
+    public internal(set) var peers: [String: Peer] = [:]
+    /// Keep a link open to every paired computer, not only the active one.
+    public let stayConnected: Bool
+    @ObservationIgnored var links: [String: PeerLink] = [:]
     /// Set while *Keep the chat list when offline* is on (the default); nil keeps nothing.
     public var chatListCache: ChatListCache? {
         didSet { if chatListCache == nil { savedListAt = nil } else { saveList() } }
@@ -242,12 +249,12 @@ public final class ComputersStore {
     // MARK: Wiring
 
     private let store: SecureStore
-    private let makeConnection: @MainActor (RelayConfig) -> RemoteConnection
+    let makeConnection: @MainActor (RelayConfig) -> RemoteConnection
     private let deviceName: () -> String
     private let deriveKey: @Sendable (String, String) async -> Data
     private let newId: () -> String
-    private let now: () -> Int64
-    private let summariesDebounce: TimeInterval
+    let now: () -> Int64
+    let summariesDebounce: TimeInterval
     private let modelListTimeout: TimeInterval
     private let platform: String
     private let app: String?
@@ -261,7 +268,7 @@ public final class ComputersStore {
     @ObservationIgnored private var flushingSignOuts = false
     @ObservationIgnored private var changeCalls: (client: ObjectIdentifier, calls: ChangeCalls)?
 
-    private var client: RemoteConnection?
+    var client: RemoteConnection?
     private var graceTask: Task<Void, Never>?
     private var generation = 0
     private var pump: Task<Void, Never>?
@@ -291,8 +298,10 @@ public final class ComputersStore {
                 outboxPoll: TimeInterval = 0.5,
                 outboxConfirmTimeout: TimeInterval = 45,
                 transcripts: SavedTranscripts? = nil,
-                probeNetwork: ProbeNetwork = PosixProbeNetwork()) {
+                probeNetwork: ProbeNetwork = PosixProbeNetwork(),
+                stayConnected: Bool = false) {
         self.store = store
+        self.stayConnected = stayConnected
         self.probeNetwork = probeNetwork
         self.makeConnection = makeConnection
         self.deviceName = deviceName
@@ -652,7 +661,7 @@ public final class ComputersStore {
 
     public func forget(_ id: String) {
         let wasActive = activeId == id
-        if wasActive { disconnect() }
+        if wasActive { disconnect() } else { dropLink(id) }
         store.set(Self.secretKey(id), nil)
         chatListCache?.remove(id)
         if wasActive {
@@ -677,21 +686,32 @@ public final class ComputersStore {
 
     // MARK: Connection
 
-    /// Make `id` the active computer and (re)connect to it.
+    /// Make `id` the active computer and (re)connect to it. With `stayConnected`
+    /// the computer left behind keeps its link in the fleet, and a computer the
+    /// fleet already reaches is taken over as it is, with no new connection.
     public func connect(_ id: String) {
+        defer { syncFleet() }
+        let leaving = id != activeId ? active : nil
         // The computer left behind must not push (or start) a card on this phone any more:
-        // tell it and its relay, best effort, then close that connection. The switch never waits.
-        if id != activeId, conn == .online, let old = client, let computer = active {
+        // tell it and its relay, best effort, then close that connection (or hand it to
+        // the fleet). The switch never waits.
+        if let computer = leaving, let old = client, conn == .online || stayConnected {
             client = nil
-            Task {
-                try? await old.registerCard(token: nil, startToken: nil, level: .none, computerId: computer.id, computerName: computer.name)
-                _ = try? await old.call(Channels.cardSet, [["level": "none"]], timeout: 3)
-                old.close()
+            let keep = stayConnected
+            if conn == .online {
+                Task {
+                    try? await old.registerCard(token: nil, startToken: nil, level: .none, computerId: computer.id, computerName: computer.name)
+                    _ = try? await old.call(Channels.cardSet, [["level": "none"]], timeout: 3)
+                    if !keep { old.close() }
+                }
             }
+            if keep { adopt(computer.id, old, as: leftBehind(), suspended: suspended) }
         }
         disconnect()
         guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
+        // Already reached by the fleet: carry on with its link and what it knows.
+        let taken = stayConnected ? takeLink(id) : nil
         store.set(Self.activeKey, id)
         if offlineComputer != id {
             drafts.load(id)
@@ -718,22 +738,31 @@ public final class ComputersStore {
             conn = .denied
             denied = .badKey
             connectionLog.record(.denied, denied: .badKey)
+            taken?.client.close()
             return
         }
+        if let peer = taken?.peer {
+            // The fleet's list and who is running stay on screen while the computer is read again.
+            activity = peer.activity
+            if peer.loaded {
+                summaries = peer.summaries
+                workspaces = peer.workspaces
+                summariesLoaded = true
+            }
+        }
         // Opening the app away from the computer: show the list as it was, marked as saved.
-        if let saved = chatListCache?.load(id) {
+        if taken?.peer.loaded != true, let saved = chatListCache?.load(id) {
             summaries = saved.summaries
             workspaces = saved.folders
             savedListAt = saved.savedAt
         }
-        var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
-                                 deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
-        config.alternates = computer.alts
-        config.helloSigner = helloSigner
-        config.requestTimeout = 120
-        config.app = app
-        let c = makeConnection(config)
-        if networkPath != .unknown { c.setNetworkPath(networkPath) }
+        let c: RemoteConnection
+        if let taken {
+            c = taken.client
+        } else {
+            c = makeConnection(relayConfig(computer, secret, hostKey: hostKey, keyBytes: keyBytes))
+            if networkPath != .unknown { c.setNetworkPath(networkPath) }
+        }
         generation += 1
         let gen = generation
         client = c
@@ -750,7 +779,32 @@ public final class ComputersStore {
                 self.handle(signal, computerId: id, hadCode: secret.pair != nil)
             }
         }
-        c.connect()
+        guard let taken else { return c.connect() }
+        hostProtocol = taken.peer.hostProtocol
+        // Its state as the fleet last heard it: online reads the computer and delivers what waits.
+        if taken.peer.conn != .idle {
+            conn = taken.peer.conn
+            connDetail = taken.peer.detail
+            sink.yield(.status(RelayStatus(taken.peer.conn, detail: taken.peer.detail, denied: taken.peer.denied)))
+        }
+        if taken.suspended { c.connect() }
+    }
+
+    /// The relay settings for one paired computer, the active one's or a fleet link's.
+    func relayConfig(_ computer: Computer, _ secret: ComputerSecret, hostKey: String, keyBytes: Data) -> RelayConfig {
+        var config = RelayConfig(relayUrl: computer.relayUrl, room: secret.room, key: secret.key, hostKey: hostKey, keyBytes: keyBytes,
+                                 deviceId: deviceId(), deviceName: deviceName(), pairCode: secret.pair, platform: platform)
+        config.alternates = computer.alts
+        config.helloSigner = helloSigner
+        config.requestTimeout = 120
+        config.app = app
+        return config
+    }
+
+    /// What the active computer's link knows, handed to the fleet when another computer becomes active.
+    private func leftBehind() -> Peer {
+        Peer(conn: conn, detail: connDetail, denied: denied, summaries: summaries, activity: activity,
+             workspaces: workspaces, loaded: summariesLoaded && savedListAt == nil, hostProtocol: hostProtocol)
     }
 
     private enum Signal: Sendable {
@@ -835,6 +889,7 @@ public final class ComputersStore {
     public func nudge() {
         resume()
         client?.nudge()
+        nudgeFleet()
         if !pendingSignOuts.isEmpty { Task { await flushSignOuts() } }
         if conn == .online {
             scheduleSummaries()
@@ -851,6 +906,7 @@ public final class ComputersStore {
         networkPath = path
         guard !suspended else { return }
         client?.networkChanged(path)
+        for link in links.values where !link.suspended { link.client.networkChanged(path) }
         if !pendingSignOuts.isEmpty { Task { await flushSignOuts() } }
     }
 
@@ -860,6 +916,7 @@ public final class ComputersStore {
         networkPath = path
         guard !suspended else { return }
         client?.setNetworkPath(path)
+        for link in links.values where !link.suspended { link.client.setNetworkPath(path) }
     }
 
     // MARK: Background grace (TASKS.md IO-20)
@@ -873,7 +930,8 @@ public final class ComputersStore {
     public func enterBackground(grace: TimeInterval = 30) {
         graceTask?.cancel()
         guard client != nil, !suspended else { return }
-        guard conn == .online, grace > 0 else { return suspend() }
+        let anyOnline = conn == .online || peers.values.contains { $0.conn == .online }
+        guard anyOnline, grace > 0 else { return suspend() }
         graceTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(grace * 1e9))
             guard let self, !Task.isCancelled else { return }
@@ -886,6 +944,7 @@ public final class ComputersStore {
     public func suspend() {
         graceTask?.cancel()
         graceTask = nil
+        suspendFleet()
         guard let c = client, !suspended else { return }
         suspended = true
         c.close()
@@ -896,6 +955,7 @@ public final class ComputersStore {
     public func resume() {
         graceTask?.cancel()
         graceTask = nil
+        resumeFleet()
         guard suspended, let c = client else { return }
         suspended = false
         if networkPath != .unknown { c.setNetworkPath(networkPath) }
@@ -970,7 +1030,16 @@ public final class ComputersStore {
     }
 
     private func registerPushNow() {
+        // Every computer reached, so a chat that needs you on any of them can say so.
+        for id in links.keys { registerPush(peer: id) }
         guard conn == .online, let token = pushToken, let c = client else { return }
+        let kinds = pushKinds?.map(\.rawValue)
+        Task { try? await c.registerPush(token: token, kinds: kinds) }
+    }
+
+    /// Register this phone's push token on one fleet link, once it is online.
+    func registerPush(peer id: String) {
+        guard peers[id]?.conn == .online, let token = pushToken, let c = links[id]?.client else { return }
         let kinds = pushKinds?.map(\.rawValue)
         Task { try? await c.registerPush(token: token, kinds: kinds) }
     }
@@ -1041,7 +1110,7 @@ public final class ComputersStore {
             let appInfo = AppInfo.from(r.4)
             hostVersion = appInfo.version
             quitFromPhone = appInfo.quitFromPhone
-            learnPlatform(appInfo.platform)
+            learnPlatform(appInfo.platform, for: activeId)
             // A failed read says nothing about the icon; an answer without one clears it.
             if r.4 != nil, let id = activeId { learnIcon(appInfo.machineIcon, for: id) }
             summariesLoading = false
@@ -1125,35 +1194,62 @@ public final class ComputersStore {
 
     // MARK: Changing chats on the computer
 
+    // Each takes the chat's computer (`on`): nil is the active one, another is reached through its fleet link.
+
     /// Complete a chat (the desktop's archive): nothing is deleted.
-    public func completeChat(_ sessionId: String) async throws {
+    public func completeChat(_ sessionId: String, on computer: String? = nil) async throws {
         let at = now()
-        _ = try await remote().call(Channels.sessionSetOptions, [.string(sessionId), ["archivedAt": .int(at)]])
-        setArchived(sessionId, at)
+        _ = try await caller(computer).call(Channels.sessionSetOptions, [.string(sessionId), ["archivedAt": .int(at)]])
+        edit(sessionId, on: computer) { $0.archived = true; $0.archivedAt = at }
     }
 
-    public func restoreChat(_ sessionId: String) async throws {
-        _ = try await remote().call(Channels.sessionSetOptions, [.string(sessionId), ["archivedAt": nil]])
-        setArchived(sessionId, nil)
+    public func restoreChat(_ sessionId: String, on computer: String? = nil) async throws {
+        _ = try await caller(computer).call(Channels.sessionSetOptions, [.string(sessionId), ["archivedAt": nil]])
+        edit(sessionId, on: computer) { $0.archived = false; $0.archivedAt = nil }
     }
 
-    public func renameChat(_ sessionId: String, to title: String) async throws {
+    public func renameChat(_ sessionId: String, to title: String, on computer: String? = nil) async throws {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        _ = try await remote().call(Channels.sessionSetOptions, [.string(sessionId), ["title": .string(t)]])
-        if let i = summaries.firstIndex(where: { $0.id == sessionId }) { summaries[i].title = t }
+        _ = try await caller(computer).call(Channels.sessionSetOptions, [.string(sessionId), ["title": .string(t)]])
+        edit(sessionId, on: computer) { $0.title = t }
     }
 
-    public func setPinned(_ sessionId: String, _ pinned: Bool) async throws {
-        _ = try await remote().call(Channels.sessionSetOptions, [.string(sessionId), ["pinned": .bool(pinned)]])
-        if let i = summaries.firstIndex(where: { $0.id == sessionId }) { summaries[i].pinned = pinned }
+    public func setPinned(_ sessionId: String, _ pinned: Bool, on computer: String? = nil) async throws {
+        _ = try await caller(computer).call(Channels.sessionSetOptions, [.string(sessionId), ["pinned": .bool(pinned)]])
+        edit(sessionId, on: computer) { $0.pinned = pinned }
     }
 
-    public func deleteChat(_ sessionId: String) async throws {
-        _ = try await remote().call(Channels.sessionDelete, [.string(sessionId)])
+    public func deleteChat(_ sessionId: String, on computer: String? = nil) async throws {
+        _ = try await caller(computer).call(Channels.sessionDelete, [.string(sessionId)])
+        if let computer, computer != activeId {
+            peers[computer]?.summaries.removeAll { $0.id == sessionId }
+            peers[computer]?.activity[sessionId] = nil
+            return
+        }
         summaries.removeAll { $0.id == sessionId }
         transcripts.remove(sessionId)
         activity[sessionId] = nil
+    }
+
+    /// The connection a chat action goes over: the active computer's, or the fleet's link to `computer`.
+    private func caller(_ computer: String?) throws -> RemoteConnection {
+        guard let computer, computer != activeId else { return try remote() }
+        guard peers[computer]?.conn == .online, let c = links[computer]?.client else {
+            let name = computers.first { $0.id == computer }?.name ?? "That computer"
+            throw RelayError("\(name) isn’t connected right now. This phone keeps trying.")
+        }
+        return c
+    }
+
+    /// Change a chat's row where the list keeps it.
+    private func edit(_ sessionId: String, on computer: String?, _ change: (inout SessionSummary) -> Void) {
+        if let computer, computer != activeId {
+            guard let i = peers[computer]?.summaries.firstIndex(where: { $0.id == sessionId }) else { return }
+            change(&peers[computer]!.summaries[i])
+        } else if let i = summaries.firstIndex(where: { $0.id == sessionId }) {
+            change(&summaries[i])
+        }
     }
 
     /// Start a chat on the computer with a model, a folder and a tool policy.
@@ -1193,12 +1289,6 @@ public final class ComputersStore {
     }
 
     // MARK: Internals
-
-    private func setArchived(_ sessionId: String, _ at: Int64?) {
-        guard let i = summaries.firstIndex(where: { $0.id == sessionId }) else { return }
-        summaries[i].archived = at != nil
-        summaries[i].archivedAt = at
-    }
 
     private func clearComputerState() {
         savedListAt = nil
@@ -1251,8 +1341,8 @@ public final class ComputersStore {
         cache.save(id, SavedChatList(savedAt: now(), summaries: summaries, folders: workspaces))
     }
 
-    private func learnPlatform(_ platform: String?) {
-        guard let platform, let id = activeId, let i = computers.firstIndex(where: { $0.id == id }),
+    func learnPlatform(_ platform: String?, for id: String?) {
+        guard let platform, let id, let i = computers.firstIndex(where: { $0.id == id }),
               computers[i].platform != platform else { return }
         // First connection names the computer after its OS, unless the user renamed it.
         if computers[i].name == defaultComputerName { computers[i].name = osName(platform) }
@@ -1260,26 +1350,26 @@ public final class ComputersStore {
         saveIndex()
     }
 
-    private func learnIcon(_ icon: String?, for id: String) {
+    func learnIcon(_ icon: String?, for id: String) {
         guard let i = computers.firstIndex(where: { $0.id == id }), computers[i].icon != icon else { return }
         computers[i].icon = icon
         saveIndex()
     }
 
-    private func dropPairCode(_ id: String) {
+    func dropPairCode(_ id: String) {
         guard var s = secret(id), s.pair != nil else { return }
         s.pair = nil
         saveSecret(id, s)
     }
 
-    private func deviceId() -> String {
+    func deviceId() -> String {
         if let id = store.get(Self.deviceKey) { return id }
         let id = newId()
         store.set(Self.deviceKey, id)
         return id
     }
 
-    private func secret(_ id: String) -> ComputerSecret? {
+    func secret(_ id: String) -> ComputerSecret? {
         store.get(Self.secretKey(id)).flatMap { try? JSONDecoder().decode(ComputerSecret.self, from: Data($0.utf8)) }
     }
 

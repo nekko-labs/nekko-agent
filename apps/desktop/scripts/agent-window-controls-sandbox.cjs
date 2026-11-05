@@ -67,7 +67,7 @@ app.whenReady().then(async () => {
           return { text: b.textContent, shadow: s.boxShadow, background: s.backgroundColor, muted, label: b.getAttribute('aria-label') };
         })()`);
         if (!badge.text.includes('+') || !badge.text.includes('−') || !badge.text.includes('files')) throw Error('Missing change summary');
-        if (!process.env.NEKKO_TEST_REVISION && (badge.shadow !== 'none' || badge.background !== badge.muted)) throw Error('Pending changes must use a muted surface without glow');
+        if (!process.env.NEKKO_TEST_REVISION && (badge.shadow !== 'none' || badge.background !== 'rgba(0, 0, 0, 0)')) throw Error('Pending changes must stay unboxed without glow');
         report.checks.push({ name: `${theme}-${width}-badge`, badge });
         await capture(`changes-${theme}-${width}`);
         if (!await clickControl('changes')) throw Error('Changes control missing');

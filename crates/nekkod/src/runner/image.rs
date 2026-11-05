@@ -1405,7 +1405,8 @@ impl BuildHost for RealBuildHost {
         vm.clone_bundle(bundle, &clone).await?;
         // The documented check: the runner rejects this and the guest powers off.
         vm.write_seed(&seed, GITHUB_SEED, "not-a-config").await?;
-        let spec = RunSpec { bundle: clone.clone(), cpus: self.cpus(), memory_mb: MEMORY_MB, seed: seed.clone() };
+        let spec =
+            RunSpec { bundle: clone.clone(), cpus: self.cpus(), memory_mb: MEMORY_MB, seed: seed.clone(), stats: None };
         let mut handle = vm.start(spec).await?;
         let stopped = timeout(TEST_BOOT_LIMIT, &mut handle.done).await;
         if stopped.is_err() {

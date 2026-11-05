@@ -52,10 +52,10 @@ The Nekko and Indigo themes use the standard Light and Dark surfaces unchanged; 
 
 - **Main button:** fill is the main colour (`#190019` or `#2B124C`), text `#FFFFFF`. In Dark it also has a 1px `#854F6C` inside outline.
 - **Merged-PR banner text:** Light uses the main colour; Dark uses `#C99BB3`.
-- **Background wash behind the chat** (replaces the old blue-to-orange cycling glow in these themes; other themes keep it):
-  - Dark: top to bottom, main colour at 45%, main colour at 20% (45% down), `#854F6C` at 10%.
-  - Light: main colour at 5%, then `#854F6C` at 7%.
-  - **Where:** Focused shows it on the new chat. Dynamic shows it only on windows whose agent is working; resting windows stay plain. Colour means "live".
+- **Working glow** (replaces the old blue-to-orange cycling glow in these themes; other themes keep it): a soft glow from the top edge of a chat window, an ellipse 90% wide and 55% tall fading to nothing by 70%.
+  - Dark: `#854F6C` at 30%.
+  - Light: the main colour at 10%.
+  - **When:** only while that window's agent is thinking or replying, in Focused and Dynamic alike. It fades in and out over 0.7 s (instantly with reduced motion). New, finished and resting chats stay plain, so colour always means "working".
 - **Dot wave** (faint dots behind the new-chat page; drawn at 60% strength and slowed, as for every Experimental theme):
 
 | Theme | From | To |
@@ -106,7 +106,7 @@ The previous lavender site is kept at tag `website-lavender-original`.
 
 - **App:** Settings, Appearance, Theme, Experimental: **Dark Nekko** (default for marketing) or **Light Nekko**. Use Indigo only when showing the theme choice itself.
 - **Window size:** match existing material (hero shots are 2560 by 1392; renderer captures 1440 by 900).
-- **Show the background rule honestly:** in Dynamic, only working windows carry the colour wash.
+- **Show the glow honestly:** only a window whose agent is thinking or replying carries it; capture it mid-reply, never on a finished chat.
 - **Check before publishing:** nothing should show the retired lavender, aqua or rose listed above, including the cat, logo and icon.
 - **Website embeds:** dark shots sit on a `#241F23` frame, light shots on `#C9A9C4`. The hero screenshots are recoloured originals; re-record the intro and demo videos in Dark Nekko.
 

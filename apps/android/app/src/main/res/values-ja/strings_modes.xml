@@ -3,7 +3,7 @@
 <resources>
     <string name="your_computer">お使いのコンピュータ</string>
     <string name="mode_simple">シンプル</string>
-    <string name="mode_expert">エキスパート</string>
+    <string name="mode_expert">詳細</string>
     <string name="effort_low">低</string>
     <string name="effort_medium">中</string>
     <string name="effort_normal">標準</string>

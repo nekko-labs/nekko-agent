@@ -38,14 +38,14 @@
     <string name="simple_logs_connect">接続してログを読む</string>
     <string name="simple_logs_subject">Nekko Agent の接続ログ</string>
     <string name="simple_mode_title">シンプルモード</string>
-    <string name="simple_mode_detail">シンプルとエキスパートに表示するもの</string>
-    <string name="simple_mode_detail_changed">シンプルとエキスパートに表示するもの · %1$d 件変更</string>
+    <string name="simple_mode_detail">シンプルと詳細に表示するもの</string>
+    <string name="simple_mode_detail_changed">シンプルと詳細に表示するもの · %1$d 件変更</string>
     <string name="simple_intro">シンプルはすっきりと集中できる表示で、詳細は必要なときだけ表示されます。すべての機能はそのまま使えます。</string>
     <string name="simple_preview">プレビュー</string>
     <string name="simple_preview_mode">%1$s をプレビュー</string>
     <string name="simple_reset">デフォルトに戻す</string>
     <string name="simple_choice_show">表示</string>
-    <string name="simple_choice_expert">エキスパートのみ</string>
+    <string name="simple_choice_expert">詳細のみ</string>
     <string name="simple_choice_hide">非表示</string>
     <string name="simple_choice_auto">実行中のみ</string>
     <string name="simple_choice_always">常に</string>
@@ -53,7 +53,7 @@
     <string name="simple_part_hidden">%1$s、非表示</string>
     <string name="simple_one_model">1 モデル</string>
     <string name="simple_switch_simple">シンプル: 日常の操作</string>
-    <string name="simple_switch_expert">エキスパート: すべての操作</string>
+    <string name="simple_switch_expert">詳細: すべての操作</string>
     <string name="simple_area_header">チャット · ヘッダー</string>
     <string name="simple_area_box">チャット · メッセージ欄</string>
     <string name="simple_area_conversation">チャット · 会話</string>

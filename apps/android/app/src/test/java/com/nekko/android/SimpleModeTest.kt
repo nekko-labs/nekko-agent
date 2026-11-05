@@ -98,7 +98,7 @@ class SimpleModeTest {
 
     @Test fun `ids match the desktop catalogue's phone items`() {
         assertEquals(
-            listOf("changes", "hardware", "ph-subtitle", "model", "effort", "asks", "context", "run-settings", "thinking", "pr-status", "ph-git", "terminal", "ph-monitors"),
+            listOf("changes", "hardware", "ph-subtitle", "model", "effort", "asks", "context", "run-settings", "thinking", "pr-status", "ph-git", "ph-monitors"),
             SimpleMode.ITEMS.map { it.id },
         )
     }

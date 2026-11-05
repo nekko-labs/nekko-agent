@@ -10,11 +10,11 @@ import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionF
 import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
-  BoltIcon, BrainIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
+  BoltIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
   ExternalIcon, FileIcon, FolderIcon, GaugeIcon, InfoIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
   RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
 } from '../icons.js';
-import { GfGaugeIcon, GfLockIcon, ShieldQuestionIcon } from '../gentleface-icons.js';
+import { BrainCircuitIcon, GfGaugeIcon, GfLockIcon, ShieldQuestionIcon } from '../gentleface-icons.js';
 import { HoverTip } from './HoverTip.js';
 
 const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
@@ -468,7 +468,7 @@ export function ModePanel({
               </span>
             </div>
             <div className="mode-row is-stacked">
-              <span className="mode-ic"><ShieldQuestionIcon /></span>
+              <span className="mode-ic" data-icon-hover><ShieldQuestionIcon /></span>
               <span className="min-w-0 flex-1">{title('Approvals', sandbox ? 'Sandbox always asks first.' : `${APPROVAL_DESC[approvals]} Guardrails is recommended for general use.`)}</span>
               {tiles<ChatMode>('Approvals', approvals, [['ask', 'Ask', <HandIcon />, { 'data-chat-mode': 'ask' }], ['guardrails', 'Guardrails', <ShieldCheckIcon />, { 'data-chat-mode': 'guardrails' }], ['yolo', 'YOLO', <YoloIcon />, { 'data-chat-mode': 'yolo' }]],
                 (v) => void (!sandbox && actions.setApprovals(v)))}
@@ -494,9 +494,9 @@ export function ModePanel({
                 (v) => void (!sandbox && actions.setGuidance(v)))}
             </div>
             <div className={`mode-row is-stacked ${sandbox || session.incognito ? 'is-disabled' : ''}`}>
-              <span className="mode-ic"><BrainIcon /></span>
+              <span className="mode-ic" data-icon-hover><BrainCircuitIcon /></span>
               <span className="min-w-0 flex-1">{title('Memory', sandbox ? 'Off in Sandbox.' : session.incognito ? 'Off while incognito: an incognito chat reads no memory notes.' : MEMORY_DESC[current.memory ?? 'all'])}</span>
-              {tiles<ChatMemory>('Memory', current.memory ?? 'all', [['all', 'Everything', <BrainIcon />, { 'data-memory': 'all' }], ['project', 'Project', <FolderIcon />, { 'data-memory': 'project' }], ['off', 'Off', <CloseIcon />, { 'data-memory': 'off' }]],
+              {tiles<ChatMemory>('Memory', current.memory ?? 'all', [['all', 'Everything', <BrainCircuitIcon />, { 'data-memory': 'all' }], ['project', 'Project', <FolderIcon />, { 'data-memory': 'project' }], ['off', 'Off', <CloseIcon />, { 'data-memory': 'off' }]],
                 (v) => void (!sandbox && actions.setMemory(v)))}
             </div>
           </section>

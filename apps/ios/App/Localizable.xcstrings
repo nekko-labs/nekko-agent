@@ -82,6 +82,166 @@
         }
       }
     },
+    "%@ (optional)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (optional)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (opcional)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (facultatif)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（任意）"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (opcional)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（可选）"
+          }
+        }
+      }
+    },
+    "%@ · no key": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · kein Schlüssel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · sin clave"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · pas de clé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · キーなし"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · sem chave"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 无密钥"
+          }
+        }
+      }
+    },
+    "%@ · %lld models": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld Modelle"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld modelos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld modèles"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld モデル"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld modelos"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld 个模型"
+          }
+        }
+      }
+    },
+    "%@ · 1 model": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 1 Modell"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 1 modelo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 1 modèle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 1 モデル"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 1 modelo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 1 个模型"
+          }
+        }
+      }
+    },
     "%@ #%lld?": {
       "localizations": {
         "de": {
@@ -2655,6 +2815,86 @@
         }
       }
     },
+    "Add a provider": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anbieter hinzufügen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir un proveedor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un fournisseur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロバイダを追加"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar um provedor"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加提供商"
+          }
+        }
+      }
+    },
+    "Add a provider in Settings → Models on %@ first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge zuerst unter Einstellungen → Modelle auf %@ einen Anbieter hinzu."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primero añade un proveedor en Ajustes → Modelos en %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez d’abord un fournisseur dans Réglages → Modèles sur %@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まず設定 → %@のモデルでプロバイダを追加してください。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primeiro adicione um provedor em Ajustes → Modelos em %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先在设置 → %@上的模型中添加提供商。"
+          }
+        }
+      }
+    },
     "Adding photos…": {
       "localizations": {
         "de": {
@@ -2691,6 +2931,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在添加照片…"
+          }
+        }
+      }
+    },
+    "Address": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adresse"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dirección"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adresse"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アドレス"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endereço"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地址"
           }
         }
       }
@@ -3655,6 +3935,46 @@
         }
       }
     },
+    "Ask anything": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frag irgendetwas"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pregunta lo que quieras"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demandez ce que vous voulez"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "何でも聞いてください"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pergunte qualquer coisa"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "随便问"
+          }
+        }
+      }
+    },
     "Ask before deleting": {
       "localizations": {
         "de": {
@@ -4375,6 +4695,126 @@
         }
       }
     },
+    "Chats can run on %@ itself, with no computer: the iPhone calls the provider with your own key. The key stays in this iPhone’s Keychain and is never sent to a computer, the relay or Nekko Cloud. These chats have no tools.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chats können auf %@ selbst laufen, ohne Computer: Das iPhone ruft den Anbieter mit deinem eigenen Schlüssel auf. Der Schlüssel bleibt im Schlüsselbund dieses iPhones und wird nie an einen Computer, das Relay oder Nekko Cloud gesendet. Diese Chats haben keine Werkzeuge."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los chats pueden ejecutarse en %@ mismo, sin ordenador: el iPhone llama al proveedor con tu propia clave. La clave se queda en el llavero de este iPhone y nunca se envía a un ordenador, al relay ni a Nekko Cloud. Estos chats no tienen herramientas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les discussions peuvent s’exécuter sur %@ lui-même, sans ordinateur : l’iPhone appelle le fournisseur avec votre propre clé. La clé reste dans le trousseau de cet iPhone et n’est jamais envoyée à un ordinateur, au relais ni à Nekko Cloud. Ces discussions n’ont pas d’outils."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットはコンピュータなしで%@そのもので動かせます。iPhoneがあなた自身のキーでプロバイダを呼び出します。キーはこのiPhoneのキーチェーンに保管され、コンピュータ、リレー、Nekko Cloudには送られません。これらのチャットにツールはありません。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os chats podem rodar no próprio %@, sem computador: o iPhone chama o provedor com sua própria chave. A chave fica nas Chaves deste iPhone e nunca é enviada a um computador, ao relay ou ao Nekko Cloud. Esses chats não têm ferramentas."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聊天可以直接在%@上运行，无需电脑：iPhone 使用你自己的密钥调用提供商。密钥保存在此 iPhone 的钥匙串中，绝不会发送到电脑、中继或 Nekko Cloud。这些聊天没有工具。"
+          }
+        }
+      }
+    },
+    "Chat options": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat-Optionen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opciones del chat"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options de la discussion"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットのオプション"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opções do chat"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聊天选项"
+          }
+        }
+      }
+    },
+    "Change model": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modell ändern"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar de modelo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changer de modèle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデルを変更"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trocar de modelo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更换模型"
+          }
+        }
+      }
+    },
     "Choose the model automatically": {
       "localizations": {
         "de": {
@@ -4491,6 +4931,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "代码"
+          }
+        }
+      }
+    },
+    "Computer icons": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Computer-Symbole"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iconos de ordenador"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Icônes des ordinateurs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータのアイコン"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ícones dos computadores"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电脑图标"
           }
         }
       }
@@ -9735,162 +10215,162 @@
         }
       }
     },
-    "Expert": {
+    "Détaillé": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experte"
+            "value": "Detailliert"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experto"
+            "value": "Detallado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expert"
+            "value": "Détaillé"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エキスパート"
+            "value": "詳細"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Especialista"
+            "value": "Detalhado"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "专家"
+            "value": "详细"
           }
         }
       }
     },
-    "Expert adds your computer’s hardware and loaded models": {
+    "Detailed adds your computer’s hardware and loaded models": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experte zeigt zusätzlich die Hardware deines Computers und die geladenen Modelle"
+            "value": "Detailliert zeigt zusätzlich die Hardware deines Computers und die geladenen Modelle"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experto añade el hardware de tu computadora y los modelos cargados"
+            "value": "Detallado añade el hardware de tu computadora y los modelos cargados"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expert ajoute le matériel de votre ordinateur et les modèles chargés"
+            "value": "Détaillé ajoute le matériel de votre ordinateur et les modèles chargés"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エキスパートではコンピュータのハードウェアと読み込み済みモデルも表示します"
+            "value": "詳細ではコンピュータのハードウェアと読み込み済みモデルも表示します"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Especialista mostra também o hardware do seu computador e os modelos carregados"
+            "value": "Detalhado mostra também o hardware do seu computador e os modelos carregados"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "专家模式会显示电脑的硬件和已加载的模型"
+            "value": "详细模式会显示电脑的硬件和已加载的模型"
           }
         }
       }
     },
-    "Expert only": {
+    "Detailed only": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur Experte"
+            "value": "Nur Detailliert"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo Experto"
+            "value": "Solo Detallado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expert uniquement"
+            "value": "Détaillé uniquement"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エキスパートのみ"
+            "value": "詳細のみ"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Só Especialista"
+            "value": "Só Detalhado"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "仅专家"
+            "value": "仅详细"
           }
         }
       }
     },
-    "Expert: every control": {
+    "Detailed: every control": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experte: alle Bedienelemente"
+            "value": "Detailliert: alle Bedienelemente"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Experto: todos los controles"
+            "value": "Detallado: todos los controles"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expert : toutes les commandes"
+            "value": "Détaillé : toutes les commandes"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "エキスパート：すべての操作"
+            "value": "詳細：すべての操作"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Especialista: todos os controles"
+            "value": "Detalhado: todos os controles"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "专家：所有控件"
+            "value": "详细：所有控件"
           }
         }
       }
@@ -12867,6 +13347,46 @@
         }
       }
     },
+    "It is removed from this device for good.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er wird endgültig von diesem Gerät entfernt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se elimina de este dispositivo para siempre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elle est supprimée de cet appareil définitivement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスから完全に削除されます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ele é removido deste dispositivo para sempre."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它将从此设备上永久删除。"
+          }
+        }
+      }
+    },
     "It runs on %@ after the current reply. If it has already started, nothing changes.": {
       "localizations": {
         "de": {
@@ -12903,6 +13423,126 @@
           "stringUnit": {
             "state": "translated",
             "value": "它会在当前回复结束后在 %@ 上运行。如果已经开始，则不会有任何变化。"
+          }
+        }
+      }
+    },
+    "Its key is deleted from this iPhone. Its chats stay to read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sein Schlüssel wird von diesem iPhone gelöscht. Seine Chats bleiben lesbar."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su clave se elimina de este iPhone. Sus chats se quedan para leerlos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sa clé est supprimée de cet iPhone. Ses discussions restent lisibles."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーはこのiPhoneから削除されます。チャットは読めるまま残ります。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A chave é apagada deste iPhone. Os chats continuam para leitura."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其密钥将从此 iPhone 删除。其聊天仍可阅读。"
+          }
+        }
+      }
+    },
+    "Its own models, no tools": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene Modelle, keine Werkzeuge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sus propios modelos, sin herramientas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ses propres modèles, sans outils"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独自のモデル、ツールなし"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os próprios modelos, sem ferramentas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自己的模型，无工具"
+          }
+        }
+      }
+    },
+    "Its own models": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene Modelle"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sus propios modelos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ses propres modèles"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独自のモデル"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os próprios modelos"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自己的模型"
           }
         }
       }
@@ -13143,6 +13783,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "让你的聊天出现在每台设备上，并经过端到端加密。Nekko Labs 无法读取。"
+          }
+        }
+      }
+    },
+    "Kept in this iPhone’s Keychain, on this device only.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Schlüsselbund dieses iPhones gespeichert, nur auf diesem Gerät."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se guarda en el llavero de este iPhone, solo en este dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conservée dans le trousseau de cet iPhone, sur cet appareil uniquement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このiPhoneのキーチェーンに、このデバイスだけに保管されます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardada nas Chaves deste iPhone, só neste dispositivo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存在此 iPhone 的钥匙串中，仅限此设备。"
+          }
+        }
+      }
+    },
+    "Key": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schlüssel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clave"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キー"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chave"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密钥"
           }
         }
       }
@@ -15107,6 +15827,86 @@
         }
       }
     },
+    "Models on %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelle auf %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelos en %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèles sur %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@のモデル"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelos em %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@上的模型"
+          }
+        }
+      }
+    },
+    "Model: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modell: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle : %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モデル: %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型：%@"
+          }
+        }
+      }
+    },
     "Monitor": {
       "localizations": {
         "de": {
@@ -15943,6 +16743,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "新聊天 · 等待发送"
+          }
+        }
+      }
+    },
+    "New key": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuer Schlüssel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva clave"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouvelle clé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいキー"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nova chave"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新密钥"
           }
         }
       }
@@ -17907,6 +18747,46 @@
         }
       }
     },
+    "On a computer only": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur auf einem Computer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo en un ordenador"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sur un ordinateur uniquement"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータのみ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só em um computador"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅限电脑"
+          }
+        }
+      }
+    },
     "OR": {
       "localizations": {
         "de": {
@@ -19359,6 +20239,46 @@
         }
       }
     },
+    "Or use a model provider on this iPhone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oder einen Modellanbieter auf diesem iPhone nutzen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O usa un proveedor de modelos en este iPhone"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ou utilisez un fournisseur de modèles sur cet iPhone"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "またはこのiPhoneでモデルプロバイダを使う"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ou use um provedor de modelos neste iPhone"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或在此 iPhone 上使用模型提供商"
+          }
+        }
+      }
+    },
     "Order": {
       "localizations": {
         "de": {
@@ -20725,6 +21645,86 @@
         }
       }
     },
+    "Provider": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anbieter"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proveedor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fournisseur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロバイダ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provedor"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提供商"
+          }
+        }
+      }
+    },
+    "Providers": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anbieter"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proveedores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fournisseurs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロバイダ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provedores"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提供商"
+          }
+        }
+      }
+    },
     "Pull request": {
       "localizations": {
         "de": {
@@ -21965,6 +22965,46 @@
         }
       }
     },
+    "Remove %@?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ entfernen?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar %@?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer %@ ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@を削除しますか？"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover %@?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除%@？"
+          }
+        }
+      }
+    },
     "Remove a device on a computer: Settings → Sync.": {
       "localizations": {
         "de": {
@@ -23045,6 +24085,86 @@
         }
       }
     },
+    "Runs on %@ with your own key. No tools: it can’t see your computers or files.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Läuft auf %@ mit deinem eigenen Schlüssel. Keine Werkzeuge: Er sieht deine Computer und Dateien nicht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ejecuta en %@ con tu propia clave. Sin herramientas: no ve tus ordenadores ni tus archivos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S’exécute sur %@ avec votre propre clé. Sans outils : elle ne voit ni vos ordinateurs ni vos fichiers."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@で、あなた自身のキーで動きます。ツールはなく、コンピュータやファイルは見えません。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roda em %@ com sua própria chave. Sem ferramentas: não vê seus computadores nem arquivos."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用你自己的密钥在%@上运行。没有工具：看不到你的电脑或文件。"
+          }
+        }
+      }
+    },
+    "Runs on %@ with %@. It has no tools: it can’t see your computers or files.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Läuft auf %1$@ mit %2$@. Ohne Werkzeuge: Er sieht deine Computer und Dateien nicht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ejecuta en %1$@ con %2$@. No tiene herramientas: no ve tus ordenadores ni tus archivos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S’exécute sur %1$@ avec %2$@. Sans outils : elle ne voit ni vos ordinateurs ni vos fichiers."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@で%2$@を使って動きます。ツールはなく、コンピュータやファイルは見えません。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roda em %1$@ com %2$@. Não tem ferramentas: não vê seus computadores nem arquivos."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在%1$@上使用%2$@运行。没有工具：看不到你的电脑或文件。"
+          }
+        }
+      }
+    },
     "Runs ssh on %@ with its own keys and config; nothing about the keys reaches this phone.": {
       "localizations": {
         "de": {
@@ -23081,6 +24201,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "在 %@ 上使用它自己的密钥和配置运行 ssh；密钥的任何内容都不会到达这部手机。"
+          }
+        }
+      }
+    },
+    "Selected": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgewählt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sélectionné"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択中"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecionado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择"
           }
         }
       }
@@ -25731,6 +26891,46 @@
         }
       }
     },
+    "Start one here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starte hier einen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empieza uno aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commencez-en une ici."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここで始めましょう。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comece um aqui."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在这里开始一个。"
+          }
+        }
+      }
+    },
     "Start when online": {
       "localizations": {
         "de": {
@@ -26971,6 +28171,86 @@
         }
       }
     },
+    "Testing…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird getestet…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Probando…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test en cours…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テスト中…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testando…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在测试…"
+          }
+        }
+      }
+    },
+    "Test": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Probar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tester"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テスト"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试"
+          }
+        }
+      }
+    },
     "Thanks. Your note is on its way to Nekko Labs.": {
       "localizations": {
         "de": {
@@ -27651,6 +28931,46 @@
         }
       }
     },
+    "This chat was deleted.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Chat wurde gelöscht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este chat se eliminó."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette discussion a été supprimée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチャットは削除されました。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este chat foi apagado."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此聊天已删除。"
+          }
+        }
+      }
+    },
     "This chat’s folder isn’t in a git repository.": {
       "localizations": {
         "de": {
@@ -27807,6 +29127,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "此文件在你打开后已在电脑上被移除或移动。"
+          }
+        }
+      }
+    },
+    "This iPad": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses iPad"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este iPad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet iPad"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このiPad"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este iPad"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 iPad"
+          }
+        }
+      }
+    },
+    "This iPhone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses iPhone"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este iPhone"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet iPhone"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このiPhone"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este iPhone"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 iPhone"
           }
         }
       }
@@ -30971,6 +32371,46 @@
         }
       }
     },
+    "Workspace ID (optional)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace-ID (optional)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID del workspace (opcional)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID de l’espace de travail (facultatif)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ワークスペースID（任意）"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID do workspace (opcional)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区 ID（可选）"
+          }
+        }
+      }
+    },
     "Write another": {
       "localizations": {
         "de": {
@@ -32853,6 +34293,606 @@
           "stringUnit": {
             "state": "translated",
             "value": "在子代理中"
+          }
+        }
+      }
+    },
+    "your computers": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "deinen Computern"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tus ordenadores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vos ordinateurs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お使いのコンピュータ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "seus computadores"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的电脑"
+          }
+        }
+      }
+    },
+    "All computers": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Computer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos los ordenadores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tous les ordinateurs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのコンピュータ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos os computadores"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有电脑"
+          }
+        }
+      }
+    },
+    "Show chats from": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chats anzeigen von"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar chats de"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les discussions de"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットを表示"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar chats de"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示聊天来自"
+          }
+        }
+      }
+    },
+    "Computers and settings, all computers, %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Computer und Einstellungen, alle Computer, %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordenadores y ajustes, todos los ordenadores, %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordinateurs et réglages, tous les ordinateurs, %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピュータと設定、すべてのコンピュータ、%@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Computadores e ajustes, todos os computadores, %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电脑和设置，所有电脑，%@"
+          }
+        }
+      }
+    },
+    "%lld of %lld online": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld von %2$lld online"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld de %2$lld en línea"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld sur %2$lld en ligne"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld 台中 %1$lld 台がオンライン"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld de %2$lld online"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld 台中 %1$lld 台在线"
+          }
+        }
+      }
+    },
+    "Reconnect": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu verbinden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconectar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecter"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再接続"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconectar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新连接"
+          }
+        }
+      }
+    },
+    "Pair again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut koppeln"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vincular de nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Associer à nouveau"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "もう一度ペアリング"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parear novamente"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新配对"
+          }
+        }
+      }
+    },
+    "The pairing key no longer matches %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Kopplungsschlüssel passt nicht mehr zu %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clave de vinculación ya no coincide con %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clé d’association ne correspond plus à %@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングキーが %@ と一致しなくなりました。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A chave de pareamento não corresponde mais a %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配对密钥与 %@ 不再匹配。"
+          }
+        }
+      }
+    },
+    "%@ doesn’t know this iPhone any more.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ kennt dieses iPhone nicht mehr."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ya no reconoce este iPhone."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ne reconnaît plus cet iPhone."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ はこの iPhone を認識しなくなりました。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ não reconhece mais este iPhone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 不再识别这台 iPhone。"
+          }
+        }
+      }
+    },
+    "%@ is offline. This phone keeps trying.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist offline. Dieses Telefon versucht es weiter."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ está desconectado. Este teléfono sigue intentándolo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ est hors ligne. Ce téléphone continue d’essayer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ はオフラインです。この電話は再試行を続けます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ está offline. Este telefone continua tentando."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 已离线。此手机会继续尝试。"
+          }
+        }
+      }
+    },
+    "Can’t reach %@ right now. This phone keeps trying.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist gerade nicht erreichbar. Dieses Telefon versucht es weiter."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se puede contactar con %@ ahora. Este teléfono sigue intentándolo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de joindre %@ pour le moment. Ce téléphone continue d’essayer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在 %@ に接続できません。この電話は再試行を続けます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não é possível alcançar %@ agora. Este telefone continua tentando."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前无法连接 %@。此手机会继续尝试。"
+          }
+        }
+      }
+    },
+    "Reconnect to %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu mit %@ verbinden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconectar con %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se reconnecter à %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ に再接続"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconectar a %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新连接到 %@"
+          }
+        }
+      }
+    },
+    "This phone keeps trying on its own; this tries again now. Its details show once it answers.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Telefon versucht es von selbst weiter; hiermit sofort erneut. Die Details erscheinen, sobald er antwortet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este teléfono sigue intentándolo por sí solo; esto lo intenta ahora. Sus detalles aparecen cuando responda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce téléphone continue d’essayer seul ; ceci réessaie maintenant. Ses détails s’affichent dès qu’il répond."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この電話は自動で再試行を続けます。これで今すぐ再試行します。応答があると詳細が表示されます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este telefone continua tentando sozinho; isto tenta de novo agora. Os detalhes aparecem quando ele responder."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此手机会自动继续尝试；这里会立即重试。它响应后会显示详细信息。"
+          }
+        }
+      }
+    },
+    "Read its logs": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seine Protokolle lesen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer sus registros"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lire ses journaux"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログを読む"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ler os registros"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看其日志"
+          }
+        }
+      }
+    },
+    "Where the chat runs. Choosing another computer shows its models and folders; a local model runs on that computer’s own hardware.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo der Chat läuft. Ein anderer Computer zeigt seine Modelle und Ordner; ein lokales Modell läuft auf der Hardware dieses Computers."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde se ejecuta el chat. Elegir otro ordenador muestra sus modelos y carpetas; un modelo local se ejecuta en el hardware de ese ordenador."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Où la discussion s’exécute. Choisir un autre ordinateur affiche ses modèles et dossiers ; un modèle local s’exécute sur le matériel de cet ordinateur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットを実行する場所です。別のコンピュータを選ぶとそのモデルとフォルダが表示されます。ローカルモデルはそのコンピュータのハードウェアで動きます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onde o chat é executado. Escolher outro computador mostra seus modelos e pastas; um modelo local roda no hardware desse computador."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聊天运行的位置。选择另一台电脑会显示它的模型和文件夹；本地模型在那台电脑自己的硬件上运行。"
           }
         }
       }

@@ -383,6 +383,41 @@ pub fn record_channel(port: u16, channel: &'static str) -> Events {
     events
 }
 
+/// How long [`until_turn_end_heard`] waits for a finished turn's last event to reach
+/// the recorder after `turn:alive` says false. Normally a few milliseconds.
+const TURN_END_DELIVERY: Duration = Duration::from_secs(5);
+
+/// Wait until the recorder has heard the end of `session_id`'s latest turn.
+///
+/// A route that answers over HTTP once a turn has ended (`turn:alive`,
+/// `chat:send`, `chat:running`) can answer before the turn's last event
+/// reaches the recorder's own socket and thread, though the daemon publishes
+/// that event first (#1708). Events arrive in order, so the turn has been
+/// heard in full once the chat's latest event, leaving out the chat-level ones
+/// published around a save, is an end: `done`, or `error` for a run aborted or
+/// never started. An earlier turn's end doesn't count, since this turn's events
+/// come after it. If it never comes, this returns anyway and the caller's
+/// assertions say what is missing.
+pub async fn until_turn_end_heard(events: &Events, session_id: &str) {
+    let deadline = Instant::now() + TURN_END_DELIVERY;
+    while !turn_end_heard(events, session_id) && Instant::now() < deadline {
+        tokio::time::sleep(POLL).await;
+    }
+}
+
+/// Whether the recorder's latest event for `session_id` that is about the
+/// turn (not `session_meta`, `compaction` or `claude_code_background`, which
+/// the hub treats as about the chat) ends a turn.
+fn turn_end_heard(events: &Events, session_id: &str) -> bool {
+    let events = events.lock().unwrap();
+    let last = events
+        .iter()
+        .rev()
+        .filter(|e| e["sessionId"] == session_id)
+        .find(|e| !matches!(e["type"].as_str(), Some("session_meta" | "compaction" | "claude_code_background")));
+    last.is_some_and(|e| matches!(e["type"].as_str(), Some("done" | "error")))
+}
+
 /// One turn, once it has ended: its chat's events (from the rig's recorder)
 /// and how it ended, `{ stop, aborted }`, read from them (`done.stop`, and the
 /// loop's `Aborted` or `Stopped` error).
@@ -392,6 +427,7 @@ pub async fn turn_record(rig: &TurnRig, turn_id: &str, session_id: &str) -> (Vec
         (alive == json!(false)).then_some(())
     })
     .await;
+    until_turn_end_heard(&rig.events, session_id).await;
     let events: Vec<Value> =
         rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == session_id).cloned().collect();
     let stop = events.iter().rev().find(|e| e["type"] == "done").map_or(Value::Null, |e| e["stop"].clone());

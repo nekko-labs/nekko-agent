@@ -1,6 +1,7 @@
 import React, { forwardRef, useLayoutEffect, useRef } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { composerMarkdownNodes } from './ComposerHighlight.js';
+import { composerFenceAt } from './composerCode.js';
 import { revealEditorCaret } from './editorCaret.js';
 import { ComposerEditingTools } from './ComposerEditingTools.js';
 
@@ -56,7 +57,7 @@ export function markdownEdit(text: string, start: number, end: number, key: stri
   }
   const lineStart = text.lastIndexOf('\n', start - 1) + 1;
   const line = text.slice(lineStart, start);
-  const fenced = (text.slice(0, lineStart).match(/^\s*```/gm)?.length ?? 0) % 2 === 1;
+  const fenced = lineStart > 0 && composerFenceAt(text.slice(0, lineStart - 1)) !== null;
   if (key === 'Enter' && shift) {
     if (fenced) return replace(start, end, '\n' + (line.match(/^\s*/)?.[0] ?? ''));
     const list = line.match(/^(\s*)([-+*]|(\d+)([.)]))\s+(?:\[([ xX])\]\s+)?(.*)$/);

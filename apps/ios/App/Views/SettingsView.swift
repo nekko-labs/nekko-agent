@@ -2,7 +2,8 @@ import NekkoKit
 import NekkoProtocol
 import SwiftUI
 
-/// Paired computers: rename, switch, forget, and how each is reached.
+/// Paired computers: rename, forget, and how each is reached. Every one stays
+/// connected on its own (2026-11-04); one that can't be reached offers Reconnect.
 struct ComputersView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
@@ -18,7 +19,7 @@ struct ComputersView: View {
                     // A tap opens the computer's page (2026-10-24); the actions stay on swipe and touch-and-hold.
                     NavigationLink(value: Route.computer(c.id)) {
                         HStack(spacing: 10) {
-                            Circle().fill(c.id == store.activeId ? dot : palette.inkFaint.opacity(0.5)).frame(width: 8, height: 8)
+                            Circle().fill(dot(store.state(of: c.id))).frame(width: 8, height: 8)
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 6) {
                                     ComputerGlyph(icon: c.icon).foregroundStyle(palette.inkSoft)
@@ -39,7 +40,9 @@ struct ComputersView: View {
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                     }
                     .contextMenu {
-                        if c.id != store.activeId { Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") } }
+                        if canReconnect(c.id) {
+                            Button { store.reconnect(computer: c.id) } label: { Label("Reconnect", systemImage: "arrow.clockwise") }
+                        }
                         Button { app.prefs.defaultComputer = c.id } label: { Label("Open at launch", systemImage: "star") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
@@ -62,12 +65,16 @@ struct ComputersView: View {
     }
 
     private func subtitle(_ c: Computer) -> String {
-        let where_ = "\(routeName(c.route)) · \(c.relayHost)"
-        return c.id == store.activeId ? "\(stateName(store.conn)) · \(where_)" : where_
+        "\(stateName(store.state(of: c.id))) · \(routeName(c.route)) · \(c.relayHost)"
     }
 
-    private var dot: Color {
-        switch store.conn {
+    /// Not reachable now: offer to dial at once rather than wait for the next try.
+    private func canReconnect(_ id: String) -> Bool {
+        ([.offline, .denied, .idle] as [RelayState]).contains(store.state(of: id))
+    }
+
+    private func dot(_ state: RelayState) -> Color {
+        switch state {
         case .online: return palette.success
         case .connecting: return palette.running
         case .offline: return palette.warning
@@ -94,7 +101,7 @@ struct SettingsView: View {
             Section {
                 ThemePicker(selection: $prefs.theme)
                 NavigationLink(value: Route.simpleMode) {
-                    LabeledContent("Simple mode", value: prefs.expertMode ? String(localized: "Expert") : String(localized: "Simple"))
+                    LabeledContent("Simple mode", value: prefs.expertMode ? String(localized: "Detailed") : String(localized: "Simple"))
                 }
                 .accessibilityIdentifier("settings.simpleMode")
                 Button {
@@ -231,6 +238,9 @@ struct SettingsView: View {
                 NavigationLink(value: Route.cloud) { Label("Nekko Cloud sync", systemImage: "lock.icloud") }
                     .accessibilityIdentifier("settings.cloud")
                 NavigationLink(value: Route.computers) { Label("Paired computers", systemImage: "desktopcomputer") }
+                // Chats that run on this iPhone, on its own cloud providers (decision 0050).
+                NavigationLink(value: Route.phoneModels) { Label("Models on \(ChatPlace.phoneName)", systemImage: "iphone") }
+                    .accessibilityIdentifier("settings.phoneModels")
                 NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right") }
                 Picker("Open at launch", selection: $prefs.defaultComputer) {
                     Text("The one used last").tag(String?.none)

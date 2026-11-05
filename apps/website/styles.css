@@ -694,7 +694,7 @@ body {
 /* each screenshot sits on a frame of its own edge colour, so the rounded
    corners clip the frame rather than the picture. The frame belongs to the
    image, so the lightbox clone carries it too. Dark look shows the dark shot;
-   White and Colourful show the light one. */
+   White shows the light one. */
 .media .hero-shot { box-sizing: border-box; padding: 8px; object-fit: contain; }
 .hero-shot-dark, .lightbox-stage > .hero-shot-dark { background: #241f23; }
 .hero-shot-light, .lightbox-stage > .hero-shot-light { background: #c9a9c4; }
@@ -748,7 +748,7 @@ body {
   .media-hero { box-shadow: 4px 4px 0 var(--sticker); }
 }
 
-/* ---- white / colourful switch in the nav ---- */
+/* ---- dark / white switch in the nav ---- */
 .theme-toggle {
   display: grid; place-items: center; width: 36px; height: 36px;
   border-radius: 11px; border: 2px solid var(--sticker); background: var(--bg-2);
@@ -763,7 +763,7 @@ body {
 .theme-toggle svg { display: none; }
 .theme-toggle .ic-sun { display: block; } /* dark: next is White */
 :root[data-theme='white'] .theme-toggle .ic-sun { display: none; }
-:root[data-theme='white'] .theme-toggle .ic-drop { display: block; } /* white: next is Colourful */
+:root[data-theme='white'] .theme-toggle .ic-moon { display: block; } /* white: next is Dark */
 @media (max-width: 560px) { .theme-toggle { width: 32px; height: 32px; } }
 
 /* ---- phone menu: below 900px the links fold behind a button; opening it
@@ -785,47 +785,6 @@ body {
 }
 @media (max-width: 560px) { .nav-menu { width: 32px; height: 32px; } }
 
-/* ---- colourful mode: the logo's lavender (#854f6c) as the accent, not
-   the wallpaper. The hero sits in a lavender wash that fades into pale lilac
-   paper, and the band sections are solid lavender (or lavender into aqua)
-   blocks, so the page alternates strong and quiet instead of reading as one
-   flat colour. Text stays dark ink; cards are white. ---- */
-:root[data-theme='colour'] {
-  --bg: #fbf6f8; --bg-2: #ffffff; --ink: #16161c; --muted: #5a2352;
-  --line: rgba(22, 22, 28, 0.16); --accent: #8a4a7f; --accent-2: #5a2352;
-  --shadow: 0 1px 2px rgba(22, 22, 28, 0.08), 0 12px 30px rgba(138, 74, 127, 0.18);
-  --sticker: #16161c; --peach-soft: #c2fce3;
-  --mascot-face: transparent; --mascot-line: #16161c; --mascot-eyes: #16161c; --ok: #0f5f2c;
-}
-:root[data-theme='colour'] body {
-  background:
-    radial-gradient(55% 800px at 6% 0%, rgba(243, 232, 238, 0.7), transparent 70%),
-    radial-gradient(50% 700px at 92% 4%, rgba(133, 79, 108, 0.45), transparent 70%),
-    radial-gradient(50% 900px at 90% 42%, rgba(133, 79, 108, 0.2), transparent 70%),
-    radial-gradient(55% 900px at 8% 66%, rgba(243, 232, 238, 0.5), transparent 70%),
-    radial-gradient(60% 900px at 90% 88%, rgba(165, 249, 223, 0.22), transparent 70%),
-    linear-gradient(180deg, #854f6c 0, #854f6c 560px, #f3e8ee 1050px, var(--bg) 1350px) no-repeat,
-    var(--bg);
-}
-:root[data-theme='colour'] .nav { background: rgba(230, 208, 220, 0.78); }
-:root[data-theme='colour'] .glass, :root[data-theme='colour'] .card { background: #ffffff; border-color: rgba(169, 101, 156, 0.14); }
-:root[data-theme='colour'] .band .card { background: #ffffff; }
-:root[data-theme='colour'] .band-lavender { background: linear-gradient(135deg, #854f6c, #e6d0dc); }
-:root[data-theme='colour'] .band-aqua { background: linear-gradient(135deg, #854f6c 0%, #e6d0dc 100%); }
-:root[data-theme='colour'] .band-blend { background: linear-gradient(120deg, #854f6c 0%, #e6d0dc 100%); }
-:root[data-theme='colour'] .btn-ghost { background: #f3e8ee; color: #16161c; }
-@media (hover: hover) {
-  :root[data-theme='colour'] .btn-ghost:hover { background: #ffffff; }
-}
-:root[data-theme='colour'] .media { background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(253, 247, 246, 0.75)); border-color: rgba(22, 22, 28, 0.3); }
-:root[data-theme='colour'] .media-hero { background: linear-gradient(135deg, #ffffff, #fbf6f8); }
-:root[data-theme='colour'] .media span, :root[data-theme='colour'] .media::after { color: #8a4a7f; }
-:root[data-theme='colour'] .grad, :root[data-theme='colour'] .tagline .grad { background: linear-gradient(100deg, #5a2352 0%, #8a4a7f 100%); -webkit-background-clip: text; background-clip: text; }
-:root[data-theme='colour'] code { background: rgba(133, 79, 108, 0.14); border-color: rgba(169, 101, 156, 0.18); }
-:root[data-theme='colour'] .band code { background: rgba(255, 255, 255, 0.55); border-color: rgba(22, 22, 28, 0.15); }
-:root[data-theme='colour'] ::selection { background: rgba(133, 79, 108, 0.35); }
-:root[data-theme='colour'] .theme-toggle .ic-sun { display: none; }
-:root[data-theme='colour'] .theme-toggle .ic-moon { display: block; } /* colourful: next is Dark */
 
 /* ---- retro-tech second voice, two faces that share the job:
    Handjet (LED-segment, tall) for the sub-titles people read: the hero
@@ -907,7 +866,6 @@ h3 { font-size: 21px; }
 .beta-opt input:focus-visible { outline: 3px solid #854f6c; outline-offset: 2px; }
 .beta-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .beta-privacy { margin-top: 12px; max-width: 46ch; }
-:root[data-theme='colour'] .beta-card { background: #ffffff; }
 @media (max-width: 900px) {
   .beta { grid-template-columns: 1fr; row-gap: 28px; grid-template-areas: 'intro' 'tour' 'perks' 'stage'; }
   .beta-perks { margin: 0; }
@@ -926,13 +884,8 @@ h3 { font-size: 21px; }
 .np-paw-line { fill: var(--peek-line, #16161c); }
 .np-paw-fill { fill: var(--peek-face, #ffffff); }
 .np-paw-toes { fill: var(--peek-line, #16161c); opacity: 0.55; }
-:root[data-theme='colour'] .np-paw-toes { fill: #ffffff; opacity: 0.35; }
 .np-question path, .np-sparkles path { fill: #16161c; }
 .np-sparkles path { fill: #854f6c; }
-/* Nekko is a black cat: white only on the white version */
-:root[data-theme='colour'] .nekko-peek { --peek-face: #16161c; --peek-line: #16161c; --peek-eyes: #ffffff; }
-:root[data-theme='colour'] .np-question path { fill: #16161c; }
-:root[data-theme='colour'] .np-sparkles path { fill: #ffffff; }
 
 /* which eyes show, per mood */
 .np-eyes-happy, .np-eyes-closed, .np-eyes-confused, .np-question, .np-sparkles { opacity: 0; }
@@ -1023,15 +976,6 @@ h3 { font-size: 21px; }
     radial-gradient(120% 90% at 20% -30%, rgba(255, 255, 255, 0.55), transparent 55%),
     radial-gradient(80% 80% at 90% 130%, rgba(133, 79, 108, 0.18), transparent 60%);
 }
-:root[data-theme='colour'] .nav {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.12));
-  border-color: rgba(255, 255, 255, 0.55);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.25),
-    inset 0 0 18px rgba(255, 255, 255, 0.18),
-    0 8px 28px rgba(138, 74, 127, 0.22);
-}
 @media (max-width: 560px) {
   .nav { top: 8px; width: calc(100% - 16px); padding: 8px 8px 8px 14px; border-radius: 18px; }
 }
@@ -1062,12 +1006,29 @@ h3 { font-size: 21px; }
 .panel-fast { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
 .panels-foot { margin-top: 30px; max-width: 760px; margin-left: auto; margin-right: auto; }
 
-/* the benchmark: three measures, three servers, bars anchored to a baseline
-   at the left; the numbers sit on the bars, the servers are named by a legend
-   and a colour key that also passes a colour-blindness check. */
-.bench { grid-column: 1 / -1; margin-top: 10px; padding-top: 26px; border-top: 1px solid var(--line); }
+/* The launch proof uses published completion times, not a simulated live race. */
+/* The hero's proof: the speed replay under the headline, kept inside its
+   panel at any width (min-width: 0 and max-width: 100% stop a 1920px video
+   from widening the column). */
+.hero-replay { width: min(100%, 880px); min-width: 0; margin: 30px auto 0; padding: 10px; border-radius: 18px; box-sizing: border-box; }
+.hero-replay-video { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 10px; background: var(--line); }
+.hero-replay-caption { margin-top: 10px; padding: 0 6px 2px; font-size: 14px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.hero-replay-caption strong { color: var(--ink); }
+/* the reply-time infographic under the fast panel's copy: two bars on one scale */
+.speed-proof { margin: 22px 0 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; }
+.speed-proof figcaption { display: block; margin-bottom: 12px; }
+.speed-row { display: grid; grid-template-columns: 124px 1fr; gap: 12px; align-items: center; padding: 5px 0; font-size: 13.5px; font-weight: 600; }
+.speed-row .bar { height: 26px; min-width: 64px; }
+.speed-row .bar b { font-size: 13px; }
+.speed-proof .micro { margin-top: 10px; max-width: none; }
+.bench-method { grid-column: 1 / -1; max-width: none; margin: 0; }
+/* the why-it's-faster video: dark file for the Dark look, light for White and Colourful */
+.media .why-video-dark, :root[data-theme='dark'] .media .why-video-light { display: none; }
+:root[data-theme='dark'] .media .why-video-dark { display: block; }
+
+.bench { grid-column: 1 / -1; min-width: 0; margin-top: 10px; padding-top: 26px; border-top: 1px solid var(--line); }
 .bench-title { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
-.bench-legend { display: inline-flex; gap: 14px; letter-spacing: 0.06em; text-transform: none; font-size: 12px; }
+.bench-legend { display: inline-flex; flex-wrap: wrap; gap: 8px 14px; letter-spacing: 0.06em; text-transform: none; font-size: 12px; }
 .bench-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .bench-row { display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: center; padding: 8px 0; }
 .bench-row + .bench-row { border-top: 1px solid var(--line); }
@@ -1089,6 +1050,7 @@ h3 { font-size: 21px; }
   .panel, .panel-fast { grid-template-columns: 1fr; padding: 24px; gap: 20px; }
   .panel .panel-media { order: 1; }
   .panel .panel-copy { order: 2; }
+  .panel-fast .panel-copy { order: 0; min-width: 0; }
   .panel .bench { order: 3; }
   .panel h3 { font-size: 24px; }
   .bench-row { grid-template-columns: 1fr; gap: 6px; }
@@ -1226,9 +1188,9 @@ html { -webkit-tap-highlight-color: transparent; }
 @media (hover: hover) {
   :root[data-theme='dark'] .btn-primary:hover { background: var(--accent); color: var(--bg); }
 }
-.btn-ghost, :root[data-theme='colour'] .btn-ghost { background: transparent; color: var(--ink); padding-left: 6px; padding-right: 6px; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; }
+.btn-ghost { background: transparent; color: var(--ink); padding-left: 6px; padding-right: 6px; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; }
 @media (hover: hover) {
-  .btn-ghost:hover, :root[data-theme='colour'] .btn-ghost:hover { background: transparent; color: var(--accent); }
+  .btn-ghost:hover { background: transparent; color: var(--accent); }
 }
 .theme-toggle, .nav-menu { box-shadow: none; border-width: 1px; border-color: var(--line); }
 .theme-toggle:active { transform: none; box-shadow: none; border-color: var(--ink); }
@@ -1278,3 +1240,10 @@ html { -webkit-tap-highlight-color: transparent; }
     #0c0c11;
 }
 :root[data-theme='dark'] .window-mock { background: #16161c; }
+
+/* Keep videos drawn with the rest of the page. On some Windows GPUs and HDR
+   screens Chrome hands a playing video to a hardware overlay while the page is
+   still and takes it back while scrolling; each switch shifts its colour, so
+   the video pops and pulses brighter on every scroll. A filter that is not a
+   no-op stops Chrome from using the overlay. */
+video { filter: brightness(1.0001); }

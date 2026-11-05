@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     await ready();
     // b waits on a question, c and a are working, d has stopped with a watch armed.
-    const phases = { a: { phase: 'building', exchangeCount: 2 }, b: { phase: 'exploring', exchangeCount: 2 }, c: { phase: 'verifying', exchangeCount: 2 }, d: { phase: 'shipping', exchangeCount: 2, activeWatchCount: 1 } };
+    const phases = { a: { phase: 'building', exchangeCount: 2 }, b: { phase: 'building', exchangeCount: 2 }, c: { phase: 'verifying', exchangeCount: 2 }, d: { phase: 'shipping', exchangeCount: 2, activeWatchCount: 1 } };
     await run(`localStorage.setItem('fixture.summaries', ${JSON.stringify(JSON.stringify(phases))}); localStorage.removeItem('nekko.agentPanelView'); localStorage.setItem('fixture.pending', JSON.stringify({ b: {} })); localStorage.setItem('fixture.running', JSON.stringify(['a', 'c'])); location.reload()`).catch(() => {});
     await sleep(500); await ready(); await sleep(1200);
     await shot('default-view');
@@ -98,13 +98,13 @@ app.whenReady().then(async () => {
     const { width, height } = report.frameSize;
     if (width === crop.width) writeGif(path.join(out, 'activity-move.gif'), frames, width, height, Math.max(2, Math.round(report.frameMs / 10)));
     else {
-      // A HiDPI capture is 2x: downsample to the crop so the GIF stays small.
-      const half = frames.map(f => { const o = Buffer.alloc(crop.width * crop.height * 4); for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) f.copy(o, (y * crop.width + x) * 4, ((y * 2) * width + x * 2) * 4, ((y * 2) * width + x * 2) * 4 + 4); return o; });
+      // Downsample at the actual display scale, including fractional Windows scaling.
+      const half = frames.map(f => { const o = Buffer.alloc(crop.width * crop.height * 4); for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) { const source = (Math.floor(y * height / crop.height) * width + Math.floor(x * width / crop.width)) * 4; f.copy(o, (y * crop.width + x) * 4, source, source + 4); } return o; });
       writeGif(path.join(out, 'activity-move.gif'), half, crop.width, crop.height, Math.max(2, Math.round(report.frameMs / 10)));
     }
     report.hidden = !win.isVisible();
   } catch (e) { report.errors.push(String(e && e.stack || e)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
-  app.exit(report.captures.length ? 0 : 1);
+  app.exit(report.hidden && report.captures.length && !report.errors.length ? 0 : 1);
 });
