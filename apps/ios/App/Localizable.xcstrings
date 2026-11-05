@@ -2266,7 +2266,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un ordenador libre"
+            "value": "Una computadora libre"
           }
         },
         "fr": {
@@ -4386,7 +4386,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auto eligió %1$@: %2$@ está ocupado."
+            "value": "Auto eligió %1$@: %2$@ está ocupada."
           }
         },
         "fr": {
@@ -10306,7 +10306,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Todos los ordenadores están ocupados, así que Auto mantuvo %@, el último usado."
+            "value": "Todas las computadoras están ocupadas, así que Auto mantuvo %@, la última usada."
           }
         },
         "fr": {
@@ -11032,7 +11032,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Buscando un ordenador libre…"
+            "value": "Buscando una computadora libre…"
           }
         },
         "fr": {
@@ -17318,7 +17318,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ningún otro ordenador puede ejecutar ahora un modelo local, así que Auto mantuvo %@."
+            "value": "Ninguna otra computadora puede ejecutar ahora un modelo local, así que Auto mantuvo %@."
           }
         },
         "fr": {
