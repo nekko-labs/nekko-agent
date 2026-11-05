@@ -102,9 +102,11 @@ public enum ChatSections {
     /// ...and only those touched in this window (ms).
     public static let recentWindow: Int64 = 14 * 24 * 60 * 60 * 1000
 
-    /// The status groups, most urgent first.
+    /// The status groups, most urgent first. A stopped chat is Watching while a
+    /// watch is armed on it, otherwise Done, as the desktop’s Agents panel splits them.
     public static let statusGroups: [GroupDef] = [
-        GroupDef("status:input", "Needs you"), GroupDef("status:working", "Working"), GroupDef("status:idle", "Idle"),
+        GroupDef("status:input", "Needs you"), GroupDef("status:working", "Working"),
+        GroupDef("status:watching", "Watching"), GroupDef("status:done", "Done"),
     ]
 
     /// The date groups, newest first, counted in local calendar days.
@@ -169,7 +171,7 @@ public enum ChatSections {
         }
         let defs = view.groupBy == .status ? statusGroups : dateGroups
         let groupOf: (SessionSummary) -> String = view.groupBy == .status
-            ? { statusKey(activity[$0.id]) }
+            ? { statusKey(activity[$0.id], watching: $0.activeWatchCount > 0) }
             : { dateKey($0.updatedAt, now: now, calendar: calendar) }
         let grouped = Dictionary(grouping: active, by: groupOf)
         return defs.compactMap { d in
@@ -193,11 +195,11 @@ public enum ChatSections {
         return (shown, hidden)
     }
 
-    public static func statusKey(_ a: Activity?) -> String {
+    public static func statusKey(_ a: Activity?, watching: Bool = false) -> String {
         switch a {
         case .needsYou?: return "status:input"
         case .running?: return "status:working"
-        case nil: return "status:idle"
+        case nil: return watching ? "status:watching" : "status:done"
         }
     }
 

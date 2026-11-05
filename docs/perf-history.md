@@ -51,7 +51,23 @@ Conditions: exact queue parent `2475c3b3e50f27a33c0271e417b587cfae522651` and he
 
 All four fail the unchanged 33 ms gate. This establishes an exact-parent baseline failure on this runner, not zero impact or a speedup. The original queue on Intel Xeon 6973P-C (same browser, Linux 4 threads) measured 34.6 / 33.9 / 33.8 ms; all other measured speed/memory rows, build, integration tests and CodeQL passed. Do not treat the original frame-only automatic profiles as cold-switch evidence.
 
-Separate timeline-instrumented base/head p95 was 39.9 / 41.3 ms. Inspected cold-switch traces contain 179441 / 162435 events; renderer-thread nested event totals: UpdateLayoutTree 701.503 / 692.301 ms, Layout 172.874 / 165.797 ms, Paint 2167.981 / 2058.461 ms. These whole-phase totals overlap and have instrumentation overhead; they are not per-click causal attribution. Raw source revisions, cleanliness, hashes, reports, samples and traces are in [matched diagnostic 41992014521](https://github.com/nekko-labs/nekko-agent/actions/runs/41992014521) and retained locally in `.shots/pr1814-archive`. The temporary diagnostic workflow must never merge. Baseline tracker: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). Two matched baseline failures supported one evidence-backed normal-queue attempt. That attempt failed again in [queue CI 42005371375](https://github.com/nekko-labs/nekko-agent/actions/runs/42005371375), group `c68dc1e6bee975685335c907004ed8769ed46a1e`, parent `7dab6be1a58dc5a903c26ef65cc34430ac6970ca`: cold first-frame p95 **41.1 / 41.7 / 41.1 ms**, 33 switches per attempt, AMD EPYC 7763 Linux 4 threads / 16 GB, Chrome/156.0.8078.79. Build, integration tests, CodeQL and all other measured speed/memory rows passed. The older matched experiment proves failure on its exact parent, not this newer parent. PR held, drafted and explicitly dequeued; API verified no queue entry or auto-merge request. No further unchanged-head retries: landing depends on a separate verified #712 baseline repair (or targeted repair if a regression is demonstrated), then integration and protected validation. An automatically generated replacement group `0aa821777f9d55c0d0de08d849ae6c43135b20e9` / [CI 42007380317](https://github.com/nekko-labs/nekko-agent/actions/runs/42007380317) was already running before the hold. Its final report also fails only cold first-paint: **43.6 / 43.7 / 44.2 ms p95**, 33 samples each, EPYC 7763 Linux 4 threads / 16 GB, Chrome/156.0.8078.47, parent `6ec0318888acae0de8bd37176f938b69f993797c`. Build, integration tests, CodeQL and other measured speed/memory rows passed. Report, raw samples and provenance inspected and archived; automatic streaming-frame profiles do not measure cold-switch latency. No further run or requeue initiated; final evidence collection is closed.
+Separate timeline-instrumented base/head p95 was 39.9 / 41.3 ms. Inspected cold-switch traces contain 179441 / 162435 events; renderer-thread nested event totals: UpdateLayoutTree 701.503 / 692.301 ms, Layout 172.874 / 165.797 ms, Paint 2167.981 / 2058.461 ms. These whole-phase totals overlap and have instrumentation overhead; they are not per-click causal attribution. Raw source revisions, cleanliness, hashes, reports, samples and traces are in [matched diagnostic 41992014521](https://github.com/nekko-labs/nekko-agent/actions/runs/41992014521) and retained locally in `.shots/pr1814-archive`. The temporary diagnostic workflow must never merge. Baseline tracker: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). Later queue attempts [42005371375](https://github.com/nekko-labs/nekko-agent/actions/runs/42005371375) and [42007380317](https://github.com/nekko-labs/nekko-agent/actions/runs/42007380317) failed only cold first-paint (p95 41.1 to 44.2 ms, EPYC 7763); build, integration tests, CodeQL and every other measured speed/memory row passed.
+
+## Follow-up slider and text toolbar (#1760, 2026-11-05)
+
+Area: renderer. Result: baseline cold-paint gate failure reproduced; no performance win or zero-regression claim.
+Conditions: same Linux runner, AMD EPYC 7763 (4 threads), Chrome/156.0.8078.79, Node 22.23.4, 1440x1000, scripted local model, 33 cold switches per run. Exact base `42b12519687867ac51608aec0b9bb5e6a44724e6`, queue snapshot `b5eb5a103700771b36be2ad31f224fea5ae3cc35`. Same unchanged latency harness and release daemon (SHA256 `9953ec90d7b3de254f47c4c2a69d1ef33b901668ff4da1dacf6e882254049d50`), clean source snapshots, fresh isolated profiles. Order base/head/head/base, one full unprofiled latency attempt per snapshot, not `--quick`.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-paint p95 | 40.0 / 45.3 ms | 44.9 / 42.8 ms |
+| Cold-chat first-paint p50 | 30.6 / 33.5 ms | 33.7 / 32.7 ms |
+
+Both unchanged-base runs fail the same 33 ms gate; both head p95s fall within the observed base range. This establishes a baseline failure on this runner, not proof that the UI change has zero effect. Original queue cold-paint p95 attempts were 41.8 / 40.3 / 40.1 ms; all other measured speed/memory rows passed. Automatic streaming-frame diagnostics did not measure the failing cold-paint metric.
+
+Separate timeline-instrumented base/head runs measured cold-paint p95 48.4 / 46.6 ms. Renderer-main cold-switch phase totals (nested events overlap, not per-interaction causal attribution): RunTask 6551.263 / 6460.261 ms, UpdateLayoutTree 723.449 / 706.784 ms, Layout 187.409 / 185.191 ms, Paint 2174.534 / 2167.673 ms, Layerize 1209.540 / 1249.811 ms. Instrumentation has overhead; these are not gate measurements or a performance improvement. Both cold-switch traces and source provenance were inspected. Baseline repair remains tracked in [#712](https://github.com/nekko-labs/nekko-agent/issues/712); budgets and protections are unchanged. Two matched base failures support one evidence-backed requeue, not repeated retries if it recurs.
+
+Source: [matched reports, samples, provenance and cold-switch timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/41956243176), [original queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/41954035733). Diagnostic attempt 1 stopped before measurement due to a crates.io TLS EOF; one network retry produced the complete artifact. Temporary `ci/1760-cold-paint` workflow is diagnostic only and must never merge.
 
 ## Zone drag and composer actions (#1703, 2026-11-04)
 
@@ -126,6 +142,31 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-11
+
+### #1862 Desktop reload: same wait, no wrong screens (2026-11-05)
+Area: renderer
+Result: no effect
+Conditions: Windows 11, real renderer entry against a stub bridge in a hidden Electron window, warm reload, 3 runs each of `main` and the PR. Simulated delays: providers 10ms, model list 1500ms, transcript 150ms, 1,500-message chat. Reduced-motion path. Times are from the new page's first script.
+
+| Metric | Before | After |
+|---|---|---|
+| Overlay gone | 589, 652, 427ms | 604, 650, 647ms |
+| Chat on screen | 323, 368, 361ms | 320, 447, 367ms |
+| Samples showing a wrong screen | 7, 6, 7 | 0, 0, 0 |
+
+Why: the overlay now waits for the provider list and transcripts, but not the model list, a live provider call once its catalog is 5 minutes old. An earlier version of the PR did wait for it and took 1943ms in one run with the same delays. Source: this PR.
+
+### #1833 iPhone: cat from the first frame, straight to the zoom after Face ID (2026-11-05)
+Area: renderer
+Result: improvement
+Conditions: iPhone 17 Pro simulator, iOS 27.0, Xcode 27.2, Debug build signed ad hoc, app lock on, simulated Face ID match. Screen recordings via `simctl io recordVideo`, read frame by frame at 1/30 s: from the last frame showing the Face ID sheet to the first frame with no lavender left on screen. Two cold launches per build (fresh install, then relaunch without reinstall).
+
+| Metric | Before | After |
+|---|---|---|
+| Face ID sheet gone to app fully on screen, fresh install | 1.97 s | 0.77 s |
+| Face ID sheet gone to app fully on screen, relaunch | 1.97 s | 0.90 s |
+
+Why: the launch animation no longer builds the cat up from pixels (1.25 s) before the 0.525 s zoom; the cat is already on the launch screen and lock cover, so the zoom starts at once. Simulator Debug timing, not a device; app startup before the Face ID prompt (about 2 s here) did not change.
 
 ### #1663 / #1686 Empty-agent wave: per-frame swell, then per-column colour (2026-11-04)
 Area: renderer
@@ -1240,6 +1281,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Native iOS first-run suite across simulator clones (2026-11-05, #1825): on a VM with at least 4 vCPUs and 8 GB, the unit tests and launch-argument UI tests now run with `-parallel-testing-enabled YES` and one worker per 2 vCPUs and 4 GB, at most 4; a hosted 3-vCPU Mac still runs them serially. Not measured: the step's time before and after on a runner VM. One local run with 4 workers on a 10-core M-series Mac took 443 s for 141 tests, but the Mac's load average was over 200 from other work and there is no serial run under the same load, so it says nothing about the speedup. The first nightly or batch run on a 6-vCPU runner VM, against the previous one on the same VM size, would settle it.
 - Completing a chat from its X (2026-11-04, #1662): the sidebar card's X played its exit animation (260 ms fold, then a 60 ms delay and 220 ms collapse, each awaited with a 50 ms fallback) before asking the engine to complete the chat, and the engine call then ran `chat:abort`, the archive write and the session refresh one after another. The engine call now starts when X is pressed and the animation plays over it, so the total should approach the longer of the two rather than their sum. Not measured: click-to-row-removed time before and after. A hidden fixture timing the X press to the row's unmount against a stubbed engine with fixed IPC latency, on both revisions, would settle it.
 - iPhone chat streaming and outbox confirmation (2026-11-01, #1412): each streamed token used to recount every live block's characters for the context gauge, merge the whole saved transcript with the live turn twice per render (the list and the follow-scroll `onChange`), and regroup every row by purpose. Now `ChatModel` keeps a running character count and a stored merged transcript whose last block a token patches in place; the view keeps its rows and replaces only the last; the scroll follows a revision counter. The outbox re-read the whole chat (`session:get`) every 0.5 s for up to 45 s after each send; it now re-reads on the computer's first event for the chat, on the send's answer, or on a 0.5/1/2/4 s backoff, and `sendWaiting` no longer polls every 50 ms. Not measured: per-token main-actor time on a long transcript and `session:get` calls per send, before and after. An Instruments Time Profiler run of a long reply in a 500-message chat, and a count of `session:get` per outbox send in the itest, would settle it.
 - nekkod router table (2026-10-28, #1335): `routes::route()` looked a channel up by walking a match of about 90 arms, many of them a linear `contains` over a channel list; it is now one `HashMap` lookup in a table built at startup. Done for structure (no `.expect("checked")`, no channel registered twice), not measured: per-call routing time before and after is unknown. A microbenchmark of `route()` for a late channel (`session:get`) on both revisions would settle it.

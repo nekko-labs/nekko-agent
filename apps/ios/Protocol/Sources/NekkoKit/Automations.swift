@@ -129,3 +129,92 @@ public final class UsageModel {
         loaded = true
     }
 }
+
+/// Usage by where it came from (#1773): every paired computer that answers,
+/// read in parallel over its own link, and this iPhone's own chats. A computer
+/// that is offline, or fails to answer, keeps the numbers it last gave.
+@MainActor
+@Observable
+public final class FleetUsageModel {
+    /// The paired computers in the app's order, then this iPhone when it runs chats.
+    public private(set) var places: [UsagePlace] = []
+    public private(set) var loading = false
+    public private(set) var loaded = false
+
+    private let store: ComputersStore
+    private let phone: PhoneChats?
+
+    public init(store: ComputersStore, phone: PhoneChats?) {
+        self.store = store
+        self.phone = phone
+    }
+
+    /// The All places total.
+    public var total: UsageTotals { UsageTotals(places) }
+    public var isEmpty: Bool { places.allSatisfy(\.isEmpty) }
+
+    public func load() async {
+        loading = true
+        defer { loading = false }
+        let last = Dictionary(places.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let computers = store.computers
+        // Who can be asked now: the active computer's connection, or the fleet's link.
+        var links: [String: RemoteConnection] = [:]
+        for c in computers where store.state(of: c.id) == .online {
+            if let r = try? store.caller(c.id) { links[c.id] = r }
+        }
+        var read: [String: Result<UsagePlace, Error>] = [:]
+        await withTaskGroup(of: (String, Result<UsagePlace, Error>).self) { group in
+            for c in computers {
+                guard let r = links[c.id] else { continue }
+                let (id, name) = (c.id, c.name)
+                group.addTask {
+                    do { return (id, .success(try await Self.read(r, id: id, name: name))) } catch { return (id, .failure(error)) }
+                }
+            }
+            for await (id, result) in group { read[id] = result }
+        }
+        var out: [UsagePlace] = computers.map { c in
+            switch read[c.id] {
+            case .success(let place)?:
+                return place
+            case .failure(let error)?:
+                return Self.stale(last[c.id], id: c.id, name: c.name, error: store.readable(error).localizedDescription)
+            case nil:
+                return Self.stale(last[c.id], id: c.id, name: c.name, error: nil)
+            }
+        }
+        if let phone, phone.isSetUp || !phone.usage.isEmpty {
+            out.append(phone.usage.place())
+        }
+        places = out
+        loaded = true
+    }
+
+    /// A place that did not answer this time: its last numbers, marked offline.
+    static func stale(_ last: UsagePlace?, id: String, name: String, error: String?) -> UsagePlace {
+        var p = last ?? UsagePlace(id: id, kind: .computer, name: name, online: false)
+        p.online = false
+        p.error = error
+        return p
+    }
+
+    /// One computer's summary, providers and the enabled providers' plan limits.
+    nonisolated static func read(_ r: RemoteConnection, id: String, name: String) async throws -> UsagePlace {
+        async let summaryRaw = r.call(Channels.usageSummary)
+        async let providersRaw = r.call(Channels.providersList)
+        let summary = UsageSummary.from(try await summaryRaw)
+        // Without the providers list there are no plans to show, but the summary still stands.
+        let providers = PublicProvider.list(try? await providersRaw).filter(\.enabled)
+        var found: [String: ProviderLimits] = [:]
+        // A provider without limits answers null; one that fails to read leaves no plan.
+        await withTaskGroup(of: (String, ProviderLimits?).self) { group in
+            for p in providers {
+                group.addTask { (p.id, ProviderLimits.from(try? await r.call(Channels.limitsGet, [.string(p.id)]))) }
+            }
+            for await (pid, l) in group { if let l { found[pid] = l } }
+        }
+        let plans = providers.compactMap { p in found[p.id].map { UsagePlace.Plan(providerId: p.id, label: p.label, limits: $0) } }
+        return UsagePlace(id: id, kind: .computer, name: name, online: true, summary: summary, plans: plans)
+    }
+}

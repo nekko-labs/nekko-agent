@@ -2,7 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PlanStep, PrInfo, Session } from '@nekko-agent/shared';
-vi.mock('../store.js', () => ({ useStore: (selector: (state: unknown) => unknown) => selector({}) }));
+const state = vi.hoisted(() => ({ sessions: [] as unknown[] }));
+vi.mock('../store.js', () => ({ useStore: (selector: (state: unknown) => unknown) => selector(state) }));
 const linked = vi.hoisted(() => ({ links: null as Map<string, unknown> | null }));
 vi.mock('../planStepLinks.js', async (original) => {
   const real = await original<typeof import('../planStepLinks.js')>();
@@ -15,7 +16,7 @@ const now = 1_800_000_000_000;
 const step = (id: string, status: string, extra = {}) => ({ id, title: id, status: 'done', updatedAt: now, createdAt: now, verification: { status, ...extra } }) as PlanStep;
 const render = (agentPlan: PlanStep[], prs: PrInfo[] = []) => renderToStaticMarkup(<PlanSheet sessionId="s" session={{ agentPlan, messages: [] } as unknown as Session} streaming prs={prs} initiallyOpen />);
 const chips = (html: string, kind: string) => html.match(new RegExp(`data-plan-chip="${kind}"`, 'g'))?.length ?? 0;
-afterEach(() => { vi.restoreAllMocks(); linked.links = null; });
+afterEach(() => { vi.restoreAllMocks(); linked.links = null; state.sessions = []; });
 
 describe('working and paused marks', () => {
   const active = { id: 'work', title: 'Working step', status: 'active', createdAt: now, updatedAt: now } as PlanStep;
@@ -82,7 +83,8 @@ describe('CI chips', () => {
     const row = html.slice(html.indexOf('data-plan-step-id="verify:all"'));
     expect(chips(row, 'ci')).toBe(3);
     expect(row.indexOf('e2e')).toBeLessThan(row.indexOf('gate'));
-    expect(row).toContain('2 passed');
+    expect(row).toContain('CI: 2 passed');
+    expect(row).toContain('CI: e2e');
     expect(chips(html, 'ci')).toBe(3);
   });
   it('fall back to the running step without a verification step, and skip closed PRs', () => {
@@ -118,5 +120,32 @@ describe('step disclosure', () => {
     stylesheet('styles.css').walkRules(rule => { if (rule.selector.includes('plan-sheet-step')) rules.push(rule.selector + rule.toString()); });
     expect(rules.some(r => /\.plan-sheet:(hover|focus-within)/.test(r))).toBe(false);
     expect(rules.some(r => /plan-sheet-step[^-][^{]*\{[^}]*border:/.test(r))).toBe(false);
+  });
+});
+
+describe('visible running sub-agents', () => {
+  it('shows running children outside a finished step disclosure', () => {
+    state.sessions = [
+      { id: 'kid', parentSessionId: 's', title: 'Trace lookup', createdAt: now, activeRun: { startedAt: now } },
+      { id: 'done', parentSessionId: 's', title: 'Finished helper', createdAt: now },
+      { id: 'other', parentSessionId: 'other-parent', title: 'Unrelated helper', activeRun: {} },
+    ];
+    const html = render([{ id: 'build', title: 'Build', status: 'done', createdAt: now, updatedAt: now }]);
+    const summary = html.slice(html.indexOf('data-plan-running-subagents'), html.indexOf('class="plan-sheet-head"'));
+    expect(summary).toContain('Sub-agent: Trace lookup');
+    expect(summary).toContain('aria-label="Running"');
+    expect(summary).not.toContain('Finished helper');
+    expect(summary).not.toContain('Unrelated helper');
+  });
+});
+
+describe('chip type labels', () => {
+  it('identifies PRs, tasks, files and previews without a tooltip', () => {
+    linked.links = new Map([['build', {
+      prs: ['https://github.com/o/r/pull/9'], projects: [{ url: 'https://github.com/o/r/issues/4', label: 'o/r#4' }], subagents: [],
+      artifacts: [{ path: '/tmp/report.html', filename: 'report.html' }, { path: '/tmp/preview.html', filename: 'preview.html', live: { url: 'http://localhost:3000/demo', host: 'localhost:3000', route: '/demo' } }],
+    }]]);
+    const html = render([{ id: 'build', title: 'Build', status: 'active', createdAt: now, updatedAt: now }]);
+    for (const label of ['PR #9', 'Task: o/r#4', 'File: report.html', 'Preview: localhost:3000/demo']) expect(html).toContain(label);
   });
 });

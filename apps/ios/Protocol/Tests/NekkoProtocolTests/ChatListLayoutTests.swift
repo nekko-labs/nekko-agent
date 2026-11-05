@@ -70,8 +70,18 @@ final class ChatListLayoutTests: XCTestCase {
         v.groupBy = .status
         v.showEmptyGroups = false
         let status = ChatSections.make(list, folders: [], view: v, activity: ["c": .needsYou, "a": .running], now: now, calendar: utc)
-        XCTAssertEqual(status.map(\.name), ["Needs you", "Working", "Idle", "Completed"])
+        XCTAssertEqual(status.map(\.name), ["Needs you", "Working", "Done", "Completed"])
         XCTAssertEqual(status.map { $0.chats.map(\.id) }, [["c"], ["a"], ["b", "d"], ["e"]])
+
+        // A stopped chat with a watch armed is Watching, apart from the Done ones.
+        let watched = try chats("""
+        [{"id":"w","title":"W","updatedAt":\(now),"activeWatchCount":1},
+         {"id":"x","title":"X","updatedAt":\(now - 1000),"prUrls":["https://github.com/o/r/pull/7"]}]
+        """)
+        let split = ChatSections.make(watched, folders: [], view: v, activity: [:], now: now, calendar: utc)
+        XCTAssertEqual(split.map(\.name), ["Watching", "Done"])
+        XCTAssertEqual(split.map { $0.chats.map(\.id) }, [["w"], ["x"]])
+        XCTAssertEqual(watched.first { $0.id == "x" }?.prUrls, ["https://github.com/o/r/pull/7"])
 
         v.groupBy = .date
         let date = ChatSections.make(list, folders: [], view: v, activity: [:], now: now, calendar: utc)

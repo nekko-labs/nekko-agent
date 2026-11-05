@@ -1,5 +1,7 @@
 /** Startup is already a turn, even before a live reply or saved message exists. */
-export function chatWelcomeState({ messages, streaming, hasLive, hasProvider, modelId, imageMode }: {
+export function chatWelcomeState({ loaded, messages, streaming, hasLive, hasProvider, modelId, imageMode }: {
+  /** A chat still being fetched has no messages yet, which is not the same as being empty. */
+  loaded: boolean;
   messages: number;
   streaming: boolean;
   hasLive: boolean;
@@ -7,6 +9,6 @@ export function chatWelcomeState({ messages, streaming, hasLive, hasProvider, mo
   modelId: string | null;
   imageMode: boolean;
 }): { welcome: boolean; modelChoice: boolean } {
-  const welcome = messages === 0 && !streaming && !hasLive;
+  const welcome = loaded && messages === 0 && !streaming && !hasLive;
   return { welcome, modelChoice: welcome && hasProvider && (imageMode || !modelId) };
 }
