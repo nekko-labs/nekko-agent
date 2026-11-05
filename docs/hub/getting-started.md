@@ -40,6 +40,12 @@ A new chat greets you with “What should we work on?” and a small pixel Nekko
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
+## Reviewing visual changes
+
+For UI work, Nekko is instructed to show the actual before/after screenshots in the agent reply, rather than leaving evidence only in a PR. Matching images labeled **Before: screen name** and **After: screen name** appear as a comparison; the reply's **Next step** section also shows a **Verify the visual changes** panel with those same screenshots. Wide conversations show the pair side by side, while narrow conversations stack it. Evidence stays with the reply and chat where the work happened.
+
+Displaying a screenshot does not mean it has been inspected or approved. The agent reports what it checked and what still needs review. New surfaces may have only an after image. Local screenshots retain Sandbox restrictions, and remote images from sources the chat has not seen still wait for **Load image**. If an image cannot load, its card shows the existing fallback rather than hiding the verification gap.
+
 ## Following tool activity
 
 The agent's plan sits on top of the message box as a card. Each step shows its title, one line of detail, and chips for what that step produced: the PRs the agent opened (with their CI status) and the files or previews it linked. Finished steps shrink to their title; hover the card to see their details. **Change plan** tells the agent what to do differently.
