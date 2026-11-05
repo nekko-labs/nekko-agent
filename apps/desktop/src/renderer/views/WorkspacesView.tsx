@@ -869,7 +869,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
-                        {s && subagentRows(kids, (id) => statuses.has(id), s.id, selectedId).map((kid) => (
+                        {s && subagentRows(kids).map((kid) => (
                           <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
