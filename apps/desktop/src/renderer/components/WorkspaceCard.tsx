@@ -277,7 +277,7 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* Chat rows stay flat; selection is carried by their title and status. */
+      /* Only the selected chat gets a background; status keeps its own icon. */
       className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
       title={title}

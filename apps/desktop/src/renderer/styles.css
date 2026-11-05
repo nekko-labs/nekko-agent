@@ -3503,6 +3503,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-suggestions-row { display: flex; justify-content: flex-end; min-width: 0; padding: 0 8px 6px; }
 .composer-suggestions-row:not(:has(button)) { display: none; }
 .agent-chip-chat { background: transparent; border: 0; box-shadow: none; }
+.agent-chip-chat[data-agent-active] { background: var(--accent-soft); }
 .agent-chip-chat:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .composer-suggestions-chip {
   display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
