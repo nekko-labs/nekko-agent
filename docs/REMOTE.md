@@ -90,6 +90,12 @@ cannot connect to an older computer.
 > computer. Choosing another computer shows its models and folders at once, since every paired
 > computer is already connected; what you typed stays.
 >
+> On the iPhone, the model list opens on **All**, with **Cloud** and **Local** beside it at the
+> top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
+> servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
+> filters the list; it picks nothing. A chat on this iPhone uses cloud providers only, so its
+> Local tab says to start the chat on a computer for local models.
+>
 > **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
 > together, each row naming its computer, and the pill above the list filters it to one
 > computer (**Show chats from**). The phone stays connected to every paired computer and

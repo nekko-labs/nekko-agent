@@ -152,6 +152,8 @@ All shows every available model and Auto; Fusion shows Auto routing; Cloud and
 Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
+The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
+(it offers no Auto, so no Fusion).
 
 ### How the Agents panel groups your agents
 
@@ -225,7 +227,9 @@ chat. Child-agent watchers show their owner.
 
 When an agent opens a pull request, Nekko watches it for you: at the end of the
 turn it arms a watcher on every open PR the chat opened, whichever model or
-harness the chat runs on (Claude Code included). The agent wakes when checks
+harness the chat runs on (Claude Code included). The exception is Claude on a
+Claude plan: Nekko can't start a turn there on its own, so it doesn't watch
+those PRs; Claude with an API key or a cloud account is watched. The agent wakes when checks
 finish, a review arrives or a few hours pass, fixes what it can, and lands the
 PR if you or the repository allow it; otherwise it tells you the PR is
 merge-ready or what is blocking it. The chip reads **Watching until

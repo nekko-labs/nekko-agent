@@ -1388,6 +1388,18 @@ public final class ComputersStore {
     }
 }
 
+#if DEBUG
+extension ComputersStore {
+    /// UI-test fixtures only (`-uiTestModelTabs`): providers and their model lists as a
+    /// computer would send them (`providers:list`, `models:list`), with no connection.
+    public func seedModelsForUITest(providers: JSONValue, models: [String: JSONValue]) {
+        self.providers = PublicProvider.list(providers)
+        self.models = models.mapValues { ModelInfo.list($0) }
+        modelErrors = [:]
+    }
+}
+#endif
+
 func orNil<T: Sendable>(_ body: @Sendable () async throws -> T) async -> T? {
     try? await body()
 }
