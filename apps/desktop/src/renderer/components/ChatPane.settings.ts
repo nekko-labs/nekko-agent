@@ -1,5 +1,6 @@
 import { AUTO_MODEL_ID } from '@nekko-agent/shared';
-import type { AppSettings, Session } from '@nekko-agent/shared';
+import type { AppSettings, ProviderConfig, Session } from '@nekko-agent/shared';
+import { providerConnected } from './providers/providerSetup.js';
 
 /**
  * The settings a chat window reads, and nothing else. Selected with
@@ -22,14 +23,36 @@ export function chatPaneSettings(settings: AppSettings | null | undefined) {
   };
 }
 
+type BrainState = {
+  settings: AppSettings | null;
+  activeProviderId: string | null;
+  activeModelId: string | null;
+  providers: Pick<ProviderConfig, 'id' | 'kind' | 'enabled'>[];
+  models: { id: string }[];
+};
+
+/**
+ * With nothing saved, the active provider is often just startup's `providers[0]`:
+ * keep it while it is connected, otherwise open on one that is.
+ */
+function fallbackProviderId(state: BrainState): string | null {
+  const active = state.providers.find((p) => p.id === state.activeProviderId);
+  if (active && providerConnected(active, state.activeModelId ?? state.models[0]?.id)) return active.id;
+
+  return state.providers.find((p) => providerConnected(p))?.id ?? state.activeProviderId ?? state.providers[0]?.id ?? null;
+}
+
 /** Saved defaults belong together; a session's own choice always wins. */
-export function initialChatBrain(session: Session | null | undefined, state: {
-  settings: AppSettings | null; activeProviderId: string | null; activeModelId: string | null; providers: { id: string }[];
-}): { providerId: string | null; modelId: string | null } {
+export function initialChatBrain(session: Session | null | undefined, state: BrainState): { providerId: string | null; modelId: string | null } {
   const own = !!session?.providerId;
   const saved = !own && !!state.settings?.defaultProviderId;
+  const providerId = session?.providerId ?? state.settings?.defaultProviderId ?? fallbackProviderId(state);
+
+  // The active model belongs to the active provider, and goes no further.
+  const fallbackModelId = providerId === state.activeProviderId ? state.activeModelId : null;
+
   return {
-    providerId: session?.providerId ?? state.settings?.defaultProviderId ?? state.activeProviderId ?? state.providers[0]?.id ?? null,
-    modelId: session?.autoModel ? AUTO_MODEL_ID : session?.modelId ?? (own ? null : saved ? state.settings?.defaultModelId ?? null : state.activeModelId),
+    providerId,
+    modelId: session?.autoModel ? AUTO_MODEL_ID : session?.modelId ?? (own ? null : saved ? state.settings?.defaultModelId ?? null : fallbackModelId),
   };
 }
