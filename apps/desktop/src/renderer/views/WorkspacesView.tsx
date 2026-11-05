@@ -128,7 +128,11 @@ function projectOfWorkspace(w: Workspace, sessions: SessionSummary[], terminals:
  */
 export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): AgentStatus | null | undefined {
   switch (type) {
-    case 'session_meta': return undefined;
+    // News about the chat, not a turn: it can come after `done`, and nothing
+    // would then clear a "working" it set (hub.rs files these as Kind::Meta).
+    case 'session_meta':
+    case 'compaction':
+    case 'claude_code_background': return undefined;
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':

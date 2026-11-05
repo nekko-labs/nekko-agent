@@ -288,6 +288,31 @@ runner card's VM size reads "Unavailable".
 Not in this version: Linux slots, a schedule, a switch for fork pull requests and a build cache
 switch. Their stored values are kept as they are.
 
+## Get more out of one Mac
+
+Apple allows 2 macOS VMs per Mac, and each VM runs one job and is then deleted. So when your jobs
+are CPU-bound test suites, one bigger VM usually beats two small ones: set **macOS slots** to 1 and
+give that VM more **CPU per VM** and **Memory per VM**, then let the job run its tests in parallel
+inside it. Two small VMs suit many short jobs that each use little CPU.
+
+For Xcode tests, have the job split its test classes across several simulator clones, sized from
+the VM it landed in:
+
+```sh
+WORKERS=$(( $(sysctl -n hw.ncpu) / 2 ))   # about one simulator per 2 vCPUs
+[ "$WORKERS" -gt 4 ] && WORKERS=4          # and leave each one some memory (about 4 GB)
+xcodebuild test-without-building ... \
+  -parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS"
+```
+
+Parallel tests suit tests that keep their state inside the simulator. Keep serial the ones that
+share something outside it: a server or port on the host, a fixed file the job reads afterwards,
+or settings changed on the simulator from the job's script (each clone starts from the original
+simulator, not from those changes). Nekko Agent's own `ios-native.yml` splits its first-run suite
+this way and keeps its live journeys serial.
+
+Linux jobs will get their own Linux slots, which Apple's limit does not cover.
+
 ## Why a runner is waiting
 
 A waiting runner card lists every reason it is not taking jobs:
