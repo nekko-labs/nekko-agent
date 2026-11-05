@@ -109,15 +109,13 @@ describe('collectSessionPrInteractions', () => {
   it.each([
     ['--auto', '', 'merge-requested'],
     ['', '', 'merge-requested'],
-    ['--auto', '✓ Auto-merge enabled for pull request o/r#9', 'merge-requested'],
-    ['--auto', 'Pull request will be merged when checks pass', 'merge-requested'],
+    ['--auto', '✓ Auto-merge enabled for pull request o/r#9', 'auto-merge'],
     ['--auto', '✓ Added pull request o/r#9 to the merge queue', 'queued'],
     ['', 'Added pull request #9 to merge queue', 'queued'],
     ['', '✓ Merged pull request o/r#9 (Fix)', 'merged'],
     ['--auto', '✓ Squashed and merged pull request o/r#9 (Fix)', 'merged'],
     ['', '✓ Rebased and merged pull request o/r#9 (Fix)', 'merged'],
     ['', 'Successfully merged pull request o/r#9', 'merged'],
-    ['', '! Pull request o/r#9 was already merged', 'merged'],
     ['--auto', JSON.stringify({ url: pr, number: 9, state: 'MERGED' }), 'merged'],
     ['', JSON.stringify({ url: pr, state: 'OPEN' }), 'merge-requested'],
     ['', JSON.stringify({ url: pr, state: 'closed', merged_at: '2026-01-01T00:00:00Z' }), 'merged'],
@@ -335,5 +333,104 @@ describe('numeric gh status identities', () => {
     expect(isPrInteractionCall({ name: 'bash', input: { command: 'gh pr ready 9 --undo' } })).toBe(true);
     expect(isPrInteractionCall({ name: 'read_file', input: { command: 'gh pr create' } })).toBe(false);
     expect(isPrInteractionCall({ name: 'bash', input: { command: 'node -e "gh pr merge 9"' } })).toBe(false);
+  });
+});
+
+// Adapt the earlier stack's index-based assertions without adding a second production parser.
+const collectPrLifecycle = (messages: Parameters<typeof collectSessionPrInteractions>[0], known: string[] = []) =>
+  collectSessionPrInteractions(messages, known).map(hit => ({ ...hit, index: messages.findIndex(m => m.toolResult?.toolCallId === hit.toolCallId) }));
+
+describe('reconciled lifecycle regression vectors from #1816', () => {
+  const steps = (...runs: Array<[command: string, output: string, isError?: boolean]>) => runs.flatMap(([command, output, isError], i) => [
+    { role: 'assistant', toolCalls: [{ id: `c${i}`, name: 'Bash', input: { command } }] },
+    { role: 'tool', toolResult: { toolCallId: `c${i}`, output, isError } },
+  ]);
+  const events = (messages: ReturnType<typeof steps>, known: string[] = []) =>
+    collectPrLifecycle(messages, known).map((h) => [h.index, h.event, h.url]);
+
+  it('reads the whole draft to merge sequence, each at its own tool result', () => {
+    const m = steps(
+      ['gh pr create --draft --fill', pr],
+      ['gh pr ready 9', '✓ Pull request o/r#9 is marked as "ready for review"'],
+      ['gh pr ready 9 --undo', '✓ Pull request o/r#9 is converted to "draft"'],
+      ['gh pr ready https://github.com/o/r/pull/9', '✓ Pull request o/r#9 is marked as "ready for review"'],
+      ['gh pr merge 9 --auto', '(no output)'],
+    );
+    expect(events(m)).toEqual([[1, 'created-draft', pr], [3, 'ready', pr], [5, 'draft', pr], [7, 'ready', pr], [9, 'merge-requested', pr]]);
+  });
+
+  it('labels what gh said it did: queued, auto-merge, merged, closed, reopened', () => {
+    expect(events(steps(['gh pr merge 9 --auto', '✓ Pull request o/r#9 will be added to the merge queue for main when ready']))).toEqual([[1, 'queued', pr]]);
+    expect(events(steps(['gh pr merge 9 --auto --squash', '✓ Pull request o/r#9 will be automatically merged via squash when all requirements are met']))).toEqual([[1, 'auto-merge', pr]]);
+    expect(events(steps(['gh pr merge 9 --squash', '✓ Squashed and merged pull request o/r#9 (Fix it)\n✓ Deleted local branch fix']))).toEqual([[1, 'merged', pr]]);
+    expect(events(steps(['gh pr close 9 -c "superseded"', '✓ Closed pull request o/r#9 (Fix it)']))).toEqual([[1, 'closed', pr]]);
+    expect(events(steps(['gh pr reopen 9', '✓ Reopened pull request o/r#9 (Fix it)']))).toEqual([[1, 'reopened', pr]]);
+  });
+
+  it('finds the PR without a URL: from the confirmation line or a known number', () => {
+    // A branch selector: gh's own confirmation names the PR.
+    expect(events(steps(['cd /w && gh pr ready fix-branch', '✓ Pull request o/r#9 is marked as "ready for review"']))).toEqual([[1, 'ready', pr]]);
+    // A silent merge: the number matches the one PR this chat knows.
+    expect(events(steps(['gh pr merge 9 --auto', '']), [pr])).toEqual([[1, 'merge-requested', pr]]);
+    expect(events(steps(['gh pr merge 9 --auto -R o/r', '']))).toEqual([[1, 'merge-requested', pr]]);
+    expect(events(steps(['gh pr merge --repo=o/r "#9" --auto', '(no output)']))).toEqual([[1, 'merge-requested', pr]]);
+    // Keeps the spelling the chat already uses for the URL.
+    expect(events(steps(['gh pr close 9', '✓ Closed pull request O/R#9 (Fix)']), ['https://github.com/O/R/pull/9'])).toEqual([[1, 'closed', 'https://github.com/O/R/pull/9']]);
+  });
+
+  it('a silent merge stays "requested", never "merged"', () => {
+    const hits = collectPrLifecycle(steps(['gh pr merge 9', '(no output)']), [pr]);
+    expect(hits.map((h) => h.event)).toEqual(['merge-requested']);
+    expect(events(steps(['gh pr merge 9 --auto', '(Bash completed with no output)']), [pr])).toEqual([[1, 'merge-requested', pr]]);
+    expect(events(steps(['gh pr merge 9 --auto', '[stderr]\n! The merge strategy for main is set by the merge queue']), [pr])).toEqual([[1, 'merge-requested', pr]]);
+  });
+
+  it('rejects failed, ambiguous and contradicting results', () => {
+    // A failed run.
+    expect(events(steps(['gh pr merge 9 --auto', 'GraphQL: Pull request is in clean status', true]), [pr])).toEqual([]);
+    // gh warnings that change nothing.
+    expect(events(steps(['gh pr ready 9', '! Pull request o/r#9 is already "ready for review"']))).toEqual([]);
+    expect(events(steps(['gh pr merge 9', '! Pull request o/r#9 was already merged']), [pr])).toEqual([]);
+    expect(events(steps(['gh pr merge 9 --auto', '! Pull request o/r#9 is already queued to merge']), [pr])).toEqual([]);
+    expect(events(steps(['gh pr close 9', '! Pull request o/r#9 (Fix) is already closed']))).toEqual([]);
+    // The wrong confirmation for the command, or for the selector.
+    expect(events(steps(['gh pr ready 9 --undo', '✓ Pull request o/r#9 is marked as "ready for review"']))).toEqual([]);
+    expect(events(steps(['gh pr ready 8', '✓ Pull request o/r#9 is marked as "ready for review"']))).toEqual([]);
+    expect(events(steps(['gh pr ready 9 -R x/y', '✓ Pull request o/r#9 is marked as "ready for review"']))).toEqual([]);
+    // A second PR in the output.
+    expect(events(steps(['gh pr close 9', '✓ Closed pull request o/r#9 (Fix)\nsee o/r#10']))).toEqual([]);
+    // A silent merge whose PR cannot be named.
+    expect(events(steps(['gh pr merge 9 --auto', '']))).toEqual([]);
+    expect(events(steps(['gh pr merge --auto', '']), [pr])).toEqual([]);
+    expect(events(steps(['gh pr merge 9 --auto', '']), [pr, 'https://github.com/x/y/pull/9'])).toEqual([]);
+    expect(events(steps(['gh pr merge 9 --auto', 'something unexpected']), [pr])).toEqual([]);
+    // Consolidated API also records successful updates; disabling auto-merge is not a merge.
+    expect(events(steps(['gh pr merge 9 --disable-auto', '']), [pr])).toEqual([[1, 'updated', pr]]);
+    // Batches, pipes and other tools.
+    expect(events(steps(['gh pr ready 9 && gh pr merge 9 --auto', '✓ Pull request o/r#9 is marked as "ready for review"']))).toEqual([]);
+    expect(events(steps(['echo "✓ Pull request o/r#9 is marked as \\"ready for review\\""', '✓ Pull request o/r#9 is marked as "ready for review"']))).toEqual([]);
+    expect(collectPrLifecycle([
+      { role: 'assistant', toolCalls: [{ id: 'r', name: 'read_file', input: { command: 'gh pr ready 9' } }] },
+      { role: 'tool', toolResult: { toolCallId: 'r', output: '✓ Pull request o/r#9 is marked as "ready for review"' } },
+    ])).toEqual([]);
+  });
+
+  it('the body of a merge commit is not read as its selector', () => {
+    expect(events(steps(['gh pr merge 9 --squash --body "fixes 12" -t "Title"', '']), [pr])).toEqual([[1, 'merge-requested', pr]]);
+    expect(events(steps([`gh pr merge 9 --squash --body "$(cat <<'EOF'\nline\nEOF\n)"`, '']), [pr])).toEqual([[1, 'merge-requested', pr]]);
+  });
+});
+
+
+describe('consolidated confirmation safeguards', () => {
+  it('rejects multiple confirmations rather than selecting a convenient state', () => {
+    expect(collectSessionPrInteractions(run('bash', `gh pr merge ${pr}`, '✓ Merged pull request o/r#9 (Fix)\n✓ Closed pull request o/r#9 (Fix)'))).toEqual([]);
+    expect(collectSessionPrInteractions(run('bash', `gh pr ready ${pr}`, '✓ Pull request o/r#9 is marked as "ready for review"\n✓ Pull request o/r#9 is converted to "draft"'))).toEqual([]);
+    expect(collectSessionPrInteractions(run('bash', `gh pr merge ${pr} --disable-auto`, '✓ Merged pull request o/r#9 (Fix)'))).toEqual([]);
+  });
+  it('never changes creation-only ownership for imported lifecycle events', () => {
+    const messages = run('bash', 'gh pr ready fix-branch', '✓ Pull request o/r#9 is marked as "ready for review"');
+    expect(collectSessionPrInteractions(messages)).toEqual([event('ready')]);
+    expect(collectSessionPrUrls(messages)).toEqual([]);
   });
 });
