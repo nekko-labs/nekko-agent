@@ -327,12 +327,13 @@ public struct ChatMessage: Equatable, Sendable {
     public let toolCalls: [ToolCall]
     public let toolResult: ToolResult?
     public let interrupted: Bool
+    public var turnStats: TurnStats? = nil
 
     public static func == (a: ChatMessage, b: ChatMessage) -> Bool {
         a.id == b.id && a.role == b.role && a.content == b.content && a.reasoning == b.reasoning
             && a.createdAt == b.createdAt && a.imageCount == b.imageCount && a.skill?.name == b.skill?.name
             && a.skill?.input == b.skill?.input && a.toolCalls == b.toolCalls && a.toolResult == b.toolResult
-            && a.interrupted == b.interrupted && a.images == b.images
+            && a.interrupted == b.interrupted && a.images == b.images && a.turnStats == b.turnStats
     }
 
     public static func from(_ v: JSONValue?) -> ChatMessage? {
@@ -345,7 +346,8 @@ public struct ChatMessage: Equatable, Sendable {
             createdAt: v.long("createdAt"), imageCount: v["images"]?.array?.count ?? max(0, Int(v.long("imageCount") ?? 0)),
             images: v["images"]?.array?.map { $0.string ?? "" } ?? [], skill: skill,
             toolCalls: v["toolCalls"]?.array?.compactMap(ToolCall.from) ?? [],
-            toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"))
+            toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"),
+            turnStats: role == "assistant" ? TurnStats.from(v["turnStats"]) : nil)
     }
 }
 

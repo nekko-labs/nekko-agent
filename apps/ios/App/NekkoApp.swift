@@ -84,7 +84,9 @@ struct NekkoApp: App {
     /// The app, or (Debug builds) a fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") {
+            TurnDetailsFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
             ChatRefreshFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
             NewChatFixture()
@@ -118,7 +120,7 @@ struct NekkoApp: App {
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") || ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") || ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") || ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") { return }
                     #endif
-                    app.start()
+                    if !ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") { app.start() }
                 }
                 .overlay {
                     if let kind = splash {
@@ -129,9 +131,10 @@ struct NekkoApp: App {
                         .id(run)
                     }
                 }
-                .task(id: spooky) { SpookyIcon.sync(spooky: spooky) }
+                .task(id: spooky) { if !ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") { SpookyIcon.sync(spooky: spooky) } }
         }
         .onChange(of: phase) { _, p in
+            if ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") { return }
             switch p {
             case .active:
                 app.didBecomeActive()

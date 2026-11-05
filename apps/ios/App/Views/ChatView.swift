@@ -111,10 +111,13 @@ struct ChatView: View {
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
                     // Simple folds each turn's reasoning and tool steps to one line, unless chosen in Settings.
                     let rows = rowCache.rows(chat)
-                    let items = prefs.shows("thinking") ? rows.map { FoldItem.row($0, reasoning: true) }
-                        : TranscriptRow.folded(rows, open: openSteps, running: chat.turn.running)
+                    let footers = chat.turnDetails
+                    let items = prefs.shows("thinking") ? TranscriptRow.detailed(rows, footers: footers)
+                        : TranscriptRow.folded(rows, open: openSteps, running: chat.turn.running, footers: footers)
                     ForEach(items) { item in
                         switch item {
+                        case .details(let details):
+                            TurnDetailsView(details: details)
                         case .summary(let turn, let steps, let thought, let running):
                             StepsSummaryRow(text: StepFold.summary(steps: steps, thought: thought, running: running),
                                             open: openSteps.contains(turn)) {
@@ -502,7 +505,7 @@ enum TranscriptRow: Identifiable {
     /// Simple's transcript: each turn's tool steps and reasoning folded behind one
     /// summary line at the first of them, unless the turn is in `open`. The
     /// last turn is the running one while `running`.
-    static func folded(_ rows: [TranscriptRow], open: Set<String>, running: Bool = false) -> [FoldItem] {
+    static func folded(_ rows: [TranscriptRow], open: Set<String>, running: Bool = false, footers: [String: TurnDetails] = [:]) -> [FoldItem] {
         // Turns start at each prompt; rows before the first one are turn "start".
         var turnOf: [Int] = []
         var turnIds: [String] = ["start"]
@@ -530,8 +533,9 @@ enum TranscriptRow: Identifiable {
             if first[t] == i {
                 out.append(.summary(turn: turnIds[t], steps: steps[t], thought: thought[t], running: running && t == turnIds.count - 1))
             }
-            if row.isStep && !isOpen { continue }
-            out.append(.row(row, reasoning: isOpen))
+            if !row.isStep || isOpen { out.append(.row(row, reasoning: isOpen)) }
+            // End-of-turn details stay visible even when Simple folds the tool-only turn.
+            out += row.footerItems(footers)
         }
         return out
     }
@@ -560,7 +564,35 @@ enum TranscriptRow: Identifiable {
         return false
     }
 
-    static func of(_ blocks: [Block]) -> [TranscriptRow] {
+    static func detailed(_ rows: [TranscriptRow], footers: [String: TurnDetails]) -> [FoldItem] {
+        rows.flatMap { [.row($0, reasoning: true)] + $0.footerItems(footers) }
+    }
+
+    private func footerItems(_ footers: [String: TurnDetails]) -> [FoldItem] {
+        let blocks: [Block]
+        switch self {
+        case .block(let b): blocks = [b]
+        case .agents(let bs), .purpose(_, let bs, _): blocks = bs
+        }
+        return blocks.compactMap { footers[$0.id].map { .details($0) } }
+    }
+
+    static func of(_ blocks: [Block], footers: [String: TurnDetails] = [:]) -> [TranscriptRow] {
+        // A turn footer ends a purpose group. Otherwise two tool-only replies
+        // with the same purpose could put both footers under the second reply.
+        var out: [TranscriptRow] = []
+        var chunk: [Block] = []
+        for b in blocks {
+            chunk.append(b)
+            if footers[b.id] != nil {
+                out += grouped(chunk)
+                chunk = []
+            }
+        }
+        return out + grouped(chunk)
+    }
+
+    private static func grouped(_ blocks: [Block]) -> [TranscriptRow] {
         Purpose.group(blocks, role: Purpose.role(of:)).map { run in
             switch run {
             case .single(let b):
@@ -601,7 +633,7 @@ final class TranscriptRowCache {
         self.chat = ObjectIdentifier(chat)
         layout = chat.blocksLayout
         running = chat.turn.running
-        rows = TranscriptRow.of(blocks)
+        rows = TranscriptRow.of(blocks, footers: chat.turnDetails)
         voices = Dictionary(zip(blocks.map(\.id), ReplyTopics.voices(blocks, running: running)).compactMap { id, v in v.map { (id, $0) } }) { a, _ in a }
         return rows
     }
@@ -1565,11 +1597,13 @@ struct LongChatNote: View {
 enum FoldItem: Identifiable {
     case row(TranscriptRow, reasoning: Bool)
     case summary(turn: String, steps: Int, thought: Bool, running: Bool)
+    case details(TurnDetails)
 
     var id: String {
         switch self {
         case .row(let row, _): return row.id
         case .summary(let turn, _, _, _): return "steps-" + turn
+        case .details(let details): return "turn-details-" + details.id
         }
     }
 }
