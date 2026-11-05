@@ -3,7 +3,7 @@
 //! It streams newline-delimited JSON, not SSE. A port of `ollama.ts`'s
 //! `listModels` and `chat` (model pulls and loads stay in TS for now).
 
-use super::Io;
+use super::{CATALOG_TIMEOUT, Io};
 use crate::http::HttpRequest;
 use crate::js;
 use crate::sse::LineParser;
@@ -47,8 +47,8 @@ impl OllamaProvider {
         body.insert("model".into(), json!(req.model));
         body.insert("stream".into(), json!(true));
         body.insert("options".into(), Value::Object(options));
-        // The native reasoning toggle, left off when unset so non-reasoning
-        // models are unaffected.
+        // The native reasoning toggle. `run` clears it for a model that can't
+        // think: Ollama answers `think: true` for one with a 400.
         if let Some(think) = req.think {
             body.insert("think".into(), json!(think));
         }
@@ -73,11 +73,16 @@ impl OllamaProvider {
         spawn(req.signal.clone(), move |sink| async move { me.run(req, sink).await })
     }
 
-    async fn run(self, req: ChatRequest, sink: Sink) -> Result<(), Stop> {
+    async fn run(self, mut req: ChatRequest, sink: Sink) -> Result<(), Stop> {
+        if req.think.is_some() && !self.can_think(&req.model, &sink).await? {
+            req.think = None;
+        }
+
         let http = self.chat_request(&req);
         let mut res = sink.send(&*self.io.transport, &http).await?.map_err(|e| ProviderError::new(e.message))?;
         if !res.ok() {
-            return Err(ProviderError::http(res.status, format!("chat {}", res.status)).into());
+            let body = sink.text(&mut res).await?;
+            return Err(ProviderError::http(res.status, chat_error(res.status, &body)).into());
         }
         // A fallback, used only if the server leaves out `eval_duration`.
         let mut decode = DecodeClock::new(self.io.clock.clone());
@@ -125,6 +130,27 @@ impl OllamaProvider {
             }
         }
         sink.emit(ProviderChunk::Done).await
+    }
+
+    /// Whether `/api/show` lists `thinking` for the model. Unknown reads as no:
+    /// a failed or slow answer leaves `think` to Ollama's default, so the chat
+    /// runs either way. Asked per chat, not cached: it takes Ollama about 20 ms
+    /// cold and 1 ms warm, and a re-pulled model may change its answer.
+    async fn can_think(&self, model: &str, sink: &Sink) -> Result<bool, Stop> {
+        let show = HttpRequest::post(format!("{}/api/show", self.base()), Vec::new(), json!({ "model": model }));
+
+        let fetch = async {
+            match sink.send(&*self.io.transport, &show).await? {
+                Ok(mut res) => sink.text(&mut res).await,
+                Err(_) => Ok(String::new()),
+            }
+        };
+
+        let Ok(body) = tokio::time::timeout(CATALOG_TIMEOUT, fetch).await else { return Ok(false) };
+
+        let capabilities = js::safe_parse(&body?);
+        let capabilities = capabilities.get("capabilities").and_then(Value::as_array);
+        Ok(capabilities.is_some_and(|list| list.iter().any(|c| c.as_str() == Some("thinking"))))
     }
 
     /// `test()`: whether `/api/tags` answers.
@@ -187,6 +213,14 @@ impl OllamaProvider {
     async fn get_json(&self, req: &HttpRequest) -> Value {
         let Ok(mut res) = self.io.transport.send(req).await else { return json!({ "models": [] }) };
         serde_json::from_str(&res.text().await).unwrap_or_else(|_| json!({ "models": [] }))
+    }
+}
+
+/// A non-OK chat: Ollama's own `{ "error": "..." }` when it sent one.
+fn chat_error(status: u16, body: &str) -> String {
+    match js::truthy_str(js::safe_parse(body).get("error")) {
+        Some(error) => format!("Ollama: {error} ({status})"),
+        None => format!("chat {status}"),
     }
 }
 
