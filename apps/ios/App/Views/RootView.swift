@@ -28,6 +28,8 @@ enum Route: Hashable {
     case simpleMode
     /// Settings → Models on this iPhone: the providers chats here run on (decision 0050).
     case phoneModels
+    /// Connectors: a git provider and project tools, connected on this iPhone itself (decision 0052).
+    case connectors
 }
 
 struct RootView: View {
@@ -208,6 +210,7 @@ struct RouteView: View {
         case .liveActivities: LiveActivitySettingsView()
         case .simpleMode: SimpleModeSettingsView()
         case .phoneModels: PhoneModelsView()
+        case .connectors: ConnectorsView()
         }
     }
 }
