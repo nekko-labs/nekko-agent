@@ -2535,6 +2535,46 @@
     "48k / 200k": {
       "shouldTranslate": false
     },
+    "A free computer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein freier Computer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una computadora libre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un ordinateur libre"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空いているコンピュータ"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um computador livre"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一台空闲的电脑"
+          }
+        }
+      }
+    },
     "A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.": {
       "localizations": {
         "de": {
@@ -4891,6 +4931,166 @@
           "stringUnit": {
             "state": "translated",
             "value": "附加文件"
+          }
+        }
+      }
+    },
+    "Auto picked %@: %@ is busy.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto hat %1$@ gewählt: %2$@ ist beschäftigt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto eligió %1$@: %2$@ está ocupada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto a choisi %1$@ : %2$@ est occupé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動で%1$@を選びました：%2$@は使用中です。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto escolheu %1$@: %2$@ está ocupado."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已自动选择 %1$@：%2$@ 正忙。"
+          }
+        }
+      }
+    },
+    "Auto picked %@: it’s free.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto hat %@ gewählt: Er ist frei."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto eligió %@: está libre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto a choisi %@ : il est libre."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動で%@を選びました：空いています。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto escolheu %@: está livre."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已自动选择 %@：它空闲。"
+          }
+        }
+      }
+    },
+    "Auto · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto · %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto · %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto · %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動 · %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动 · %@"
+          }
+        }
+      }
+    },
+    "Automatic": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automático"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatique"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automático"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动"
           }
         }
       }
@@ -11975,6 +12175,46 @@
         }
       }
     },
+    "Every computer is busy, so Auto kept %@, the one used last.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Computer sind beschäftigt, daher bleibt Auto bei %@, dem zuletzt verwendeten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las computadoras están ocupadas, así que Auto mantuvo %@, la última usada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tous les ordinateurs sont occupés : Auto garde %@, le dernier utilisé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのコンピュータが使用中のため、最後に使った%@のままにしました。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos os computadores estão ocupados, então Auto manteve %@, o último usado."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有电脑都在忙，因此自动保留了上次使用的 %@。"
+          }
+        }
+      }
+    },
     "Excellent": {
       "localizations": {
         "de": {
@@ -12657,6 +12897,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "找到电脑并不等于配对。请在目标电脑上：设置 → 远程访问 → 配对手机，然后扫描上方的代码。"
+          }
+        }
+      }
+    },
+    "Finding a free computer…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freier Computer wird gesucht …"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando una computadora libre…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherche d’un ordinateur libre…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空いているコンピュータを探しています…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Procurando um computador livre…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在寻找空闲的电脑…"
           }
         }
       }
@@ -18943,6 +19223,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有未关闭的拉取请求。"
+          }
+        }
+      }
+    },
+    "No other computer can run a local model now, so Auto kept %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein anderer Computer kann gerade ein lokales Modell ausführen, daher bleibt Auto bei %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguna otra computadora puede ejecutar ahora un modelo local, así que Auto mantuvo %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun autre ordinateur ne peut exécuter de modèle local pour l’instant : Auto garde %@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今ローカルモデルを実行できる他のコンピュータがないため、%@のままにしました。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum outro computador pode rodar um modelo local agora, então Auto manteve %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前没有其他电脑能运行本地模型，因此自动保留了 %@。"
           }
         }
       }

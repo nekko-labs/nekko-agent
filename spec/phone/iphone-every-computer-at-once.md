@@ -5,7 +5,7 @@ area: phone
 
 # iPhone: every computer at once, and no Connect button (2026-11-04)
 
-`[implemented 2026-11-04, iPhone only: the store's fleet links and the aggregate list are tested in NekkoKit (Linux Swift container); the SwiftUI screens build only on macOS CI and were not run on a device or in the simulator yet. Android still connects to one computer at a time]` Decision: [0047](../../docs/decisions/0047-the-iphone-stays-connected-to-every-paired-computer.md).
+`[implemented 2026-11-04, iPhone only: the store's fleet links and the aggregate list are tested in NekkoKit (Linux Swift container); the SwiftUI screens build only on macOS CI and were not run on a device or in the simulator yet. Android keeps a link to every computer since 2026-11-05 (native-android-app.md) but still lists one computer's chats]` Decision: [0047](../../docs/decisions/0047-the-iphone-stays-connected-to-every-paired-computer.md).
 
 ## User intent
 
