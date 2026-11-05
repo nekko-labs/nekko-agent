@@ -25,6 +25,7 @@ struct ChatView: View {
     @State private var viewing: PhotoSet?
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
+    @State private var pull = PawPull()
     /// The transcript's rows between renders (a streamed token patches only the last one).
     @State private var rowCache = TranscriptRowCache()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -173,6 +174,13 @@ struct ChatView: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .frame(minHeight: max(0, geo.size.height - pillRoom), alignment: .bottom)
             }
+            .accessibilityIdentifier("chat.transcript")
+            .pawRefreshableFromEnd(pull) {
+                await chat.reload()
+                guard !Task.isCancelled else { return }
+                // The gesture starts at the end; retain it after the new transcript lays out.
+                scrollAfterLayout(proxy)
+            }
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
@@ -242,11 +250,16 @@ struct ChatView: View {
         .modifier(MonitorFollow(monitor: $monitor, panelOpen: showPanel))
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 0) {
-                    Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    if prefs.shows("ph-subtitle") {
-                        Text([chat.modelId, store.active?.name].compactMap { $0 }.joined(separator: " · "))
-                            .font(.caption2).foregroundStyle(palette.inkFaint).lineLimit(1)
+                HStack(spacing: 6) {
+                    ChatMascot(working: chat.running, pull: pull, refresh: {
+                        Task { await pull.reload { await chat.reload() } }
+                    })
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        if prefs.shows("ph-subtitle") {
+                            Text([chat.modelId, store.active?.name].compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption2).foregroundStyle(palette.inkFaint).lineLimit(1)
+                        }
                     }
                 }
             }
@@ -289,7 +302,7 @@ struct ChatView: View {
                         Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
                     .disabled(chat.savedAt != nil)
-                    Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    Button { Task { await pull.reload { await chat.reload() } } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                 } label: { Label("More", systemImage: "ellipsis.circle") }
             }
         }
