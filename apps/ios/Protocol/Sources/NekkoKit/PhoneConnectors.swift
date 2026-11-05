@@ -169,6 +169,17 @@ public enum PhoneConnectors {
         return name.flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    /// The id a service lists a user's pull requests by (GitLab's username, Bitbucket's uuid).
+    public static func userId(kind: String, body: Data) -> String? {
+        guard let v = try? JSONValue.parse(body) else { return nil }
+        switch kind {
+        case "github": return v.str("login")
+        case "gitlab": return v.str("username")
+        case "bitbucket": return v.str("uuid")
+        default: return nil
+        }
+    }
+
     /// What a failed answer says, in the service's words where it has some.
     public static func failure(label: String, status: Int, body: Data) -> String {
         let v = try? JSONValue.parse(body)
@@ -195,13 +206,16 @@ public struct PhoneConnector: Codable, Equatable, Sendable, Identifiable {
     public var connectedAt: Int64
     /// Who the token signed in as, when the service said.
     public var account: String?
+    /// The id the service lists this user's pull requests by, when it needs one.
+    public var userId: String?
     public var id: String { kind }
 
-    public init(kind: String, settings: [String: String] = [:], connectedAt: Int64, account: String? = nil) {
+    public init(kind: String, settings: [String: String] = [:], connectedAt: Int64, account: String? = nil, userId: String? = nil) {
         self.kind = kind
         self.settings = settings
         self.connectedAt = connectedAt
         self.account = account
+        self.userId = userId
     }
 
     public var label: String { PhoneConnectors.kind(kind)?.label ?? kind }
@@ -269,6 +283,7 @@ public final class ConnectorsModel {
             throw ConnectError(message: String(localized: "\(c.label) turned the token down\(said)"))
         }
         c.account = PhoneConnectors.account(kind: kind, body: body)
+        c.userId = PhoneConnectors.userId(kind: kind, body: body)
         secrets.set(PhoneConnectors.tokenName(kind), secret)
         connectors.removeAll { $0.kind == kind }
         connectors.append(c)

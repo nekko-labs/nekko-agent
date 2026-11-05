@@ -109,6 +109,20 @@ cannot connect to an older computer.
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
 > and ChatGPT subscriptions and local model servers still need a computer.
 >
+> **Connectors** (iPhone): **Settings → Connectors** (or **Connectors** in the chat list's menu)
+> connects this iPhone to a git provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) and to
+> project tools (Linear, Jira, Floop, Asana, ClickUp, Trello, Todoist). Each token stays in this
+> iPhone's Keychain and goes only to its own service; your computers keep their own connectors.
+> Connect checks the token first and says who it signed in as.
+>
+> **Pull requests** (iPhone): in the chat list's menu. **Mine** lists the open pull requests to
+> review, opened by you and assigned to you on the selected git provider; **Projects** lists the
+> ones in the repositories your computers' folders hold, plus any you add. Tap one for **Review
+> it**, **Fix the failing checks**, **Address the review comments**, **Summarize it**, **Update
+> from the base branch** or **Ask about it** (also on touch and hold, and swipe right to review).
+> Each opens New chat with the prompt written, on the computer that has that repository and in
+> its folder; nothing is sent until you tap **Start**.
+>
 > **Simple and Detailed** (iPhone and Android): the switch at the top left of a chat picks the mode, and the
 > phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
 > and effort** (an effort dial beside the model's name; tap it to change either) and the chat's

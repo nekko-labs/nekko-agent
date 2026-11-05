@@ -30,6 +30,8 @@ enum Route: Hashable {
     case phoneModels
     /// Connectors: a git provider and project tools, connected on this iPhone itself (decision 0052).
     case connectors
+    /// The selected git provider's pull requests, with one-tap prompts (decision 0052).
+    case pullRequests
 }
 
 struct RootView: View {
@@ -211,6 +213,7 @@ struct RouteView: View {
         case .simpleMode: SimpleModeSettingsView()
         case .phoneModels: PhoneModelsView()
         case .connectors: ConnectorsView()
+        case .pullRequests: PullRequestsView(path: $path)
         }
     }
 }
