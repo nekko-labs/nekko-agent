@@ -32,6 +32,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 import type { AgentEvent, AgentReplay, ToolCall } from '@nekko-agent/shared';
 import type { Activity } from './components/agent-console/transcript.js';
 import { accumulateDecodeMs, describeLiveActivity, emptyLiveActivity, reduceLiveActivity, type LiveActivity } from '@nekko-agent/shared';
+import { reportAgentWorking } from './workingAgents.js';
 
 export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; items: Activity[] };
 
@@ -194,6 +195,8 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
   const folded = reduceLiveActivity(runs.get(id)?.activity, event, now);
 
   if (event.type === 'done' || event.type === 'error') {
+    // Here and not only in the pane: a reply can end with no pane open to hear it.
+    reportAgentWorking(id, false);
     const ended = runs.get(id);
     runs.delete(id);
     if (ended) {

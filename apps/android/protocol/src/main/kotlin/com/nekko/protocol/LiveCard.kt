@@ -51,6 +51,8 @@ data class LiveChat(
     val callId: String? = null,
     /** low / medium / high (the computer's guardrail rating). */
     val severity: String? = null,
+    /** The chat's title for its row on the iPhone card, at most 40 characters; empty at Minimal. */
+    val title: String = "",
 ) {
     companion object {
         /** Anything but the id may be left out; it reads as empty. */
@@ -59,6 +61,7 @@ data class LiveChat(
             return LiveChat(
                 id = o.str("id") ?: return null,
                 short = o.str("short").orEmpty(),
+                title = o.str("title").orEmpty(),
                 state = LiveChatState.parse(o.str("state")),
                 step = o.str("step").orEmpty(),
                 reply = o.str("reply").orEmpty(),
@@ -131,8 +134,8 @@ object LiveCard {
         val pinned = pinnedFocus?.takeIf { id -> kept.any { it.id == id } }
 
         val shown = kept.map { c ->
-            var x = c.copy(step = oneLine(c.step, 60))
-            if (level == LiveLevel.MINIMAL) x = x.copy(short = "", step = "")
+            var x = c.copy(step = oneLine(c.step, 60), title = oneLine(c.title, 40))
+            if (level == LiveLevel.MINIMAL) x = x.copy(short = "", title = "", step = "")
             if (level != LiveLevel.DETAILED) x = x.copy(reply = "")
             x
         }

@@ -31,6 +31,10 @@ public struct LiveChat: Codable, Hashable, Sendable {
     public var id: String
     /// About 8 characters, for the chip (see `shortTitle`).
     public var short: String
+    /// The chat's title for its row on the card, at most 40 characters (see
+    /// `LiveCardRules.titleLength`). Empty at Minimal and from a computer that
+    /// predates the rows: the row falls back to `short`, then to the phase line.
+    public var title: String
     public var state: LiveChatState
     public var step: String
     /// The agent's latest reply line (Detailed only).
@@ -46,9 +50,10 @@ public struct LiveChat: Codable, Hashable, Sendable {
     public var severity: String?
 
     public init(id: String, short: String, state: LiveChatState, step: String, reply: String, closeWord: String,
-                finishedAt: Date?, callId: String?, severity: String?, startedAt: Date? = nil) {
+                finishedAt: Date?, callId: String?, severity: String?, startedAt: Date? = nil, title: String = "") {
         self.id = id
         self.short = short
+        self.title = title
         self.state = state
         self.step = step
         self.reply = reply
@@ -59,11 +64,16 @@ public struct LiveChat: Codable, Hashable, Sendable {
         self.startedAt = startedAt
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case id, short, title, state, step, reply, closeWord, finishedAt, startedAt, callId, severity
+    }
+
     /// Pushes may omit anything but the id and state.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         short = try c.decodeIfPresent(String.self, forKey: .short) ?? ""
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         state = try c.decode(LiveChatState.self, forKey: .state)
         step = try c.decodeIfPresent(String.self, forKey: .step) ?? ""
         reply = try c.decodeIfPresent(String.self, forKey: .reply) ?? ""
@@ -72,6 +82,24 @@ public struct LiveChat: Codable, Hashable, Sendable {
         callId = try c.decodeIfPresent(String.self, forKey: .callId)
         severity = try c.decodeIfPresent(String.self, forKey: .severity)
         startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+    }
+
+    /// Written as the synthesized encoder would, except an empty title is left
+    /// out, so a card without titles stays the size it was (and matches the
+    /// fixture's byte counts, which the computer's builder shares).
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(short, forKey: .short)
+        if !title.isEmpty { try c.encode(title, forKey: .title) }
+        try c.encode(state, forKey: .state)
+        try c.encode(step, forKey: .step)
+        try c.encode(reply, forKey: .reply)
+        try c.encode(closeWord, forKey: .closeWord)
+        try c.encodeIfPresent(finishedAt, forKey: .finishedAt)
+        try c.encodeIfPresent(startedAt, forKey: .startedAt)
+        try c.encodeIfPresent(callId, forKey: .callId)
+        try c.encodeIfPresent(severity, forKey: .severity)
     }
 }
 
@@ -110,6 +138,10 @@ public enum LiveCardRules {
     public static let finishedTail: TimeInterval = 2 * 3600
     /// The encoded state's budget, under ActivityKit's 4 KB.
     public static let maxBytes = 3500
+    /// A row's title, in characters.
+    public static let titleLength = 40
+    /// Chats the card draws as rows; the rest are counted by state below them.
+    public static let rows = 2
 }
 
 /// Builds the card from every chat, or nil when there is nothing to show
@@ -137,7 +169,8 @@ public func buildCard(chats: [LiveChat], previous: LiveCardState?, pinnedFocus: 
 
     for i in kept.indices {
         kept[i].step = Transcript.oneLine(kept[i].step, 60)
-        if level == .minimal { kept[i].short = ""; kept[i].step = "" }
+        kept[i].title = Transcript.oneLine(kept[i].title, LiveCardRules.titleLength)
+        if level == .minimal { kept[i].short = ""; kept[i].title = ""; kept[i].step = "" }
         if level != .detailed { kept[i].reply = "" }
     }
     var card = LiveCardState(chats: kept, focusId: focus ?? pinned ?? kept[0].id, more: more,
@@ -151,6 +184,49 @@ public func buildCard(chats: [LiveChat], previous: LiveCardState?, pinnedFocus: 
         card.more += 1
     }
     return card
+}
+
+/// The chats the card draws as rows: the first two (what needs you sorts
+/// first), with the focused chat swapped into the second row when it sits
+/// further down, so the buttons always answer a chat you can see.
+public func cardRows(_ card: LiveCardState) -> [LiveChat] {
+    var rows = Array(card.chats.prefix(LiveCardRules.rows))
+    if let focus = card.focusId, !rows.contains(where: { $0.id == focus }),
+       let chat = card.chats.first(where: { $0.id == focus }) {
+        rows[rows.count - 1] = chat
+    }
+    return rows
+}
+
+/// The count line under the rows: the chats that are not rows, by state in the
+/// card's order ("3 working, 5 done"), and the chats past the eight the state
+/// carries, whose state the card does not know (`more`).
+public func cardTally(_ card: LiveCardState) -> CardTally {
+    let shown = Set(cardRows(card).map(\.id))
+    var counts: [LiveChatState: Int] = [:]
+    for chat in card.chats where !shown.contains(chat.id) { counts[chat.state, default: 0] += 1 }
+    let states = counts.sorted { $0.key.rank < $1.key.rank }.map { CardTally.Count(state: $0.key, count: $0.value) }
+    return CardTally(states: states, more: card.more)
+}
+
+public struct CardTally: Equatable, Sendable {
+    public struct Count: Hashable, Sendable {
+        public var state: LiveChatState
+        public var count: Int
+        public init(state: LiveChatState, count: Int) {
+            self.state = state
+            self.count = count
+        }
+    }
+
+    public var states: [Count]
+    public var more: Int
+    public var isEmpty: Bool { states.isEmpty && more == 0 }
+
+    public init(states: [Count], more: Int) {
+        self.states = states
+        self.more = more
+    }
 }
 
 /// The first word, plus the second when both fit in 8 characters; a longer

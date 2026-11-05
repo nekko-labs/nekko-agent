@@ -36,7 +36,7 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Typing in a new agent window
 
-A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The very first time, a short **Send your first prompt** intro opens over it: three looping demos (start with a question, add your files, send). **Skip**, the ✕, Escape or a click outside closes it, and it does not open again. It stays closed for anyone who turned off contextual tips. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
@@ -45,6 +45,12 @@ Opening an agent composer puts the caret after any restored draft once a usable 
 For UI work, Nekko is instructed to show the actual before/after screenshots in the agent reply, rather than leaving evidence only in a PR. Matching images labeled **Before: screen name** and **After: screen name** appear as a comparison; the reply's **Next step** section also shows a **Verify the visual changes** panel with those same screenshots. Wide conversations show the pair side by side, while narrow conversations stack it. Evidence stays with the reply and chat where the work happened.
 
 Displaying a screenshot does not mean it has been inspected or approved. The agent reports what it checked and what still needs review. New surfaces may have only an after image. Local screenshots retain Sandbox restrictions, and remote images from sources the chat has not seen still wait for **Load image**. If an image cannot load, its card shows the existing fallback rather than hiding the verification gap.
+
+## Make it yours
+
+In **Settings → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
+
+Open **Custom colors** to adjust the accent and secondary color with the wheel or an exact color value. **Reset to this theme's colors** restores the defaults for the current palette and mode. The same controls appear during first-run setup. Theme circles respond gently to hover and press; the system's reduced-motion preference turns that motion off.
 
 ## Following tool activity
 
@@ -158,6 +164,8 @@ All shows every available model and Auto; Fusion shows Auto routing; Cloud and
 Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
+The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
+(it offers no Auto, so no Fusion).
 
 ### How the Agents panel groups your agents
 
@@ -170,6 +178,10 @@ While agents are working, a group's heading shows a small Nekko animation and a 
 Delegated subagents appear as compact rows beneath their parent, in Claude chats too, where a subagent's chat is a live copy you can read but not write to. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
 
 A turn's working steps fold into one work group whose header says what the agent did, by purpose: for example *Read guidance, looked through the code, edited 3 files*. Hover or keyboard-focus the header to read the complete summary and each purpose group with its number of calls. Click the header to open the steps. Inside it, adjacent calls with one purpose are one row that states the goal, such as *Read the project's guidance · AGENTS.md, CLAUDE.md* or *Ran the tests · passed*. When a call gave its own description (Claude Code's commands do), that description is the goal. Click a group to see its individual calls. A call waiting for your approval, a question for you, and a lone call stay rows of their own. A group with a failed call says *1 failed* and stays open.
+
+### Reading a compaction summary
+
+When older conversation is summarized, a **Conversation compacted** event card shows how many earlier messages were summarized. It starts collapsed, including the newest summary. Click **Show summary** to read it and **Hide summary** to fold it again. Earlier messages remain readable above the card. Expanding or collapsing the card does not change what the model receives.
 
 ### Answering agent questions
 
@@ -231,7 +243,9 @@ chat. Child-agent watchers show their owner.
 
 When an agent opens a pull request, Nekko watches it for you: at the end of the
 turn it arms a watcher on every open PR the chat opened, whichever model or
-harness the chat runs on (Claude Code included). The agent wakes when checks
+harness the chat runs on (Claude Code included). The exception is Claude on a
+Claude plan: Nekko can't start a turn there on its own, so it doesn't watch
+those PRs; Claude with an API key or a cloud account is watched. The agent wakes when checks
 finish, a review arrives or a few hours pass, fixes what it can, and lands the
 PR if you or the repository allow it; otherwise it tells you the PR is
 merge-ready or what is blocking it. The chip reads **Watching until

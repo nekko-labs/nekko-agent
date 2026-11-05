@@ -40,6 +40,10 @@ The ChatGPT usage endpoint used here is reverse-engineered from the Codex CLI's 
 
 Your actual provider bill may differ because of taxes, discounts, cached-token pricing, batch pricing, enterprise agreements, image or tool-token costs, or mid-rate changes. Local models (Ollama, LM Studio, vLLM) and subscription providers are shown as `Free` or `Included in plan` because they are not metered through an API key in Nekko Agent.
 
+## On the iPhone
+
+The iPhone's **Usage and limits** reads every paired computer that is online (its usage summary, its providers and each enabled provider's limits) and adds the chats that run on the iPhone itself. Each computer's numbers come from that computer, so its prices are the estimates above. The iPhone's own chats use your API keys straight from the phone: it counts the tokens each provider reports at the end of a reply (Anthropic's `message_start` and `message_delta` usage, OpenAI's and OpenRouter's `stream_options.include_usage`) and keeps that count on the phone. It has no price table, so it shows tokens only. An OpenAI-compatible server is not asked for usage, because some turn down fields they don't know.
+
 ## Limits are provider-side
 
 Nekko Agent can only read and surface the limits that Anthropic, OpenAI and OpenRouter return. It cannot raise, reset, or bypass them. If a window is reported as rate limited, that state comes from the provider; Nekko Agent does not create or remove the limit.
