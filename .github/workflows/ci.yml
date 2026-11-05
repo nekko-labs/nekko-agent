@@ -1,24 +1,11 @@
 name: CI
 
-# Three tiers (scripts/ci-scope.mjs decides which jobs each run needs):
-#
-#   pull_request   fast feedback: build, gated by the paths the PR touches. A
-#                  change only to the native phone apps (apps/ios, apps/android)
-#                  skips it: their own workflows test them.
-#   merge_group    the merge queue: adds the speed contract and itests for the
-#                  queued group, before anything reaches main.
-#   schedule       nightly: every job on every OS (the Linux, Windows and macOS
-#                  daemon and capture). Skipped when main has not moved.
-#
-# Platform builds run nightly rather than per change, here and in the iOS,
-# Android, installer and development-identity workflows. A `deploy:linux`,
-# `deploy:windows`, `deploy:macos`, `deploy:ios` or `deploy:android` label opts
-# a single PR into that platform's runs (`ci:perf` into the speed contract), and
-# `gate` waits for the runs a deploy label turns on in other workflows
-# (scripts/ci-label-gate.mjs). Adding a label re-runs CI so it takes effect.
+# PRs run path-gated build, performance and integration checks before native
+# auto-merge. Platform jobs stay nightly or deploy-label opt-in. merge_group
+# remains enabled to land this migration through the existing queue.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
   merge_group:
   schedule:
     # 03:17 JST.
@@ -224,9 +211,8 @@ jobs:
   # The speed contract (spec/platform/speed-responsiveness-the-speed-contract.md): headless Chrome over
   # the DevTools protocol against the Local Web UI and a scripted model. Fails
   # when a p95 exceeds its budget; the report is uploaded either way so a
-  # regression shows its numbers, not only a red cross. It runs in the merge
-  # queue for changes it can measure, so a regression is stopped before main,
-  # and on a PR only with the `ci:perf` label.
+  # regression shows its numbers, not only a red cross. Runs on each PR when
+  # affected paths change, or with ci:perf; budgets are unchanged.
   perf:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.perf == 'true'
@@ -378,7 +364,7 @@ jobs:
       - run: node scripts/third-party.mjs check
 
   gate:
-    needs: [scope, build, daemon, capture, perf, licenses]
+    needs: [scope, build, daemon, capture, perf, itests, licenses]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 190
@@ -393,11 +379,11 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@v7
-        if: github.event_name == 'merge_group' || contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
+        if: github.event_name == 'merge_group' || github.event_name == 'pull_request'
         with:
           sparse-checkout: scripts
-      - name: The platform runs the deploy labels turned on passed
-        if: github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
+      - name: PR is ready, not held, and deploy-label runs passed
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -424,3 +410,15 @@ jobs:
             gh issue create -R "$GITHUB_REPOSITORY" --label ci-scheduled --title 'Scheduled full CI is failing on main' \
               --body "$body. Fix it before the nightly release; close this issue once a scheduled run is green."
           fi
+
+  # New required context prevents old PR-tier gates from authorizing cutover.
+  native-premerge:
+    needs: gate
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Migrated pre-merge gate passed
+        env:
+          RESULT: ${{ needs.gate.result }}
+        run: test "$RESULT" = success

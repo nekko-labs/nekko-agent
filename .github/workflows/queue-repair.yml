@@ -1,106 +1,14 @@
-name: Queue repair
+name: Queue repair (retired)
 
-# Gets stuck ready PRs back into the merge queue without waiting on the agent
-# that opened them. auto-merge.yml queues a PR and queue-sweeper.yml re-queues
-# an ejected one and re-runs a flaky `gate` once; both leave the rest "for the
-# author", and the author is often an agent session that has ended. This takes
-# over from there (scripts/queue-repair.mjs has the details):
-#
-#   - A PR that conflicts with main gets main merged in on the runner. Conflicts
-#     in files every PR appends to (spec/README.md, TASKS.md, perf-history,
-#     llms.txt, sitemap.xml) are settled by rule and the merge is pushed.
-#   - Anything that needs judgment (a code conflict, `gate` still red after the
-#     sweeper's re-run, a second ejection at the same commit) goes to Codex: a
-#     `@codex` comment posted with CODEX_TRIGGER_TOKEN starts a Codex cloud task
-#     on the maintainer's ChatGPT plan, which pushes its fix to the branch. Codex
-#     runs in its own sandbox; no ChatGPT credential ever reaches this runner.
-#   - A failure every job of which also fails in other PRs' merge groups is
-#     main's (a flaky budget, say): Codex is not asked and no budget is spent.
-#     The PR is retried once that failure stops, at most twice per head.
-#   - When Codex is not set up, pushes nothing within an hour, or has been asked
-#     three times, the PR gets the `needs-human` label and a comment. The next
-#     push clears it.
-#
-# Drafts, `hold`, stacked layers (base is not main) and fork PRs are left alone.
-# Nothing here runs the PR's code with a secret except the spec index script,
-# and only for same-repo branches, whose authors already have write access.
-#
-# Setup for the Codex step (without it the step labels `needs-human` instead):
-#   1. Connect Codex to this repository and give it an environment
-#      (chatgpt.com/codex, Settings > Environments).
-#   2. A fine-grained token of that maintainer, this repository only, with
-#      Pull requests: read and write, saved as the CODEX_TRIGGER_TOKEN secret.
-#      Codex only answers mentions from accounts it knows, so the comment has
-#      to come from that person, not the App.
-
+# Retired by #1855. Retained as a manual no-op for old workflow links.
+# Native auto-merge reconciles gate results without requeues or blind retries.
 on:
-  schedule:
-    # Between the sweeper's runs (7,22,37,52), so its re-queues and re-runs land first.
-    - cron: '14,29,44,59 * * * *'
-  # Right after the queue drops a PR. pull_request_target runs this file from
-  # main, so it works for PRs opened before it existed.
-  pull_request_target:
-    types: [dequeued]
   workflow_dispatch:
-    inputs:
-      pr:
-        description: 'One PR number (blank: every eligible PR)'
-        required: false
-      dry-run:
-        description: 'Decide and merge locally, push and comment nothing'
-        type: boolean
-        default: false
-
 permissions:
   contents: read
-  # Comments and the needs-human label.
-  pull-requests: write
-  issues: write
-  # Reading the failed jobs to hand Codex, and re-running a red gate once main's
-  # own failure has cleared.
-  actions: write
-
-concurrency:
-  group: queue-repair
-  cancel-in-progress: false
-
 jobs:
-  repair:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+  retired:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
-      # main's copy of the script, always; PR branches are merged in throwaway worktrees.
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-
-      # Pushes use the repo's App token, not GITHUB_TOKEN: a push made with
-      # GITHUB_TOKEN starts no workflow run, so CI would never check the merge
-      # and auto-merge.yml would never re-queue it (same reason as docs-site.yml).
-      - name: Create repository-scoped App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          client-id: ${{ vars.RUNTIME_UPDATE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RUNTIME_UPDATE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-contents: write
-          permission-pull-requests: write
-
-      - name: Repair stuck PRs
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
-          PR: ${{ inputs.pr || github.event.pull_request.number }}
-          DRY_RUN: ${{ inputs.dry-run && '--dry-run' || '' }}
-        run: node scripts/queue-repair.mjs $DRY_RUN
+      - run: echo 'Retired; see auto-merge.yml.'

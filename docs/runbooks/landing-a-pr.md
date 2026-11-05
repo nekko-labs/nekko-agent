@@ -53,33 +53,42 @@ git add -A   # or a scoped add; never commit .shots/ or other evidence dirs
 git commit -m "..."
 git push -u origin <branch>
 gh pr create --title "..." --body "..."    # ready, not --draft
-gh pr merge --auto                          # queue it; it merges itself when `gate` is green
+gh pr merge --auto --squash                 # native auto-merge after protections pass
 ```
 
-`main` requires the merge queue and one check, `gate`. Do not merge with `--admin`:
-it skips the queue, and the queue is what tests your PR against everything landing
-beside it. The auto-merge workflow also queues every ready PR, so `gh pr merge
---auto` is a belt to its braces. Never add `--squash` (or another method) to it:
-with a method, gh arms classic auto-merge, which waits outside the queue forever.
-The queue's own setting squashes. The auto-merge workflow also runs on every push,
-so a fix to a red PR re-queues itself. Every 15 minutes `queue-sweeper.yml`
-re-queues a ready PR whose `gate` is green but which is not in the queue (once per
-head commit, so a queue ejection by a flake heals and a real one waits for your
-fix), and re-runs a red `gate`'s failed jobs once. `queue-repair.yml` picks up
-what is left: it merges `main` into a conflicting PR (settling conflicts in the
-append-only files by rule), and hands a code conflict, a `gate` still red after
-the re-run, or a second ejection to Codex with a `@codex` comment. If Codex is not
-set up or does not push a fix within an hour, the PR gets the `needs-human` label;
-your next push clears it. To keep a ready PR out of the
-queue, mark it draft or label it `hold`. If it is already queued, either one also
-fails the group's `gate`, so the queue ejects it rather than merging it. If you need it
-queued sooner, `gh pr merge --auto <n>` once `gate` is green still works.
+### Native PR auto-merge (decision #1855)
+
+After the settings cutover, main requires `gate`, `native-premerge`, and resolved review threads,
+not a merge queue. GitHub native auto-merge uses squash (the same method the
+old queue used); never use `--admin` or force a merge. Performance checks run
+on PRs when their paths are affected, and loopback integration tests run for
+every PR needing a build. Both hold gate. Budgets and platform label opt-ins
+are unchanged. Combined queue groups are no longer tested; the existing
+non-strict required-status-check policy is unchanged.
+
+`auto-merge.yml` runs trusted main policy with a repository-scoped App token
+after PR CI completes and on PR readiness/hold changes. It checks the current
+head, successful gate, main base, same repository, draft and hold before using
+`gh pr merge --auto --squash --match-head-commit <sha>`. Draft/hold or an
+incomplete/failed gate disables an existing auto-merge request. PR gate itself
+also checks draft/hold. Forks and stacked layers are not auto-armed. App merges
+trigger push/release workflows normally; the scheduled release remains a backstop.
+Queue sweeper and queue repair are retired manual no-ops: no automatic reruns,
+requeues or Codex dispatch. Diagnose failures before any permitted retry.
+
+**Cutover:** land this migration with all required checks through the still-active
+queue first (plain `gh pr merge --auto`). Only then remove the merge_queue rule
+from ruleset 23611651 and add required `native-premerge` from GitHub Actions.
+This new context depends on migrated gate, so stale green PR gates cannot merge
+without the new coverage. Retain every other rule/parameter/bypass actor exactly,
+and verify native auto-merge remains enabled. Keep merge_group CI compatibility
+for this transition. Never release held PRs as part of the settings change.
 
 Platform builds run nightly, not per change. With a `deploy:linux`, `deploy:windows`,
 `deploy:macos`, `deploy:ios` or `deploy:android` label, `gate` on the PR waits for the
 runs the label turns on (ci.yml's per-OS daemon and capture, Native iOS, Native Android,
 Installers, Dev identity, CodeQL's Swift pass, Decision models' CoreML job, nekkod-npm's
-darwin build) and fails if any of them fails, so the PR is not queued until they are
+darwin build) and fails if any of them fails, so the PR does not merge until they are
 green. macOS runners queue, so that can take an hour or more. Adding the label re-runs CI.
 
 Native iOS runs in batches, not on every push: about a minute after a push, one run
@@ -91,7 +100,7 @@ one that conflicts only with others in the batch waits for a later batch. A red 
 marks every PR in it red: run `gh workflow run ios-native.yml --ref <branch>` on your
 branch to see whether the failure is yours (a green run on the PR beats a red batch).
 A head with a green batch is left out of later ones, so main moving can't turn it
-pending and push it out of the merge queue; a new push gets a new batch. Main moving
+pending and disarm auto-merge; a new push gets a new batch. Main moving
 re-runs the same heads only when it changes a file Native iOS tests (a desktop-only
 merge leaves the last result standing), and that new batch cancels the older run.
 Preview the next batch with `node scripts/ios-batch.mjs --dry-run`.
@@ -103,46 +112,30 @@ the script cannot see. The nightly run always checks both.
 ### Ready, not draft
 
 Open the PR **ready** once your own verification passes (focused tests, and for UI
-changes the evidence below). Do not park it in draft to watch CI: the queue waits
-for CI, merges on green and ejects on red, with nobody watching. Use draft only
+changes the evidence below). Do not park it in draft to watch CI: native auto-merge waits
+for CI and protections, and does not merge on red. Use draft only
 while you are still working, or when a named release blocker holds the PR (see
 below). "CI is still running" is never a reason to stay draft.
 
-If the queue ejects your PR, it comes back with the failing run linked. Diagnose
-it like any red check below, push the fix, and it re-queues.
+### A PR does not merge
 
-### When the queue holds or ejects your PR
-
-- **A queued branch refuses pushes** (GH006, "Branches that are queued for
-  merging cannot be updated"). Push a fix right after an ejection, before the
-  sweeper re-queues it; if the push is refused, wait for that queue run to finish
-  instead of retrying.
-- **Green but never queued.** `mergeStateStatus` is `BLOCKED` with every check
-  passing: usually an unresolved review thread. The common one is CodeQL's
-  "improper code sanitization" on an `apps/desktop/scripts/*-sandbox.cjs` that
-  splices `JSON.stringify(...)` into `executeJavaScript`; escape it with the `js()`
-  helper the other sandboxes use (see `monitors-trio-sandbox.cjs`) and the thread
-  resolves on the rescan. To see the blocker, call the `enqueuePullRequest`
-  GraphQL mutation (the one in `queue-sweeper.yml`): it names the reason, and
-  queues the PR once it is clear.
-- **A stack's bottom layer is never queued by the bots.** `gh pr merge --auto`
-  and the `enqueuePullRequest` mutation refuse stacked PRs, and the merge-async
-  REST API they point to refuses the repo's App ("Enqueuer is not authorized to
-  merge"). Once its `gate` is green, run `gh stack merge <pr> --yes` yourself. Auto-merge armed with a merge method also sits
-  here forever; re-arm with plain `gh pr merge --auto`.
-- **No PR CI after a push** means a conflict with `main` (`mergeable_state:
-  dirty`): GitHub computes no merge ref and triggers nothing. Merge `main` in,
-  or let `queue-repair.yml` do it within 15 minutes.
-- **A `@codex` comment you did not write** is `queue-repair.yml` asking Codex to
-  fix the PR. Pushing your own fix first is fine: a new commit supersedes it.
-- **Typecheck fails on a new import after merging `main`**: your worktree's
-  `node_modules` is stale. Run `npm ci --ignore-scripts` before believing it.
+- Inspect its current gate, reviews, unresolved threads, draft/hold and conflicts.
+- No PR CI after a push usually means GitHub cannot compute the merge ref.
+  Merge main in an isolated worktree, resolve conflicts without dropping either
+  change, and push; no recovery workflow now does this for you.
+- A stale worktree's node_modules can produce spurious import failures after
+  merging main. Run npm ci --ignore-scripts before believing them.
+- Native auto-merge is not a retry engine. Diagnose a red check; fix and push, or
+  rerun once only for a named transient cause. See failing-checks.md.
+- A green, ready, non-held main-base PR can be reconciled with
+  `gh workflow run auto-merge.yml -f pr=<number>` after cutover; this does not
+  rerun checks or bypass protection. Read the workflow result.
 
 ### Big features: stack them
 
 When a feature is more than one reviewable change (roughly: several hundred lines,
 or a part that can land before the rest), split it into a stack with GitHub's
-stacked-PR CLI instead of one large PR or a chain of drafts:
+stacked-PR CLI instead of one large PR or a chain of drafts (the old queue-specific stack merge command is not the native landing path):
 
 ```
 gh extension install github/gh-stack     # once per machine
@@ -151,15 +144,15 @@ gh stack init                            # first layer, based on main
 gh stack add <next-branch>               # each layer builds on the one below
 gh stack submit                          # one PR per layer, linked as a stack
 gh stack sync                            # after main or a lower layer moves
-gh stack merge --yes                     # queue the stack (or up to a layer)
+# Verify and merge the main-base layer using native auto-merge, then retarget the next.
 ```
 
-Each layer is a normal PR: fast-tier CI, ready not draft, its own Unfinished work
+Each layer is a normal PR: path-gated PR CI, ready not draft, its own Unfinished work
 section. Rebasing a lower layer re-runs CI on every layer above it, so keep stacks
 short (2-4 layers) and finish lower layers first.
 
-The auto-merge workflow and the sweeper only queue PRs based on `main`, so a
-layer whose base is another branch is never queued. Once its parent merges,
+The auto-merge workflow only arms PRs based on `main`, so a layer whose base is
+another branch is never auto-merged. Once its parent merges,
 retarget the layer to `main` and merge `main` in. A squash-merged parent leaves
 its original commits in the child's history, so git's merge conflicts wherever
 both layers touched the same lines; a three-way `git merge-file` per file, using

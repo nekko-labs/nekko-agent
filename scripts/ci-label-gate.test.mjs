@@ -66,7 +66,8 @@ test('every listed workflow exists, and is switched on by a deploy label', () =>
 
 test('gate runs the check on PRs and in the queue, and CI re-runs when a label is added', () => {
   const ci = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
-  assert.match(ci, /types: \[opened, synchronize, reopened, labeled\]/);
+  assert.match(ci, /types: \[opened, synchronize, reopened, labeled, unlabeled, ready_for_review, converted_to_draft\]/);
+  assert.match(ci, /if: github.event_name == 'pull_request'\n[\s\S]*?ci-label-gate\.mjs pr /, 'all PR gates check hold/draft, even without deploy labels');
   assert.match(ci, /ci-label-gate\.mjs pr /);
   assert.match(ci, /ci-label-gate\.mjs queue /);
 });

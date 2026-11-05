@@ -59,3 +59,5 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0049](0049-keep-the-spec-index-and-task-log-out-of-prs.md) | Generate the spec index on demand and keep tasks in GitHub issues, so no file changes in most PRs; TASKS.md holds only the plan | accepted |
 | [0050](0050-the-iphone-runs-chats-on-its-own-cloud-providers.md) | The iPhone runs chats of its own on cloud providers whose keys it keeps in its own Keychain (never sent to a computer, the relay or Nekko Cloud); 0016 still holds for a computer's keys | accepted |
 | [0051](0051-one-macos-keychain-item-per-profile.md) | One descriptive macOS Keychain item per data profile, shared startup reads and verified lazy migration from per-secret items; Windows and Linux unchanged | accepted |
+
+| [0052](0052-native-pr-auto-merge-with-premerge-checks.md) | Native PR auto-merge with path-gated pre-merge checks | proposed; settings cutover pending |

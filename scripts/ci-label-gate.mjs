@@ -132,8 +132,12 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function waitForPr(repo, pr, sha, { timeoutMin, pollSec }) {
   const until = Date.now() + timeoutMin * 60_000;
-  const labels = labelsOf(JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])));
   for (;;) {
+    const current = JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`]));
+    const problems = queueBlockers([{ number: current.number, isDraft: current.draft, labels: current.labels }]);
+    if (current.head?.sha !== sha) problems.push('PR head changed while gate was running.');
+    if (problems.length) { console.error(problems.join('\n')); return 1; }
+    const labels = labelsOf(current);
     const state = labelRuns(runsFor(repo, sha), iosContext(repo, pr, sha, labels));
     if (state.failed.length) {
       console.error(`Deploy-label runs failed on ${sha}:\n${state.failed.map(describe).join('\n')}`);

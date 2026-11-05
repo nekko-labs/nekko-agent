@@ -1,26 +1,7 @@
-// Decides which of ci.yml's slow jobs a run needs. Three tiers:
-//
-// - pull_request (fast tier): `build`, gated by the paths the PR touches. The
-//   per-OS jobs (the daemon, capture) run on a PR only with a `deploy:<os>`
-//   label (`deploy:linux`, `deploy:windows`, `deploy:macos`), and only when the
-//   change touches what they test. `ci:perf` opts a PR into the speed contract.
-//   Labels are read when a run starts; adding one re-runs CI.
-// - merge_group (queue tier): what must hold before anything reaches main. Adds
-//   the speed contract and itests, path-gated like the PR tier. A group's file
-//   list is its diff against main, so a skipped job is one that no PR in the
-//   group could affect. No per-OS jobs: a labelled PR already ran them.
-// - schedule, push to main, workflow_dispatch (full tier): every job on every
-//   OS, macOS included. The schedule is nightly: platform builds run once a
-//   day, not per change, unless a `deploy:<platform>` label asks.
-//
-// Unknown changed files (none listed, or a list at the API's 3,000-file cap) and
-// changes to CI itself fall back to every job of the tier.
-//
-// `itests`, the loopback end-to-end scripts (Local Web UI + nekkod + scripted
-// models), never run on a pull request, and `gate` does not wait for them, so
-// they report without holding a PR or the queue. They run on what lands on
-// main: every merge-queue group (ci.yml has no `push` trigger; the queue's
-// group is the commit main moves to), the nightly schedule and a dispatch.
+// PRs run path-gated build, performance and loopback integration checks.
+// Platform jobs stay nightly or deploy-label opt-in; ci:perf forces coverage.
+// merge_group keeps the same coverage during the native-auto-merge transition.
+// Unknown file lists fail closed; full runs cover every OS.
 
 const RUST = [/^crates\//, /^Cargo\.(toml|lock)$/, /^rust-toolchain\.toml$/, /^rustfmt\.toml$/];
 // Shared's contracts feed the engine's golden sets (the phone allowlist, the IPC names).
@@ -55,20 +36,20 @@ export function ciScope({ event, files = [], labels = [] }) {
   if (FULL.has(event)) {
     return { build: true, daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true, licenses: false };
   }
-  const queue = event === 'merge_group';
+  const premerge = event === 'pull_request' || event === 'merge_group';
   const all = files.length === 0 || files.length >= FILE_LIST_CAP || touches(files, EVERYTHING);
   // A `deploy:<os>` label adds that OS's row to a job the change already needs, never to one it doesn't.
   const os = name => labels.includes(`deploy:${name}`);
   const build = all || !files.every(file => NATIVE_APPS.some(pattern => pattern.test(file)));
   const daemon = all || touches(files, DAEMON);
   const capture = all || touches(files, CAPTURE);
-  const perf = labels.includes('ci:perf') || (queue && (all || touches(files, PERF)));
+  const perf = labels.includes('ci:perf') || (premerge && (all || touches(files, PERF)));
   return {
     build,
     daemon_os: [...(daemon && os('linux') ? ['ubuntu-latest'] : []), ...(daemon && os('windows') ? ['windows-latest'] : []), ...(daemon && os('macos') ? ['macos-latest'] : [])],
     capture_os: [...(capture && os('windows') ? ['windows-latest'] : []), ...(capture && os('macos') ? ['macos-latest'] : [])],
     perf,
-    itests: queue && build,
+    itests: premerge && build,
     licenses: all || touches(files, LICENSES),
   };
 }
