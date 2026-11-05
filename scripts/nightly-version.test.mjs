@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -81,10 +81,25 @@ test('reserve pushes the counter tag and a concurrent reservation takes the next
   const dir = mkdtempSync(join(tmpdir(), 'nightly-version-'));
   const cwd = process.cwd();
   // Leave the temp dir before deleting it (Windows refuses to remove a cwd).
-  t.after(() => { process.chdir(cwd); rmSync(dir, { recursive: true, force: true }); });
-  const g = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  // Hermetic git: no global or system config (a CI runner has no identity and
+  // no init.defaultBranch), and nothing inherited that points git elsewhere.
+  // Set on process.env because run() under test spawns git too.
+  const saved = { ...process.env };
+  for (const k of Object.keys(process.env)) if (/^GIT_/.test(k)) delete process.env[k];
+  const emptyConfig = join(dir, 'empty.gitconfig');
+  writeFileSync(emptyConfig, '');
+  Object.assign(process.env, { GIT_CONFIG_GLOBAL: emptyConfig, GIT_CONFIG_NOSYSTEM: '1' });
+  t.after(() => {
+    process.chdir(cwd);
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const g =(cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const remote = join(dir, 'remote.git');
-  g(dir, 'init', '--quiet', '--bare', remote);
+  // Name the branch: with no init.defaultBranch the bare HEAD names master, and
+  // a clone of a remote that only has main gets an unborn HEAD (the CI failure).
+  g(dir, 'init', '--quiet', '--bare', '--initial-branch=main', remote);
   const clone = name => {
     const c = join(dir, name);
     g(dir, 'clone', '--quiet', remote, c);
@@ -97,6 +112,8 @@ test('reserve pushes the counter tag and a concurrent reservation takes the next
   g(a, 'tag', 'v0.8.2');
   g(a, 'push', '--quiet', 'origin', 'HEAD:refs/heads/main', 'v0.8.2');
   const b = clone('b');
+  const head = g(a, 'rev-parse', 'HEAD');
+  assert.equal(g(b, 'rev-parse', 'HEAD'), head, 'the second clone checked out the pushed commit');
 
   const reserve = (repo, opts = {}) => { process.chdir(repo); return run({ platform: 'android', reserve: true, log: () => {}, ...opts }); };
 
