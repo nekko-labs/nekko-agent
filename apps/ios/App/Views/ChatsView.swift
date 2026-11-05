@@ -53,7 +53,7 @@ struct ChatsView: View {
         .listRowSeparatorTint(palette.line)
         .appBackground()
         // Room for the floating pill under the large title, while it sits there.
-        .contentMargins(.top, prefs.pillPlacement.isStandard && !searching ? AgentPillLayer.topMargin : 0, for: .scrollContent)
+        .contentMargins(.top, searching ? 0 : AgentPillLayer.room(prefs.pillPlacement, gauges: gauges), for: .scrollContent)
         .hidesPillOnScroll($pillHidden)
         .pawRefreshable(pull) {
             await store.refresh()
@@ -76,9 +76,8 @@ struct ChatsView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             if searching { SearchRow(query: $query) { query = ""; searching = false } }
         }
-        // Simple or Expert, and the minimal monitor while the hardware shows, floating under the title.
-        .agentPill(gauges: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
-                   monitor: monitor, hidden: searching || pillHidden, expanded: $showPanel)
+        // The minimal monitor while the hardware shows, floating under the title.
+        .agentPill(gauges: gauges, monitor: monitor, hidden: searching || pillHidden, expanded: $showPanel)
         .modifier(MonitorFollow(monitor: $monitor, ids: ["hardware", "ph-monitors"], panelOpen: showPanel))
         .overlay(alignment: .top) { if store.summariesLoading && listSummaries.isEmpty { ProgressView().padding(.top, 80) } }
         .modifier(dialogs)
@@ -86,6 +85,11 @@ struct ChatsView: View {
             ReorderGroupsSheet(groups: sections.filter { $0.key != ChatGroup.general }.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
         }
         .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
+    }
+
+    /// The readings the floating pill shows, while the hardware shows; no pill otherwise.
+    private var gauges: HardwareMonitorModel? {
+        prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil
     }
 
     private func open(_ r: Route) {
@@ -248,6 +252,7 @@ struct ChatsView: View {
     /// Group by, sort by, and what is shown: the desktop Agents panel's view menu.
     private var viewMenu: some View {
         Menu {
+            ModeMenuPicker()
             Picker("Group by", selection: bind(\.groupBy)) {
                 // By computer, as the desktop offers it, once chats come from more than one place.
                 ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: \.self) {

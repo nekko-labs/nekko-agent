@@ -85,7 +85,12 @@ struct ChatView: View {
     }
 
     /// The room the transcript leaves at its top for the pill in its standard place.
-    private var pillRoom: CGFloat { prefs.pillPlacement.isStandard ? AgentPillLayer.topMargin : 0 }
+    private var pillRoom: CGFloat { AgentPillLayer.room(prefs.pillPlacement, gauges: gauges) }
+
+    /// The readings the floating pill shows, while the hardware shows; no pill otherwise.
+    private var gauges: HardwareMonitorModel? {
+        prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil
+    }
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
         let flex = self.flex
@@ -213,10 +218,9 @@ struct ChatView: View {
                 }
                 .animation(.smooth(duration: 0.2), value: !atBottom && chat.running)
             }
-            // Simple or Expert, and the minimal monitor while the hardware shows, floating
-            // over the transcript; tapped, it opens into the agent's details.
-            .agentPill(gauges: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
-                       monitor: monitor, chat: chat, hidden: pillHidden, expanded: $showPanel)
+            // The minimal monitor while the hardware shows, floating over the
+            // transcript; tapped, it opens into the agent's details.
+            .agentPill(gauges: gauges, monitor: monitor, chat: chat, hidden: pillHidden, expanded: $showPanel)
             .safeAreaInset(edge: .bottom) {
                 if flex == nil { bottomBar(chat) }
             }
@@ -265,6 +269,8 @@ struct ChatView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    // Simple or Detailed is this phone's own, so it works on a saved copy too.
+                    ModeMenuPicker()
                     // A saved copy is read-only: changing the chat needs the computer.
                     Group {
                         if ModelEffortButton.parts(prefs, chat).model {
@@ -304,6 +310,7 @@ struct ChatView: View {
                     .disabled(chat.savedAt != nil)
                     Button { Task { await pull.reload { await chat.reload() } } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                 } label: { Label("More", systemImage: "ellipsis.circle") }
+                .accessibilityIdentifier("chat.more")
             }
         }
         .sheet(isPresented: $showModels) {
