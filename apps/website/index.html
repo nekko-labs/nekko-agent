@@ -36,7 +36,7 @@
       content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <!-- Structured data: so search and answer engines describe Nekko Agent accurately -->
     <script type="application/ld+json">
@@ -644,6 +644,19 @@
         <p class="micro center reveal">macOS builds are signed and notarized from v0.6.0 on. An older release is not, and macOS may call it <em>damaged</em>: clear quarantine with <code>xattr -cr "/Applications/Nekko Agent.app"</code>, or just take a current build. <a href="https://github.com/nekko-labs/nekko-agent#macos-says-the-app-is-damaged-and-cant-be-opened">Read the install guidance</a></p>
         <p class="micro center reveal">Windows builds are unsigned for now (SmartScreen: More info → Run anyway); free code signing by the <a href="https://signpath.org" target="_blank" rel="noopener">SignPath Foundation</a> is in progress.</p>
       </section>
+      <section id="contributors" class="chapter contributors" aria-labelledby="contributors-title">
+        <div class="contributors-intro">
+          <p class="eyebrow">OPEN SOURCE. BUILT TOGETHER.</p>
+          <h2 id="contributors-title">The people behind Nekko.</h2>
+          <p class="chapter-lede">Made better by every contribution. Thank you to the people sharing their time, ideas and code to make Nekko Agent yours.</p>
+        </div>
+        <ul class="contributor-wall" data-contributors aria-label="GitHub contributors" hidden></ul>
+        <p class="micro contributors-status" data-contributors-status>Meet the contributors on GitHub.</p>
+        <div class="contributors-links">
+          <a class="card-link" href="https://github.com/nekko-labs/nekko-agent/graphs/contributors">Meet every contributor <span aria-hidden="true">↗</span></a>
+          <a class="btn btn-ghost btn-sm" href="https://github.com/nekko-labs/nekko-agent/blob/main/CONTRIBUTING.md">Start contributing <span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
     </main>
 
     <footer>
@@ -659,6 +672,7 @@
       <div class="lightbox-stage"></div>
     </div>
     <script src="site.js?v=13"></script>
+    <script src="contributors.js?v=1" defer></script>
     <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

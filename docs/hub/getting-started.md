@@ -40,6 +40,12 @@ A new chat greets you with “What should we work on?” and a small pixel Nekko
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
+## Make it yours
+
+In **Settings → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
+
+Open **Custom colors** to adjust the accent and secondary color with the wheel or an exact color value. **Reset to this theme's colors** restores the defaults for the current palette and mode. The same controls appear during first-run setup. Theme circles respond gently to hover and press; the system's reduced-motion preference turns that motion off.
+
 ## Following tool activity
 
 The agent's plan sits on top of the message box as a card. Each step shows its title, one line of detail, and chips for what that step produced: the PRs the agent opened (with their CI status) and the files or previews it linked. Finished steps shrink to their title; hover the card to see their details. **Change plan** tells the agent what to do differently.
@@ -166,6 +172,10 @@ While agents are working, a group's heading shows a small Nekko animation and a 
 Delegated subagents appear as compact rows beneath their parent, in Claude chats too, where a subagent's chat is a live copy you can read but not write to. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
 
 A turn's working steps fold into one work group whose header says what the agent did, by purpose: for example *Read guidance, looked through the code, edited 3 files*. Hover or keyboard-focus the header to read the complete summary and each purpose group with its number of calls. Click the header to open the steps. Inside it, adjacent calls with one purpose are one row that states the goal, such as *Read the project's guidance · AGENTS.md, CLAUDE.md* or *Ran the tests · passed*. When a call gave its own description (Claude Code's commands do), that description is the goal. Click a group to see its individual calls. A call waiting for your approval, a question for you, and a lone call stay rows of their own. A group with a failed call says *1 failed* and stays open.
+
+### Reading a compaction summary
+
+When older conversation is summarized, a **Conversation compacted** event card shows how many earlier messages were summarized. It starts collapsed, including the newest summary. Click **Show summary** to read it and **Hide summary** to fold it again. Earlier messages remain readable above the card. Expanding or collapsing the card does not change what the model receives.
 
 ### Answering agent questions
 
