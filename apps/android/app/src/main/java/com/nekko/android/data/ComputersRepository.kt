@@ -95,8 +95,10 @@ const val DEFAULT_COMPUTER_NAME = "My computer"
  * Computers this phone is paired with, and the live connection to the active
  * one. A port of `apps/mobile/src/services/computers.ts`. Pairing material
  * lives in [SecureStore] only; screens read the non-secret parts (name, relay
- * host, connection state, chat list) from [state]. One relay connection at a
- * time: the computer you're looking at.
+ * host, connection state, chat list) from [state]. The active computer is
+ * the one screens act on; with [stayConnected] every other paired computer
+ * keeps a light link of its own beside it ([Peer]), handed over when it
+ * becomes active, so switching never dials again (the iPhone's fleet, decision 0047).
  */
 class ComputersRepository(
     private val store: SecureStore,
@@ -131,6 +133,8 @@ class ComputersRepository(
     private val probeNetwork: ProbeNetwork = JvmProbeNetwork(),
     /** How long a route check's hello waits for the relay and the computer. */
     private val helloTimeoutMs: Long = 8_000,
+    /** Keep a link open to every paired computer, not only the active one. */
+    private val stayConnected: Boolean = false,
 ) {
     /** The active computer's composers, kept until their prompt is sent (offline mode, the iPhone's drafts). */
     val drafts = DraftStore(offlineFiles, scope, draftDebounceMs)
@@ -396,6 +400,8 @@ class ComputersRepository(
             _state.update { it.copy(computers = next) }
             id
         }
+        // Paired again: its fleet link still carries the old pairing, so it is dialed afresh.
+        dropLink(id)
         connect(id)
         return id
     }
@@ -412,6 +418,7 @@ class ComputersRepository(
         val activeId = lock.withLock {
             val wasActive = _state.value.activeId == id
             if (wasActive) disconnect()
+            dropLink(id)
             store.set(secretKey(id), null)
             chatListCache?.remove(id)
             if (_state.value.activeId == id) {
@@ -441,9 +448,12 @@ class ComputersRepository(
 
     /** Make [id] the active computer and (re)connect to it. */
     suspend fun connect(id: String) = lock.withLock {
-        disconnect()
+        release(id)
         val computer = _state.value.computers.firstOrNull { it.id == id } ?: return@withLock
         val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return@withLock
+        // Already reached by the fleet: carry on with its open link and what it knows.
+        val taken = links.remove(id)?.also { it.stop() }
+        val peer = _state.value.peers[id]
         store.set(ACTIVE_KEY, id)
         if (drafts.computerId != id) _checks.value = emptyList()
         if (drafts.computerId != id) {
@@ -467,7 +477,16 @@ class ComputersRepository(
                 lastError = null,
                 savedListAt = null,
                 hostProtocol = null,
+                peers = it.peers - id,
             )
+        }
+        if (taken != null && peer != null) {
+            _state.update {
+                it.copy(
+                    conn = taken.client.status.value.state, summaries = peer.summaries, workspaces = peer.workspaces,
+                    activity = peer.activity, savedListAt = peer.savedAt,
+                )
+            }
         }
         liveList = false
         val hostKey = secret.pin
@@ -479,27 +498,10 @@ class ComputersRepository(
             return@withLock
         }
         // Opening the app away from the computer: the list as it was, marked as saved.
-        chatListCache?.load(id)?.let { saved ->
+        if (taken == null) chatListCache?.load(id)?.let { saved ->
             _state.update { it.copy(summaries = saved.summaries, workspaces = saved.folders, savedListAt = saved.savedAt) }
         }
-        val config = RelayConfig(
-            relayUrl = computer.relayUrl,
-            room = secret.room,
-            key = secret.key,
-            keyBytes = E2E.fromHex(secret.keyHex),
-            hostKey = hostKey,
-            deviceId = deviceId(),
-            deviceName = deviceName(),
-            pairCode = secret.pair,
-            platform = "android",
-            alts = computer.alts,
-            routeAllowed = routeAllowed,
-            helloSigner = helloSigner,
-        )
-        // Refusals read with the computer's current name (it can be renamed while connected).
-        val c = PlainRefusals(remotes.create(config, scope)) {
-            _state.value.computers.firstOrNull { it.id == id }?.name ?: computer.name
-        }
+        val c = taken?.client ?: dial(computer, secret, hostKey)
         client = c
         connJob = scope.launch {
             launch {
@@ -548,7 +550,202 @@ class ComputersRepository(
             }
         }
         c.setNetworkPath(networkPath)
+        if (taken == null) c.connect()
+        syncFleet()
+    }
+
+    /** A connection to one paired computer, not yet dialed. */
+    private suspend fun dial(computer: Computer, secret: ComputerSecret, hostKey: String): Remote {
+        val config = RelayConfig(
+            relayUrl = computer.relayUrl,
+            room = secret.room,
+            key = secret.key,
+            keyBytes = E2E.fromHex(secret.keyHex),
+            hostKey = hostKey,
+            deviceId = deviceId(),
+            deviceName = deviceName(),
+            pairCode = secret.pair,
+            platform = "android",
+            alts = computer.alts,
+            routeAllowed = routeAllowed,
+            helloSigner = helloSigner,
+        )
+        // Refusals read with the computer's current name (it can be renamed while connected).
+        return PlainRefusals(remotes.create(config, scope)) {
+            _state.value.computers.firstOrNull { it.id == computer.id }?.name ?: computer.name
+        }
+    }
+
+    /**
+     * Before [next] becomes active: the computer left behind keeps its open
+     * connection as a fleet link, with what it knew. Without [stayConnected],
+     * or reconnecting the same computer, it is closed as before.
+     */
+    private fun release(next: String) {
+        val c = client
+        val s = _state.value
+        val previous = s.activeId
+        if (!stayConnected || c == null || previous == null || previous == next || s.computers.none { it.id == previous }) {
+            disconnect()
+            return
+        }
+        connJob?.cancel(); connJob = null
+        summariesJob?.cancel(); summariesJob = null
+        summariesDirty = false
+        client = null
+        changeCalls = null
+        val peer = Peer(
+            conn = s.conn, detail = s.connDetail, denied = s.denied, summaries = s.summaries, activity = s.activity,
+            workspaces = s.workspaces, loaded = liveList, savedAt = s.savedListAt,
+        )
+        _state.update { it.copy(conn = RelayState.IDLE, route = null) }
+        dropLink(previous)
+        _state.update { it.copy(peers = it.peers + (previous to peer)) }
+        listen(previous, c, hadCode = false)
+    }
+
+    // ---- the fleet: a link to every paired computer but the active one ----
+
+    private class PeerRead(
+        val summaries: List<SessionSummary>?,
+        val folders: List<WorkspaceFolder>?,
+        val pending: Map<String, PendingInput>?,
+        val info: AppInfo?,
+    )
+
+    private class PeerLink(val client: Remote) {
+        var job: Job? = null
+        var summariesJob: Job? = null
+        @Volatile var summariesDirty = false
+
+        fun stop() {
+            job?.cancel(); job = null
+            summariesJob?.cancel(); summariesJob = null
+        }
+    }
+
+    private val links = java.util.concurrent.ConcurrentHashMap<String, PeerLink>()
+
+    /** A link for every paired computer but the active one; none for a forgotten one. */
+    private suspend fun syncFleet() {
+        if (!stayConnected) return
+        val s = _state.value
+        val wanted = s.computers.map { it.id }.filter { it != s.activeId }.toSet()
+        (links.keys + s.peers.keys).filter { it !in wanted }.forEach { dropLink(it) }
+        for (id in wanted) if (!links.containsKey(id) && !_state.value.peers.containsKey(id)) openLink(id)
+    }
+
+    /** Dial one computer that isn't active, showing its saved list until it answers. */
+    private suspend fun openLink(id: String) {
+        val computer = _state.value.computers.firstOrNull { it.id == id } ?: return
+        val secret = StoredJson.decodeSecret(store.get(secretKey(id))) ?: return
+        var peer = Peer()
+        chatListCache?.load(id)?.let { saved -> peer = peer.copy(summaries = saved.summaries, workspaces = saved.folders, savedAt = saved.savedAt) }
+        val hostKey = secret.pin
+        if (hostKey == null) {
+            // Paired before the computer could prove itself: only a fresh QR helps (as [connect]).
+            _state.update { it.copy(peers = it.peers + (id to peer.copy(conn = RelayState.DENIED, denied = DenyReason.BAD_KEY))) }
+            return
+        }
+        _state.update { it.copy(peers = it.peers + (id to peer)) }
+        val c = dial(computer, secret, hostKey)
+        listen(id, c, hadCode = secret.pair != null)
+        c.setNetworkPath(networkPath)
         c.connect()
+    }
+
+    /** Close and forget one fleet link. */
+    private fun dropLink(id: String) {
+        links.remove(id)?.let {
+            it.stop()
+            it.client.close()
+        }
+        _state.update { if (id in it.peers) it.copy(peers = it.peers - id) else it }
+    }
+
+    private fun updatePeer(id: String, f: (Peer) -> Peer) {
+        _state.update { s -> s.peers[id]?.let { p -> f(p).let { n -> if (n == p) s else s.copy(peers = s.peers + (id to n)) } } ?: s }
+    }
+
+    /** Follow one fleet link: its state, who is running there, and its list when a turn ends. */
+    private fun listen(id: String, c: Remote, hadCode: Boolean) {
+        val link = PeerLink(c)
+        links[id] = link
+        link.job = scope.launch {
+            launch {
+                c.status.collect { s ->
+                    if (links[id] !== link) return@collect
+                    updatePeer(id) { p ->
+                        p.copy(conn = s.state, detail = s.detail, denied = s.denied ?: p.denied.takeIf { s.state != RelayState.ONLINE })
+                    }
+                    if (s.state == RelayState.ONLINE) scope.launch { refreshPeer(id, link) }
+                }
+            }
+            // Enrollment done: the one-time code must never be sent again.
+            launch { c.welcome.collect { if (hadCode) dropPairCode(id) } }
+            launch {
+                c.events.collect { (channel, payload) ->
+                    if (links[id] !== link || channel != Events.AGENT_EVENT) return@collect
+                    val e = AgentEvent.from(payload) ?: return@collect
+                    updatePeer(id) { p -> p.copy(activity = ActivityTracker.next(p.activity, e)) }
+                    // The list stays fresh when a turn ends there, as the active computer's does.
+                    if (e is AgentEvent.Done || e is AgentEvent.SessionMeta) schedulePeerSummaries(id, link)
+                }
+            }
+        }
+    }
+
+    /** Read what the list shows from one fleet computer. */
+    private suspend fun refreshPeer(id: String, link: PeerLink) {
+        val c = link.client
+        val r = coroutineScope {
+            val summaries = async { orNull { SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES)) } }
+            val folders = async { orNull { WorkspaceFolder.list(c.call(Channels.WORKSPACE_LIST)) } }
+            val pending = async { orNull { PendingInput.map(c.call(Channels.CHAT_PENDING)) } }
+            val info = async { orNull { AppInfo.from(c.call(Channels.APP_INFO)) } }
+            PeerRead(summaries.await(), folders.await(), pending.await(), info.await())
+        }
+        if (links[id] !== link) return
+        updatePeer(id) { p ->
+            var n = p
+            r.summaries?.let { n = n.copy(summaries = it, loaded = true, savedAt = null) }
+            r.folders?.let { n = n.copy(workspaces = it) }
+            // Approvals and questions already waiting when the link (re)connects.
+            r.pending?.forEach { (sid, q) ->
+                if (q.approval != null || q.question != null) n = n.copy(activity = n.activity + (sid to Activity.NEEDS_YOU))
+            }
+            n
+        }
+        r.info?.let {
+            learnPlatform(id, it.platform, it.computerName ?: it.hostname)
+            learnIcon(id, it.machineIcon)
+        }
+        savePeerList(id)
+    }
+
+    private fun schedulePeerSummaries(id: String, link: PeerLink) {
+        link.summariesDirty = true
+        if (link.summariesJob?.isActive == true) return
+        link.summariesJob = scope.launch {
+            do {
+                delay(summariesDebounceMs)
+                if (links[id] !== link) return@launch
+                link.summariesDirty = false
+                val list = orNull { SessionSummary.visible(link.client.call(Channels.SESSIONS_SUMMARIES)) }
+                if (links[id] !== link) return@launch
+                if (list != null) {
+                    updatePeer(id) { it.copy(summaries = list, loaded = true, savedAt = null) }
+                    savePeerList(id)
+                }
+            } while (isActive && links[id] === link && link.summariesDirty)
+        }
+    }
+
+    /** A fleet computer's live list, as the phone's saved copy (only when the user keeps one). */
+    private fun savePeerList(id: String) {
+        val cache = chatListCache ?: return
+        val p = _state.value.peers[id]?.takeIf { it.loaded } ?: return
+        cache.save(id, SavedChatList(now(), p.summaries, p.workspaces))
     }
 
     /** Drop the live connection (the pairing stays). */
@@ -565,6 +762,10 @@ class ComputersRepository(
     /** App came to the foreground: reconnect now rather than after the backoff. */
     fun nudge() {
         client?.nudge()
+        links.forEach { (id, l) ->
+            l.client.nudge()
+            if (_state.value.peers[id]?.conn == RelayState.ONLINE) schedulePeerSummaries(id, l)
+        }
         // Chats completed, restored or started on the computer meanwhile send no event: re-read the list.
         if (_state.value.conn == RelayState.ONLINE) {
             scheduleSummaries()
@@ -774,6 +975,7 @@ class ComputersRepository(
     /** The phone changed network, or the socket may have died while frozen: dial a fresh one now. */
     fun reconnect() {
         client?.reconnect()
+        links.values.forEach { it.client.reconnect() }
     }
 
     /** The phone's network, for the route choice; the next connection starts from it too. */
@@ -783,12 +985,14 @@ class ComputersRepository(
     fun networkChanged(path: NetworkPath) {
         networkPath = path
         client?.networkChanged(path)
+        links.values.forEach { it.client.networkChanged(path) }
     }
 
     /** Where the phone is, without having moved: dial again only if that changes the route. */
     fun setNetworkPath(path: NetworkPath) {
         networkPath = path
         client?.setNetworkPath(path)
+        links.values.forEach { it.client.setNetworkPath(path) }
     }
 
     suspend fun refresh() {
@@ -822,7 +1026,7 @@ class ComputersRepository(
             transcripts.keepOnly(r.summaries.map { it.id }.toSet())
             liveList = true
             saveList()
-            learnPlatform(r.info?.platform, r.info?.computerName ?: r.info?.hostname)
+            _state.value.activeId?.let { learnPlatform(it, r.info?.platform, r.info?.computerName ?: r.info?.hostname) }
             // A failed read says nothing about the icon; an answer without one clears it.
             if (r.info != null) _state.value.activeId?.let { learnIcon(it, r.info.machineIcon) }
         } catch (e: CancellationException) {
@@ -923,9 +1127,8 @@ class ComputersRepository(
         }
     }
 
-    private suspend fun learnPlatform(platform: String?, reportedName: String?) {
+    private suspend fun learnPlatform(id: String, platform: String?, reportedName: String?) {
         lock.withLock {
-            val id = _state.value.activeId ?: return
             val list = _state.value.computers
             val c = list.firstOrNull { it.id == id } ?: return
             val generic = c.name in listOf(DEFAULT_COMPUTER_NAME, "Mac", "Windows PC", "Linux PC")

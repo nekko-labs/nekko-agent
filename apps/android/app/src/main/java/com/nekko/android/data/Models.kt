@@ -92,8 +92,17 @@ data class ComputersState(
     val remoteStoppedAt: Long? = null,
     /** The active computer's phone protocol from its welcome (IO-32); null until it has welcomed this phone. */
     val hostProtocol: Int? = null,
+    /**
+     * Every paired computer but the active one, kept connected beside it
+     * (2026-11-05, the iPhone's fleet): its state, chats, folders and which
+     * chats run or need you. Empty unless the repository stays connected.
+     */
+    val peers: Map<String, Peer> = emptyMap(),
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
+
+    /** A computer's connection state, active or not. */
+    fun connOf(id: String): RelayState = if (id == activeId) conn else peers[id]?.conn ?: RelayState.IDLE
 
     /** The relay keeps closing on a bad pairing key: not a denial (it isn't sealed), but worth asking to pair again. */
     val badKey: Boolean get() = connDetail == RelayStatus.BAD_KEY && conn != RelayState.IDLE
@@ -101,6 +110,20 @@ data class ComputersState(
     /** Which side to update when the phone and the computer speak different versions. */
     val protocolCheck: ProtocolCheck get() = ProtocolCheck.compare(hostProtocol)
 }
+
+/** What the phone knows about one paired computer that isn't the active one. */
+data class Peer(
+    val conn: RelayState = RelayState.CONNECTING,
+    val detail: String? = null,
+    val denied: DenyReason? = null,
+    val summaries: List<SessionSummary> = emptyList(),
+    val activity: Map<String, Activity> = emptyMap(),
+    val workspaces: List<WorkspaceFolder> = emptyList(),
+    /** The computer answered on this link (not only a saved list). */
+    val loaded: Boolean = false,
+    /** The list shown is the phone's saved copy, from then. */
+    val savedAt: Long? = null,
+)
 
 /** Hand-written JSON for what we persist; the app has no serialization plugin. */
 internal object StoredJson {

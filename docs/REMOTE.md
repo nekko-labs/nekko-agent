@@ -107,6 +107,19 @@ to old duplicates that were saved with different identity keys.
 > computer. Choosing another computer shows its models and folders at once, since every paired
 > computer is already connected; what you typed stays.
 >
+> **Automatic** (iPhone): with a **local model** (Ollama, LM Studio, llama.cpp, vLLM) and more
+> than one paired computer, **Run on** starts on **Automatic**. The phone asks each online
+> computer whether it is in use (a chat replying there, or someone at its keyboard) and starts the
+> chat on a free one, with the same model if that computer has it, else the last one used there,
+> else one it already has loaded. The line under the options says what it picked and why
+> (*Auto picked Studio Mac: MacBook is busy.*). When every computer is busy, or none other can run
+> a local model, the chat stays on the one used last. Choosing a **folder** decides the computer
+> (the folder lives on it), and picking a computer by hand turns Automatic off for that chat;
+> choose **Automatic** again to go back. New chat opened from one computer's list starts on that
+> computer. Chats on cloud models are not moved. A computer tells the phone only yes/no answers
+> (in use, a chat replying, no keyboard, on battery or hot), never how long it has been idle,
+> its battery level or its temperatures.
+>
 > On the iPhone, the model list opens on **All**, with **Cloud** and **Local** beside it at the
 > top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
 > servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
@@ -226,6 +239,11 @@ to old duplicates that were saved with different identity keys.
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
 > version, the phone protocol on each side and the open-source licenses of the app and the
 > libraries it ships.
+>
+> **Every computer stays connected** (Android): the app keeps a connection to every paired
+> computer, not only the one you are using, so switching to another (in Computers, or **New chat →
+> Run on**) is instant and needs no new connection. **Run on** shows whether each one is online.
+> The chat list still shows one computer's chats at a time.
 >
 > **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
 > different phone protocol versions, the chat list and **Settings → About** show a banner naming
