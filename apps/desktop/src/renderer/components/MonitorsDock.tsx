@@ -21,7 +21,7 @@ import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
 import { usePanelPresence } from '../usePanelPresence.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
-import { useShown } from '../simpleMode.js';
+import { useExpertMode } from '../simpleMode.js';
 import { EASE_OUT } from '../easing.js';
 
 const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
@@ -58,16 +58,16 @@ export function MonitorsToggle({ show, side, onToggle }: { show: boolean; side: 
   );
 }
 
-/** A flow-layout sibling of the wall stage. The parent places it using data-dock-side. */
-/** Monitors that Settings > Simple mode can keep for Expert. */
-const HW_MONITORS = new Set<string>(['hardware', 'localModels']);
-const BUDGET_MONITORS = new Set<string>(['budget', 'utilization', 'cost', 'tokens']);
-
+/**
+ * A flow-layout sibling of the wall stage. The parent places it using data-dock-side.
+ * Simple and Detailed only open or close the panel, each remembering its own
+ * toggle (`simpleShow`, `show`); the monitors checked in Configure are exactly
+ * the ones it shows, in both modes.
+ */
 export function MonitorsDock(props: MonitorsDockProps) {
-  const hwShown = useShown('mon-hw');
-  const budgetShown = useShown('mon-budget');
+  const [expert] = useExpertMode();
   const { state, setState } = props;
-  const { dock } = state;
+  const dock = { ...state.dock, show: expert ? state.dock.show : !!state.dock.simpleShow };
   const background = useBackgroundState();
   const present = usePanelPresence(dock.show);
   const reorderDrag = useRef<MonitorKey | null>(null);
@@ -196,7 +196,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
     minimizeTransition.current.start(!value || window.matchMedia('(prefers-reduced-motion: reduce)').matches, () => setCollapsing(key), commit);
   };
 
-  const setShow = (show: boolean) => setState((s) => ({ ...s, dock: { ...s.dock, show } }));
+  const setShow = (show: boolean) => setState((s) => ({ ...s, dock: { ...s.dock, ...(expert ? { show } : { simpleShow: show }) } }));
   // Hidden, the dock leaves only its own show button where it was, the way the
   // agent panel leaves its controls, so the way back is where it went.
   const collapsed = !dock.show && (
@@ -205,7 +205,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
     </div>
   );
   if (!present) return collapsed;
-  const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key] && (hwShown || !HW_MONITORS.has(p.key)) && (budgetShown || !BUDGET_MONITORS.has(p.key)));
+  const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key]);
   const expandedMonitors = selectedMonitors.filter((p) => !dock.minimized[p.key]);
   return (
     <>
