@@ -73,7 +73,7 @@ jobs:
     outputs:
       runs-on: ${{ steps.pick.outputs.runs-on }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: |
             .github/actions/pick-runner
@@ -94,7 +94,7 @@ jobs:
     # passing runs off mid-test. A slow runner reaches 75 by itself, and a retried journey adds about 8.
     timeout-minutes: 85
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # A PR checks out its merge commit and a batch is one commit on main:
           # either way HEAD^1 is the base, for the appearance scope.
@@ -116,7 +116,7 @@ jobs:
       - name: Protocol and app-state tests (NekkoProtocol, NekkoKit)
         working-directory: apps/ios/Protocol
         run: swift test
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -324,7 +324,7 @@ jobs:
             base64 -i /tmp/shot.jpg | tr -d '\n'; echo
             echo "SHOT-END"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: native-ios-evidence
