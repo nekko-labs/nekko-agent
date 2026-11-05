@@ -86,7 +86,9 @@ one that conflicts only with others in the batch waits for a later batch. A red 
 marks every PR in it red: run `gh workflow run ios-native.yml --ref <branch>` on your
 branch to see whether the failure is yours (a green run on the PR beats a red batch).
 A head with a green batch is left out of later ones, so main moving can't turn it
-pending and push it out of the merge queue; a new push gets a new batch.
+pending and push it out of the merge queue; a new push gets a new batch. Main moving
+re-runs the same heads only when it changes a file Native iOS tests (a desktop-only
+merge leaves the last result standing), and that new batch cancels the older run.
 Preview the next batch with `node scripts/ios-batch.mjs --dry-run`.
 
 On a PR, Native iOS checks dark mode only when the change touches colours
