@@ -404,7 +404,8 @@ describe('relay v2 routing', () => {
     agent.send({ type: 'notify', title: 't', body: 'b' });
     agent.send({ type: 'notify', kind: 'failed', tag: 'short', title: 't', body: 'b' });
     await new Promise((r) => setTimeout(r, 50));
-    expect(sent).toEqual([
+    // Per-target serialization does not impose an order between APNs and FCM.
+    expect(sent.toSorted((a, b) => a.token.localeCompare(b.token))).toEqual([
       { token: 'a'.repeat(64), kind: 'needs-you', tag: 'e'.repeat(32) },
       { token: 'b'.repeat(40), kind: 'needs-you', tag: 'e'.repeat(32) },
       { token: 'b'.repeat(40), kind: 'finished', tag: undefined },

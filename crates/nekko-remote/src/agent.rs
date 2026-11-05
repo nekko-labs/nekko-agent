@@ -1,5 +1,8 @@
-//! The relay agent's protocol (`packages/host/src/relay.ts`), without any I/O:
-//! relay frames and host events in, the exact frames to send the relay out.
+//! The Rust relay agent's protocol, without any I/O: relay frames and daemon
+//! events in, the exact frames to send the relay out. Historical TS golden
+//! fixtures cover the legacy controls, including phase-based dismissals. The
+//! production socket holds those dismissals until a complete pending snapshot
+//! confirms no input remains. Core-only goldens do not model that I/O boundary.
 //!
 //! Relay v2 (see `packages/shared/src/remote.ts`):
 //!
@@ -12,6 +15,8 @@
 //!                  only this may register for pushes, which the relay can't read)
 //! agent -> relay : { type:'notify', kind, tag?, deviceId?, title, body } (content-free push trigger)
 //! agent -> relay : { type:'dismiss', tag }        (a needs-you push was handled)
+//! agent -> relay : { type:'attention-snapshot', tags } (complete pending-chat set)
+//! agent -> relay : { type:'attention-unknown' }    (withdraw completeness)
 //! agent -> relay : { type:'push-remove', deviceId }
 //! agent -> relay : { type:'activity', tag, phase, callId?, severity? } (content-free Live Activity update)
 //! agent -> relay : { type:'card' | 'card-start', state } (the iPhone's one Live Activity card, `card.rs`)
@@ -576,15 +581,56 @@ impl AgentCore {
         out
     }
 
-    /// Every relay control frame one agent event causes, in order: a
-    /// `finished` or `failed` push request, the Live Activity update, a
-    /// `dismiss` when an approval or a question was answered or its run ended,
-    /// and a `needs-you` push request when one is waiting. Exactly
-    /// `relayFrames` in packages/host/src/relay.ts.
+    /// A complete, unclipped `chat:pending` map from the daemon, never the card
+    /// or a saved session list. One chat contributes once regardless of how many
+    /// approvals/questions it has. Invalid input withdraws authority, not zero.
+    pub fn attention_snapshot(&self, pending: &Value) -> String {
+        let Some(pending) = pending.as_object() else { return Self::attention_unknown() };
+        // The protocol caps supplied entries before deduplication. Never clip.
+        if pending.len() > 4096 {
+            return Self::attention_unknown();
+        }
+        let mut tags = Vec::new();
+        for (sid, entry) in pending {
+            if sid.is_empty() || !entry.is_object() {
+                return Self::attention_unknown();
+            }
+            let waits = |key| entry.get(key).is_some_and(Value::is_object);
+            if !waits("approval") && !waits("question") {
+                return Self::attention_unknown();
+            }
+            tags.push(activity_tag(sid));
+        }
+        tags.sort_unstable();
+        tags.dedup();
+        frame(json!({ "type": "attention-snapshot", "tags": tags }))
+    }
+
+    pub fn attention_unknown() -> String {
+        frame(json!({ "type": "attention-unknown" }))
+    }
+
+    /// Whether an event can change the full pending map. The socket reads again
+    /// after these events and rejects reads overtaken by a subsequent event.
+    pub fn attention_changed(channel: &str, e: &Value) -> bool {
+        channel == "agent:event"
+            && matches!(
+                e.get("type").and_then(Value::as_str),
+                Some("tool_approval_required" | "question" | "tool_result" | "question_resolved" | "done" | "error")
+            )
+    }
+
+    /// Legacy activity phases are not chat-wide pending state. Before any
+    /// removal control, withdraw authority until the socket completes a full
+    /// read. Resolving one request must never assert a known zero for its chat.
     fn relay_frames(&mut self, e: &Value) -> Vec<Value> {
         let sid = e.get("sessionId").and_then(Value::as_str).map(str::to_string);
         let prev = sid.as_ref().and_then(|s| self.phases.get(s).copied());
         let mut out = Vec::new();
+        if matches!(e.get("type").and_then(Value::as_str), Some("tool_result" | "question_resolved" | "done" | "error"))
+        {
+            out.push(json!({ "type": "attention-unknown" }));
+        }
         match e.get("type").and_then(Value::as_str) {
             Some("done") => out.push(notify_frame("finished", sid.as_deref(), None, None)),
             Some("error") if !stopped(e) => out.push(notify_frame("failed", sid.as_deref(), None, None)),
@@ -593,8 +639,15 @@ impl AgentCore {
         let Some(activity) = self.activity_frame(e) else { return out };
         let phase = activity.get("phase").and_then(Value::as_str).unwrap_or("").to_string();
         let tag = activity.get("tag").cloned().unwrap_or(Value::Null);
+        if !matches!(phase.as_str(), "approval" | "question")
+            && out.first().and_then(|f| f["type"].as_str()) != Some("attention-unknown")
+        {
+            // Even the first text after reconnect can say "running" while
+            // another request in this chat is still pending.
+            out.insert(0, json!({ "type": "attention-unknown" }));
+        }
         out.push(activity);
-        if matches!(prev, Some("approval" | "question")) && prev != Some(phase.as_str()) {
+        if matches!(prev, Some("approval" | "question")) && !matches!(phase.as_str(), "approval" | "question") {
             out.push(json!({ "type": "dismiss", "tag": tag }));
         }
         if phase == "approval" || phase == "question" {
@@ -923,7 +976,10 @@ mod tests {
         };
         // No phone asked: the old per-chat activity frame only.
         let first = plain(&core.on_event("agent:event", &tool));
-        assert_eq!(first.iter().map(|f| f["type"].as_str().unwrap()).collect::<Vec<_>>(), ["activity"]);
+        assert_eq!(
+            first.iter().map(|f| f["type"].as_str().unwrap()).collect::<Vec<_>>(),
+            ["attention-unknown", "activity"]
+        );
         assert!(!core.wants_summaries());
 
         let req = json!({ "type": "req", "id": 5, "channel": "card:set", "args": [{ "level": "standard" }] });
