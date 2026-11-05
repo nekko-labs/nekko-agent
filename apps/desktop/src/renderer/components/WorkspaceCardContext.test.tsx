@@ -12,7 +12,8 @@ const state: Record<string, unknown> = {
   sessionCtxEstimate: {} as Record<string, number>,
 };
 vi.mock('../store.js', () => ({ useStore: (pick: (s: typeof state) => unknown) => pick(state) }));
-vi.mock('../useGitStatus.js', () => ({ useGitStatus: () => null }));
+const gitStatus: { current: unknown } = { current: null };
+vi.mock('../useGitStatus.js', () => ({ useGitStatus: () => gitStatus.current }));
 vi.mock('../compactionStatus.js', () => ({ useCompactionStore: () => false }));
 import { WorkspaceCard, chatRenameTitle } from './WorkspaceCard.js';
 
@@ -140,5 +141,61 @@ describe('workspace card rename', () => {
     expect(chatRenameTitle(null, 'Chat')).toBeNull();
     expect(chatRenameTitle('   ', 'Chat')).toBeNull();
     expect(chatRenameTitle('Chat', 'Chat')).toBeNull();
+  });
+});
+
+describe('workspace card PR chip', () => {
+  const pr = (number: number, state: 'open' | 'merged' | 'closed', isDraft = false) =>
+    ({ url: `https://github.com/o/r/pull/${number}`, owner: 'o', repo: 'r', number, title: `PR ${number}`, state, isDraft });
+  const render = (props: Partial<React.ComponentProps<typeof WorkspaceCard>> = {}) => renderToStaticMarkup(
+    <WorkspaceCard workspace={null} session={session} terminal={null} status="done" isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} {...props} />,
+  );
+  /** The card's rows as markup, top to bottom: the title row, then each metadata line (rows hold no divs). */
+  const lines = (html: string) => html.split('<div ').slice(2);
+  const chipLine = (html: string) => lines(html).findIndex((l) => l.includes('data-session-pr-chip'));
+  const withPrs = (prs: unknown[]) => { (state.prsBySession as Record<string, unknown>).s1 = prs; };
+
+  it('shows no chip for a chat without PRs', () => {
+    withPrs([]);
+    expect(render()).not.toContain('data-session-pr-chip');
+  });
+
+  it('ends the last line with one chip for the most relevant PR', () => {
+    withPrs([pr(7, 'merged'), pr(8, 'open', true)]);
+    const html = render();
+    expect(html.match(/data-session-pr-chip/g)).toHaveLength(1);
+    expect(html).toContain('data-pr-status="draft"');
+    expect(html).toContain('>+1<');
+    // No branch, provider or sub-agents: the model line is last, and the chip ends it.
+    const rows = lines(html);
+    expect(chipLine(html)).toBe(rows.length - 1);
+    expect(rows[rows.length - 1]).toMatch(/<span class="ml-auto[^"]*"><span[^>]*data-session-pr-chip[^]*<\/span><\/span><\/div><\/div>$/);
+  });
+
+  it('moves down to the branch line, then the spawn line, when they are there', () => {
+    withPrs([pr(7, 'open')]);
+    gitStatus.current = { workspaceId: 'session:s1', repo: true, branch: 'feat/x', dirtyCount: 0, ahead: 0, behind: 0 };
+    try {
+      let html = render();
+      expect(chipLine(html)).toBe(lines(html).length - 1);
+      expect(lines(html)[chipLine(html)]).toContain('feat/x');
+      html = render({ subAgentCount: 2 });
+      expect(chipLine(html)).toBe(lines(html).length - 1);
+      expect(lines(html)[chipLine(html)]).toContain('sub-agent');
+      expect(lines(html)[chipLine(html)]).not.toContain('feat/x');
+    } finally {
+      gitStatus.current = null;
+    }
+  });
+
+  it('rides the title row of a title-only card, in place of the reply time', () => {
+    withPrs([pr(7, 'closed')]);
+    const replied = { ...session, lastReplyAt: -60_000 } as SessionSummary;
+    const html = render({ showMetadata: false, session: replied });
+    expect(html).toContain('data-pr-status="closed"');
+    expect(chipLine(html)).toBe(0);
+    expect(html).not.toContain('min ago');
+    withPrs([]);
+    expect(render({ showMetadata: false, session: replied })).toContain('1 min ago');
   });
 });
