@@ -711,6 +711,8 @@ struct ComputerMenu: View {
             }
             Button { path.append(.automations) } label: { Label("Automations", systemImage: "bolt.badge.clock") }
             Button { path.append(.usage) } label: { Label("Usage and limits", systemImage: "gauge.with.dots.needle.33percent") }
+            Button { path.append(.pullRequests) } label: { Label("Pull requests", systemImage: "arrow.triangle.pull") }
+                .accessibilityIdentifier("chats.menu.pullRequests")
             Button { path.append(.connectors) } label: { Label("Connectors", systemImage: "point.3.connected.trianglepath.dotted") }
                 .accessibilityIdentifier("chats.menu.connectors")
             Button { path.append(.files) } label: { Label("Files", systemImage: "folder") }
