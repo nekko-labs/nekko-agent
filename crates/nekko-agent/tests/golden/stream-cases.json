@@ -766,6 +766,9 @@
     "request": "think-on",
     "responses": [
       {
+        "body": "{\"capabilities\":[\"completion\",\"tools\",\"thinking\"]}"
+      },
+      {
         "chunks": [
           "{\"message\":{\"role\":\"assistant\",\"content\":\"\",\"thinking\":\"Considering\"}}\n",
           "{\"message\":{\"role\":\"assistant\",\"content\":\"\",\"thinking\":\" options.\"}}\n",
@@ -868,6 +871,104 @@
     "responses": [
       {
         "networkError": "fetch failed"
+      }
+    ]
+  },
+  {
+    "name": "ol-think-model-cant",
+    "provider": "ollama",
+    "request": "think-on",
+    "responses": [
+      {
+        "body": "{\"capabilities\":[\"completion\",\"tools\"]}"
+      },
+      {
+        "chunks": [
+          "{\"message\":{\"content\":\"Rayleigh.\"}}\n",
+          "{\"done\":true}\n"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ol-think-capabilities-missing",
+    "provider": "ollama",
+    "request": "think-on",
+    "responses": [
+      {
+        "body": "{\"details\":{}}"
+      },
+      {
+        "chunks": [
+          "{\"message\":{\"content\":\"Rayleigh.\"}}\n",
+          "{\"done\":true}\n"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ol-think-show-404",
+    "provider": "ollama",
+    "request": "think-on",
+    "responses": [
+      {
+        "status": 404,
+        "body": "{\"error\":\"model 'qwen3-8b' not found\"}"
+      },
+      {
+        "chunks": [
+          "{\"message\":{\"content\":\"Rayleigh.\"}}\n",
+          "{\"done\":true}\n"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ol-think-show-network-error",
+    "provider": "ollama",
+    "request": "think-on",
+    "responses": [
+      {
+        "networkError": "fetch failed"
+      },
+      {
+        "chunks": [
+          "{\"message\":{\"content\":\"Rayleigh.\"}}\n",
+          "{\"done\":true}\n"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ol-think-off-model-can",
+    "provider": "ollama",
+    "request": "think-off",
+    "responses": [
+      {
+        "chunks": [
+          "{\"message\":{\"content\":\"Rayleigh.\"}}\n",
+          "{\"done\":true}\n"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ol-http-400-reason",
+    "provider": "ollama",
+    "responses": [
+      {
+        "status": 400,
+        "body": "{\"error\":\"\\\"qwen2.5:3b\\\" does not support thinking\"}"
+      }
+    ]
+  },
+  {
+    "name": "ol-http-502-no-reason",
+    "provider": "ollama",
+    "responses": [
+      {
+        "status": 502,
+        "body": "<html>Bad Gateway</html>"
       }
     ]
   },
