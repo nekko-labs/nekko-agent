@@ -268,4 +268,8 @@ other models and runtimes remain available while one downloads.
 
 After a reply, **Suggested follow-ups** can offer relevant next messages such as **Inspect the saved PNGs directly** or **Try another image viewer**. Each button sends the words it displays; nothing is sent until you choose one. These suggestions are not questions from you or approval requests from the agent.
 
-When delegation is available, use the separate **Run in** selector to choose **This chat** (the default) or **A subagent** before choosing a response. If you type your own message instead, the existing **Do it here** and **In a subagent** actions apply to your draft. Suggestions are optional and may not appear after every reply.
+When delegation is available, use the small sliding toggle to choose **This chat** (the default) or **Subagent** before choosing a response. If you type your own message instead, the existing **Do it here** and **In a subagent** actions apply to your draft. Suggestions are optional and may not appear after every reply.
+
+### Text formatting toolbar
+
+Selecting text in the desktop or Local Web UI message editor opens a compact, single-row Markdown formatting toolbar beside the selection. Its pointer identifies the text being edited. The toolbar can extend over a neighboring agent pane, but stays inside the app viewport. Right-click still offers the formatting controls and clipboard actions.

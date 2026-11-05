@@ -22,11 +22,16 @@ describe('contextual follow-up choices', () => {
     expect(html).toContain('Where to run a suggested follow-up');
     expect(html).not.toContain('Do it here');
     expect(html).not.toContain('Here uses more context');
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain('type="radio"');
+    expect(html).toContain('checked="" value="here"');
+    expect(html).toContain('Subagent</span>');
+    expect(html).not.toContain('<select');
   });
   it('offers responses even when delegation is unavailable, without a delegation control', () => {
     const html = renderToStaticMarkup(<FollowUpChoices options={['Inspect saved PNGs']} canDelegate={false} onSend={() => {}} />);
     expect(html).toContain('Inspect saved PNGs</button>');
-    expect(html).not.toContain('<select');
+    expect(html).not.toContain('data-follow-up-location');
     expect(renderToStaticMarkup(<FollowUpChoices options={[]} canDelegate onSend={() => {}} />)).toBe('');
   });
   it('renders suggestions as escaped text, never markup', () => {
