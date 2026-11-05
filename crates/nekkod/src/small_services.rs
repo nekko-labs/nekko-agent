@@ -11,7 +11,7 @@ use crate::routes::Ctx;
 use futures_util::future::BoxFuture;
 use nekko_workspace::integrations;
 use nekko_workspace::stacks::{self, StackHost};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -425,11 +425,7 @@ impl StackHost for DaemonStacks<'_> {
         Box::pin(async move {
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
             let out = nekko_workspace::proc::run("git", &refs, Duration::from_secs(30), Some(cwd), 1024 * 1024).await;
-            if out.ok {
-                Ok(out.stdout)
-            } else {
-                Err(git_error(args, &out.stderr))
-            }
+            if out.ok { Ok(out.stdout) } else { Err(git_error(args, &out.stderr)) }
         })
     }
 
