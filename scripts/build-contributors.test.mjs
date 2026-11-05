@@ -5,6 +5,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadContributors, writeContributors } from './build-contributors.mjs';
 
+test('mobile contributor tooltips size to their names, with a bounded wrapping width', () => {
+  const styles = readFileSync(new URL('../apps/website/styles.css', import.meta.url), 'utf8');
+  const mobile = styles.slice(styles.indexOf('@media (max-width: 600px)', styles.indexOf('/* Contributor wall:')));
+  assert.match(mobile, /\.contributor-name\s*\{[^}]*width:\s*max-content;/);
+  assert.match(mobile, /\.contributor-name\s*\{[^}]*max-width:\s*88px;/);
+  assert.match(mobile, /\.contributor-name\s*\{[^}]*overflow-wrap:\s*anywhere;/);
+});
+
 const person = (login, extra = {}) => ({ login, type: 'User', avatar_url: `https://avatars.githubusercontent.com/u/1?v=4`, ...extra });
 const json = (body) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 
