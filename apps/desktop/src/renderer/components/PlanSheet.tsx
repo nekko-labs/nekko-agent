@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { planStepKind, type ChatMessage, type PlanStep, type PlanStepKind, type PrInfo, type Session } from '@nekko-agent/shared';
+import { planStepKind, type ChatMessage, type PlanStep, type PlanStepKind, type PrInfo, type Session, type SessionSummary } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
@@ -12,6 +12,8 @@ import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
 import { PlanWorking } from './PlanWorking.js';
+import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
+import { NO_STATUS, childActivity } from '../subagentActivity.js';
 
 /**
  * The step's bullet. A reported check outranks the step's own status, so a
@@ -165,15 +167,48 @@ function SubagentChip({ child, onOpen }: { child: Child; onOpen: (id: string) =>
   </button>;
 }
 
-/** Folded, the sub-agents are one chip: how many run and how many are done. */
-function SubagentSummary({ children }: { children: Child[] }) {
-  const running = children.filter(c => c.running).length;
-  const done = children.length - running;
-  return <span className="plan-sheet-chip" data-plan-chip="subagents" title={`Sub-agents: ${running} running, ${done} done`}>
-    Sub-agents
-    {running > 0 && <><b>{running}</b><span className="plan-sheet-glyph is-running" role="img" aria-label="running"><RocketIcon className="h-3 w-3" /></span></>}
-    {done > 0 && <><b>{done}</b><span className="plan-sheet-glyph" role="img" aria-label="done"><CheckIcon className="h-3 w-3" /></span></>}
-  </span>;
+const CARD_STATUS: Record<AgentStatus, string> = { working: 'Working', input: 'Needs you', error: 'Stopped', done: 'Done', idle: 'Idle' };
+const CARD_ORDER: Record<AgentStatus, number> = { input: 0, working: 1, error: 2, idle: 3, done: 4 };
+
+/**
+ * A sub-agent's card status, the glyph the agent panel draws for it: a
+ * question or approval it is waiting on, a run in flight, a failed or stopped
+ * run, else done. The live line says what it is doing right now.
+ */
+export function subagentCardState(child: SessionSummary, running: boolean): { status: AgentStatus; detail: string } {
+  const activity = childActivity(child, running);
+  const asking = activity.status === 'waiting' && /answer|approval/i.test(activity.detail);
+  const status: AgentStatus = asking ? 'input'
+    : running ? 'working'
+    : activity.status === 'failed' || activity.status === 'stopped' ? 'error'
+    : 'done';
+  const detail = activity.detail === NO_STATUS || (status === 'done' && activity.status !== 'completed') ? '' : activity.detail;
+  return { status, detail };
+}
+
+/**
+ * The chat's sub-agents as live cards along the bottom of the plan: each one's
+ * status glyph, its task as a one-line title, and what it is doing now. A card
+ * opens that sub-agent's chat. Those waiting on you lead, then the working ones.
+ */
+function SubagentCards({ children, running, onOpen }: { children: SessionSummary[]; running: Set<string>; onOpen: (id: string) => void }) {
+  if (!children.length) return null;
+  const cards = children
+    .map(child => ({ child, ...subagentCardState(child, running.has(child.id) || !!getLiveRun(child.id) || !!child.activeRun) }))
+    .sort((a, b) => CARD_ORDER[a.status] - CARD_ORDER[b.status] || b.child.createdAt - a.child.createdAt);
+  return <div className="plan-sheet-agents" data-plan-subagents role="group" aria-label="Sub-agents">
+    {cards.map(({ child, status, detail }) => {
+      const title = child.title || 'Sub-agent';
+      return <button key={child.id} type="button" className="plan-sheet-agent" data-subagent-card={child.id} data-status={status}
+        title={`Open ${title}${detail ? `\n${detail}` : ''}`} aria-label={`${title}, ${CARD_STATUS[status]}. Open sub-agent`} onClick={() => onOpen(child.id)}>
+        <span className="plan-sheet-agent-line">
+          <StatusIcon status={status} />
+          <span className="min-w-0 flex-1 truncate text-ink" dir="auto">{title}</span>
+        </span>
+        <span className="plan-sheet-agent-detail truncate" dir="auto">{CARD_STATUS[status]}{detail ? ` · ${detail}` : ''}</span>
+      </button>;
+    })}
+  </div>;
 }
 
 /**
@@ -250,7 +285,6 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   if (!plan.length) return null;
   const running = new Set(runningSessionIds());
   const childById = new Map(childSessions.map((c): [string, Child] => [c.id, { id: c.id, title: c.title || 'Sub-agent', running: running.has(c.id) || !!getLiveRun(c.id) || !!c.activeRun }]));
-  const runningChildren = [...childById.values()].filter(child => child.running);
   const openChild = onOpenChild ?? ((id: string) => useStore.getState().openChatPane(id));
   const progress = planProgress(plan);
   // An active step is not tied to token streaming. Only an explicit
@@ -284,11 +318,9 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
 
   if (collapsed) {
     const own = links.get(current.id);
-    const allKids = [...childById.values()];
     // The current step's PRs, else the newest PR the chat opened, so a finished plan still shows where it landed.
     const shownPrs = !prsShown ? [] : own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
     const chips = [
-      allKids.length > 0 && <SubagentSummary key="subagents" children={allKids} />,
       ...shownPrs.map(prChip),
       // The step's own task links, else the chat's (the first step's), which say what this work is for.
       ...(own?.projects.length ? own.projects : links.get(plan[0].id)?.projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
@@ -306,14 +338,11 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         </span>
       </button>
       {chips.length > 0 && <div className="plan-sheet-chips plan-sheet-fold-chips">{chips}</div>}
+      <SubagentCards children={childSessions} running={running} onOpen={openChild} />
     </div></div>;
   }
 
   return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet aria-label="Agent plan">
-    {runningChildren.length > 0 && <div className="plan-sheet-chips" data-plan-running-subagents aria-label="Running sub-agents">
-      <span className="text-2xs text-ink-faint">Running:</span>
-      {runningChildren.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}
-    </div>}
     <div className="plan-sheet-head">
       <button type="button" className="plan-sheet-toggle" onClick={() => setCollapsed(true)} aria-expanded title="Fold the plan">
         <span className="font-semibold text-ink-soft">Plan</span>
@@ -377,5 +406,6 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         </li>;
       })}
     </ol>
+    <SubagentCards children={childSessions} running={running} onOpen={openChild} />
   </div></div>;
 }

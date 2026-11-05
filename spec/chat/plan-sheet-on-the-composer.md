@@ -118,7 +118,7 @@ Implemented: published and saved plan steps with the legacy `explore` kind rende
 
 ## Running delegates and explicit chip types
 
-Implemented: the expanded plan keeps a Running row outside step disclosures, listing direct children reported active by live events or saved activeRun metadata. A child remains reachable when its originating step is completed or manually collapsed. The folded plan retains its subagent summary. No placeholder plan is created.
+`[superseded 2026-11-06]` by live sub-agent cards along the bottom of the sheet, folded or open; see [Sub-agents as a tree and as live cards on the plan](../agents/subagent-tree-and-plan-check-marks.md). Was: the expanded plan keeps a Running row outside step disclosures, listing direct children reported active by live events or saved activeRun metadata. A child remains reachable when its originating step is completed or manually collapsed. The folded plan retains its subagent summary. No placeholder plan is created.
 
 PR, CI, Task, File, Preview and Sub-agent chips use text prefixes so their purpose is visible without a tooltip. Verification chips retain their explicit state and device wording. Opening chips follows existing navigation; this adds no routing, provider, permission or network behavior.
 

@@ -2869,6 +2869,18 @@
 .plan-sheet-glyph { display: inline-grid; place-items: center; color: var(--ink-faint); }
 .plan-sheet-glyph.is-running { color: var(--success); }
 .plan-sheet-dot { width: 6px; height: 6px; border-radius: 50%; }
+/* Sub-agents as live cards along the bottom of the plan: a status glyph and the
+ * task on one line, what it is doing now under it. One row that scrolls
+ * sideways, so many sub-agents never push the composer down. */
+.plan-sheet-agents { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 2px; scrollbar-width: thin; }
+.plan-sheet-agent { display: flex; flex: 0 0 auto; flex-direction: column; gap: 1px; width: 200px; min-width: 0; border-radius: 8px; background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); padding: 5px 8px; text-align: left; font-size: var(--text-xs); transition: background-color 120ms ease, border-color 120ms ease; }
+.plan-sheet-agent[data-status="working"] { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.plan-sheet-agent[data-status="input"] { border-color: color-mix(in srgb, var(--attention) 55%, transparent); }
+.plan-sheet-agent[data-status="done"] .plan-sheet-agent-line .text-ink { color: var(--ink-soft); }
+.plan-sheet-agent:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--accent); }
+.plan-sheet-agent-line { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.plan-sheet-agent-detail { display: block; padding-left: 18px; font-size: var(--text-2xs); color: var(--ink-faint); }
+@media (hover: hover) { .plan-sheet-agent:hover { background: var(--surface); border-color: color-mix(in srgb, var(--ink) 16%, transparent); } }
 /* The small CI/state icon on a PR chip. `is-pending` spins so a watcher can see
  * the checks are still running even if the colour reads the same as another
  * state's tone. */

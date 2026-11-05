@@ -64,6 +64,8 @@ app.whenReady().then(async () => {
     await run(`layoutFixture.store.setState({ focusRequest: { sessionId: 'a' } })`);
     // k4 and the parent are mid-run, so k4's row wears the rocket.
     await run(`['k4', 'a'].forEach((sessionId) => layoutFixture.emitAgent({ type: 'text', sessionId, delta: '' }))`);
+    // k4's card says what it is doing right now.
+    await run(`layoutFixture.emitAgent({ type: 'tool_call', sessionId: 'k4', call: { id: 'k4-call', name: 'bash', input: { command: 'npm test -- relay-badges' } } })`);
     await run(`(() => { const style = document.createElement('style'); style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; }'; document.head.append(style); })()`);
     await sleep(1500);
     // The sub-agent rows arrive with the session list refresh; wait for all four.
@@ -83,6 +85,14 @@ app.whenReady().then(async () => {
     await check('each sub-agent row has a tree line, the last an elbow', `(() => { const t = [...document.querySelectorAll('[data-agent-panel] [data-subagent-row] [data-subagent-tree]')].map(e => e.dataset.subagentTree); return t.length === 4 && t.slice(0, 3).every(x => x === 'tee') && t[3] === 'last'; })()`);
     await check('the status icon leads each sub-agent row', `[...document.querySelectorAll('[data-agent-panel] [data-subagent-row]')].every(b => b.children[1]?.getAttribute('role') === 'img')`);
     await check('the running sub-agent wears the rocket in front', `!!document.querySelector('[data-agent-panel] [data-subagent-row="k4"] > .status-rocket')`);
+    report.cards = await run(`[...document.querySelectorAll('[data-subagent-card]')].map(c => [c.dataset.subagentCard, c.dataset.status, c.textContent.trim()])`);
+    await check('every sub-agent is a card at the bottom of the plan', `(() => { const row = document.querySelector('[data-plan-sheet] [data-plan-subagents]'); const steps = document.querySelector('[data-plan-sheet] .plan-sheet-steps'); return !!row && !!steps && row.getBoundingClientRect().top >= steps.getBoundingClientRect().bottom - 1 && row.querySelectorAll('[data-subagent-card]').length === 4; })()`);
+    await check('the working sub-agent leads, with its rocket and live activity', `(() => { const c = document.querySelector('[data-plan-subagents] [data-subagent-card]'); return c?.dataset.subagentCard === 'k4' && c.dataset.status === 'working' && !!c.querySelector('.status-rocket') && /Working · Running bash/.test(c.textContent); })()`);
+    await check('each card title stays on one line', `[...document.querySelectorAll('[data-subagent-card] .plan-sheet-agent-line')].every(l => l.getBoundingClientRect().height <= 20)`);
+    await run(`document.querySelector('[data-subagent-card="k3"]').click()`);
+    await sleep(2500);
+    await check('a card opens its sub-agent', `!!document.querySelector('[data-subagent-banner]')`);
+    await shot('card-opened');
     await run(`document.querySelector('[data-subagent-row="k2"]').click()`);
     await sleep(2500);
     report.banner = await run(`[...document.querySelectorAll('[data-subagent-banner]')].map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), e.textContent]; })`);

@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PlanStep, PrInfo, Session } from '@nekko-agent/shared';
+import type { PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 const state = vi.hoisted(() => ({ sessions: [] as unknown[] }));
 vi.mock('../store.js', () => ({ useStore: (selector: (state: unknown) => unknown) => selector(state) }));
 const linked = vi.hoisted(() => ({ links: null as Map<string, unknown> | null }));
@@ -9,7 +9,7 @@ vi.mock('../planStepLinks.js', async (original) => {
   const real = await original<typeof import('../planStepLinks.js')>();
   return { ...real, planStepLinks: (...args: Parameters<typeof real.planStepLinks>) => linked.links ?? real.planStepLinks(...args) };
 });
-import { PlanSheet } from './PlanSheet.js';
+import { PlanSheet, subagentCardState } from './PlanSheet.js';
 import { stylesheet } from '../tests/css.js';
 
 const now = 1_800_000_000_000;
@@ -131,19 +131,45 @@ describe('step disclosure', () => {
   });
 });
 
-describe('visible running sub-agents', () => {
-  it('shows running children outside a finished step disclosure', () => {
+describe('sub-agent cards', () => {
+  const kids = () => {
     state.sessions = [
-      { id: 'kid', parentSessionId: 's', title: 'Trace lookup', createdAt: now, activeRun: { startedAt: now } },
       { id: 'done', parentSessionId: 's', title: 'Finished helper', createdAt: now },
+      { id: 'kid', parentSessionId: 's', title: 'Trace lookup', createdAt: now, activeRun: { startedAt: now } },
       { id: 'other', parentSessionId: 'other-parent', title: 'Unrelated helper', activeRun: {} },
     ];
+  };
+  const cards = (html: string) => html.slice(html.indexOf('data-plan-subagents'));
+  it('shows every child as a live card at the bottom of the open plan, working first', () => {
+    kids();
     const html = render([{ id: 'build', title: 'Build', status: 'done', createdAt: now, updatedAt: now }]);
-    const summary = html.slice(html.indexOf('data-plan-running-subagents'), html.indexOf('class="plan-sheet-head"'));
-    expect(summary).toContain('Sub-agent: Trace lookup');
-    expect(summary).toContain('aria-label="Running"');
-    expect(summary).not.toContain('Finished helper');
-    expect(summary).not.toContain('Unrelated helper');
+    // Below the steps, not above the head.
+    expect(html.indexOf('data-plan-subagents')).toBeGreaterThan(html.indexOf('</ol>'));
+    const row = cards(html);
+    expect(row).toContain('data-subagent-card="kid" data-status="working"');
+    expect(row).toContain('data-subagent-card="done" data-status="done"');
+    expect(row.indexOf('Trace lookup')).toBeLessThan(row.indexOf('Finished helper'));
+    expect(row).toContain('aria-label="Trace lookup, Working. Open sub-agent"');
+    expect(row).not.toContain('Unrelated helper');
+    expect(html).not.toContain('data-plan-running-subagents');
+  });
+  it('keeps the cards on the folded plan', () => {
+    kids();
+    const html = renderToStaticMarkup(<PlanSheet sessionId="s" session={{ agentPlan: [{ id: 'build', title: 'Build', status: 'active', createdAt: now, updatedAt: now }], messages: [] } as unknown as Session} streaming prs={[]} initiallyOpen={false} />);
+    expect(html).toContain('data-folded');
+    expect(cards(html)).toContain('data-subagent-card="kid"');
+    expect(html).not.toContain('data-plan-chip="subagents"');
+  });
+});
+
+describe('subagentCardState', () => {
+  const child = { id: 'c', title: 'T', createdAt: now } as SessionSummary;
+  it('reads a live child as working and an idle one as done', () => {
+    expect(subagentCardState(child, true).status).toBe('working');
+    expect(subagentCardState(child, false)).toEqual({ status: 'done', detail: '' });
+  });
+  it('reads a stalled child as stopped', () => {
+    expect(subagentCardState({ ...child, stalled: true } as SessionSummary, false).status).toBe('error');
   });
 });
 
