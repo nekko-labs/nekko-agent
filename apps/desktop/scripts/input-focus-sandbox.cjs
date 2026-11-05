@@ -10,6 +10,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 const profile = path.join(out, 'profile');
 app.setPath('userData', profile);
 app.setPath('sessionData', profile);
+const js = value => JSON.stringify(value).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const baseline = process.env.NEKKO_FOCUS_BASELINE === '1';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const report = { baseline, checks: [], captures: [], errors: [] };
@@ -33,10 +34,10 @@ app.whenReady().then(async () => {
     const file = path.join(out, name + '.png');
     fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file);
   };
-  const show = async (kind, compact = false, id = 'question-1') => { await run(`inputFocusFixture.show(${JSON.stringify(kind)}, ${compact}, ${JSON.stringify(id)})`); await sleep(150); };
-  const focus = async selector => run(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); el.focus(); el.setSelectionRange(5, 7); })()`);
-  const state = async selector => run(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); return { focused: document.activeElement === el, start: el.selectionStart, end: el.selectionEnd }; })()`);
-  const click = async text => { await run(`Array.from(document.querySelectorAll('button')).find(el => el.textContent.trim() === ${JSON.stringify(text)}).click()`); await sleep(100); };
+  const show = async (kind, compact = false, id = 'question-1') => { await run(`inputFocusFixture.show(${js(kind)}, ${compact}, ${js(id)})`); await sleep(150); };
+  const focus = async selector => run(`(() => { const el = document.querySelector(${js(selector)}); el.focus(); el.setSelectionRange(5, 7); })()`);
+  const state = async selector => run(`(() => { const el = document.querySelector(${js(selector)}); return { focused: document.activeElement === el, start: el.selectionStart, end: el.selectionEnd }; })()`);
+  const click = async text => { await run(`Array.from(document.querySelectorAll('button')).find(el => el.textContent.trim() === ${js(text)}).click()`); await sleep(100); };
   const key = async value => {
     await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: value, code: value, windowsVirtualKeyCode: value === 'Tab' ? 9 : value === 'Enter' ? 13 : 0 });
     await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key: value, code: value, windowsVirtualKeyCode: value === 'Tab' ? 9 : value === 'Enter' ? 13 : 0 });
@@ -121,7 +122,7 @@ app.whenReady().then(async () => {
   } catch (error) { report.errors.push(String(error.stack || error)); report.success = false; }
   finally {
     fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
-    console.log(JSON.stringify(report, null, 2));
+    console.log(js(report, null, 2));
     win.destroy();
     // The integration runner removes the profile after Electron releases its locks.
     app.exit(report.success ? 0 : 1);
