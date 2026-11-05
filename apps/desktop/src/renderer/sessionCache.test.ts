@@ -7,8 +7,10 @@ import {
   cachedBytes,
   cachedSessionIds,
   getCachedSession,
+  holdTranscript,
   putCachedSession,
   transcriptBytes,
+  transcriptsLoaded,
 } from './sessionCache.js';
 
 const chat = (id: string, chars = 10): Session => ({
@@ -17,6 +19,23 @@ const chat = (id: string, chars = 10): Session => ({
   messages: [{ id: `${id}_m`, role: 'assistant', content: 'x'.repeat(chars), createdAt: 0 }],
   createdAt: 0,
   updatedAt: 0,
+});
+
+describe('first transcript holds', () => {
+  it('settles at once with nothing on screen, and only after the last hold is released', async () => {
+    await transcriptsLoaded();
+    const first = holdTranscript();
+    const second = holdTranscript();
+    let settled = false;
+    const waiting = transcriptsLoaded().then(() => { settled = true; });
+    first();
+    first(); // a pane can release from both its load and its unmount
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    second();
+    await waiting;
+    expect(settled).toBe(true);
+  });
 });
 
 describe('session cache', () => {

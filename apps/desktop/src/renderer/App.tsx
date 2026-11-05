@@ -75,13 +75,14 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 const MOBILE_NAV: View[] = ['command', 'training', 'workflows', 'settings'];
 
 export function App() {
-  const { view, setView, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
+  const { view, setView, settings, settingsLoaded, providers, providersLoaded, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
       settings: s.settings,
       settingsLoaded: s.settingsLoaded,
       providers: s.providers,
+      providersLoaded: s.providersLoaded,
       onboardingOpen: s.onboardingOpen,
       refreshSettings: s.refreshSettings,
       refreshProviders: s.refreshProviders,
@@ -336,7 +337,7 @@ export function App() {
         {/* Main (bottom padding on phones so the tab bar never covers content,
             the home indicator's inset included) */}
         <main className="relative flex min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-          {providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
+          {providersLoaded && providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
             <button
               className="flex items-center justify-center gap-2 border-b border-line py-2 text-sm"
               style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}

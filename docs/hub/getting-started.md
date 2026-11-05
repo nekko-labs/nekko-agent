@@ -132,7 +132,7 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 
 - Take the [walkthrough](/docs/walkthrough) for a tour of the app.
 - Set up [local models](/docs/local-models) or [sign in with a subscription](/docs/subscriptions).
-- [Pair your phone](/docs/remote) to use the agent away from your desk.
+- [Pair your phone](/docs/remote) to use the agent away from your desk. On iPhone, Nekko sits beside an open chat’s title. Pull **up** past the latest message to refresh without returning to the top; lists still refresh by pulling down. The spinner turns while loading, then Nekko grabs it and pulls it in once the reload finishes.
 - Want to help build it? Read [Contributing](/docs/contributing) and the [architecture](/docs/architecture).
 
 ### Closing the desktop UI and notifications
@@ -293,3 +293,5 @@ When delegation is available, use the small sliding toggle to choose **This chat
 ### Text formatting toolbar
 
 Selecting text in the desktop or Local Web UI message editor opens a compact, single-row Markdown formatting toolbar beside the selection. Its pointer identifies the text being edited. The toolbar can extend over a neighboring agent pane, but stays inside the app viewport. Right-click still offers the formatting controls and clipboard actions.
+
+On iOS, tap the keyboard-down button at the right of the message box’s formatting row to hide the keyboard without sending or clearing your draft. It stays available when **Aa** collapses the formatting controls. Tap the message box to continue typing.

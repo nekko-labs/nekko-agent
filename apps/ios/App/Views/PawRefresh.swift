@@ -3,7 +3,7 @@ import UIKit
 
 extension View {
     /// Pull to refresh with Nekko in place of the system spinner: a "!" over a shocked
-    /// cat, a quick grab and pull of the spinner, and a smile once the reload is done.
+    /// cat, a spinning wait, then a grab, pull and smile once the reload is done.
     func pawRefreshable(action: @escaping @MainActor () async -> Void) -> some View {
         modifier(OwnedPawRefresh(action: action))
     }
@@ -30,22 +30,7 @@ private struct PawRefreshModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .refreshable { [pull] in
-                await MainActor.run { pull.smiling = false }
-                let start = ContinuousClock.now
-                await action()
-                // Long enough for the grab and pull, however fast the reload is.
-                try? await Task.sleep(until: start + .milliseconds(Int(PawPose.pullEnd * 1000)), clock: .continuous)
-                // The smile plays before the refresh ends: once it ends the page closes
-                // over the control at once.
-                await MainActor.run { pull.endStart = Date(); pull.smiling = true }
-                try? await Task.sleep(for: .milliseconds(Int(PawPose.smileBeat * 1000)))
-                // The toolbar mascot keeps smiling a moment after the page closes.
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(1200))
-                    if pull.refreshStart == nil { pull.smiling = false }
-                }
-            }
+            .refreshable { await pull.reload(action: action) }
             .background(PawRefreshProbe(pull: pull))
     }
 }
@@ -65,20 +50,23 @@ struct PawPose: Equatable {
     static let reachDelay = 0.3
     static let reachDuration = 0.18
     static let pullDuration = 0.28
-    /// The grab and pull are done: the spinner sits by the cat until the reload ends.
-    static var pullEnd: Double { reachDelay + reachDuration + pullDuration }
+    /// The scoop starts only after the reload finishes.
+    static var pullEnd: Double { reachDuration + pullDuration }
     static let smileBeat = 0.3
 
-    /// Seconds since the refresh began: the "!", a quick reach, and straight into the pull.
+    /// While loading, the paw stays tucked in and the spinner turns at its own spot.
     static func refreshing(_ t: Double, reduceMotion: Bool) -> PawPose {
-        let alarm = t < reachDelay
-        guard !reduceMotion else { return PawPose(alarm: alarm) }
-        let reached = reachDelay + reachDuration
-        guard t >= reached else { return PawPose(reach: easeOut((t - reachDelay) / reachDuration), alarm: alarm) }
-        return PawPose(reach: 1, spinner: 1 - easeOut((t - reached) / pullDuration))
+        PawPose(alarm: t < reachDelay)
     }
 
-    /// Seconds since the reload finished: the spinner fades and the paw goes back.
+    /// Seconds since loading completed: reach, then scoop with no pause at the grab.
+    static func grabbing(_ t: Double, reduceMotion: Bool) -> PawPose {
+        guard !reduceMotion else { return PawPose() }
+        guard t >= reachDuration else { return PawPose(reach: easeOut(t / reachDuration)) }
+        return PawPose(reach: 1, spinner: 1 - easeOut((t - reachDuration) / pullDuration))
+    }
+
+    /// Seconds since the scoop finished: the spinner fades and the paw goes back.
     static func ending(_ t: Double, reduceMotion: Bool) -> PawPose {
         guard !reduceMotion else { return PawPose() }
         let k = easeOut(t / smileBeat)
@@ -111,6 +99,7 @@ struct PawPose: Equatable {
 final class PawPull {
     var progress: CGFloat = 0
     var refreshStart: Date?
+    var grabStart: Date?
     var endStart: Date?
     var smiling = false
     /// A toolbar mascot is on screen and does the grabbing.
@@ -119,13 +108,50 @@ final class PawPull {
     @ObservationIgnored var reduceMotion = false
     @ObservationIgnored var ink = Color.secondary
 
-    var animating: Bool { refreshStart != nil || endStart != nil }
+    static func motionReduced(_ environment: Bool) -> Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReduceMotion") { return true }
+        #endif
+        return environment
+    }
+
+    var animating: Bool { refreshStart != nil || grabStart != nil || endStart != nil }
     var shocked: Bool { refreshStart != nil && !smiling }
 
     func pose(at date: Date) -> PawPose {
         if let endStart { return .ending(date.timeIntervalSince(endStart), reduceMotion: reduceMotion) }
+        if let grabStart { return .grabbing(date.timeIntervalSince(grabStart), reduceMotion: reduceMotion) }
         if let refreshStart { return .refreshing(date.timeIntervalSince(refreshStart), reduceMotion: reduceMotion) }
         return PawPose()
+    }
+
+    /// The same lifecycle for system pull-down, transcript pull-up, and accessible refresh.
+    /// Cancellation on navigation cleans up without playing a false success smile.
+    func reload(action: @MainActor () async -> Void) async {
+        guard !animating, !Task.isCancelled else { return }
+        let start = Date()
+        refreshStart = start
+        grabStart = nil
+        endStart = nil
+        smiling = false
+        progress = 0
+        defer { refreshStart = nil; grabStart = nil; endStart = nil; progress = 0 }
+        await action()
+        do {
+            try Task.checkCancellation()
+            // Even an instant/offline read gives the spinner and surprise a short beat.
+            let remaining = PawPose.reachDelay - Date().timeIntervalSince(start)
+            if remaining > 0 { try await Task.sleep(for: .seconds(remaining)) }
+            grabStart = Date()
+            try await Task.sleep(for: .seconds(PawPose.pullEnd))
+            endStart = Date()
+            smiling = true
+            try await Task.sleep(for: .seconds(PawPose.smileBeat))
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1200))
+                if refreshStart == nil { smiling = false }
+            }
+        } catch { smiling = false }
     }
 
     /// The spinner's turn: wound by the pull, then spinning.
@@ -282,7 +308,7 @@ private struct PawRefreshProbe: UIViewRepresentable {
 
     func updateUIView(_ view: PawProbeView, context: Context) {
         view.pull.ink = palette.inkSoft
-        view.pull.reduceMotion = reduceMotion
+        view.pull.reduceMotion = PawPull.motionReduced(reduceMotion)
     }
 }
 
@@ -348,13 +374,7 @@ final class PawProbeView: UIView {
         // bring the spinner back.
         let pulled = scroll.isTracking ? -(scroll.contentOffset.y + scroll.adjustedContentInset.top) : 0
         if pull.progress != min(1, max(0, pulled / 80)) { pull.progress = min(1, max(0, pulled / 80)) }
-        if control.isRefreshing, pull.refreshStart == nil {
-            pull.refreshStart = Date()
-            pull.endStart = nil
-        } else if !control.isRefreshing, pull.refreshStart != nil {
-            pull.refreshStart = nil
-            pull.endStart = nil
-        }
+
     }
 
     /// The closest unclaimed scroll view with a refresh control: siblings first, then
