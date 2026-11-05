@@ -1,4 +1,6 @@
 // Real App, synthetic bridge, hidden isolated profile. Run with layout-evidence-integration.cjs.
+// The 480px hit test currently exposes baseline issue #1909 on both main and head;
+// keep the assertion until that drawer-stacking bug is fixed.
 const { app, BrowserWindow, session, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -19,12 +21,16 @@ app.whenReady().then(async () => {
   win.on('focus', () => report.errors.push('took focus'));
   const run = s => win.webContents.executeJavaScript(s, true);
   const shot = async name => {
+    assert.equal(await run("!!document.querySelector('[role=dialog]')"), false, 'No tutorial may obscure the sidebar');
     const file = path.join(out, name + '.png');
     fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG());
     report.captures.push(file);
+    const hit = await run("(() => { const e = document.querySelector('.agent-chip-chat[data-agent-active]'); const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { visible: e.contains(hit), rect: r.toJSON(), hit: hit?.outerHTML.slice(0, 500) }; })()");
+    report[name] = hit;
+    assert.ok(hit.visible, 'Selected row is visible and hit-testable: ' + JSON.stringify(hit));
   };
   // A hidden window may defer a transition's first frame until capture. Sample
-  // after two paints so settled-style assertions do not read its start value.
+  // after settled paints so style assertions do not read its start value.
   const rows = async () => {
     for (let i = 0; i < 8; i++) {
       await win.capturePage(undefined, { stayHidden: true });
@@ -36,8 +42,13 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 60 && !(await run("document.querySelectorAll('.agent-chip-chat').length >= 4")); i++) await sleep(200);
     assert.equal(await run("document.querySelectorAll('.agent-chip-chat').length"), 4);
+    // Close the real first-visit tutorial before testing the sidebar underneath.
+    for (let i = 0; i < 30 && !(await run("!!document.querySelector('.zones-intro')")); i++) await sleep(100);
+    await run("document.querySelector('.zones-intro [aria-label=\"Close\"]')?.click()");
+    await sleep(300);
+    assert.equal(await run("!!document.querySelector('.zones-intro')"), false);
     // Keep the same data and default Nekko dark theme for base and changed code.
-    await run("layoutFixture.store.setState({ settings: { ...layoutFixture.store.getState().settings, theme: 'dark', themePreset: 'x-plum-dark' } }); document.documentElement.dataset.theme = 'dark'; document.documentElement.dataset.preset = 'x-plum-dark'");
+    await run("(async () => { const settings = await window.nekko.updateSettings({ theme: 'dark', themePreset: 'x-plum-dark', showTips: false, firstPromptIntroSeen: true }); layoutFixture.store.setState({ settings }); document.documentElement.dataset.theme = 'dark'; document.documentElement.dataset.preset = 'x-plum-dark'; })()");
     await run("document.querySelector('.agent-chip-chat[title=\"Persist quota history\"]').click()");
     await sleep(1000);
     report.initial = await rows();
@@ -65,13 +76,6 @@ app.whenReady().then(async () => {
     await run("document.querySelector('[aria-label=\"Show agents in a column\"]').click()");
     await rows();
     report.checks.push('Horizontal panel keeps the same selected-row treatment');
-    win.setContentSize(480, 900);
-    await sleep(400);
-    await run("document.querySelector('[aria-label=\"Open agent list\"]').click()");
-    await sleep(500);
-    report.narrow = await rows();
-    assert.deepEqual(report.narrow, report.initial);
-    await shot('selected-agent-narrow');
     if (process.env.NEKKO_EXPECT_SELECTION === '1') {
       for (const row of report.initial) {
         assert.equal(row.background === 'rgba(0, 0, 0, 0)', !row.active);
@@ -84,6 +88,13 @@ app.whenReady().then(async () => {
     }
     report.hidden = !win.isVisible();
     assert.ok(report.hidden);
+    win.setContentSize(480, 900);
+    await sleep(400);
+    await run("document.querySelector('[aria-label=\"Open agent list\"]').click()");
+    await sleep(500);
+    report.narrow = await rows();
+    assert.deepEqual(report.narrow, report.initial);
+    await shot('selected-agent-narrow');
   } catch (error) { report.errors.push(String(error.stack || error)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
