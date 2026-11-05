@@ -292,6 +292,8 @@ After a reply, **Suggested follow-ups** can offer relevant next messages such as
 
 When delegation is available, use the small sliding toggle to choose **This chat** (the default) or **Subagent** before choosing a response. If you type your own message instead, the existing **Do it here** and **In a subagent** actions apply to your draft. Suggestions are optional and may not appear after every reply.
 
+Starred models stay listed under their provider as well as in the model picker shortcuts. Either entry selects the same model. To reorder a monitor card, press its header and move the pointer; clicking without movement does not lift it or show a landing preview.
+
 ### Text formatting toolbar
 
 Selecting text in the desktop or Local Web UI message editor opens a compact, single-row Markdown formatting toolbar beside the selection. Its pointer identifies the text being edited. The toolbar can extend over a neighboring agent pane, but stays inside the app viewport. Right-click still offers the formatting controls and clipboard actions.
