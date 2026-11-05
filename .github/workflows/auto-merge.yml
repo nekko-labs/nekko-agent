@@ -2,8 +2,8 @@ name: Auto-merge
 
 # Turns on GitHub's native auto-merge for every ready PR into main. With the
 # merge queue required on main, that adds the PR to the queue once its PR-tier
-# checks pass; the queue runs the queue tier and merges. Then it makes sure the
-# merge actually releases.
+# checks pass; the queue runs the queue tier and merges. Then it closes the
+# PR's linked issues.
 #
 # Only PRs based on main: a stacked layer targets the branch below it, and
 # auto-merging it would fold it into that branch rather than queue it. Stacks
@@ -14,14 +14,10 @@ name: Auto-merge
 # branch that requires one (#751 and #755 sat green and never queued). Without
 # one, gh enqueues the PR, and the queue's own setting (squash) merges it.
 #
-# Why this also dispatches version-release: a merge performed with
-# GITHUB_TOKEN never starts a workflow run, so the `push` trigger on
-# version-release.yml has never once fired here. Every run in this repo's
-# history is `schedule` or `workflow_dispatch`; the push path is dead on
-# arrival for bot merges, which is what silently skipped v0.6.0's release and
-# left v0.6.1 waiting for a hand dispatch. Waiting for the merge and
-# dispatching explicitly is the same trick version-release already uses to
-# reach release.yml and docker.yml. The schedule stays as the backstop.
+# A merge no longer releases anything: releases start from a version tag a
+# person pushes (docs/decisions/0055), so this no longer dispatches
+# version-release.yml after the merge as it did when a package.json bump was
+# the release trigger.
 #
 # Also on `synchronize`: a fix pushed after a red `gate` re-runs `gate`, and
 # before this nothing re-queued the PR unless its author remembered `gh pr
@@ -35,8 +31,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  # Needed to dispatch version-release.yml once the PR lands.
-  actions: write
   # Needed to close the PR's linked issues: GitHub skips closing keywords on
   # merges made with GITHUB_TOKEN.
   issues: write
@@ -112,17 +106,11 @@ jobs:
           done
           echo '::warning::gate did not finish within 20 minutes; auto-merge stays armed.'
 
-      # Dispatched for every merge, not just version bumps: version-release is
-      # idempotent (it stops when the version is already tagged), so a merge
-      # that does not bump the version costs one no-op run and a merge that
-      # does releases within seconds instead of waiting for the next tick.
-      #
       # Waits only while the PR is queued. One that is open and out of the queue
       # (gate red, ejected, still pending) ends the job green rather than
       # holding a runner until the timeout shows a red `auto-merge` check (#787
-      # did after 45 minutes). The sweeper re-queues it, and version-release's
-      # schedule releases whatever lands that way.
-      - name: Release the merge
+      # did after 45 minutes). The sweeper re-queues it.
+      - name: Close linked issues once merged
         run: |
           out=0
           for _ in $(seq 1 120); do
@@ -130,7 +118,7 @@ jobs:
             case "$state" in
               MERGED)
                 # Closing keywords do nothing on a GITHUB_TOKEN merge, so close
-                # linked issues here. Failures warn; the release still dispatches.
+                # linked issues here. Failures warn.
                 issues=$(gh pr view "$PR_URL" --json closingIssuesReferences \
                   -q ".closingIssuesReferences[] | select(\"\(.repository.owner.login)/\(.repository.name)\" == \"$GH_REPO\") | .number") \
                   || echo "::warning::Could not read linked issues for $PR_URL."
@@ -142,17 +130,16 @@ jobs:
                     || echo "::warning::Could not close #$n."
                 done
 
-                gh workflow run version-release.yml --repo "$GH_REPO" --ref main
                 # A merge that touched the iPhone app reaches TestFlight with
                 # ios-testflight.yml's nightly run.
                 # No CI dispatch here: the merge queue tested this exact group on
                 # top of main before merging it, and the nightly full run covers
                 # every OS (ci.yml).
-                echo "Merged. Dispatched version-release for $PR_URL"
+                echo "Merged: $PR_URL"
                 exit 0
                 ;;
               CLOSED)
-                echo "PR was closed without merging. Nothing to release."
+                echo "PR was closed without merging. Nothing to close."
                 exit 0
                 ;;
             esac
@@ -168,12 +155,12 @@ jobs:
             fi
             sleep 20
           done
-          echo "::warning::$PR_URL had not merged after 40 minutes, so no release was dispatched. The */15 schedule on version-release.yml remains the backstop."
+          echo "::warning::$PR_URL had not merged after 40 minutes, so its linked issues were not closed here."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # This job never checks out the repo, so gh has no git remote to infer
           # from. `gh pr view` survives that because it is given a full URL;
-          # `gh workflow run` does not, and died with "not a git repository".
+          # `gh issue` needs the repository named.
           GH_REPO: ${{ github.repository }}

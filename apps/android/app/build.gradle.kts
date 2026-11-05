@@ -19,8 +19,12 @@ android {
         applicationId = "com.nekko.native.android"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Nightly builds pass -PnekkoVersionName=MAJOR.MINOR.BUILD and
+        // -PnekkoVersionCode=MAJOR*10000000+MINOR*10000+BUILD
+        // (scripts/nightly-version.mjs, docs/decisions/0055); a local build
+        // keeps these defaults.
+        versionCode = providers.gradleProperty("nekkoVersionCode").orElse("1").get().toInt()
+        versionName = providers.gradleProperty("nekkoVersionName").orElse("0.1.0").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

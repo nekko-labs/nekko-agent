@@ -33,8 +33,15 @@ name: iOS TestFlight
 #     false: every cipher is Apple's own, CryptoKit and URLSession); revisit it if
 #     the app ever bundles a crypto library of its own.
 #
-# Build number: the run number plus an offset, so every upload is unique and
-# increasing. The marketing version comes from apps/ios/project.yml.
+# Version (docs/decisions/0055): every upload reserves the next iOS BUILD since
+# the newest release tag (scripts/nightly-version.mjs, kept as the counter tag
+# nightly/ios/v<version>) and is stamped MARKETING_VERSION = MAJOR.MINOR.BUILD,
+# CURRENT_PROJECT_VERSION (CFBundleVersion) = MAJOR*10000000 + MINOR*10000 +
+# BUILD, on the app and every extension. Never reused, even for a re-run of the
+# same commit: App Store Connect refuses a build number it has seen. The
+# values in apps/ios/project.yml are only for local builds. (Before 0.8.1,
+# builds were numbered run number + 100, up to 179; the new numbers start at
+# 80001.)
 
 on:
   schedule:
@@ -99,8 +106,29 @@ jobs:
             echo ship=false >> "$GITHUB_OUTPUT"
           fi
 
-  upload:
+  # Reserved on a cheap runner, only when there is something to upload. A
+  # failed upload leaves a gap in the count, which is harmless.
+  version:
     needs: changed
+    if: needs.changed.outputs.ship == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: nightly-version-ios
+      cancel-in-progress: false
+    outputs:
+      version: ${{ steps.reserve.outputs.version }}
+      code: ${{ steps.reserve.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: reserve
+        run: node scripts/nightly-version.mjs --platform ios --reserve
+
+  upload:
+    needs: [changed, version]
     if: needs.changed.outputs.ship == 'true'
     runs-on: xcode-27
     timeout-minutes: 60
@@ -111,7 +139,8 @@ jobs:
       MACOS_SIGNING_CERTS_P12: ${{ secrets.MACOS_SIGNING_CERTS_P12 }}
       MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
-      BUILD_NUMBER: ${{ github.run_number }}
+      VERSION: ${{ needs.version.outputs.version }}
+      BUILD_NUMBER: ${{ needs.version.outputs.code }}
     steps:
       - uses: actions/checkout@v7
 
@@ -208,7 +237,7 @@ jobs:
             -authenticationKeyID "$APPLE_API_KEY_ID" \
             -authenticationKeyIssuerID "$APPLE_API_ISSUER" \
             DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
-            CURRENT_PROJECT_VERSION="$((BUILD_NUMBER + 100))" \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | tee "$RUNNER_TEMP/archive.log" | grep -E '^(\*\*|error:|warning: .*[Ss]ign)' || true
           test -d "$RUNNER_TEMP/NekkoNative.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
 
@@ -245,10 +274,9 @@ jobs:
           # By hand, what the dispatcher typed; on a push, the merged PR's title.
           NOTES: ${{ inputs.notes || github.event.head_commit.message }}
         run: |
-          version="$(awk -F'"' '/MARKETING_VERSION/ {print $2; exit}' apps/ios/project.yml)"
           {
             echo "### iOS TestFlight upload"
-            echo "- Version $version, build $((BUILD_NUMBER + 100)), commit \`${GITHUB_SHA::7}\`"
+            echo "- Version $VERSION, build $BUILD_NUMBER, commit \`${GITHUB_SHA::7}\`"
             echo "- Team ${TEAM_ID:-unknown}; bundle id dev.nekkolabs.nekkoagent"
             [ -n "$NOTES" ] && echo "- What to test: $(printf '%s\n' "$NOTES" | head -n1)"
             echo "- After processing, add the build to a TestFlight group in App Store Connect."
