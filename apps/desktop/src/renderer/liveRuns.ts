@@ -68,6 +68,11 @@ export interface LiveRun {
    * since the failed call's output is regenerated rather than kept.
    */
   stepMark: { blocks: LiveBlock[]; text: string; reasoning: string };
+  /**
+   * Results of this turn's `gh` shell commands, so a PR step the agent takes
+   * shows in the streaming reply, not only once the turn is saved.
+   */
+  ghResults?: Array<{ toolCallId: string; output: string; isError?: boolean }>;
   /** The retry the loop is waiting out, until the next event arrives. */
   retrying?: { attempt: number; maxAttempts: number; delayMs: number; reason: string; at: number };
 }
@@ -281,6 +286,13 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
         ...b,
         items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now, ...(event.result.isError ? { failed: true } : {}) } : it),
       });
+      {
+        const call = next.tools.find((c) => c.id === event.result.toolCallId);
+        if (call && (call.name === 'bash' || call.name === 'Bash') && /\bgh\s+pr\s/.test(String(call.input?.command ?? ''))) {
+          // gh's PR confirmations are a line or two; never hold a long output.
+          next.ghResults = [...(prev.ghResults ?? []), { toolCallId: call.id, output: event.result.output.slice(0, 4000), isError: event.result.isError }];
+        }
+      }
       // A step boundary: the next model call starts from here.
       next.stepMark = { blocks: next.blocks, text: next.text, reasoning: next.reasoning };
       break;

@@ -4,7 +4,9 @@ import { useLiveRun, type LiveRun } from '../../liveRuns.js';
 import { usePaneVisible } from '../../paneVisibility.js';
 import { ActivityGroup } from './ActivityGroup.js';
 import { MessageBubble } from './MessageBubble.js';
-import { midTurnVoice } from './transcript.js';
+import { midTurnVoice, withLivePrSteps } from './transcript.js';
+import { PrCard } from '../PrCard.js';
+import type { PrInfo } from '@nekko-agent/shared';
 
 /**
  * The reply being written right now: its working steps and its text, read
@@ -20,12 +22,17 @@ export const LiveTurn = memo(function LiveTurn({
   held,
   onImageClick,
   pendingCallId,
+  knownPrUrls = [],
+  prByUrl,
 }: {
   sessionId: string;
   held: LiveRun | null;
   onImageClick?: (src: string) => void;
   /** The call waiting for approval, which stays out of the purpose groups. */
   pendingCallId?: string;
+  /** The chat's PRs so far, to name the PR a silent `gh pr merge 12` acted on. */
+  knownPrUrls?: string[];
+  prByUrl?: Map<string, PrInfo>;
 }) {
   // A hidden pane stops repainting the reply until it is shown again.
   const live = useLiveRun(sessionId, !usePaneVisible());
@@ -34,15 +41,24 @@ export const LiveTurn = memo(function LiveTurn({
   // The newest text has no voice yet: it may be a note or the reply. Its look
   // settles once more follows it or the turn ends, and neither re-wraps it.
   const last = run.blocks.length - 1;
+  // PR steps the turn has confirmed sit right after the call that took them.
+  const pieces = withLivePrSteps(run.blocks.map((block, at) => ({ ...block, at })), run.tools, run.ghResults, knownPrUrls);
   return (
     <>
-      {run.blocks.map((block, i) => (
-        <Fragment key={i}>
-          {block.kind === 'activity'
-            ? <ActivityGroup items={block.items} streaming={!!live && i === run.blocks.length - 1} turnRunning={!!live} toolActivity={live?.activity} pendingCallId={pendingCallId} />
-            : <MessageBubble message={{ id: `live_${i}`, role: 'assistant', content: block.text, createdAt: 0 }} voice={i < last ? midTurnVoice(block.text) : !live && run.tools.length ? 'reply' : undefined} onImageClick={onImageClick} chronological />}
-        </Fragment>
-      ))}
+      {pieces.map((piece, n) => {
+        if (piece.kind === 'pr') return <PrCard key={piece.key} url={piece.url} info={prByUrl?.get(piece.url)} event={piece.event} sessionId={sessionId} />;
+        const { block } = piece;
+        const i = block.at;
+        // Only the newest piece of the newest block is still being written.
+        const newest = n === pieces.length - 1 && i === last;
+        return (
+          <Fragment key={i + '_' + n}>
+            {block.kind === 'activity'
+              ? <ActivityGroup items={block.items} streaming={!!live && newest} turnRunning={!!live} toolActivity={live?.activity} pendingCallId={pendingCallId} />
+              : <MessageBubble message={{ id: `live_${i}`, role: 'assistant', content: block.text, createdAt: 0 }} voice={i < last ? midTurnVoice(block.text) : !live && run.tools.length ? 'reply' : undefined} onImageClick={onImageClick} chronological />}
+          </Fragment>
+        );
+      })}
     </>
   );
 });

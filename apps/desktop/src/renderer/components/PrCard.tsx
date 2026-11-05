@@ -6,6 +6,26 @@ import { useShown } from '../simpleMode.js';
 import { subscribePrPolling } from '../prPolling.js';
 import { PrProgress } from './WorkProgress.js';
 import { BranchIcon, CheckIcon, CloseIcon } from '../icons.js';
+import { isPrCreation, type PrRowEvent } from './agent-console/transcript.js';
+
+/**
+ * What each PR milestone says and its colour. Requested and queued merges are
+ * worded as requests and keep the accent colour: only `merged` may read as a
+ * completed merge, with the merged wash.
+ */
+export const PR_EVENT_LABEL: Record<PrRowEvent, { label: string; color: string }> = {
+  created: { label: 'PR created', color: 'var(--success)' },
+  open: { label: 'PR created', color: 'var(--success)' },
+  'created-draft': { label: 'Draft PR created', color: 'var(--ink-soft)' },
+  draft: { label: 'Moved back to draft', color: 'var(--ink-soft)' },
+  ready: { label: 'Marked ready for review', color: 'var(--accent)' },
+  'merge-requested': { label: 'Merge requested', color: 'var(--accent)' },
+  'auto-merge': { label: 'Auto-merge enabled', color: 'var(--accent)' },
+  'merge-queued': { label: 'Added to merge queue', color: 'var(--accent)' },
+  merged: { label: 'PR merged', color: 'var(--merged-ink)' },
+  closed: { label: 'PR closed', color: 'var(--danger)' },
+  reopened: { label: 'PR reopened', color: 'var(--success)' },
+};
 
 /** Live PR polling: when a session has an open PR, keep its status fresh. */
 function usePrPolling(sessionId: string | undefined) {
@@ -60,7 +80,7 @@ export const MERGED_CARD_STYLE: React.CSSProperties = {
  * Draft/Open state, CI progress and the actions (Approve, Decline, Merge,
  * Review) that used to sit as a strip below the composer.
  */
-export function PrCard({ url, info, event = 'created', sessionId }: { url: string; info?: PrInfo; event?: 'created' | 'open' | 'closed' | 'merged'; sessionId?: string }) {
+export function PrCard({ url, info, event = 'created', sessionId }: { url: string; info?: PrInfo; event?: PrRowEvent; sessionId?: string }) {
   const spooky = useStore((s) => s.settings?.themePreset === 'autumn');
   // Hidden in Settings > Simple mode, an open PR stays a plain milestone in the chat.
   const showStatus = useShown('pr-status', { pr: true });
@@ -69,20 +89,21 @@ export function PrCard({ url, info, event = 'created', sessionId }: { url: strin
   // The created card goes live only when the poller still reports it open:
   // merged/closed events keep their own historical rows a few lines down, so
   // "created" must stay as a static milestone once resolved.
-  if (showStatus && (event === 'created' || event === 'open') && info?.state === 'open' && sessionId) {
+  if (showStatus && isPrCreation(event) && info?.state === 'open' && sessionId) {
     return <OpenPrCard url={url} info={info} sessionId={sessionId} label={label} />;
   }
   const merged = event === 'merged';
+  const milestone = PR_EVENT_LABEL[event];
+  // Creation and the final states are cards; the steps between are one quiet line.
+  const step = !isPrCreation(event) && event !== 'merged' && event !== 'closed';
   return (
-    <div className="relative my-2 overflow-hidden rounded-xl border px-4 py-3" data-pr-event={event}
-      style={merged ? MERGED_CARD_STYLE : { borderColor: 'var(--line)', background: 'var(--surface)' }}>
+    <div className={'relative overflow-hidden rounded-xl border ' + (step ? 'my-1 px-3 py-1.5' : 'my-2 px-4 py-3')} data-pr-event={event}
+      style={merged ? MERGED_CARD_STYLE : { borderColor: 'var(--line)', background: step ? 'transparent' : 'var(--surface)' }}>
       {merged && spooky && <AutumnConfetti />}
       <div className="relative flex flex-wrap items-center gap-x-2 gap-y-1">
         <a href={url} className="min-w-0 truncate font-mono text-xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
         {info?.title && <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{info.title}</span>}
-        <span className="ml-auto text-xs font-semibold" style={{ color: merged ? 'var(--merged-ink)' : event === 'closed' ? 'var(--danger)' : 'var(--success)' }}>
-          {merged ? 'PR merged' : event === 'closed' ? 'PR closed' : 'PR created'}
-        </span>
+        <span className="ml-auto shrink-0 whitespace-nowrap text-xs font-semibold" style={{ color: milestone.color }}>{milestone.label}</span>
       </div>
     </div>
   );

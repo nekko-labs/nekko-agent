@@ -2373,6 +2373,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // a regular expression over every message, and it used to run on every
   // render of the pane, including each streaming frame.
   const prByUrl = useMemo(() => new Map(prs.map((p) => [p.url, p])), [prs]);
+  // The PRs the chat knew before the live turn, for the PR steps it streams.
+  const knownPrUrls = useMemo(() => [...new Set([...(settled ? collectSessionPrUrls(settled) : []), ...prs.map((p) => p.url)])], [settled, prs]);
   // Handlers handed to rows go through refs, so a row never re-renders because
   // this pane re-rendered.
   const editResendRef = useRef(editResend);
@@ -2678,7 +2680,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {/* The reply being written: repaints once a frame on its own. */}
                 {imageMode
                   ? <ImageLiveTurn sessionId={sessionId} streaming={streaming} />
-                  : <LiveTurn sessionId={sessionId} held={held} onImageClick={setLightbox} pendingCallId={approval?.call.id} />}
+                  : <LiveTurn sessionId={sessionId} held={held} onImageClick={setLightbox} pendingCallId={approval?.call.id} knownPrUrls={knownPrUrls} prByUrl={prByUrl} />}
                 <LiveReplyStatus
                   sessionId={sessionId}
                   startedAt={turnStart.current}

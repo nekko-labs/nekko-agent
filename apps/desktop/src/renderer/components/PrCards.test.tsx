@@ -68,4 +68,33 @@ describe('PR milestones and live card', () => {
     expect(markup).toContain('PR created');
     expect(markup).not.toContain('data-pr-actions');
   });
+  it.each([
+    ['merge-requested', 'Merge requested'],
+    ['auto-merge', 'Auto-merge enabled'],
+    ['merge-queued', 'Added to merge queue'],
+  ] as const)('a %s step says what was asked, never that the PR merged', (event, label) => {
+    const markup = renderToStaticMarkup(<PrCard url={url} info={{ ...pr, state: 'open' }} event={event} sessionId="s" />);
+    expect(markup).toContain(label);
+    expect(markup).not.toContain('PR merged');
+    expect(markup).not.toContain('merged-wash');
+    expect(markup).not.toContain('🎃');
+    // A step never grows into the live card: that stays on the creation row.
+    expect(markup).not.toContain('data-pr-actions');
+  });
+  it.each([
+    ['created-draft', 'Draft PR created'],
+    ['draft', 'Moved back to draft'],
+    ['ready', 'Marked ready for review'],
+    ['reopened', 'PR reopened'],
+  ] as const)('labels the %s step', (event, label) => {
+    expect(renderToStaticMarkup(<PrCard url={url} info={pr} event={event} />)).toContain(label);
+  });
+  it('a draft creation row still becomes the live card while the PR is open', () => {
+    expect(renderToStaticMarkup(<PrCard url={url} info={pr} event="created-draft" sessionId="s" />)).toContain('data-pr-actions');
+  });
+  it('keeps the step label whole on a narrow column: only the title truncates', () => {
+    const markup = renderToStaticMarkup(<PrCard url={url} info={pr} event="merge-queued" />);
+    expect(markup).toMatch(/class="[^"]*shrink-0 whitespace-nowrap[^"]*"[^>]*>Added to merge queue/);
+    expect(markup).toMatch(/class="[^"]*truncate[^"]*"[^>]*>A change/);
+  });
 });

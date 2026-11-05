@@ -1,4 +1,5 @@
-import { ASK_CANCELLED, ASK_UNATTENDED, groupByPurpose, parseAskRequest } from '@nekko-agent/shared';
+import { ASK_CANCELLED, ASK_UNATTENDED, collectPrLifecycle, groupByPurpose, parseAskRequest } from '@nekko-agent/shared';
+import type { PrLifecycleEvent } from '@nekko-agent/shared';
 import type { PurposeCall, ToolPurpose } from '@nekko-agent/shared';
 import type { ChatMessage, ToolCall, ToolResult, PrInfo, PrState } from '@nekko-agent/shared';
 import { speaksToUser } from '../../replyTopics.js';
@@ -172,20 +173,33 @@ export function transcriptBeforeLiveTurn(messages: ChatMessage[], transcriptThro
 const PR_CARD_GAP = 8;
 
 /**
+ * What a PR row in the transcript marks: a lifecycle step the agent confirmably
+ * took (pr.ts `collectPrLifecycle`), or the PR's final state as GitHub reports
+ * it, placed at the time it happened.
+ */
+export type PrRowEvent = PrLifecycleEvent | PrState;
+
+/** Rows that can grow into the live PR card: the PR's creation. */
+export const isPrCreation = (event: PrRowEvent): boolean => event === 'created' || event === 'created-draft' || event === 'open';
+
+/**
  * One row of the windowed transcript: a message, working steps, or an anchored
  * PR lifecycle milestone. PR cards never live at a moving transcript tail.
  */
 export type TranscriptRow =
   | { key: string; kind: 'msg'; message: ChatMessage; voice?: Voice; prUrls: string[]; displayOnly?: boolean; gapAfter?: number }
   | { key: string; kind: 'activity'; items: Activity[]; gapAfter?: number }
-  | { key: string; kind: 'prs'; urls: string[]; event: 'created' | PrState; gapAfter?: number }
+  | { key: string; kind: 'prs'; urls: string[]; event: PrRowEvent; gapAfter?: number }
   /** A compaction summary: a divider under the turns it replaced, then the summary. */
   | { key: string; kind: 'compaction'; message: ChatMessage; latest: boolean; gapAfter?: number }
   /** A reply's stats when its last message was folded into working steps. */
   | { key: string; kind: 'stats'; stats: import('@nekko-agent/shared').TurnStats; gapAfter?: number };
 
 /**
- * Fold a transcript into rows with PR discovery and resolution milestones.
+ * Fold a transcript into rows with PR milestones: discovery, every lifecycle
+ * step the agent confirmably took (draft, ready, merge requested or queued,
+ * closed, reopened), each right after the tool result that confirmed it, and
+ * the final merged/closed state GitHub reports, at the time it happened.
  * Tool-only discoveries are anchored just like assistant/user mentions.
  * Keys are unique within the chat and stable as messages are appended.
  */
@@ -200,12 +214,17 @@ export function toTranscriptRows(
   const persisted = new Set(messages);
   const known = new Set(collectUrls(messages));
   const shown = new Set<string>();
-  const anchors = new Map<number, Array<{ url: string; event: 'created' | PrState }>>();
-  const add = (index: number, url: string, event: 'created' | PrState) => {
-    const events = anchors.get(index) ?? [];
-    events.push({ url, event });
-    anchors.set(index, events);
-  };
+  // Each milestone at the message it belongs after. `rank` orders milestones
+  // on one message: discovery, then the agent's own steps, then GitHub's state.
+  const milestones: Array<{ index: number; rank: number; url: string; event: PrRowEvent; key: string }> = [];
+  const lifecycle = collectPrLifecycle(messages, [...known, ...prs.map((p) => p.url)]);
+  const draftCreated = new Set(lifecycle.filter((h) => h.event === 'created-draft').map((h) => h.url));
+  // Final states the agent's own steps already show, so GitHub's copy is not repeated.
+  const confirmedEnd = new Set(lifecycle.filter((h) => h.event === 'merged' || h.event === 'closed').map((h) => h.url + ' ' + h.event));
+  for (const h of lifecycle) {
+    if (h.event === 'created' || h.event === 'created-draft') continue;
+    milestones.push({ index: h.index, rank: 1, url: h.url, event: h.event, key: 'pr_' + h.url + '_' + h.event + '_' + h.toolCallId });
+  }
   // Anchor tool-only discoveries to their original turn, never to the moving tail.
   const contextTools = new Set(['read_file', 'grep', 'glob', 'list_dir']);
   const calls = new Map(messages.flatMap((m) => (m.toolCalls ?? []).map((c) => [c.id, c.name] as const)));
@@ -215,9 +234,10 @@ export function toTranscriptRows(
     for (const url of extractUrls([m.content, m.toolResult?.output].filter(Boolean).join('\n'))) {
       if (!known.has(url) || shown.has(url)) continue;
       shown.add(url);
-      add(i, url, 'created');
+      const created = draftCreated.has(url) ? 'created-draft' : 'created';
+      milestones.push({ index: i, rank: 0, url, event: created, key: 'pr_' + url + '_' + created });
       const pr = prs.find((p) => p.url === url);
-      if (pr && pr.state !== 'open') {
+      if (pr && pr.state !== 'open' && !confirmedEnd.has(url + ' ' + pr.state)) {
         const time = Date.parse((pr.state === 'merged' ? pr.mergedAt : pr.closedAt) ?? '');
         // Missing timestamps stay next to discovery, not after future messages.
         let terminal = i;
@@ -227,10 +247,13 @@ export function toTranscriptRows(
             else break;
           }
         }
-        add(terminal, url, pr.state);
+        milestones.push({ index: terminal, rank: 2, url, event: pr.state, key: 'pr_' + url + '_' + pr.state });
       }
     }
   });
+  milestones.sort((a, b) => a.index - b.index || a.rank - b.rank);
+  const anchors = new Map<number, typeof milestones>();
+  for (const e of milestones) anchors.set(e.index, [...(anchors.get(e.index) ?? []), e]);
   const keys = new Set<string>();
   const unique = (k: string) => {
     let key = k;
@@ -260,7 +283,7 @@ export function toTranscriptRows(
     const events = anchors.get(i);
     if (!events) return;
     append(messages.slice(start, i + 1));
-    for (const e of events) rows.push({ key: unique('pr_' + e.url + '_' + e.event), kind: 'prs', urls: [e.url], event: e.event, gapAfter: PR_CARD_GAP });
+    for (const e of events) rows.push({ key: unique(e.key), kind: 'prs', urls: [e.url], event: e.event, gapAfter: PR_CARD_GAP });
     start = i + 1;
   });
   append(messages.slice(start));
@@ -291,7 +314,8 @@ export function toTranscriptRows(
 export function estimateRowHeight(row: TranscriptRow, width: number): number {
   const gap = row.gapAfter ?? 20;
   if (row.kind === 'activity') return 22 + gap;
-  if (row.kind === 'prs') return row.urls.length * 90 + gap;
+  // Only the creation row can become the full live card; other steps are one line.
+  if (row.kind === 'prs') return row.urls.length * (isPrCreation(row.event) ? 90 : 46) + gap;
   if (row.kind === 'stats') return 18 + gap;
   // An older summary folds to its divider; the latest shows its text.
   if (row.kind === 'compaction') {
@@ -383,4 +407,50 @@ export function transcriptRowStamp(row: TranscriptRow): string | undefined {
     : row.kind === 'activity' ? row.items.find((it) => it.kind === 'tool')?.startedAt
       : undefined;
   return at ? fmtTime(at) || undefined : undefined;
+}
+
+/** A streaming reply's block, or a PR milestone the turn has confirmed so far. */
+export type LivePiece<B> = { kind: 'block'; block: B } | { kind: 'pr'; key: string; url: string; event: PrRowEvent };
+
+/**
+ * Place the PR steps a streaming turn has confirmed right after the tool call
+ * that took them, splitting its working steps there, as the saved transcript
+ * does (`toTranscriptRows`), so a step never jumps when the turn is saved.
+ * `known` is the chat's PRs so far, which a silent `gh pr merge 12` needs.
+ */
+export function withLivePrSteps<B extends { kind: string; items?: Activity[] }>(
+  blocks: B[],
+  tools: ToolCall[],
+  results: Array<{ toolCallId: string; output: string; isError?: boolean }> | undefined,
+  known: string[],
+): LivePiece<B>[] {
+  const pieces: LivePiece<B>[] = [];
+  if (!results?.length) {
+    for (const block of blocks) pieces.push({ kind: 'block', block });
+    return pieces;
+  }
+  const messages: ChatMessage[] = [
+    { id: 'live_calls', role: 'assistant', content: '', createdAt: 0, toolCalls: tools },
+    ...results.map((r, i) => ({ id: 'live_result_' + i, role: 'tool' as const, content: '', createdAt: 0, toolResult: r })),
+  ];
+  const byCall = new Map<string, Array<{ url: string; event: PrRowEvent; key: string }>>();
+  for (const h of collectPrLifecycle(messages, known)) {
+    const event: PrRowEvent = h.event;
+    const key = 'pr_' + h.url + '_' + (h.event === 'created' || h.event === 'created-draft' ? h.event : h.event + '_' + h.toolCallId);
+    byCall.set(h.toolCallId, [...(byCall.get(h.toolCallId) ?? []), { url: h.url, event, key }]);
+  }
+  for (const block of blocks) {
+    if (block.kind !== 'activity' || !block.items) { pieces.push({ kind: 'block', block }); continue; }
+    let start = 0;
+    block.items.forEach((item, i) => {
+      const steps = item.kind === 'tool' ? byCall.get(item.call.id) : undefined;
+      if (!steps) return;
+      pieces.push({ kind: 'block', block: { ...block, items: block.items!.slice(start, i + 1) } });
+      for (const s of steps) pieces.push({ kind: 'pr', ...s });
+      start = i + 1;
+    });
+    if (start === 0) pieces.push({ kind: 'block', block });
+    else if (start < block.items.length) pieces.push({ kind: 'block', block: { ...block, items: block.items.slice(start) } });
+  }
+  return pieces;
 }

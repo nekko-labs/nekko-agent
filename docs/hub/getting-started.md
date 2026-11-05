@@ -173,6 +173,8 @@ When an agent needs a choice, its question opens at the bottom of the conversati
 
 A pull request link in a reply shows as a small chip with GitHub's state icon: open (green), draft (grey), merged (purple) or closed (red). Click it to open the pull request in your browser. Other web links have a **Preview** button that loads the page inside the message.
 
+When the agent works on a pull request, each step shows in the chat right where it happened, while the reply is still being written and after you reopen the chat: **Draft PR created** or **PR created**, **Marked ready for review**, **Moved back to draft**, **Merge requested**, **Auto-merge enabled**, **Added to merge queue**, **PR closed** and **PR reopened**. A requested or queued merge is not a merge: **PR merged** appears only once GitHub reports it, or when the merge itself said so. A step shows only when the command succeeded and its output names the pull request, so a failed or unclear command adds nothing. The card where the pull request was created keeps its live status and actions while it is open.
+
 Click a file link to open the file in a window beside the chat. Code is coloured by language, and the toolbar shows which language was detected. You can edit the file there: it saves itself a moment after you stop typing (turn **Auto-save** off in the toolbar if you prefer), and **Ctrl+S** (**Cmd+S** on macOS) saves at once. The toolbar tells you when a save happens: *Auto-saved at 9:41* or *Saved at 9:41*.
 
 ### Agent panel shortcuts

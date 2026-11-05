@@ -52,6 +52,16 @@ describe('liveRuns', () => {
     expect(block.kind === 'activity' && block.items[0]).toMatchObject({ kind: 'tool', startedAt: 1_000, endedAt: 3_500 });
   });
 
+  it('keeps the results of gh PR commands, and only those, for the streaming PR steps', () => {
+    applyEvent({ type: 'tool_call', sessionId: 'a', call: { id: 'gh', name: 'Bash', input: { command: 'cd /w && gh pr ready 9' } } });
+    applyEvent({ type: 'tool_call', sessionId: 'a', call: { id: 'ls', name: 'bash', input: { command: 'ls' } } });
+    applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'gh', output: '✓ Pull request o/r#9 is marked as "ready for review"' } });
+    applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'ls', output: 'x'.repeat(10_000) } });
+    expect(getLiveRun('a')!.ghResults).toEqual([{ toolCallId: 'gh', output: '✓ Pull request o/r#9 is marked as "ready for review"', isError: undefined }]);
+    applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
+    expect(takeFinishedRun('a')!.ghResults).toHaveLength(1);
+  });
+
   it('retains live connectivity notices without starting or resurrecting a run', () => {
     const notice = { id: 'outage1', kind: 'restored' as const, createdAt: 1000, content: 'Reachability restored; select Continue.' };
     applyEvent({ type: 'session_meta', sessionId: 'incognito', connectivityNotice: notice });

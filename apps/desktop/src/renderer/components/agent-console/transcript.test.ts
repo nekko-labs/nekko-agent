@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ASK_CANCELLED, ASK_UNATTENDED, formatAskAnswers, parseAskRequest } from '../../../../../../packages/shared/src/ask.js';
 import type { ChatMessage } from '@nekko-agent/shared';
 import { collectSessionPrUrls, extractPrUrls } from '../../../../../../packages/shared/src/pr.js';
-import { activityRows, estimateRowHeight, fmtDateTime, fmtTime, toStreamBlocks, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type Activity } from './transcript.js';
+import { activityRows, estimateRowHeight, fmtDateTime, fmtTime, toStreamBlocks, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, withLivePrSteps, type Activity, type TranscriptRow } from './transcript.js';
 import { fmtElapsed } from './ActivityGroup.js';
 
 const msg = (id: string, role: ChatMessage['role'], content: string, extra: Partial<ChatMessage> = {}): ChatMessage => ({
@@ -380,5 +380,100 @@ describe('inline thought projection', () => {
     })]);
     expect(blocks[0].type === 'activity' && blocks[0].items[0]).toMatchObject({ kind: 'reasoning', text: 'Check first' });
     expect(blocks[1].type === 'msg' && blocks[1].message.reasoning).toBeUndefined();
+  });
+});
+
+describe('PR lifecycle steps in the transcript', () => {
+  const url = 'https://github.com/o/r/pull/9';
+  let t = 0;
+  const run = (id: string, command: string, output: string, isError?: boolean) => [
+    msg('a_' + id, 'assistant', '', { createdAt: (t += 10), toolCalls: [{ id, name: 'Bash', input: { command } }] }),
+    msg('t_' + id, 'tool', '', { createdAt: (t += 10), toolResult: { toolCallId: id, output, isError } }),
+  ];
+  const chat = () => {
+    t = 0;
+    return [
+      msg('u', 'user', 'ship it', { createdAt: 1 }),
+      ...run('create', 'gh pr create --draft --fill', url),
+      msg('n1', 'assistant', 'Opened as draft; checks next.', { createdAt: (t += 10) }),
+      ...run('ready', 'gh pr ready 9', '✓ Pull request o/r#9 is marked as "ready for review"'),
+      ...run('failed', 'gh pr merge 9 --auto', 'GraphQL: not allowed', true),
+      ...run('merge', 'gh pr merge 9 --auto', '(Bash completed with no output)'),
+      msg('done', 'assistant', 'Queued it.', { createdAt: (t += 10) }),
+      msg('u2', 'user', 'thanks', { createdAt: (t += 1000) }),
+    ];
+  };
+  const outline = (r: TranscriptRow[]) => r.map((x) => x.kind === 'prs' ? x.event : x.kind === 'msg' ? x.message.id : x.kind);
+
+  it('shows each confirmed step where it happened, and skips the failed one', () => {
+    expect(outline(rows(chat()))).toEqual(['u', 'activity', 'created-draft', 'n1', 'activity', 'ready', 'activity', 'merge-requested', 'done', 'u2']);
+  });
+
+  it('a requested merge is not a merge: GitHub\'s merged state follows at its own time', () => {
+    const messages = chat();
+    const mergedAt = new Date(messages.find((m) => m.id === 'done')!.createdAt + 5).toISOString();
+    const r = toTranscriptRows(messages, extractPrUrls, collectSessionPrUrls, [{ url, state: 'merged', mergedAt } as never]);
+    expect(outline(r)).toEqual(['u', 'activity', 'created-draft', 'n1', 'activity', 'ready', 'activity', 'merge-requested', 'done', 'merged', 'u2']);
+  });
+
+  it('does not repeat a merge or close gh already confirmed', () => {
+    t = 0;
+    const messages = [...run('c', 'gh pr create --fill', url), ...run('x', 'gh pr close 9', '✓ Closed pull request o/r#9 (Fix)'), msg('after', 'assistant', 'Closed.', { createdAt: 999 })];
+    const r = toTranscriptRows(messages, extractPrUrls, collectSessionPrUrls, [{ url, state: 'closed', closedAt: new Date(999).toISOString() } as never]);
+    expect(r.filter((x) => x.kind === 'prs').map((x) => x.kind === 'prs' && x.event)).toEqual(['created', 'closed']);
+  });
+
+  it('repeated steps keep their own rows and keys, stable as the chat grows', () => {
+    t = 0;
+    const base = [
+      ...run('c', 'gh pr create --fill', url),
+      ...run('d1', 'gh pr ready 9 --undo', '✓ Pull request o/r#9 is converted to "draft"'),
+      ...run('r1', 'gh pr ready 9', '✓ Pull request o/r#9 is marked as "ready for review"'),
+      ...run('d2', 'gh pr ready 9 --undo', '✓ Pull request o/r#9 is converted to "draft"'),
+    ];
+    const before = rows(base);
+    const keys = before.filter((x) => x.kind === 'prs').map((x) => x.key);
+    expect(keys).toEqual([`pr_${url}_created`, `pr_${url}_draft_d1`, `pr_${url}_ready_r1`, `pr_${url}_draft_d2`]);
+    const after = rows([...base, msg('u2', 'user', 'more'), msg('a2', 'assistant', 'Sure.')]);
+    expect(after.slice(0, before.length)).toEqual(before);
+  });
+
+  it('a reloaded chat draws the same rows as the one that was streamed and saved', () => {
+    const messages = chat();
+    const reloaded = JSON.parse(JSON.stringify(messages)) as ChatMessage[];
+    const strip = (r: TranscriptRow[]) => r.map((x) => ({ key: x.key, kind: x.kind, event: x.kind === 'prs' ? x.event : undefined }));
+    expect(strip(rows(reloaded))).toEqual(strip(rows(messages)));
+  });
+
+  it('a step row is estimated as one line, the creation card as a full card', () => {
+    const r = rows(chat()).filter((x) => x.kind === 'prs');
+    expect(estimateRowHeight(r[0], 600)).toBeGreaterThan(estimateRowHeight(r[1], 600));
+  });
+});
+
+describe('PR steps in the streaming reply', () => {
+  const url = 'https://github.com/o/r/pull/9';
+  const tool = (id: string, command: string): Activity => ({ kind: 'tool', call: { id, name: 'Bash', input: { command } } });
+  const items = [tool('a', 'ls'), tool('b', 'gh pr ready 9'), tool('c', 'gh pr merge 9 --auto')];
+  const blocks = [{ kind: 'text', text: 'Shipping.' }, { kind: 'activity', items }];
+  const calls = items.map((i) => (i.kind === 'tool' ? i.call : undefined)!);
+  const shape = (pieces: ReturnType<typeof withLivePrSteps>) => pieces.map((p) => p.kind === 'pr' ? p.event : p.block.kind === 'activity' ? 'steps:' + p.block.items!.length : 'text');
+
+  it('splits the working steps right after the call that took each step', () => {
+    const results = [
+      { toolCallId: 'b', output: '✓ Pull request o/r#9 is marked as "ready for review"' },
+      { toolCallId: 'c', output: '' },
+    ];
+    expect(shape(withLivePrSteps(blocks, calls, results, [url]))).toEqual(['text', 'steps:2', 'ready', 'steps:1', 'merge-requested']);
+  });
+
+  it('uses the saved transcript\'s keys, so nothing jumps when the turn is saved', () => {
+    const pieces = withLivePrSteps(blocks, calls, [{ toolCallId: 'b', output: '✓ Pull request o/r#9 is marked as "ready for review"' }], []);
+    expect(pieces.find((p) => p.kind === 'pr')).toMatchObject({ key: `pr_${url}_ready_b` });
+  });
+
+  it('leaves the reply as it was without a confirmed step', () => {
+    expect(shape(withLivePrSteps(blocks, calls, undefined, [url]))).toEqual(['text', 'steps:3']);
+    expect(shape(withLivePrSteps(blocks, calls, [{ toolCallId: 'c', output: 'boom', isError: true }], [url]))).toEqual(['text', 'steps:3']);
   });
 });
