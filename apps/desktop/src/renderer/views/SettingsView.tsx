@@ -9,7 +9,7 @@ import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ChatIcon, ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ChatIcon, ComputerIcon, GearIcon, GlobeIcon, HandIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -27,7 +27,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
-import { DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
+import { AccessibilitySection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
 import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
@@ -56,6 +56,7 @@ export const SETTINGS_GROUPS = [
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
   { id: 'computers', label: 'Computers', icon: ComputerIcon },
   { id: 'style', label: 'Style', icon: SlidersIcon },
+  { id: 'accessibility', label: 'Accessibility', icon: HandIcon },
   { id: 'simple', label: 'Simple mode', icon: ChatIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
@@ -85,7 +86,7 @@ function AdvancedFold({ children }: { children: React.ReactNode }) {
   if (shown || open) return <>{children}</>;
   return (
     <section className="card mt-6 flex flex-wrap items-center gap-3 p-5" data-advanced-fold>
-      <p className="min-w-0 flex-1 text-xs text-ink-soft">Git management, project management, pull requests, the terminal and MCP servers are kept for Expert.</p>
+      <p className="min-w-0 flex-1 text-xs text-ink-soft">Git management, project management, pull requests, the terminal and MCP servers are kept for Detailed.</p>
       <button type="button" className="btn btn-outline px-3 py-1 text-xs" onClick={() => setOpen(true)}>Show advanced settings</button>
     </section>
   );
@@ -108,7 +109,7 @@ export function SettingsView() {
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<SettingsGroupId>('general');
-  // Simple says nothing about computers until one is connected; Expert is where the first one is paired.
+  // Simple says nothing about computers until one is connected; Detailed is where the first one is paired.
   const [expert] = useExpertMode();
   const hasComputers = useStore((s) => s.computers.length > 0);
   const computersPage = expert || hasComputers;
@@ -325,6 +326,9 @@ export function SettingsView() {
             </SettingsGroup>}
             <SettingsGroup id="style">
               <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="accessibility">
+              <AccessibilitySection settings={settings} update={update} />
             </SettingsGroup>
             <SettingsGroup id="simple">
               <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>

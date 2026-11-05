@@ -13,6 +13,7 @@
 //
 // Usage: node scripts/itest-relay-daemon.mjs [path/to/nekkod]
 // Needs `npm run build:web`, `npm run build -w @nekko-agent/relay-server` and a cargo build of nekkod.
+import { randomPort } from './itest-ports.mjs';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -31,8 +32,8 @@ const nekkod =
   );
 if (!nekkod) throw new Error('build nekkod first (cargo build -p nekkod) or pass its path');
 
-const RELAY_PORT = 4400 + Math.floor(Math.random() * 500);
-const SERVER_PORT = 5400 + Math.floor(Math.random() * 500);
+const RELAY_PORT = randomPort(4400, 500);
+const SERVER_PORT = randomPort(5400, 500);
 const RELAY_URL = `ws://127.0.0.1:${RELAY_PORT}`;
 const TOKEN = randomBytes(24).toString('hex');
 const root = mkdtempSync(join(tmpdir(), 'nekko-relay-daemon-'));

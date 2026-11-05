@@ -19,7 +19,7 @@ struct SimpleModeSettingsView: View {
                     .foregroundStyle(palette.inkSoft)
                 Picker("Preview", selection: $previewExpert) {
                     Text("Simple").tag(false)
-                    Text("Expert").tag(true)
+                    Text("Detailed").tag(true)
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("simpleMode.preview")
@@ -235,7 +235,7 @@ private struct SimpleAreaPreview: View {
     private var summary: String {
         let on = items.filter { shown($0.id) }.map(\.label)
         let off = items.filter { !shown($0.id) }.map(\.label)
-        let mode = expert ? String(localized: "Expert") : String(localized: "Simple")
+        let mode = expert ? String(localized: "Detailed") : String(localized: "Simple")
         return [String(localized: "Preview in \(mode)"),
                 on.isEmpty ? nil : String(localized: "Shown: \(on.joined(separator: ", "))"),
                 off.isEmpty ? nil : String(localized: "Hidden: \(off.joined(separator: ", "))")]

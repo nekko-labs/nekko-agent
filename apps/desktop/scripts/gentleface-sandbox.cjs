@@ -35,14 +35,14 @@ app.whenReady().then(async () => {
       win.setContentSize(width, 600); await sleep(200); await capture('controls-' + width);
       if (!process.env.NEKKO_BEFORE) {
         await check("[...document.querySelectorAll('svg.gf-icon-motion')].every(s => s.animationsPaused())", 'Idle SVG timelines paused at ' + width);
-        await check("document.querySelectorAll('svg.gf-icon-motion').length === 11", 'All shared controls use motion at ' + width);
+        await check("document.querySelectorAll('svg.gf-icon-motion').length === 17", 'All shared controls use motion at ' + width);
       }
     }
     win.setContentSize(1000, 600); await sleep(200);
     if (!process.env.NEKKO_BEFORE) {
       const box = await run("JSON.stringify(document.querySelector('[data-name=Send]').getBoundingClientRect().toJSON())");
       const b = JSON.parse(box);
-      win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(b.x + 8), y: Math.round(b.y + 8) }); await sleep(100);
+      await cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x: b.x + 8, y: b.y + 8 }); await sleep(100);
       await check("!document.querySelector('[data-name=Send] svg').animationsPaused()", 'Real pointer hover starts the parent control animation');
       for (let i = 0; i < 20; i++) { await capture('motion-' + String(i).padStart(2, '0')); await sleep(90); }
       await sleep(300);
@@ -53,10 +53,30 @@ app.whenReady().then(async () => {
       await check("document.querySelector('[data-name=Disabled] svg').animationsPaused()", 'Disabled controls stay still');
       await run("document.querySelector('[data-name=Terminal]').click()"); await sleep(80);
       await check("!document.querySelector('[data-name=Terminal] svg').animationsPaused()", 'Click or touch activation plays motion');
-      await cdp.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }); await sleep(100);
+      await cdp.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }); await capture('reduced-motion-initial'); await sleep(400);
       await check("[...document.querySelectorAll('svg.gf-icon-motion')].every(s=>s.animationsPaused())", 'Live reduced-motion preference stops active motion');
       await run("document.querySelector('[data-name=Send]').click()");
       await check("document.querySelector('[data-name=Send] svg').animationsPaused()", 'Reduced motion prevents activation');
+      await cdp.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+      await capture('motion-enabled'); await sleep(400);
+      for (const name of ['Permissions', 'Memory', 'Workflow', 'Router', 'SignOut', 'Complete']) {
+        const control = '[data-name=' + name + ']';
+        const box = await run("document.querySelector('" + control + "').getBoundingClientRect().toJSON()");
+        await cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 }); await sleep(50);
+        await cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x+8, y: box.y+8 }); await sleep(70);
+        await check("!document.querySelector('" + control + " svg').animationsPaused()", name + ': real hover starts motion');
+        for (let i=0; i<12; i++) { await capture(name.toLowerCase()+'-motion-'+String(i).padStart(2,'0')); await sleep(70); }
+        await sleep(2800);
+        await check("document.querySelector('" + control + " svg').animationsPaused() && document.querySelector('" + control + " svg').getCurrentTime() < .05", name + ': one shot returns to rest');
+        await run("document.querySelector('" + control + "').focus()"); await sleep(60);
+        await check("!document.querySelector('" + control + " svg').animationsPaused()", name + ': keyboard focus starts motion');
+      }
+      await cdp.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+      await capture('reduced-motion'); await sleep(400);
+      for (const name of ['Permissions', 'Memory', 'Workflow', 'Router', 'SignOut', 'Complete']) {
+        await run("document.querySelector('[data-name=" + name + "]').click()");
+        await check("document.querySelector('[data-name=" + name + "] svg').animationsPaused()", name + ': reduced motion prevents activation');
+      }
       cdp.detach();
       await check("!document.querySelectorAll('[id]').length || new Set([...document.querySelectorAll('[id]')].map(e=>e.id)).size === document.querySelectorAll('[id]').length", 'SVG reference IDs are unique');
     }

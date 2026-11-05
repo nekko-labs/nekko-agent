@@ -68,7 +68,7 @@ export function leftLine(state: MemoryState): string {
   const physical = state.availableBytes / state.totalBytes;
   const commit = state.commitLimitBytes && state.commitAvailableBytes != null ? state.commitAvailableBytes / state.commitLimitBytes : 1;
   return commit < physical
-    ? `${gb(state.commitAvailableBytes ?? 0)} of ${gb(state.commitLimitBytes ?? 0)} left to allocate`
+    ? `${gb(state.commitAvailableBytes ?? 0)} of ${gb(state.commitLimitBytes ?? 0)} virtual memory left`
     : `${gb(state.availableBytes)} of ${gb(state.totalBytes)} free`;
 }
 

@@ -82,7 +82,7 @@ export function ApprovalBar({ approval, onDecide, computerName }: { approval: Pe
       onKeyDown={(e) => handleApprovalKey(e, (ok) => void decide(ok))}
     >
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3">
-        <ShieldQuestionIcon className="h-5 w-5" />
+        <span data-icon-hover><ShieldQuestionIcon className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1 basis-64">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">Approval required</span>

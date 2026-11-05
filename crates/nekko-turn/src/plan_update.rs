@@ -6,8 +6,8 @@ use nekko_js as js;
 use serde_json::{Map, Value, json};
 
 const VALID: &[&str] = &["pending", "active", "done", "skipped"];
-/// `PLAN_STEP_KINDS`: the step's place in the work loop.
-const KINDS: &[&str] = &["explore", "build", "verify", "ship"];
+/// `PLAN_STEP_KINDS`: the step's place in the work loop. Looking is part of `build`.
+const KINDS: &[&str] = &["build", "verify", "ship"];
 
 pub enum PlanOutcome {
     /// `{ plan, replaced, finished, skippedNow }`.
@@ -104,7 +104,13 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             Some(n) if !n.is_empty() => Some(js::slice16(n, 240).to_string()),
             _ => None,
         };
-        let kind = r.get("kind").and_then(Value::as_str).filter(|k| KINDS.contains(k)).map(str::to_string);
+        // `planStepKind`: `explore`, from older models, is `build` now.
+        let kind = r
+            .get("kind")
+            .and_then(Value::as_str)
+            .map(|k| if k == "explore" { "build" } else { k })
+            .filter(|k| KINDS.contains(k))
+            .map(str::to_string);
         let verification = verification(r.get("verification"));
         let mut found = if id.is_empty() {
             None
@@ -259,7 +265,7 @@ mod tests {
             json!({"steps":[{"title":"Look","kind":"explore","status":"done"},{"title":"Make","kind":"build","status":"done"},{"title":"Check","kind":"verify","status":"active"},{"title":"Odd","kind":"deploy"}]}),
             10,
         );
-        assert_eq!(plan[0]["kind"], "explore");
+        assert_eq!(plan[0]["kind"], "build", "explore is build now");
         assert_eq!(plan[2]["kind"], "verify");
         assert!(plan[3].get("kind").is_none());
         // Key order matches the TS object: id, title, status, kind, note slot, createdAt.
@@ -292,7 +298,7 @@ mod tests {
         let tool = &catalog["tools"]["updatePlan"];
         let properties = &tool["parameters"]["properties"]["steps"]["items"]["properties"];
         assert_eq!(properties["status"]["enum"], json!(["pending", "active", "done", "skipped"]));
-        assert_eq!(properties["kind"]["enum"], json!(["explore", "build", "verify", "ship"]));
+        assert_eq!(properties["kind"]["enum"], json!(["build", "verify", "ship"]));
         assert_eq!(
             properties["verification"]["properties"]["status"]["enum"],
             json!(["pending", "active", "passed", "failed", "blocked", "unknown"])

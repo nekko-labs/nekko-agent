@@ -143,6 +143,7 @@
  "pr:continueStack",
  "pr:create",
  "pr:diff",
+ "pr:info",
  "pr:linkStack",
  "pr:sessionList",
  "preview:fetch",

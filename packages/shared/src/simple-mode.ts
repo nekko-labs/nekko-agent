@@ -73,7 +73,6 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'pr-status', area: 'Chat · conversation', label: 'Pull request status', hint: 'The live PR card and PR chips. Only while this chat has a pull request', platforms: DP, default: 'show', needs: 'pr' },
   { id: 'run-settings', area: 'Chat · message box', label: 'Run settings', hint: 'Offline, incognito, Git branch and tool style, in the model menu', platforms: P, default: 'expert' },
   { id: 'ph-git', area: 'Chat · conversation', label: 'Git', hint: 'The Git screen and commits', platforms: P, default: 'expert' },
-  { id: 'terminal', area: 'Agents wall', label: 'Terminal', hint: 'Open a terminal from New or the More menu', platforms: DP, default: 'expert' },
   { id: 'cardmeta', area: 'Agents wall', label: 'Model and tokens on window cards', hint: 'Like "Opus 5.5 · 48k context"', platforms: D, default: 'expert' },
   { id: 'mon-hw', area: 'Agents wall', label: 'Hardware and local models monitors', hint: 'Dials and resident models in the dock', platforms: D, default: 'auto', when: 'localModel' },
   { id: 'mon-budget', area: 'Agents wall', label: 'Budget, cost and utilization', hint: 'Spending and token use in the dock', platforms: D, default: 'expert' },

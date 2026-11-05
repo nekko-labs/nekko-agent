@@ -130,7 +130,9 @@ impl AnyProvider {
 
 /// Build a provider from its stored config, on the real wire.
 pub fn create_provider(config: ProviderConfig) -> AnyProvider {
-    create_provider_with(config, Io::default())
+    let name = if config.label.trim().is_empty() { &config.id } else { &config.label };
+    let io = Io { transport: http::ReqwestTransport::for_provider(name), ..Io::default() };
+    create_provider_with(config, io)
 }
 
 /// Build a provider from its stored config, on the given wire and clock.

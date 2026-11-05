@@ -245,9 +245,11 @@ describe('workspace companions and stable bodies', () => {
       const html = renderToStaticMarkup(wall(state({ folded: { 'chat-a': true }, filter: 'chat' })));
       expect(html).not.toContain('Expand companions');
     expect(html).toContain('title="Zen: focus this window (Ctrl+Shift+1)"');
-      // The focus action wears the target ring: outer ring, inner ring, centre dot.
+      // The actual wall action must use the animated Gentleface focus export.
       const focus = html.slice(html.indexOf('agent-zen-action'));
-      expect(focus.slice(0, focus.indexOf('</button>'))).toMatch(/<circle cx="12" cy="12" r="9"><\/circle><circle cx="12" cy="12" r="5"><\/circle><circle cx="12" cy="12" r="1.5" fill="currentColor"><\/circle>/);
+      const action = focus.slice(0, focus.indexOf('</button>'));
+      expect(action).toContain('data-gf-icon="focus"');
+      expect(action).toContain('gf-icon-motion');
       expect(html).not.toContain('Collapse Chat');
       expect(html).not.toContain('command-wall-folded');
       expect(html).toContain('draft:chat-a');

@@ -17,6 +17,27 @@ const render = (agentPlan: PlanStep[], prs: PrInfo[] = []) => renderToStaticMark
 const chips = (html: string, kind: string) => html.match(new RegExp(`data-plan-chip="${kind}"`, 'g'))?.length ?? 0;
 afterEach(() => { vi.restoreAllMocks(); linked.links = null; });
 
+describe('working and paused marks', () => {
+  const active = { id: 'work', title: 'Working step', status: 'active', createdAt: now, updatedAt: now } as PlanStep;
+  it('uses an aria-hidden SMIL ripple for working active steps', () => {
+    const html = render([active]);
+    expect(html).toContain('aria-label="Working"');
+    expect(html).toContain('class="plan-working" aria-hidden="true"');
+    expect(html).toContain('attributeName="r"');
+    expect(html).toContain('repeatCount="indefinite"');
+    expect(html).toContain('class="plan-working-still"');
+    expect(html).not.toContain('M8 5v14M16 5v14');
+  });
+  it('keeps pause bars instead of a ripple for interrupted inactive runs', () => {
+    const session = { agentPlan: [active], messages: [{ id: 'reply', role: 'assistant', content: 'Partial reply', interrupted: true, createdAt: now }] } as unknown as Session;
+    const html = renderToStaticMarkup(<PlanSheet sessionId="s" session={session} streaming={false} prs={[]} initiallyOpen />);
+    expect(html).toContain('aria-label="Paused"');
+    expect(html).toContain('M8 5v14M16 5v14');
+    expect(html).not.toContain('plan-working');
+    expect(html).not.toContain('<animate');
+  });
+});
+
 describe('verification chips', () => {
   it('shows only explicit reports, with device and detail, never a done step on its own', () => {
     const html = render([step('inspected', 'passed'), step('phone', 'blocked', { device: 'iPhone', detail: 'Waiting for pairing' }), { id: 'generic', title: 'generic', status: 'done', createdAt: now, updatedAt: now }]);
@@ -25,6 +46,21 @@ describe('verification chips', () => {
     expect(html).toContain('Check blocked on iPhone');
     expect(html).toContain('Waiting for pairing');
     expect(html).toContain('not inferred from tool results');
+  });
+  it('gathers every Verify step and report under one Verify step, as sub-bullets', () => {
+    const kinded = (id: string, kind: PlanStep['kind'], extra = {}) => ({ id, title: id, kind, status: 'done', createdAt: now, updatedAt: now, ...extra }) as PlanStep;
+    const html = render([
+      kinded('Fix the parser', 'build', { verification: { status: 'passed', device: 'Windows' } }),
+      kinded('Run the tests', 'verify'),
+      kinded('Screenshot it', 'verify', { status: 'active' }),
+      kinded('Open the PR', 'ship', { status: 'pending' }),
+    ]);
+    expect(html.match(/data-plan-kind="verify"/g)).toHaveLength(1);
+    expect(html.match(/data-plan-substep=/g)).toHaveLength(3);
+    // The build step's report moved under Verify: its own row has no chip.
+    const build = html.slice(html.indexOf('data-plan-step-id="Fix the parser"'), html.indexOf('data-plan-step-id="verify:all"'));
+    expect(chips(build, 'verify')).toBe(0);
+    expect(html).toContain('Verified on Windows');
   });
   it('marks waiting reports stale and leaves finished ones unstale', () => {
     vi.spyOn(Date, 'now').mockReturnValue(now + 180_000);
@@ -41,9 +77,9 @@ describe('CI chips', () => {
   const pr = { url: 'https://github.com/o/r/pull/9', number: 9, state: 'open', checks: 'failing', checkProgress: { total: 4, completed: 2, pending: 1, failing: 1, unknown: 0, items: [
     { name: 'build', state: 'completed', link: null }, { name: 'gate', state: 'pending', link: null }, { name: 'lint', state: 'completed', link: null }, { name: 'e2e', state: 'failing', link: null },
   ] } } as unknown as PrInfo;
-  it('go under the last verification step in one row: failing first, passing folded into a count', () => {
+  it('go under the Verify step in one row: failing first, passing folded into a count', () => {
     const html = render([step('first', 'passed'), { id: 'work', title: 'work', status: 'active', createdAt: now, updatedAt: now }, step('check', 'active')], [pr]);
-    const row = html.slice(html.indexOf('data-plan-step-id="check"'));
+    const row = html.slice(html.indexOf('data-plan-step-id="verify:all"'));
     expect(chips(row, 'ci')).toBe(3);
     expect(row.indexOf('e2e')).toBeLessThan(row.indexOf('gate'));
     expect(row).toContain('2 passed');

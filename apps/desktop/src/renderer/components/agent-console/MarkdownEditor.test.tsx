@@ -21,6 +21,22 @@ describe('markdown editing', () => {
     expect(newline('> quote')?.text).toBe('> quote\n> ');
     expect(newline('```\n- code')?.text).toBe('```\n- code\n');
   });
+  it('keeps single-backtick code lines out of list and quote editing', () => {
+    expect(newline('`\n- code')?.text).toBe('`\n- code\n');
+    expect(newline('`\n  > code')?.text).toBe('`\n  > code\n  ');
+    const text = '`\n- code';
+    expect(markdownEdit(text, text.length, text.length, 'Tab')).toBeNull();
+    expect(newline('`\ncode\n`\n- list')?.text).toBe('`\ncode\n`\n- list\n- ');
+  });
+  it('does not let mixed fence markers change code editing state', () => {
+    expect(newline('`\n```\n- code')?.text).toBe('`\n```\n- code\n');
+    expect(newline('```\n`\n- code')?.text).toBe('```\n`\n- code\n');
+    expect(newline('run `code`\n- list')?.text).toBe('run `code`\n- list\n- ');
+  });
+  it('leaves fenced raw text intact for the send handler', () => {
+    const text = '`\nconst html = "<script>alert(1)</script>";\n`';
+    expect(markdownEdit(text, text.length, text.length, 'Enter')).toBeNull();
+  });
   it('wraps and unwraps selections with shortcuts', () => {
     expect(markdownEdit('hello', 0, 5, 'b', false, true)).toEqual({ text: '**hello**', start: 2, end: 7 });
     expect(markdownEdit('**hello**', 2, 7, 'b', false, true)).toEqual({ text: 'hello', start: 0, end: 5 });

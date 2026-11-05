@@ -8,8 +8,8 @@ import { hardwareRows, LocalModels } from './MonitorsDock.js';
 import { useMonitors, useResourceSample, watchComputer } from './ResourceMonitor.js';
 
 /*
- * Simple and Expert (decision 0041, spec desktop/desktop-simple-and-expert-modes).
- * Simple is the cleaner, more focused view; Expert shows every control. In
+ * Simple and Detailed (decision 0041, spec desktop/desktop-simple-and-expert-modes).
+ * Simple is the cleaner, more focused view; Detailed shows every control. In
  * both, a control that means nothing right now stays out of sight. Settings >
  * Simple mode chooses where each control shows. Both are kept on this computer
  * and shared by every window; a new install starts in Simple.
@@ -23,7 +23,7 @@ export function Shown({ id, children }: { id: string; children: React.ReactNode 
 }
 
 /**
- * The switch: a chat bubble for Simple and angle brackets for Expert. It
+ * The switch: a chat bubble for Simple and angle brackets for Detailed. It
  * changes the whole app, so it sits in the title bar (in a chat's header where
  * there is no title bar, as in the browser builds).
  */
@@ -37,8 +37,8 @@ export function ModeSwitch() {
           type="button"
           role="radio"
           aria-checked={expert === on}
-          aria-label={on ? 'Expert: every control' : 'Simple: everyday controls'}
-          title={on ? 'Expert: every control' : 'Simple: everyday controls'}
+          aria-label={on ? 'Detailed: every control' : 'Simple: everyday controls'}
+          title={on ? 'Detailed: every control' : 'Simple: everyday controls'}
           className={expert === on ? 'on' : ''}
           onClick={() => setExpert(on)}
         >
@@ -125,7 +125,7 @@ export function RingDial({ pct, value, label, temp, size = 40 }: { pct: number |
   );
 }
 
-/* ── Expert monitor ─────────────────────────────────────────────────────── */
+/* ── Detailed monitor ─────────────────────────────────────────────────────── */
 
 /** The Hardware monitor's rows as dials: short labels, a percent in the middle. */
 function useDials() {
@@ -154,7 +154,7 @@ function useLoadedCount(): number | null {
 }
 
 /**
- * Expert mode's strip under the chat's header: the hardware as small dials and
+ * Detailed mode's strip under the chat's header: the hardware as small dials and
  * how many models the Model Server holds. Click for larger dials and the models.
  */
 export function ExpertMonitor() {

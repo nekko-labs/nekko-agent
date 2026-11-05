@@ -54,7 +54,7 @@ createServer((req, res) => {
     } else if (last?.role === 'user' && /make a plan/i.test(userText)) {
       const args = {
         steps: [
-          { title: 'Read the composer code', status: 'done', kind: 'explore', note: 'Found the message box' },
+          { title: 'Read the composer code', status: 'done', kind: 'build', note: 'Found the message box' },
           { title: 'Draw the plan sheet', status: 'active', kind: 'build', note: 'Tucked behind the composer' },
           { title: 'Check it on the phone', status: 'pending', kind: 'verify' },
           { title: 'Open a pull request', status: 'pending', kind: 'ship' },

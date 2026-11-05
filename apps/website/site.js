@@ -411,6 +411,30 @@
   videos.forEach((v) => io.observe(v));
 })();
 
+// ---- the hero's speed replay: its file and end-frame poster follow the look
+//      (dark files for Dark, light for White), switching with the theme. It
+//      autoplays muted and loops; with reduced motion only the poster loads. ----
+(() => {
+  const video = document.querySelector('video[data-replay]');
+  if (!video) return;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const key = () => (document.documentElement.dataset.theme === 'dark' ? 'Dark' : 'Light');
+  let loaded = null;
+  const load = () => {
+    const k = key();
+    if (k === loaded) return;
+    loaded = k;
+    video.poster = video.dataset[`poster${k}`];
+    if (reduced) return; // poster only
+    video.autoplay = true;
+    video.preload = 'auto';
+    video.src = video.dataset[`src${k}`];
+    video.play().catch(() => { /* autoplay blocked: the poster stays */ });
+  };
+  load();
+  new MutationObserver(load).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+
 // ---- media slots: click a feature GIF or product image to see it large ----
 (() => {
   const box = document.getElementById('lightbox');
@@ -447,27 +471,37 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) shut(); });
 })();
 
-// ---- look switch: Colourful by default, then Dark, then White. The choice is
-//      remembered once made; the icon shows where the next click goes. ----
+// ---- look switch: Dark or White. Until the visitor picks one the page follows
+//      the system's light or dark setting (the inline script in <head> applies
+//      it before first paint); a pick is remembered. The icon shows where the
+//      next click goes. ----
 (() => {
   const btn = document.querySelector('.theme-toggle');
   if (!btn) return;
   const root = document.documentElement;
-  const LOOKS = ['dark', 'white', 'colour'];
-  const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
-  const THEME_COLOR = { dark: '#0c0c11', white: '#fbf6f8', colour: '#854f6c' };
-  const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'colour');
+  const NAME = { dark: 'Dark', white: 'White' };
+  const THEME_COLOR = { dark: '#0c0c11', white: '#fbf6f8' };
+  const system = window.matchMedia('(prefers-color-scheme: dark)');
+  const saved = () => { try { return localStorage.getItem('nekko-theme'); } catch (e) { return null; } };
+  const current = () => (root.dataset.theme === 'dark' ? 'dark' : 'white');
   const sync = () => {
     const now = current();
-    const next = LOOKS[(LOOKS.indexOf(now) + 1) % LOOKS.length];
+    const next = now === 'dark' ? 'white' : 'dark';
     btn.setAttribute('aria-label', `${NAME[now]} look. Switch to the ${NAME[next]} look`);
     btn.title = `Switch to the ${NAME[next]} look`;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = THEME_COLOR[now];
   };
   sync();
+  // No pick yet: keep following the system if it changes while the page is open.
+  system.addEventListener('change', () => {
+    const pick = saved();
+    if (pick === 'dark' || pick === 'white') return;
+    root.dataset.theme = system.matches ? 'dark' : 'white';
+    sync();
+  });
   btn.addEventListener('click', () => {
-    const next = LOOKS[(LOOKS.indexOf(current()) + 1) % LOOKS.length];
+    const next = current() === 'dark' ? 'white' : 'dark';
     root.dataset.theme = next;
     sync();
     try { localStorage.setItem('nekko-theme', next); } catch (e) { /* private mode: the choice lasts this page only */ }
@@ -599,7 +633,7 @@
   });
 
   // ---- the tour video beside the form. Its file follows the look (dark files
-  //      for Dark, light for White and Colourful) and nothing, poster included,
+  //      for Dark, light for White) and nothing, poster included,
   //      loads until the section nears the screen. It plays while at least half
   //      of it is in view, never on its own with reduced motion, and when it
   //      ends it hands over to the form. ----
@@ -660,8 +694,8 @@
 //      sits invisible, with a soft wave of brightness drifting through it.
 //      The grid is fixed to the screen and ignores scrolling, so the wave
 //      keeps one steady pace however the page moves. Brand gradient (plum to
-//      light plum, left to right) on the white version, white on the colourful
-//      one, and light plum to rose on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
+//      light plum, left to right) on the white version,
+//      and light plum to rose on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
 //      reduced-motion visitors. ----
 (() => {
   const c = document.getElementById('pixelwave');
@@ -688,8 +722,8 @@
         if (a < 0.025) continue;
         const s = a > 0.18 ? 3 : 2;
         const k = x / W;
-        if (theme === 'dark' || theme === 'colour') {
-          // 0 = light plum #c084b5, 1 = rose #854f6c: glowing on the dark ground, tinted on the coloured one
+        if (theme === 'dark') {
+          // 0 = light plum #c084b5, 1 = rose #854f6c: glowing on the dark ground
           ctx.fillStyle = `rgba(${Math.round(192 - 59 * k)},${Math.round(132 - 53 * k)},${Math.round(181 - 73 * k)},${(a * 1.1).toFixed(3)})`;
         } else {
           // 0 = plum #5a2352, 1 = light plum #c084b5

@@ -21,6 +21,8 @@ final class AppModel {
     let previews: PreviewLoader
     /// Nekko Cloud sign-in and end-to-end encrypted sync (its own Keychain service).
     let cloud: CloudSync
+    /// This iPhone as a place chats run, on its own cloud providers (decision 0050).
+    let phone: PhoneChats
     private let cloudKeychain: KeychainStore
     private let cloudKey: CloudDeviceKey
     let lock: AppLock
@@ -95,7 +97,9 @@ final class AppModel {
             makeConnection: { RelayClient(config: $0, transport: URLSessionTransport(), prober: HealthProber()) },
             deviceName: { deviceName },
             app: Bundle.main.bundleIdentifier,
-            offlineFiles: offlineFiles)
+            offlineFiles: offlineFiles,
+            // Every paired computer stays connected, for the chat list across all of them (2026-11-04).
+            stayConnected: true)
         // Change actions (IO-33) are signed in the Secure Enclave behind Face ID or the passcode.
         computers.changeSigner = SecureEnclaveChangeSigner(store: keychain)
         // Every relay HELLO is signed with this iPhone's device key (decision 0036), without asking.
@@ -110,6 +114,23 @@ final class AppModel {
         self.cloudKeychain = cloudKeychain
         cloudKey = key
         cloud = CloudSync(api: Self.cloudURL, secrets: cloudKeychain, files: offlineFiles, deviceLabel: deviceName, key: { try key.get() })
+        // Its keys have a Keychain service of their own, apart from the pairing keys.
+        let phoneKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.phone-providers")
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { phoneKeychain.wipe() }
+        #endif
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneProvider") {
+            // A provider that answers inside the simulator, with no network or real key.
+            let fixture = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: FixturePhoneHTTP())
+            if fixture.providers.isEmpty { _ = try? fixture.add(kind: "anthropic", label: "Fixture Claude", baseUrl: nil, key: "fixture-key") }
+            phone = fixture
+        } else {
+            phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
+        }
+        #else
+        phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
+        #endif
         lock = AppLock(enabled: prefs.appLock)
         #if DEBUG
         // What the share extension leaves behind, without driving another app's share sheet.
@@ -571,6 +592,7 @@ final class AppModel {
     /// The app's own state for a computer that is gone from the list.
     private func forgotten(_ id: String) {
         if prefs.defaultComputer == id { prefs.defaultComputer = store.activeId }
+        if prefs.chatsFilter == id { prefs.chatsFilter = nil }
         prefs.lastModel[id] = nil
         prefs.lastEffort[id] = nil
         prefs.lastTools[id] = nil
@@ -598,6 +620,7 @@ final class AppModel {
         cloud.forgetAll()
         cloudKey.forget()
         cloudKeychain.wipe()
+        phone.forgetAll()
         chatLists.removeAll()
         transcriptFiles.removeAll()
         offlineFiles.removeAll()
@@ -605,6 +628,7 @@ final class AppModel {
         keychain.wipe()
         activities.endAll()
         prefs.defaultComputer = nil
+        prefs.chatsFilter = nil
         prefs.lastModel = [:]
         prefs.lastEffort = [:]
         prefs.lastTools = [:]

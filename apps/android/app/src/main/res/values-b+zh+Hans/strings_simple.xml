@@ -38,14 +38,14 @@
     <string name="simple_logs_connect">连接以读取日志</string>
     <string name="simple_logs_subject">Nekko Agent 连接日志</string>
     <string name="simple_mode_title">简单模式</string>
-    <string name="simple_mode_detail">简单和专家模式显示的内容</string>
-    <string name="simple_mode_detail_changed">简单和专家模式显示的内容 · 已更改 %1$d 项</string>
+    <string name="simple_mode_detail">简单和详细模式显示的内容</string>
+    <string name="simple_mode_detail_changed">简单和详细模式显示的内容 · 已更改 %1$d 项</string>
     <string name="simple_intro">简单模式视图更清爽、更专注,细节只在需要时显示。所有功能仍然可用。</string>
     <string name="simple_preview">预览</string>
     <string name="simple_preview_mode">预览 %1$s</string>
     <string name="simple_reset">恢复默认设置</string>
     <string name="simple_choice_show">显示</string>
-    <string name="simple_choice_expert">仅专家模式</string>
+    <string name="simple_choice_expert">仅详细模式</string>
     <string name="simple_choice_hide">隐藏</string>
     <string name="simple_choice_auto">运行时</string>
     <string name="simple_choice_always">始终</string>
@@ -53,7 +53,7 @@
     <string name="simple_part_hidden">%1$s,已隐藏</string>
     <string name="simple_one_model">1 个模型</string>
     <string name="simple_switch_simple">简单:日常控件</string>
-    <string name="simple_switch_expert">专家:所有控件</string>
+    <string name="simple_switch_expert">详细:所有控件</string>
     <string name="simple_area_header">聊天 · 标题栏</string>
     <string name="simple_area_box">聊天 · 消息框</string>
     <string name="simple_area_conversation">聊天 · 对话</string>

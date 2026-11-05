@@ -1,20 +1,22 @@
 import React, { useMemo, useState } from 'react';
-import type { ChatMessage, PlanStep, PlanStepKind, PrInfo, Session } from '@nekko-agent/shared';
+import { planStepKind, type ChatMessage, type PlanStep, type PlanStepKind, type PrInfo, type Session } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
 import { sheetPlan } from '../claudeAgentPlan.js';
+import { VERIFY_GROUP_ID, groupVerification } from '../planVerifyGroup.js';
 import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
 import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
+import { PlanWorking } from './PlanWorking.js';
 
 function StepMark({ status, paused }: { status: PlanStep['status']; paused: boolean }) {
   const label = status === 'active' ? (paused ? 'Paused' : 'Working') : status === 'done' ? 'Done' : status === 'skipped' ? 'Skipped' : 'Pending';
   return <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={label} title={label}>
-    {status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
+    {status === 'active' && !paused ? <PlanWorking /> : status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
       <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: status === 'active' ? 'var(--accent)' : 'var(--ink-faint)' }}>
         {status === 'active' ? (paused ? <path d="M8 5v14M16 5v14" /> : <path d="M12 3v3m6.36-.36-2.12 2.12M21 12h-3m.36 6.36-2.12-2.12M12 21v-3m-6.36.36 2.12-2.12M3 12h3m-.36-6.36 2.12 2.12" />) : <>
           <circle cx="12" cy="12" r="8" />
@@ -110,7 +112,7 @@ function CiChips({ info }: { info: PrInfo }) {
   </>;
 }
 
-const KIND_LABEL: Record<PlanStepKind, string> = { explore: 'Explore', build: 'Build', verify: 'Verify', ship: 'Ship' };
+const KIND_LABEL: Record<PlanStepKind, string> = { build: 'Build', verify: 'Verify', ship: 'Ship' };
 
 /** The step's place in the loop, a small caps word before its title. */
 /**
@@ -126,7 +128,9 @@ function PlanCaret({ direction, label }: { direction: 'up' | 'down'; label: stri
   </span>;
 }
 
-function Kind({ kind, current }: { kind?: PlanStepKind; current?: boolean }) {
+function Kind({ kind: saved, current }: { kind?: PlanStepKind; current?: boolean }) {
+  // A plan saved before looking became part of Build still says `explore`.
+  const kind = planStepKind(saved);
   if (!kind) return null;
   return <span className="plan-sheet-kind" data-plan-kind={kind} data-current={current || undefined}>{KIND_LABEL[kind]}</span>;
 }
@@ -198,7 +202,6 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   const providers = useStore((s) => s.providers);
   const liveVersion = useLiveRunsVersion();
   const live = getLiveRun(sessionId);
-  const working = streaming || !!live || !!session?.activeRun;
   // Mid-turn, the saved `messages` don't yet show tool calls from the in-flight
   // reply. Fold the live tools in as a synthetic trailing assistant message so a
   // Claude Agent chat's TodoWrite plan updates while the agent is still writing
@@ -229,10 +232,13 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, liveVersion]);
   const messages = planSession?.messages;
-  const plan = useMemo(() => sheetPlan(planSession, providers, working), [planSession, providers, working]);
+  const fullPlan = useMemo(() => sheetPlan(planSession, providers), [planSession, providers]);
   const childSessions = useMemo(() => (sessions ?? []).filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
-  const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions), [messages, plan, basePath, childSessions]);
-  if (!plan?.length) return null;
+  // Chips land on the plan's own steps; then every check folds into one Verify step.
+  const { steps: plan, checks: verifyChecks, links } = useMemo(
+    () => groupVerification(fullPlan ?? [], planStepLinks(messages ?? [], fullPlan, basePath, childSessions)),
+    [messages, fullPlan, basePath, childSessions]);
+  if (!plan.length) return null;
   const running = new Set(runningSessionIds());
   const childById = new Map(childSessions.map((c): [string, Child] => [c.id, { id: c.id, title: c.title || 'Sub-agent', running: running.has(c.id) || !!getLiveRun(c.id) || !!c.activeRun }]));
   const openChild = onOpenChild ?? ((id: string) => useStore.getState().openChatPane(id));
@@ -308,10 +314,13 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         const own = links.get(step.id);
         const checks = ci.get(step.id) ?? [];
         const stepKids = kids(own);
-        const chips = !!((prsShown && own?.prs.length) || own?.artifacts.length || own?.projects.length || stepKids.length || step.verification || checks.length);
-        const detail = step.verification?.detail || step.note;
+        // The grouped Verify step shows each check as a sub-bullet, each with its own report.
+        const subs = step.id === VERIFY_GROUP_ID ? verifyChecks : [];
+        const report = subs.length ? undefined : step.verification;
+        const chips = !!((prsShown && own?.prs.length) || own?.artifacts.length || own?.projects.length || stepKids.length || report || checks.length);
+        const detail = subs.length ? step.note : report?.detail || step.note;
         const squeezed = step.status === 'done' || step.status === 'skipped';
-        const more = !!(detail || chips);
+        const more = !!(detail || chips || subs.length);
         const isOpen = more && (stepOpen[step.id] ?? (!squeezed || step.id === resultStep));
         const line = <>
           <Kind kind={step.kind} current={step.status === 'active'} />
@@ -329,10 +338,25 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
               : <p className="plan-sheet-line">{line}</p>}
             {more && <div className="plan-sheet-more" data-plan-more hidden={!isOpen}>
               {detail && <p className="truncate text-xs text-ink-faint" title={detail}>{detail}</p>}
+              {subs.length > 0 && <ul className="plan-sheet-substeps" data-plan-substeps>
+                {subs.map(sub => {
+                  const subDetail = sub.verification?.detail || sub.note;
+                  return <li key={sub.id} className="plan-sheet-substep" data-plan-substep={sub.id}>
+                    <StepMark status={sub.status} paused={paused} />
+                    <div className="min-w-0 flex-1">
+                      <p className="plan-sheet-line">
+                        <span className={`min-w-0 flex-1 truncate ${sub.status === 'done' || sub.status === 'skipped' ? 'text-ink-soft' : 'text-ink'}${sub.status === 'skipped' ? ' line-through' : ''}`} title={sub.title}>{sub.title}</span>
+                        {sub.verification && <VerificationChip step={sub} />}
+                      </p>
+                      {subDetail && <p className="truncate text-xs text-ink-faint" title={subDetail}>{subDetail}</p>}
+                    </div>
+                  </li>;
+                })}
+              </ul>}
               {chips && <div className="plan-sheet-chips">
                 {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
                 {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}
-                {step.verification && <VerificationChip step={step} />}
+                {report && <VerificationChip step={step} />}
                 {prsShown && own?.prs.map(prChip)}
                 {checks.map(pr => <CiChips key={pr.url} info={pr} />)}
                 {own?.artifacts.map(artifactChip)}

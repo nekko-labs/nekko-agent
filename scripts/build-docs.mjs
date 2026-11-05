@@ -235,7 +235,7 @@ function layout({ page, rendered, sections, prev, next }) {
     about: { '@id': 'https://nekkoagent.com/#app' },
   };
   return `<!doctype html>
-<html lang="en" data-theme="colour">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -245,8 +245,7 @@ function layout({ page, rendered, sections, prev, next }) {
     <link rel="alternate" type="text/markdown" href="/docs/${pageFile(page.slug)}.md" />
     <link rel="alternate" type="text/plain" href="/llms.txt" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
-    <meta name="theme-color" content="#9d8ce6" />
-    <script>try{var t=localStorage.getItem('nekko-theme');if(t==='white'||t==='dark'){delete document.documentElement.dataset.theme;document.querySelector('meta[name=theme-color]').content='#f3effe';}}catch(e){}</script>
+    <meta name="theme-color" content="#fbf6f8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-6" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="Nekko Agent" />
