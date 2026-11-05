@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { inSubagent } from '@nekko-agent/shared';
+import './FollowUpChoices.css';
 
 /** Older engines may only return next. Never replace missing choices with generic answers. */
 export function followUpOptions(options: unknown, next: string | null): string[] {
@@ -22,18 +23,19 @@ export function FollowUpChoices({ options, canDelegate, onSend }: {
   onSend: (text: string) => void;
 }) {
   const [where, setWhere] = useState('here');
+  const locationId = useId();
   if (!options.length) return null;
   return (
     <div className="space-y-2 py-2 text-xs" role="group" aria-label="Suggested follow-ups" data-follow-up-choices>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-faint">
         <span>Suggested follow-ups</span>
-        {canDelegate && <label className="flex items-center gap-1 text-2xs">
-          <span>Run in</span>
-          <select aria-label="Where to run a suggested follow-up" className="max-w-full rounded border border-line bg-surface px-1 py-0.5 text-ink-muted" value={where} onChange={e => setWhere(e.target.value)}>
-            <option value="here">This chat</option>
-            <option value="subagent">A subagent</option>
-          </select>
-        </label>}
+        {canDelegate && <div className="follow-up-location" role="radiogroup" aria-label="Where to run a suggested follow-up" data-follow-up-location data-where={where}>
+          <span className="follow-up-location__thumb" aria-hidden="true" />
+          {(['here', 'subagent'] as const).map(location => <label key={location}>
+            <input type="radio" name={locationId} value={location} checked={where === location} onChange={() => setWhere(location)} />
+            <span>{location === 'here' ? 'This chat' : 'Subagent'}</span>
+          </label>)}
+        </div>}
       </div>
       <div className="flex flex-wrap gap-2">
         {options.map(text => <button key={text} type="button" className="btn btn-outline max-w-full whitespace-normal py-1 text-left text-xs [overflow-wrap:anywhere]" onClick={() => onSend(canDelegate && where === 'subagent' ? inSubagent(text) : text)}>{text}</button>)}
