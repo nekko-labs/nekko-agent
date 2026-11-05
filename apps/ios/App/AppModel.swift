@@ -148,7 +148,6 @@ final class AppModel {
         }
         // The computer builds the same card for the relay to push: it hears these too.
         IntentRouter.focus = { [weak self] sid in await self?.focusCard(sid) }
-        IntentRouter.nextPage = { [weak self] sid in await self?.focusCard(sid) }
         IntentRouter.dismiss = { [weak self] sid in
             self?.activities.dismiss(sid)
             await self?.tellCard(dismiss: sid)
