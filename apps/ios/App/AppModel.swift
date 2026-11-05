@@ -463,7 +463,7 @@ final class AppModel {
             newChatRequested = true
             return
         }
-        // The card's "+N" when it holds more chats than it shows: opening the app is the point.
+        // The card's count line ("3 Working · 5 Done"): opening the app is the point.
         if url.scheme == "nekko-agent", url.host == "chats" { return }
         if let link = Pairing.parse(url.absoluteString) { pendingLink = link }
     }
