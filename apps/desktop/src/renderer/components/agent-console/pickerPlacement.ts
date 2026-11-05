@@ -9,7 +9,7 @@ export function pickerPlacement(anchor: { left: number; top: number; bottom: num
   return {
     left: Math.max(margin, Math.min(anchor.left, width - margin - menuWidth)),
     width: menuWidth,
-    maxHeight: Math.min(384, opensAbove ? above : below),
+    maxHeight: Math.min(500, opensAbove ? above : below),
     ...(opensAbove ? { bottom: Math.max(margin, height - anchor.top + gap) } : { top: Math.max(margin, anchor.bottom + gap) }),
   };
 }
