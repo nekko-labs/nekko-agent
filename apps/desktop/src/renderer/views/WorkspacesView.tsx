@@ -854,7 +854,6 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           projects={settings?.workspaces ?? []}
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
-                          showProvider={view.showProvider}
                           showComputer={view.showComputer}
                           showComputerIcons={view.showComputerIcons}
                           zoneTint={zoneTints?.get(s?.id ?? entry.t?.id ?? '')}

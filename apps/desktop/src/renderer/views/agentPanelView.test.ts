@@ -10,7 +10,7 @@ describe('agent panel view', () => {
   it('defaults to grouping by activity', () => {
     expect(DEFAULT_AGENT_PANEL_VIEW).toEqual({
       groupBy: 'status', sortBy: 'manual', direction: 'desc',
-      showMetadata: true, showProvider: true, showAutomations: true, showEmptyGroups: true,
+      showMetadata: true, showAutomations: true, showEmptyGroups: true,
       showComputer: true,
       showComputerIcons: true,
     });
@@ -22,7 +22,7 @@ describe('agent panel view', () => {
     expect(parseAgentPanelView(null)).toBe(DEFAULT_AGENT_PANEL_VIEW);
     expect(parseAgentPanelView('not json')).toBe(DEFAULT_AGENT_PANEL_VIEW);
     expect(parseAgentPanelView(JSON.stringify({ groupBy: 'project', sortBy: 'bogus', direction: 'asc', showMetadata: false, showProvider: false, showAutomations: 'yes' })))
-      .toEqual({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project', direction: 'asc', showMetadata: false, showProvider: false });
+      .toEqual({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project', direction: 'asc', showMetadata: false });
   });
 
   it('only lets cards be dragged into order where that order is what the panel shows', () => {
