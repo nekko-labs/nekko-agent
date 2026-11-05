@@ -29,7 +29,9 @@ struct ModelTabsFixture: View {
     @State private var ready = false
 
     var body: some View {
-        Group {
+        // A ZStack, not a Group: an empty Group never appears, so its task would never run.
+        ZStack {
+            Color.clear
             if ready { ModelPicker(selected: ("anthropic", "claude-opus-5-5")) { _, _ in } }
         }
         .task {
