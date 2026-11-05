@@ -16,6 +16,7 @@ import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
 import { matchesModelQuery } from '../components/agent-console/modelPickerInteractions.js';
 import { MODEL_FILTER_THRESHOLD, modelListProblem } from './modelListProblem.js';
 import { MiddleTruncate } from '../components/primitives/MiddleTruncate.js';
+import { ModelRowName } from './ModelRowName.js';
 
 const isLocal = (k: ProviderKind) => isLocalProvider(k);
 
@@ -354,6 +355,10 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
     set.has(key) ? set.delete(key) : set.add(key);
     await window.nekko.updateSettings({ favoriteModels: [...set] });
     refreshSettings();
+  };
+
+  const setDefaultModel = (id: string) => {
+    void window.nekko.updateSettings({ defaultProviderId: provider.id, defaultModelId: id }).then(() => refreshSettings()).catch((e) => pushToast('error', String(e)));
   };
 
   const load = async () => {
@@ -771,7 +776,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
           <p className="text-xs text-ink-faint">No models found.</p>
         ))}
         {models.length > 0 && listedModels.length === 0 && <p className="text-xs text-ink-faint">No models match.</p>}
-        {defaultMenu && <ContextMenu x={defaultMenu.x} y={defaultMenu.y} onClose={() => setDefaultMenu(null)}><ContextAction onClick={() => { void window.nekko.updateSettings({defaultProviderId:provider.id,defaultModelId:defaultMenu.id}).then(() => useStore.getState().refreshSettings()).catch(e => pushToast("error",String(e))); setDefaultMenu(null); }}>Set as default</ContextAction></ContextMenu>}
+        {defaultMenu && <ContextMenu x={defaultMenu.x} y={defaultMenu.y} onClose={() => setDefaultMenu(null)}><ContextAction onClick={() => { setDefaultModel(defaultMenu.id); setDefaultMenu(null); }}>Set as default</ContextAction></ContextMenu>}
         {defaultId && !models.some(m => m.id === defaultId) && <div aria-disabled="true" className="flex min-w-0 items-baseline gap-1 rounded-lg px-2 py-1 text-xs text-ink-faint"><MiddleTruncate text={defaultId} tail={20} /> <span className="shrink-0 text-2xs">Default · unavailable</span></div>}
         {listedModels.map((m) => {
           const price = formatModelPriceLabel({ modelId: m.id, auth: provider.auth, isLocal: local, pricing: modelPricing(m) });
@@ -785,7 +790,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
               >
                 <StarIcon className="h-3.5 w-3.5" filled={isFavorite(`${provider.id}::${m.id}`)} />
               </button>
-              <MiddleTruncate text={m.name} tail={20} className="font-mono" />{m.id === defaultId && <span className="shrink-0 text-2xs text-accent">Default</span>}
+              <ModelRowName name={m.name} isDefault={m.id === defaultId} onSetDefault={() => setDefaultModel(m.id)} />
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {price && (
