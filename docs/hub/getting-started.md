@@ -30,7 +30,7 @@ The quickest way to start is the installer.
    - **macOS (Apple silicon):** the `.dmg`
    - **Linux:** the `.AppImage`, or the `.deb` for Debian and Ubuntu
 2. Run it. On macOS, drag Nekko Agent into Applications.
-3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab.
+3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab. Click a model's name there to make it the default for new chats.
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 

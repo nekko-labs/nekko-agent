@@ -37,6 +37,7 @@ import { useAgentEventClaim } from '../agentSubscription.js';
 import { ComposerFocus } from './ComposerFocus.js';
 import { afterPaint } from '../afterPaint.js';
 import { chatWelcomeState } from './agent-console/chatWelcome.js';
+import { reconcileModelAfterList } from './agent-console/modelPickerInteractions.js';
 import { useAllProviderLimits, useProviderLimits } from '../useLimits.js';
 import { clearDraft, loadDraft, restoredDraftImages, saveDraft } from '../composerDrafts.js';
 import { indentListSelection } from '../composerLists.js';
@@ -750,6 +751,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     return () => window.removeEventListener('nekko-session-brain', changed);
   }, [sessionId]);
   const [models, setModels] = useState<ModelInfo[]>([]);
+  // The user's own pick in this pane, which a re-list that cannot confirm it must not revoke.
+  const pickedModel = useRef<{ sessionId: string; providerId: string; modelId: string } | null>(null);
   // Whether this pane's model list has come back yet, so the "pick a model"
   // nudge waits for the truth instead of flashing during the fetch.
   const [modelsLoaded, setModelsLoaded] = useState(false);
@@ -964,16 +967,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     setModelsLoaded(false);
     let live = true;
     const cancel = afterPaint(() => {
-      window.nekko.listModels(providerId).then((m) => {
+      const settle = (listed: ModelInfo[] | null) => {
         if (!live) return;
-        setModels(m);
+        setModels(listed ?? []);
+        const pick = pickedModel.current;
+        const picked = pick?.sessionId === sessionId && pick.providerId === providerId ? pick.modelId : null;
         setModelId((cur) => {
-          const keep = cur === AUTO_MODEL_ID || (!!cur && m.some((x) => x.id === cur));
-          setUnavailableModel(keep ? null : cur);
-          return keep ? cur : null;
+          const next = reconcileModelAfterList(cur, listed, picked);
+          setUnavailableModel(next.unavailable);
+          return next.modelId;
         });
         setModelsLoaded(true);
-      }).catch(() => { if (live) { setModels([]); setModelId((cur) => { if (cur && cur !== AUTO_MODEL_ID) setUnavailableModel(cur); return cur === AUTO_MODEL_ID ? cur : null; }); setModelsLoaded(true); } });
+      };
+      window.nekko.listModels(providerId).then(settle).catch(() => settle(null));
     });
     return () => { live = false; cancel(); };
   }, [providerId]);
@@ -2532,6 +2538,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           setContextChangeNotice(true);
         }
         if (pid) setProviderId(pid);
+        pickedModel.current = pid ? { sessionId, providerId: pid, modelId: v } : null;
         setModelId(v);
         setUnavailableModel(null);
         // Park the pick on the chat itself. Switching tabs unmounts
@@ -2668,7 +2675,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       resolvedModelId={resolvedClaudeCodeModel}
                       open={false} onOpenChange={openModelMenu} expanded
                       recent={recentModels}
-                      onProvider={setProviderId} onModel={(pid, mid) => { setProviderId(pid); setModelId(mid); setUnavailableModel(null); void window.nekko.setSessionOptions(sessionId, { providerId: pid, modelId: mid, autoModel: mid === AUTO_MODEL_ID }).then((s) => { if (s) { useStore.getState().rememberModel(pid, mid); window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); } }).catch((e) => useStore.getState().pushToast('error', String(e))); }} />}
+                      onProvider={setProviderId} onModel={(pid, mid) => { pickedModel.current = { sessionId, providerId: pid, modelId: mid }; setProviderId(pid); setModelId(mid); setUnavailableModel(null); void window.nekko.setSessionOptions(sessionId, { providerId: pid, modelId: mid, autoModel: mid === AUTO_MODEL_ID }).then((s) => { if (s) { useStore.getState().rememberModel(pid, mid); window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id: sessionId, session: s } })); } }).catch((e) => useStore.getState().pushToast('error', String(e))); }} />}
                 </div>}
               </div>
             ) : undefined}
