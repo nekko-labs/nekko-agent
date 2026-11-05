@@ -213,6 +213,7 @@
  "session:images",
  "session:nextWatch",
  "session:page",
+ "session:photo",
  "session:setAttachments",
  "session:setOptions",
  "session:setSupportingWorkspaces",

@@ -275,7 +275,9 @@ cannot connect to an older computer.
 > - **Don't wait:** **Interrupt and send now** stops the reply and starts that message at once.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
-> - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
+> - **Photos:** tap a photo in a message to see it full screen. It sharpens as the computer sends it at
+>   full size (a spinner shows while it loads). **⋯** saves it to Photos, copies it or shares it, and
+>   swiping up or down closes the viewer. **+ → Paste image** adds one from the clipboard.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt

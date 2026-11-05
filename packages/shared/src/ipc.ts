@@ -147,6 +147,8 @@ export const IpcChannels = {
   chatSend: 'chat:send',
   chatGenerateImage: 'chat:generateImage',
   sessionImages: 'session:images',
+  /** A phone opening one photo a user attached, full size (`session:photo`, served by the daemon). */
+  sessionPhoto: 'session:photo',
   chatAbort: 'chat:abort',
   chatCompact: 'chat:compact',
   chatCancelCompaction: 'chat:cancelCompaction',

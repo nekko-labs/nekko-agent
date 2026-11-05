@@ -594,6 +594,12 @@ public final class ChatModel {
         session?.messages.first { $0.id == messageId }?.images ?? []
     }
 
+    /// One of a message's photos at full size (`session:photo`), sharp on a phone screen: a data
+    /// URL, or nil when the computer has none to send (a photo it can't read, or an older computer).
+    public func fullPhoto(_ messageId: String, _ index: Int) async throws -> String? {
+        try await store.remote().call(Channels.sessionPhoto, [.string(sessionId), .string(messageId), .int(Int64(index))]).string
+    }
+
     // MARK: Projection
 
     /// The session's own model, else the computer's default (never the `__auto__` sentinel).

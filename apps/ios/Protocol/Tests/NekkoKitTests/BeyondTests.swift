@@ -82,6 +82,7 @@ final class BeyondTests: XCTestCase {
                 return .null
             },
             Channels.sessionFork: { _ in ["id": "s_fork", "title": "New chat"] },
+            Channels.sessionPhoto: { args in args.last?.int64 == 0 ? "data:image/jpeg;base64,AAAA" : .null },
             Channels.tasksList: { _ in [["id": "t1", "title": "Nightly tests", "kind": "recurring", "intervalMs": 86_400_000, "status": "active",
                                          "runCount": 3, "lastResult": "All 40 passed.", "lastRunAt": 5]] },
             Channels.workflowsList: { _ in [["id": "w1", "name": "Review PRs", "category": "Code", "enabled": true, "stepCount": 2, "lastStatus": "failure"]] },
@@ -250,6 +251,17 @@ final class BeyondTests: XCTestCase {
         let sent = try XCTUnwrap(c.callsTo(Channels.chatSend).last?.first)
         XCTAssertEqual(sent.str("text"), GitPrompt.commit.text)
         XCTAssertFalse(c.calls.contains { $0.0.hasPrefix("pr:action") || $0.0.hasPrefix("workspace:git") })
+    }
+
+    func testAPhotoOpensFullSizeFromTheComputer() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        let full = try await chat.fullPhoto("u1", 0)
+        XCTAssertEqual(full, "data:image/jpeg;base64,AAAA")
+        XCTAssertEqual(c.callsTo(Channels.sessionPhoto).last, [.string("s1"), .string("u1"), .int(0)])
+        // None to send (a photo it can't read): the viewer keeps the small copy.
+        let none = try await chat.fullPhoto("u1", 1)
+        XCTAssertNil(none)
     }
 
     func testUsageAndLimitsByProviderId() async throws {
