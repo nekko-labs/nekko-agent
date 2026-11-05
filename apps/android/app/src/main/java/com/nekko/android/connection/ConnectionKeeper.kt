@@ -65,8 +65,17 @@ class ConnectionKeeper(
         // The first level, once: Minimal with the app lock on, Standard with it off (as on the iPhone).
         if (prefs.get(LiveCards.LEVEL) == null) prefs.set(LiveCards.LEVEL, LiveCards.firstLevel(lock.enabled.value))
         watchNetwork()
-        // Answered elsewhere, or its run ended: the needs-you notification goes.
+        // A content-free dismissal also clears an OS notification retained across process restart.
         scope.launch { repo.dismissals.collect { notices.dismissNeedsYou(it) } }
+        // Actual pending inputs, including reconnect snapshots, own both alerts and badges.
+        // Foreground attention still has a silent notification so opening a chat cannot clear its badge.
+        scope.launch {
+            combine(repo.state, prefs.flow(Notices.NEEDS_YOU), lock.enabled, foreground) { s, enabled, hidden, visible ->
+                AttentionNotices.update(s, enabled, hidden, visible)
+            }.distinctUntilChanged().collect { update ->
+                if (update != null) notices.syncAttention(update.computer, update.waiting, update.silent, update.authoritative, update.resolved)
+            }
+        }
         scope.launch {
             repo.events.collect { e ->
                 lastEventAt.value = now()
@@ -118,6 +127,7 @@ class ConnectionKeeper(
 
     private fun onEvent(sessionId: String, event: PhoneEvent, callId: String?) {
         // In the app the chat itself shows it (and A6's haptics react).
+        if (event == PhoneEvent.APPROVAL || event == PhoneEvent.NEEDS_INPUT) return // Reconciled above, in every app state.
         if (foreground.value || !Notices.wants(prefs, event)) return
         val s = repo.state.value
         // Only the chats the phone lists: not subagents, tasks or training runs.

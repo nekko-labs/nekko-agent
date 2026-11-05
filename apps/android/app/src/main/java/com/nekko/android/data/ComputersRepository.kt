@@ -316,11 +316,26 @@ class ComputersRepository(
 
     /** Calls the active computer at call time; throws when none is connected. */
     val caller: Caller = object : Caller {
-        override suspend fun call(channel: String, vararg args: JsonElement): JsonElement =
-            remote().call(channel, *args)
+        override suspend fun call(channel: String, vararg args: JsonElement): JsonElement {
+            val c = remote()
+            return c.call(channel, *args).also { if (client === c) answered(channel, args) }
+        }
 
-        override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement =
-            remote().callWithTimeout(timeoutMs, channel, *args)
+        override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement {
+            val c = remote()
+            return c.callWithTimeout(timeoutMs, channel, *args).also { if (client === c) answered(channel, args) }
+        }
+    }
+
+    private fun answered(channel: String, args: Array<out JsonElement>) {
+        if (channel != Channels.TOOL_APPROVE && channel != Channels.CHAT_ANSWER) return
+        val id = (args.getOrNull(0) as? JsonPrimitive)?.content ?: return
+        val callId = (args.getOrNull(1) as? JsonPrimitive)?.content ?: return
+        _state.update { s ->
+            val attention = s.attention.answered(id, callId, channel == Channels.TOOL_APPROVE)
+            val activity = if (id !in attention.pending && id in s.attention.pending) s.activity + (id to Activity.RUNNING) else s.activity
+            s.copy(attention = attention, activity = activity)
+        }
     }
 
     fun remote(): Remote = client ?: throw RelayException("Not connected to a computer.")
@@ -459,7 +474,7 @@ class ComputersRepository(
         _state.update {
             it.copy(
                 activeId = id, conn = RelayState.CONNECTING, denied = null, connDetail = null,
-                summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(),
+                summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(), attention = AttentionState(),
                 // Another computer, or the same one later: its settings are unknown until it answers.
                 pcSettings = PcSettings(),
                 quitFromPhone = false,
@@ -514,7 +529,17 @@ class ComputersRepository(
                     }
                 }
             }
-            launch { c.dismissals.collect { _dismissals.emit(it) } }
+            launch {
+                c.dismissals.collect { tag ->
+                    if (client !== c) return@collect
+                    _state.update { s ->
+                        val attention = s.attention.dismiss(tag)
+                        val resolved = s.attention.pending.keys - attention.pending.keys
+                        s.copy(attention = attention, activity = s.activity - resolved)
+                    }
+                    _dismissals.emit(tag)
+                }
+            }
             launch {
                 c.welcome.collect { w ->
                     if (client === c) _state.update { it.copy(hostProtocol = w.protocol) }
@@ -537,11 +562,13 @@ class ComputersRepository(
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
                     outbox.onEvent(e)
-                    _events.emit(e)
                     _state.update { s ->
-                        val activity = ActivityTracker.next(s.activity, e)
-                        if (activity === s.activity) s else s.copy(activity = activity)
+                        val attention = s.attention.next(e)
+                        val activity = ActivityTracker.next(s.activity, e).toMutableMap()
+                        attention.pending.keys.forEach { activity[it] = Activity.NEEDS_YOU }
+                        s.copy(activity = activity, attention = attention)
                     }
+                    _events.emit(e)
                     // Keep the list fresh when a turn ends anywhere (another device, a task).
                     if (e is AgentEvent.Done || e is AgentEvent.SessionMeta) scheduleSummaries()
                 }
@@ -768,7 +795,7 @@ class ComputersRepository(
     }
 
     private fun dropFromList(sessionId: String) {
-        _state.update { s -> s.copy(summaries = s.summaries.filter { it.id != sessionId }, activity = s.activity - sessionId) }
+        _state.update { s -> s.copy(summaries = s.summaries.filter { it.id != sessionId }, activity = s.activity - sessionId, attention = s.attention.remove(sessionId)) }
     }
 
     /** The phone changed network, or the socket may have died while frozen: dial a fresh one now. */
@@ -793,6 +820,7 @@ class ComputersRepository(
 
     suspend fun refresh() {
         val c = client ?: return
+        val attentionVersion = _state.value.attention.version
         _state.update { it.copy(summariesLoading = true, lastError = null) }
         try {
             val r = coroutineScope {
@@ -803,18 +831,19 @@ class ComputersRepository(
                 val settings = async { c.call(Channels.SETTINGS_GET).let { Triple(RemoteDefaults.from(it), Appearance.from(it), PcSettings.from(it)) } }
                 val workspaces = async { orNull { WorkspaceFolder.list(c.call(Channels.WORKSPACE_LIST)) } ?: emptyList() }
                 val info = async { orNull { AppInfo.from(c.call(Channels.APP_INFO)) } }
-                val pending = async { orNull { PendingInput.map(c.call(Channels.CHAT_PENDING)) } ?: emptyMap() }
+                val pending = async { orNull { (c.call(Channels.CHAT_PENDING) as? JsonObject)?.let(PendingInput::map) } }
                 val (defaults, appearance, pcSettings) = settings.await()
                 Refresh(summaries.await(), providers.await(), defaults, appearance, pcSettings, workspaces.await(), info.await(), pending.await())
             }
             if (client !== c) return
             _state.update { s ->
-                // Approvals and questions already waiting when we (re)connect.
-                val activity = s.activity.toMutableMap()
-                r.pending.forEach { (sid, p) -> if (p.approval != null || p.question != null) activity[sid] = Activity.NEEDS_YOU }
+                // Replace stale waits after reconnect, but never overwrite a newer live event.
+                val attention = s.attention.reconcile(r.pending, attentionVersion)
+                val activity = s.activity.filterValues { it != Activity.NEEDS_YOU }.toMutableMap()
+                attention.pending.keys.forEach { activity[it] = Activity.NEEDS_YOU }
                 s.copy(
                     summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
-                    workspaces = r.workspaces, activity = activity, summariesLoading = false, savedListAt = null,
+                    workspaces = r.workspaces, activity = activity, attention = attention, summariesLoading = false, savedListAt = null,
                 )
             }
             _state.update { it.copy(quitFromPhone = r.info?.quitFromPhone == true) }
@@ -978,7 +1007,7 @@ class ComputersRepository(
         val pcSettings: PcSettings,
         val workspaces: List<WorkspaceFolder>,
         val info: AppInfo?,
-        val pending: Map<String, PendingInput>,
+        val pending: Map<String, PendingInput>?,
     )
 
     companion object {

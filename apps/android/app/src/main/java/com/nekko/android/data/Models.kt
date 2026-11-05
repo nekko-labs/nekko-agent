@@ -81,6 +81,8 @@ data class ComputersState(
     val workspaces: List<WorkspaceFolder> = emptyList(),
     /** Chats mid-run or waiting on an approval/answer, by session id. */
     val activity: Map<String, Activity> = emptyMap(),
+    /** Authoritative waiting inputs for local alerts and launcher badges, independent of the open chat. */
+    val attention: AttentionState = AttentionState(),
     val lastError: String? = null,
     /** When the list on screen is the phone's saved copy, when it was saved; null once the computer answers. */
     val savedListAt: Long? = null,
