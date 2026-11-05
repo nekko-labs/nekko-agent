@@ -300,3 +300,11 @@ Implemented; matches the desktop greeting: each paw moves one drawing unit outwa
 **Implementation:** phone-only `Prefs.lastFolder` in UserDefaults stores folder ids, not paths or credentials. Selecting a folder does not make a network call or start a chat. The root mascot uses the centered principal toolbar placement; iOS 26 and later explicitly hide its shared glass background. Its existing 44-point target, greeting, working state and Reduce Motion behavior are unchanged.
 
 **Verification:** builds with Xcode 27.1; focused `LastFolderPrefsTests` and `ChatStatusTests` pass on an isolated iPhone 17 Pro simulator (iOS 26.5). Folder persistence, per-computer separation, No folder and draft priority are unit-tested. The UI test checks the mascot is horizontally centered within 2 pt, keeps a 44-point target and greets/returns to Working. Matched native before/after PNGs were inspected: centered mascot without a chip, other controls visible. Physical iPhone/iPad, iOS 17–25 layout and end-to-end folder creation over a real paired connection remain unverified.
+
+## Collapsed groups with activity headers (2026-11-06)
+
+Implemented, awaiting native build and visual verification (#1913): project, status, date, computer and Completed headings start folded on iOS. A tap opens a group; its explicit choice lasts while the list remains mounted. Search temporarily reveals matching rows without changing that choice. General and Group by None remain plain visible rows. The separate Needs you section remains visible so a pending question is not hidden.
+
+A nonempty group's header uses the chat status glyphs: attention first, then running work, then watches, otherwise done. Archived chats cannot make the group appear busy. Empty headings have no activity glyph. Counts and computer marks remain visible. Header accessibility retains its expanded/collapsed value and the status icon's spoken label. No new storage, network requests, permissions or change to phone status categories.
+
+Acceptance: fresh groups are collapsed, disclosure toggles in both directions, search reveals matches, and activity stays visible while folded. Protocol tests cover disclosure and aggregate activity; simulator captures and interactions must pass before landing. Physical-device verification is separate.
