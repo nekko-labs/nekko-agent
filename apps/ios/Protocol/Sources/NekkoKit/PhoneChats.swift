@@ -76,6 +76,8 @@ public final class PhoneChats {
     public private(set) var modelErrors: [String: String] = [:]
     /// Chats whose reply is streaming in now.
     public private(set) var running: Set<String> = []
+    /// The tokens this iPhone's chats used, by provider, model and day. Kept on the phone only.
+    public private(set) var usage = PhoneUsageLedger()
 
     private let secrets: SecureStore
     private let files: OfflineFiles?
@@ -86,6 +88,7 @@ public final class PhoneChats {
 
     static let file = "phone-chats"
     static let providersFile = "phone-providers"
+    static let usageFile = "phone-usage"
 
     public init(secrets: SecureStore, files: OfflineFiles?, http: PhoneHTTP,
                 now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
@@ -97,6 +100,7 @@ public final class PhoneChats {
         self.newId = newId
         providers = Self.decode([PhoneProvider].self, files?.load(PhoneProviders.computerId, Self.providersFile)) ?? []
         chats = Self.decode([PhoneChat].self, files?.load(PhoneProviders.computerId, Self.file)) ?? []
+        usage = Self.decode(PhoneUsageLedger.self, files?.load(PhoneProviders.computerId, Self.usageFile)) ?? PhoneUsageLedger()
         // A reply cut off when the app was closed is not still coming.
         for i in chats.indices {
             if let j = chats[i].messages.indices.last, chats[i].messages[j].role == .assistant, chats[i].messages[j].text.isEmpty,
@@ -208,6 +212,7 @@ public final class PhoneChats {
                 for e in parser.read(line) {
                     switch e {
                     case .text, .done: return nil
+                    case .usage: continue
                     case .failed(let why): return why
                     }
                 }
@@ -299,6 +304,7 @@ public final class PhoneChats {
         chats = []
         models = [:]
         modelErrors = [:]
+        usage = PhoneUsageLedger()
         files?.remove(PhoneProviders.computerId)
     }
 
@@ -322,8 +328,10 @@ public final class PhoneChats {
         let request = PhoneProviders.chatRequest(p, key: key(p.id), model: chat.modelId, messages: history)
         running.insert(chatId)
         let http = self.http
+        let model = chat.modelId
         tasks[chatId] = Task { [weak self] in
             var failure: String?
+            var count = PhoneTokenCount()
             do {
                 let (status, lines) = try await http.lines(request)
                 if !(200..<300).contains(status) {
@@ -335,6 +343,7 @@ public final class PhoneChats {
                         for e in parser.read(line) {
                             switch e {
                             case .text(let t): self?.append(chatId, answerId, t)
+                            case .usage: count.add(e)
                             case .done: break read
                             case .failed(let why):
                                 failure = why
@@ -350,8 +359,16 @@ public final class PhoneChats {
             } catch {
                 failure = Task.isCancelled ? String(localized: "Stopped.") : error.localizedDescription
             }
+            // A stopped or failed reply still used what the provider counted.
+            if count.reported { self?.record(p, model: model, count) }
             self?.finish(chatId, answerId, error: failure)
         }
+    }
+
+    private func record(_ p: PhoneProvider, model: String, _ count: PhoneTokenCount) {
+        usage.record(providerId: p.id, providerLabel: p.label, model: model, input: count.input, output: count.output, at: now())
+        guard let files, let v = Self.encode(usage) else { return }
+        files.save(PhoneProviders.computerId, Self.usageFile, v)
     }
 
     private func append(_ chatId: String, _ answerId: String, _ text: String) {

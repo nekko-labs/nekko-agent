@@ -90,6 +90,12 @@ cannot connect to an older computer.
 > computer. Choosing another computer shows its models and folders at once, since every paired
 > computer is already connected; what you typed stays.
 >
+> On the iPhone, the model list opens on **All**, with **Cloud** and **Local** beside it at the
+> top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
+> servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
+> filters the list; it picks nothing. A chat on this iPhone uses cloud providers only, so its
+> Local tab says to start the chat on a computer for local models.
+>
 > **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
 > together, each row naming its computer, and the pill above the list filters it to one
 > computer (**Show chats from**). The phone stays connected to every paired computer and
@@ -109,8 +115,8 @@ cannot connect to an older computer.
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
 > and ChatGPT subscriptions and local model servers still need a computer.
 >
-> **Simple and Detailed** (iPhone and Android): the switch at the top left of a chat picks the mode, and the
-> phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
+> **Simple and Detailed** (iPhone and Android): on iPhone the chat's **More** menu (or the chats list's view menu) picks the
+> mode; on Android the switch at the top left of a chat does. The phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
 > and effort** (an effort dial beside the model's name; tap it to change either) and the chat's
 > **context window** (a ring that fills as the window does, with the tokens in use; tap it to see
 > what fills it). **Detailed** adds a monitor under the chat's title: your computer's CPU, memory,
@@ -335,6 +341,12 @@ cannot connect to an older computer.
 >   On Android it is **Settings → Logs**, with the same list, newest lines, **Refresh** and search;
 >   **Share** sends what the screen shows as text, with secrets removed again on the phone.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
+>   On the iPhone it is grouped by where the usage came from: an **All places** total, then one
+>   section per paired computer (an offline one keeps the last numbers it gave and says so) and
+>   **This iPhone** for chats that run on the phone. Within each, **Subscriptions** (each plan with
+>   its limit bars, and the models that bill to it) come before **API** (pay-per-token models with
+>   their estimated spend). This iPhone counts tokens only, from each provider's replies, and keeps
+>   that count on the phone.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**

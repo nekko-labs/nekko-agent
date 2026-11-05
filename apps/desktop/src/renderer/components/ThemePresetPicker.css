@@ -1,0 +1,70 @@
+.theme-picker-heading { display: flex; align-items: center; gap: 16px; }
+.theme-mode-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-around;
+  flex: none;
+  width: 76px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  isolation: isolate;
+}
+.theme-mode-thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 30px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 12%, transparent);
+  transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
+  z-index: -1;
+}
+.theme-mode-toggle[aria-checked='true'] .theme-mode-thumb { transform: translateX(38px); }
+.theme-mode-toggle[aria-checked='true'] > svg:last-child,
+.theme-mode-toggle[aria-checked='false'] > svg:nth-child(2) { color: var(--accent); }
+.theme-swatch-list { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.theme-swatch-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 72px;
+  padding: 6px 2px;
+  border-radius: 16px;
+  color: var(--ink-soft);
+}
+.theme-swatch {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  outline: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  outline-offset: 0;
+  transition: transform 170ms cubic-bezier(.2, .8, .2, 1), box-shadow 170ms ease, outline-offset 170ms ease;
+}
+.theme-swatch-large .theme-swatch { width: 56px; height: 56px; }
+.theme-swatch-button[aria-checked='true'] { color: var(--accent); }
+.theme-swatch-button[aria-checked='true'] .theme-swatch {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 4px;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+@media (hover: hover) {
+  .theme-swatch-button:hover .theme-swatch { transform: scale(1.08); }
+}
+.theme-swatch-button:active .theme-swatch { transform: scale(.94); transition-duration: 70ms; }
+.theme-swatch-button:focus-visible, .theme-mode-toggle:focus-visible, .theme-custom-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.theme-custom-colors { width: min(100%, 420px); }
+.theme-custom-trigger { border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .theme-swatch, .theme-mode-thumb { transition: none; }
+  .theme-swatch-button .theme-swatch { transform: none !important; }
+}

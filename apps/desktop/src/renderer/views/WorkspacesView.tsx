@@ -29,7 +29,7 @@ import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
-  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
+  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelView, saveAgentPanelView, statusGroupOf, wakeSourcesOf,
   type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -128,7 +128,11 @@ function projectOfWorkspace(w: Workspace, sessions: SessionSummary[], terminals:
  */
 export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): AgentStatus | null | undefined {
   switch (type) {
-    case 'session_meta': return undefined;
+    // News about the chat, not a turn: it can come after `done`, and nothing
+    // would then clear a "working" it set (hub.rs files these as Kind::Meta).
+    case 'session_meta':
+    case 'compaction':
+    case 'claude_code_background': return undefined;
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':
@@ -1082,7 +1086,7 @@ function SubAgentRow({
         className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
       />
       <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
-      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, session.activeWatchCount)} />
+      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, wakeSourcesOf(session))} />
     </button>
   );
 }

@@ -4,6 +4,7 @@ import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
 import { ClaudeBackgroundTasks, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
+import { shouldShowFirstPromptIntro } from '../firstPromptIntroGate.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
@@ -17,7 +18,7 @@ import { attachmentName, pastedFileName, planAttachment, unreadableNote } from '
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
 import { revealEditorCaret } from './agent-console/editorCaret.js';
-import React, { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
@@ -63,7 +64,7 @@ import { PhotoViewer } from './PhotoViewer.js';
 import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSeenIn, type ChatImageItem, type ChatImagesApi } from '../remoteImages.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -73,7 +74,7 @@ import { ExpertMonitor, ModeSwitch, useExpertMode, useShown } from './ModeViews.
 import { hasAppChrome } from '../chrome.js';
 import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
-import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
+import { ReplyStatsRow } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
 import { useWallLogs } from '../wallLogs.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
@@ -98,6 +99,8 @@ import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, Inc
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
+// The first-chat intro brings Remotion with it, so it loads only when it shows.
+const FirstPromptIntro = lazy(() => import('./FirstPromptIntro.js'));
 
 /**
  * How long the store's copy of the draft (read by the Context Inspector) trails
@@ -426,7 +429,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
 }) {
   if (row.kind === 'activity') return <ActivityGroup items={row.items} />;
   if (row.kind === 'compaction') return <CompactionSummary message={row.message} latest={row.latest} />;
-  if (row.kind === 'stats') return <div className="msg-ai"><TurnStatsLine stats={row.stats} /></div>;
+  if (row.kind === 'stats') return <div className="msg-ai"><ReplyStatsRow stats={row.stats} /></div>;
   if (row.kind === 'prs') {
     // Historical milestones stay anchored to their original transcript positions.
     return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} sessionId={sessionId} />)}</>;
@@ -1365,12 +1368,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   }, [hasDraft, composerH, surface]);
 
   /**
-   * Drag the line between the conversation and the composer to trade one for
-   * the other: up gives the message box more room for a long prompt, down gives
-   * it back to the transcript. Everything else in the composer (the controls,
-   * the attach row) keeps its size, so only the text box grows, and the
-   * transcript is never squeezed below TRANSCRIPT_MIN_H. Double-click the line
-   * to go back to growing with the draft.
+   * Drag the message box's top edge to trade room with the conversation: up
+   * gives the box more room for a long prompt, down gives it back to the
+   * transcript. Everything else in the composer (the controls, the attach row)
+   * keeps its size, so only the text box grows, and the transcript is never
+   * squeezed below TRANSCRIPT_MIN_H. Double-click the edge to go back to
+   * growing with the draft.
    */
   const startComposerResize = (e: React.PointerEvent) => {
     const ta = composerRef.current;
@@ -2018,11 +2021,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const canContinueReply = !!errorNotice && !question && !streaming && hasResumableProgress(session?.messages ?? []);
   // A transcript that ends on a cut-off reply (the app was closed mid-run, the
   // host restarted) has no `error` event left to announce it, so the notice is
-  // read off the record itself. Dismissing it is remembered per reply.
+  // read off the record itself, as is a failure the host saved for the same
+  // reason. Dismissing it is remembered per reply.
   const [dismissedInterruption, setDismissedInterruption] = useState<string | null>(null);
   useEffect(() => {
     if (!session) return;
-    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, !!held || finalizingReply.current, !!question);
+    const awaitingTranscript = !!held || finalizingReply.current;
+    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, awaitingTranscript, !!question);
     // A stale transcript can arrive before the completed record. Retire only
     // the inferred notice, never a provider error or a user-requested stop.
     if (reconcileInterruptionNotice(errorNotice, interrupted) !== errorNotice) {
@@ -2030,7 +2035,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       return;
     }
     if (errorNotice || dismissedInterruption === lastMsgId) return;
-    if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
+    const failure = streaming || awaitingTranscript || question ? null : savedTurnFailure(session);
+    if (failure) setErrorNotice(failure);
+    else if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
   }, [session, streaming, held, errorNotice, lastMsgId, dismissedInterruption, question]);
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
@@ -2434,6 +2441,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const wavePreset = useStore((s) => s.resolvedPreset);
   const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(wavePreset) : null;
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
+  // Someone's first ever new chat opens the "Send your first prompt" intro over it, once.
+  const [firstPromptIntroClosed, setFirstPromptIntroClosed] = useState(false);
+  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart, settings: s.settings, sessions: s.sessions }));
+  const closeFirstPromptIntro = useCallback(() => {
+    setFirstPromptIntroClosed(true);
+    // If saving fails it simply shows again next time.
+    void window.nekko.updateSettings({ firstPromptIntroSeen: true }).then((next) => useStore.setState({ settings: next }), () => {});
+  }, []);
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
   const wasCleanStart = useRef(false);
@@ -2735,7 +2750,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <span className="mr-2 font-medium" style={{ color: tone }}>{interruption.title}</span>
                         {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
                       </span>
-                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
+                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => {
+                        setDismissedInterruption(lastMsgId ?? null);
+                        setErrorNotice(null);
+                        if (session?.turnFailure) void window.nekko.setSessionOptions(sessionId, { turnFailure: null }).catch(() => {});
+                      }}>
                         <CloseIcon className="h-3 w-3" />
                       </button>
                     </div>
@@ -2802,21 +2821,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
         <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
-          {/* The resize grip rides the composer's top border: a wide invisible
-              hit area over a hairline that lights up on hover. */}
-          {surface !== 'composer' && !cleanStart && <div
-            className="group absolute inset-x-0 -top-1.5 z-10 h-3 cursor-row-resize"
-            onPointerDown={startComposerResize}
-            onDoubleClick={resetComposerHeight}
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="Resize the message box"
-            title="Drag to resize the message box · double-click to reset"
-          >
-            <span className="absolute inset-x-0 top-[5px] h-0.5 opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
-            <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
-          </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
+          {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : 'w-[min(90%,calc(100%-8px))]'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
@@ -2830,6 +2836,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </div>
             )}
             <div className="composer relative">
+            {/* The resize grip is part of the box: a wide invisible hit area on
+                its top border, with a pill that lights up there on hover. */}
+            {surface !== 'composer' && !cleanStart && <div
+              className="group absolute inset-x-0 -top-2 z-10 h-3 cursor-row-resize"
+              onPointerDown={startComposerResize}
+              onDoubleClick={resetComposerHeight}
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize the message box"
+              title="Drag to resize the message box · double-click to reset"
+            >
+              <span className="absolute left-1/2 top-[5px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
+            </div>}
             {/* The per-chat Nekko peeks over the composer's left end and watches
                 its caret; wall windows and the lone composer surface already
                 carry their own picker, and a new chat has the greeting cat. */}
@@ -3328,25 +3347,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
-                  {/* Prompt suggestions: one chip beside the microphone; its
-                      details open above it rather than pushing the editor. */}
-                  {!imageMode && showSuggest && (
-                    <PromptAnalyzer
-                      variant="chip"
-                      text={deferredDraft}
-                      sessionId={sessionId}
-                      canModelFill={hasProvider}
-                      workspaces={settings?.workspaces ?? []}
-                      contextItems={ctx?.items ?? []}
-                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
-                      onFill={({ snippet, placement }) => {
-                        setDraft((d) =>
-                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
-                        );
-                        composerRef.current?.focus();
-                      }}
-                    />
-                  )}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3362,6 +3362,24 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
+                {/* Suggestions get their own row, clear of the model and send controls. */}
+                {!imageMode && showSuggest && <div className="composer-suggestions-row" data-composer-suggestions-row>
+                    <PromptAnalyzer
+                      variant="chip"
+                      text={deferredDraft}
+                      sessionId={sessionId}
+                      canModelFill={hasProvider}
+                      workspaces={settings?.workspaces ?? []}
+                      contextItems={ctx?.items ?? []}
+                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
+                      onFill={({ snippet, placement }) => {
+                        setDraft((d) =>
+                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
+                        );
+                        composerRef.current?.focus();
+                      }}
+                    />
+                </div>}
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}

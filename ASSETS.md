@@ -27,3 +27,7 @@ Thank you to everyone who built and maintains these.
 | whisper.cpp and Whisper Tiny.en | Nekko Voice. Downloaded on first use, with its own notice beside it. | v1.9.2 | MIT | - | [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp) |
 | uv | Sets up the MLX runtime on Apple silicon. Downloaded when needed. | 0.12.21 | MIT OR Apache-2.0 | - | [astral-sh/uv](https://github.com/astral-sh/uv) |
 | Laya decision models | Quick on-device decisions, converted to ONNX by Nekko Labs | decision-models-v1 | Apache-2.0 | scripts/decision-models/LICENSE | [convaiinnovations](https://huggingface.co/convaiinnovations) |
+
+## GitHub contributor profile avatars
+
+The marketing homepage uses public GitHub profile avatars solely to credit the repository's contributors, with a link to each profile. Philip approved this use for the contributor section. These are user-owned profile images, not MIT-licensed project assets; no blanket reuse license is claimed. They are fetched at website build time, served first-party, regenerated on each deploy, and never committed. An unavailable image falls back to initials. Source: the [GitHub contributors API](https://docs.github.com/en/rest/repos/repos#list-repository-contributors) and each linked profile. Applicable [GitHub terms, sections D and H](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service). Removal or correction requests: hello@nekkoagent.com.

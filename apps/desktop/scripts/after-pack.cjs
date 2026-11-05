@@ -15,6 +15,7 @@ const { execFileSync } = require('node:child_process');
 const { existsSync } = require('node:fs');
 const { join } = require('node:path');
 const { vmEntitlements } = require('./sign-mac.cjs');
+const { devSigningIdentity } = require('./dev-signing.cjs');
 
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') return;
@@ -26,16 +27,19 @@ exports.default = async function afterPack(context) {
 
   const appName = `${context.packager.appInfo.productFilename}.app`;
   const appPath = join(context.appOutDir, appName);
+  // The development identity when this Mac has one (dev-signing.cjs): the
+  // Keychain then keeps its answers from one local build to the next.
+  const identity = devSigningIdentity() ?? '-';
   try {
-    execFileSync('codesign', ['--deep', '--force', '--sign', '-', appPath], { stdio: 'inherit' });
+    execFileSync('codesign', ['--deep', '--force', '--sign', identity, appPath], { stdio: 'inherit' });
     // --deep re-signed nekko-vm without its entitlement, which Virtualization
     // needs: sign it again with its own file, then reseal the app around it.
     const vm = join(appPath, 'Contents', 'Resources', 'bin', 'nekko-vm');
     if (existsSync(vm)) {
-      execFileSync('codesign', ['--force', '--sign', '-', '--entitlements', vmEntitlements, vm], { stdio: 'inherit' });
-      execFileSync('codesign', ['--force', '--sign', '-', appPath], { stdio: 'inherit' });
+      execFileSync('codesign', ['--force', '--sign', identity, '--entitlements', vmEntitlements, vm], { stdio: 'inherit' });
+      execFileSync('codesign', ['--force', '--sign', identity, appPath], { stdio: 'inherit' });
     }
-    console.log(`[after-pack] ad-hoc signed ${appName} (unsigned build)`);
+    console.log(identity === '-' ? `[after-pack] ad-hoc signed ${appName} (unsigned build)` : `[after-pack] signed ${appName} with "${identity}" (development build)`);
   } catch (e) {
     console.warn(`[after-pack] ad-hoc signing failed (continuing): ${e.message}`);
   }
