@@ -18,7 +18,7 @@ Philip asked (2026-11-04):
 ## What the user sees
 
 - **The chat list** shows the chats of every paired computer together, grouped and sorted as before (project folders of every computer, a Needs you group across all of them). With more than one computer paired, each row names its computer.
-- **The computer pill** above the list reads *All computers* with how many are online (*2 of 3 online*), or the one computer it is filtered to. Its menu starts with **Show chats from**: *All computers* or one computer, each with its connection state. The filter is kept on the phone; forgetting the filtered computer goes back to all. Picking one computer also makes it the active one, so the menu's other items (Files, Logs, Automations, Usage, Settings, the safety exits) act on it.
+- **The computer pill** above the list reads *Computers* with how many are online (*2 of 3 online*), or the one computer it is filtered to. Its menu starts with **Show chats from**: *All computers* or one computer, each with its connection state. The filter is kept on the phone; forgetting the filtered computer goes back to all. Picking one computer also makes it the active one, so the menu's other items (Files, Logs, Automations, Usage, Settings, the safety exits) act on it.
 - **No Connect anywhere.** Every paired computer stays connected and reconnects by itself. Opening a chat on any computer works straight away: the chat's computer becomes the active one over the link the phone already holds. A computer's page opens the same way. The computer menu's per-computer submenu (Connect, Forget) is gone; forgetting is on the computer's page and in Computers.
 - **Reconnect** shows only while a computer can't be reached: a line above the list for each such computer (*Studio PC is offline. This phone keeps trying.* with **Reconnect**, or **Pair again** when it refused this phone), in Computers (touch and hold), and on the computer's page. It dials at once instead of waiting for the next try.
 - **Computers** shows each computer's own state (Online, Connecting, Computer offline, Refused), not only the active one's.
@@ -34,7 +34,7 @@ Philip asked (2026-11-04):
 
 ## Acceptance
 
-- With two computers paired and online, the list shows both computers' chats with their computer named, the pill reads *All computers · 2 of 2 online*, and filtering to one shows only its chats.
+- With two computers paired and online, the list shows both computers' chats with their computer named, the pill reads *Computers · 2 of 2 online*, and filtering to one shows only its chats.
 - Opening a chat on the computer that isn't active opens it with no Connect step and no new connection; the other computer stays online in the pill.
 - A computer turned off shows its line with Reconnect within the relay's offline poll; turned on again, it comes back by itself.
 - New chat from a list filtered to computer B starts on B; from the all-computers list, on the computer used last; Run on lists both with their state.

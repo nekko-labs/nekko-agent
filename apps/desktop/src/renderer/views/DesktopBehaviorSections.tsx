@@ -41,6 +41,15 @@ function LowMemoryRows({ settings, update }: Props) {
   </>;
 }
 
+export function AccessibilitySection({ settings, update }: Props) {
+  return <section id="accessibility" className="card mt-5 p-5" aria-labelledby="accessibility-heading">
+    <h2 id="accessibility-heading" className="font-semibold">Accessibility</h2>
+    <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3"><div><span className="text-sm">Agent activity animation</span>
+      <p className="text-2xs text-ink-faint">Nekko moves beside Agent panel groups while agents work. Off holds Nekko still. This setting decides, whatever your system's reduce motion preference says.</p></div>
+      <Toggle aria-label="Agent activity animation" on={settings.agentActivityAnimation !== false} onChange={v => update({ agentActivityAnimation: v })} /></div>
+  </section>;
+}
+
 export function FunSection({ settings, update }: Props) {
   const tr = useT();
   return <section id="fun" className="card mt-5 p-5" aria-labelledby="fun-heading">

@@ -26,11 +26,14 @@ enum Route: Hashable {
     case liveActivities
     /// Settings → Simple mode: what Simple and Expert show, with a preview.
     case simpleMode
+    /// Settings → Models on this iPhone: the providers chats here run on (decision 0050).
+    case phoneModels
 }
 
 struct RootView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
+    @Environment(PhoneChats.self) private var phone
     @Environment(\.scenePhase) private var phase
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
@@ -121,8 +124,11 @@ struct RootView: View {
     private func takeNewChat() {
         guard app.newChatRequested, store.ready else { return }
         app.newChatRequested = false
-        if !store.computers.isEmpty { open(.newChat) }
+        if !store.computers.isEmpty || phoneRuns { open(.newChat) }
     }
+
+    /// This iPhone runs chats of its own, so the chat list shows with no computer paired.
+    private var phoneRuns: Bool { phone.isSetUp || !phone.chats.isEmpty }
 
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 
@@ -138,7 +144,7 @@ struct RootView: View {
     @ViewBuilder private var content: some View {
         if !store.ready && !(app.prefs.appLock && app.lock.locked) {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background { AppBackdrop() }
-        } else if store.computers.isEmpty {
+        } else if store.computers.isEmpty && !phoneRuns {
             NavigationStack {
                 if app.prefs.onboarded || introDone { WelcomeView() } else { FirstRunIntroView { introDone = true } }
             }
@@ -183,7 +189,7 @@ struct RouteView: View {
 
     var body: some View {
         switch route {
-        case .chat(let id): ChatView(sessionId: id)
+        case .chat(let id): ChatScreen(sessionId: id)
         case .newChat: NewChatView(path: $path, opened: openChat)
         case .computers: ComputersView()
         case .computer(let id): ComputerDetailView(computerId: id)
@@ -201,7 +207,17 @@ struct RouteView: View {
         case .security: SecuritySettingsView()
         case .liveActivities: LiveActivitySettingsView()
         case .simpleMode: SimpleModeSettingsView()
+        case .phoneModels: PhoneModelsView()
         }
+    }
+}
+
+/// A chat's screen: one on a computer, or one that runs on this iPhone.
+struct ChatScreen: View {
+    let sessionId: String
+
+    var body: some View {
+        if PhoneProviders.isPhoneChat(sessionId) { PhoneChatView(chatId: sessionId) } else { ChatView(sessionId: sessionId) }
     }
 }
 

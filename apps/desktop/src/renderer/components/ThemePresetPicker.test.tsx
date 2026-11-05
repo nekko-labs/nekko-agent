@@ -10,12 +10,21 @@ describe('theme palette slices', () => {
   it('uses adjacent hard stops rather than blending colors', () => {
     expect(slicedSwatch(['#111', '#222', '#333', '#444'])).toBe('conic-gradient(from 0deg, #111 0% 25%, #222 25% 50%, #333 50% 75%, #444 75% 100%)');
   });
-  it('places Spooky once in the final Fun! preset group', () => {
+  it('shows the Nekko light/dark toggle above the curated themes, with Spooky under Seasonal', () => {
     const markup = renderToStaticMarkup(<ThemePresetPicker settings={{ theme: 'dark', accent: '#6d5efc' } as AppSettings} update={() => {}} />);
-    expect(markup).toContain('aria-label="Fun!"');
+    expect(markup).toContain('data-nekko-mode="light"');
+    expect(markup).toContain('data-nekko-mode="dark"');
+    expect(markup.indexOf('aria-label="Nekko mode"')).toBeLessThan(markup.indexOf('aria-label="Themes"'));
+    for (const name of ['Nebula', 'Terminal', 'Nord', 'Ember', 'Forest', 'Blueberry']) expect(markup).toContain(`title="${name}"`);
+    for (const gone of ['Solar', 'Lilac', 'Lavender', 'Raspberry', 'Cyber', 'Tidepool', 'Colourful']) expect(markup).not.toContain(`title="${gone}`);
     expect(markup.match(/title="Spooky"/g)).toHaveLength(1);
-    expect(markup).not.toContain('title="Autumn"');
-    expect(markup.indexOf('aria-label="Fun!"')).toBeGreaterThan(markup.indexOf('settings.themeDark'));
+    expect(markup.indexOf('aria-label="Seasonal"')).toBeGreaterThan(markup.indexOf('aria-label="Themes"'));
+  });
+  it('offers only Light and Dark versions of a family', () => {
+    const markup = renderToStaticMarkup(<ThemePresetPicker settings={{ theme: 'light', themePreset: 'x-forest-white' } as AppSettings} update={() => {}} />);
+    expect(markup).toContain('aria-label="Forest versions"');
+    expect(markup).not.toContain('x-forest-colour');
+    expect(markup).not.toContain('Colourful');
   });
   it('renders preset and custom circles with solid slices', () => {
     const markup = renderToStaticMarkup(<ThemePresetPicker settings={{ theme: 'dark', accent: '#6d5efc' } as AppSettings} update={() => {}} />);

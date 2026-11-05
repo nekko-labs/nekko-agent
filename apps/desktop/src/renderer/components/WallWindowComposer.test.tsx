@@ -28,7 +28,17 @@ describe('a composer in every wall window (#1317)', () => {
     expect(html).not.toContain('send-avatar');
   });
 
-  it('keeps the Agent tab composer as it was', () => {
+  it.each([{}, { commandCenter: true }, { surface: 'composer' as const }])('uses one borderless send/stop slot without standalone Automate: %j', (props) => {
+    withProvider();
+    const html = renderChatPane(chatSession(), props);
+    expect(html.match(/data-composer-action="send"/g)).toHaveLength(1);
+    expect(html).toContain('composer-action');
+    expect(html).not.toContain('data-composer-action="stop"');
+    expect(html).not.toContain('Automate: schedule, repeat, or run in the background');
+    expect(html).not.toContain('data-composer-automate');
+  });
+
+  it('keeps the Agent tab send avatar', () => {
     withProvider();
     const agentTab = renderChatPane(chatSession());
     expect(agentTab).not.toContain('data-wall-composer');

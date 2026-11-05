@@ -27,8 +27,12 @@ const LAST_REPLY_CHARS = 200;
 /** A session's own fields, which a summary and a full session both carry. */
 export type SessionMeta = Omit<Session, 'messages'>;
 
-/** Where a chat is in the agent loop, as the Agents panel groups it. */
-export type LoopPhase = 'exploring' | 'building' | 'verifying' | 'shipping';
+/**
+ * Where a chat is in the agent loop, as the Agents panel groups it. Reading and
+ * changing are one phase, `building`; engines from before that still send
+ * `exploring`, which the panel files under Building.
+ */
+export type LoopPhase = 'building' | 'verifying' | 'shipping';
 
 export interface SessionSummary extends SessionMeta {
   /** Armed watches, including ones due while the chat is busy. Supplied by the host. */

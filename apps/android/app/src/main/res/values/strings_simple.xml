@@ -38,14 +38,14 @@
     <string name="simple_logs_connect">Connect to read its logs</string>
     <string name="simple_logs_subject">Nekko Agent connection log</string>
     <string name="simple_mode_title">Simple mode</string>
-    <string name="simple_mode_detail">What Simple and Expert show</string>
-    <string name="simple_mode_detail_changed">What Simple and Expert show · %1$d changed</string>
+    <string name="simple_mode_detail">What Simple and Detailed show</string>
+    <string name="simple_mode_detail_changed">What Simple and Detailed show · %1$d changed</string>
     <string name="simple_intro">Simple is a cleaner, more focused view, and details show only when they matter. Everything still works.</string>
     <string name="simple_preview">Preview</string>
     <string name="simple_preview_mode">Preview %1$s</string>
     <string name="simple_reset">Reset to defaults</string>
     <string name="simple_choice_show">Show</string>
-    <string name="simple_choice_expert">Expert only</string>
+    <string name="simple_choice_expert">Detailed only</string>
     <string name="simple_choice_hide">Hide</string>
     <string name="simple_choice_auto">When running</string>
     <string name="simple_choice_always">Always</string>
@@ -53,7 +53,7 @@
     <string name="simple_part_hidden">%1$s, hidden</string>
     <string name="simple_one_model">1 model</string>
     <string name="simple_switch_simple">Simple: everyday controls</string>
-    <string name="simple_switch_expert">Expert: every control</string>
+    <string name="simple_switch_expert">Detailed: every control</string>
     <string name="simple_area_header">Chat · header</string>
     <string name="simple_area_box">Chat · message box</string>
     <string name="simple_area_conversation">Chat · conversation</string>

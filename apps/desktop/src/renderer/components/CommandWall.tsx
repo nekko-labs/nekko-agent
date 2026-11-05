@@ -52,7 +52,7 @@ import { ChatPane } from './ChatPane.js';
 import { FilePane } from './FilePane.js';
 import { ExplorerPane } from './ExplorerPane.js';
 import { WorkingSubagents } from './WorkingSubagents.js';
-import { TargetIcon } from '../icons.js';
+import { FocusIcon } from '../gentleface-icons.js';
 import { agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
 import { WallMascot, WallNumber } from './WallMascot.js';
 import { BrowserPane } from './BrowserPane.js';
@@ -157,7 +157,7 @@ import { PaneVisibleContext } from '../paneVisibility.js';
 import { Shown } from './ModeViews.js';
 
 /** Length of the span button at the end of each add-zone rail. */
-const RAIL_SPAN = 24;
+
 
 /** The kinds the wall's compass offers, in order. */
 const WALL_ADDABLE: PaneKind[] = [...WALL_KINDS];
@@ -404,11 +404,14 @@ export function CommandWall({
   const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : DEFAULT_ASPECT;
   // While a window is held the wall lays out as if it had been dropped, so the
   // others step aside and the held window's own box is the landing zone.
+  const [railPreview, setRailPreview] = useState<ZoneSpot | null>(null);
+  const zonePreview = useMemo(() => railPreview && !lift ? addZone(state.root, railPreview) : null, [state.root, railPreview, !!lift]);
   const view = useMemo(() => {
+    if (zonePreview?.id) return { ...state, root: zonePreview.root };
     if (!lift) return state;
     const root = applyWallDrop(state.root, lift.paneId, lift.target);
     return root && root !== state.root ? { ...state, root } : state;
-  }, [state, lift]);
+  }, [state, lift, zonePreview]);
   const { geometry, expanded } = useMemo(() => {
     const state = view;
     const base = commandWallGeometry(state, size.width, size.height, new Set(), !!addContent);
@@ -453,20 +456,51 @@ export function CommandWall({
   const held = useRef<{ paneId: string; rects: Map<string, Rect>; grab: { x: number; y: number }; target: WallDropTarget; grid: boolean; stage: { width: number; height: number }; at?: { x: number; y: number } } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [heldCard, setHeldCard] = useState<{ title: string; kind: PaneKind; from: DOMRect; card: { width: number; height: number }; at: { x: number; y: number } } | null>(null);
+  // A press only arms pickup. Clicks must not lift the zone or flash its landing preview.
+  const pendingPickup = useRef<{ pointerId: number; x: number; y: number; start: (x: number, y: number) => void } | null>(null);
+  useEffect(() => {
+    const cancel = () => { pendingPickup.current = null; };
+    const release = (e: PointerEvent) => { if (pendingPickup.current?.pointerId === e.pointerId) cancel(); };
+    const move = (e: PointerEvent) => {
+      const p = pendingPickup.current;
+      if (!p || e.pointerId !== p.pointerId || (e.clientX === p.x && e.clientY === p.y)) return;
+      cancel();
+      if (!(e.buttons & 1)) return;
+      p.start(e.clientX, e.clientY);
+    };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') cancel(); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    window.addEventListener('blur', cancel);
+    window.addEventListener('keydown', key, true);
+    return () => {
+      cancel();
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+      window.removeEventListener('blur', cancel);
+      window.removeEventListener('keydown', key, true);
+    };
+  }, []);
   const pickUp = (e: React.PointerEvent, pane: WbPane, title: string) => {
     const win = (e.currentTarget as HTMLElement).closest<HTMLElement>('[data-wall-pane]');
     if (!win || held.current) return;
     const from = win.getBoundingClientRect();
     const card = heldSize(from.width, from.height);
     const k = card.width / (from.width || 1);
-    held.current = {
-      paneId: pane.id, rects: new Map(shownPanes), grab: { x: (e.clientX - from.left) * k, y: (e.clientY - from.top) * k }, target: HOME,
-      // A one-column wall is a list, not a tree: it swaps like the fixed grid.
-      grid: wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH,
-      stage: { width: size.width, height: geometry.stageHeight },
-    };
-    setHeldCard({ title, kind: pane.kind, from, card, at: { x: e.clientX, y: e.clientY } });
-    setLift({ paneId: pane.id, target: HOME });
+    const grab = { x: (e.clientX - from.left) * k, y: (e.clientY - from.top) * k };
+    pendingPickup.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, start: (x, y) => {
+      if (!win.isConnected) return;
+      held.current = {
+        paneId: pane.id, rects: new Map(shownPanes), grab, target: HOME,
+        // A one-column wall is a list, not a tree: it swaps like the fixed grid.
+        grid: wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH,
+        stage: { width: size.width, height: geometry.stageHeight },
+      };
+      setHeldCard({ title, kind: pane.kind, from, card, at: { x, y } });
+      setLift({ paneId: pane.id, target: HOME });
+    } };
   };
   // The card leaves from the window's own rectangle and settles, smaller, under the pointer.
   useLayoutEffect(() => {
@@ -620,7 +654,6 @@ export function CommandWall({
   };
 
   // The thin plus buttons along the right and bottom edges, and the zone a hovered one would add.
-  const [railPreview, setRailPreview] = useState<ZoneSpot | null>(null);
   const addZoneAt = (spot: ZoneSpot) => setState((s) => {
     const { root, id } = addZone(s.root, spot);
     return id ? { ...s, root, activeZone: id } : s;
@@ -893,7 +926,7 @@ export function CommandWall({
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
           onClose={() => { void closeWallAgent(pane, () => live.current.update((root) => clearZone(root, pane.id))); }}
-          focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><TargetIcon className="h-5 w-5" /></button>}
+          focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><FocusIcon className="h-5 w-5" /></button>}
           onMinimize={() => live.current.update((root) => clearZone(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
         >
@@ -988,21 +1021,10 @@ export function CommandWall({
     });
   };
 
-  // The add-zone rails: one plus per zone along the right and bottom edges
-  // (fitting that zone's row or column), and one that spans the whole side
-  // when that would come out differently.
+  // One stable header-level plus previews a full-height column. Existing zones
+  // use that same tree while hovering, so preview and commit have equal boxes.
   const zoneRails = state.layout.mode !== 'focus' && wallArrangement(state.layout) === 'grid' && size.width >= NARROW_WIDTH && !addContent && !!state.root;
-  const railSegments = (side: 'right' | 'down') => allPanes(state.root).flatMap((p) => {
-    const r = shownPanes.get(p.id);
-    if (!r) return [];
-    if (side === 'right') return r.x + r.width >= size.width - 8 ? [{ paneId: p.id, from: r.y, len: r.height, full: r.height >= geometry.stageHeight - 8 }] : [];
-    return r.y + r.height >= geometry.stageHeight - 8 ? [{ paneId: p.id, from: r.x, len: r.width, full: r.width >= size.width - 8 }] : [];
-  });
-  const railGhost = useMemo(() => {
-    if (!railPreview) return null;
-    const { root, id } = addZone(state.root, railPreview);
-    return id ? commandWallGeometry({ ...state, root }, size.width, size.height).panes.get(id) ?? null : null;
-  }, [railPreview, state, size]);
+  const railGhost = zonePreview?.id ? geometry.panes.get(zonePreview.id) : null;
   const spanWord = (side: Direction) => (side === 'left' || side === 'right' ? { span: 'full height', fit: 'row' } : { span: 'full width', fit: 'column' });
   const heldBox = lift ? shownPanes.get(lift.paneId) : undefined;
   const spanHint = lift && heldBox && (lift.target.kind === 'edge' || (lift.target.kind === 'beside' && lift.target.atEdge))
@@ -1049,30 +1071,11 @@ export function CommandWall({
         {railGhost && <div className="wall-zone-ghost" aria-hidden style={{ left: railGhost.x, top: railGhost.y, width: railGhost.width, height: railGhost.height }}><span>New zone</span></div>}
         {spanHint && heldBox && <div className="wall-span-hint" role="status" style={{ left: heldBox.x + heldBox.width / 2, top: heldBox.y + heldBox.height / 2 }}>{spanHint}</div>}
         </div>
-        {zoneRails && (['right', 'down'] as const).map((side) => {
-          const segments = railSegments(side);
-          const across = side === 'right';
-          const { span, fit } = spanWord(side);
-          const preview = (spot: ZoneSpot) => ({ onPointerEnter: () => setRailPreview(spot), onFocus: () => setRailPreview(spot), onPointerLeave: () => setRailPreview(null), onBlur: () => setRailPreview(null) });
-          // Each plus covers its zone's whole edge; the span button takes the
-          // rail's last RAIL_SPAN pixels, so the strip beside it stops short.
-          const end = across ? geometry.stageHeight : size.width;
-          const spans = segments.some((g) => !g.full);
-          const stop = spans ? end - RAIL_SPAN - 4 : end;
-          return <div key={side} className="wall-zone-rail" data-side={side} style={across ? { left: size.width, top: 0, height: geometry.stageHeight } : { left: 0, top: geometry.stageHeight, width: size.width }}>
-            {segments.map((g) => {
-              const len = Math.max(0, Math.min(g.from + g.len, stop) - g.from);
-              return <button key={g.paneId} type="button" className="wall-zone-add" style={across ? { top: g.from, height: len } : { left: g.from, width: len }}
-                aria-label={`Add a zone to this ${fit}`} title={`Add a zone to this ${fit} (Shift-click: span the ${span})`}
-                {...preview({ paneId: g.paneId, side })}
-                onClick={(e) => { addZoneAt(e.shiftKey ? { edge: side } : { paneId: g.paneId, side }); setRailPreview(null); }}><PlusIcon className="h-3 w-3" /></button>;
-            })}
-            {spans && <button type="button" className="wall-zone-add wall-zone-span" style={across ? { top: end - RAIL_SPAN, height: RAIL_SPAN } : { left: end - RAIL_SPAN, width: RAIL_SPAN }}
-              aria-label={`Add a zone spanning the ${span}`} title={`Add a zone spanning the ${span}`}
-              {...preview({ edge: side })}
-              onClick={() => { addZoneAt({ edge: side }); setRailPreview(null); }}><SpanIcon className="h-3 w-3" /></button>}
-          </div>;
-        })}
+        {zoneRails && <button type="button" className="wall-zone-add" style={{ left: size.width + 2, top: 0 }}
+          aria-label="Add zone" title="Add zone as a column, then drag its header to move it"
+          onPointerEnter={() => setRailPreview({ edge: 'right' })} onFocus={() => setRailPreview({ edge: 'right' })}
+          onPointerLeave={() => setRailPreview(null)} onBlur={() => setRailPreview(null)}
+          onClick={() => { addZoneAt({ edge: 'right' }); setRailPreview(null); }}><PlusIcon className="h-3.5 w-3.5" /></button>}
         {/* Add window lives beside the composer; the wall only shows the slot it opens. */}
         {addContent && <div className="command-wall-add-zone">
           {<section className={`command-wall-add${addContent ? ' command-wall-add-tile' : ''}`} data-preview={!!addContent || undefined} data-solid={!!addContent || undefined} style={{ left: geometry.add.x, top: geometry.add.y, width: geometry.add.width, height: addContent ? Math.max(createHeight + 64, geometry.add.height) : geometry.add.height, position: 'absolute' }}>
@@ -1083,11 +1086,6 @@ export function CommandWall({
       </div>
     </div>
   );
-}
-
-/** A plus between two end bars: a new zone that runs the whole side. Drawn for the right rail; the bottom rail turns it. */
-function SpanIcon({ className }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className={className} aria-hidden><path d="M7 3h10M7 21h10M12 8v8M8 12h8" /></svg>;
 }
 
 /** Closing stops work before removing its view; minimizing only hides it. */

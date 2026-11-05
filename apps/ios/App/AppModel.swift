@@ -21,6 +21,8 @@ final class AppModel {
     let previews: PreviewLoader
     /// Nekko Cloud sign-in and end-to-end encrypted sync (its own Keychain service).
     let cloud: CloudSync
+    /// This iPhone as a place chats run, on its own cloud providers (decision 0050).
+    let phone: PhoneChats
     private let cloudKeychain: KeychainStore
     private let cloudKey: CloudDeviceKey
     let lock: AppLock
@@ -112,6 +114,23 @@ final class AppModel {
         self.cloudKeychain = cloudKeychain
         cloudKey = key
         cloud = CloudSync(api: Self.cloudURL, secrets: cloudKeychain, files: offlineFiles, deviceLabel: deviceName, key: { try key.get() })
+        // Its keys have a Keychain service of their own, apart from the pairing keys.
+        let phoneKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.phone-providers")
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { phoneKeychain.wipe() }
+        #endif
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneProvider") {
+            // A provider that answers inside the simulator, with no network or real key.
+            let fixture = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: FixturePhoneHTTP())
+            if fixture.providers.isEmpty { _ = try? fixture.add(kind: "anthropic", label: "Fixture Claude", baseUrl: nil, key: "fixture-key") }
+            phone = fixture
+        } else {
+            phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
+        }
+        #else
+        phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
+        #endif
         lock = AppLock(enabled: prefs.appLock)
         #if DEBUG
         // What the share extension leaves behind, without driving another app's share sheet.
@@ -601,6 +620,7 @@ final class AppModel {
         cloud.forgetAll()
         cloudKey.forget()
         cloudKeychain.wipe()
+        phone.forgetAll()
         chatLists.removeAll()
         transcriptFiles.removeAll()
         offlineFiles.removeAll()

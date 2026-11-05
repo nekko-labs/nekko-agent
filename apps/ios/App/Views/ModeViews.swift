@@ -24,7 +24,7 @@ struct ModeToggle: View {
         .background(palette.surface2, in: Capsule())
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Mode")
-        .accessibilityValue(prefs.expertMode ? String(localized: "Expert") : String(localized: "Simple"))
+        .accessibilityValue(prefs.expertMode ? String(localized: "Detailed") : String(localized: "Simple"))
         .accessibilityIdentifier("chat.mode")
     }
 
@@ -40,7 +40,7 @@ struct ModeToggle: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(expert ? String(localized: "Expert: every control") : String(localized: "Simple: everyday controls"))
+        .accessibilityLabel(expert ? String(localized: "Detailed: every control") : String(localized: "Simple: everyday controls"))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 

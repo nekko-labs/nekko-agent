@@ -18,7 +18,15 @@ async function main() {
     if (process.platform === 'win32') cp.execFileSync('tar', ['-xf', zip, '-C', source]);
     else cp.execFileSync('python3', ['-c', 'import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])', zip, source]);
     entry = path.join(out, 'base-fixture.tsx');
-    fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, 'agent-window-controls-fixture.tsx'), 'utf8').replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/')));
+    // The fixture and the helpers it imports from this folder (./store-sidebar) are copied
+    // beside it under .shots, each pointed at the base revision's renderer.
+    const toBase = text => text.replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/'));
+    const fixture = fs.readFileSync(path.join(__dirname, 'agent-window-controls-fixture.tsx'), 'utf8');
+    for (const [, name] of fixture.matchAll(/from '\.\/([\w-]+)'/g)) {
+      const file = ['.tsx', '.ts'].map(ext => name + ext).find(f => fs.existsSync(path.join(__dirname, f)));
+      if (file) fs.writeFileSync(path.join(out, file), toBase(fs.readFileSync(path.join(__dirname, file), 'utf8')));
+    }
+    fs.writeFileSync(entry, toBase(fixture));
     shared = path.join(source, 'packages/shared/src/index.ts');
   }
   await require(path.join(modules, 'esbuild')).build({ entryPoints: [entry], bundle: true, jsx: 'automatic', conditions: ['style', 'browser', 'import', 'default'], format: 'iife', outfile: path.join(out, 'fixture.js'), nodePaths: [modules], plugins: [{ name: 'unused-mermaid-guard', setup(build) { build.onResolve({ filter: /^mermaid$/ }, () => ({ path: 'unused-mermaid', namespace: 'fixture' })); build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: "export default { initialize(){}, async render(){ throw Error('Mermaid is outside the window-controls fixture'); } }", loader: 'js' })); } }], alias: { '@nekko-agent/shared': shared, '@fixture/context': path.join(repo, 'apps/desktop/scripts/fixture-context.ts') }, loader: { '.woff2': 'dataurl', '.svg': 'dataurl', '.png': 'dataurl', '.wasm': 'file' } });

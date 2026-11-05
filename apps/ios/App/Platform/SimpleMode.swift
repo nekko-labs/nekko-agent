@@ -19,7 +19,7 @@ enum SimpleVisibility: String, CaseIterable, Codable {
         switch self {
         case .auto: return String(localized: "When running")
         case .show: return item.fallback == .auto ? String(localized: "Always") : String(localized: "Show")
-        case .expert: return String(localized: "Expert only")
+        case .expert: return String(localized: "Detailed only")
         case .hide: return String(localized: "Hide")
         }
     }
