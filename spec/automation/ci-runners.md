@@ -90,6 +90,10 @@ Checked against the 2026-11-03 Native iOS run: all 6 vCPUs full for 14% (under 2
 
 **Not in this version.** Per-step breakdowns (the analysis joined samples to step times by hand; the rules need only the job). A floor read from each job's hosted history through the Actions API (the app already has `actions: write`), which would raise the floor for jobs that run on `*-xlarge` (5 vCPUs, 14 GB) or `*-large` (12 vCPUs, 30 GB) hosted Macs. Resizing a ready VM when the size changes.
 
+### One bigger VM with parallel test workers `[implemented 2026-11-05 in Native iOS and the user docs; not yet run on a runner VM with 4+ vCPUs]`
+
+Apple's cap of 2 macOS VMs per Mac fixes how many jobs a Mac runs at once, and the rule stays one job per throwaway VM: several jobs never share a VM. The way to more throughput on one Mac is a bigger VM whose job runs its tests in parallel. For CPU-bound test suites the guidance ([docs/ci-runners.md](../../docs/ci-runners.md#get-more-out-of-one-mac)) is one VM with more vCPUs and memory and `xcodebuild -parallel-testing-enabled YES -parallel-testing-worker-count N`, with N from the VM's `hw.ncpu` (one worker per 2 vCPUs and 4 GB, at most 4), over two small VMs. Native iOS does this for its first-run suite (unit tests and the UI tests that set their state by launch argument); a hosted 3-vCPU Mac works out to 1 worker and runs it serially. The live relay journeys stay serial: each is one test against its own host-side stack, with the appearance set on the one simulator. The settings do not suggest this yet; the suggested VM size above is where it would go.
+
 ## Keep awake `[planned]`
 
 Exact labels.
