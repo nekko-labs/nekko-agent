@@ -24,8 +24,20 @@ app.whenReady().then(async () => {
   // A hidden window paints only when asked: invalidate and let a frame land, or the capture shows the previous state.
   const shot = async name => { for (let i = 0; i < 3; i++) { win.webContents.invalidate(); await sleep(500); await win.capturePage(undefined, { stayHidden: true }); } const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(f); };
   const until = async (code, what, tries = 80) => { for (let i = 0; i < tries; i++) { if (await run(code)) return; await sleep(100); } throw Error('Timed out waiting for ' + what); };
-  const click = sel => run(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) throw Error('Missing ${sel}'); e.click(); })()`);
-  const button = text => run(`(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === ${JSON.stringify(text)}); if (!b) throw Error('Missing button ${text}'); b.click(); })()`);
+  // Calls a fixed page function with real arguments over CDP, so no value is ever spliced into code.
+  const call = async (fn, ...args) => {
+    const dbg = win.webContents.debugger;
+    const { result: page } = await dbg.sendCommand('Runtime.evaluate', { expression: 'globalThis' });
+    const { result, exceptionDetails } = await dbg.sendCommand('Runtime.callFunctionOn', { objectId: page.objectId, functionDeclaration: fn.toString(), arguments: args.map((value) => ({ value })), awaitPromise: true, returnByValue: true });
+    if (exceptionDetails) throw Error(exceptionDetails.exception?.description || exceptionDetails.text);
+    return result.value;
+  };
+  const clickDialogButton = function (text) {
+    const b = [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === text);
+    if (!b) throw Error('Missing button ' + text);
+    b.click();
+  };
+  const button = text => call(clickDialogButton, text);
   const open = '!!document.querySelector("[data-first-prompt-intro-step]")';
   try {
     await win.loadURL('about:blank');
