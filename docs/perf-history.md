@@ -113,6 +113,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### #1833 iPhone: cat from the first frame, straight to the zoom after Face ID (2026-11-05)
+Area: renderer
+Result: improvement
+Conditions: iPhone 17 Pro simulator, iOS 27.0, Xcode 27.2, Debug build signed ad hoc, app lock on, simulated Face ID match. Screen recordings via `simctl io recordVideo`, read frame by frame at 1/30 s: from the last frame showing the Face ID sheet to the first frame with no lavender left on screen. Two cold launches per build (fresh install, then relaunch without reinstall).
+
+| Metric | Before | After |
+|---|---|---|
+| Face ID sheet gone to app fully on screen, fresh install | 1.97 s | 0.77 s |
+| Face ID sheet gone to app fully on screen, relaunch | 1.97 s | 0.90 s |
+
+Why: the launch animation no longer builds the cat up from pixels (1.25 s) before the 0.525 s zoom; the cat is already on the launch screen and lock cover, so the zoom starts at once. Simulator Debug timing, not a device; app startup before the Face ID prompt (about 2 s here) did not change.
+
 ### #1663 / #1686 Empty-agent wave: per-frame swell, then per-column colour (2026-11-04)
 Area: renderer
 Result: mixed (#1663 costs more raster per second than #1495; #1686 brings it below #1495), microbenchmark only
