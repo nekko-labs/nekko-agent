@@ -20,6 +20,7 @@ import {
   reasonText,
   networkText,
   recommendationText,
+  suggestedSizeRow,
   runnerActivity,
   runnerSubtitle,
   runnerTitle,
@@ -49,7 +50,7 @@ const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['conf
     settings: { ...DEFAULT_RUNNER_SETTINGS, ...settings },
   },
   state: 'waiting', slots: [], reasons: [], available: 1, limit: null, awake: false, error: null,
-  today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [],
+  today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [], suggestedSize: null,
   ...over,
 });
 const slot = (state: SlotView['state'], over: Partial<SlotView> = {}): SlotView => ({ state, job: null, since: now, drainEndsAt: null, ...over });
@@ -189,6 +190,19 @@ describe('runner helpers', () => {
     expect(recommendationText({ ...host, recommendedMemoryMb: 24576 })).toBe('Recommended: 24 GB for this Mac');
     // Before the first sample the host is all zeros: no "0 GB".
     expect(recommendationText(host)).toBe('');
+  });
+
+  it('shows the suggested size, and Apply only when it differs', () => {
+    const at = (s: RunnerView['suggestedSize']) => suggestedSizeRow(view({ host: { ...host, cpusPerVm: 6 }, suggestedSize: s }, { memoryPerVmMb: 10240 }));
+    expect(at(null)).toBeNull();
+    expect(at({ jobs: 1, cpus: 6, memoryMb: 10240, reasons: [] })).toEqual({ line: 'Suggested size after 3 jobs at this size (1 so far).', reasons: [], apply: null });
+    expect(at({ jobs: 4, cpus: 6, memoryMb: 10240, reasons: [] })).toEqual({ line: 'Fits your last 4 jobs.', reasons: [], apply: null });
+    const why = ['The biggest job used 5.4 GB at most and never swapped.'];
+    expect(at({ jobs: 4, cpus: 6, memoryMb: 8192, reasons: why })).toEqual({
+      line: 'Suggested for your jobs: 6 vCPUs, 8 GB (now 6 vCPUs, 10 GB).',
+      reasons: why,
+      apply: { cpusPerVm: 6, memoryPerVmMb: 8192 },
+    });
   });
 
   it('counts VMs and keep-awake across runners', () => {

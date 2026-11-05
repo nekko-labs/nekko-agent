@@ -20,6 +20,8 @@ pub const MAX_CHATS: usize = 8;
 pub const FINISHED_TAIL: f64 = 2.0 * 3600.0;
 /// The encoded state's budget, under ActivityKit's 4 KB.
 pub const MAX_BYTES: usize = 3500;
+/// A row's title on the card, in characters.
+pub const TITLE_LENGTH: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LiveLevel {
@@ -86,6 +88,8 @@ impl LiveChatState {
 pub struct LiveChat {
     pub id: String,
     pub short: String,
+    /// The chat's title for its row, at most `TITLE_LENGTH`; empty at Minimal.
+    pub title: String,
     pub state: LiveChatState,
     pub step: String,
     pub reply: String,
@@ -122,6 +126,7 @@ impl LiveChat {
             id: v.get("id")?.as_str()?.to_string(),
             state: LiveChatState::parse(v.get("state")?.as_str()?),
             short: text(v, "short"),
+            title: text(v, "title"),
             step: text(v, "step"),
             reply: text(v, "reply"),
             close_word: text(v, "closeWord"),
@@ -136,6 +141,10 @@ impl LiveChat {
         let mut o = Map::new();
         o.insert("id".into(), json!(self.id));
         o.insert("short".into(), json!(self.short));
+        // Left out when empty, as the phone writes it, so a card without titles keeps its size.
+        if !self.title.is_empty() {
+            o.insert("title".into(), json!(self.title));
+        }
         o.insert("state".into(), json!(self.state.as_str()));
         o.insert("step".into(), json!(self.step));
         o.insert("reply".into(), json!(self.reply));
@@ -241,8 +250,10 @@ pub fn build_card(
 
     for c in &mut kept {
         c.step = one_line(&c.step, 60);
+        c.title = one_line(&c.title, TITLE_LENGTH);
         if level == LiveLevel::Minimal {
             c.short.clear();
+            c.title.clear();
             c.step.clear();
         }
         if level != LiveLevel::Detailed {
@@ -631,6 +642,7 @@ impl Cards {
                 Some(LiveChat {
                     id: id.to_string(),
                     short: short_title(title),
+                    title: title.to_string(),
                     state,
                     step,
                     reply: s.map(|s| s.reply.clone()).unwrap_or_default(),
@@ -829,6 +841,7 @@ mod tests {
         ]);
         let (_, card) = only(&c.set_summaries(&list, T0 + 2.0));
         assert_eq!((card.chats[0].short.as_str(), card.chats[0].reply.as_str()), ("Fix", "On it."));
+        assert_eq!(card.chats[0].title, "Fix login bug", "the row shows the whole title");
         // A sub-agent's chat is not on the phone's list, so not on the card.
         assert!(c.on_event(&tool("sub", "ls"), T0 + 20.0).is_empty());
     }
@@ -839,6 +852,7 @@ mod tests {
         c.set("phone-1", &json!([{ "level": "minimal" }]), T0);
         let (_, card) = only(&c.on_event(&tool("s1", "npm test"), T0));
         assert_eq!((card.chats[0].short.as_str(), card.chats[0].step.as_str()), ("", ""));
+        assert_eq!(card.chats[0].title, "", "no title at Minimal");
         // Another phone at Standard: text goes out, the relay blanks it for the first.
         let (_, card) = only(&c.set("phone-2", &json!([{ "level": "standard" }]), T0 + 1.0));
         assert_eq!(card.chats[0].step, "Run npm test");

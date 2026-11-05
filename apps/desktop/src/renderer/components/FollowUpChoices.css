@@ -1,0 +1,28 @@
+.follow-up-location {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  isolation: isolate;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: var(--text-2xs);
+  line-height: 20px;
+}
+.follow-up-location__thumb {
+  position: absolute;
+  inset: 2px auto 2px 2px;
+  width: calc(50% - 2px);
+  border-radius: inherit;
+  background: var(--surface);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 12%, transparent);
+  transition: transform 160ms ease;
+}
+.follow-up-location[data-where="subagent"] .follow-up-location__thumb { transform: translateX(100%); }
+.follow-up-location label { position: relative; width: 65px; text-align: center; cursor: pointer; }
+.follow-up-location input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.follow-up-location label > span { display: block; border-radius: 999px; color: var(--ink-faint); pointer-events: none; }
+.follow-up-location input:checked + span { color: var(--ink); font-weight: 600; }
+.follow-up-location input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .follow-up-location__thumb { transition: none; } }

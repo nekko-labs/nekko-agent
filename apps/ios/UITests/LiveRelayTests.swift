@@ -537,7 +537,7 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-0-search")
         app.buttons["chats.search.cancel"].tap()
         XCTAssertTrue(waitGone(search, 5), "Cancel closes the search")
-        XCTAssertTrue(app.buttons["Simple: everyday controls"].waitForExistence(timeout: 5), "the slim row is back")
+        XCTAssertTrue(app.buttons["chats.view"].waitForExistence(timeout: 5), "the toolbar is back")
 
         // Logs: this phone's, then each computer's.
         XCTAssertTrue(waitForFrame(menu, in: app, 10))
@@ -565,10 +565,8 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-1-simple")
         auditAccessibility(app, "modes-simple")
 
-        // Expert: the context gauge. The hardware stays away here too until a local model runs.
-        let expert = app.buttons["Detailed: every control"]
-        XCTAssertTrue(expert.waitForExistence(timeout: 5))
-        expert.tap()
+        // Detailed, from the chat's More menu: the context gauge. The hardware stays away here too until a local model runs.
+        chooseMode("Detailed", in: app)
         let panel = app.buttons["chat.monitor"]
         XCTAssertFalse(panel.waitForExistence(timeout: 5), "Detailed has no monitor without a local model")
         XCTAssertTrue(app.buttons["chat.context"].exists, "Detailed shows the context gauge")
@@ -625,9 +623,7 @@ final class LiveRelayTests: XCTestCase {
         app.buttons["Done"].firstMatch.tap()
 
         // Back to Simple: the panel stays while the local model runs.
-        let simple = app.buttons["Simple: everyday controls"]
-        XCTAssertTrue(simple.waitForExistence(timeout: 5))
-        simple.tap()
+        chooseMode("Simple", in: app)
         XCTAssertTrue(panel.waitForExistence(timeout: 10), "the monitor stays in Simple while a local model runs")
     }
 
@@ -926,6 +922,16 @@ final class LiveRelayTests: XCTestCase {
 
     /// A tap while a swipe is still decelerating only stops the scroll; let it finish.
     private func settle() { RunLoop.current.run(until: Date().addingTimeInterval(1.2)) }
+
+    /// Simple or Detailed, from the open chat's More menu (the floating pill's switch until 2026-11-05).
+    private func chooseMode(_ name: String, in app: XCUIApplication) {
+        let more = app.buttons["chat.more"].firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 5), "the chat has its More menu")
+        more.tap()
+        let item = app.buttons[name].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "the More menu offers \(name)")
+        item.tap()
+    }
 
     private func waitValue(_ e: XCUIElement, _ value: String, _ seconds: TimeInterval) -> Bool {
         let p = expectation(for: NSPredicate(format: "value == %@", value), evaluatedWith: e)

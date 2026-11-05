@@ -16,7 +16,7 @@ const host: HostView = {
 };
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerSettings> = {}): RunnerView => ({
   config: { id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac', settings: { ...DEFAULT_RUNNER_SETTINGS, enabled: true, ...settings } },
-  state: 'ready', slots: [], reasons: [], available: 2, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [], ...over,
+  state: 'ready', slots: [], reasons: [], available: 2, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, host, repos: [], forkApprovalOpen: false, recent: [], suggestedSize: null, ...over,
 });
 const render = (v: RunnerView, draft = v.config.settings, image: ImageView | null = null) =>
   renderToStaticMarkup(<SettingsBody view={v} image={image} draft={draft} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} saving={false} />);
@@ -51,6 +51,23 @@ describe('RunnerSettingsSheet', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>3 not allowed<\/button>/);
     for (const s of ['Run fork pull requests', 'Build cache', 'Outside 9:00', '\u2014', 'keep 25 GB free']) expect(html).not.toContain(s);
     expect(html).not.toContain('Trust this network');
+  });
+
+  it('suggested_size_row_offers_apply_only_for_a_change', () => {
+    expect(render(view())).not.toContain('Suggested size');
+    const why = 'The biggest job used 5.4 GB at most and never swapped.';
+    const change = view({ suggestedSize: { jobs: 4, cpus: 4, memoryMb: 8192, reasons: [why] } }, { memoryPerVmMb: 12288 });
+    const html = renderToStaticMarkup(
+      <SettingsBody view={change} draft={change.config.settings} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onApplySize={() => {}} onRemove={() => {}} saving={false} />,
+    );
+    expect(html).toContain('from what your jobs used');
+    expect(html).toContain('Suggested for your jobs: 4 vCPUs, 8 GB (now 4 vCPUs, 12 GB).');
+    expect(html).toContain(why);
+    expect(html).toContain('>Apply<');
+    const fits = view({ suggestedSize: { jobs: 5, cpus: 4, memoryMb: 8192, reasons: [] } });
+    expect(render(fits)).toContain('Fits your last 5 jobs.');
+    expect(render(fits)).not.toContain('>Apply<');
+    expect(render(view({ suggestedSize: { jobs: 1, cpus: 4, memoryMb: 8192, reasons: [] } }))).toContain('Suggested size after 3 jobs at this size (1 so far).');
   });
 
   it('hides_the_recommendation_before_the_first_sample', () => {

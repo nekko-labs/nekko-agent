@@ -137,6 +137,7 @@ app.whenReady().then(async () => {
       await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500);
       await run("(()=>{const r=[...document.querySelectorAll('[role=dialog] p')].find(e=>e.textContent.startsWith('Linux slots'));r&&r.scrollIntoView({block:'center'})})()"); await sleep(200);
     },
+    'settings-suggested': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
   };
   const checks = {
     'first-visit': [['both steps, step 2 waits', "(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent==='After step 1');return document.body.innerText.includes('Use this Mac as a CI runner')&&document.querySelectorAll('.runner-step svg').length===2&&b&&b.disabled})()"]],
@@ -194,19 +195,21 @@ app.whenReady().then(async () => {
     'linux-slots': [['Linux tiles follow the macOS ones', "(()=>{const t=document.body.innerText;return t.includes('Slot 3 · Linux')&&t.includes('ci · server tests')&&t.includes('Slot 5 · Linux')&&t.includes('Not available: the memory macOS slots leave is used up.')})()"]],
     'settings-linux': [['Linux slots and the ready image', "(()=>{const t=document.querySelector('[role=dialog]').innerText;return t.includes('nekko-cloud-mac-linux')&&t.includes('Rebuild Linux image')&&t.includes('ubuntu-24.04 · runner 2.338.1')})()"]],
     'settings-linux-building': [['the build in progress', "(()=>{const t=document.querySelector('[role=dialog]').innerText;return t.includes('Downloading: Downloading Ubuntu 24.04 (1 of 3) 42%')&&[...document.querySelectorAll('[role=dialog] button')].some(b=>b.textContent==='Cancel')})()"]],
+    'settings-suggested': [['the suggestion with Apply', "document.querySelector('[role=dialog]').innerText.includes('Suggested for your jobs: 4 vCPUs, 8 GB (now 4 vCPUs, 12 GB).') && [...document.querySelectorAll('[role=dialog] button')].some(b=>b.textContent==='Apply')"]],
     'settings-unsampled': [['waits for the first reading', "document.body.innerText.includes('Waiting for this Mac\\'s first reading.') && !document.body.innerText.includes('Recommended:')"]],
   };
   try {
-    await win.loadFile(path.join(out, 'index.html')); await sleep(1000); 
+    await win.loadFile(path.join(out, 'index.html')); await sleep(1000);
     for (const theme of ['light', 'dark']) {
-      // NEKKO_CI_SCENES=a,b captures only those scenes (a PR's before and after).
-      const only = (process.env.NEKKO_CI_SCENES || '').split(',').filter(Boolean);
-      for (const [scene, act] of Object.entries(scenes).filter(([s]) => !only.length || only.includes(s))) {
+      // NEKKO_SCENES=a,b captures only those scenes, and skips the burst frames.
+      const only = process.env.NEKKO_SCENES ? process.env.NEKKO_SCENES.split(',') : null;
+      for (const [scene, act] of Object.entries(scenes).filter(([s]) => !only || only.includes(s))) {
         await open(scene, theme); await act(); await sleep(300);
         await capture(`ci-runners-${scene}-${theme}`);
         await check(`${theme} ${scene}: no em dash in document text`, "!document.body.innerText.includes('\\u2014')");
         for (const [name, src] of checks[scene]) await check(`${theme} ${scene}: ${name}`, src);
       }
+      if (only) continue;
       // Motion: stepped frames, because a hidden window's timing is not worth trusting for stills.
       const burst = "document.getAnimations().filter(a=>a.effect.target.closest&&a.effect.target.closest('.runner-burst'))";
       await open('ready', theme); await finish();

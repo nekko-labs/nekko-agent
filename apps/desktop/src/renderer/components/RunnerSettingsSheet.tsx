@@ -12,6 +12,7 @@ import {
   settingsPatch,
   recommendationText,
   slotLimitText,
+  suggestedSizeRow,
   type HostView,
   type ImageView,
   type KeepAwake,
@@ -139,7 +140,7 @@ export function LinuxImageRow({ image, onAction }: { image: LinuxImageView; onAc
 }
 
 /** The settings form (mockup 4); pure so tests render it statically. */
-export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onRemove, onCancel, onRebuild, onRefresh, saving, toggling = false }: {
+export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, toggling = false }: {
   view: RunnerView;
   image?: ImageView | null;
   /** `null` while unknown, or where the daemon builds no Linux image. */
@@ -149,6 +150,8 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
   onDraft(d: RunnerSettings): void;
   onEnabled(v: boolean): void;
   onSave(): void;
+  /** Saves the suggested size at once, apart from Save. */
+  onApplySize?(patch: Pick<RunnerSettings, 'cpusPerVm' | 'memoryPerVmMb'>): void;
   onRemove(): void;
   onCancel?(): void;
   onRebuild?(): void;
@@ -163,6 +166,7 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
   const capGb = Math.max(4, Math.floor((0.75 * host.ramMb) / GB));
   const maxCpus = Math.max(2, host.cores - 2);
   const recommendation = recommendationText(host);
+  const suggested = suggestedSizeRow(view);
   const jobChoices = MAX_JOB_CHOICES.includes(draft.maxJobMinutes) ? MAX_JOB_CHOICES : [...MAX_JOB_CHOICES, draft.maxJobMinutes];
 
   return (
@@ -211,6 +215,17 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
       </Row>
       {(draft.linuxSlots > 0 || (linuxImage && linuxImage.state !== 'none')) && linuxImage && (
         <LinuxImageRow image={linuxImage} onAction={onLinuxImage} />
+      )}
+      {suggested && (
+        <Row label="Suggested size" hint="from what your jobs used">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-ink">{suggested.line}</span>
+            {suggested.apply && onApplySize && (
+              <button type="button" className="btn btn-outline py-1! text-xs" disabled={saving} onClick={() => suggested.apply && onApplySize(suggested.apply)}>Apply</button>
+            )}
+          </div>
+          {suggested.reasons.length > 0 && <p className="mt-1 text-xs text-ink-faint">{suggested.reasons.join(' ')}</p>}
+        </Row>
       )}
       <Row label="Memory per VM" hint={sampled ? `${Math.round(host.ramMb / GB)} GB Mac, runner cap ${Math.round(host.runnerMemoryMb / GB)} GB` : undefined}>
         {sampled ? (
@@ -394,6 +409,19 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
     setEdits(null); // the view now carries what the daemon kept
     reply(res.view);
   };
+  // Apply saves the two sizes now and keeps any other edits in the form.
+  const applySize = async (patch: Pick<RunnerSettings, 'cpusPerVm' | 'memoryPerVmMb'>) => {
+    setSaving(true);
+    try {
+      const reply = beginReply();
+      reply(await window.nekko.updateRunner(view.config.id, patch));
+      setEdits((e) => e && { base: { ...e.base, ...patch }, draft: { ...e.draft, ...patch } });
+    } catch (e) {
+      pushToast('error', `Could not apply the suggested size: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
   const refresh = async () => {
     try {
       await onRefresh?.();
@@ -422,6 +450,7 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
         onDraft={(d) => setEdits((e) => editDraft(e, view, d))}
         onEnabled={(v) => void setEnabled(v)}
         onSave={() => void save()}
+        onApplySize={(p) => void applySize(p)}
         onRemove={() => void remove()}
         onCancel={onClose}
         onRebuild={onRebuild}
