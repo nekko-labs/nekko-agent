@@ -21,7 +21,8 @@
       initials.setAttribute('aria-hidden', 'true');
       initials.textContent = person.login.slice(0, 2).toUpperCase();
       link.append(initials);
-      if (new RegExp(`^/contributors/${person.login}\\.(png|jpg|webp)$`, 'i').test(person.avatar || '')) {
+      const avatarPattern = new RegExp(`^/contributors/${person.login}-[a-f0-9]{16}\\.(png|jpg|webp)$`, 'i');
+      if (avatarPattern.test(person.avatar || '')) {
         const image = document.createElement('img');
         image.src = person.avatar;
         image.alt = '';

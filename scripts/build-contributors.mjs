@@ -1,6 +1,7 @@
 // GitHub is contacted at deploy time only, never by a visitor's browser.
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const API = 'https://api.github.com/repos/nekko-labs/nekko-agent/contributors';
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
@@ -50,7 +51,9 @@ export async function writeContributors(site, { fetcher = fetch, token = process
         if (!response.ok || !ext) throw new Error('Avatar unavailable');
         const bytes = Buffer.from(await response.arrayBuffer());
         if (!bytes.length || bytes.length > 1_000_000) throw new Error('Invalid avatar size');
-        const name = `${login}.${ext}`;
+        // The host serves images immutable, so changed avatars need new URLs.
+        const hash = createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+        const name = `${login}-${hash}.${ext}`;
         writeFileSync(join(directory, name), bytes);
         person.avatar = `/contributors/${name}`;
       } catch {

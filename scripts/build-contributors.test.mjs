@@ -36,15 +36,16 @@ test('caches raster images first-party, never sends token to images, keeps initi
       return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { 'content-type': 'image/png' } });
     } });
     const data = JSON.parse(readFileSync(join(site, 'contributors.json')));
-    assert.equal(data.contributors[0].avatar, '/contributors/ok.png');
+    assert.match(data.contributors[0].avatar, /^\/contributors\/ok-[a-f0-9]{16}\.png$/);
+    const cachedAvatar = join(site, data.contributors[0].avatar.slice(1));
     assert.equal(data.contributors[1].avatar, undefined);
     assert.equal(imageCalls.length, 1);
     assert.equal(imageCalls[0].headers, undefined);
     assert.equal(imageCalls[0].redirect, 'error');
-    assert.ok(existsSync(join(site, 'contributors', 'ok.png')));
+    assert.ok(existsSync(cachedAvatar));
     await writeContributors(site, { fetcher: async () => { throw new Error('offline'); } });
     assert.deepEqual(JSON.parse(readFileSync(join(site, 'contributors.json'))), { available: false, contributors: [] });
-    assert.equal(existsSync(join(site, 'contributors', 'ok.png')), false);
+    assert.equal(existsSync(cachedAvatar), false);
   } finally { rmSync(site, { recursive: true, force: true }); }
 });
 
