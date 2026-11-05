@@ -3,7 +3,7 @@
     "theme": "system",
     "promptCaching": true,
     "phoneChanges": true,
-    "accent": "#6d5efc",
+    "accent": "#5a2352",
     "sandboxMode": "workspace-jail",
     "providers": [],
     "guardrails": [
@@ -140,8 +140,9 @@
       "maxParallel": 4
     }
   },
-  "defaultAccent": "#6d5efc",
+  "defaultAccent": "#5a2352",
   "legacyAccents": [
-    "#ff7a59"
+    "#ff7a59",
+    "#6d5efc"
   ]
 }

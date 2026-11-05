@@ -8,14 +8,14 @@ import type { ConnectorConfig } from './connectors.js';
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 /**
- * Brand accent. The default is an indigo-violet (paired in the UI with a cyan
- * secondary into a violet→cyan brand gradient, the modern developer-tool look).
+ * Brand accent. The default is the plum palette's light-mode accent
+ * (spec/brand/colour-palette.md); the old indigo-violet default is now legacy.
  * `LEGACY_ACCENTS` are prior defaults we migrate off on load so users who never
  * customized the accent get the refreshed color, while anyone who picked their
  * own keeps it.
  */
-export const DEFAULT_ACCENT = '#6d5efc';
-export const LEGACY_ACCENTS = ['#ff7a59'];
+export const DEFAULT_ACCENT = '#5a2352';
+export const LEGACY_ACCENTS = ['#ff7a59', '#6d5efc'];
 
 /** A reusable prompt, invokable from the composer as `/name`. */
 export interface PromptTemplate {
