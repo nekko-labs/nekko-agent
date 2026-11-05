@@ -14,6 +14,9 @@ name: Queue repair
 #     `@codex` comment posted with CODEX_TRIGGER_TOKEN starts a Codex cloud task
 #     on the maintainer's ChatGPT plan, which pushes its fix to the branch. Codex
 #     runs in its own sandbox; no ChatGPT credential ever reaches this runner.
+#   - A failure every job of which also fails in other PRs' merge groups is
+#     main's (a flaky budget, say): Codex is not asked and no budget is spent.
+#     The PR is retried once that failure stops, at most twice per head.
 #   - When Codex is not set up, pushes nothing within an hour, or has been asked
 #     three times, the PR gets the `needs-human` label and a comment. The next
 #     push clears it.
@@ -53,8 +56,9 @@ permissions:
   # Comments and the needs-human label.
   pull-requests: write
   issues: write
-  # Reading the failed jobs to hand Codex.
-  actions: read
+  # Reading the failed jobs to hand Codex, and re-running a red gate once main's
+  # own failure has cleared.
+  actions: write
 
 concurrency:
   group: queue-repair

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { CODEX_BUDGET, CODEX_WAIT_MS, codexPrompt, decide, marker, mergeMain, readMarkers, ruleFor } from './queue-repair.mjs';
+import { BASELINE_WINDOW_MS, CODEX_BUDGET, CODEX_WAIT_MS, RETRY_BUDGET, baselineJobs, codexPrompt, decide, marker, mergeMain, onlyBaseline, readMarkers, ruleFor } from './queue-repair.mjs';
 
 const HEAD = 'a'.repeat(40);
 const OLD = 'b'.repeat(40);
@@ -191,4 +191,35 @@ test('a branch that already contains main needs nothing', () => {
   const { dir, git } = hotFileRepo({ mainDropsTaskLog: true });
   const r = mergeMain({ repo: dir, head: git('rev-parse', 'main'), mainRef: 'main', workdir: path.join(os.tmpdir(), 'unused'), branch: 'main' });
   assert.equal(r.status, 'up-to-date');
+});
+
+test("a job failing in other PRs' merge groups is main's, not this PR's", () => {
+  const now = Date.parse('2026-11-04T16:00:00Z');
+  const runs = [
+    { pr: 1716, at: now - 1000, failed: ['perf', 'gate'] },
+    { pr: 1654, at: now - 2000, failed: ['perf', 'gate'] },
+    { pr: 1652, at: now - 3000, failed: ['perf', 'gate'] },
+    { pr: 1650, at: now - 4000, failed: ['build', 'gate'] },
+    { pr: 1601, at: now - BASELINE_WINDOW_MS - 1, failed: ['build'] },
+  ];
+  const base = baselineJobs(runs, 1716, now);
+  assert.deepEqual([...base], ['perf'], 'perf failed for two other PRs; build for one in the window; gate never counts; own runs never count');
+  assert.equal(onlyBaseline([{ name: 'perf' }], base), true);
+  assert.equal(onlyBaseline([{ name: 'perf' }, { name: 'build' }], base), false, 'one job of its own makes it the PR\'s');
+  assert.equal(onlyBaseline([], base), false, 'no failed job found is not a baseline failure');
+});
+
+test('a PR waiting on main is not handed to Codex, and is retried a bounded number of times', () => {
+  const waiting = decide(pr({ markers: [mark('sweeper-enqueued'), mark('baseline-queue')] }));
+  assert.deepEqual(waiting, { action: 'baseline', kind: 'queue', retries: 0 });
+  const retried = decide(pr({ markers: [mark('baseline-queue'), ...Array.from({ length: RETRY_BUDGET }, () => mark('retried'))] }));
+  assert.equal(retried.retries, RETRY_BUDGET);
+  assert.equal(decide(pr({ markers: [mark('baseline-ci', OLD)] })).action, 'skip', 'a marker at an old head does not hold a new push');
+  assert.equal(decide(pr({ mergeable: 'CONFLICTING', markers: [mark('baseline-queue')] })).action, 'merge', 'a conflict is still merged');
+});
+
+test("the spec index is rebuilt with main's code, never by running the branch's script", () => {
+  const src = fs.readFileSync(new URL('./queue-repair.mjs', import.meta.url), 'utf8');
+  assert.match(src, /import \{ writeIndex \} from '\.\/spec-index\.mjs'/);
+  assert.doesNotMatch(src, /'scripts\/spec-index\.mjs'/, 'no path to the branch copy of the script is executed');
 });
