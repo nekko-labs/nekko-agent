@@ -42,6 +42,30 @@ app.whenReady().then(async () => {
         await run("document.querySelector('[data-compaction] button').click()"); await sleep(200);
         assert.equal(await run("document.querySelector('[data-compaction] button').getAttribute('aria-expanded')"), 'false');
         assert.equal(await run('document.documentElement.scrollWidth <= innerWidth'), true);
+        // Emulate document focus in this hidden renderer only, never OS focus.
+        // Native input exercises the button's Enter/Space defaults, not .click().
+        if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3');
+        await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
+        await run("document.querySelector('[data-compaction] button').focus()");
+        assert.equal(await run("document.activeElement === document.querySelector('[data-compaction] button')"), true);
+        const frames = [];
+        for (const [key, code, windowsVirtualKeyCode, text] of [['Enter', 'Enter', 13, '\r'], [' ', 'Space', 32, ' ']]) {
+          for (const expected of ['true', 'false']) {
+            await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode, text });
+            await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
+            await sleep(150);
+            assert.equal(await run("document.querySelector('[data-compaction] button').getAttribute('aria-expanded')"), expected);
+            assert.equal(await run("document.body.textContent.includes('Goal and constraints')"), expected === 'true');
+            assert.equal(await run("document.getElementById(document.querySelector('[data-compaction] button').getAttribute('aria-controls')).hidden"), expected !== 'true');
+            frames.push((await win.capturePage(undefined, { stayHidden: true })).resize({ width: Math.min(width, 700) }).toPNG());
+            assert.equal(win.isVisible(), false); assert.equal(win.isFocused(), false);
+          }
+          report['keyboard-' + width + '-' + code] = 'expanded and collapsed using native input';
+        }
+        const recording = path.join(out, width + '-keyboard-toggle.gif');
+        require('./evidence-gif.cjs')(recording, frames, 45);
+        report.captures.push(recording);
+        await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: false });
       }
     }
     assert.equal(win.isVisible(), false); assert.equal(win.isFocused(), false);
