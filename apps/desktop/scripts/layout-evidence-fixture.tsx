@@ -46,7 +46,11 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   document.documentElement.dataset.theme = 'dark';
   const root = createRoot(document.getElementById('root')!);
   root.render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent, showRetry: async () => {
+  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent, showTheme: async () => {
+    const { ThemeStep } = await import('../src/renderer/components/onboarding/ThemeStep');
+    root.render(React.createElement('main', { style: { padding: 24, minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)' } },
+      React.createElement('div', { style: { maxWidth: 640, margin: 'auto' } }, React.createElement(ThemeStep))));
+  }, showRetry: async () => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     const record = records[0] as any;
     record.messages = [

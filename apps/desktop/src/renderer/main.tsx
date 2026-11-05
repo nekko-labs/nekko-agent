@@ -10,7 +10,9 @@ import '@fontsource-variable/inter-tight';
 import '@fontsource-variable/jetbrains-mono';
 import './styles.css';
 import { useStore } from './store.js';
-import { playSplash } from './splash.js';
+import { fadeInReloadCover, pageWasReloaded, playReloadCover, playSplash } from './splash.js';
+import { transcriptsLoaded } from './sessionCache.js';
+import { windowChrome } from './chrome.js';
 import { isScreenWindow } from './displays.js';
 import { presenterRequest, startPresenterMode } from './presenter.js';
 
@@ -21,14 +23,20 @@ if (presenter) startPresenterMode(presenter);
 // Resolve the system preference before mounting even the loading or login UI.
 useStore.getState().applyTheme();
 
-// The startup splash plays over the app and zooms through once settings have
-// loaded, so it opens onto the real app rather than the loading screen.
+// The startup splash plays over the app and lifts once settings, providers and
+// the open chats have loaded, so it opens onto the real app rather than a
+// half-loaded one. A reload gets the quiet cover instead of the launch splash.
+// A very long chat doesn't get to hold it up: past this it fills in on screen.
+const TRANSCRIPT_WAIT_MS = 1000;
 if (!isScreenWindow) {
+  const appLoaded = (s: ReturnType<typeof useStore.getState>) => s.settingsLoaded && s.providersLoaded;
   const loaded = new Promise<void>((resolve) => {
-    if (useStore.getState().settingsLoaded) return resolve();
-    const stop = useStore.subscribe((s) => { if (s.settingsLoaded) { stop(); requestAnimationFrame(() => resolve()); } });
-  });
-  playSplash(loaded);
+    if (appLoaded(useStore.getState())) return resolve();
+    const stop = useStore.subscribe((s) => { if (appLoaded(s)) { stop(); requestAnimationFrame(() => resolve()); } });
+  }).then(() => Promise.race([transcriptsLoaded(), new Promise((r) => setTimeout(r, TRANSCRIPT_WAIT_MS))]));
+  if (pageWasReloaded()) playReloadCover(loaded);
+  else playSplash(loaded);
+  windowChrome?.onPageReloading(fadeInReloadCover);
 }
 
 function registerServiceWorker() {

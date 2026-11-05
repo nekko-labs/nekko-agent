@@ -114,3 +114,11 @@ Issue: [#1474](https://github.com/nekko-labs/nekko-agent/issues/1474). The nativ
 ## Exploring folds into Building (2026-11-04)
 
 Implemented: published and saved plan steps with the legacy `explore` kind render as Build, and `update_plan` offers build, verify and ship. This does not restore the inferred Claude Code activity plan removed by #1673: when Claude Code has published no plan, the sheet stays absent. Verification grouping from #1673 is unchanged.
+
+## Running delegates and explicit chip types
+
+Implemented: the expanded plan keeps a Running row outside step disclosures, listing direct children reported active by live events or saved activeRun metadata. A child remains reachable when its originating step is completed or manually collapsed. The folded plan retains its subagent summary. No placeholder plan is created.
+
+PR, CI, Task, File, Preview and Sub-agent chips use text prefixes so their purpose is visible without a tooltip. Verification chips retain their explicit state and device wording. Opening chips follows existing navigation; this adds no routing, provider, permission or network behavior.
+
+Acceptance: inactive children and children of other parents do not enter the Running row; running children remain visible above collapsed steps; labels identify link types. Focused rendering regressions and isolated Electron evidence cover these behaviors. Live-provider delegation and packaged builds are not verified by fixtures.
